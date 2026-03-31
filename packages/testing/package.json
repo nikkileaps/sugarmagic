@@ -1,0 +1,17 @@
+{
+  "name": "@sugarmagic/testing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@sugarmagic/domain": "workspace:*",
+    "@sugarmagic/io": "workspace:*",
+    "@sugarmagic/productmodes": "workspace:*",
+    "@sugarmagic/runtime-core": "workspace:*",
+    "@sugarmagic/runtime-web": "workspace:*",
+    "@sugarmagic/shell": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

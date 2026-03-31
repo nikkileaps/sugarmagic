@@ -1,0 +1,37 @@
+{
+  "name": "sugarmagic",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @sugarmagic/studio build && pnpm --filter @sugarmagic/target-web build && pnpm typecheck",
+    "dev:studio": "pnpm --filter @sugarmagic/studio dev",
+    "dev:web": "pnpm --filter @sugarmagic/target-web dev",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint . && pnpm lint:boundaries",
+    "lint:boundaries": "node tooling/check-package-boundaries.mjs",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
+  }
+}

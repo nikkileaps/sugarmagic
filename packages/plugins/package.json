@@ -1,0 +1,14 @@
+{
+  "name": "@sugarmagic/plugins",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@sugarmagic/domain": "workspace:*",
+    "@sugarmagic/runtime-core": "workspace:*",
+    "@sugarmagic/ui": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
