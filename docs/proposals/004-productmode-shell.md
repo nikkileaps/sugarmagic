@@ -33,6 +33,12 @@ The application should not be organized around:
 
 Instead, Sugarmagic should present a small number of strong top-level product contexts.
 
+For the initial shell foundation, the visual system for those contexts should preserve:
+
+- Sugarengine's established shell color palette as the starting shell color system
+- Sugarengine's established icon set and icon semantics as the starting shell icon language
+- Mantine-backed reusable shell/layout components as the default implementation approach for shared shell surfaces
+
 ## Core Rule
 
 `ProductMode` is the only term Sugarmagic should use for this top-level shell concept.
