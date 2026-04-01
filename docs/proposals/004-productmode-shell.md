@@ -152,6 +152,18 @@ A `Workspace` should compose:
 - workspace-scoped tool and inspector coordination
 - access to domain commands and runtime-backed preview for that subject
 
+### Workspace implementation rule
+
+Concrete workspace behavior should live in workspace implementation modules, not inside `ProductMode` descriptors themselves.
+
+That means:
+
+- `ProductMode` stays a shell-composition concept
+- `Workspace` remains the concrete editing surface
+- authoring-only workspace behavior such as `Build > Layout` scene-explorer logic, gizmos, and transform sessions should live in dedicated workspace implementation modules
+
+This keeps ProductMode composition declarative and prevents `ProductMode` packages from turning into feature-implementation dumping grounds.
+
 ## Shell State and Store Model
 
 Sugarmagic should use explicit shell/application state for ProductMode composition and authoring-session coordination.
@@ -208,6 +220,18 @@ When ProductMode changes:
 - shared workspace state may be preserved if it is explicitly declared cross-mode
 - mode-specific transient sessions must be resolved, suspended, or discarded
 - one ProductMode must not silently inherit another ProductMode's transient tool state
+
+### Editor overlay rule
+
+Workspace-specific editor overlays such as gizmos, origin markers, and world cursors are allowed.
+
+But they must be treated as:
+
+- editor/tool overlays
+- workspace-scoped interaction state
+- non-canonical view/tooling content
+
+They must not become alternate authored scene truth or alternate runtime semantics.
 
 ### Camera ownership rule
 

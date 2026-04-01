@@ -1,18 +1,50 @@
+/**
+ * ShellFrame — the top-level layout container for the Sugarmagic shell.
+ *
+ * Defines five layout panels:
+ *
+ *   ┌─────────────────────────────────────────────┐
+ *   │              HeaderPanel                     │
+ *   │              SubHeaderPanel (optional)       │
+ *   ├───────────┬─────────────────────┬───────────┤
+ *   │           │                     │           │
+ *   │ LeftPanel │    CenterPanel      │ RightPanel│
+ *   │           │                     │           │
+ *   ├───────────┴─────────────────────┴───────────┤
+ *   │              BottomPanel                     │
+ *   └─────────────────────────────────────────────┘
+ *
+ * These are pure layout regions. What goes inside each panel
+ * (mode bar, inspector, viewport, status) is the consumer's concern.
+ */
+
 import { AppShell } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export interface ShellFrameProps {
-  navbar: ReactNode;
-  header: ReactNode;
-  footer: ReactNode;
-  children: ReactNode;
+  headerPanel: ReactNode;
+  subHeaderPanel?: ReactNode;
+  leftPanel: ReactNode;
+  centerPanel: ReactNode;
+  rightPanel?: ReactNode;
+  bottomPanel: ReactNode;
 }
 
-export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps) {
+export function ShellFrame({
+  headerPanel,
+  subHeaderPanel,
+  leftPanel,
+  centerPanel,
+  rightPanel,
+  bottomPanel
+}: ShellFrameProps) {
+  const headerHeight = subHeaderPanel ? 76 : 44;
+
   return (
     <AppShell
-      header={{ height: 44 }}
+      header={{ height: headerHeight }}
       navbar={{ width: 240, breakpoint: 0 }}
+      aside={rightPanel ? { width: 280, breakpoint: 0 } : undefined}
       footer={{ height: 28 }}
       padding={0}
       styles={{
@@ -26,7 +58,7 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
-          height: "calc(100vh - 44px - 28px)",
+          height: `calc(100vh - ${headerHeight}px - 28px)`,
           overflow: "hidden"
         }
       }}
@@ -41,7 +73,8 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {header}
+        {headerPanel}
+        {subHeaderPanel}
       </AppShell.Header>
 
       <AppShell.Navbar
@@ -52,10 +85,23 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {navbar}
+        {leftPanel}
       </AppShell.Navbar>
 
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main>{centerPanel}</AppShell.Main>
+
+      {rightPanel && (
+        <AppShell.Aside
+          styles={{
+            aside: {
+              background: "var(--sm-panel-bg)",
+              borderLeft: "1px solid var(--sm-panel-border)"
+            }
+          }}
+        >
+          {rightPanel}
+        </AppShell.Aside>
+      )}
 
       <AppShell.Footer
         styles={{
@@ -65,7 +111,7 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {footer}
+        {bottomPanel}
       </AppShell.Footer>
     </AppShell>
   );

@@ -145,6 +145,22 @@ A workspace typically consists of:
 - tool-session coordination
 - access to domain commands and runtime-backed preview
 
+### Workspace implementation guideline
+
+Concrete workspace behavior should live in authoring-facing workspace implementation modules, not in:
+
+- `ProductMode` descriptor packages
+- `runtime-core`
+- `runtime-web`
+
+except for the lower-level viewport capabilities those modules may expose.
+
+For example:
+
+- `runtime-core` may define scene descriptors and shared runtime semantics
+- `runtime-web` may expose viewport, overlay-root, and picking helpers
+- the concrete `Build > Layout` gizmo/session logic should still live in the Layout workspace implementation layer
+
 ### Workspace examples
 
 - `RegionWorkspace(regionId)`
@@ -193,6 +209,25 @@ Switching ProductModes should:
 - preserve only the shell/workspace state that is explicitly declared cross-mode
 - dispose or suspend ProductMode-scoped tool/session state
 - never let one ProductMode's transient tool state silently become another ProductMode's starting state
+
+### Editor overlay rule
+
+Editor overlays such as:
+
+- gizmos
+- object-origin markers
+- world cursors
+- temporary preview overlays
+
+are valid workspace/tool-session state.
+
+They should be:
+
+- derived from workspace selection, tool state, and runtime-backed viewport context
+- rendered as non-canonical editor overlays
+- excluded from canonical authored persistence and runtime scene descriptors
+
+They should not be treated as authored content.
 
 ### Camera ownership rule
 

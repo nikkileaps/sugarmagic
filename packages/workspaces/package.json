@@ -1,0 +1,22 @@
+{
+  "name": "@sugarmagic/workspaces",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sugarmagic/domain": "workspace:*",
+    "@sugarmagic/runtime-core": "workspace:*",
+    "@sugarmagic/runtime-web": "workspace:*",
+    "@sugarmagic/shell": "workspace:*",
+    "@sugarmagic/ui": "workspace:*",
+    "@mantine/core": "^9.0.0",
+    "three": "^0.183.2"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  }
+}

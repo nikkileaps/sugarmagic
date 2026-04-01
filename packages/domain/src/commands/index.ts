@@ -42,6 +42,16 @@ export type UpdateEnvironmentCommand = SemanticCommandBase<
   }
 >;
 
+export type TransformPlacedAssetCommand = SemanticCommandBase<
+  "TransformPlacedAsset",
+  {
+    instanceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
 export type UpdatePluginConfigurationCommand = SemanticCommandBase<
   "UpdatePluginConfiguration",
   {
@@ -52,6 +62,7 @@ export type UpdatePluginConfigurationCommand = SemanticCommandBase<
 
 export type SemanticCommand =
   | MovePlacedAssetCommand
+  | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | UpdateEnvironmentCommand
   | UpdatePluginConfigurationCommand;
