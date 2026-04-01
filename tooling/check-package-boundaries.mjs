@@ -154,9 +154,16 @@ for (const { dir, manifest } of packageByName.values()) {
         }
 
         if (specifier !== internalName) {
-          errors.push(
-            `${relativePath(filePath)}: deep import "${specifier}" is not allowed; use the public package entrypoint.`
-          );
+          const targetPkg = packageByName.get(internalName);
+          const subpath = "./" + specifier.slice(internalName.length + 1);
+          const isExportedSubpath =
+            targetPkg?.manifest.exports?.[subpath] !== undefined;
+
+          if (!isExportedSubpath) {
+            errors.push(
+              `${relativePath(filePath)}: deep import "${specifier}" is not allowed; use the public package entrypoint.`
+            );
+          }
         }
 
         if (!allowed.has(internalName)) {

@@ -60,6 +60,12 @@ The final architecture must instead satisfy the non-negotiable rules from [AGENT
 
 This proposal translates those rules into a concrete repo shape and a concrete system map.
 
+One important clarification:
+
+- published web targets should share runtime architecture with Sugarmagic
+- published web targets should not be assumed to share the Sugarmagic editor shell visual system
+- game-specific UI remains distinct from editor-shell UI unless a later proposal explicitly defines a shared game-facing UI layer
+
 ## Technology and State Management Direction
 
 This proposal remains architecture-first, but the foundation should still assume a small number of implementation choices.
@@ -560,6 +566,21 @@ It should reuse:
 
 This preserves the Sugarengine lesson that published targets should be thin shells around shared runtime logic.
 
+This should not be read to mean that published targets inherit the Sugarmagic editor shell visual system.
+
+What is shared is:
+
+- runtime boot and lifecycle architecture
+- content and asset resolution architecture
+- publish artifact consumption
+
+What is not automatically shared is:
+
+- editor shell palette
+- editor shell chrome
+- editor shell panel/layout system
+- editor shell icon semantics as the default language for in-game UI
+
 ### `/packages/shell`
 
 This package owns the Product Shell System.
@@ -743,7 +764,7 @@ These are related, but they are not the same responsibility.
 
 ### `/packages/ui`
 
-This package owns reusable UI components and view-layer composition pieces.
+This package owns reusable UI components and view-layer composition pieces for Sugarmagic-owned shell and editor surfaces.
 
 Suggested substructure:
 
@@ -760,6 +781,10 @@ Suggested substructure:
 Important rule:
 
 UI components remain reusable and domain-aware, but they do not become domain owners.
+
+For the current foundation, this package is editor-first.
+
+It should not be treated as the default home for arbitrary published-game UI styling unless a later design explicitly introduces a game-facing shared UI layer.
 
 ### `/packages/testing`
 

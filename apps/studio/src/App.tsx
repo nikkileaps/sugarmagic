@@ -1,8 +1,19 @@
 import { useMemo } from "react";
+import { Text, Stack, Group } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { createRuntimeBootModel } from "@sugarmagic/runtime-core";
 import { createBrowserRuntimeAdapter } from "@sugarmagic/runtime-web";
 import { createShellModel, createShellStore } from "@sugarmagic/shell";
+import {
+  ModeBar,
+  PanelSection,
+  ShellFrame,
+  StatusBar,
+  ViewportFrame,
+  WorkspaceHeader,
+  shellIcons,
+  type ModeBarItem
+} from "@sugarmagic/ui";
 import { useStore } from "zustand";
 
 const shellStore = createShellStore("build");
@@ -22,10 +33,26 @@ const adapter = createBrowserRuntimeAdapter({
   contentSource: "authored-game-root"
 });
 
+const modeBarItems: ModeBarItem[] = productModes.map((mode) => ({
+  id: mode.id,
+  label: mode.label,
+  icon: shellIcons[mode.id as keyof typeof shellIcons] ?? ""
+}));
+
 export function App() {
-  const activeProductMode = useStore(shellStore, (state) => state.activeProductMode);
-  const activeWorkspaceId = useStore(shellStore, (state) => state.activeWorkspaceId);
-  const selectionCount = useStore(shellStore, (state) => state.selection.entityIds.length);
+  const activeProductMode = useStore(
+    shellStore,
+    (state) => state.activeProductMode
+  );
+  const activeWorkspaceId = useStore(
+    shellStore,
+    (state) => state.activeWorkspaceId
+  );
+  const selectionCount = useStore(
+    shellStore,
+    (state) => state.selection.entityIds.length
+  );
+  const panels = useStore(shellStore, (state) => state.panels);
 
   const shell = useMemo(
     () =>
@@ -40,56 +67,87 @@ export function App() {
   );
 
   return (
-    <main className="app-shell">
-      <section className="card">
-        <p className="eyebrow">Sugarmagic</p>
-        <h1>Studio bootstrap is wired.</h1>
-        <p>
-          This host remains a thin composition shell and now boots through the
-          shared runtime-facing packages.
-        </p>
-        <dl className="details">
-          <div>
-            <dt>Host</dt>
-            <dd>{boot.hostKind}</dd>
-          </div>
-          <div>
-            <dt>Profile</dt>
-            <dd>{boot.compileProfile}</dd>
-          </div>
-          <div>
-            <dt>Runtime family</dt>
-            <dd>{boot.runtimeFamily}</dd>
-          </div>
-          <div>
-            <dt>Asset resolution</dt>
-            <dd>{adapter.assetResolution}</dd>
-          </div>
-          <div>
-            <dt>Workspace</dt>
-            <dd>{shell.workspaceHost.workspaceKind}</dd>
-          </div>
-          <div>
-            <dt>Selection count</dt>
-            <dd>{selectionCount}</dd>
-          </div>
-        </dl>
-        <div className="mode-row">
-          {productModes.map((mode) => (
-            <button
-              key={mode.id}
-              className={mode.id === activeProductMode ? "mode-button active" : "mode-button"}
-              type="button"
-              onClick={() => shellStore.getState().setActiveProductMode(mode.id)}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
-        <p className="workspace-copy">
-          Active workspace: <strong>{activeWorkspaceId}</strong>
-        </p>
-      </section>
-    </main>
+    <ShellFrame
+      header={
+        <>
+          <Group px="md" h={40} align="center" justify="space-between">
+            <Group gap="sm" align="center">
+              <Text fw={700} size="sm" c="var(--sm-color-text)">
+                Sugarmagic
+              </Text>
+              <Text size="xs" c="var(--sm-color-overlay0)">
+                Studio
+              </Text>
+            </Group>
+          </Group>
+          <ModeBar
+            items={modeBarItems}
+            activeId={activeProductMode}
+            onSelect={(id) =>
+              shellStore.getState().setActiveProductMode(id as typeof activeProductMode)
+            }
+          />
+        </>
+      }
+      navbar={
+        <Stack gap={0} h="100%">
+          <WorkspaceHeader
+            icon={shellIcons.regions}
+            label={shell.workspaceHost.subjectId ?? "No subject"}
+            subtitle={shell.workspaceHost.workspaceKind ?? undefined}
+          />
+
+          {panels.structure && (
+            <PanelSection title="Structure" icon={shellIcons.regions}>
+              <Stack gap="xs">
+                <Text size="xs" c="var(--sm-color-overlay2)">
+                  {shellIcons.regions} bootstrap-region
+                </Text>
+                <Text size="xs" c="var(--sm-color-overlay0)" pl="md">
+                  {selectionCount} selected
+                </Text>
+              </Stack>
+            </PanelSection>
+          )}
+
+          {panels.inspector && (
+            <PanelSection title="Inspector" icon={shellIcons.inspections}>
+              <Stack gap="xs">
+                <DetailRow label="Host" value={boot.hostKind} />
+                <DetailRow label="Profile" value={boot.compileProfile} />
+                <DetailRow label="Runtime" value={boot.runtimeFamily} />
+                <DetailRow label="Assets" value={adapter.assetResolution} />
+              </Stack>
+            </PanelSection>
+          )}
+        </Stack>
+      }
+      footer={
+        <StatusBar
+          message={shell.statusSurface.message}
+          severity={shell.statusSurface.severity}
+          trailing={activeWorkspaceId ?? undefined}
+        />
+      }
+    >
+      <ViewportFrame>
+        <Text size="sm" c="var(--sm-color-overlay0)">
+          Viewport — {shell.viewportHost.cameraScope} camera
+        </Text>
+      </ViewportFrame>
+    </ShellFrame>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <Text size="xs" c="var(--sm-color-overlay0)" w={60}>
+        {label}
+      </Text>
+      <Text size="xs" c="var(--sm-color-subtext)" truncate>
+        {value}
+      </Text>
+    </Group>
   );
 }

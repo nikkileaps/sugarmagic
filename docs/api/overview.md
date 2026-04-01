@@ -62,10 +62,16 @@ Sugarmagic is expected to rely on:
 Sugarmagic is expected to use:
 
 - a shell-oriented component architecture
+- Mantine as the backing component library for reusable shell and layout components
 - `zustand` as the default store technology for shell and authoring-session state
 - reusable UI components
 - ProductMode-based top-level composition
 - runtime-backed viewport hosting
+
+For the initial shell visual foundation, engineers should also assume:
+
+- Sugarengine's shell palette is the initial Sugarmagic shell palette
+- Sugarengine's icon set and icon semantics are the initial Sugarmagic shell icon baseline
 
 The UI stack itself is less important than the architectural rule:
 
@@ -142,6 +148,10 @@ In practical terms, that means:
 - the deployed web game boots the shared runtime
 - it loads authored game-root content or published derivatives
 - it starts the game using the same runtime semantics used by Sugarmagic preview/playtest
+
+This is a runtime-sharing rule, not a shell-visual-sharing rule.
+
+The published target may have little or no host chrome at all, and any actual game UI should be treated as game-facing UI rather than as a continuation of the Sugarmagic editor shell.
 
 ### Important developer implication
 

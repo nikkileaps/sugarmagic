@@ -150,6 +150,10 @@ The deployable web game target shell.
 
 It must not become a second engine.
 
+It also should not be treated as the owner of a shared editor-and-game visual language.
+
+What it shares with Sugarmagic is runtime and delivery architecture, not the editor shell palette, shell chrome, or shell icon language.
+
 ## `/packages/shell` API
 
 ### Purpose
@@ -320,15 +324,20 @@ It is not the owner of domain meaning.
 
 ### Purpose
 
-Reusable components and view-layer building blocks.
+Reusable components and view-layer building blocks for Sugarmagic-owned shell and editor surfaces.
 
 ### Should expose
 
+- Mantine-backed reusable shell and layout components
 - reusable components
 - inspector components
 - graph and tree view components
 - shell-usable panels
 - design tokens and styling primitives
+- shared icon wrappers and icon usage contracts
+- shared theme integration for Sugarengine-derived shell palette tokens
+
+For the current foundation, this package should be understood primarily as the home for editor and shell-facing UI primitives.
 
 ### State guidance
 
@@ -340,6 +349,7 @@ If a component needs shared shell/application state, it should consume that thro
 
 - domain ownership
 - direct mutation of canonical documents
+- arbitrary published-game UI look-and-feel as if every game should inherit the editor shell design system
 
 ## `/packages/testing` API
 

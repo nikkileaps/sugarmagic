@@ -1,0 +1,75 @@
+/*
+ * Sugarmagic shell CSS custom properties.
+ *
+ * Inherited from the established Sugarengine Catppuccin Mocha palette.
+ * Editor-shell only — published-game UI must not consume these.
+ */
+
+:root {
+  /* Surface colors */
+  --sm-color-text: #cdd6f4;
+  --sm-color-subtext: #bac2de;
+  --sm-color-overlay2: #9399b2;
+  --sm-color-overlay1: #7f849c;
+  --sm-color-overlay0: #6c7086;
+  --sm-color-surface2: #45475a;
+  --sm-color-surface1: #313244;
+  --sm-color-surface0: #242436;
+  --sm-color-base: #1e1e2e;
+  --sm-color-mantle: #181825;
+  --sm-color-crust: #1a1a2e;
+
+  /* Accent colors */
+  --sm-accent-blue: #89b4fa;
+  --sm-accent-green: #a6e3a1;
+  --sm-accent-yellow: #f9e2af;
+  --sm-accent-red: #f38ba8;
+  --sm-accent-mauve: #cba6f7;
+  --sm-accent-teal: #94e2d5;
+  --sm-accent-peach: #fab387;
+
+  /* Interactive state surfaces */
+  --sm-active-bg: color-mix(in srgb, var(--sm-accent-blue) 10%, transparent);
+  --sm-active-bg-hover: color-mix(in srgb, var(--sm-accent-blue) 15%, transparent);
+  --sm-hover-bg: color-mix(in srgb, white 4%, transparent);
+  --sm-subtle-hover-bg: color-mix(in srgb, white 3%, transparent);
+
+  /* Semantic surface roles */
+  --sm-shell-bg: var(--sm-color-crust);
+  --sm-viewport-bg: var(--sm-color-base);
+  --sm-panel-bg: var(--sm-color-surface1);
+  --sm-panel-border: var(--sm-color-surface2);
+  --sm-status-bg: var(--sm-color-mantle);
+  --sm-modebar-bg: var(--sm-color-mantle);
+  --sm-workspace-header-bg: var(--sm-color-surface0);
+
+  /* Typography */
+  --sm-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --sm-font-mono: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas,
+    monospace;
+  --sm-font-size-xs: 10px;
+  --sm-font-size-sm: 12px;
+  --sm-font-size-md: 13px;
+  --sm-font-size-lg: 14px;
+
+  /* Spacing */
+  --sm-space-xs: 4px;
+  --sm-space-sm: 8px;
+  --sm-space-md: 12px;
+  --sm-space-lg: 16px;
+  --sm-space-xl: 20px;
+
+  /* Radius */
+  --sm-radius-sm: 4px;
+  --sm-radius-md: 6px;
+  --sm-radius-lg: 8px;
+
+  /* Elevation */
+  --sm-elevation-panel: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --sm-elevation-popup: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  /* Transitions */
+  --sm-transition-fast: 120ms ease;
+  --sm-transition-normal: 200ms ease;
+}

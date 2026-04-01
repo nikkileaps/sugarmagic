@@ -1,104 +1,12 @@
-:root {
-  color: #f5efe5;
-  background: radial-gradient(circle at top, #3a4a5b 0%, #121820 65%);
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-}
-
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  background: var(--sm-color-crust);
 }
 
 #root {
-  min-height: 100vh;
-}
-
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.card {
-  width: min(640px, 100%);
-  padding: 32px;
-  border: 1px solid rgba(245, 239, 229, 0.16);
-  border-radius: 24px;
-  background: rgba(10, 14, 20, 0.62);
-  backdrop-filter: blur(10px);
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 12px;
-  color: #ffd089;
-}
-
-h1 {
-  margin: 0 0 12px;
-  font-size: clamp(2rem, 4vw, 3rem);
-}
-
-p {
-  margin: 0;
-  line-height: 1.6;
-  color: rgba(245, 239, 229, 0.86);
-}
-
-.details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.details div {
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: rgba(245, 239, 229, 0.06);
-}
-
-.details dt {
-  margin-bottom: 6px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: rgba(255, 208, 137, 0.8);
-}
-
-.details dd {
-  margin: 0;
-  font-size: 14px;
-}
-
-.mode-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-.mode-button {
-  border: 1px solid rgba(245, 239, 229, 0.18);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  padding: 10px 14px;
-  cursor: pointer;
-}
-
-.mode-button.active {
-  background: rgba(255, 208, 137, 0.16);
-  border-color: rgba(255, 208, 137, 0.5);
-}
-
-.workspace-copy {
-  margin-top: 18px;
+  height: 100vh;
 }

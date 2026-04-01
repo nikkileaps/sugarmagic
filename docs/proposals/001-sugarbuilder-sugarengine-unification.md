@@ -149,6 +149,8 @@ That is the bar the product should be designed around.
 ## Secondary Product Goals
 
 - adopt Sugarengine's visual style and shell discipline
+- inherit Sugarengine's shell color palette as Sugarmagic's initial shell palette
+- inherit Sugarengine's icon set and icon semantics as Sugarmagic's initial shell iconography baseline
 - keep Sugarbuilder's strongest authoring workflows
 - reduce time lost to parity debugging
 - make region authoring feel like editing the game itself, not preparing data for another app
@@ -169,6 +171,13 @@ Non-goals for the first major foundation:
 ## Product Shape
 
 Sugarmagic should use a mode-based editor shell with Sugarengine-style presentation.
+
+For the initial shell foundation, this should be interpreted concretely:
+
+- preserve Sugarengine's established shell palette unless and until a later proposal intentionally changes it
+- preserve Sugarengine's established icon set and icon semantics unless and until a later proposal intentionally changes them
+- build reusable shell and layout components instead of relying on page-level placeholder styling
+- use Mantine as the backing component library for those reusable shell and layout components
 
 ### Workspace Structure
 
