@@ -14,7 +14,7 @@ export interface ModeBarProps {
 
 export function ModeBar({ items, activeId, onSelect }: ModeBarProps) {
   return (
-    <Group gap="xs" px="md" h={40} align="center" wrap="nowrap">
+    <Group gap="sm" h={44} align="center" wrap="nowrap">
       {items.map((item) => {
         const isActive = item.id === activeId;
         return (
@@ -25,10 +25,10 @@ export function ModeBar({ items, activeId, onSelect }: ModeBarProps) {
               root: {
                 display: "flex",
                 alignItems: "center",
-                gap: "var(--sm-space-xs)",
-                padding: "var(--sm-space-xs) var(--sm-space-md)",
+                gap: "var(--sm-space-sm)",
+                padding: "6px var(--sm-space-lg)",
                 borderRadius: "var(--sm-radius-md)",
-                fontSize: "var(--sm-font-size-md)",
+                fontSize: "var(--sm-font-size-lg)",
                 color: isActive
                   ? "var(--sm-accent-blue)"
                   : "var(--sm-color-overlay2)",

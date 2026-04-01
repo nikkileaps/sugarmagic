@@ -11,11 +11,10 @@ export function ViewportFrame({ children }: ViewportFrameProps) {
       style={{
         flex: 1,
         minHeight: 0,
+        height: "100%",
         background: "var(--sm-viewport-bg)",
         position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
+        overflow: "hidden"
       }}
     >
       {children}

@@ -19,14 +19,15 @@ const workspaces = [
 
 const allowedInternalDeps = {
   "@sugarmagic/studio": new Set([
-    "@sugarmagic/shell",
+    "@sugarmagic/domain",
+    "@sugarmagic/io",
+    "@sugarmagic/plugins",
     "@sugarmagic/productmodes",
     "@sugarmagic/runtime-core",
     "@sugarmagic/runtime-web",
-    "@sugarmagic/plugins",
-    "@sugarmagic/io",
-    "@sugarmagic/ui",
-    "@sugarmagic/testing"
+    "@sugarmagic/shell",
+    "@sugarmagic/testing",
+    "@sugarmagic/ui"
   ]),
   "@sugarmagic/target-web": new Set([
     "@sugarmagic/runtime-core",
@@ -35,6 +36,8 @@ const allowedInternalDeps = {
     "@sugarmagic/io"
   ]),
   "@sugarmagic/shell": new Set([
+    "@sugarmagic/domain",
+    "@sugarmagic/io",
     "@sugarmagic/productmodes",
     "@sugarmagic/ui"
   ]),
@@ -52,6 +55,7 @@ const allowedInternalDeps = {
     "@sugarmagic/plugins"
   ]),
   "@sugarmagic/runtime-web": new Set([
+    "@sugarmagic/domain",
     "@sugarmagic/runtime-core",
     "@sugarmagic/io",
     "@sugarmagic/plugins"

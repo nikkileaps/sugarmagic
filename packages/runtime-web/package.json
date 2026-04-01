@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "@sugarmagic/runtime-core": "workspace:*"
+    "@sugarmagic/domain": "workspace:*",
+    "@sugarmagic/runtime-core": "workspace:*",
+    "three": "^0.183.2"
   },
   "exports": {
     ".": "./src/index.ts"

@@ -33,6 +33,8 @@
   --sm-active-bg-hover: color-mix(in srgb, var(--sm-accent-blue) 15%, transparent);
   --sm-hover-bg: color-mix(in srgb, white 4%, transparent);
   --sm-subtle-hover-bg: color-mix(in srgb, white 3%, transparent);
+  --sm-action-green-bg: color-mix(in srgb, var(--sm-accent-green) 27%, transparent);
+  --sm-action-green-bg-hover: color-mix(in srgb, var(--sm-accent-green) 40%, transparent);
 
   /* Semantic surface roles */
   --sm-shell-bg: var(--sm-color-crust);

@@ -75,6 +75,15 @@ This proposal remains architecture-first, but the foundation should still assume
 - Vite-compatible tooling is the default host/target build direction
 - `zustand` is the default store technology for shell-facing and authoring-session-facing application state
 
+For the first authored-loop milestone, the implementation direction should also assume:
+
+- browser-first project lifecycle support
+- Chromium-class desktop browsers as the first supported environment
+- File System Access API as the primary way to access canonical game roots from the browser host
+- OPFS only for non-canonical cached or disposable data where useful
+
+This milestone should not require Tauri just to achieve project open/save flows.
+
 ### Important rule
 
 `zustand` is not the canonical owner of authored truth.

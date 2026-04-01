@@ -1,3 +1,4 @@
+export * from "./authoring-session";
 export * from "./commands";
 export * from "./content-library";
 export * from "./game-project";
