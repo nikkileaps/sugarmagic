@@ -31,6 +31,33 @@ Sugarmagic is expected to converge on a package-oriented internal architecture s
 
 These should be treated as implementation-stable module boundaries, not just folders.
 
+## Shell Layout Convention
+
+The Sugarmagic shell uses a panel-based layout. Layout containers are called **Panels** — they are pure rectangular regions that do not know or care what content they hold. What goes inside each panel (mode bar, inspector, viewport, status) is determined by the consumer, not the layout.
+
+```text
+┌─────────────────────────────────────────────────┐
+│                 HeaderPanel                      │
+├───────────┬─────────────────────┬───────────────┤
+│           │                     │               │
+│ LeftPanel │    CenterPanel      │  RightPanel   │
+│           │                     │  (future)     │
+│           │                     │               │
+├───────────┴─────────────────────┴───────────────┤
+│                 BottomPanel                      │
+└─────────────────────────────────────────────────┘
+```
+
+| Panel | Role | Current content |
+|-------|------|----------------|
+| HeaderPanel | Top strip, fixed height | App title, Game menu, ProductMode tabs |
+| LeftPanel | Left column, fixed width | Workspace header, Structure panel, Inspector panel |
+| CenterPanel | Main content area, fills remaining space | Viewport (Three.js canvas) |
+| RightPanel | Right column (not yet active) | Reserved for future use |
+| BottomPanel | Bottom strip, fixed height | Status bar |
+
+These names are layout terms, not semantic descriptions. The `ShellFrame` component in `packages/ui` accepts `headerPanel`, `leftPanel`, `centerPanel`, and `bottomPanel` as props. Semantic names like "sidebar", "viewport", or "toolbar" describe what fills a panel, not the panel itself.
+
 ## Allowed Dependency Direction
 
 At a high level:

@@ -1,14 +1,39 @@
+/**
+ * ShellFrame — the top-level layout container for the Sugarmagic shell.
+ *
+ * Defines five layout panels:
+ *
+ *   ┌─────────────────────────────────────────────┐
+ *   │              HeaderPanel                     │
+ *   ├───────────┬─────────────────────┬───────────┤
+ *   │           │                     │           │
+ *   │ LeftPanel │    CenterPanel      │ RightPanel│
+ *   │           │                     │ (future)  │
+ *   │           │                     │           │
+ *   ├───────────┴─────────────────────┴───────────┤
+ *   │              BottomPanel                     │
+ *   └─────────────────────────────────────────────┘
+ *
+ * These are pure layout regions. What goes inside each panel
+ * (mode bar, inspector, viewport, status) is the consumer's concern.
+ */
+
 import { AppShell } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export interface ShellFrameProps {
-  navbar: ReactNode;
-  header: ReactNode;
-  footer: ReactNode;
-  children: ReactNode;
+  headerPanel: ReactNode;
+  leftPanel: ReactNode;
+  centerPanel: ReactNode;
+  bottomPanel: ReactNode;
 }
 
-export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps) {
+export function ShellFrame({
+  headerPanel,
+  leftPanel,
+  centerPanel,
+  bottomPanel
+}: ShellFrameProps) {
   return (
     <AppShell
       header={{ height: 44 }}
@@ -41,7 +66,7 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {header}
+        {headerPanel}
       </AppShell.Header>
 
       <AppShell.Navbar
@@ -52,10 +77,10 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {navbar}
+        {leftPanel}
       </AppShell.Navbar>
 
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main>{centerPanel}</AppShell.Main>
 
       <AppShell.Footer
         styles={{
@@ -65,7 +90,7 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           }
         }}
       >
-        {footer}
+        {bottomPanel}
       </AppShell.Footer>
     </AppShell>
   );

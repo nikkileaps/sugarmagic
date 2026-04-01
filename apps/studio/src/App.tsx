@@ -243,7 +243,7 @@ export function App() {
       />
 
       <ShellFrame
-        header={
+        headerPanel={
           <Group h={44} px="md" align="center" gap={0} wrap="nowrap">
             <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
               Sugarmagic
@@ -346,7 +346,7 @@ export function App() {
             />
           </Group>
         }
-        navbar={
+        leftPanel={
           <Stack gap={0} h="100%">
             <WorkspaceHeader
               icon={shellIcons.regions}
@@ -397,30 +397,31 @@ export function App() {
             )}
           </Stack>
         }
-        footer={
+        bottomPanel={
           <StatusBar
             message={statusMessage}
             severity={phase === "error" ? "error" : "info"}
             trailing={activeWorkspaceId ?? undefined}
           />
         }
-      >
-        <ViewportFrame>
-          {phase === "active" ? (
-            <div
-              ref={viewportRef}
-              style={{
-                position: "absolute",
-                inset: 0
-              }}
-            />
-          ) : (
-            <Text size="sm" c="var(--sm-color-overlay0)">
-              Open or create a project to begin.
-            </Text>
-          )}
-        </ViewportFrame>
-      </ShellFrame>
+        centerPanel={
+          <ViewportFrame>
+            {phase === "active" ? (
+              <div
+                ref={viewportRef}
+                style={{
+                  position: "absolute",
+                  inset: 0
+                }}
+              />
+            ) : (
+              <Text size="sm" c="var(--sm-color-overlay0)">
+                Open or create a project to begin.
+              </Text>
+            )}
+          </ViewportFrame>
+        }
+      />
     </>
   );
 }
