@@ -15,6 +15,7 @@ export * from "./network";
 export * from "./save";
 export * from "./scheduling";
 export * from "./transfer";
+export * from "./viewport";
 export * from "./workers";
 
 export interface BrowserRuntimeAdapter {

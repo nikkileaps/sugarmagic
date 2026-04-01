@@ -57,6 +57,15 @@ Sugarmagic is expected to rely on:
 - transferables for large binary payload exchange where appropriate
 - optional WASM acceleration behind worker-friendly contracts when profiling justifies it
 
+For the initial authored-loop milestone, Sugarmagic should also assume:
+
+- browser-first project lifecycle support
+- Chromium-class desktop browsers as the first supported environment
+- File System Access API for canonical game-root selection and authored read/write
+- OPFS only for non-canonical caches or disposable derived data where useful
+
+The initial milestone should not require Tauri or another native wrapper just to make project open/save work.
+
 ### UI model
 
 Sugarmagic is expected to use:
@@ -198,6 +207,8 @@ A host should be able to:
 1. create an isolated runtime session
 2. persist or discard session state according to host policy
 3. keep authored content separate from play/session persistence
+
+For browser-first authoring flows, canonical authored project persistence should use the selected game-root handles, while browser-private storage should remain non-canonical.
 
 ### Worker/job API
 

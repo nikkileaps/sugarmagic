@@ -11,7 +11,7 @@ export interface ShellFrameProps {
 export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps) {
   return (
     <AppShell
-      header={{ height: 72 }}
+      header={{ height: 44 }}
       navbar={{ width: 240, breakpoint: 0 }}
       footer={{ height: 28 }}
       padding={0}
@@ -25,7 +25,9 @@ export function ShellFrame({ navbar, header, footer, children }: ShellFrameProps
           background: "var(--sm-viewport-bg)",
           display: "flex",
           flexDirection: "column",
-          minHeight: 0
+          minHeight: 0,
+          height: "calc(100vh - 44px - 28px)",
+          overflow: "hidden"
         }
       }}
     >

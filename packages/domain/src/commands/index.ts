@@ -55,3 +55,11 @@ export type SemanticCommand =
   | PaintLandscapeCommand
   | UpdateEnvironmentCommand
   | UpdatePluginConfigurationCommand;
+
+export {
+  executeCommand,
+  pushTransaction,
+  undoTransaction,
+  createEmptyHistory,
+  type CommandExecutionResult
+} from "./executor";

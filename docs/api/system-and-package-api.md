@@ -314,6 +314,10 @@ Game-root, persistence, import, export, and publish boundaries.
 - publish API for target artifacts
 - schema and migration APIs
 
+For the initial authored-loop milestone, these boundaries should support a browser-first implementation using the File System Access API for canonical project read/write.
+
+If OPFS is used, it should be limited to caches, sidecars, or other non-canonical persistence roles.
+
 ### Important rule
 
 IO is responsible for moving data across boundaries.
