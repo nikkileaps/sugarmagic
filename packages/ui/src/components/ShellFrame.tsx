@@ -5,10 +5,10 @@
  *
  *   ┌─────────────────────────────────────────────┐
  *   │              HeaderPanel                     │
+ *   │              SubHeaderPanel (optional)       │
  *   ├───────────┬─────────────────────┬───────────┤
  *   │           │                     │           │
  *   │ LeftPanel │    CenterPanel      │ RightPanel│
- *   │           │                     │ (future)  │
  *   │           │                     │           │
  *   ├───────────┴─────────────────────┴───────────┤
  *   │              BottomPanel                     │
@@ -23,21 +23,28 @@ import type { ReactNode } from "react";
 
 export interface ShellFrameProps {
   headerPanel: ReactNode;
+  subHeaderPanel?: ReactNode;
   leftPanel: ReactNode;
   centerPanel: ReactNode;
+  rightPanel?: ReactNode;
   bottomPanel: ReactNode;
 }
 
 export function ShellFrame({
   headerPanel,
+  subHeaderPanel,
   leftPanel,
   centerPanel,
+  rightPanel,
   bottomPanel
 }: ShellFrameProps) {
+  const headerHeight = subHeaderPanel ? 76 : 44;
+
   return (
     <AppShell
-      header={{ height: 44 }}
+      header={{ height: headerHeight }}
       navbar={{ width: 240, breakpoint: 0 }}
+      aside={rightPanel ? { width: 280, breakpoint: 0 } : undefined}
       footer={{ height: 28 }}
       padding={0}
       styles={{
@@ -51,7 +58,7 @@ export function ShellFrame({
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
-          height: "calc(100vh - 44px - 28px)",
+          height: `calc(100vh - ${headerHeight}px - 28px)`,
           overflow: "hidden"
         }
       }}
@@ -67,6 +74,7 @@ export function ShellFrame({
         }}
       >
         {headerPanel}
+        {subHeaderPanel}
       </AppShell.Header>
 
       <AppShell.Navbar
@@ -81,6 +89,19 @@ export function ShellFrame({
       </AppShell.Navbar>
 
       <AppShell.Main>{centerPanel}</AppShell.Main>
+
+      {rightPanel && (
+        <AppShell.Aside
+          styles={{
+            aside: {
+              background: "var(--sm-panel-bg)",
+              borderLeft: "1px solid var(--sm-panel-border)"
+            }
+          }}
+        >
+          {rightPanel}
+        </AppShell.Aside>
+      )}
 
       <AppShell.Footer
         styles={{

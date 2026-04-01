@@ -14,6 +14,7 @@ const workspaces = [
   { dir: "packages/plugins", kind: "package" },
   { dir: "packages/io", kind: "package" },
   { dir: "packages/ui", kind: "package" },
+  { dir: "packages/workspaces", kind: "package" },
   { dir: "packages/testing", kind: "package" }
 ];
 
@@ -27,7 +28,8 @@ const allowedInternalDeps = {
     "@sugarmagic/runtime-web",
     "@sugarmagic/shell",
     "@sugarmagic/testing",
-    "@sugarmagic/ui"
+    "@sugarmagic/ui",
+    "@sugarmagic/workspaces"
   ]),
   "@sugarmagic/target-web": new Set([
     "@sugarmagic/runtime-core",
@@ -70,6 +72,13 @@ const allowedInternalDeps = {
     "@sugarmagic/plugins"
   ]),
   "@sugarmagic/ui": new Set(),
+  "@sugarmagic/workspaces": new Set([
+    "@sugarmagic/domain",
+    "@sugarmagic/runtime-core",
+    "@sugarmagic/runtime-web",
+    "@sugarmagic/shell",
+    "@sugarmagic/ui"
+  ]),
   "@sugarmagic/testing": new Set([
     "@sugarmagic/domain",
     "@sugarmagic/io",
@@ -78,7 +87,8 @@ const allowedInternalDeps = {
     "@sugarmagic/runtime-core",
     "@sugarmagic/runtime-web",
     "@sugarmagic/shell",
-    "@sugarmagic/ui"
+    "@sugarmagic/ui",
+    "@sugarmagic/workspaces"
   ])
 };
 

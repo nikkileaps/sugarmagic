@@ -20,6 +20,7 @@ Sugarmagic is expected to converge on a package-oriented internal architecture s
 /targets/web
 /packages/shell
 /packages/productmodes
+/packages/workspaces
 /packages/domain
 /packages/runtime-core
 /packages/runtime-web
@@ -51,12 +52,12 @@ The Sugarmagic shell uses a panel-based layout. Layout containers are called **P
 | Panel | Role | Current content |
 |-------|------|----------------|
 | HeaderPanel | Top strip, fixed height | App title, Game menu, ProductMode tabs |
-| LeftPanel | Left column, fixed width | Workspace header, Structure panel, Inspector panel |
+| LeftPanel | Left column, fixed width | Workspace header, `SceneExplorer`, `Inspector` |
 | CenterPanel | Main content area, fills remaining space | Viewport (Three.js canvas) |
 | RightPanel | Right column (not yet active) | Reserved for future use |
 | BottomPanel | Bottom strip, fixed height | Status bar |
 
-These names are layout terms, not semantic descriptions. The `ShellFrame` component in `packages/ui` accepts `headerPanel`, `leftPanel`, `centerPanel`, and `bottomPanel` as props. Semantic names like "sidebar", "viewport", or "toolbar" describe what fills a panel, not the panel itself.
+These names are layout terms, not semantic descriptions. The `ShellFrame` component in `packages/ui` accepts `headerPanel`, `leftPanel`, `centerPanel`, and `bottomPanel` as props. Semantic names like `SceneExplorer`, `Inspector`, `Viewport`, or `ModeBar` describe what fills a panel, not the panel itself.
 
 ## Allowed Dependency Direction
 
@@ -129,6 +130,64 @@ The hierarchy remains:
 2. `ProductMode`
 3. `Workspace`
 
+## Workspace Implementation API
+
+Sugarmagic should also distinguish between:
+
+- `Workspace` as an architecture concept
+- workspace implementation modules as the code that realizes one concrete workspace
+
+### Recommended package home
+
+Concrete workspace implementation logic should live in a dedicated authoring-facing home such as:
+
+```text
+/packages/workspaces/
+  /build/
+    /layout/
+    /environment/
+    /assets/
+  /design/
+  /render/
+```
+
+### Important rule
+
+Workspace implementation modules are not the same thing as `ProductMode` descriptors.
+
+They are allowed to depend on:
+
+- shell-facing coordination contracts
+- domain commands and canonical document types
+- runtime-facing viewport capabilities
+- shared UI components
+
+They should not be treated as publishable runtime packages by default.
+
+## `SceneExplorer` API
+
+`SceneExplorer` should be treated as a reusable UI component, not as a layout term.
+
+### Definition
+
+`SceneExplorer` is a reusable UI component for:
+
+- showing a tree of scene elements
+- showing folders and nested scene structure
+- selection and focus behavior
+- lightweight management controls appropriate to the active workspace
+
+### Rule
+
+`SceneExplorer` is rendered inside a layout panel, but it is not itself a `Panel`.
+
+For the initial `Build > Layout` pass, `SceneExplorer` should begin as:
+
+- a real tree, not a flat debug list
+- folder-aware from the start
+- derived from canonical region/workspace structure
+- synchronized with viewport selection and gizmo state
+
 ## `/apps/studio` API
 
 ### Purpose
@@ -180,6 +239,24 @@ It must not become a second engine.
 It also should not be treated as the owner of a shared editor-and-game visual language.
 
 What it shares with Sugarmagic is runtime and delivery architecture, not the editor shell palette, shell chrome, or shell icon language.
+
+It also must not depend on editor-only workspace implementation packages.
+
+### Publish rule
+
+The intended published target dependency graph is:
+
+- `targets/web`
+- `runtime-core`
+- `runtime-web`
+- approved runtime-facing plugins
+- published content artifacts
+
+It must not pull in:
+
+- `shell`
+- editor-only workspace implementation modules
+- editor gizmos, editor overlays, or ProductMode-specific authoring logic
 
 ## `/packages/shell` API
 
@@ -237,6 +314,56 @@ They do not own domain truth.
 
 They may consume shell-facing store state, but they must not turn that store state into canonical authored meaning.
 
+They also must not become the home for full workspace implementation logic.
+
+`packages/productmodes` should remain primarily declarative:
+
+- descriptors
+- labels
+- available workspace kinds
+- registration metadata
+- composition hooks
+
+It should not become the package where Build/Layout gizmos, viewport interaction controllers, or workspace-specific editor logic permanently live.
+
+## `/packages/workspaces` API
+
+### Purpose
+
+Authoring-only implementation modules for concrete workspaces.
+
+### Should expose
+
+- concrete workspace implementations such as `LayoutWorkspace(regionId)`
+- workspace-specific interaction/session controllers
+- workspace-specific editor overlays such as gizmos, origin markers, and world cursors
+- workspace-specific selection-to-tool mapping
+- workspace-specific inspector and panel composition helpers
+
+### Should depend on
+
+- `shell`
+- `domain`
+- `runtime-core`
+- `runtime-web`
+- `ui`
+
+### Should not expose
+
+- publish-target entry points
+- canonical runtime semantics that belong in `runtime-core`
+- browser renderer internals that belong in `runtime-web`
+
+### Important rule
+
+`packages/workspaces` is an authoring-facing layer.
+
+It is where editor viewport tooling should live when that tooling is:
+
+- ProductMode-specific
+- workspace-specific
+- not part of the published runtime
+
 ## `/packages/domain` API
 
 ### Purpose
@@ -284,6 +411,8 @@ This is the primary shared runtime boundary that both Sugarmagic and published t
 
 Runtime session state may be surfaced to stores or views through adapters, but the store is not the owner of that truth.
 
+It must not absorb editor gizmo logic, ProductMode-specific workspace controllers, or editor-only overlay behavior as runtime semantics.
+
 ## `/packages/runtime-web` API
 
 ### Purpose
@@ -298,12 +427,28 @@ Browser-specific runtime adapters.
 - browser save/session adapters
 - browser audio/network adapters
 - target warmup helpers where needed
+- viewport and renderer adapter helpers
+- authored-scene root and editor-overlay root access where needed
+- low-level browser or renderer picking and raycast helpers
+- pointer-to-ray or equivalent browser viewport utilities
 
 ### Should not expose
 
 - alternate runtime semantics
 - editor-specific shell assumptions
 - shell-store ownership of runtime session truth
+- Build-specific gizmo logic
+- Layout-specific transform-session logic
+- editor workspace behavior
+- commit-on-release authoring logic
+
+### Important rule
+
+`runtime-web` is not the package where arbitrary Three.js-specific editor code goes.
+
+It exists to adapt the shared runtime for the browser and to expose renderer/viewport primitives that authoring workspaces may use.
+
+If a piece of code exists only to support a specific authoring workspace such as `Build > Layout`, it should live in workspace implementation modules rather than in `runtime-web`.
 
 ## `/packages/plugins` API
 

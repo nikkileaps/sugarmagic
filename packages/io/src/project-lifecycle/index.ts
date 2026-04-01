@@ -30,42 +30,15 @@ export interface CreateProjectInput {
 const PROJECT_FILE = "project.sgrmagic";
 const REGIONS_DIR = "regions";
 
-function makeDefaultRegion(slug: string): RegionDocument {
-  const regionId = `${slug}-region-01`;
-  return {
-    identity: { id: regionId, schema: "RegionDocument", version: 1 },
-    displayName: "Region 01",
-    placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: {
-      placedAssets: [
-        {
-          instanceId: "placed-001",
-          assetDefinitionId: "builtin:cube",
-          transform: {
-            position: [0, 1, 0],
-            rotation: [0, 0, 0],
-            scale: [1, 1, 1]
-          }
-        }
-      ]
-    },
-    environment: { skyProfileId: null, fogEnabled: false },
-    landscape: { enabled: false, channelIds: [] },
-    markers: [],
-    gameplayPlacements: []
-  };
-}
-
-function makeDefaultProject(
+function makeEmptyProject(
   gameName: string,
-  slug: string,
-  regionId: string
+  slug: string
 ): GameProject {
   return {
     identity: { id: slug, schema: "GameProject", version: 1 },
     displayName: gameName,
     gameRootPath: ".",
-    regionRegistry: [{ regionId }],
+    regionRegistry: [],
     pluginConfigIds: []
   };
 }
@@ -81,20 +54,10 @@ export async function createProjectInDirectory(
   handle: FileSystemDirectoryHandle,
   input: CreateProjectInput
 ): Promise<ActiveProject> {
-  const region = makeDefaultRegion(input.slug);
-  const project = makeDefaultProject(
-    input.gameName,
-    input.slug,
-    region.identity.id
-  );
+  const project = makeEmptyProject(input.gameName, input.slug);
 
   await ensureDirectory(handle, REGIONS_DIR);
   await writeJsonFile(handle, [PROJECT_FILE], project);
-  await writeJsonFile(
-    handle,
-    [REGIONS_DIR, `${region.identity.id}.json`],
-    region
-  );
 
   await storeProjectHandle(input.slug, handle);
 
@@ -108,7 +71,7 @@ export async function createProjectInDirectory(
       publishPath: "publish"
     },
     gameProject: project,
-    regions: [region]
+    regions: []
   };
 }
 

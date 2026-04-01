@@ -80,6 +80,9 @@ importers:
       '@sugarmagic/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@sugarmagic/workspaces':
+        specifier: workspace:*
+        version: link:../../packages/workspaces
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -180,6 +183,36 @@ importers:
       react-dom:
         specifier: '>=18'
         version: 19.2.4(react@19.2.4)
+
+  packages/workspaces:
+    dependencies:
+      '@mantine/core':
+        specifier: ^9.0.0
+        version: 9.0.0(@mantine/hooks@9.0.0(react@19.2.4))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@sugarmagic/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+      '@sugarmagic/runtime-web':
+        specifier: workspace:*
+        version: link:../runtime-web
+      '@sugarmagic/shell':
+        specifier: workspace:*
+        version: link:../shell
+      '@sugarmagic/ui':
+        specifier: workspace:*
+        version: link:../ui
+      react:
+        specifier: '>=18'
+        version: 19.2.4
+      react-dom:
+        specifier: '>=18'
+        version: 19.2.4(react@19.2.4)
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
 
   targets/web:
     dependencies:

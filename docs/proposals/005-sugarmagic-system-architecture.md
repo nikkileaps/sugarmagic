@@ -536,6 +536,7 @@ It gives Sugarmagic:
 - one shared runtime
 - one publish target system
 - one explicit place for ProductMode composition
+- one explicit place for authoring-only workspace implementation
 
 ## Detailed Folder Proposal
 
@@ -583,12 +584,21 @@ What is shared is:
 - content and asset resolution architecture
 - publish artifact consumption
 
+The published target should bundle the shared runtime packages it needs in order to run the game:
+
+- `runtime-core`
+- `runtime-web`
+- approved runtime-facing plugin capabilities
+
+and then load game-specific published content from derived publish outputs.
+
 What is not automatically shared is:
 
 - editor shell palette
 - editor shell chrome
 - editor shell panel/layout system
 - editor shell icon semantics as the default language for in-game UI
+- editor-only workspace implementations such as Layout gizmos, Scene Explorer behavior, or ProductMode-specific authoring interactions
 
 ### `/packages/shell`
 
@@ -633,6 +643,44 @@ Each ProductMode declares:
 Each ProductMode must **compose** existing domain and runtime systems.
 
 A ProductMode must not become a second domain layer.
+
+It also must not become the permanent home for full workspace implementation logic.
+
+`packages/productmodes` should remain primarily declarative:
+
+- mode descriptors
+- labels
+- exposed workspace kinds
+- registration and composition metadata
+
+It should not become the package where Build/Layout gizmos, viewport interaction controllers, or workspace-specific editor logic permanently live.
+
+### `/packages/workspaces`
+
+This package owns authoring-only workspace implementation.
+
+Suggested substructure:
+
+```text
+/packages/workspaces/
+  /build/
+    /layout/
+    /environment/
+    /assets/
+  /design/
+  /render/
+```
+
+This is the recommended home for:
+
+- concrete workspace implementation modules such as `LayoutWorkspace(regionId)`
+- workspace-specific interaction/session controllers
+- editor overlays such as gizmos, origin markers, and world cursors
+- workspace-specific inspector, structure-panel, and viewport-tool composition
+
+This package is authoring-facing.
+
+It should not be treated as part of the published runtime dependency graph by default.
 
 ### `/packages/domain`
 
@@ -692,6 +740,12 @@ It should absorb:
 - VFX runtime systems
 - runtime overlays used by ProductModes
 
+It should not absorb:
+
+- editor gizmo logic
+- ProductMode-specific workspace interaction controllers
+- editor-only overlay behavior as runtime semantics
+
 ### `/packages/runtime-web`
 
 This package owns platform adapters for web targets.
@@ -721,6 +775,25 @@ Its job is to adapt the shared runtime for:
 - local preview and published web hosting
 
 This keeps the runtime extracted for web targets without creating a second renderer or second simulation path.
+
+`runtime-web` may expose low-level browser renderer and viewport capabilities such as:
+
+- runtime boot helpers
+- browser viewport/renderer adapters
+- authored-scene root and editor-overlay root access
+- low-level picking and raycast helpers
+- browser pointer-to-ray utilities
+
+It should not become the home for arbitrary editor tooling just because that tooling uses Three.js.
+
+In particular, `runtime-web` should not own:
+
+- Build-specific gizmo logic
+- Layout-specific transform-session logic
+- Scene Explorer behavior
+- commit-on-release authoring controllers
+
+Those belong in authoring-facing workspace implementation modules.
 
 ### `/packages/plugins`
 

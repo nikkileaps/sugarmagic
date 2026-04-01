@@ -2,7 +2,8 @@
  * Three.js runtime viewport — browser-specific rendering adapter.
  *
  * Scene loading semantics (what objects exist, transforms) are owned
- * by runtime-core. This adapter only handles Three.js rendering.
+ * by runtime-core. This adapter handles Three.js rendering and exposes
+ * separate roots for authored content and editor overlays.
  */
 
 import * as THREE from "three";
@@ -17,9 +18,15 @@ export interface RuntimeViewport {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
+  /** Root group for authored scene content (cubes, meshes, etc.) */
+  authoredRoot: THREE.Group;
+  /** Root group for editor overlays (gizmos, markers, cursors) */
+  overlayRoot: THREE.Group;
   mount: (container: HTMLElement) => void;
   unmount: () => void;
   updateFromRegion: (region: RegionDocument) => void;
+  /** Update a single object's transform without a full region diff */
+  previewTransform: (instanceId: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
   resize: (width: number, height: number) => void;
   render: () => void;
 }
@@ -58,6 +65,15 @@ export function createRuntimeViewport(): RuntimeViewport {
   const grid = new THREE.GridHelper(20, 20, GRID_COLOR, GRID_COLOR);
   scene.add(grid);
 
+  // Separate roots for authored content and editor overlays
+  const authoredRoot = new THREE.Group();
+  authoredRoot.name = "authored-root";
+  scene.add(authoredRoot);
+
+  const overlayRoot = new THREE.Group();
+  overlayRoot.name = "overlay-root";
+  scene.add(overlayRoot);
+
   const meshMap = new Map<string, THREE.Mesh>();
   let previousObjects: SceneObject[] = [];
   let animationId: number | null = null;
@@ -72,6 +88,8 @@ export function createRuntimeViewport(): RuntimeViewport {
     scene,
     camera,
     renderer,
+    authoredRoot,
+    overlayRoot,
 
     mount(el: HTMLElement) {
       container = el;
@@ -100,14 +118,13 @@ export function createRuntimeViewport(): RuntimeViewport {
     },
 
     updateFromRegion(region: RegionDocument) {
-      // Scene loading semantics come from runtime-core
       const currentObjects = resolveSceneObjects(region);
       const delta = computeSceneDelta(previousObjects, currentObjects);
 
       for (const id of delta.removed) {
         const mesh = meshMap.get(id);
         if (mesh) {
-          scene.remove(mesh);
+          authoredRoot.remove(mesh);
           mesh.geometry.dispose();
           (mesh.material as THREE.Material).dispose();
           meshMap.delete(id);
@@ -116,7 +133,7 @@ export function createRuntimeViewport(): RuntimeViewport {
 
       for (const obj of delta.added) {
         const mesh = createMeshForSceneObject(obj);
-        scene.add(mesh);
+        authoredRoot.add(mesh);
         meshMap.set(obj.instanceId, mesh);
       }
 
@@ -130,6 +147,15 @@ export function createRuntimeViewport(): RuntimeViewport {
       }
 
       previousObjects = currentObjects;
+    },
+
+    previewTransform(instanceId, position, rotation, scale) {
+      const mesh = meshMap.get(instanceId);
+      if (mesh) {
+        mesh.position.set(...position);
+        mesh.rotation.set(...rotation);
+        mesh.scale.set(...scale);
+      }
     },
 
     resize(width: number, height: number) {

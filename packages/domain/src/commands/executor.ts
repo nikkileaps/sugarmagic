@@ -9,7 +9,7 @@ import type { RegionDocument } from "../region-authoring";
 import type { TransactionBoundary } from "../transactions";
 import type { AuthoringHistory } from "../history";
 import type { TimestampIso } from "../shared";
-import type { SemanticCommand, MovePlacedAssetCommand } from "./index";
+import type { SemanticCommand, MovePlacedAssetCommand, TransformPlacedAssetCommand } from "./index";
 
 export interface CommandExecutionResult {
   region: RegionDocument;
@@ -45,6 +45,30 @@ function applyMovePlacedAsset(
   };
 }
 
+function applyTransformPlacedAsset(
+  region: RegionDocument,
+  command: TransformPlacedAssetCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              transform: {
+                position: command.payload.position,
+                rotation: command.payload.rotation,
+                scale: command.payload.scale
+              }
+            }
+          : asset
+      )
+    }
+  };
+}
+
 export function executeCommand(
   region: RegionDocument,
   command: SemanticCommand
@@ -54,6 +78,9 @@ export function executeCommand(
   switch (command.kind) {
     case "MovePlacedAsset":
       updatedRegion = applyMovePlacedAsset(region, command);
+      break;
+    case "TransformPlacedAsset":
+      updatedRegion = applyTransformPlacedAsset(region, command);
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

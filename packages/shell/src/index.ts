@@ -22,6 +22,8 @@ export * from "./status";
 export * from "./viewport-host";
 export * from "./workspace-host";
 
+export type BuildWorkspaceKind = "layout" | "environment" | "assets";
+
 export interface ShellSelectionState {
   workspaceId: string | null;
   entityIds: string[];
@@ -41,6 +43,8 @@ export interface ShellPanelState {
 
 export interface ShellState {
   activeProductMode: ProductModeId;
+  activeBuildWorkspaceKind: BuildWorkspaceKind;
+  activeRegionId: string | null;
   activeWorkspaceId: string | null;
   navigation: NavigationModel;
   panels: ShellPanelState;
@@ -50,6 +54,8 @@ export interface ShellState {
 
 export interface ShellActions {
   setActiveProductMode: (productModeId: ProductModeId) => void;
+  setActiveBuildWorkspaceKind: (kind: BuildWorkspaceKind) => void;
+  setActiveRegionId: (regionId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   setSelection: (entityIds: string[]) => void;
   setToolSession: (toolId: string | null, isActive: boolean) => void;
@@ -57,6 +63,14 @@ export interface ShellActions {
 }
 
 export type ShellStore = ReturnType<typeof createShellStore>;
+
+export function deriveBuildWorkspaceId(
+  kind: BuildWorkspaceKind,
+  regionId: string | null
+): string | null {
+  if (!regionId) return null;
+  return `build:${kind}:${regionId}`;
+}
 
 export interface ShellModel {
   appFrame: AppFrameModel;
@@ -71,8 +85,10 @@ export interface ShellModel {
 export function createShellStore(
   initialProductMode: ProductModeId = "build"
 ) {
-  return createStore<ShellState & ShellActions>()((set) => ({
+  return createStore<ShellState & ShellActions>()((set, get) => ({
     activeProductMode: initialProductMode,
+    activeBuildWorkspaceKind: "layout" as BuildWorkspaceKind,
+    activeRegionId: null,
     activeWorkspaceId: null,
     navigation: {
       activeProductMode: initialProductMode,
@@ -100,6 +116,34 @@ export function createShellStore(
           activeProductMode: productModeId
         }
       })),
+    setActiveBuildWorkspaceKind: (kind) => {
+      const regionId = get().activeRegionId;
+      const workspaceId = deriveBuildWorkspaceId(kind, regionId);
+      set((state) => ({
+        activeBuildWorkspaceKind: kind,
+        activeWorkspaceId: workspaceId,
+        navigation: {
+          ...state.navigation,
+          activeWorkspaceId: workspaceId
+        },
+        selection: { workspaceId, entityIds: [] },
+        toolSession: { workspaceId, toolId: null, isActive: false }
+      }));
+    },
+    setActiveRegionId: (regionId) => {
+      const kind = get().activeBuildWorkspaceKind;
+      const workspaceId = deriveBuildWorkspaceId(kind, regionId);
+      set((state) => ({
+        activeRegionId: regionId,
+        activeWorkspaceId: workspaceId,
+        navigation: {
+          ...state.navigation,
+          activeWorkspaceId: workspaceId
+        },
+        selection: { workspaceId, entityIds: [] },
+        toolSession: { workspaceId, toolId: null, isActive: false }
+      }));
+    },
     setActiveWorkspace: (workspaceId) =>
       set((state) => ({
         activeWorkspaceId: workspaceId,
