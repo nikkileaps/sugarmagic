@@ -273,6 +273,7 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [assetSources, setAssetSources] = useState<Record<string, string>>({});
+  const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
 
   function handleCreateRegion(input: { displayName: string; regionId: string }) {
     if (!session) return;
@@ -381,6 +382,9 @@ export function App() {
     const viewport = createAuthoringViewport();
     viewport.mount(viewportRef.current);
     runtimeRef.current = viewport;
+    const readyFrame = window.requestAnimationFrame(() => {
+      setViewportReadyVersion((version) => version + 1);
+    });
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) viewport.resize(entry.contentRect.width, entry.contentRect.height);
@@ -388,6 +392,7 @@ export function App() {
     observer.observe(viewportRef.current);
 
     return () => {
+      window.cancelAnimationFrame(readyFrame);
       observer.disconnect();
       viewport.unmount();
       runtimeRef.current = null;
@@ -410,6 +415,7 @@ export function App() {
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
     activeBuildKind,
+    viewportReadyVersion,
     activeRegionId,
     selectedIds,
     session,

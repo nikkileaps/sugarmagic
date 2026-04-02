@@ -33,6 +33,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
 
 export interface BuildProductModeViewProps {
   activeBuildKind: BuildWorkspaceKind;
+  viewportReadyVersion: number;
   activeRegionId: string | null;
   selectedIds: string[];
   session: AuthoringSession | null;
@@ -62,6 +63,7 @@ export function useBuildProductModeView(
 ): BuildProductModeViewResult {
   const {
     activeBuildKind,
+    viewportReadyVersion,
     activeRegionId,
     selectedIds,
     session,
@@ -92,6 +94,7 @@ export function useBuildProductModeView(
 
   const layoutView = useLayoutWorkspaceView({
     isActive: activeBuildKind === "layout",
+    viewportReadyVersion,
     getViewport: activeBuildKind === "layout" ? getViewport : () => null,
     getViewportElement: activeBuildKind === "layout" ? getViewportElement : () => null,
     selectedIds,

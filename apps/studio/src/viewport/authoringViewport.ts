@@ -114,12 +114,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
   scene.add(overlayRoot);
 
   const objectMap = new Map<string, SceneObjectEntry>();
+  const frameListeners = new Set<() => void>();
   let previousObjects: SceneObject[] = [];
   let animationId: number | null = null;
   let container: HTMLElement | null = null;
   let renderGeneration = 0;
 
   function renderLoop() {
+    for (const listener of frameListeners) {
+      listener();
+    }
     renderer.render(scene, camera);
     animationId = requestAnimationFrame(renderLoop);
   }
@@ -263,6 +267,13 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     render() {
       renderer.render(scene, camera);
+    },
+
+    subscribeFrame(listener) {
+      frameListeners.add(listener);
+      return () => {
+        frameListeners.delete(listener);
+      };
     }
   };
 }

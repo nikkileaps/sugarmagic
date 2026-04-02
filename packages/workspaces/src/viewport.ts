@@ -27,4 +27,5 @@ export interface WorkspaceViewport {
   ) => void;
   resize: (width: number, height: number) => void;
   render: () => void;
+  subscribeFrame: (listener: () => void) => () => void;
 }
