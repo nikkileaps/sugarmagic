@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { RegionDocument } from "@sugarmagic/domain";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
   World,
   Position,
@@ -43,9 +44,15 @@ export interface WebRuntimeHostOptions {
   request: WebTargetAdapterRequest;
 }
 
+export interface WebRuntimeStartState {
+  regions: RegionDocument[];
+  contentLibrary: ContentLibrarySnapshot;
+  assetSources: Record<string, string>;
+}
+
 export interface WebRuntimeHost {
   readonly boot: RuntimeBootModel;
-  start: (regions: RegionDocument[]) => void;
+  start: (state: WebRuntimeStartState) => void;
   dispose: () => void;
 }
 
@@ -53,6 +60,33 @@ const CUBE_COLOR = 0x89b4fa;
 const PLAYER_COLOR = 0xa6e3a1;
 const GRID_COLOR = 0x45475a;
 const BG_COLOR = 0x1e1e2e;
+
+const gltfLoader = new GLTFLoader();
+
+interface SceneObjectEntry {
+  root: THREE.Group;
+}
+
+function createFallbackMesh(): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
+  );
+}
+
+function disposeObject(root: THREE.Object3D) {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      for (const material of child.material) {
+        material.dispose();
+      }
+    } else {
+      child.material.dispose();
+    }
+  });
+}
 
 export function createWebTargetAdapter(
   request: WebTargetAdapterRequest
@@ -86,6 +120,7 @@ export function createWebRuntimeHost(
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
+  const sceneObjectEntries = new Map<string, SceneObjectEntry>();
 
   function disposeRuntime() {
     if (animationId !== null) {
@@ -97,14 +132,29 @@ export function createWebRuntimeHost(
     inputManager = null;
     cameraState = null;
     world = null;
-    playerMesh = null;
+
+    if (playerMesh) {
+      playerMesh.geometry.dispose();
+      if (Array.isArray(playerMesh.material)) {
+        for (const material of playerMesh.material) {
+          material.dispose();
+        }
+      } else {
+        playerMesh.material.dispose();
+      }
+      playerMesh = null;
+    }
+
+    for (const entry of sceneObjectEntries.values()) {
+      scene?.remove(entry.root);
+      disposeObject(entry.root);
+    }
+    sceneObjectEntries.clear();
 
     if (scene) {
       scene.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
-
         child.geometry.dispose();
-
         if (Array.isArray(child.material)) {
           for (const material of child.material) {
             material.dispose();
@@ -117,7 +167,6 @@ export function createWebRuntimeHost(
 
     if (renderer) {
       renderer.dispose();
-
       if (renderer.domElement.parentElement === root) {
         root.removeChild(renderer.domElement);
       }
@@ -139,7 +188,15 @@ export function createWebRuntimeHost(
   }
 
   function renderFrame(now: number) {
-    if (!world || !cameraState || !camera || !renderer || !scene || !playerMesh || !inputManager) {
+    if (
+      !world ||
+      !cameraState ||
+      !camera ||
+      !renderer ||
+      !scene ||
+      !playerMesh ||
+      !inputManager
+    ) {
       return;
     }
 
@@ -171,7 +228,7 @@ export function createWebRuntimeHost(
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
-  function start(regions: RegionDocument[]) {
+  function start(state: WebRuntimeStartState) {
     if (!started) {
       started = true;
       ownerWindow.addEventListener("resize", handleResize);
@@ -200,17 +257,35 @@ export function createWebRuntimeHost(
     scene.add(directional);
     scene.add(new THREE.GridHelper(40, 40, GRID_COLOR, GRID_COLOR));
 
-    for (const region of regions) {
-      const objects = resolveSceneObjects(region);
+    for (const region of state.regions) {
+      const objects = resolveSceneObjects(region, state.contentLibrary);
       for (const object of objects) {
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(...object.transform.position);
-        mesh.rotation.set(...object.transform.rotation);
-        mesh.scale.set(...object.transform.scale);
-        mesh.name = object.instanceId;
-        scene.add(mesh);
+        const rootObject = new THREE.Group();
+        rootObject.name = object.instanceId;
+        rootObject.position.set(...object.transform.position);
+        rootObject.rotation.set(...object.transform.rotation);
+        rootObject.scale.set(...object.transform.scale);
+
+        const assetSourceUrl = object.assetSourcePath
+          ? state.assetSources[object.assetSourcePath] ?? null
+          : null;
+
+        if (assetSourceUrl) {
+          void gltfLoader
+            .loadAsync(assetSourceUrl)
+            .then((gltf) => {
+              if (!scene) return;
+              rootObject.add(gltf.scene.clone(true));
+            })
+            .catch(() => {
+              rootObject.add(createFallbackMesh());
+            });
+        } else {
+          rootObject.add(createFallbackMesh());
+        }
+
+        scene.add(rootObject);
+        sceneObjectEntries.set(object.instanceId, { root: rootObject });
       }
     }
 
@@ -223,7 +298,9 @@ export function createWebRuntimeHost(
     world.addComponent(player, new Renderable("player", true));
 
     const playerGeometry = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: PLAYER_COLOR });
+    const playerMaterial = new THREE.MeshStandardMaterial({
+      color: PLAYER_COLOR
+    });
     playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
     playerMesh.position.set(0, 0.7, 0);
     scene.add(playerMesh);
@@ -233,20 +310,33 @@ export function createWebRuntimeHost(
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
-    movementSystem.setInputProvider(() => inputManager?.getInput() ?? { moveX: 0, moveY: 0 });
+    movementSystem.setInputProvider(
+      () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
+    );
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     inputManager.onRightDrag = (dx, dy) => {
       if (cameraState) {
-        cameraState = applyCameraDrag(cameraState, DEFAULT_CAMERA_CONFIG, dx, dy);
+        cameraState = applyCameraDrag(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          dx,
+          dy
+        );
       }
     };
     inputManager.onScroll = (delta) => {
       if (cameraState) {
-        cameraState = applyCameraZoom(cameraState, DEFAULT_CAMERA_CONFIG, delta);
+        cameraState = applyCameraZoom(
+          cameraState,
+          DEFAULT_CAMERA_CONFIG,
+          delta
+        );
       }
     };
-    movementSystem.setCameraYawProvider(() => cameraState?.yaw ?? Math.PI * 1.25);
+    movementSystem.setCameraYawProvider(
+      () => cameraState?.yaw ?? Math.PI * 1.25
+    );
 
     handleResize();
     lastTime = ownerWindow.performance.now();

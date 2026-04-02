@@ -1,10 +1,12 @@
-import type { RegionDocument } from "@sugarmagic/domain";
+import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import { createWebRuntimeHost } from "@sugarmagic/target-web";
 
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
+  contentLibrary: ContentLibrarySnapshot;
+  assetSources: Record<string, string>;
 }
 
 interface PreviewReadyMessage {
@@ -31,7 +33,11 @@ const host = createWebRuntimeHost({
 window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
-    host.start(data.regions);
+    host.start({
+      regions: data.regions,
+      contentLibrary: data.contentLibrary,
+      assetSources: data.assetSources
+    });
   }
 });
 

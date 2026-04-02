@@ -15,6 +15,20 @@ export async function pickDirectory(): Promise<FileSystemDirectoryHandle> {
   return window.showDirectoryPicker({ mode: "readwrite" });
 }
 
+export async function pickFile(options?: {
+  types?: Array<{
+    description?: string;
+    accept: Record<string, string[]>;
+  }>;
+}): Promise<FileSystemFileHandle> {
+  const [fileHandle] = await window.showOpenFilePicker({
+    multiple: false,
+    excludeAcceptAllOption: false,
+    ...options
+  });
+  return fileHandle;
+}
+
 export async function readJsonFile<T>(
   dirHandle: FileSystemDirectoryHandle,
   ...pathSegments: string[]
@@ -48,6 +62,40 @@ export async function writeJsonFile(
   const writable = await fileHandle.createWritable();
   await writable.write(JSON.stringify(data, null, 2));
   await writable.close();
+}
+
+export async function writeBlobFile(
+  dirHandle: FileSystemDirectoryHandle,
+  pathSegments: string[],
+  data: Blob
+): Promise<void> {
+  let current = dirHandle;
+  for (const segment of pathSegments.slice(0, -1)) {
+    current = await current.getDirectoryHandle(segment, { create: true });
+  }
+  const fileName = pathSegments[pathSegments.length - 1];
+  const fileHandle = await current.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(data);
+  await writable.close();
+}
+
+export async function readBlobFile(
+  dirHandle: FileSystemDirectoryHandle,
+  ...pathSegments: string[]
+): Promise<Blob | null> {
+  try {
+    let current = dirHandle;
+    for (const segment of pathSegments.slice(0, -1)) {
+      current = await current.getDirectoryHandle(segment);
+    }
+    const fileName = pathSegments[pathSegments.length - 1];
+    const fileHandle = await current.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    return file;
+  } catch {
+    return null;
+  }
 }
 
 export async function ensureDirectory(

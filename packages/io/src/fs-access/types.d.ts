@@ -3,6 +3,17 @@
  * Available in Chromium-class browsers.
  */
 
+interface FilePickerAcceptType {
+  description?: string;
+  accept: Record<string, string[]>;
+}
+
+interface OpenFilePickerOptions {
+  multiple?: boolean;
+  excludeAcceptAllOption?: boolean;
+  types?: FilePickerAcceptType[];
+}
+
 interface FileSystemDirectoryHandle {
   readonly kind: "directory";
   readonly name: string;
@@ -32,4 +43,7 @@ interface Window {
   showDirectoryPicker(options?: {
     mode?: "read" | "readwrite";
   }): Promise<FileSystemDirectoryHandle>;
+  showOpenFilePicker(
+    options?: OpenFilePickerOptions
+  ): Promise<FileSystemFileHandle[]>;
 }

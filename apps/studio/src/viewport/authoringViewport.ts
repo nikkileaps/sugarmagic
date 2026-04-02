@@ -1,37 +1,89 @@
 import * as THREE from "three";
-import type { RegionDocument } from "@sugarmagic/domain";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   resolveSceneObjects,
   computeSceneDelta,
   type SceneObject
 } from "@sugarmagic/runtime-core";
-import type { WorkspaceViewport } from "@sugarmagic/workspaces";
+import type {
+  WorkspaceViewport,
+  ViewportSceneState
+} from "@sugarmagic/workspaces";
 
 const CUBE_COLOR = 0x89b4fa;
 const GRID_COLOR = 0x45475a;
 const BG_COLOR = 0x1e1e2e;
 
-function createMeshForSceneObject(obj: SceneObject): THREE.Mesh {
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(
-    obj.transform.position[0],
-    obj.transform.position[1],
-    obj.transform.position[2]
+const gltfLoader = new GLTFLoader();
+
+interface SceneObjectEntry {
+  root: THREE.Group;
+  assetSourceUrl: string | null;
+}
+
+function createFallbackMesh(): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
   );
-  mesh.rotation.set(
-    obj.transform.rotation[0],
-    obj.transform.rotation[1],
-    obj.transform.rotation[2]
+}
+
+function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
+  root.position.set(
+    object.transform.position[0],
+    object.transform.position[1],
+    object.transform.position[2]
   );
-  mesh.scale.set(
-    obj.transform.scale[0],
-    obj.transform.scale[1],
-    obj.transform.scale[2]
+  root.rotation.set(
+    object.transform.rotation[0],
+    object.transform.rotation[1],
+    object.transform.rotation[2]
   );
-  mesh.name = obj.instanceId;
-  return mesh;
+  root.scale.set(
+    object.transform.scale[0],
+    object.transform.scale[1],
+    object.transform.scale[2]
+  );
+}
+
+function disposeObject(root: THREE.Object3D) {
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      for (const material of child.material) {
+        material.dispose();
+      }
+    } else {
+      child.material.dispose();
+    }
+  });
+}
+
+async function createRenderableRoot(
+  object: SceneObject,
+  assetSources: Record<string, string>
+): Promise<SceneObjectEntry> {
+  const root = new THREE.Group();
+  root.name = object.instanceId;
+  applyObjectTransform(root, object);
+
+  const assetSourceUrl =
+    object.assetSourcePath ? assetSources[object.assetSourcePath] ?? null : null;
+
+  if (!assetSourceUrl) {
+    root.add(createFallbackMesh());
+    return { root, assetSourceUrl: null };
+  }
+
+  try {
+    const gltf = await gltfLoader.loadAsync(assetSourceUrl);
+    root.add(gltf.scene.clone(true));
+    return { root, assetSourceUrl };
+  } catch {
+    root.add(createFallbackMesh());
+    return { root, assetSourceUrl };
+  }
 }
 
 export function createAuthoringViewport(): WorkspaceViewport {
@@ -61,12 +113,17 @@ export function createAuthoringViewport(): WorkspaceViewport {
   overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
 
-  const meshMap = new Map<string, THREE.Mesh>();
+  const objectMap = new Map<string, SceneObjectEntry>();
+  const frameListeners = new Set<() => void>();
   let previousObjects: SceneObject[] = [];
   let animationId: number | null = null;
   let container: HTMLElement | null = null;
+  let renderGeneration = 0;
 
   function renderLoop() {
+    for (const listener of frameListeners) {
+      listener();
+    }
     renderer.render(scene, camera);
     animationId = requestAnimationFrame(renderLoop);
   }
@@ -95,10 +152,18 @@ export function createAuthoringViewport(): WorkspaceViewport {
     },
 
     unmount() {
+      renderGeneration += 1;
+
       if (animationId !== null) {
         cancelAnimationFrame(animationId);
         animationId = null;
       }
+
+      for (const entry of objectMap.values()) {
+        authoredRoot.remove(entry.root);
+        disposeObject(entry.root);
+      }
+      objectMap.clear();
 
       if (container && renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -107,62 +172,94 @@ export function createAuthoringViewport(): WorkspaceViewport {
       renderer.dispose();
     },
 
-    updateFromRegion(region: RegionDocument) {
-      const currentObjects = resolveSceneObjects(region);
+    updateFromRegion(state: ViewportSceneState) {
+      const { region, contentLibrary, assetSources } = state;
+      const currentObjects = resolveSceneObjects(region, contentLibrary);
       const delta = computeSceneDelta(previousObjects, currentObjects);
+      const generation = ++renderGeneration;
 
       for (const id of delta.removed) {
-        const mesh = meshMap.get(id);
-        if (!mesh) continue;
-
-        authoredRoot.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        meshMap.delete(id);
+        const entry = objectMap.get(id);
+        if (!entry) continue;
+        authoredRoot.remove(entry.root);
+        disposeObject(entry.root);
+        objectMap.delete(id);
       }
 
       for (const object of delta.added) {
-        const mesh = createMeshForSceneObject(object);
-        authoredRoot.add(mesh);
-        meshMap.set(object.instanceId, mesh);
+        void createRenderableRoot(object, assetSources).then((entry) => {
+          if (generation !== renderGeneration) {
+            disposeObject(entry.root);
+            return;
+          }
+          authoredRoot.add(entry.root);
+          objectMap.set(object.instanceId, entry);
+        });
       }
 
       for (const object of delta.updated) {
-        const mesh = meshMap.get(object.instanceId);
-        if (!mesh) continue;
+        const existing = objectMap.get(object.instanceId);
+        const nextAssetSourceUrl = object.assetSourcePath
+          ? assetSources[object.assetSourcePath] ?? null
+          : null;
+        if (existing && existing.assetSourceUrl === nextAssetSourceUrl) {
+          applyObjectTransform(existing.root, object);
+          continue;
+        }
+        if (existing) {
+          authoredRoot.remove(existing.root);
+          disposeObject(existing.root);
+          objectMap.delete(object.instanceId);
+        }
 
-        mesh.position.set(
-          object.transform.position[0],
-          object.transform.position[1],
-          object.transform.position[2]
-        );
-        mesh.rotation.set(
-          object.transform.rotation[0],
-          object.transform.rotation[1],
-          object.transform.rotation[2]
-        );
-        mesh.scale.set(
-          object.transform.scale[0],
-          object.transform.scale[1],
-          object.transform.scale[2]
-        );
+        void createRenderableRoot(object, assetSources).then((entry) => {
+          if (generation !== renderGeneration) {
+            disposeObject(entry.root);
+            return;
+          }
+          authoredRoot.add(entry.root);
+          objectMap.set(object.instanceId, entry);
+        });
+      }
+
+      for (const object of currentObjects) {
+        const entry = objectMap.get(object.instanceId);
+        const nextAssetSourceUrl = object.assetSourcePath
+          ? assetSources[object.assetSourcePath] ?? null
+          : null;
+        if (entry && entry.assetSourceUrl !== nextAssetSourceUrl) {
+          authoredRoot.remove(entry.root);
+          disposeObject(entry.root);
+          objectMap.delete(object.instanceId);
+
+          void createRenderableRoot(object, assetSources).then((nextEntry) => {
+            if (generation !== renderGeneration) {
+              disposeObject(nextEntry.root);
+              return;
+            }
+            authoredRoot.add(nextEntry.root);
+            objectMap.set(object.instanceId, nextEntry);
+          });
+          continue;
+        }
+        if (!entry) continue;
+        applyObjectTransform(entry.root, object);
       }
 
       previousObjects = currentObjects;
     },
 
     previewTransform(instanceId, position, rotation, scale) {
-      const mesh = meshMap.get(instanceId);
-      if (!mesh) return;
+      const entry = objectMap.get(instanceId);
+      if (!entry) return;
 
-      mesh.position.set(position[0], position[1], position[2]);
-      mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
-      mesh.scale.set(scale[0], scale[1], scale[2]);
+      entry.root.position.set(position[0], position[1], position[2]);
+      entry.root.rotation.set(rotation[0], rotation[1], rotation[2]);
+      entry.root.scale.set(scale[0], scale[1], scale[2]);
     },
 
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
-
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -170,6 +267,13 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     render() {
       renderer.render(scene, camera);
+    },
+
+    subscribeFrame(listener) {
+      frameListeners.add(listener);
+      return () => {
+        frameListeners.delete(listener);
+      };
     }
   };
 }

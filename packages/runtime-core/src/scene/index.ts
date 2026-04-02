@@ -1,4 +1,9 @@
-import type { RegionDocument, PlacedAssetInstance } from "@sugarmagic/domain";
+import {
+  getAssetDefinition,
+  type ContentLibrarySnapshot,
+  type RegionDocument,
+  type PlacedAssetInstance
+} from "@sugarmagic/domain";
 
 /**
  * Platform-agnostic scene loading semantics.
@@ -27,6 +32,7 @@ export interface SceneObjectTransform {
 export interface SceneObject {
   instanceId: string;
   assetDefinitionId: string;
+  assetSourcePath: string | null;
   transform: SceneObjectTransform;
 }
 
@@ -37,11 +43,14 @@ export interface SceneDelta {
 }
 
 export function resolveSceneObjects(
-  region: RegionDocument
+  region: RegionDocument,
+  contentLibrary?: ContentLibrarySnapshot
 ): SceneObject[] {
   return region.scene.placedAssets.map((asset: PlacedAssetInstance) => ({
     instanceId: asset.instanceId,
     assetDefinitionId: asset.assetDefinitionId,
+    assetSourcePath:
+      getSceneObjectSourcePath(asset.assetDefinitionId, contentLibrary),
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
@@ -66,6 +75,7 @@ export function computeSceneDelta(
     if (!prev) {
       added.push(obj);
     } else if (
+      prev.assetSourcePath !== obj.assetSourcePath ||
       prev.transform.position[0] !== obj.transform.position[0] ||
       prev.transform.position[1] !== obj.transform.position[1] ||
       prev.transform.position[2] !== obj.transform.position[2] ||
@@ -87,4 +97,13 @@ export function computeSceneDelta(
   }
 
   return { added, updated, removed };
+}
+
+function getSceneObjectSourcePath(
+  assetDefinitionId: string,
+  contentLibrary?: ContentLibrarySnapshot
+): string | null {
+  if (!contentLibrary) return null;
+  const definition = getAssetDefinition(contentLibrary, assetDefinitionId);
+  return definition?.source.relativeAssetPath ?? null;
 }

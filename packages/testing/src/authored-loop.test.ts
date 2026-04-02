@@ -12,10 +12,13 @@ function makeTestRegion(): RegionDocument {
     displayName: "Test Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     scene: {
+      folders: [],
       placedAssets: [
         {
           instanceId: "cube-001",
           assetDefinitionId: "builtin:cube",
+          displayName: "Cube 001",
+          parentFolderId: null,
           transform: {
             position: [0, 1, 0],
             rotation: [0, 0, 0],

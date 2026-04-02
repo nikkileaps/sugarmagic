@@ -6,4 +6,5 @@ export interface GameProject {
   gameRootPath: string;
   regionRegistry: RegionReference[];
   pluginConfigIds: string[];
+  contentLibraryId: string | null;
 }

@@ -1,4 +1,8 @@
-import type { GameProject, RegionDocument } from "@sugarmagic/domain";
+import type {
+  GameProject,
+  RegionDocument,
+  ContentLibrarySnapshot
+} from "@sugarmagic/domain";
 
 export type PersistencePayloadKind =
   | "canonical-authored"
@@ -8,6 +12,7 @@ export type PersistencePayloadKind =
 
 export interface DocumentLoadResult {
   gameProject: GameProject | null;
+  contentLibrary: ContentLibrarySnapshot | null;
   regions: RegionDocument[];
 }
 

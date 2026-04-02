@@ -5,7 +5,8 @@
  * domain documents. No separate "editor project" abstraction.
  */
 
-import type { GameProject, RegionDocument } from "@sugarmagic/domain";
+import type { GameProject, RegionDocument, ContentLibrarySnapshot } from "@sugarmagic/domain";
+import { createEmptyContentLibrarySnapshot } from "@sugarmagic/domain";
 import {
   ensureDirectory,
   pickDirectory,
@@ -19,6 +20,7 @@ export interface ActiveProject {
   handle: FileSystemDirectoryHandle;
   descriptor: GameRootDescriptor;
   gameProject: GameProject;
+  contentLibrary: ContentLibrarySnapshot;
   regions: RegionDocument[];
 }
 
@@ -28,6 +30,7 @@ export interface CreateProjectInput {
 }
 
 const PROJECT_FILE = "project.sgrmagic";
+const CONTENT_LIBRARY_FILE = "content-library.sgrmagic";
 const REGIONS_DIR = "regions";
 
 function makeEmptyProject(
@@ -39,7 +42,8 @@ function makeEmptyProject(
     displayName: gameName,
     gameRootPath: ".",
     regionRegistry: [],
-    pluginConfigIds: []
+    pluginConfigIds: [],
+    contentLibraryId: `${slug}:content-library`
   };
 }
 
@@ -55,9 +59,12 @@ export async function createProjectInDirectory(
   input: CreateProjectInput
 ): Promise<ActiveProject> {
   const project = makeEmptyProject(input.gameName, input.slug);
+  const contentLibrary = createEmptyContentLibrarySnapshot(project.identity.id);
 
   await ensureDirectory(handle, REGIONS_DIR);
+  await ensureDirectory(handle, "assets");
   await writeJsonFile(handle, [PROJECT_FILE], project);
+  await writeJsonFile(handle, [CONTENT_LIBRARY_FILE], contentLibrary);
 
   await storeProjectHandle(input.slug, handle);
 
@@ -71,6 +78,7 @@ export async function createProjectInDirectory(
       publishPath: "publish"
     },
     gameProject: project,
+    contentLibrary,
     regions: []
   };
 }
@@ -89,6 +97,10 @@ export async function loadProjectFromHandle(
       `No ${PROJECT_FILE} found in selected directory. Is this a Sugarmagic game root?`
     );
   }
+
+  const contentLibrary =
+    (await readJsonFile<ContentLibrarySnapshot>(handle, CONTENT_LIBRARY_FILE)) ??
+    createEmptyContentLibrarySnapshot(project.identity.id);
 
   const regions: RegionDocument[] = [];
   for (const ref of project.regionRegistry) {
@@ -114,12 +126,14 @@ export async function loadProjectFromHandle(
       publishPath: "publish"
     },
     gameProject: project,
+    contentLibrary,
     regions
   };
 }
 
 export async function saveProject(active: ActiveProject): Promise<void> {
   await writeJsonFile(active.handle, [PROJECT_FILE], active.gameProject);
+  await writeJsonFile(active.handle, [CONTENT_LIBRARY_FILE], active.contentLibrary);
   for (const region of active.regions) {
     await writeJsonFile(
       active.handle,

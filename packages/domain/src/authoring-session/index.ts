@@ -15,11 +15,18 @@ import type { GameProject } from "../game-project";
 import type { RegionDocument } from "../region-authoring";
 import type { AuthoringHistory } from "../history";
 import type { SemanticCommand } from "../commands";
+import type { AssetDefinition, ContentLibrarySnapshot } from "../content-library";
+import {
+  createEmptyContentLibrarySnapshot,
+  listAssetDefinitions as listAssetDefinitionsFromLibrary
+} from "../content-library";
+import { createScopedId } from "../shared";
 import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
 
 export interface AuthoringSession {
   gameProject: GameProject;
+  contentLibrary: ContentLibrarySnapshot;
   /** All loaded regions, keyed by region ID */
   regions: Map<string, RegionDocument>;
   /** The region currently being edited */
@@ -41,9 +48,18 @@ export function getAllRegions(session: AuthoringSession): RegionDocument[] {
   return Array.from(session.regions.values());
 }
 
+export function getAllAssetDefinitions(
+  session: AuthoringSession
+): AssetDefinition[] {
+  return listAssetDefinitionsFromLibrary(session.contentLibrary);
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
-  regions: RegionDocument[]
+  regions: RegionDocument[],
+  contentLibrary: ContentLibrarySnapshot = createEmptyContentLibrarySnapshot(
+    gameProject.identity.id
+  )
 ): AuthoringSession {
   const regionMap = new Map<string, RegionDocument>();
   for (const region of regions) {
@@ -52,6 +68,7 @@ export function createAuthoringSession(
 
   return {
     gameProject,
+    contentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
     undoStack: [],
@@ -185,6 +202,92 @@ export function addRegionToSession(
     history: createEmptyHistory(),
     isDirty: true
   };
+}
+
+export function addAssetDefinitionToSession(
+  session: AuthoringSession,
+  assetDefinition: AssetDefinition
+): AuthoringSession {
+  const existingIndex = session.contentLibrary.assetDefinitions.findIndex(
+    (definition) => definition.definitionId === assetDefinition.definitionId
+  );
+
+  const nextDefinitions = [...session.contentLibrary.assetDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = assetDefinition;
+  } else {
+    nextDefinitions.push(assetDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateAssetDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<Pick<AssetDefinition, "displayName">>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) =>
+        definition.definitionId === definitionId
+          ? {
+              ...definition,
+              ...patch
+            }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeAssetDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: session.contentLibrary.assetDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function assetDefinitionHasSceneReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  return getAllRegions(session).some((region) =>
+    region.scene.placedAssets.some(
+      (asset) => asset.assetDefinitionId === definitionId
+    )
+  );
+}
+
+export function createAssetDefinitionId(fileNameStem: string): string {
+  return createScopedId(`asset:${fileNameStem}`);
+}
+
+export function createPlacedAssetInstanceId(fileNameStem: string): string {
+  return createScopedId(`placed-asset:${fileNameStem}`);
+}
+
+export function createSceneFolderId(): string {
+  return createScopedId("scene-folder");
 }
 
 export function markSessionClean(

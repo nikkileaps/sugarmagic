@@ -17,6 +17,27 @@ const AXIS_COLORS = {
 type Axis = "x" | "y" | "z";
 const AXES: Axis[] = ["x", "y", "z"];
 
+function configureOverlayMesh(
+  mesh: THREE.Mesh,
+  renderOrder: number
+): THREE.Mesh {
+  mesh.renderOrder = renderOrder;
+
+  if (Array.isArray(mesh.material)) {
+    for (const material of mesh.material) {
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.toneMapped = false;
+    }
+  } else {
+    mesh.material.depthTest = false;
+    mesh.material.depthWrite = false;
+    mesh.material.toneMapped = false;
+  }
+
+  return mesh;
+}
+
 // --- Move gizmo: shafts + cone tips ---
 
 function createMoveHandle(axis: Axis, color: number): THREE.Group {
@@ -30,20 +51,20 @@ function createMoveHandle(axis: Axis, color: number): THREE.Group {
 
   const mat = new THREE.MeshBasicMaterial({ color, depthTest: false });
 
-  const shaft = new THREE.Mesh(
+  const shaft = configureOverlayMesh(new THREE.Mesh(
     new THREE.CylinderGeometry(0.04, 0.04, 1.5, 8),
     mat
-  );
+  ), 999);
   shaft.position.copy(direction.clone().multiplyScalar(0.75));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
   shaft.name = `gizmo-move-${axis}`;
   group.add(shaft);
 
-  const cone = new THREE.Mesh(
+  const cone = configureOverlayMesh(new THREE.Mesh(
     new THREE.ConeGeometry(0.1, 0.25, 12),
     mat
-  );
+  ), 999);
   cone.position.copy(direction.clone().multiplyScalar(1.625));
   if (axis === "x") cone.rotation.z = -Math.PI / 2;
   if (axis === "z") cone.rotation.x = Math.PI / 2;
@@ -65,10 +86,10 @@ function createRotateHandle(axis: Axis, color: number): THREE.Group {
     side: THREE.DoubleSide
   });
 
-  const ring = new THREE.Mesh(
+  const ring = configureOverlayMesh(new THREE.Mesh(
     new THREE.TorusGeometry(1.2, 0.03, 8, 48),
     mat
-  );
+  ), 999);
   ring.name = `gizmo-rotate-${axis}`;
 
   if (axis === "x") ring.rotation.y = Math.PI / 2;
@@ -92,20 +113,20 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
 
   const mat = new THREE.MeshBasicMaterial({ color, depthTest: false });
 
-  const shaft = new THREE.Mesh(
+  const shaft = configureOverlayMesh(new THREE.Mesh(
     new THREE.CylinderGeometry(0.03, 0.03, 1.2, 8),
     mat
-  );
+  ), 999);
   shaft.position.copy(direction.clone().multiplyScalar(0.6));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
   shaft.name = `gizmo-scale-${axis}`;
   group.add(shaft);
 
-  const cube = new THREE.Mesh(
+  const cube = configureOverlayMesh(new THREE.Mesh(
     new THREE.BoxGeometry(0.15, 0.15, 0.15),
     mat
-  );
+  ), 999);
   cube.position.copy(direction.clone().multiplyScalar(1.3));
   cube.name = `gizmo-scale-${axis}`;
   group.add(cube);
@@ -119,6 +140,7 @@ export interface LayoutGizmo {
   root: THREE.Group;
   setPosition: (pos: [number, number, number]) => void;
   setRotation: (rot: [number, number, number]) => void;
+  setScale: (scale: number) => void;
   setVisible: (visible: boolean) => void;
   setActiveTool: (tool: TransformTool) => void;
 }
@@ -161,6 +183,9 @@ export function createLayoutGizmo(): LayoutGizmo {
     setRotation(rot) {
       root.rotation.set(...rot);
     },
+    setScale(scale) {
+      root.scale.setScalar(scale);
+    },
     setVisible(visible) {
       root.visible = visible;
     },
@@ -184,7 +209,12 @@ export function createOriginMarker(): OriginMarker {
   root.renderOrder = 998;
 
   const mat = new THREE.MeshBasicMaterial({ color: 0xfab387, depthTest: false });
-  root.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), mat));
+  root.add(
+    configureOverlayMesh(
+      new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), mat),
+      998
+    )
+  );
   root.visible = false;
 
   return {
@@ -210,12 +240,20 @@ export function createWorldCursor(): WorldCursor {
   const ringMat = new THREE.MeshBasicMaterial({
     color: 0xcba6f7, side: THREE.DoubleSide, depthTest: false
   });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.25, 32), ringMat);
+  const ring = configureOverlayMesh(
+    new THREE.Mesh(new THREE.RingGeometry(0.2, 0.25, 32), ringMat),
+    997
+  );
   ring.rotation.x = -Math.PI / 2;
   root.add(ring);
 
   const dotMat = new THREE.MeshBasicMaterial({ color: 0xcba6f7, depthTest: false });
-  root.add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), dotMat));
+  root.add(
+    configureOverlayMesh(
+      new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), dotMat),
+      997
+    )
+  );
 
   root.visible = true;
 
