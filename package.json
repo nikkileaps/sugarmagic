@@ -8,9 +8,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "build": "pnpm --filter @sugarmagic/studio build && pnpm --filter @sugarmagic/target-web build && pnpm typecheck",
-    "dev:studio": "pnpm --filter @sugarmagic/studio dev",
-    "dev:web": "pnpm --filter @sugarmagic/target-web dev",
+    "build": "pnpm --dir apps/studio build && pnpm --dir targets/web build && pnpm typecheck",
+    "dev:studio": "pnpm --dir apps/studio dev",
+    "dev:web": "pnpm --dir targets/web dev",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "lint": "eslint . && pnpm lint:boundaries && pnpm lint:shell-tokens",

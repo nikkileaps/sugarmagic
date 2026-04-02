@@ -1,4 +1,4 @@
-import { createBrowserRuntimeAdapter } from "@sugarmagic/runtime-web";
+import { createRuntimeBootModel } from "@sugarmagic/runtime-core";
 import { createShellModel, createShellStore } from "@sugarmagic/shell";
 import { bootstrapFixtureIds } from "../fixtures";
 
@@ -16,10 +16,12 @@ export function createRuntimeHarness() {
       subjectId: bootstrapFixtureIds.regionId,
       productModeId: "build"
     }),
-    adapter: createBrowserRuntimeAdapter({
-      hostKind: "studio",
-      compileProfile: "authoring-preview",
-      contentSource: "authored-game-root"
-    })
+    adapter: {
+      boot: createRuntimeBootModel({
+        hostKind: "studio",
+        compileProfile: "authoring-preview",
+        contentSource: "authored-game-root"
+      })
+    }
   };
 }

@@ -5,7 +5,7 @@
  * folders and entities. Data is derived from canonical region truth.
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Stack, Group, Text, UnstyledButton, ActionIcon } from "@mantine/core";
 
 // --- Data model ---

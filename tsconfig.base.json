@@ -14,6 +14,19 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "useDefineForClassFields": true,
+    "baseUrl": ".",
+    "paths": {
+      "@sugarmagic/domain": ["packages/domain/src/index.ts"],
+      "@sugarmagic/io": ["packages/io/src/index.ts"],
+      "@sugarmagic/plugins": ["packages/plugins/src/index.ts"],
+      "@sugarmagic/productmodes": ["packages/productmodes/src/index.ts"],
+      "@sugarmagic/runtime-core": ["packages/runtime-core/src/index.ts"],
+      "@sugarmagic/shell": ["packages/shell/src/index.ts"],
+      "@sugarmagic/target-web": ["targets/web/src/index.ts"],
+      "@sugarmagic/testing": ["packages/testing/src/index.ts"],
+      "@sugarmagic/ui": ["packages/ui/src/index.ts"],
+      "@sugarmagic/workspaces": ["packages/workspaces/src/index.ts"]
+    },
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["vite/client"]

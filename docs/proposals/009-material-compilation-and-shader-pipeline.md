@@ -315,7 +315,7 @@ Suggested shape:
     /finalization/
     /cache/
 
-/packages/runtime-web/
+/targets/web/
   /materials/
     /warmup/
     /capabilities/

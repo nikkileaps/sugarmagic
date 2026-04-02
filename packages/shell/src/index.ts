@@ -17,6 +17,7 @@ export * from "./app-frame";
 export * from "./commands";
 export * from "./inspector-host";
 export * from "./navigation";
+export * from "./preview";
 export * from "./project";
 export * from "./status";
 export * from "./viewport-host";

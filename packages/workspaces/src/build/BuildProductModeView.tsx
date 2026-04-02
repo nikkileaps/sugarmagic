@@ -9,13 +9,13 @@
 import { Stack, Text } from "@mantine/core";
 import type { SemanticCommand } from "@sugarmagic/domain";
 import { getActiveRegion, type AuthoringSession } from "@sugarmagic/domain";
-import type { RuntimeViewport } from "@sugarmagic/runtime-web";
 import {
   BuildSubNav,
   type BuildWorkspaceKindItem
 } from "@sugarmagic/ui";
 import type { BuildWorkspaceKind } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../workspace-view";
+import type { WorkspaceViewport } from "../viewport";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
@@ -31,7 +31,7 @@ export interface BuildProductModeViewProps {
   activeRegionId: string | null;
   selectedIds: string[];
   session: AuthoringSession | null;
-  getViewport: () => RuntimeViewport | null;
+  getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   regions: { id: string; displayName: string }[];
   onSelectKind: (kind: BuildWorkspaceKind) => void;

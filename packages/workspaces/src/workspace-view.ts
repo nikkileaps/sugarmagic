@@ -7,10 +7,10 @@
  */
 
 import type { ReactNode } from "react";
-import type { RuntimeViewport } from "@sugarmagic/runtime-web";
+import type { WorkspaceViewport } from "./viewport";
 
 export interface WorkspaceViewContext {
-  viewport: RuntimeViewport | null;
+  viewport: WorkspaceViewport | null;
   viewportElement: HTMLElement | null;
 }
 

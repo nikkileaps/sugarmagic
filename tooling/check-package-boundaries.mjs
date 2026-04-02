@@ -10,7 +10,6 @@ const workspaces = [
   { dir: "packages/productmodes", kind: "package" },
   { dir: "packages/domain", kind: "package" },
   { dir: "packages/runtime-core", kind: "package" },
-  { dir: "packages/runtime-web", kind: "package" },
   { dir: "packages/plugins", kind: "package" },
   { dir: "packages/io", kind: "package" },
   { dir: "packages/ui", kind: "package" },
@@ -20,20 +19,20 @@ const workspaces = [
 
 const allowedInternalDeps = {
   "@sugarmagic/studio": new Set([
+    "@sugarmagic/target-web",
     "@sugarmagic/domain",
     "@sugarmagic/io",
     "@sugarmagic/plugins",
     "@sugarmagic/productmodes",
     "@sugarmagic/runtime-core",
-    "@sugarmagic/runtime-web",
     "@sugarmagic/shell",
     "@sugarmagic/testing",
     "@sugarmagic/ui",
     "@sugarmagic/workspaces"
   ]),
   "@sugarmagic/target-web": new Set([
+    "@sugarmagic/domain",
     "@sugarmagic/runtime-core",
-    "@sugarmagic/runtime-web",
     "@sugarmagic/plugins",
     "@sugarmagic/io"
   ]),
@@ -46,7 +45,6 @@ const allowedInternalDeps = {
   "@sugarmagic/productmodes": new Set([
     "@sugarmagic/domain",
     "@sugarmagic/runtime-core",
-    "@sugarmagic/runtime-web",
     "@sugarmagic/plugins",
     "@sugarmagic/io",
     "@sugarmagic/ui"
@@ -54,12 +52,6 @@ const allowedInternalDeps = {
   "@sugarmagic/domain": new Set(),
   "@sugarmagic/runtime-core": new Set([
     "@sugarmagic/domain",
-    "@sugarmagic/plugins"
-  ]),
-  "@sugarmagic/runtime-web": new Set([
-    "@sugarmagic/domain",
-    "@sugarmagic/runtime-core",
-    "@sugarmagic/io",
     "@sugarmagic/plugins"
   ]),
   "@sugarmagic/plugins": new Set([
@@ -75,17 +67,16 @@ const allowedInternalDeps = {
   "@sugarmagic/workspaces": new Set([
     "@sugarmagic/domain",
     "@sugarmagic/runtime-core",
-    "@sugarmagic/runtime-web",
     "@sugarmagic/shell",
     "@sugarmagic/ui"
   ]),
   "@sugarmagic/testing": new Set([
+    "@sugarmagic/target-web",
     "@sugarmagic/domain",
     "@sugarmagic/io",
     "@sugarmagic/plugins",
     "@sugarmagic/productmodes",
     "@sugarmagic/runtime-core",
-    "@sugarmagic/runtime-web",
     "@sugarmagic/shell",
     "@sugarmagic/ui",
     "@sugarmagic/workspaces"

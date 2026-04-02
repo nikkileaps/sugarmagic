@@ -8,7 +8,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { SemanticCommand } from "@sugarmagic/domain";
 import { getActiveRegion } from "@sugarmagic/domain";
-import type { RuntimeViewport } from "@sugarmagic/runtime-web";
 import {
   PanelSection,
   SceneExplorer,
@@ -19,6 +18,7 @@ import {
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
+import type { WorkspaceViewport } from "../../viewport";
 import { createLayoutWorkspace, type LayoutWorkspaceInstance } from "./layout-workspace";
 import type { TransformTool } from "../../interaction/tool-state";
 
@@ -29,7 +29,7 @@ const transformTools: ViewportToolbarItem[] = [
 ];
 
 export interface LayoutWorkspaceViewProps {
-  getViewport: () => RuntimeViewport | null;
+  getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   selectedIds: string[];
   onSelect: (ids: string[]) => void;
@@ -86,7 +86,7 @@ export function useLayoutWorkspaceView(
       layout.detach();
       layoutRef.current = null;
     };
-  }, [getViewport, getViewportElement]);
+  }, [getViewport, getViewportElement, getRegion, getSelectedId, onCommand, onSelect]);
 
   // --- Sync overlays when selection changes ---
   useEffect(() => {

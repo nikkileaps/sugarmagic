@@ -1,4 +1,8 @@
 export {
+  ActionStripe,
+  type ActionStripeProps
+} from "./ActionStripe";
+export {
   BuildSubNav,
   type BuildSubNavProps,
   type BuildWorkspaceKindItem

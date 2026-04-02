@@ -25,6 +25,20 @@ Sugarmagic will use one runtime/rendering path for:
 - playtest
 - published targets
 
+That shared runtime path includes both:
+
+- rendering semantics
+- runtime gameplay semantics
+
+When Sugarmagic introduces preview/playtest gameplay behavior, it should do so by extending the shared runtime rather than inventing editor-local preview simulation logic.
+
+The first gameplay foundation should be derived from Sugarengine’s proven ECS model:
+
+- `World`
+- `System`
+- ordered system execution
+- player-controlled runtime entity flow
+
 Editor tooling may add overlays, inspectors, and transient authoring aids, but authored content itself must render and simulate through the same runtime semantics.
 
 There will not be:
@@ -37,8 +51,9 @@ There will not be:
 
 1. Runtime-visible behavior is implemented once.
 2. Authoring preview uses the shared runtime, not a fake editor-only path.
-3. Published targets derive from the same runtime semantics.
-4. Any target-specific optimization must preserve authored meaning.
+3. Preview/playtest gameplay semantics use the shared runtime, not a shell-local simulation stub.
+4. Published targets derive from the same runtime semantics.
+5. Any target-specific optimization must preserve authored meaning.
 
 ## Consequences
 
@@ -47,6 +62,7 @@ There will not be:
 - visual trust becomes a real product property
 - parity bugs move from architectural norm to implementation bug
 - new authored features must become runtime-real immediately
+- preview becomes a real runtime loop rather than a camera-only presentation mode
 
 ### Tradeoffs
 
