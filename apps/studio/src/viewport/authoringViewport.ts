@@ -1,11 +1,3 @@
-/**
- * Three.js runtime viewport — browser-specific rendering adapter.
- *
- * Scene loading semantics (what objects exist, transforms) are owned
- * by runtime-core. This adapter handles Three.js rendering and exposes
- * separate roots for authored content and editor overlays.
- */
-
 import * as THREE from "three";
 import type { RegionDocument } from "@sugarmagic/domain";
 import {
@@ -13,23 +5,7 @@ import {
   computeSceneDelta,
   type SceneObject
 } from "@sugarmagic/runtime-core";
-
-export interface RuntimeViewport {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  /** Root group for authored scene content (cubes, meshes, etc.) */
-  authoredRoot: THREE.Group;
-  /** Root group for editor overlays (gizmos, markers, cursors) */
-  overlayRoot: THREE.Group;
-  mount: (container: HTMLElement) => void;
-  unmount: () => void;
-  updateFromRegion: (region: RegionDocument) => void;
-  /** Update a single object's transform without a full region diff */
-  previewTransform: (instanceId: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
-  resize: (width: number, height: number) => void;
-  render: () => void;
-}
+import type { WorkspaceViewport } from "@sugarmagic/workspaces";
 
 const CUBE_COLOR = 0x89b4fa;
 const GRID_COLOR = 0x45475a;
@@ -39,14 +15,26 @@ function createMeshForSceneObject(obj: SceneObject): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(...obj.transform.position);
-  mesh.rotation.set(...obj.transform.rotation);
-  mesh.scale.set(...obj.transform.scale);
+  mesh.position.set(
+    obj.transform.position[0],
+    obj.transform.position[1],
+    obj.transform.position[2]
+  );
+  mesh.rotation.set(
+    obj.transform.rotation[0],
+    obj.transform.rotation[1],
+    obj.transform.rotation[2]
+  );
+  mesh.scale.set(
+    obj.transform.scale[0],
+    obj.transform.scale[1],
+    obj.transform.scale[2]
+  );
   mesh.name = obj.instanceId;
   return mesh;
 }
 
-export function createRuntimeViewport(): RuntimeViewport {
+export function createAuthoringViewport(): WorkspaceViewport {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG_COLOR);
 
@@ -65,13 +53,12 @@ export function createRuntimeViewport(): RuntimeViewport {
   const grid = new THREE.GridHelper(20, 20, GRID_COLOR, GRID_COLOR);
   scene.add(grid);
 
-  // Separate roots for authored content and editor overlays
   const authoredRoot = new THREE.Group();
-  authoredRoot.name = "authored-root";
+  authoredRoot.name = "authoring-authored-root";
   scene.add(authoredRoot);
 
   const overlayRoot = new THREE.Group();
-  overlayRoot.name = "overlay-root";
+  overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
 
   const meshMap = new Map<string, THREE.Mesh>();
@@ -87,33 +74,36 @@ export function createRuntimeViewport(): RuntimeViewport {
   return {
     scene,
     camera,
-    renderer,
     authoredRoot,
     overlayRoot,
 
-    mount(el: HTMLElement) {
-      container = el;
+    mount(element: HTMLElement) {
+      container = element;
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.domElement.style.display = "block";
       renderer.domElement.style.width = "100%";
       renderer.domElement.style.height = "100%";
-      el.appendChild(renderer.domElement);
+      element.appendChild(renderer.domElement);
 
-      const w = el.clientWidth || 1;
-      const h = el.clientHeight || 1;
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
+      const width = element.clientWidth || 1;
+      const height = element.clientHeight || 1;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
 
       renderLoop();
     },
 
     unmount() {
-      if (animationId !== null) cancelAnimationFrame(animationId);
-      animationId = null;
+      if (animationId !== null) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+
       if (container && renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
       }
+
       renderer.dispose();
     },
 
@@ -123,27 +113,39 @@ export function createRuntimeViewport(): RuntimeViewport {
 
       for (const id of delta.removed) {
         const mesh = meshMap.get(id);
-        if (mesh) {
-          authoredRoot.remove(mesh);
-          mesh.geometry.dispose();
-          (mesh.material as THREE.Material).dispose();
-          meshMap.delete(id);
-        }
+        if (!mesh) continue;
+
+        authoredRoot.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+        meshMap.delete(id);
       }
 
-      for (const obj of delta.added) {
-        const mesh = createMeshForSceneObject(obj);
+      for (const object of delta.added) {
+        const mesh = createMeshForSceneObject(object);
         authoredRoot.add(mesh);
-        meshMap.set(obj.instanceId, mesh);
+        meshMap.set(object.instanceId, mesh);
       }
 
-      for (const obj of delta.updated) {
-        const mesh = meshMap.get(obj.instanceId);
-        if (mesh) {
-          mesh.position.set(...obj.transform.position);
-          mesh.rotation.set(...obj.transform.rotation);
-          mesh.scale.set(...obj.transform.scale);
-        }
+      for (const object of delta.updated) {
+        const mesh = meshMap.get(object.instanceId);
+        if (!mesh) continue;
+
+        mesh.position.set(
+          object.transform.position[0],
+          object.transform.position[1],
+          object.transform.position[2]
+        );
+        mesh.rotation.set(
+          object.transform.rotation[0],
+          object.transform.rotation[1],
+          object.transform.rotation[2]
+        );
+        mesh.scale.set(
+          object.transform.scale[0],
+          object.transform.scale[1],
+          object.transform.scale[2]
+        );
       }
 
       previousObjects = currentObjects;
@@ -151,15 +153,16 @@ export function createRuntimeViewport(): RuntimeViewport {
 
     previewTransform(instanceId, position, rotation, scale) {
       const mesh = meshMap.get(instanceId);
-      if (mesh) {
-        mesh.position.set(...position);
-        mesh.rotation.set(...rotation);
-        mesh.scale.set(...scale);
-      }
+      if (!mesh) return;
+
+      mesh.position.set(position[0], position[1], position[2]);
+      mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+      mesh.scale.set(scale[0], scale[1], scale[2]);
     },
 
-    resize(width: number, height: number) {
+    resize(width, height) {
       if (width <= 0 || height <= 0) return;
+
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();

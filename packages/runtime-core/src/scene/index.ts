@@ -4,8 +4,8 @@ import type { RegionDocument, PlacedAssetInstance } from "@sugarmagic/domain";
  * Platform-agnostic scene loading semantics.
  *
  * runtime-core owns the logic of resolving a RegionDocument into
- * a scene description. Platform adapters (runtime-web) consume
- * this description to produce renderer-specific objects.
+ * a scene description. Platform hosts consume this description
+ * to produce renderer-specific objects.
  */
 
 export interface RuntimeSceneLoadRequest {

@@ -68,12 +68,15 @@ importers:
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../../packages/productmodes
-      '@sugarmagic/runtime-web':
+      '@sugarmagic/runtime-core':
         specifier: workspace:*
-        version: link:../../packages/runtime-web
+        version: link:../../packages/runtime-core
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../../packages/shell
+      '@sugarmagic/target-web':
+        specifier: workspace:*
+        version: link:../../targets/web
       '@sugarmagic/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -86,6 +89,9 @@ importers:
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
       zustand:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)
@@ -118,18 +124,6 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
-  packages/runtime-web:
-    dependencies:
-      '@sugarmagic/domain':
-        specifier: workspace:*
-        version: link:../domain
-      '@sugarmagic/runtime-core':
-        specifier: workspace:*
-        version: link:../runtime-core
-      three:
-        specifier: ^0.183.2
-        version: 0.183.2
-
   packages/shell:
     dependencies:
       '@sugarmagic/domain':
@@ -159,9 +153,6 @@ importers:
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core
-      '@sugarmagic/runtime-web':
-        specifier: workspace:*
-        version: link:../runtime-web
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../shell
@@ -192,9 +183,6 @@ importers:
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core
-      '@sugarmagic/runtime-web':
-        specifier: workspace:*
-        version: link:../runtime-web
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../shell
@@ -213,18 +201,21 @@ importers:
 
   targets/web:
     dependencies:
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core
-      '@sugarmagic/runtime-web':
-        specifier: workspace:*
-        version: link:../../packages/runtime-web
       react:
         specifier: ^19.2.4
         version: 19.2.4
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
       zustand:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)

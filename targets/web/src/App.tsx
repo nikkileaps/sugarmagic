@@ -1,13 +1,6 @@
-import { createRuntimeBootModel } from "@sugarmagic/runtime-core";
-import { createBrowserRuntimeAdapter } from "@sugarmagic/runtime-web";
+import { createWebTargetAdapter } from "./runtimeHost";
 
-const boot = createRuntimeBootModel({
-  hostKind: "published-web",
-  compileProfile: "published-target",
-  contentSource: "published-artifact"
-});
-
-const adapter = createBrowserRuntimeAdapter({
+const adapter = createWebTargetAdapter({
   hostKind: "published-web",
   compileProfile: "published-target",
   contentSource: "published-artifact"
@@ -20,21 +13,20 @@ export function App() {
         <p className="eyebrow">Sugarmagic</p>
         <h1>Web target bootstrap is wired.</h1>
         <p>
-          This remains a thin host and now resolves its boot model through the
-          same shared runtime-facing packages as studio.
+          This remains a thin published web host over the shared runtime.
         </p>
         <dl className="details">
           <div>
             <dt>Host</dt>
-            <dd>{boot.hostKind}</dd>
+            <dd>{adapter.boot.hostKind}</dd>
           </div>
           <div>
             <dt>Profile</dt>
-            <dd>{boot.compileProfile}</dd>
+            <dd>{adapter.boot.compileProfile}</dd>
           </div>
           <div>
             <dt>Runtime family</dt>
-            <dd>{boot.runtimeFamily}</dd>
+            <dd>{adapter.boot.runtimeFamily}</dd>
           </div>
           <div>
             <dt>Asset resolution</dt>

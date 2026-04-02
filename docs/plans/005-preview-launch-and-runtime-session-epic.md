@@ -313,6 +313,9 @@ In scope:
 - runtime camera behavior for preview
 - runtime input ownership while preview runs
 - preview/runtime HUD or minimal runtime chrome as needed to make preview feel like the game
+- aligning preview boot with the same `runtime-core` + `targets/web` path intended for published web targets
+- keeping preview lifecycle ownership in `apps/studio`
+- retiring `runtime-web` as the place where target-host or preview behavior accumulates
 - tests for preview session lifecycle and restoration behavior
 - one first end-to-end Build-to-Preview flow using the active authored region context
 
@@ -529,6 +532,7 @@ Run preview as the game using the shared runtime, not as an authoring imitation.
 - No export or publish step is required.
 - Preview boot input is derived and disposable, not canonical.
 - Preview runtime owns a real `World` and first ordered `System` execution path.
+- Preview launches through the same target-host path intended for published web games rather than a studio-only runtime fork.
 
 ### Definition of done
 
@@ -602,6 +606,56 @@ Close the full loop and prove that preview is a safe, repeatable authoring tool.
 ### Definition of done
 
 - Sugarmagic supports a trustworthy start-preview / stop-preview loop.
+
+## Story 7
+
+### Title
+
+Correct the preview/target host architecture so preview runs through `targets/web` and not through a separate `runtime-web` concept.
+
+### Objective
+
+Eliminate the package-boundary confusion that allows preview-specific or target-specific behavior to accumulate in the wrong place.
+
+This story exists to lock the architecture to the intended long-term shape:
+
+- `runtime-core` owns game/runtime logic
+- `targets/web` owns the published web host around that runtime
+- `apps/studio` owns preview launch, stop, and authoring-context restoration
+
+### References
+
+- [ADR 001: Single Runtime Authoring Rule](/Users/nikki/projects/sugarmagic/docs/adr/001-single-runtime-authoring-rule.md)
+- [ADR 006: Playtest Runtime Session Boundary](/Users/nikki/projects/sugarmagic/docs/adr/006-playtest-runtime-session-boundary.md)
+- [API 002: System and Package API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
+- [API 003: Domain, Runtime, and Lifecycle API](/Users/nikki/projects/sugarmagic/docs/api/domain-runtime-and-lifecycle-api.md)
+
+### Tasks
+
+1. Retire `runtime-web` as a conceptual owner of runtime hosting or preview behavior.
+2. Move all true game/runtime logic into `runtime-core`.
+3. Move published web hosting responsibilities into `targets/web`.
+4. Make studio preview launch the `targets/web` path in a dedicated browser window instead of composing a parallel host inside `apps/studio`.
+5. Keep preview lifecycle ownership in `apps/studio`, including:
+   - `Preview` shell action
+   - `window.open(...)`
+   - preview handshake/orchestration
+   - authoring snapshot and restore
+6. Ensure the `targets/web` path used by preview is the same path the published web target uses, with preview-specific boot input remaining derived and disposable.
+7. Remove any leftover package seams, names, or code ownership that imply a separate `runtime-web` layer is the long-term architecture.
+
+### Acceptance criteria
+
+- `runtime-core` is the only package that owns runtime/game logic.
+- `targets/web` owns the web target host around `runtime-core`.
+- `apps/studio` owns preview lifecycle orchestration, but not game/runtime logic.
+- Preview uses the same `runtime-core` + `targets/web` path intended for published web targets.
+- There is no separate preview-only runtime host architecture competing with the published web target host.
+- `runtime-web` is no longer a conceptual dependency that invites web-target logic, preview logic, and runtime logic to mix together.
+
+### Definition of done
+
+- The package and host boundaries for preview and published web target are clean enough that future targets can be added without recreating the same confusion.
 
 ## Manual verification checklist
 

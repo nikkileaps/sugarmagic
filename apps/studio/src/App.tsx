@@ -26,8 +26,7 @@ import {
   createPreviewStore,
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
-import { createRuntimeViewport, type RuntimeViewport } from "@sugarmagic/runtime-web";
-import { useBuildProductModeView } from "@sugarmagic/workspaces";
+import { useBuildProductModeView, type WorkspaceViewport } from "@sugarmagic/workspaces";
 import {
   ActionStripe,
   CreateRegionDialog,
@@ -40,6 +39,7 @@ import {
   type ModeBarItem
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
+import { createAuthoringViewport } from "./viewport/authoringViewport";
 
 const shellStore = createShellStore("build");
 const projectStore = createProjectStore();
@@ -231,11 +231,11 @@ export function App() {
 
   // --- Viewport lifecycle (tied to project phase) ---
   const viewportRef = useRef<HTMLDivElement>(null);
-  const runtimeRef = useRef<RuntimeViewport | null>(null);
+  const runtimeRef = useRef<WorkspaceViewport | null>(null);
 
   useEffect(() => {
     if (!viewportRef.current || phase !== "active") return;
-    const viewport = createRuntimeViewport();
+    const viewport = createAuthoringViewport();
     viewport.mount(viewportRef.current);
     runtimeRef.current = viewport;
 

@@ -9,7 +9,6 @@
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
-    "@sugarmagic/runtime-web": "workspace:*",
     "@sugarmagic/shell": "workspace:*",
     "@sugarmagic/ui": "workspace:*",
     "@mantine/core": "^9.0.0",

@@ -18,28 +18,34 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   type GameCameraState,
-  type RuntimeBootModel
+  type RuntimeBootModel,
+  type RuntimeCompileProfile,
+  type RuntimeContentSource,
+  type RuntimeHostKind
 } from "@sugarmagic/runtime-core";
 
-export interface PreviewBootMessage {
-  type: "PREVIEW_BOOT";
-  regions: RegionDocument[];
-}
-
-export interface PreviewReadyMessage {
-  type: "PREVIEW_READY";
+export interface WebTargetAdapter {
   boot: RuntimeBootModel;
+  platform: "web";
+  assetResolution: "root-relative-authored" | "published-target-manifest";
+  inputPolicy: "dom-input-host";
 }
 
-export interface PreviewWindowHostOptions {
+export interface WebTargetAdapterRequest {
+  hostKind: RuntimeHostKind;
+  compileProfile: RuntimeCompileProfile;
+  contentSource: RuntimeContentSource;
+}
+
+export interface WebRuntimeHostOptions {
   root: HTMLElement;
-  opener?: Window | null;
   ownerWindow?: Window;
+  request: WebTargetAdapterRequest;
 }
 
-export interface PreviewWindowHost {
+export interface WebRuntimeHost {
   readonly boot: RuntimeBootModel;
-  start: () => void;
+  start: (regions: RegionDocument[]) => void;
   dispose: () => void;
 }
 
@@ -48,16 +54,27 @@ const PLAYER_COLOR = 0xa6e3a1;
 const GRID_COLOR = 0x45475a;
 const BG_COLOR = 0x1e1e2e;
 
-export function createPreviewWindowHost(
-  options: PreviewWindowHostOptions
-): PreviewWindowHost {
-  const { root, opener = null, ownerWindow = window } = options;
+export function createWebTargetAdapter(
+  request: WebTargetAdapterRequest
+): WebTargetAdapter {
+  const boot = createRuntimeBootModel(request);
 
-  const boot = createRuntimeBootModel({
-    hostKind: "studio",
-    compileProfile: "runtime-preview",
-    contentSource: "authored-game-root"
-  });
+  return {
+    boot,
+    platform: "web",
+    assetResolution:
+      request.contentSource === "authored-game-root"
+        ? "root-relative-authored"
+        : "published-target-manifest",
+    inputPolicy: "dom-input-host"
+  };
+}
+
+export function createWebRuntimeHost(
+  options: WebRuntimeHostOptions
+): WebRuntimeHost {
+  const { root, ownerWindow = window, request } = options;
+  const adapter = createWebTargetAdapter(request);
 
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
@@ -84,16 +101,16 @@ export function createPreviewWindowHost(
 
     if (scene) {
       scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose();
+        if (!(child instanceof THREE.Mesh)) return;
 
-          if (Array.isArray(child.material)) {
-            for (const material of child.material) {
-              material.dispose();
-            }
-          } else {
-            child.material.dispose();
+        child.geometry.dispose();
+
+        if (Array.isArray(child.material)) {
+          for (const material of child.material) {
+            material.dispose();
           }
+        } else {
+          child.material.dispose();
         }
       });
     }
@@ -154,7 +171,13 @@ export function createPreviewWindowHost(
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
-  function bootPreview(regions: RegionDocument[]) {
+  function start(regions: RegionDocument[]) {
+    if (!started) {
+      started = true;
+      ownerWindow.addEventListener("resize", handleResize);
+      ownerWindow.addEventListener("beforeunload", dispose);
+    }
+
     disposeRuntime();
 
     scene = new THREE.Scene();
@@ -230,32 +253,10 @@ export function createPreviewWindowHost(
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
-  function handleMessage(event: MessageEvent) {
-    const data = event.data as PreviewBootMessage | undefined;
-    if (data?.type === "PREVIEW_BOOT") {
-      bootPreview(data.regions);
-    }
-  }
-
-  function start() {
-    if (started) return;
-    started = true;
-
-    ownerWindow.addEventListener("message", handleMessage);
-    ownerWindow.addEventListener("resize", handleResize);
-    ownerWindow.addEventListener("beforeunload", dispose);
-
-    if (opener) {
-      const message: PreviewReadyMessage = { type: "PREVIEW_READY", boot };
-      opener.postMessage(message, "*");
-    }
-  }
-
   function dispose() {
     if (!started) return;
     started = false;
 
-    ownerWindow.removeEventListener("message", handleMessage);
     ownerWindow.removeEventListener("resize", handleResize);
     ownerWindow.removeEventListener("beforeunload", dispose);
 
@@ -263,7 +264,7 @@ export function createPreviewWindowHost(
   }
 
   return {
-    boot,
+    boot: adapter.boot,
     start,
     dispose
   };
