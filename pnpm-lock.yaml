@@ -68,9 +68,6 @@ importers:
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../../packages/productmodes
-      '@sugarmagic/runtime-core':
-        specifier: workspace:*
-        version: link:../../packages/runtime-core
       '@sugarmagic/runtime-web':
         specifier: workspace:*
         version: link:../../packages/runtime-web

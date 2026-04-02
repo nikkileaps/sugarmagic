@@ -86,7 +86,7 @@ export function useLayoutWorkspaceView(
       layout.detach();
       layoutRef.current = null;
     };
-  }, [getViewport, getViewportElement]);
+  }, [getViewport, getViewportElement, getRegion, getSelectedId, onCommand, onSelect]);
 
   // --- Sync overlays when selection changes ---
   useEffect(() => {

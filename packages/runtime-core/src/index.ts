@@ -1,7 +1,10 @@
 import type { RuntimeCompileProfile } from "./materials";
 import type { RuntimeSessionBoundary } from "./state";
 
+export * from "./camera";
 export * from "./coordination";
+export * from "./ecs";
+export * from "./input";
 export * from "./environment";
 export * from "./interaction";
 export * from "./jobs";

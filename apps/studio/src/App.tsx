@@ -22,11 +22,14 @@ import {
 } from "@sugarmagic/io";
 import {
   createShellStore,
-  createProjectStore
+  createProjectStore,
+  createPreviewStore,
+  type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
 import { createRuntimeViewport, type RuntimeViewport } from "@sugarmagic/runtime-web";
 import { useBuildProductModeView } from "@sugarmagic/workspaces";
 import {
+  ActionStripe,
   CreateRegionDialog,
   ModeBar,
   ProjectManagerDialog,
@@ -40,6 +43,7 @@ import { useStore } from "zustand";
 
 const shellStore = createShellStore("build");
 const projectStore = createProjectStore();
+const previewStore = createPreviewStore();
 
 const modeBarItems: ModeBarItem[] = productModes.map((mode) => ({
   id: mode.id,
@@ -119,6 +123,71 @@ function handleRegionSelect(regionId: string) {
   shellStore.getState().setActiveRegionId(regionId);
 }
 
+// --- Preview ---
+
+function handleStartPreview() {
+  const { session } = projectStore.getState();
+  if (!session) return;
+
+  const shell = shellStore.getState();
+
+  // Snapshot authoring context
+  const snapshot: AuthoringContextSnapshot = {
+    activeProductMode: shell.activeProductMode,
+    activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
+    activeRegionId: shell.activeRegionId,
+    activeWorkspaceId: shell.activeWorkspaceId,
+    selectedEntityIds: shell.selection.entityIds
+  };
+
+  // Open preview window
+  const previewWindow = window.open(
+    "/preview.html",
+    "sugarmagic-preview",
+    "width=1280,height=720"
+  );
+  if (!previewWindow) {
+    window.alert("Could not open preview window. Check your popup blocker.");
+    return;
+  }
+
+  previewStore.getState().startPreview(snapshot, previewWindow);
+
+  // Wait for preview ready, then send boot data
+  const capturedSession = session;
+  const capturedWindow = previewWindow;
+  function onMessage(event: MessageEvent) {
+    if (event.data?.type === "PREVIEW_READY") {
+      window.removeEventListener("message", onMessage);
+      const regions = getAllRegions(capturedSession);
+      capturedWindow.postMessage({ type: "PREVIEW_BOOT", regions }, "*");
+    }
+  }
+  window.addEventListener("message", onMessage);
+
+  // Handle preview window closing externally
+  const checkClosed = setInterval(() => {
+    if (previewWindow.closed) {
+      clearInterval(checkClosed);
+      handleStopPreview();
+    }
+  }, 500);
+}
+
+function handleStopPreview() {
+  const snapshot = previewStore.getState().stopPreview();
+  if (!snapshot) return;
+
+  // Restore authoring context
+  const shell = shellStore.getState();
+  shell.setActiveProductMode(snapshot.activeProductMode);
+  shell.setActiveBuildWorkspaceKind(snapshot.activeBuildWorkspaceKind);
+  if (snapshot.activeRegionId) {
+    shell.setActiveRegionId(snapshot.activeRegionId);
+  }
+  shell.setSelection(snapshot.selectedEntityIds);
+}
+
 // --- App ---
 
 export function App() {
@@ -134,6 +203,7 @@ export function App() {
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
   const isBuild = activeProductMode === "build";
+  const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
 
   const regions = useMemo(() => {
     if (!session) return [];
@@ -242,6 +312,14 @@ export function App() {
               </Menu>
             )}
             <ModeBar items={modeBarItems} activeId={activeProductMode} onSelect={(id) => shellStore.getState().setActiveProductMode(id as typeof activeProductMode)} />
+            {phase === "active" && (
+              <ActionStripe
+                isPreviewRunning={isPreviewRunning}
+                onStartPreview={handleStartPreview}
+                onStopPreview={handleStopPreview}
+                previewDisabled={!session}
+              />
+            )}
           </Group>
         }
         subHeaderPanel={isBuild && phase === "active" ? buildView.subHeaderPanel : undefined}
