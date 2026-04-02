@@ -18,6 +18,7 @@ When playtest starts:
 - resolve active transient authoring sessions first
 - snapshot the current authoring context
 - create an isolated `Runtime Session` from committed authored state
+- boot the minimal gameplay foundation needed for the preview/playtest loop
 
 When playtest stops:
 
@@ -29,8 +30,9 @@ When playtest stops:
 
 1. Playtest state is isolated inside `Runtime Session`.
 2. Playtest does not hot-mutate authored truth by default.
-3. Stopping playtest restores authoring context instead of unwinding live scene mutations.
-4. Any future `apply from playtest` behavior must be an explicit authored command.
+3. The first preview/playtest slice must be meaningfully runtime-real, not just an alternate camera over authored content.
+4. Stopping playtest restores authoring context instead of unwinding live scene mutations.
+5. Any future `apply from playtest` behavior must be an explicit authored command.
 
 ## Consequences
 

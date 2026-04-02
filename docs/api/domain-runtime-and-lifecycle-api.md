@@ -31,6 +31,7 @@ Examples:
 - `Runtime Session`
 - loaded region state
 - live world state
+- ECS world state
 - active quest state
 - player state
 - live plugin runtime state
@@ -78,6 +79,7 @@ This state is not owned by a UI store.
 Live execution state such as:
 
 - loaded runtime world state
+- ECS `World` state
 - player and NPC state during playtest
 - live quest/session state
 
@@ -174,6 +176,39 @@ For example:
 `Workspace` is where the app remembers how the user is working on a subject.
 
 It is not where the app stores what the authored subject means.
+
+## Runtime Gameplay Foundation API
+
+Sugarmagic’s runtime session model should include a minimal gameplay foundation derived from Sugarengine’s ECS architecture.
+
+### Conceptual pieces
+
+- `World`
+  - runtime owner of live entities, components, and system execution
+- `System`
+  - ordered simulation unit that updates the `World`
+- player-controlled runtime entity
+  - first controllable subject in preview/playtest
+
+### First preview/playtest slice
+
+For the first real preview loop, the minimum gameplay foundation should support:
+
+- player spawn
+- movement / locomotion
+- runtime follow camera
+
+This is the minimum bar for “the game is running” in preview.
+
+### Important rule
+
+This gameplay foundation belongs to runtime/session architecture.
+
+It must not be implemented as:
+
+- shell-local simulation state
+- authoring workspace state
+- editor-only preview code that bypasses runtime session truth
 
 ## State Lifetime and Scoping Rules
 

@@ -398,6 +398,9 @@ Shared runtime semantics used by authoring preview, playtest, and published targ
 - runtime boot and teardown API
 - scene and region loading API
 - runtime session API
+- ECS gameplay-foundation API
+- `World` and `System` contracts or equivalent runtime gameplay kernel boundaries
+- player spawn / movement / follow-camera runtime services
 - material semantics and compile-profile API
 - landscape runtime API
 - environment runtime API
@@ -412,6 +415,10 @@ This is the primary shared runtime boundary that both Sugarmagic and published t
 Runtime session state may be surfaced to stores or views through adapters, but the store is not the owner of that truth.
 
 It must not absorb editor gizmo logic, ProductMode-specific workspace controllers, or editor-only overlay behavior as runtime semantics.
+
+For the first preview/playtest migration slices, `runtime-core` should be the home of the minimal gameplay foundation ported from Sugarengine’s ECS model.
+
+That means preview should become runtime-real by growing `runtime-core`, not by adding shell-local preview behavior in `apps/studio` or `packages/workspaces`.
 
 ## `/packages/runtime-web` API
 
@@ -431,6 +438,7 @@ Browser-specific runtime adapters.
 - authored-scene root and editor-overlay root access where needed
 - low-level browser or renderer picking and raycast helpers
 - pointer-to-ray or equivalent browser viewport utilities
+- browser host adapters for preview-window boot and runtime-session wiring where needed
 
 ### Should not expose
 
@@ -449,6 +457,8 @@ Browser-specific runtime adapters.
 It exists to adapt the shared runtime for the browser and to expose renderer/viewport primitives that authoring workspaces may use.
 
 If a piece of code exists only to support a specific authoring workspace such as `Build > Layout`, it should live in workspace implementation modules rather than in `runtime-web`.
+
+If a piece of code exists to boot and host the shared runtime in a browser preview window, it belongs in `runtime-web`, not in workspace implementation modules.
 
 ## `/packages/plugins` API
 

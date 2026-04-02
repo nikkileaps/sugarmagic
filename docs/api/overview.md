@@ -14,6 +14,7 @@ Sugarmagic is expected to support three closely related execution contexts.
 
 2. `preview`
 - local browser-hosted runtime preview and playtest inside the same runtime family
+- first preview slices should include a minimal ECS-backed gameplay loop rather than a camera-only presentation swap
 
 3. `published-web`
 - deployable game target hosted on the web, such as Google Cloud Run serving the web app and game assets
@@ -47,6 +48,25 @@ This means engineers should assume:
 - one material semantics layer
 - one runtime rendering model
 - compile profiles for authoring preview, runtime preview, and published targets
+
+### Runtime gameplay foundation
+
+Sugarmagic should also adopt a shared runtime gameplay foundation derived from Sugarengine’s ECS architecture.
+
+That foundation should include:
+
+- `World` as the runtime entity/component container
+- `System` as the runtime execution unit
+- ordered system execution for simulation
+- a player-controlled runtime entity model
+
+For the first preview/playtest slice, this foundation only needs to be large enough to support:
+
+- player spawn
+- movement
+- runtime follow camera
+
+It does not need full gameplay parity yet.
 
 ### Browser execution
 
