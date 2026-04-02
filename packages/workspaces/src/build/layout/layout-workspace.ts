@@ -89,6 +89,7 @@ export function createLayoutWorkspace(
 
   let transformController: ReturnType<typeof createTransformController> | null = null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  let attachedOverlayRoot: THREE.Object3D | null = null;
 
   function buildTransformController(camera: THREE.Camera) {
     return createTransformController({
@@ -146,6 +147,7 @@ export function createLayoutWorkspace(
       hitTestService.setCamera(camera);
       hitTestService.setAuthoredRoot(authoredRoot);
       hitTestService.setOverlayRoot(overlayRoot);
+      attachedOverlayRoot = overlayRoot;
 
       overlayRoot.add(gizmo.root);
       overlayRoot.add(originMarker.root);
@@ -176,6 +178,14 @@ export function createLayoutWorkspace(
         window.removeEventListener("keydown", keydownHandler);
         keydownHandler = null;
       }
+      if (attachedOverlayRoot) {
+        attachedOverlayRoot.remove(gizmo.root);
+        attachedOverlayRoot.remove(originMarker.root);
+        attachedOverlayRoot.remove(worldCursor.root);
+        attachedOverlayRoot = null;
+      }
+      gizmo.setVisible(false);
+      originMarker.setVisible(false);
     },
 
     syncOverlays() {
@@ -195,6 +205,12 @@ export function createLayoutWorkspace(
 
       gizmo.setPosition(transform.position);
       gizmo.setRotation(transform.rotation);
+      const largestAxisScale = Math.max(
+        transform.scale[0],
+        transform.scale[1],
+        transform.scale[2]
+      );
+      gizmo.setScale(Math.min(2.4, Math.max(1.4, largestAxisScale * 1.1)));
       gizmo.setVisible(true);
       originMarker.setPosition(transform.position);
       originMarker.setVisible(true);

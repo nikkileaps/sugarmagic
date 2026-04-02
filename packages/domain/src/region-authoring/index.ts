@@ -8,9 +8,17 @@ export interface RegionPlacement {
   placementPolicy: "world-grid";
 }
 
+export interface RegionSceneFolder {
+  folderId: string;
+  displayName: string;
+  parentFolderId: string | null;
+}
+
 export interface PlacedAssetInstance {
   instanceId: string;
   assetDefinitionId: string;
+  displayName: string;
+  parentFolderId: string | null;
   transform: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -45,6 +53,7 @@ export interface RegionDocument {
   displayName: string;
   placement: RegionPlacement;
   scene: {
+    folders: RegionSceneFolder[];
     placedAssets: PlacedAssetInstance[];
   };
   environment: RegionEnvironmentState;

@@ -10,15 +10,22 @@ import {
   switchActiveRegion,
   addRegionToSession,
   getActiveRegion,
-  getAllRegions
+  getAllRegions,
+  getAllAssetDefinitions,
+  addAssetDefinitionToSession,
+  updateAssetDefinitionInSession,
+  removeAssetDefinitionFromSession,
+  assetDefinitionHasSceneReferences
 } from "@sugarmagic/domain";
 import {
   checkDirectoryHasProject,
   createProjectInDirectory,
   openProject,
   pickDirectory,
+  readBlobFile,
   saveProject,
-  reloadProject
+  reloadProject,
+  importSourceAsset
 } from "@sugarmagic/io";
 import {
   createShellStore,
@@ -40,6 +47,30 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+
+function revokeAssetSources(assetSources: Record<string, string>) {
+  for (const url of Object.values(assetSources)) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function createAssetSourceMap(
+  handle: FileSystemDirectoryHandle,
+  assetDefinitions: ReturnType<typeof getAllAssetDefinitions>
+): Promise<Record<string, string>> {
+  const nextSources: Record<string, string> = {};
+
+  for (const definition of assetDefinitions) {
+    const pathSegments = definition.source.relativeAssetPath
+      .split("/")
+      .filter(Boolean);
+    const blob = await readBlobFile(handle, ...pathSegments);
+    if (!blob) continue;
+    nextSources[definition.source.relativeAssetPath] = URL.createObjectURL(blob);
+  }
+
+  return nextSources;
+}
 
 const shellStore = createShellStore("build");
 const projectStore = createProjectStore();
@@ -69,7 +100,11 @@ function activateRegion(region: RegionDocument | undefined) {
 async function handleOpenProject() {
   try {
     const active = await openProject();
-    const session = createAuthoringSession(active.gameProject, active.regions);
+    const session = createAuthoringSession(
+      active.gameProject,
+      active.regions,
+      active.contentLibrary
+    );
     projectStore.getState().setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
   } catch (e) {
@@ -83,7 +118,11 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
     const hasExisting = await checkDirectoryHasProject(handle);
     if (hasExisting && !window.confirm("This directory already contains a Sugarmagic project. Replace it?")) return;
     const active = await createProjectInDirectory(handle, input);
-    const session = createAuthoringSession(active.gameProject, active.regions);
+    const session = createAuthoringSession(
+      active.gameProject,
+      active.regions,
+      active.contentLibrary
+    );
     projectStore.getState().setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
   } catch (e) {
@@ -100,7 +139,13 @@ function dispatchCommand(command: SemanticCommand) {
 async function handleSave() {
   const { handle, descriptor, session } = projectStore.getState();
   if (!handle || !descriptor || !session) return;
-  await saveProject({ handle, descriptor, gameProject: session.gameProject, regions: getAllRegions(session) });
+  await saveProject({
+    handle,
+    descriptor,
+    gameProject: session.gameProject,
+    contentLibrary: session.contentLibrary,
+    regions: getAllRegions(session)
+  });
   projectStore.getState().updateSession(markSessionClean(session));
 }
 
@@ -108,10 +153,17 @@ async function handleReload() {
   const { handle, descriptor, session } = projectStore.getState();
   if (!handle || !descriptor || !session) return;
   const reloaded = await reloadProject({
-    handle, descriptor, gameProject: session.gameProject,
+    handle,
+    descriptor,
+    gameProject: session.gameProject,
+    contentLibrary: session.contentLibrary,
     regions: getAllRegions(session)
   });
-  const newSession = createAuthoringSession(reloaded.gameProject, reloaded.regions);
+  const newSession = createAuthoringSession(
+    reloaded.gameProject,
+    reloaded.regions,
+    reloaded.contentLibrary
+  );
   projectStore.getState().setActive(reloaded.handle, reloaded.descriptor, newSession);
   activateRegion(reloaded.regions[0]);
 }
@@ -125,7 +177,7 @@ function handleRegionSelect(regionId: string) {
 
 // --- Preview ---
 
-function handleStartPreview() {
+function handleStartPreview(assetSources: Record<string, string>) {
   const { session } = projectStore.getState();
   if (!session) return;
 
@@ -160,7 +212,15 @@ function handleStartPreview() {
     if (event.data?.type === "PREVIEW_READY") {
       window.removeEventListener("message", onMessage);
       const regions = getAllRegions(capturedSession);
-      capturedWindow.postMessage({ type: "PREVIEW_BOOT", regions }, "*");
+      capturedWindow.postMessage(
+        {
+          type: "PREVIEW_BOOT",
+          regions,
+          contentLibrary: capturedSession.contentLibrary,
+          assetSources
+        },
+        "*"
+      );
     }
   }
   window.addEventListener("message", onMessage);
@@ -198,6 +258,7 @@ export function App() {
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
 
   const phase = useStore(projectStore, (s) => s.phase);
+  const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
 
   const isDirty = session?.isDirty ?? false;
@@ -211,6 +272,7 @@ export function App() {
   }, [session]);
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
+  const [assetSources, setAssetSources] = useState<Record<string, string>>({});
 
   function handleCreateRegion(input: { displayName: string; regionId: string }) {
     if (!session) return;
@@ -218,7 +280,7 @@ export function App() {
       identity: { id: input.regionId, schema: "RegionDocument", version: 1 },
       displayName: input.displayName,
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-      scene: { placedAssets: [] },
+      scene: { folders: [], placedAssets: [] },
       environment: { skyProfileId: null, fogEnabled: false },
       landscape: { enabled: false, channelIds: [] },
       markers: [],
@@ -228,6 +290,87 @@ export function App() {
     shellStore.getState().setActiveRegionId(input.regionId);
     setCreateRegionOpen(false);
   }
+
+  const assetDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllAssetDefinitions(session);
+  }, [session]);
+
+  useEffect(() => {
+    let disposed = false;
+    let generatedSources: Record<string, string> = {};
+
+    if (!projectHandle || assetDefinitions.length === 0) {
+      void Promise.resolve().then(() => {
+        if (!disposed) {
+          setAssetSources({});
+        }
+      });
+      return undefined;
+    }
+
+    void createAssetSourceMap(projectHandle, assetDefinitions).then(
+      (nextSources) => {
+        if (disposed) {
+          revokeAssetSources(nextSources);
+          return;
+        }
+        generatedSources = nextSources;
+        setAssetSources(nextSources);
+      }
+    );
+
+    return () => {
+      disposed = true;
+      revokeAssetSources(generatedSources);
+    };
+  }, [assetDefinitions, projectHandle]);
+
+  const handleImportAsset = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    const result = await importSourceAsset({
+      projectHandle: handle,
+      descriptor
+    });
+    projectStore
+      .getState()
+      .updateSession(addAssetDefinitionToSession(currentSession, result.assetDefinition));
+    return result.assetDefinition;
+  }, []);
+
+  const handleUpdateAssetDefinition = useCallback(
+    (definitionId: string, displayName: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateAssetDefinitionInSession(currentSession, definitionId, {
+            displayName
+          })
+        );
+    },
+    []
+  );
+
+  const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    if (assetDefinitionHasSceneReferences(currentSession, definitionId)) {
+      window.alert("Remove all placed instances before deleting this asset from the project.");
+      return;
+    }
+
+    if (!window.confirm("Remove this asset definition from the project?")) {
+      return;
+    }
+
+    projectStore
+      .getState()
+      .updateSession(removeAssetDefinitionFromSession(currentSession, definitionId));
+  }, []);
 
   // --- Viewport lifecycle (tied to project phase) ---
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -255,8 +398,14 @@ export function App() {
   const activeRegion = session ? getActiveRegion(session) : null;
 
   useEffect(() => {
-    if (runtimeRef.current && activeRegion) runtimeRef.current.updateFromRegion(activeRegion);
-  }, [activeRegion]);
+    if (runtimeRef.current && activeRegion && session?.contentLibrary) {
+      runtimeRef.current.updateFromRegion({
+        region: activeRegion,
+        contentLibrary: session.contentLibrary,
+        assetSources
+      });
+    }
+  }, [activeRegion, assetSources, session?.contentLibrary]);
 
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
@@ -264,6 +413,7 @@ export function App() {
     activeRegionId,
     selectedIds,
     session,
+    assetDefinitions,
     getViewport: () => runtimeRef.current,
     getViewportElement: () => viewportRef.current,
     regions,
@@ -271,7 +421,10 @@ export function App() {
     onSelectRegion: handleRegionSelect,
     onCreateRegion: () => setCreateRegionOpen(true),
     onSelect: (ids) => shellStore.getState().setSelection(ids),
-    onCommand: dispatchCommand
+    onCommand: dispatchCommand,
+    onImportAsset: handleImportAsset,
+    onUpdateAssetDefinition: handleUpdateAssetDefinition,
+    onRemoveAssetDefinition: handleRemoveAssetDefinition
   });
 
   const handleUndo = useCallback(() => {
@@ -315,7 +468,7 @@ export function App() {
             {phase === "active" && (
               <ActionStripe
                 isPreviewRunning={isPreviewRunning}
-                onStartPreview={handleStartPreview}
+                onStartPreview={() => handleStartPreview(assetSources)}
                 onStopPreview={handleStopPreview}
                 previewDisabled={!session}
               />

@@ -1,5 +1,15 @@
 import type * as THREE from "three";
-import type { RegionDocument } from "@sugarmagic/domain";
+import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
+
+export interface ViewportAssetSources {
+  [relativeAssetPath: string]: string;
+}
+
+export interface ViewportSceneState {
+  region: RegionDocument;
+  contentLibrary: ContentLibrarySnapshot;
+  assetSources: ViewportAssetSources;
+}
 
 export interface WorkspaceViewport {
   scene: THREE.Scene;
@@ -8,7 +18,7 @@ export interface WorkspaceViewport {
   overlayRoot: THREE.Group;
   mount: (container: HTMLElement) => void;
   unmount: () => void;
-  updateFromRegion: (region: RegionDocument) => void;
+  updateFromRegion: (state: ViewportSceneState) => void;
   previewTransform: (
     instanceId: string,
     position: [number, number, number],

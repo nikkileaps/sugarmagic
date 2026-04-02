@@ -2,8 +2,9 @@ import { Stack, Group, Text, NumberInput, ActionIcon } from "@mantine/core";
 
 export interface TransformInspectorProps {
   label: string;
-  position: [number, number, number];
-  onMove: (axis: 0 | 1 | 2, value: number) => void;
+  value: [number, number, number];
+  step?: number;
+  onChange: (axis: 0 | 1 | 2, value: number) => void;
 }
 
 const AXIS_LABELS = ["X", "Y", "Z"] as const;
@@ -16,8 +17,9 @@ const NUDGE_STEP = 0.5;
 
 export function TransformInspector({
   label,
-  position,
-  onMove
+  value,
+  step = NUDGE_STEP,
+  onChange
 }: TransformInspectorProps) {
   return (
     <Stack gap="xs">
@@ -38,7 +40,7 @@ export function TransformInspector({
           <ActionIcon
             variant="subtle"
             size="xs"
-            onClick={() => onMove(i as 0 | 1 | 2, position[i] - NUDGE_STEP)}
+            onClick={() => onChange(i as 0 | 1 | 2, value[i] - step)}
             styles={{
               root: {
                 color: "var(--sm-color-overlay2)",
@@ -49,11 +51,11 @@ export function TransformInspector({
             −
           </ActionIcon>
           <NumberInput
-            value={position[i]}
+            value={value[i]}
             onChange={(val) => {
-              if (typeof val === "number") onMove(i as 0 | 1 | 2, val);
+              if (typeof val === "number") onChange(i as 0 | 1 | 2, val);
             }}
-            step={NUDGE_STEP}
+            step={step}
             decimalScale={2}
             size="xs"
             w={80}
@@ -70,7 +72,7 @@ export function TransformInspector({
           <ActionIcon
             variant="subtle"
             size="xs"
-            onClick={() => onMove(i as 0 | 1 | 2, position[i] + NUDGE_STEP)}
+            onClick={() => onChange(i as 0 | 1 | 2, value[i] + step)}
             styles={{
               root: {
                 color: "var(--sm-color-overlay2)",

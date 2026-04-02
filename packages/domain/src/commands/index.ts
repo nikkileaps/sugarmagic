@@ -26,6 +26,67 @@ export type MovePlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+export type PlaceAssetInstanceCommand = SemanticCommandBase<
+  "PlaceAssetInstance",
+  {
+    instanceId: string;
+    assetDefinitionId: string;
+    displayName: string;
+    parentFolderId: string | null;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type DuplicatePlacedAssetCommand = SemanticCommandBase<
+  "DuplicatePlacedAsset",
+  {
+    sourceInstanceId: string;
+    duplicatedInstanceId: string;
+    positionOffset: [number, number, number];
+  }
+>;
+
+export type RemovePlacedAssetCommand = SemanticCommandBase<
+  "RemovePlacedAsset",
+  {
+    instanceId: string;
+  }
+>;
+
+export type MovePlacedAssetToFolderCommand = SemanticCommandBase<
+  "MovePlacedAssetToFolder",
+  {
+    instanceId: string;
+    parentFolderId: string | null;
+  }
+>;
+
+export type CreateSceneFolderCommand = SemanticCommandBase<
+  "CreateSceneFolder",
+  {
+    folderId: string;
+    displayName: string;
+    parentFolderId: string | null;
+  }
+>;
+
+export type RenameSceneFolderCommand = SemanticCommandBase<
+  "RenameSceneFolder",
+  {
+    folderId: string;
+    displayName: string;
+  }
+>;
+
+export type DeleteSceneFolderCommand = SemanticCommandBase<
+  "DeleteSceneFolder",
+  {
+    folderId: string;
+  }
+>;
+
 export type PaintLandscapeCommand = SemanticCommandBase<
   "PaintLandscape",
   {
@@ -62,6 +123,13 @@ export type UpdatePluginConfigurationCommand = SemanticCommandBase<
 
 export type SemanticCommand =
   | MovePlacedAssetCommand
+  | PlaceAssetInstanceCommand
+  | DuplicatePlacedAssetCommand
+  | RemovePlacedAssetCommand
+  | MovePlacedAssetToFolderCommand
+  | CreateSceneFolderCommand
+  | RenameSceneFolderCommand
+  | DeleteSceneFolderCommand
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | UpdateEnvironmentCommand

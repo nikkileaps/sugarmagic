@@ -68,10 +68,7 @@ export function BuildSubNav({
           },
           option: {
             fontSize: "var(--sm-font-size-sm)",
-            color: "var(--sm-color-text)",
-            "&[data-selected]": {
-              background: "var(--sm-active-bg)"
-            }
+            color: "var(--sm-color-text)"
           }
         }}
       />
