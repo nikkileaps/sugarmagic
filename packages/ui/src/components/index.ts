@@ -5,7 +5,8 @@ export {
 export {
   BuildSubNav,
   type BuildSubNavProps,
-  type BuildWorkspaceKindItem
+  type BuildWorkspaceKindItem,
+  type BuildContextSelector
 } from "./BuildSubNav";
 export {
   CreateRegionDialog,

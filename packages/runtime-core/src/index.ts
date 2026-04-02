@@ -11,6 +11,7 @@ export * from "./jobs";
 export * from "./landscape";
 export * from "./materials";
 export * from "./plugins";
+export * from "./render";
 export * from "./scene";
 export * from "./state";
 export * from "./streaming";

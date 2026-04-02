@@ -16,6 +16,7 @@ export interface AuthoringContextSnapshot {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeRegionId: string | null;
+  activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;
   selectedEntityIds: string[];
 }

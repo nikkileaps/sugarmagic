@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
@@ -18,10 +19,15 @@ import {
   computeCameraPosition,
   createRuntimeInputManager,
   createRuntimeBootModel,
+  createRuntimeEnvironmentState,
+  createEnvironmentSceneController,
+  createRuntimeRenderPipeline,
+  resolveEnvironmentDefinition,
   type GameCameraState,
   type RuntimeBootModel,
   type RuntimeCompileProfile,
   type RuntimeContentSource,
+  type RuntimeEnvironmentState,
   type RuntimeHostKind
 } from "@sugarmagic/runtime-core";
 
@@ -46,6 +52,8 @@ export interface WebRuntimeHostOptions {
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
+  activeRegionId?: string | null;
+  activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   assetSources: Record<string, string>;
 }
@@ -59,7 +67,6 @@ export interface WebRuntimeHost {
 const CUBE_COLOR = 0x89b4fa;
 const PLAYER_COLOR = 0xa6e3a1;
 const GRID_COLOR = 0x45475a;
-const BG_COLOR = 0x1e1e2e;
 
 const gltfLoader = new GLTFLoader();
 
@@ -88,6 +95,17 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
+function getActiveRegion(
+  regions: RegionDocument[],
+  activeRegionId: string | null | undefined
+): RegionDocument | null {
+  if (activeRegionId) {
+    const activeRegion = regions.find((region) => region.identity.id === activeRegionId);
+    if (activeRegion) return activeRegion;
+  }
+  return regions[0] ?? null;
+}
+
 export function createWebTargetAdapter(
   request: WebTargetAdapterRequest
 ): WebTargetAdapter {
@@ -113,9 +131,12 @@ export function createWebRuntimeHost(
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
-  let renderer: THREE.WebGLRenderer | null = null;
+  let renderer: WebGPURenderer | null = null;
+  let environmentController: ReturnType<typeof createEnvironmentSceneController> | null = null;
+  let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
+  let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
   let playerMesh: THREE.Mesh | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
@@ -131,6 +152,7 @@ export function createWebRuntimeHost(
     inputManager?.detach();
     inputManager = null;
     cameraState = null;
+    runtimeEnvironmentState = null;
     world = null;
 
     if (playerMesh) {
@@ -150,6 +172,11 @@ export function createWebRuntimeHost(
       disposeObject(entry.root);
     }
     sceneObjectEntries.clear();
+
+    environmentController?.dispose();
+    environmentController = null;
+    renderPipeline?.dispose();
+    renderPipeline = null;
 
     if (scene) {
       scene.traverse((child) => {
@@ -185,6 +212,7 @@ export function createWebRuntimeHost(
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
+    renderPipeline?.resize(width, height);
   }
 
   function renderFrame(now: number) {
@@ -223,7 +251,12 @@ export function createWebRuntimeHost(
     const camPos = computeCameraPosition(cameraState);
     camera.position.set(camPos.x, camPos.y, camPos.z);
     camera.lookAt(camPos.lookAtX, camPos.lookAtY, camPos.lookAtZ);
-    renderer.render(scene, camera);
+    renderPipeline?.setCamera(camera);
+    if (renderPipeline) {
+      renderPipeline.render();
+    } else {
+      renderer.render(scene, camera);
+    }
 
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
@@ -238,7 +271,7 @@ export function createWebRuntimeHost(
     disposeRuntime();
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(BG_COLOR);
+    environmentController = createEnvironmentSceneController(scene);
 
     camera = new THREE.PerspectiveCamera(
       DEFAULT_CAMERA_CONFIG.fov,
@@ -247,16 +280,25 @@ export function createWebRuntimeHost(
       1000
     );
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(ownerWindow.devicePixelRatio);
+    renderer = new WebGPURenderer({ antialias: true });
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
     root.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-    directional.position.set(5, 10, 5);
-    scene.add(directional);
     scene.add(new THREE.GridHelper(40, 40, GRID_COLOR, GRID_COLOR));
 
+    const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
+    runtimeEnvironmentState = createRuntimeEnvironmentState({
+      region: activeRegion,
+      contentLibrary: state.contentLibrary,
+      explicitEnvironmentId: state.activeEnvironmentId
+    });
+    environmentController.apply(
+      activeRegion,
+      state.contentLibrary,
+      runtimeEnvironmentState.activeEnvironmentId
+    );
     for (const region of state.regions) {
       const objects = resolveSceneObjects(region, state.contentLibrary);
       for (const object of objects) {
@@ -338,9 +380,34 @@ export function createWebRuntimeHost(
       () => cameraState?.yaw ?? Math.PI * 1.25
     );
 
-    handleResize();
-    lastTime = ownerWindow.performance.now();
-    animationId = ownerWindow.requestAnimationFrame(renderFrame);
+    void renderer
+      .init()
+      .then(() => {
+        if (!renderer || !scene || !camera) return;
+
+        renderer.setPixelRatio(ownerWindow.devicePixelRatio);
+        renderPipeline = createRuntimeRenderPipeline({
+          renderer,
+          scene,
+          camera,
+          width: root.clientWidth || 1,
+          height: root.clientHeight || 1
+        });
+        renderPipeline.applyEnvironment(
+          resolveEnvironmentDefinition(
+            activeRegion,
+            state.contentLibrary,
+            runtimeEnvironmentState?.activeEnvironmentId ?? null
+          )
+        );
+
+        handleResize();
+        lastTime = ownerWindow.performance.now();
+        animationId = ownerWindow.requestAnimationFrame(renderFrame);
+      })
+      .catch((error) => {
+        console.error("[sugarmagic] Failed to initialize WebGPU runtime host.", error);
+      });
   }
 
   function dispose() {

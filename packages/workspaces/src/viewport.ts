@@ -9,6 +9,7 @@ export interface ViewportSceneState {
   region: RegionDocument;
   contentLibrary: ContentLibrarySnapshot;
   assetSources: ViewportAssetSources;
+  environmentOverrideId?: string | null;
 }
 
 export interface WorkspaceViewport {

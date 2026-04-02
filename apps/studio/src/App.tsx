@@ -12,10 +12,13 @@ import {
   getActiveRegion,
   getAllRegions,
   getAllAssetDefinitions,
+  getAllEnvironmentDefinitions,
   addAssetDefinitionToSession,
+  addEnvironmentDefinitionToSession,
   updateAssetDefinitionInSession,
   removeAssetDefinitionFromSession,
-  assetDefinitionHasSceneReferences
+  assetDefinitionHasSceneReferences,
+  createDefaultEnvironmentDefinition
 } from "@sugarmagic/domain";
 import {
   checkDirectoryHasProject,
@@ -97,6 +100,10 @@ function activateRegion(region: RegionDocument | undefined) {
   shellStore.getState().setActiveRegionId(region.identity.id);
 }
 
+function activateDefaultEnvironment(environmentId: string | null | undefined) {
+  shellStore.getState().setActiveEnvironmentId(environmentId ?? null);
+}
+
 async function handleOpenProject() {
   try {
     const active = await openProject();
@@ -107,6 +114,9 @@ async function handleOpenProject() {
     );
     projectStore.getState().setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
+    activateDefaultEnvironment(
+      session.contentLibrary.environmentDefinitions[0]?.definitionId
+    );
   } catch (e) {
     handleProjectError(e);
   }
@@ -125,6 +135,9 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
     );
     projectStore.getState().setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
+    activateDefaultEnvironment(
+      session.contentLibrary.environmentDefinitions[0]?.definitionId
+    );
   } catch (e) {
     handleProjectError(e);
   }
@@ -132,7 +145,10 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
 
 function dispatchCommand(command: SemanticCommand) {
   const { session } = projectStore.getState();
-  if (!session || !getActiveRegion(session)) return;
+  if (!session) return;
+  if (command.target.aggregateKind === "region-document" && !getActiveRegion(session)) {
+    return;
+  }
   projectStore.getState().updateSession(applyCommand(session, command));
 }
 
@@ -166,6 +182,9 @@ async function handleReload() {
   );
   projectStore.getState().setActive(reloaded.handle, reloaded.descriptor, newSession);
   activateRegion(reloaded.regions[0]);
+  activateDefaultEnvironment(
+    newSession.contentLibrary.environmentDefinitions[0]?.definitionId
+  );
 }
 
 function handleRegionSelect(regionId: string) {
@@ -188,6 +207,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
     activeProductMode: shell.activeProductMode,
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeRegionId: shell.activeRegionId,
+    activeEnvironmentId: shell.activeEnvironmentId,
     activeWorkspaceId: shell.activeWorkspaceId,
     selectedEntityIds: shell.selection.entityIds
   };
@@ -216,6 +236,8 @@ function handleStartPreview(assetSources: Record<string, string>) {
         {
           type: "PREVIEW_BOOT",
           regions,
+          activeRegionId: capturedSession.activeRegionId,
+          activeEnvironmentId: snapshot.activeEnvironmentId,
           contentLibrary: capturedSession.contentLibrary,
           assetSources
         },
@@ -245,6 +267,7 @@ function handleStopPreview() {
   if (snapshot.activeRegionId) {
     shell.setActiveRegionId(snapshot.activeRegionId);
   }
+  shell.setActiveEnvironmentId(snapshot.activeEnvironmentId ?? null);
   shell.setSelection(snapshot.selectedEntityIds);
 }
 
@@ -255,6 +278,7 @@ export function App() {
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
   const activeBuildKind = useStore(shellStore, (s) => s.activeBuildWorkspaceKind);
   const activeRegionId = useStore(shellStore, (s) => s.activeRegionId);
+  const activeEnvironmentId = useStore(shellStore, (s) => s.activeEnvironmentId);
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
 
   const phase = useStore(projectStore, (s) => s.phase);
@@ -282,7 +306,10 @@ export function App() {
       displayName: input.displayName,
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
       scene: { folders: [], placedAssets: [] },
-      environment: { skyProfileId: null, fogEnabled: false },
+      environmentBinding: {
+        defaultEnvironmentId:
+          session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
+      },
       landscape: { enabled: false, channelIds: [] },
       markers: [],
       gameplayPlacements: []
@@ -296,6 +323,25 @@ export function App() {
     if (!session) return [];
     return getAllAssetDefinitions(session);
   }, [session]);
+
+  const environmentDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllEnvironmentDefinitions(session);
+  }, [session]);
+
+  const environmentViewportOverrideId =
+    activeBuildKind === "environment"
+      ? activeEnvironmentId ?? environmentDefinitions[0]?.definitionId ?? null
+      : null;
+
+  useEffect(() => {
+    if (!session) return;
+    if (activeEnvironmentId) return;
+    const firstEnvironmentId =
+      session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
+    if (!firstEnvironmentId) return;
+    shellStore.getState().setActiveEnvironmentId(firstEnvironmentId);
+  }, [activeEnvironmentId, session]);
 
   useEffect(() => {
     let disposed = false;
@@ -373,6 +419,29 @@ export function App() {
       .updateSession(removeAssetDefinitionFromSession(currentSession, definitionId));
   }, []);
 
+  const handleCreateEnvironment = useCallback(() => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+
+    const nextIndex =
+      currentSession.contentLibrary.environmentDefinitions.length + 1;
+    const environmentDefinition = createDefaultEnvironmentDefinition(
+      currentSession.gameProject.identity.id,
+      {
+        displayName: `Environment ${nextIndex}`
+      }
+    );
+
+    const nextSession = addEnvironmentDefinitionToSession(
+      currentSession,
+      environmentDefinition
+    );
+    projectStore.getState().updateSession(nextSession);
+    shellStore
+      .getState()
+      .setActiveEnvironmentId(environmentDefinition.definitionId);
+  }, []);
+
   // --- Viewport lifecycle (tied to project phase) ---
   const viewportRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<WorkspaceViewport | null>(null);
@@ -407,25 +476,31 @@ export function App() {
       runtimeRef.current.updateFromRegion({
         region: activeRegion,
         contentLibrary: session.contentLibrary,
-        assetSources
+        assetSources,
+        environmentOverrideId: environmentViewportOverrideId
       });
     }
-  }, [activeRegion, assetSources, session?.contentLibrary]);
+  }, [activeRegion, assetSources, environmentViewportOverrideId, session?.contentLibrary]);
 
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
     activeBuildKind,
     viewportReadyVersion,
     activeRegionId,
+    activeEnvironmentId,
     selectedIds,
     session,
     assetDefinitions,
+    environmentDefinitions,
     getViewport: () => runtimeRef.current,
     getViewportElement: () => viewportRef.current,
     regions,
     onSelectKind: (kind) => shellStore.getState().setActiveBuildWorkspaceKind(kind),
     onSelectRegion: handleRegionSelect,
     onCreateRegion: () => setCreateRegionOpen(true),
+    onSelectEnvironment: (environmentId) =>
+      shellStore.getState().setActiveEnvironmentId(environmentId),
+    onCreateEnvironment: handleCreateEnvironment,
     onSelect: (ids) => shellStore.getState().setSelection(ids),
     onCommand: dispatchCommand,
     onImportAsset: handleImportAsset,

@@ -11,7 +11,8 @@ import {
   addAssetDefinitionToSession,
   getAllAssetDefinitions,
   applyCommand,
-  getActiveRegion
+  getActiveRegion,
+  createDefaultEnvironmentDefinition
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -42,7 +43,7 @@ function makeRegion(): RegionDocument {
       folders: [],
       placedAssets: []
     },
-    environment: { skyProfileId: null, fogEnabled: false },
+    environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
     landscape: { enabled: false, channelIds: [] },
     markers: [],
     gameplayPlacements: []
@@ -56,7 +57,13 @@ function makeContentLibrary(): ContentLibrarySnapshot {
       schema: "ContentLibrary",
       version: 1
     },
-    assetDefinitions: []
+    assetDefinitions: [],
+    environmentDefinitions: [
+      createDefaultEnvironmentDefinition("wordlark", {
+        definitionId: "wordlark:environment:default",
+        displayName: "Default Environment"
+      })
+    ]
   };
 }
 

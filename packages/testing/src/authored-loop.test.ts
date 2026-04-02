@@ -27,7 +27,7 @@ function makeTestRegion(): RegionDocument {
         }
       ]
     },
-    environment: { skyProfileId: null, fogEnabled: false },
+    environmentBinding: { defaultEnvironmentId: "env:default" },
     landscape: { enabled: false, channelIds: [] },
     markers: [],
     gameplayPlacements: []
@@ -94,7 +94,6 @@ describe("first authored loop", () => {
 
     const result = executeCommand(region, command);
 
-    // Simulate save/reload via JSON round-trip
     const serialized = JSON.stringify(result.region);
     const reloaded: RegionDocument = JSON.parse(serialized);
 
@@ -103,6 +102,7 @@ describe("first authored loop", () => {
     ]);
     expect(reloaded.identity.id).toBe("test-region");
     expect(reloaded.identity.schema).toBe("RegionDocument");
+    expect(reloaded.environmentBinding.defaultEnvironmentId).toBe("env:default");
   });
 
   it("does not mutate the original region", () => {

@@ -6,9 +6,13 @@
  * Does NOT redefine the shell — returns panel contributions.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Stack, Text } from "@mantine/core";
-import type { SemanticCommand, AssetDefinition } from "@sugarmagic/domain";
+import type {
+  SemanticCommand,
+  AssetDefinition,
+  EnvironmentDefinition
+} from "@sugarmagic/domain";
 import {
   getActiveRegion,
   createPlacedAssetInstanceId,
@@ -16,11 +20,13 @@ import {
 } from "@sugarmagic/domain";
 import {
   BuildSubNav,
-  type BuildWorkspaceKindItem
+  type BuildWorkspaceKindItem,
+  type BuildContextSelector
 } from "@sugarmagic/ui";
 import type { BuildWorkspaceKind } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import type { WorkspaceViewport } from "../viewport";
+import { applyLightingPresetToEnvironmentDefinition } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
@@ -35,15 +41,19 @@ export interface BuildProductModeViewProps {
   activeBuildKind: BuildWorkspaceKind;
   viewportReadyVersion: number;
   activeRegionId: string | null;
+  activeEnvironmentId: string | null;
   selectedIds: string[];
   session: AuthoringSession | null;
   assetDefinitions: AssetDefinition[];
+  environmentDefinitions: EnvironmentDefinition[];
   getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   regions: { id: string; displayName: string }[];
   onSelectKind: (kind: BuildWorkspaceKind) => void;
   onSelectRegion: (regionId: string) => void;
   onCreateRegion: () => void;
+  onSelectEnvironment: (environmentId: string) => void;
+  onCreateEnvironment: () => void;
   onSelect: (ids: string[]) => void;
   onCommand: (command: SemanticCommand) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
@@ -56,6 +66,7 @@ export interface BuildProductModeViewResult {
   leftPanel: React.ReactNode;
   rightPanel: React.ReactNode;
   viewportOverlay: React.ReactNode;
+  environmentOverrideId: string | null;
 }
 
 export function useBuildProductModeView(
@@ -65,15 +76,19 @@ export function useBuildProductModeView(
     activeBuildKind,
     viewportReadyVersion,
     activeRegionId,
+    activeEnvironmentId,
     selectedIds,
     session,
     assetDefinitions,
+    environmentDefinitions,
     getViewport,
     getViewportElement,
     regions,
     onSelectKind,
     onSelectRegion,
     onCreateRegion,
+    onSelectEnvironment,
+    onCreateEnvironment,
     onSelect,
     onCommand,
     onImportAsset,
@@ -92,6 +107,15 @@ export function useBuildProductModeView(
       ? selectedAssetDefinitionIdState
       : assetDefinitions[0]?.definitionId ?? null;
 
+  const selectedEnvironment = useMemo(() => {
+    if (environmentDefinitions.length === 0) return null;
+    return (
+      environmentDefinitions.find(
+        (definition) => definition.definitionId === activeEnvironmentId
+      ) ?? environmentDefinitions[0]
+    );
+  }, [activeEnvironmentId, environmentDefinitions]);
+
   const layoutView = useLayoutWorkspaceView({
     isActive: activeBuildKind === "layout",
     viewportReadyVersion,
@@ -109,7 +133,43 @@ export function useBuildProductModeView(
     }
   });
 
-  const environmentView = useEnvironmentWorkspaceView();
+  const boundRegionNames = useMemo(() => {
+    if (!selectedEnvironment || !session) return [];
+    return Array.from(session.regions.values())
+      .filter(
+        (region) =>
+          region.environmentBinding.defaultEnvironmentId ===
+          selectedEnvironment.definitionId
+      )
+      .map((region) => region.displayName);
+  }, [selectedEnvironment, session]);
+
+  const environmentView = useEnvironmentWorkspaceView({
+    selectedEnvironment,
+    boundRegionNames,
+    onSelectLightingPreset: (preset) => {
+      if (!selectedEnvironment) return;
+      onCommand({
+        kind: "UpdateEnvironmentDefinition",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: selectedEnvironment.definitionId
+        },
+        subject: {
+          subjectKind: "environment-definition",
+          subjectId: selectedEnvironment.definitionId
+        },
+        payload: {
+          definitionId: selectedEnvironment.definitionId,
+          definition: applyLightingPresetToEnvironmentDefinition(
+            selectedEnvironment,
+            preset
+          )
+        }
+      });
+    }
+  });
+
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
@@ -160,22 +220,45 @@ export function useBuildProductModeView(
         ? environmentView
         : assetsView;
 
+  const contextSelector: BuildContextSelector | null =
+    activeBuildKind === "layout"
+      ? {
+          items: regions,
+          activeId: activeRegionId,
+          placeholder: "Select region...",
+          createLabel: "+ New Region",
+          width: 180,
+          onSelect: onSelectRegion,
+          onCreate: onCreateRegion
+        }
+      : activeBuildKind === "environment"
+        ? {
+            items: environmentDefinitions.map((definition) => ({
+              id: definition.definitionId,
+              displayName: definition.displayName
+            })),
+            activeId: selectedEnvironment?.definitionId ?? null,
+            placeholder: "Select environment...",
+            createLabel: "+ New Environment",
+            width: 220,
+            onSelect: onSelectEnvironment,
+            onCreate: onCreateEnvironment
+          }
+        : null;
+
   return {
     subHeaderPanel: (
       <BuildSubNav
         workspaceKinds={buildWorkspaceKinds}
         activeKindId={activeBuildKind}
         onSelectKind={(id) => onSelectKind(id as BuildWorkspaceKind)}
-        regions={regions}
-        activeRegionId={activeRegionId}
-        onSelectRegion={onSelectRegion}
-        onCreateRegion={onCreateRegion}
+        contextSelector={contextSelector}
       />
     ),
 
     leftPanel: (
       <Stack gap={0} h="100%">
-        {!activeRegion && activeBuildKind !== "assets" && (
+        {!activeRegion && activeBuildKind === "layout" && (
           <Stack gap="sm" align="center" p="xl" mt="xl">
             <Text size="sm" c="var(--sm-color-overlay0)" ta="center">
               No region selected.
@@ -190,6 +273,10 @@ export function useBuildProductModeView(
     ),
 
     rightPanel: activeView.rightPanel,
-    viewportOverlay: activeView.viewportOverlay
+    viewportOverlay: activeView.viewportOverlay,
+    environmentOverrideId:
+      activeBuildKind === "environment"
+        ? selectedEnvironment?.definitionId ?? null
+        : null
   };
 }

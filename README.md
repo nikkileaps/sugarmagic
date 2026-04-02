@@ -23,3 +23,7 @@ Developer API docs:
 
 - [Sugarmagic Developer API](/Users/nikki/projects/sugarmagic/docs/api/README.md)
 
+Current plans:
+
+- [Plan 008: Environment Light Presets and Shared Render Pipeline Epic](/Users/nikki/projects/sugarmagic/docs/plans/008-environment-light-presets-and-shared-render-pipeline-epic.md)
+

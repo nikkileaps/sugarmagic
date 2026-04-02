@@ -5,35 +5,48 @@ import {
 } from "@sugarmagic/shell";
 
 describe("Build navigation model", () => {
-  it("derives workspace ID from kind and region", () => {
+  it("derives workspace ID from workspace context", () => {
     expect(deriveBuildWorkspaceId("layout", "forest_north")).toBe(
       "build:layout:forest_north"
     );
-    expect(deriveBuildWorkspaceId("environment", "forest_north")).toBe(
-      "build:environment:forest_north"
+    expect(deriveBuildWorkspaceId("environment", "env_default")).toBe(
+      "build:environment:env_default"
     );
     expect(deriveBuildWorkspaceId("assets", "cave_01")).toBe(
       "build:assets:cave_01"
     );
   });
 
-  it("returns null when no region is selected", () => {
+  it("returns null when no workspace context is selected", () => {
     expect(deriveBuildWorkspaceId("layout", null)).toBeNull();
   });
 
-  it("changing workspace kind preserves region and updates workspace ID", () => {
+  it("changing to environment workspace uses environment context, not region context", () => {
     const store = createShellStore("build");
     store.getState().setActiveRegionId("forest_north");
+    store.getState().setActiveEnvironmentId("env_default");
 
     expect(store.getState().activeWorkspaceId).toBe("build:layout:forest_north");
 
     store.getState().setActiveBuildWorkspaceKind("environment");
     expect(store.getState().activeBuildWorkspaceKind).toBe("environment");
     expect(store.getState().activeRegionId).toBe("forest_north");
-    expect(store.getState().activeWorkspaceId).toBe("build:environment:forest_north");
+    expect(store.getState().activeEnvironmentId).toBe("env_default");
+    expect(store.getState().activeWorkspaceId).toBe("build:environment:env_default");
   });
 
-  it("changing region preserves workspace kind and updates workspace ID", () => {
+  it("changing environment preserves workspace kind and updates workspace ID", () => {
+    const store = createShellStore("build");
+    store.getState().setActiveEnvironmentId("env_default");
+    store.getState().setActiveBuildWorkspaceKind("environment");
+
+    store.getState().setActiveEnvironmentId("env_night");
+    expect(store.getState().activeBuildWorkspaceKind).toBe("environment");
+    expect(store.getState().activeEnvironmentId).toBe("env_night");
+    expect(store.getState().activeWorkspaceId).toBe("build:environment:env_night");
+  });
+
+  it("changing region preserves workspace kind and updates workspace ID for region-scoped workspaces", () => {
     const store = createShellStore("build");
     store.getState().setActiveRegionId("forest_north");
     store.getState().setActiveBuildWorkspaceKind("assets");
@@ -47,6 +60,7 @@ describe("Build navigation model", () => {
   it("clears selection and tool session on workspace kind change", () => {
     const store = createShellStore("build");
     store.getState().setActiveRegionId("forest_north");
+    store.getState().setActiveEnvironmentId("env_default");
     store.getState().setSelection(["obj-1", "obj-2"]);
 
     store.getState().setActiveBuildWorkspaceKind("environment");
@@ -54,7 +68,7 @@ describe("Build navigation model", () => {
     expect(store.getState().toolSession.isActive).toBe(false);
   });
 
-  it("clears selection and tool session on region change", () => {
+  it("clears selection and tool session on region change in region-scoped workspaces", () => {
     const store = createShellStore("build");
     store.getState().setActiveRegionId("forest_north");
     store.getState().setSelection(["obj-1"]);
