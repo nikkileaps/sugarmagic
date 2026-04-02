@@ -394,7 +394,7 @@ Suggested additions inside the architecture from [Proposal 005](/Users/nikki/pro
   /landscape/
   /scene/
 
-/packages/runtime-web/
+/targets/web/
   /workers/
   /transfer/
   /scheduling/

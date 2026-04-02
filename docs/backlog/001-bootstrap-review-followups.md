@@ -9,7 +9,7 @@
 
 **Severity:** Medium
 
-The `tooling/check-package-boundaries.mjs` allowlist is more permissive than current reality. For example, `@sugarmagic/productmodes` is allowed to import from `domain`, `runtime-core`, `runtime-web`, `plugins`, `io`, and `ui` — but it currently imports nothing and architecturally should import very little (ProductModes are shell composition concepts per ADR 002, not domain owners). Similar gaps exist for `runtime-core → plugins`, `io → plugins`, and `runtime-web → io, plugins`.
+The `tooling/check-package-boundaries.mjs` allowlist is more permissive than current reality. For example, `@sugarmagic/productmodes` is allowed to import from `domain`, `runtime-core`, `plugins`, `io`, and `ui` — but it currently imports nothing and architecturally should import very little (ProductModes are shell composition concepts per ADR 002, not domain owners). Similar gaps exist for `runtime-core → plugins`, `io → plugins`, and `targets/web → io, plugins`.
 
 **Action:** Tighten the allowlist to reflect only the dependencies each package actually needs. Widen deliberately when a dependency is actually introduced, with a comment explaining why.
 

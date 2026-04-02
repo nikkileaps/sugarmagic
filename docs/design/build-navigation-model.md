@@ -80,5 +80,5 @@ When `Build` is active, the header shows:
 | `packages/productmodes` | Descriptors only. Does not own workspace implementations. |
 | `packages/workspaces/build/layout` | LayoutWorkspace implementation, gizmo, interaction sessions |
 | `packages/shell` | Coordination state: active mode, workspace kind, region, selection |
-| `packages/runtime-web` | Viewport adapter, overlay root, low-level raycast helpers |
+| `apps/studio` | Authoring viewport host, overlay root, viewport contracts consumed by Build workspaces |
 | `packages/domain` | Canonical mutation path only |

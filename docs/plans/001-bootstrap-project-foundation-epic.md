@@ -217,7 +217,6 @@ Establish the top-level repo layout so Sugarmagic starts inside the package-orie
    - `packages/productmodes`
    - `packages/domain`
    - `packages/runtime-core`
-   - `packages/runtime-web`
    - `packages/plugins`
    - `packages/io`
    - `packages/ui`
@@ -466,12 +465,12 @@ Lay down the shared runtime contracts for runtime boot, session lifecycle, compi
 - [Proposal 007: Execution and Concurrency Architecture](/Users/nikki/projects/sugarmagic/docs/proposals/007-execution-and-concurrency-architecture.md)
 - [Proposal 009: Material Compilation and Shader Pipeline Architecture](/Users/nikki/projects/sugarmagic/docs/proposals/009-material-compilation-and-shader-pipeline.md)
 - [API 002: `/packages/runtime-core` API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
-- [API 002: `/packages/runtime-web` API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
+- [API 002: `/targets/web` API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
 
 ### Tasks
 
 1. Create the `runtime-core` package structure for scene, materials, landscape, environment, streaming, interaction, state, jobs, coordination, and plugins.
-2. Create the `runtime-web` package structure for boot, workers, transfer, scheduling, assets, input, save, audio, and network.
+2. Create the `targets/web` target-host structure for boot, workers, transfer, scheduling, asset-base integration, and web host startup.
 3. Define shared runtime boot and teardown contracts.
 4. Define runtime session and playtest lifecycle seams.
 5. Define compile-profile seams for authoring preview, runtime preview, and published target.

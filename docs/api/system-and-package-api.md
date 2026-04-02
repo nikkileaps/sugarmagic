@@ -23,7 +23,6 @@ Sugarmagic is expected to converge on a package-oriented internal architecture s
 /packages/workspaces
 /packages/domain
 /packages/runtime-core
-/packages/runtime-web
 /packages/plugins
 /packages/io
 /packages/ui
@@ -201,7 +200,9 @@ The Sugarmagic host app.
 - shell/app-state store wiring
 - ProductMode activation wiring
 - dev entry points
-- authoring/playtest host wiring
+- authoring viewport wiring
+- preview lifecycle orchestration
+- preview window launch and stop wiring
 
 ### Should not expose as canonical APIs
 
@@ -210,6 +211,14 @@ The Sugarmagic host app.
 - file-format logic
 
 `apps/studio` is a composition host.
+
+It is also the owner of preview orchestration:
+
+- opening the preview window
+- preview boot and ready messaging
+- snapshot and restore of authoring context
+
+It should use the shared `targets/web` host path for the actual running preview.
 
 ## `/targets/web` API
 
@@ -227,7 +236,6 @@ The deployable web game target shell.
 ### Should depend on
 
 - `runtime-core`
-- `runtime-web`
 - approved target-facing plugin capabilities
 
 ### Important rule
@@ -248,7 +256,6 @@ The intended published target dependency graph is:
 
 - `targets/web`
 - `runtime-core`
-- `runtime-web`
 - approved runtime-facing plugins
 - published content artifacts
 
@@ -345,14 +352,14 @@ Authoring-only implementation modules for concrete workspaces.
 - `shell`
 - `domain`
 - `runtime-core`
-- `runtime-web`
 - `ui`
+- abstract viewport contracts supplied by the active host
 
 ### Should not expose
 
 - publish-target entry points
 - canonical runtime semantics that belong in `runtime-core`
-- browser renderer internals that belong in `runtime-web`
+- published target host behavior that belongs in `targets/web`
 
 ### Important rule
 
@@ -363,6 +370,10 @@ It is where editor viewport tooling should live when that tooling is:
 - ProductMode-specific
 - workspace-specific
 - not part of the published runtime
+
+Authoring viewport composition belongs on the studio side of the boundary.
+
+`packages/workspaces` may depend on viewport contracts and runtime-facing scene semantics, but it should not depend on a separate browser-runtime package seam.
 
 ## `/packages/domain` API
 
@@ -420,45 +431,40 @@ For the first preview/playtest migration slices, `runtime-core` should be the ho
 
 That means preview should become runtime-real by growing `runtime-core`, not by adding shell-local preview behavior in `apps/studio` or `packages/workspaces`.
 
-## `/packages/runtime-web` API
+## `/targets/web` and studio host split
 
-### Purpose
+The web host boundary needs one explicit rule because earlier drafts were too soft here.
 
-Browser-specific runtime adapters.
+### `targets/web` owns
 
-### Should expose
+- the published web entry point
+- web runtime host creation around `runtime-core`
+- target-safe boot wiring
+- target asset-base integration
+- host lifecycle for the running web game
 
-- worker host API
-- browser asset resolution API
-- browser input adapters
-- browser save/session adapters
-- browser audio/network adapters
-- target warmup helpers where needed
-- viewport and renderer adapter helpers
-- authored-scene root and editor-overlay root access where needed
-- low-level browser or renderer picking and raycast helpers
-- pointer-to-ray or equivalent browser viewport utilities
-- browser host adapters for preview-window boot and runtime-session wiring where needed
+### `targets/web` must not own
 
-### Should not expose
+- preview window lifecycle
+- `window.open(...)`
+- opener/child window messaging
+- authoring snapshot and restore
+- editor-only viewport overlays
+- editor workspace interaction behavior
 
-- alternate runtime semantics
-- editor-specific shell assumptions
-- shell-store ownership of runtime session truth
-- Build-specific gizmo logic
-- Layout-specific transform-session logic
-- editor workspace behavior
-- commit-on-release authoring logic
+### `apps/studio` owns
+
+- preview launch and stop
+- preview ready/boot handshake
+- authoring viewport composition
+- authoring camera and overlay behavior
+- authoring snapshot and restore
 
 ### Important rule
 
-`runtime-web` is not the package where arbitrary Three.js-specific editor code goes.
+Preview should boot through the same `targets/web` host path intended for published web targets.
 
-It exists to adapt the shared runtime for the browser and to expose renderer/viewport primitives that authoring workspaces may use.
-
-If a piece of code exists only to support a specific authoring workspace such as `Build > Layout`, it should live in workspace implementation modules rather than in `runtime-web`.
-
-If a piece of code exists to boot and host the shared runtime in a browser preview window, it belongs in `runtime-web`, not in workspace implementation modules.
+That does not make preview orchestration a web-target concern.
 
 ## `/packages/plugins` API
 
@@ -556,8 +562,8 @@ Shared harnesses and test fixtures.
 The most important package-level contract is this:
 
 - `runtime-core` defines shared runtime semantics
-- `runtime-web` defines browser/platform adapters
-- both Sugarmagic and published web targets should be able to consume them cleanly
+- `targets/web` defines the published web host around `runtime-core`
+- `apps/studio` uses the same `runtime-core` plus `targets/web` host path for preview, while keeping preview lifecycle ownership for itself
 
 That means engineers should treat these packages as:
 

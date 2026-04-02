@@ -153,14 +153,15 @@ Concrete workspace behavior should live in authoring-facing workspace implementa
 
 - `ProductMode` descriptor packages
 - `runtime-core`
-- `runtime-web`
+- `targets/web`
 
 except for the lower-level viewport capabilities those modules may expose.
 
 For example:
 
 - `runtime-core` may define scene descriptors and shared runtime semantics
-- `runtime-web` may expose viewport, overlay-root, and picking helpers
+- `apps/studio` may own the authoring viewport and editor-overlay hosting contracts
+- `targets/web` may own the published web host around `runtime-core`
 - the concrete `Build > Layout` gizmo/session logic should still live in the Layout workspace implementation layer
 
 ### Workspace examples

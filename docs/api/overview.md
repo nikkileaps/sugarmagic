@@ -21,8 +21,25 @@ Sugarmagic is expected to support three closely related execution contexts.
 
 The architectural rule is:
 
-- these contexts share one runtime semantics layer
-- they differ in shell, packaging, and compile profile behavior
+- these contexts share one runtime semantics layer in `runtime-core`
+- they differ in shell ownership, target hosting, and compile profile behavior
+
+### Boundary summary
+
+The package split should be read like this:
+
+- `packages/runtime-core`
+  - the only home for game and runtime logic
+- `targets/web`
+  - the web host around `runtime-core` used by published web games
+- `apps/studio`
+  - the editor shell, authoring viewport, and preview lifecycle orchestration
+
+Important negative rule:
+
+- there is no `runtime-web` architectural layer
+- browser-specific target hosting belongs to `targets/web`
+- preview is launched by `apps/studio`, but it should boot the same `targets/web` host path used by published web targets
 
 ## Core Stack
 
@@ -178,6 +195,20 @@ In practical terms, that means:
 - it loads authored game-root content or published derivatives
 - it starts the game using the same runtime semantics used by Sugarmagic preview/playtest
 
+The ownership split is:
+
+- `runtime-core` owns runtime semantics
+- `targets/web` owns the published web host around that runtime
+- `apps/studio` owns preview launch, stop, and authoring-context restoration
+
+That means preview should not invent a second browser-runtime seam.
+
+Instead:
+
+- Studio opens and coordinates the preview window
+- the preview window boots through the same `targets/web` path intended for published web targets
+- preview-specific message handshakes remain studio concerns, not target concerns
+
 This is a runtime-sharing rule, not a shell-visual-sharing rule.
 
 The published target may have little or no host chrome at all, and any actual game UI should be treated as game-facing UI rather than as a continuation of the Sugarmagic editor shell.
@@ -198,6 +229,14 @@ It does mean the runtime API must be clean enough to support:
 - published package consumption
 - thin target-shell integration
 
+It also means engineers should avoid creating broad browser-runtime adapter layers that mix:
+
+- game/runtime logic
+- studio preview orchestration
+- published target hosting
+
+Those concerns now have different owners.
+
 ## Platform-Facing API Expectations
 
 The platform-facing API should expose these broad capabilities.
@@ -211,6 +250,12 @@ A runtime consumer should be able to:
 3. load a game project or published target manifest
 4. start preview or play mode
 5. dispose the runtime cleanly
+
+In package terms:
+
+- `targets/web` should expose the web runtime host around `runtime-core`
+- `apps/studio` should decide when preview starts and stops
+- `apps/studio` should not own runtime semantics
 
 ### Asset resolution API
 

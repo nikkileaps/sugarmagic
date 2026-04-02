@@ -511,7 +511,6 @@ sugarmagic/
 │   ├── productmodes/
 │   ├── domain/
 │   ├── runtime-core/
-│   ├── runtime-web/
 │   ├── plugins/
 │   ├── io/
 │   ├── ui/
@@ -537,6 +536,7 @@ It gives Sugarmagic:
 - one publish target system
 - one explicit place for ProductMode composition
 - one explicit place for authoring-only workspace implementation
+- one explicit split between studio orchestration and published target hosting
 
 ## Detailed Folder Proposal
 
@@ -571,7 +571,6 @@ It contains:
 It should reuse:
 
 - `runtime-core`
-- `runtime-web`
 - target-safe plugin/runtime capabilities
 
 This preserves the Sugarengine lesson that published targets should be thin shells around shared runtime logic.
@@ -587,7 +586,6 @@ What is shared is:
 The published target should bundle the shared runtime packages it needs in order to run the game:
 
 - `runtime-core`
-- `runtime-web`
 - approved runtime-facing plugin capabilities
 
 and then load game-specific published content from derived publish outputs.
@@ -746,54 +744,38 @@ It should not absorb:
 - ProductMode-specific workspace interaction controllers
 - editor-only overlay behavior as runtime semantics
 
-### `/packages/runtime-web`
+### `targets/web` and Studio web ownership
 
-This package owns platform adapters for web targets.
+Sugarmagic should not introduce a separate `runtime-web` package seam.
 
-Suggested substructure:
+Instead:
 
-```text
-/packages/runtime-web/
-  /boot/
-  /assets/
-  /input/
-  /save/
-  /audio/
-  /network/
-```
+- `runtime-core` owns game and runtime logic
+- `targets/web` owns the published web host around `runtime-core`
+- `apps/studio` owns preview launch, preview stop, and authoring viewport composition
 
-`runtime-web` should remain thin.
+`targets/web` should remain thin.
 
-Its job is not to redefine runtime semantics.
+Its job is to host the shared runtime for the web target:
 
-Its job is to adapt the shared runtime for:
+- web entry boot
+- target asset base integration
+- web-hosted runtime boot and teardown
+- published target-safe startup hooks
 
-- browser file and URL loading
-- browser input
-- browser save persistence
-- browser audio/network integrations
-- local preview and published web hosting
+It must not absorb:
 
-This keeps the runtime extracted for web targets without creating a second renderer or second simulation path.
-
-`runtime-web` may expose low-level browser renderer and viewport capabilities such as:
-
-- runtime boot helpers
-- browser viewport/renderer adapters
-- authored-scene root and editor-overlay root access
-- low-level picking and raycast helpers
-- browser pointer-to-ray utilities
-
-It should not become the home for arbitrary editor tooling just because that tooling uses Three.js.
-
-In particular, `runtime-web` should not own:
-
+- preview window lifecycle
+- opener/child-window messaging
+- authoring snapshot and restore
+- editor viewport overlays
 - Build-specific gizmo logic
 - Layout-specific transform-session logic
-- Scene Explorer behavior
-- commit-on-release authoring controllers
 
-Those belong in authoring-facing workspace implementation modules.
+Those belong to either:
+
+- `apps/studio` for preview and authoring orchestration
+- `packages/workspaces` for authoring-facing workspace behavior
 
 ### `/packages/plugins`
 
@@ -1058,19 +1040,17 @@ Sugarmagic should extract a shared runtime for web targets inside the same repo.
 That means:
 
 - `runtime-core` owns simulation and rendering semantics
-- `runtime-web` owns browser/platform adapters
 - `targets/web` owns the published target shell
-- `apps/studio` uses the same runtime layers for authoring preview and local playtest
+- `apps/studio` uses the same `runtime-core` plus `targets/web` path for authoring preview and local playtest while retaining preview lifecycle ownership
 
 ```mermaid
 flowchart LR
     Studio["apps/studio"] --> Core["runtime-core"]
-    Studio --> Web["runtime-web"]
-    Target["targets/web"] --> Core
-    Target --> Web
+    Studio --> Target["targets/web"]
+    Target --> Core
 
     Core --> Docs["canonical documents"]
-    Web --> Root["game root assets and manifests"]
+    Target --> Root["game root assets and manifests"]
 ```
 
 ### Why this is the right seam
