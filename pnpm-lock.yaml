@@ -123,6 +123,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
 
   packages/shell:
     dependencies:
@@ -156,6 +159,9 @@ importers:
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../shell
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
 
   packages/ui:
     dependencies:

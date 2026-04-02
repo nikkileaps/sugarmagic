@@ -26,9 +26,8 @@ export interface PlacedAssetInstance {
   };
 }
 
-export interface RegionEnvironmentState {
-  skyProfileId: string | null;
-  fogEnabled: boolean;
+export interface RegionEnvironmentBinding {
+  defaultEnvironmentId: string | null;
 }
 
 export interface RegionLandscapeState {
@@ -56,7 +55,7 @@ export interface RegionDocument {
     folders: RegionSceneFolder[];
     placedAssets: PlacedAssetInstance[];
   };
-  environment: RegionEnvironmentState;
+  environmentBinding: RegionEnvironmentBinding;
   landscape: RegionLandscapeState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];

@@ -1,8 +1,12 @@
 import * as THREE from "three";
+import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   resolveSceneObjects,
   computeSceneDelta,
+  createEnvironmentSceneController,
+  createRuntimeRenderPipeline,
+  resolveEnvironmentDefinition,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import type {
@@ -12,7 +16,6 @@ import type {
 
 const CUBE_COLOR = 0x89b4fa;
 const GRID_COLOR = 0x45475a;
-const BG_COLOR = 0x1e1e2e;
 
 const gltfLoader = new GLTFLoader();
 
@@ -88,19 +91,14 @@ async function createRenderableRoot(
 
 export function createAuthoringViewport(): WorkspaceViewport {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BG_COLOR);
+  const environmentController = createEnvironmentSceneController(scene);
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
   camera.position.set(5, 5, 5);
   camera.lookAt(0, 0, 0);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-
-  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambient);
-  const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-  directional.position.set(5, 10, 5);
-  scene.add(directional);
+  let renderer: WebGPURenderer | null = null;
+  let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
 
   const grid = new THREE.GridHelper(20, 20, GRID_COLOR, GRID_COLOR);
   scene.add(grid);
@@ -119,12 +117,17 @@ export function createAuthoringViewport(): WorkspaceViewport {
   let animationId: number | null = null;
   let container: HTMLElement | null = null;
   let renderGeneration = 0;
+  let mountGeneration = 0;
 
   function renderLoop() {
     for (const listener of frameListeners) {
       listener();
     }
-    renderer.render(scene, camera);
+    if (renderPipeline) {
+      renderPipeline.render();
+    } else if (renderer) {
+      renderer.render(scene, camera);
+    }
     animationId = requestAnimationFrame(renderLoop);
   }
 
@@ -136,19 +139,44 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     mount(element: HTMLElement) {
       container = element;
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.domElement.style.display = "block";
-      renderer.domElement.style.width = "100%";
-      renderer.domElement.style.height = "100%";
-      element.appendChild(renderer.domElement);
+      const generation = ++mountGeneration;
+      const nextRenderer = new WebGPURenderer({ antialias: true });
+      renderer = nextRenderer;
+      nextRenderer.domElement.style.display = "block";
+      nextRenderer.domElement.style.width = "100%";
+      nextRenderer.domElement.style.height = "100%";
+      element.appendChild(nextRenderer.domElement);
 
-      const width = element.clientWidth || 1;
-      const height = element.clientHeight || 1;
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
+      void nextRenderer
+        .init()
+        .then(() => {
+          if (mountGeneration !== generation || container !== element) {
+            nextRenderer.dispose();
+            if (nextRenderer.domElement.parentElement === element) {
+              element.removeChild(nextRenderer.domElement);
+            }
+            return;
+          }
 
-      renderLoop();
+          nextRenderer.setPixelRatio(window.devicePixelRatio);
+          const width = element.clientWidth || 1;
+          const height = element.clientHeight || 1;
+          nextRenderer.setSize(width, height, false);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+          renderPipeline = createRuntimeRenderPipeline({
+            renderer: nextRenderer,
+            scene,
+            camera,
+            width,
+            height
+          });
+
+          renderLoop();
+        })
+        .catch((error) => {
+          console.error("[sugarmagic] Failed to initialize WebGPU authoring viewport.", error);
+        });
     },
 
     unmount() {
@@ -164,16 +192,30 @@ export function createAuthoringViewport(): WorkspaceViewport {
         disposeObject(entry.root);
       }
       objectMap.clear();
+      environmentController.dispose();
+      renderPipeline?.dispose();
+      renderPipeline = null;
 
-      if (container && renderer.domElement.parentElement === container) {
+      if (container && renderer?.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
       }
 
-      renderer.dispose();
+      renderer?.dispose();
+      renderer = null;
     },
 
     updateFromRegion(state: ViewportSceneState) {
-      const { region, contentLibrary, assetSources } = state;
+      const {
+        region,
+        contentLibrary,
+        assetSources,
+        environmentOverrideId = null
+      } = state;
+      environmentController.apply(region, contentLibrary, environmentOverrideId);
+      renderPipeline?.applyEnvironment(
+        resolveEnvironmentDefinition(region, contentLibrary, environmentOverrideId)
+      );
+
       const currentObjects = resolveSceneObjects(region, contentLibrary);
       const delta = computeSceneDelta(previousObjects, currentObjects);
       const generation = ++renderGeneration;
@@ -260,13 +302,18 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
-      renderer.setSize(width, height, false);
+      renderer?.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      renderPipeline?.resize(width, height);
     },
 
     render() {
-      renderer.render(scene, camera);
+      if (renderPipeline) {
+        renderPipeline.render();
+      } else if (renderer) {
+        renderer.render(scene, camera);
+      }
     },
 
     subscribeFrame(listener) {

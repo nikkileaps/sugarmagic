@@ -46,6 +46,7 @@ export interface ShellState {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeRegionId: string | null;
+  activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;
   navigation: NavigationModel;
   panels: ShellPanelState;
@@ -57,6 +58,7 @@ export interface ShellActions {
   setActiveProductMode: (productModeId: ProductModeId) => void;
   setActiveBuildWorkspaceKind: (kind: BuildWorkspaceKind) => void;
   setActiveRegionId: (regionId: string | null) => void;
+  setActiveEnvironmentId: (environmentId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   setSelection: (entityIds: string[]) => void;
   setToolSession: (toolId: string | null, isActive: boolean) => void;
@@ -67,10 +69,20 @@ export type ShellStore = ReturnType<typeof createShellStore>;
 
 export function deriveBuildWorkspaceId(
   kind: BuildWorkspaceKind,
-  regionId: string | null
+  contextId: string | null
 ): string | null {
-  if (!regionId) return null;
-  return `build:${kind}:${regionId}`;
+  if (!contextId) return null;
+  return `build:${kind}:${contextId}`;
+}
+
+function getBuildContextId(
+  state: Pick<ShellState, "activeBuildWorkspaceKind" | "activeRegionId" | "activeEnvironmentId">,
+  kind: BuildWorkspaceKind = state.activeBuildWorkspaceKind
+): string | null {
+  if (kind === "environment") {
+    return state.activeEnvironmentId;
+  }
+  return state.activeRegionId;
 }
 
 export interface ShellModel {
@@ -90,6 +102,7 @@ export function createShellStore(
     activeProductMode: initialProductMode,
     activeBuildWorkspaceKind: "layout" as BuildWorkspaceKind,
     activeRegionId: null,
+    activeEnvironmentId: null,
     activeWorkspaceId: null,
     navigation: {
       activeProductMode: initialProductMode,
@@ -118,8 +131,8 @@ export function createShellStore(
         }
       })),
     setActiveBuildWorkspaceKind: (kind) => {
-      const regionId = get().activeRegionId;
-      const workspaceId = deriveBuildWorkspaceId(kind, regionId);
+      const contextId = getBuildContextId(get(), kind);
+      const workspaceId = deriveBuildWorkspaceId(kind, contextId);
       set((state) => ({
         activeBuildWorkspaceKind: kind,
         activeWorkspaceId: workspaceId,
@@ -132,17 +145,49 @@ export function createShellStore(
       }));
     },
     setActiveRegionId: (regionId) => {
-      const kind = get().activeBuildWorkspaceKind;
-      const workspaceId = deriveBuildWorkspaceId(kind, regionId);
-      set((state) => ({
+      const state = get();
+      const workspaceId =
+        state.activeBuildWorkspaceKind === "environment"
+          ? state.activeWorkspaceId
+          : deriveBuildWorkspaceId(state.activeBuildWorkspaceKind, regionId);
+      set((current) => ({
         activeRegionId: regionId,
         activeWorkspaceId: workspaceId,
         navigation: {
-          ...state.navigation,
+          ...current.navigation,
           activeWorkspaceId: workspaceId
         },
-        selection: { workspaceId, entityIds: [] },
-        toolSession: { workspaceId, toolId: null, isActive: false }
+        selection:
+          state.activeBuildWorkspaceKind === "environment"
+            ? current.selection
+            : { workspaceId, entityIds: [] },
+        toolSession:
+          state.activeBuildWorkspaceKind === "environment"
+            ? current.toolSession
+            : { workspaceId, toolId: null, isActive: false }
+      }));
+    },
+    setActiveEnvironmentId: (environmentId) => {
+      const state = get();
+      const workspaceId =
+        state.activeBuildWorkspaceKind === "environment"
+          ? deriveBuildWorkspaceId("environment", environmentId)
+          : state.activeWorkspaceId;
+      set((current) => ({
+        activeEnvironmentId: environmentId,
+        activeWorkspaceId: workspaceId,
+        navigation: {
+          ...current.navigation,
+          activeWorkspaceId: workspaceId
+        },
+        selection:
+          state.activeBuildWorkspaceKind === "environment"
+            ? { workspaceId, entityIds: [] }
+            : current.selection,
+        toolSession:
+          state.activeBuildWorkspaceKind === "environment"
+            ? { workspaceId, toolId: null, isActive: false }
+            : current.toolSession
       }));
     },
     setActiveWorkspace: (workspaceId) =>

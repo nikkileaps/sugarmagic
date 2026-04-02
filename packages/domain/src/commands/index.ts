@@ -1,3 +1,4 @@
+import type { EnvironmentDefinition } from "../content-library";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
 export type AuthoringAggregateKind =
@@ -95,11 +96,11 @@ export type PaintLandscapeCommand = SemanticCommandBase<
   }
 >;
 
-export type UpdateEnvironmentCommand = SemanticCommandBase<
-  "UpdateEnvironment",
+export type UpdateEnvironmentDefinitionCommand = SemanticCommandBase<
+  "UpdateEnvironmentDefinition",
   {
-    skyProfileId: string | null;
-    fogEnabled: boolean;
+    definitionId: string;
+    definition: EnvironmentDefinition;
   }
 >;
 
@@ -132,7 +133,7 @@ export type SemanticCommand =
   | DeleteSceneFolderCommand
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
-  | UpdateEnvironmentCommand
+  | UpdateEnvironmentDefinitionCommand
   | UpdatePluginConfigurationCommand;
 
 export {

@@ -6,30 +6,39 @@ export interface BuildWorkspaceKindItem {
   icon: string;
 }
 
+export interface BuildContextSelector {
+  items: { id: string; displayName: string }[];
+  activeId: string | null;
+  placeholder: string;
+  createLabel: string;
+  width?: number;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+}
+
 export interface BuildSubNavProps {
   workspaceKinds: BuildWorkspaceKindItem[];
   activeKindId: string;
   onSelectKind: (id: string) => void;
-  regions: { id: string; displayName: string }[];
-  activeRegionId: string | null;
-  onSelectRegion: (id: string) => void;
-  onCreateRegion: () => void;
+  contextSelector?: BuildContextSelector | null;
 }
 
 export function BuildSubNav({
   workspaceKinds,
   activeKindId,
   onSelectKind,
-  regions,
-  activeRegionId,
-  onSelectRegion,
-  onCreateRegion
+  contextSelector
 }: BuildSubNavProps) {
-  const CREATE_VALUE = "__create_new_region__";
-  const regionData: ComboboxItem[] = [
-    ...regions.map((r) => ({ value: r.id, label: r.displayName })),
-    { value: CREATE_VALUE, label: "+ New Region" }
-  ];
+  const CREATE_VALUE = "__create_context__";
+  const contextData: ComboboxItem[] = contextSelector
+    ? [
+        ...contextSelector.items.map((item) => ({
+          value: item.id,
+          label: item.displayName
+        })),
+        { value: CREATE_VALUE, label: contextSelector.createLabel }
+      ]
+    : [];
 
   return (
     <Group
@@ -45,33 +54,38 @@ export function BuildSubNav({
         }
       }}
     >
-      <Select
-        data={regionData}
-        value={activeRegionId}
-        onChange={(val) => {
-          if (val === CREATE_VALUE) { onCreateRegion(); return; }
-          if (val) onSelectRegion(val);
-        }}
-        size="xs"
-        w={180}
-        placeholder="Select region..."
-        styles={{
-          input: {
-            background: "var(--sm-color-mantle)",
-            borderColor: "var(--sm-panel-border)",
-            color: "var(--sm-color-text)",
-            fontSize: "var(--sm-font-size-sm)"
-          },
-          dropdown: {
-            background: "var(--sm-color-surface1)",
-            borderColor: "var(--sm-panel-border)"
-          },
-          option: {
-            fontSize: "var(--sm-font-size-sm)",
-            color: "var(--sm-color-text)"
-          }
-        }}
-      />
+      {contextSelector ? (
+        <Select
+          data={contextData}
+          value={contextSelector.activeId}
+          onChange={(val) => {
+            if (val === CREATE_VALUE) {
+              contextSelector.onCreate();
+              return;
+            }
+            if (val) contextSelector.onSelect(val);
+          }}
+          size="xs"
+          w={contextSelector.width ?? 200}
+          placeholder={contextSelector.placeholder}
+          styles={{
+            input: {
+              background: "var(--sm-color-mantle)",
+              borderColor: "var(--sm-panel-border)",
+              color: "var(--sm-color-text)",
+              fontSize: "var(--sm-font-size-sm)"
+            },
+            dropdown: {
+              background: "var(--sm-color-surface1)",
+              borderColor: "var(--sm-panel-border)"
+            },
+            option: {
+              fontSize: "var(--sm-font-size-sm)",
+              color: "var(--sm-color-text)"
+            }
+          }}
+        />
+      ) : null}
 
       <Group gap={4} align="center" wrap="nowrap">
         {workspaceKinds.map((kind) => {

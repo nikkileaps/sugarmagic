@@ -1,3 +1,1 @@
-export interface EnvironmentRuntimeDescriptor {
-  owner: "runtime-core";
-}
+export * from "./model";

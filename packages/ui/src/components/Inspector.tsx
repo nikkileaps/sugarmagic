@@ -10,10 +10,15 @@ import type { ReactNode } from "react";
 
 export interface InspectorProps {
   selectionLabel: string | null;
+  selectionIcon?: string;
   children?: ReactNode;
 }
 
-export function Inspector({ selectionLabel, children }: InspectorProps) {
+export function Inspector({
+  selectionLabel,
+  selectionIcon = "📦",
+  children
+}: InspectorProps) {
   return (
     <Stack gap={0} h="100%">
       <Text
@@ -47,7 +52,7 @@ export function Inspector({ selectionLabel, children }: InspectorProps) {
               }
             }}
           >
-            📦 {selectionLabel}
+            {selectionIcon} {selectionLabel}
           </Text>
           <Stack gap={0} p="md">
             {children}

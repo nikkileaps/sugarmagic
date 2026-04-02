@@ -8,7 +8,8 @@
     "@sugarmagic/io": "workspace:*",
     "@sugarmagic/productmodes": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
-    "@sugarmagic/shell": "workspace:*"
+    "@sugarmagic/shell": "workspace:*",
+    "three": "^0.183.2"
   },
   "exports": {
     ".": "./src/index.ts"

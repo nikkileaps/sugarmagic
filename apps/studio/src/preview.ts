@@ -5,6 +5,8 @@ import { createWebRuntimeHost } from "@sugarmagic/target-web";
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
+  activeRegionId?: string | null;
+  activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   assetSources: Record<string, string>;
 }
@@ -35,6 +37,8 @@ window.addEventListener("message", (event) => {
   if (data?.type === "PREVIEW_BOOT") {
     host.start({
       regions: data.regions,
+      activeRegionId: data.activeRegionId,
+      activeEnvironmentId: data.activeEnvironmentId,
       contentLibrary: data.contentLibrary,
       assetSources: data.assetSources
     });
