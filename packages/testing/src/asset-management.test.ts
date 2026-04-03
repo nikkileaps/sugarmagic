@@ -28,7 +28,8 @@ function makeProject(): GameProject {
     contentLibraryId: "wordlark:content-library",
     playerDefinition: createDefaultPlayerDefinition("wordlark"),
     npcDefinitions: [],
-    dialogueDefinitions: []
+    dialogueDefinitions: [],
+    questDefinitions: []
   };
 }
 

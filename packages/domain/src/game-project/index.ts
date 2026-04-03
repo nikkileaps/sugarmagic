@@ -4,6 +4,10 @@ import {
   type DialogueDefinition
 } from "../dialogue-definition";
 import {
+  normalizeQuestDefinition,
+  type QuestDefinition
+} from "../quest-definition";
+import {
   normalizeNPCDefinition,
   type NPCDefinition
 } from "../npc-definition";
@@ -23,13 +27,15 @@ export interface GameProject {
   playerDefinition: PlayerDefinition;
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
+  questDefinitions: QuestDefinition[];
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions" | "dialogueDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
     dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
+    questDefinitions?: Array<Partial<QuestDefinition>> | null;
   })
 ): GameProject {
   return {
@@ -43,6 +49,9 @@ export function normalizeGameProject(
     ),
     dialogueDefinitions: (gameProject.dialogueDefinitions ?? []).map((definition) =>
       normalizeDialogueDefinition(definition)
+    ),
+    questDefinitions: (gameProject.questDefinitions ?? []).map((definition) =>
+      normalizeQuestDefinition(definition)
     )
   };
 }
@@ -60,6 +69,7 @@ export function createDefaultGameProject(
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
     npcDefinitions: [],
-    dialogueDefinitions: []
+    dialogueDefinitions: [],
+    questDefinitions: []
   };
 }

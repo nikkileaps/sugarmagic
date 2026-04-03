@@ -6,6 +6,7 @@ import type { EnvironmentDefinition } from "../content-library";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
+import type { QuestDefinition } from "../quest-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
 export type AuthoringAggregateKind =
@@ -186,6 +187,13 @@ export type CreateDialogueDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateQuestDefinitionCommand = SemanticCommandBase<
+  "CreateQuestDefinition",
+  {
+    definition: QuestDefinition;
+  }
+>;
+
 export type UpdateNPCDefinitionCommand = SemanticCommandBase<
   "UpdateNPCDefinition",
   {
@@ -200,6 +208,13 @@ export type UpdateDialogueDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateQuestDefinitionCommand = SemanticCommandBase<
+  "UpdateQuestDefinition",
+  {
+    definition: QuestDefinition;
+  }
+>;
+
 export type DeleteNPCDefinitionCommand = SemanticCommandBase<
   "DeleteNPCDefinition",
   {
@@ -209,6 +224,13 @@ export type DeleteNPCDefinitionCommand = SemanticCommandBase<
 
 export type DeleteDialogueDefinitionCommand = SemanticCommandBase<
   "DeleteDialogueDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DeleteQuestDefinitionCommand = SemanticCommandBase<
+  "DeleteQuestDefinition",
   {
     definitionId: string;
   }
@@ -281,10 +303,13 @@ export type SemanticCommand =
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
   | CreateDialogueDefinitionCommand
+  | CreateQuestDefinitionCommand
   | UpdateNPCDefinitionCommand
   | UpdateDialogueDefinitionCommand
+  | UpdateQuestDefinitionCommand
   | DeleteNPCDefinitionCommand
   | DeleteDialogueDefinitionCommand
+  | DeleteQuestDefinitionCommand
   | CreateNPCPresenceCommand
   | TransformNPCPresenceCommand
   | RemoveNPCPresenceCommand

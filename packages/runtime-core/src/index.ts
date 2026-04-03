@@ -14,6 +14,7 @@ export * from "./materials";
 export * from "./npc";
 export * from "./player";
 export * from "./plugins";
+export * from "./quest";
 export * from "./render";
 export * from "./scene";
 export * from "./state";

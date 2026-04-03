@@ -3,6 +3,7 @@ import type {
   DialogueDefinition,
   NPCDefinition,
   PlayerDefinition,
+  QuestDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
@@ -17,6 +18,7 @@ interface PreviewBootMessage {
   playerDefinition: PlayerDefinition;
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
+  questDefinitions: QuestDefinition[];
   assetSources: Record<string, string>;
 }
 
@@ -52,6 +54,7 @@ window.addEventListener("message", (event) => {
       playerDefinition: data.playerDefinition,
       npcDefinitions: data.npcDefinitions,
       dialogueDefinitions: data.dialogueDefinitions,
+      questDefinitions: data.questDefinitions,
       assetSources: data.assetSources
     });
   }
