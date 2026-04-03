@@ -1,5 +1,9 @@
 import type { DocumentIdentity, RegionReference } from "../shared/identity";
 import {
+  normalizeDocumentDefinition,
+  type DocumentDefinition
+} from "../document-definition";
+import {
   normalizeDialogueDefinition,
   type DialogueDefinition
 } from "../dialogue-definition";
@@ -30,15 +34,17 @@ export interface GameProject {
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "itemDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
     itemDefinitions?: Array<Partial<ItemDefinition>> | null;
+    documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
     dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
     questDefinitions?: Array<Partial<QuestDefinition>> | null;
@@ -52,6 +58,9 @@ export function normalizeGameProject(
     ),
     itemDefinitions: (gameProject.itemDefinitions ?? []).map((definition) =>
       normalizeItemDefinition(definition)
+    ),
+    documentDefinitions: (gameProject.documentDefinitions ?? []).map((definition) =>
+      normalizeDocumentDefinition(definition)
     ),
     npcDefinitions: (gameProject.npcDefinitions ?? []).map((definition) =>
       normalizeNPCDefinition(definition)
@@ -78,6 +87,7 @@ export function createDefaultGameProject(
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
     itemDefinitions: [],
+    documentDefinitions: [],
     npcDefinitions: [],
     dialogueDefinitions: [],
     questDefinitions: []

@@ -30,6 +30,7 @@ function makeProject(): GameProject {
     npcDefinitions: [],
     dialogueDefinitions: [],
     itemDefinitions: [],
+    documentDefinitions: [],
     questDefinitions: []
   };
 }

@@ -4,6 +4,7 @@ import type { RuntimeSessionBoundary } from "./state";
 export * from "./camera";
 export * from "./coordination";
 export * from "./dialogue";
+export * from "./document";
 export * from "./ecs";
 export * from "./input";
 export * from "./inventory";

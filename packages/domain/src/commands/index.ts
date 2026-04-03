@@ -1,3 +1,4 @@
+import type { DocumentDefinition } from "../document-definition";
 import type {
   RegionLandscapeChannelDefinition,
   RegionLandscapePaintPayload
@@ -188,6 +189,13 @@ export type CreateItemDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateDocumentDefinitionCommand = SemanticCommandBase<
+  "CreateDocumentDefinition",
+  {
+    definition: DocumentDefinition;
+  }
+>;
+
 export type CreateDialogueDefinitionCommand = SemanticCommandBase<
   "CreateDialogueDefinition",
   {
@@ -216,6 +224,13 @@ export type UpdateItemDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateDocumentDefinitionCommand = SemanticCommandBase<
+  "UpdateDocumentDefinition",
+  {
+    definition: DocumentDefinition;
+  }
+>;
+
 export type UpdateDialogueDefinitionCommand = SemanticCommandBase<
   "UpdateDialogueDefinition",
   {
@@ -239,6 +254,13 @@ export type DeleteNPCDefinitionCommand = SemanticCommandBase<
 
 export type DeleteItemDefinitionCommand = SemanticCommandBase<
   "DeleteItemDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DeleteDocumentDefinitionCommand = SemanticCommandBase<
+  "DeleteDocumentDefinition",
   {
     definitionId: string;
   }
@@ -333,6 +355,32 @@ export type TransformPlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+export type AssignPlacedAssetInspectableCommand = SemanticCommandBase<
+  "AssignPlacedAssetInspectable",
+  {
+    instanceId: string;
+    behaviorId: string;
+    documentDefinitionId: string;
+    promptText?: string;
+  }
+>;
+
+export type UpdatePlacedAssetInspectableCommand = SemanticCommandBase<
+  "UpdatePlacedAssetInspectable",
+  {
+    instanceId: string;
+    documentDefinitionId?: string;
+    promptText?: string;
+  }
+>;
+
+export type RemovePlacedAssetInspectableCommand = SemanticCommandBase<
+  "RemovePlacedAssetInspectable",
+  {
+    instanceId: string;
+  }
+>;
+
 export type UpdatePluginConfigurationCommand = SemanticCommandBase<
   "UpdatePluginConfiguration",
   {
@@ -362,14 +410,17 @@ export type SemanticCommand =
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
   | CreateItemDefinitionCommand
+  | CreateDocumentDefinitionCommand
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
   | UpdateNPCDefinitionCommand
   | UpdateItemDefinitionCommand
+  | UpdateDocumentDefinitionCommand
   | UpdateDialogueDefinitionCommand
   | UpdateQuestDefinitionCommand
   | DeleteNPCDefinitionCommand
   | DeleteItemDefinitionCommand
+  | DeleteDocumentDefinitionCommand
   | DeleteDialogueDefinitionCommand
   | DeleteQuestDefinitionCommand
   | CreateNPCPresenceCommand
@@ -379,6 +430,9 @@ export type SemanticCommand =
   | UpdateItemPresenceCommand
   | RemoveNPCPresenceCommand
   | RemoveItemPresenceCommand
+  | AssignPlacedAssetInspectableCommand
+  | UpdatePlacedAssetInspectableCommand
+  | RemovePlacedAssetInspectableCommand
   | UpdatePluginConfigurationCommand;
 
 export {

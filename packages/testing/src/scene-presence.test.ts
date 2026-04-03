@@ -49,6 +49,7 @@ describe("layout scene presences", () => {
         npcDefinitions: [],
         dialogueDefinitions: [],
         itemDefinitions: [],
+        documentDefinitions: [],
         questDefinitions: []
       },
       [makeRegion()],

@@ -24,7 +24,13 @@ export * from "./viewport-host";
 export * from "./workspace-host";
 
 export type BuildWorkspaceKind = "layout" | "landscape" | "environment" | "assets";
-export type DesignWorkspaceKind = "player" | "npcs" | "items" | "dialogues" | "quests";
+export type DesignWorkspaceKind =
+  | "player"
+  | "npcs"
+  | "items"
+  | "documents"
+  | "dialogues"
+  | "quests";
 
 export interface ShellSelectionState {
   workspaceId: string | null;

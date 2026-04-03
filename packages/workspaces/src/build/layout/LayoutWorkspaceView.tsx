@@ -14,6 +14,7 @@ import {
   Menu,
   Modal,
   NumberInput,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -21,6 +22,7 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
+  DocumentDefinition,
   ItemDefinition,
   NPCDefinition,
   PlayerDefinition,
@@ -28,6 +30,7 @@ import type {
   RegionDocument
 } from "@sugarmagic/domain";
 import {
+  createInspectableBehaviorId,
   getActiveRegion,
   createItemPresenceId,
   createNPCPresenceId,
@@ -72,6 +75,7 @@ export interface LayoutWorkspaceViewProps {
   getRegion: () => ReturnType<typeof getActiveRegion>;
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
@@ -83,6 +87,7 @@ function buildSceneTree(
   region: RegionDocument,
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
+  documentDefinitions: DocumentDefinition[],
   npcDefinitions: NPCDefinition[]
 ): SceneExplorerNode[] {
   const foldersByParent = new Map<string | null, RegionDocument["scene"]["folders"]>();
@@ -108,15 +113,27 @@ function buildSceneTree(
       children: buildChildren(folder.folderId)
     }));
 
-    const childAssets = (assetsByParent.get(parentFolderId) ?? []).map((asset) => ({
-      type: "entity" as const,
-      instanceId: asset.instanceId,
-      displayName: asset.displayName,
-      entityKind: "asset" as const,
-      assetKind: asset.assetDefinitionId,
-      assetDefinitionId: asset.assetDefinitionId,
-      visible: true
-    }));
+    const childAssets = (assetsByParent.get(parentFolderId) ?? []).map((asset) => {
+      const documentDefinition = asset.inspectable
+        ? documentDefinitions.find(
+            (definition) =>
+              definition.definitionId === asset.inspectable?.documentDefinitionId
+          ) ?? null
+        : null;
+
+      return {
+        type: "entity" as const,
+        instanceId: asset.instanceId,
+        displayName:
+          asset.inspectable && documentDefinition
+            ? `${asset.displayName} · ${documentDefinition.displayName}`
+            : asset.displayName,
+        entityKind: "asset" as const,
+        assetKind: asset.assetDefinitionId,
+        assetDefinitionId: asset.assetDefinitionId,
+        visible: true
+      };
+    });
 
     return [...childFolders, ...childAssets];
   };
@@ -187,6 +204,7 @@ export function useLayoutWorkspaceView(
     getRegion,
     playerDefinition,
     itemDefinitions,
+    documentDefinitions,
     npcDefinitions,
     onEditAssetDefinition,
     onImportAsset
@@ -379,8 +397,16 @@ export function useLayoutWorkspaceView(
 
   const explorerRoots: SceneExplorerNode[] = useMemo(
     () =>
-      region ? buildSceneTree(region, playerDefinition, itemDefinitions, npcDefinitions) : [],
-    [itemDefinitions, npcDefinitions, playerDefinition, region]
+      region
+        ? buildSceneTree(
+            region,
+            playerDefinition,
+            itemDefinitions,
+            documentDefinitions,
+            npcDefinitions
+          )
+        : [],
+    [documentDefinitions, itemDefinitions, npcDefinitions, playerDefinition, region]
   );
 
   const selectedAsset = useMemo(() => {
@@ -435,6 +461,16 @@ export function useLayoutWorkspaceView(
       ) ?? null
     );
   }, [itemDefinitions, selectedItemPresence]);
+
+  const selectedInspectableDocument = useMemo(() => {
+    if (!selectedAsset?.inspectable) return null;
+    return (
+      documentDefinitions.find(
+        (definition) =>
+          definition.definitionId === selectedAsset.inspectable?.documentDefinitionId
+      ) ?? null
+    );
+  }, [documentDefinitions, selectedAsset]);
 
   const selectedSceneLabel =
     selectedAsset?.displayName ??
@@ -1134,6 +1170,129 @@ export function useLayoutWorkspaceView(
                 handleTransformChange(selectedAsset.instanceId, "scale", axis, value)
               }
             />
+            <Stack gap="xs">
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                Inspectable
+              </Text>
+              {selectedAsset.inspectable ? (
+                <>
+                  <Select
+                    label="Document"
+                    size="xs"
+                    searchable
+                    data={documentDefinitions.map((definition) => ({
+                      value: definition.definitionId,
+                      label: definition.displayName
+                    }))}
+                    value={selectedAsset.inspectable.documentDefinitionId}
+                    onChange={(value: string | null) => {
+                      if (!region || !value) return;
+                      onCommand({
+                        kind: "UpdatePlacedAssetInspectable",
+                        target: {
+                          aggregateKind: "region-document",
+                          aggregateId: region.identity.id
+                        },
+                        subject: {
+                          subjectKind: "placed-asset-inspectable",
+                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                        },
+                        payload: {
+                          instanceId: selectedAsset.instanceId,
+                          documentDefinitionId: value
+                        }
+                      });
+                    }}
+                  />
+                  <TextInput
+                    label="Prompt Text"
+                    size="xs"
+                    placeholder="Inspect"
+                    value={selectedAsset.inspectable.promptText ?? ""}
+                    onChange={(event) => {
+                      if (!region) return;
+                      onCommand({
+                        kind: "UpdatePlacedAssetInspectable",
+                        target: {
+                          aggregateKind: "region-document",
+                          aggregateId: region.identity.id
+                        },
+                        subject: {
+                          subjectKind: "placed-asset-inspectable",
+                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                        },
+                        payload: {
+                          instanceId: selectedAsset.instanceId,
+                          promptText: event.currentTarget.value
+                        }
+                      });
+                    }}
+                  />
+                  {selectedInspectableDocument && (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      Opens: {selectedInspectableDocument.displayName}
+                    </Text>
+                  )}
+                  <Button
+                    variant="light"
+                    color="red"
+                    onClick={() => {
+                      if (!region) return;
+                      onCommand({
+                        kind: "RemovePlacedAssetInspectable",
+                        target: {
+                          aggregateKind: "region-document",
+                          aggregateId: region.identity.id
+                        },
+                        subject: {
+                          subjectKind: "placed-asset-inspectable",
+                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                        },
+                        payload: {
+                          instanceId: selectedAsset.instanceId
+                        }
+                      });
+                    }}
+                  >
+                    Remove Inspectable
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    Turn this placed asset into an inspectable world object.
+                  </Text>
+                  <Button
+                    variant="light"
+                    disabled={documentDefinitions.length === 0}
+                    onClick={() => {
+                      if (!region || documentDefinitions.length === 0) return;
+                      const firstDocument = documentDefinitions[0]!;
+                      const behaviorId = createInspectableBehaviorId();
+                      onCommand({
+                        kind: "AssignPlacedAssetInspectable",
+                        target: {
+                          aggregateKind: "region-document",
+                          aggregateId: region.identity.id
+                        },
+                        subject: {
+                          subjectKind: "placed-asset-inspectable",
+                          subjectId: behaviorId
+                        },
+                        payload: {
+                          instanceId: selectedAsset.instanceId,
+                          behaviorId,
+                          documentDefinitionId: firstDocument.definitionId,
+                          promptText: "Inspect"
+                        }
+                      });
+                    }}
+                  >
+                    Make Inspectable
+                  </Button>
+                </>
+              )}
+            </Stack>
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">

@@ -6,7 +6,7 @@ import {
   PlayerControlled
 } from "../ecs";
 
-export type InteractableType = "npc" | "item";
+export type InteractableType = "npc" | "item" | "inspectable";
 
 export interface NearbyInteractable {
   type: InteractableType;

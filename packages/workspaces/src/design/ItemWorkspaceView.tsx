@@ -17,13 +17,13 @@ import {
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  DocumentDefinition,
   ItemCategory,
   ItemDefinition,
-  ItemReadableTemplate,
   ItemViewKind,
   SemanticCommand
 } from "@sugarmagic/domain";
-import { createDefaultItemDefinition, createDefaultReadableDocument } from "@sugarmagic/domain";
+import { createDefaultItemDefinition } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import type { ItemWorkspaceViewport } from "../viewport";
@@ -35,6 +35,7 @@ export interface ItemWorkspaceViewProps {
   viewportReadyVersion: number;
   gameProjectId: string | null;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -45,6 +46,13 @@ export interface ItemWorkspaceViewProps {
 
 function toAssetOptions(assetDefinitions: AssetDefinition[]) {
   return assetDefinitions.map((definition) => ({
+    value: definition.definitionId,
+    label: definition.displayName
+  }));
+}
+
+function toDocumentOptions(documentDefinitions: DocumentDefinition[]) {
+  return documentDefinitions.map((definition) => ({
     value: definition.definitionId,
     label: definition.displayName
   }));
@@ -64,14 +72,6 @@ const viewKindOptions: Array<{ value: ItemViewKind; label: string }> = [
   { value: "consumable", label: "Consumable" }
 ];
 
-const readableTemplateOptions: Array<{ value: ItemReadableTemplate; label: string }> = [
-  { value: "book", label: "Book" },
-  { value: "newspaper", label: "Newspaper" },
-  { value: "letter", label: "Letter" },
-  { value: "postcard", label: "Postcard" },
-  { value: "flyer", label: "Flyer" }
-];
-
 export function useItemWorkspaceView(
   props: ItemWorkspaceViewProps
 ): WorkspaceViewContribution {
@@ -80,6 +80,7 @@ export function useItemWorkspaceView(
     viewportReadyVersion,
     gameProjectId,
     itemDefinitions,
+    documentDefinitions,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -136,22 +137,10 @@ export function useItemWorkspaceView(
   }, [itemDefinitions, searchQuery]);
 
   const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
-
-  function updateReadableDocument(
-    definition: ItemDefinition,
-    patch: Partial<ItemDefinition["interactionView"]["readableDocument"]>
-  ) {
-    updateItem({
-      ...definition,
-      interactionView: {
-        ...definition.interactionView,
-        readableDocument: {
-          ...definition.interactionView.readableDocument,
-          ...patch
-        }
-      }
-    });
-  }
+  const documentOptions = useMemo(
+    () => toDocumentOptions(documentDefinitions),
+    [documentDefinitions]
+  );
 
   function createItem() {
     if (!gameProjectId) return;
@@ -541,24 +530,20 @@ export function useItemWorkspaceView(
                     interactionView: {
                       ...selectedItem.interactionView,
                       kind: value as ItemViewKind,
-                      readableDocument:
+                      documentDefinitionId:
                         value === "readable"
-                          ? selectedItem.interactionView.readableDocument ??
-                            createDefaultReadableDocument()
-                          : selectedItem.interactionView.readableDocument
+                          ? selectedItem.interactionView.documentDefinitionId ??
+                            documentDefinitions[0]?.definitionId ??
+                            null
+                          : selectedItem.interactionView.documentDefinitionId
                     }
                   })
                 }
               />
-              {(selectedItem.interactionView.kind === "readable" ||
-                selectedItem.interactionView.kind === "examine" ||
+              {(selectedItem.interactionView.kind === "examine" ||
                 selectedItem.interactionView.kind === "consumable") && (
                 <TextInput
-                  label={
-                    selectedItem.interactionView.kind === "readable"
-                      ? "Document Title"
-                      : "View Title"
-                  }
+                  label="View Title"
                   size="xs"
                   value={selectedItem.interactionView.title}
                   onChange={(event) =>
@@ -576,387 +561,31 @@ export function useItemWorkspaceView(
               {selectedItem.interactionView.kind === "readable" && (
                 <>
                   <Select
-                    label="Readable Template"
+                    label="Document"
                     size="xs"
-                    data={readableTemplateOptions}
-                    value={selectedItem.interactionView.readableDocument.template}
+                    searchable
+                    data={documentOptions}
+                    value={selectedItem.interactionView.documentDefinitionId}
                     onChange={(value) => {
                       if (!value) return;
-                      updateReadableDocument(selectedItem, {
-                        ...createDefaultReadableDocument(value as ItemReadableTemplate),
-                        template: value as ItemReadableTemplate,
-                        subtitle: selectedItem.interactionView.readableDocument.subtitle,
-                        author: selectedItem.interactionView.readableDocument.author,
-                        locationLine:
-                          selectedItem.interactionView.readableDocument.locationLine,
-                        dateLine: selectedItem.interactionView.readableDocument.dateLine
+                      updateItem({
+                        ...selectedItem,
+                        interactionView: {
+                          ...selectedItem.interactionView,
+                          documentDefinitionId: value
+                        }
                       });
                     }}
                   />
-                  <TextInput
-                    label="Subtitle"
-                    size="xs"
-                    value={selectedItem.interactionView.readableDocument.subtitle}
-                    onChange={(event) =>
-                      updateReadableDocument(selectedItem, {
-                        subtitle: event.currentTarget.value
-                      })
-                    }
-                  />
-                  <TextInput
-                    label="Author"
-                    size="xs"
-                    value={selectedItem.interactionView.readableDocument.author}
-                    onChange={(event) =>
-                      updateReadableDocument(selectedItem, {
-                        author: event.currentTarget.value
-                      })
-                    }
-                  />
-                  <Group grow>
-                    <TextInput
-                      label="Location Line"
-                      size="xs"
-                      value={selectedItem.interactionView.readableDocument.locationLine}
-                      onChange={(event) =>
-                        updateReadableDocument(selectedItem, {
-                          locationLine: event.currentTarget.value
-                        })
-                      }
-                    />
-                    <TextInput
-                      label="Date Line"
-                      size="xs"
-                      value={selectedItem.interactionView.readableDocument.dateLine}
-                      onChange={(event) =>
-                        updateReadableDocument(selectedItem, {
-                          dateLine: event.currentTarget.value
-                        })
-                      }
-                    />
-                  </Group>
-
-                  {selectedItem.interactionView.readableDocument.template === "book" && (
-                    <>
-                      <Textarea
-                        label="Cover Blurb"
-                        size="xs"
-                        minRows={3}
-                        autosize
-                        value={selectedItem.interactionView.body}
-                        onChange={(event) =>
-                          updateItem({
-                            ...selectedItem,
-                            interactionView: {
-                              ...selectedItem.interactionView,
-                              body: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                      <Stack gap="xs">
-                        <Group justify="space-between">
-                          <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-                            Pages
-                          </Text>
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            aria-label="Add Page"
-                            onClick={() =>
-                              updateReadableDocument(selectedItem, {
-                                pages: [
-                                  ...selectedItem.interactionView.readableDocument.pages,
-                                  ""
-                                ]
-                              })
-                            }
-                          >
-                            +
-                          </ActionIcon>
-                        </Group>
-                        {selectedItem.interactionView.readableDocument.pages.map((page, index) => (
-                          <Box
-                            key={`page-${index}`}
-                            p="xs"
-                            style={{
-                              border: "1px solid var(--sm-panel-border)",
-                              borderRadius: 8
-                            }}
-                          >
-                            <Group justify="space-between" mb={6}>
-                              <Text size="xs" fw={500}>
-                                Page {index + 1}
-                              </Text>
-                              <ActionIcon
-                                variant="subtle"
-                                size="sm"
-                                color="red"
-                                disabled={
-                                  selectedItem.interactionView.readableDocument.pages.length <= 1
-                                }
-                                aria-label={`Remove Page ${index + 1}`}
-                                onClick={() =>
-                                  updateReadableDocument(selectedItem, {
-                                    pages:
-                                      selectedItem.interactionView.readableDocument.pages.filter(
-                                        (_page, pageIndex) => pageIndex !== index
-                                      ) || [""]
-                                  })
-                                }
-                              >
-                                -
-                              </ActionIcon>
-                            </Group>
-                            <Textarea
-                              size="xs"
-                              minRows={5}
-                              autosize
-                              value={page}
-                              onChange={(event) =>
-                                updateReadableDocument(selectedItem, {
-                                  pages:
-                                    selectedItem.interactionView.readableDocument.pages.map(
-                                      (currentPage, pageIndex) =>
-                                        pageIndex === index
-                                          ? event.currentTarget.value
-                                          : currentPage
-                                    )
-                                })
-                              }
-                            />
-                          </Box>
-                        ))}
-                      </Stack>
-                    </>
-                  )}
-
-                  {selectedItem.interactionView.readableDocument.template === "newspaper" && (
-                    <>
-                      <Textarea
-                        label="Banner Copy"
-                        size="xs"
-                        minRows={2}
-                        autosize
-                        value={selectedItem.interactionView.body}
-                        onChange={(event) =>
-                          updateItem({
-                            ...selectedItem,
-                            interactionView: {
-                              ...selectedItem.interactionView,
-                              body: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                      <TextInput
-                        label="Edition Note"
-                        size="xs"
-                        value={selectedItem.interactionView.readableDocument.footer}
-                        onChange={(event) =>
-                          updateReadableDocument(selectedItem, {
-                            footer: event.currentTarget.value
-                          })
-                        }
-                      />
-                      <Stack gap="xs">
-                        <Group justify="space-between">
-                          <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-                            Articles
-                          </Text>
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            aria-label="Add Article"
-                            onClick={() =>
-                              updateReadableDocument(selectedItem, {
-                                sections: [
-                                  ...selectedItem.interactionView.readableDocument.sections,
-                                  { heading: "", body: "" }
-                                ]
-                              })
-                            }
-                          >
-                            +
-                          </ActionIcon>
-                        </Group>
-                        {selectedItem.interactionView.readableDocument.sections.map(
-                          (section, index) => (
-                            <Box
-                              key={`article-${index}`}
-                              p="xs"
-                              style={{
-                                border: "1px solid var(--sm-panel-border)",
-                                borderRadius: 8
-                              }}
-                            >
-                              <Group justify="space-between" mb={6}>
-                                <Text size="xs" fw={500}>
-                                  Article {index + 1}
-                                </Text>
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  color="red"
-                                  disabled={
-                                    selectedItem.interactionView.readableDocument.sections
-                                      .length <= 1
-                                  }
-                                  aria-label={`Remove Article ${index + 1}`}
-                                  onClick={() =>
-                                    updateReadableDocument(selectedItem, {
-                                      sections:
-                                        selectedItem.interactionView.readableDocument.sections.filter(
-                                          (_section, sectionIndex) => sectionIndex !== index
-                                        ) || [{ heading: "", body: "" }]
-                                    })
-                                  }
-                                >
-                                  -
-                                </ActionIcon>
-                              </Group>
-                              <Stack gap="xs">
-                                <TextInput
-                                  label="Headline"
-                                  size="xs"
-                                  value={section.heading}
-                                  onChange={(event) =>
-                                    updateReadableDocument(selectedItem, {
-                                      sections:
-                                        selectedItem.interactionView.readableDocument.sections.map(
-                                          (currentSection, sectionIndex) =>
-                                            sectionIndex === index
-                                              ? {
-                                                  ...currentSection,
-                                                  heading: event.currentTarget.value
-                                                }
-                                              : currentSection
-                                        )
-                                    })
-                                  }
-                                />
-                                <Textarea
-                                  label="Body"
-                                  size="xs"
-                                  minRows={4}
-                                  autosize
-                                  value={section.body}
-                                  onChange={(event) =>
-                                    updateReadableDocument(selectedItem, {
-                                      sections:
-                                        selectedItem.interactionView.readableDocument.sections.map(
-                                          (currentSection, sectionIndex) =>
-                                            sectionIndex === index
-                                              ? {
-                                                  ...currentSection,
-                                                  body: event.currentTarget.value
-                                                }
-                                              : currentSection
-                                        )
-                                    })
-                                  }
-                                />
-                              </Stack>
-                            </Box>
-                          )
-                        )}
-                      </Stack>
-                    </>
-                  )}
-
-                  {selectedItem.interactionView.readableDocument.template === "letter" && (
-                    <>
-                      <Textarea
-                        label="Letter Body"
-                        size="xs"
-                        minRows={6}
-                        autosize
-                        value={selectedItem.interactionView.body}
-                        onChange={(event) =>
-                          updateItem({
-                            ...selectedItem,
-                            interactionView: {
-                              ...selectedItem.interactionView,
-                              body: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                      <TextInput
-                        label="Sign-off"
-                        size="xs"
-                        value={selectedItem.interactionView.readableDocument.footer}
-                        onChange={(event) =>
-                          updateReadableDocument(selectedItem, {
-                            footer: event.currentTarget.value
-                          })
-                        }
-                      />
-                    </>
-                  )}
-
-                  {selectedItem.interactionView.readableDocument.template === "postcard" && (
-                    <>
-                      <Textarea
-                        label="Front Message"
-                        size="xs"
-                        minRows={4}
-                        autosize
-                        value={selectedItem.interactionView.body}
-                        onChange={(event) =>
-                          updateItem({
-                            ...selectedItem,
-                            interactionView: {
-                              ...selectedItem.interactionView,
-                              body: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                      <Textarea
-                        label="Back Message"
-                        size="xs"
-                        minRows={4}
-                        autosize
-                        value={selectedItem.interactionView.readableDocument.backBody}
-                        onChange={(event) =>
-                          updateReadableDocument(selectedItem, {
-                            backBody: event.currentTarget.value
-                          })
-                        }
-                      />
-                    </>
-                  )}
-
-                  {selectedItem.interactionView.readableDocument.template === "flyer" && (
-                    <>
-                      <Textarea
-                        label="Body Copy"
-                        size="xs"
-                        minRows={5}
-                        autosize
-                        value={selectedItem.interactionView.body}
-                        onChange={(event) =>
-                          updateItem({
-                            ...selectedItem,
-                            interactionView: {
-                              ...selectedItem.interactionView,
-                              body: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                      <TextInput
-                        label="Footer / Call To Action"
-                        size="xs"
-                        value={selectedItem.interactionView.readableDocument.footer}
-                        onChange={(event) =>
-                          updateReadableDocument(selectedItem, {
-                            footer: event.currentTarget.value
-                          })
-                        }
-                      />
-                    </>
+                  {documentDefinitions.length === 0 ? (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      Create a document in Design &gt; Documents, then bind it here.
+                    </Text>
+                  ) : (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      Readable items now open a shared document definition. Edit the
+                      actual content in Design &gt; Documents.
+                    </Text>
                   )}
                 </>
               )}

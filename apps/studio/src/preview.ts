@@ -1,5 +1,6 @@
 import type {
   ContentLibrarySnapshot,
+  DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
   NPCDefinition,
@@ -18,6 +19,7 @@ interface PreviewBootMessage {
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -55,6 +57,7 @@ window.addEventListener("message", (event) => {
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,
       itemDefinitions: data.itemDefinitions,
+      documentDefinitions: data.documentDefinitions,
       npcDefinitions: data.npcDefinitions,
       dialogueDefinitions: data.dialogueDefinitions,
       questDefinitions: data.questDefinitions,

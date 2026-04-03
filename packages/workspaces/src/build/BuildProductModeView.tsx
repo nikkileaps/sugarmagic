@@ -11,6 +11,7 @@ import { Stack, Text } from "@mantine/core";
 import type {
   SemanticCommand,
   AssetDefinition,
+  DocumentDefinition,
   EnvironmentDefinition
 } from "@sugarmagic/domain";
 import {
@@ -47,6 +48,7 @@ export interface BuildProductModeViewProps {
   selectedIds: string[];
   session: AuthoringSession | null;
   assetDefinitions: AssetDefinition[];
+  documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
@@ -82,6 +84,7 @@ export function useBuildProductModeView(
     selectedIds,
     session,
     assetDefinitions,
+    documentDefinitions,
     environmentDefinitions,
     getViewport,
     getViewportElement,
@@ -130,6 +133,7 @@ export function useBuildProductModeView(
     getRegion: () => (session ? getActiveRegion(session) : null),
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
+    documentDefinitions,
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     onImportAsset,
     onEditAssetDefinition: (definitionId) => {

@@ -33,3 +33,4 @@ Current plans:
 - [Plan 013: Design Dialogue Graph Epic](/Users/nikki/projects/sugarmagic/docs/plans/013-design-dialogue-graph-epic.md)
 - [Plan 014: Design Quest Graph Epic](/Users/nikki/projects/sugarmagic/docs/plans/014-design-quest-graph-epic.md)
 - [Plan 015: Design Items and Runtime Inventory Epic](/Users/nikki/projects/sugarmagic/docs/plans/015-design-items-and-runtime-inventory-epic.md)
+- [Plan 016: Design Documents and Layout Inspectables Epic](/Users/nikki/projects/sugarmagic/docs/plans/016-design-documents-and-layout-inspectables-epic.md)

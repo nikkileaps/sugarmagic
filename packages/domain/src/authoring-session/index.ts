@@ -9,6 +9,7 @@
 
 import type { GameProject } from "../game-project";
 import { normalizeGameProject } from "../game-project";
+import type { DocumentDefinition } from "../document-definition";
 import type { RegionDocument } from "../region-authoring";
 import {
   createRegionNPCPresence,
@@ -21,15 +22,18 @@ import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
   CreateDialogueDefinitionCommand,
+  CreateDocumentDefinitionCommand,
   CreateItemDefinitionCommand,
   CreateNPCDefinitionCommand,
   CreateQuestDefinitionCommand,
   DeleteItemDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
+  DeleteDocumentDefinitionCommand,
   DeleteQuestDefinitionCommand,
   UpdateEnvironmentDefinitionCommand,
   UpdateDialogueDefinitionCommand,
+  UpdateDocumentDefinitionCommand,
   UpdateItemDefinitionCommand,
   UpdateNPCDefinitionCommand,
   UpdateQuestDefinitionCommand,
@@ -97,7 +101,10 @@ function normalizeRegionDocument(
     ...region,
     scene: {
       folders: region.scene.folders,
-      placedAssets: region.scene.placedAssets,
+      placedAssets: region.scene.placedAssets.map((asset) => ({
+        ...asset,
+        inspectable: asset.inspectable ?? null
+      })),
       playerPresence: region.scene.playerPresence
         ? createRegionPlayerPresence(region.scene.playerPresence)
         : null,
@@ -196,6 +203,12 @@ export function getAllNPCDefinitions(session: AuthoringSession): NPCDefinition[]
 
 export function getAllItemDefinitions(session: AuthoringSession): ItemDefinition[] {
   return session.gameProject.itemDefinitions;
+}
+
+export function getAllDocumentDefinitions(
+  session: AuthoringSession
+): DocumentDefinition[] {
+  return session.gameProject.documentDefinitions;
 }
 
 export function getAllDialogueDefinitions(
@@ -355,6 +368,30 @@ function applyCreateItemDefinitionCommand(
   };
 }
 
+function applyCreateDocumentDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateDocumentDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      documentDefinitions: [
+        ...session.gameProject.documentDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyCreateDialogueDefinitionCommand(
   session: AuthoringSession,
   command: CreateDialogueDefinitionCommand
@@ -447,6 +484,32 @@ function applyUpdateItemDefinitionCommand(
     gameProject: {
       ...session.gameProject,
       itemDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateDocumentDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateDocumentDefinitionCommand
+): AuthoringSession {
+  const nextDefinitions = session.gameProject.documentDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definition.definitionId
+      ? command.payload.definition
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      documentDefinitions: nextDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -553,6 +616,29 @@ function applyDeleteItemDefinitionCommand(
   };
 }
 
+function applyDeleteDocumentDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteDocumentDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      documentDefinitions: session.gameProject.documentDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyDeleteDialogueDefinitionCommand(
   session: AuthoringSession,
   command: DeleteDialogueDefinitionCommand
@@ -619,6 +705,10 @@ export function applyCommand(
     return applyCreateItemDefinitionCommand(session, command);
   }
 
+  if (command.kind === "CreateDocumentDefinition") {
+    return applyCreateDocumentDefinitionCommand(session, command);
+  }
+
   if (command.kind === "CreateDialogueDefinition") {
     return applyCreateDialogueDefinitionCommand(session, command);
   }
@@ -635,6 +725,10 @@ export function applyCommand(
     return applyUpdateItemDefinitionCommand(session, command);
   }
 
+  if (command.kind === "UpdateDocumentDefinition") {
+    return applyUpdateDocumentDefinitionCommand(session, command);
+  }
+
   if (command.kind === "UpdateDialogueDefinition") {
     return applyUpdateDialogueDefinitionCommand(session, command);
   }
@@ -649,6 +743,10 @@ export function applyCommand(
 
   if (command.kind === "DeleteItemDefinition") {
     return applyDeleteItemDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteDocumentDefinition") {
+    return applyDeleteDocumentDefinitionCommand(session, command);
   }
 
   if (command.kind === "DeleteDialogueDefinition") {
