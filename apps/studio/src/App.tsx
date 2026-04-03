@@ -13,6 +13,7 @@ import {
   getAllRegions,
   getAllAssetDefinitions,
   getAllEnvironmentDefinitions,
+  getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
   updateAssetDefinitionInSession,
@@ -37,7 +38,12 @@ import {
   createPreviewStore,
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
-import { useBuildProductModeView, type WorkspaceViewport } from "@sugarmagic/workspaces";
+import {
+  useBuildProductModeView,
+  useDesignProductModeView,
+  type WorkspaceViewport,
+  type PlayerWorkspaceViewport
+} from "@sugarmagic/workspaces";
 import {
   ActionStripe,
   CreateRegionDialog,
@@ -51,6 +57,7 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+import { createPlayerViewport } from "./viewport/playerViewport";
 
 function revokeAssetSources(assetSources: Record<string, string>) {
   for (const url of Object.values(assetSources)) {
@@ -207,6 +214,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
   const snapshot: AuthoringContextSnapshot = {
     activeProductMode: shell.activeProductMode,
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
+    activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
     activeRegionId: shell.activeRegionId,
     activeEnvironmentId: shell.activeEnvironmentId,
     activeWorkspaceId: shell.activeWorkspaceId,
@@ -240,6 +248,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           activeRegionId: capturedSession.activeRegionId,
           activeEnvironmentId: snapshot.activeEnvironmentId,
           contentLibrary: capturedSession.contentLibrary,
+          playerDefinition: capturedSession.gameProject.playerDefinition,
           assetSources
         },
         "*"
@@ -264,7 +273,12 @@ function handleStopPreview() {
   // Restore authoring context
   const shell = shellStore.getState();
   shell.setActiveProductMode(snapshot.activeProductMode);
-  shell.setActiveBuildWorkspaceKind(snapshot.activeBuildWorkspaceKind);
+  if (snapshot.activeProductMode === "build") {
+    shell.setActiveBuildWorkspaceKind(snapshot.activeBuildWorkspaceKind);
+  }
+  if (snapshot.activeProductMode === "design") {
+    shell.setActiveDesignWorkspaceKind(snapshot.activeDesignWorkspaceKind);
+  }
   if (snapshot.activeRegionId) {
     shell.setActiveRegionId(snapshot.activeRegionId);
   }
@@ -278,6 +292,7 @@ export function App() {
   const activeProductMode = useStore(shellStore, (s) => s.activeProductMode);
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
   const activeBuildKind = useStore(shellStore, (s) => s.activeBuildWorkspaceKind);
+  const activeDesignKind = useStore(shellStore, (s) => s.activeDesignWorkspaceKind);
   const activeRegionId = useStore(shellStore, (s) => s.activeRegionId);
   const activeEnvironmentId = useStore(shellStore, (s) => s.activeEnvironmentId);
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
@@ -289,6 +304,7 @@ export function App() {
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
   const isBuild = activeProductMode === "build";
+  const isDesign = activeProductMode === "design";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
 
   const regions = useMemo(() => {
@@ -328,6 +344,11 @@ export function App() {
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllEnvironmentDefinitions(session);
+  }, [session]);
+
+  const playerDefinition = useMemo(() => {
+    if (!session) return null;
+    return getPlayerDefinition(session);
   }, [session]);
 
   const environmentViewportOverrideId =
@@ -445,13 +466,23 @@ export function App() {
 
   // --- Viewport lifecycle (tied to project phase) ---
   const viewportRef = useRef<HTMLDivElement>(null);
-  const runtimeRef = useRef<WorkspaceViewport | null>(null);
+  const buildViewportRef = useRef<WorkspaceViewport | null>(null);
+  const playerViewportRef = useRef<PlayerWorkspaceViewport | null>(null);
 
   useEffect(() => {
     if (!viewportRef.current || phase !== "active") return;
-    const viewport = createAuthoringViewport();
+    const viewport =
+      activeProductMode === "design"
+        ? createPlayerViewport()
+        : createAuthoringViewport();
     viewport.mount(viewportRef.current);
-    runtimeRef.current = viewport;
+    if (activeProductMode === "design") {
+      playerViewportRef.current = viewport as PlayerWorkspaceViewport;
+      buildViewportRef.current = null;
+    } else {
+      buildViewportRef.current = viewport as WorkspaceViewport;
+      playerViewportRef.current = null;
+    }
     const readyFrame = window.requestAnimationFrame(() => {
       setViewportReadyVersion((version) => version + 1);
     });
@@ -465,23 +496,30 @@ export function App() {
       window.cancelAnimationFrame(readyFrame);
       observer.disconnect();
       viewport.unmount();
-      runtimeRef.current = null;
+      buildViewportRef.current = null;
+      playerViewportRef.current = null;
     };
-  }, [phase]);
+  }, [activeProductMode, phase]);
 
   // --- Sync viewport with active region ---
   const activeRegion = session ? getActiveRegion(session) : null;
 
   useEffect(() => {
-    if (runtimeRef.current && activeRegion && session?.contentLibrary) {
-      runtimeRef.current.updateFromRegion({
+    if (isBuild && buildViewportRef.current && activeRegion && session?.contentLibrary) {
+      buildViewportRef.current.updateFromRegion({
         region: activeRegion,
         contentLibrary: session.contentLibrary,
         assetSources,
         environmentOverrideId: environmentViewportOverrideId
       });
     }
-  }, [activeRegion, assetSources, environmentViewportOverrideId, session?.contentLibrary]);
+  }, [
+    activeRegion,
+    assetSources,
+    environmentViewportOverrideId,
+    isBuild,
+    session?.contentLibrary
+  ]);
 
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
@@ -493,7 +531,7 @@ export function App() {
     session,
     assetDefinitions,
     environmentDefinitions,
-    getViewport: () => runtimeRef.current,
+    getViewport: () => buildViewportRef.current,
     getViewportElement: () => viewportRef.current,
     regions,
     onSelectKind: (kind) => shellStore.getState().setActiveBuildWorkspaceKind(kind),
@@ -507,6 +545,19 @@ export function App() {
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
     onRemoveAssetDefinition: handleRemoveAssetDefinition
+  });
+
+  const designView = useDesignProductModeView({
+    activeDesignKind,
+    viewportReadyVersion,
+    playerDefinition,
+    contentLibrary: session?.contentLibrary ?? null,
+    assetDefinitions,
+    assetSources,
+    getViewport: () => playerViewportRef.current,
+    getViewportElement: () => viewportRef.current,
+    onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
+    onCommand: dispatchCommand
   });
 
   const handleUndo = useCallback(() => {
@@ -557,9 +608,21 @@ export function App() {
             )}
           </Group>
         }
-        subHeaderPanel={isBuild && phase === "active" ? buildView.subHeaderPanel : undefined}
-        leftPanel={isBuild ? buildView.leftPanel : null}
-        rightPanel={isBuild ? buildView.rightPanel : undefined}
+        subHeaderPanel={
+          phase === "active"
+            ? isBuild
+              ? buildView.subHeaderPanel
+              : isDesign
+                ? designView.subHeaderPanel
+                : undefined
+            : undefined
+        }
+        leftPanel={
+          isBuild ? buildView.leftPanel : isDesign ? designView.leftPanel : null
+        }
+        rightPanel={
+          isBuild ? buildView.rightPanel : isDesign ? designView.rightPanel : undefined
+        }
         bottomPanel={
           <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
         }
@@ -569,6 +632,7 @@ export function App() {
               <>
                 <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
                 {isBuild && buildView.viewportOverlay}
+                {isDesign && designView.viewportOverlay}
               </>
             ) : (
               <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>

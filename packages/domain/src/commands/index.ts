@@ -3,6 +3,7 @@ import type {
   RegionLandscapePaintPayload
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
+import type { PlayerDefinition } from "../player-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
 export type AuthoringAggregateKind =
@@ -135,6 +136,13 @@ export type UpdateEnvironmentDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdatePlayerDefinitionCommand = SemanticCommandBase<
+  "UpdatePlayerDefinition",
+  {
+    definition: PlayerDefinition;
+  }
+>;
+
 export type TransformPlacedAssetCommand = SemanticCommandBase<
   "TransformPlacedAsset",
   {
@@ -168,6 +176,7 @@ export type SemanticCommand =
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
   | UpdateEnvironmentDefinitionCommand
+  | UpdatePlayerDefinitionCommand
   | UpdatePluginConfigurationCommand;
 
 export {

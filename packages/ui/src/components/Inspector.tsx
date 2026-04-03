@@ -5,7 +5,7 @@
  * Pure presentation — does not own selection or canonical state.
  */
 
-import { Stack, Text } from "@mantine/core";
+import { Box, Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export interface InspectorProps {
@@ -20,7 +20,7 @@ export function Inspector({
   children
 }: InspectorProps) {
   return (
-    <Stack gap={0} h="100%">
+    <Stack gap={0} h="100%" style={{ minHeight: 0 }}>
       <Text
         size="xs"
         fw={600}
@@ -38,7 +38,7 @@ export function Inspector({
       </Text>
 
       {selectionLabel ? (
-        <Stack gap={0}>
+        <Stack gap={0} style={{ minHeight: 0, flex: 1 }}>
           <Text
             size="xs"
             c="var(--sm-accent-blue)"
@@ -54,9 +54,18 @@ export function Inspector({
           >
             {selectionIcon} {selectionLabel}
           </Text>
-          <Stack gap={0} p="md">
-            {children}
-          </Stack>
+          <Box
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              overflowX: "hidden"
+            }}
+          >
+            <Stack gap={0} p="md">
+              {children}
+            </Stack>
+          </Box>
         </Stack>
       ) : (
         <Text size="xs" c="var(--sm-color-overlay0)" p="md" ta="center">

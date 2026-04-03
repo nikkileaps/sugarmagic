@@ -70,6 +70,7 @@ describe("preview lifecycle state", () => {
     const snapshot = {
       activeProductMode: "build" as const,
       activeBuildWorkspaceKind: "layout" as const,
+      activeDesignWorkspaceKind: "player" as const,
       activeRegionId: "region-1",
       activeEnvironmentId: "env-default",
       activeWorkspaceId: "build:layout:region-1",

@@ -1,6 +1,8 @@
 import type * as THREE from "three";
 import type {
   ContentLibrarySnapshot,
+  PlayerAnimationSlot,
+  PlayerDefinition,
   RegionDocument,
   RegionLandscapePaintPayload,
   RegionLandscapeState
@@ -15,6 +17,14 @@ export interface ViewportSceneState {
   contentLibrary: ContentLibrarySnapshot;
   assetSources: ViewportAssetSources;
   environmentOverrideId?: string | null;
+}
+
+export interface PlayerViewportState {
+  playerDefinition: PlayerDefinition;
+  contentLibrary: ContentLibrarySnapshot;
+  assetSources: ViewportAssetSources;
+  activeAnimationSlot: PlayerAnimationSlot | null;
+  isAnimationPlaying: boolean;
 }
 
 export interface WorkspaceViewport {
@@ -46,6 +56,17 @@ export interface WorkspaceViewport {
     rotation: [number, number, number],
     scale: [number, number, number]
   ) => void;
+  resize: (width: number, height: number) => void;
+  render: () => void;
+  subscribeFrame: (listener: () => void) => () => void;
+}
+
+export interface PlayerWorkspaceViewport {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  mount: (container: HTMLElement) => void;
+  unmount: () => void;
+  updateFromPlayer: (state: PlayerViewportState) => void;
   resize: (width: number, height: number) => void;
   render: () => void;
   subscribeFrame: (listener: () => void) => () => void;

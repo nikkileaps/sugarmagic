@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createShellStore,
-  deriveBuildWorkspaceId
+  deriveBuildWorkspaceId,
+  deriveDesignWorkspaceId
 } from "@sugarmagic/shell";
 
 describe("Build navigation model", () => {
@@ -22,6 +23,10 @@ describe("Build navigation model", () => {
 
   it("returns null when no workspace context is selected", () => {
     expect(deriveBuildWorkspaceId("layout", null)).toBeNull();
+  });
+
+  it("derives design workspace IDs without region context", () => {
+    expect(deriveDesignWorkspaceId("player")).toBe("design:player");
   });
 
   it("changing to environment workspace uses environment context, not region context", () => {
@@ -83,5 +88,13 @@ describe("Build navigation model", () => {
   it("defaults to layout workspace kind", () => {
     const store = createShellStore("build");
     expect(store.getState().activeBuildWorkspaceKind).toBe("layout");
+  });
+
+  it("switching to design mode activates the player workspace", () => {
+    const store = createShellStore("build");
+    store.getState().setActiveProductMode("design");
+
+    expect(store.getState().activeDesignWorkspaceKind).toBe("player");
+    expect(store.getState().activeWorkspaceId).toBe("design:player");
   });
 });

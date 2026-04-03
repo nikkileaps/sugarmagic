@@ -6,7 +6,10 @@
  */
 
 import type { GameProject, RegionDocument, ContentLibrarySnapshot } from "@sugarmagic/domain";
-import { createEmptyContentLibrarySnapshot } from "@sugarmagic/domain";
+import {
+  createDefaultGameProject,
+  createEmptyContentLibrarySnapshot
+} from "@sugarmagic/domain";
 import {
   ensureDirectory,
   pickDirectory,
@@ -37,14 +40,7 @@ function makeEmptyProject(
   gameName: string,
   slug: string
 ): GameProject {
-  return {
-    identity: { id: slug, schema: "GameProject", version: 1 },
-    displayName: gameName,
-    gameRootPath: ".",
-    regionRegistry: [],
-    pluginConfigIds: [],
-    contentLibraryId: `${slug}:content-library`
-  };
+  return createDefaultGameProject(gameName, slug);
 }
 
 export async function checkDirectoryHasProject(

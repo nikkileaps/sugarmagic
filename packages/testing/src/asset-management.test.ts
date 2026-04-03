@@ -12,6 +12,7 @@ import {
   getAllAssetDefinitions,
   applyCommand,
   getActiveRegion,
+  createDefaultPlayerDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
@@ -24,7 +25,8 @@ function makeProject(): GameProject {
     gameRootPath: ".",
     regionRegistry: [{ regionId: "arrival_station" }],
     pluginConfigIds: [],
-    contentLibraryId: "wordlark:content-library"
+    contentLibraryId: "wordlark:content-library",
+    playerDefinition: createDefaultPlayerDefinition("wordlark")
   };
 }
 
