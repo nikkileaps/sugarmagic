@@ -8,13 +8,18 @@
  */
 
 import type { GameProject } from "../game-project";
+import { normalizeGameProject } from "../game-project";
 import type { RegionDocument } from "../region-authoring";
 import {
   createDefaultRegionLandscapeState,
   createDefaultRegionLandscapeChannels
 } from "../region-authoring";
 import type { AuthoringHistory } from "../history";
-import type { SemanticCommand, UpdateEnvironmentDefinitionCommand } from "../commands";
+import type {
+  SemanticCommand,
+  UpdateEnvironmentDefinitionCommand,
+  UpdatePlayerDefinitionCommand
+} from "../commands";
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
@@ -32,6 +37,7 @@ import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
 
 interface SessionCheckpoint {
+  gameProject: GameProject;
   contentLibrary: ContentLibrarySnapshot;
   regions: Map<string, RegionDocument>;
   activeRegionId: string | null;
@@ -100,6 +106,7 @@ function createTransactionForCommand(
 
 function checkpointSession(session: AuthoringSession): SessionCheckpoint {
   return {
+    gameProject: session.gameProject,
     contentLibrary: session.contentLibrary,
     regions: new Map(session.regions),
     activeRegionId: session.activeRegionId
@@ -115,6 +122,7 @@ function restoreCheckpoint(
 ): AuthoringSession {
   return {
     ...session,
+    gameProject: checkpoint.gameProject,
     contentLibrary: checkpoint.contentLibrary,
     regions: new Map(checkpoint.regions),
     activeRegionId: checkpoint.activeRegionId,
@@ -146,6 +154,10 @@ export function getAllEnvironmentDefinitions(
   return listEnvironmentDefinitionsFromLibrary(session.contentLibrary);
 }
 
+export function getPlayerDefinition(session: AuthoringSession) {
+  return session.gameProject.playerDefinition;
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
   regions: RegionDocument[],
@@ -153,9 +165,10 @@ export function createAuthoringSession(
     gameProject.identity.id
   )
 ): AuthoringSession {
+  const normalizedProject = normalizeGameProject(gameProject);
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
     contentLibrary,
-    gameProject.identity.id
+    normalizedProject.identity.id
   );
   const regionMap = new Map<string, RegionDocument>();
   for (const region of regions) {
@@ -166,7 +179,7 @@ export function createAuthoringSession(
   }
 
   return {
-    gameProject,
+    gameProject: normalizedProject,
     contentLibrary: normalizedContentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
@@ -221,12 +234,37 @@ function applyEnvironmentDefinitionCommand(
   };
 }
 
+function applyPlayerDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdatePlayerDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      playerDefinition: command.payload.definition
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
 ): AuthoringSession {
   if (command.kind === "UpdateEnvironmentDefinition") {
     return applyEnvironmentDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdatePlayerDefinition") {
+    return applyPlayerDefinitionCommand(session, command);
   }
 
   const activeRegion = getActiveRegion(session);

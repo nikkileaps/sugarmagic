@@ -1,4 +1,9 @@
 import type { DocumentIdentity, RegionReference } from "../shared/identity";
+import {
+  createDefaultPlayerDefinition,
+  normalizePlayerDefinition,
+  type PlayerDefinition
+} from "../player-definition";
 
 export interface GameProject {
   identity: DocumentIdentity;
@@ -7,4 +12,34 @@ export interface GameProject {
   regionRegistry: RegionReference[];
   pluginConfigIds: string[];
   contentLibraryId: string | null;
+  playerDefinition: PlayerDefinition;
+}
+
+export function normalizeGameProject(
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition"> & {
+    playerDefinition?: Partial<PlayerDefinition> | null;
+  })
+): GameProject {
+  return {
+    ...gameProject,
+    playerDefinition: normalizePlayerDefinition(
+      gameProject.playerDefinition,
+      gameProject.identity.id
+    )
+  };
+}
+
+export function createDefaultGameProject(
+  gameName: string,
+  slug: string
+): GameProject {
+  return {
+    identity: { id: slug, schema: "GameProject", version: 1 },
+    displayName: gameName,
+    gameRootPath: ".",
+    regionRegistry: [],
+    pluginConfigIds: [],
+    contentLibraryId: `${slug}:content-library`,
+    playerDefinition: createDefaultPlayerDefinition(slug)
+  };
 }

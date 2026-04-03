@@ -1,4 +1,8 @@
-import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
+import type {
+  ContentLibrarySnapshot,
+  PlayerDefinition,
+  RegionDocument
+} from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import { createWebRuntimeHost } from "@sugarmagic/target-web";
 
@@ -8,6 +12,7 @@ interface PreviewBootMessage {
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
+  playerDefinition: PlayerDefinition;
   assetSources: Record<string, string>;
 }
 
@@ -40,6 +45,7 @@ window.addEventListener("message", (event) => {
       activeRegionId: data.activeRegionId,
       activeEnvironmentId: data.activeEnvironmentId,
       contentLibrary: data.contentLibrary,
+      playerDefinition: data.playerDefinition,
       assetSources: data.assetSources
     });
   }

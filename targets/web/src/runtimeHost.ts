@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
+  type PlayerDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -28,6 +29,7 @@ import {
   createEnvironmentSceneController,
   createLandscapeSceneController,
   createRuntimeRenderPipeline,
+  createPlayerVisualController,
   resolveEnvironmentDefinition,
   type GameCameraState,
   type RuntimeBootModel,
@@ -61,6 +63,7 @@ export interface WebRuntimeStartState {
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
+  playerDefinition: PlayerDefinition;
   assetSources: Record<string, string>;
 }
 
@@ -71,7 +74,6 @@ export interface WebRuntimeHost {
 }
 
 const CUBE_COLOR = 0x89b4fa;
-const PLAYER_COLOR = 0xa6e3a1;
 const GRID_COLOR = 0x45475a;
 
 const gltfLoader = new GLTFLoader();
@@ -181,7 +183,8 @@ export function createWebRuntimeHost(
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
-  let playerMesh: THREE.Mesh | null = null;
+  let playerVisualController: ReturnType<typeof createPlayerVisualController> | null = null;
+  let playerEyeHeight = 1.62;
   let grid: THREE.GridHelper | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
@@ -200,17 +203,9 @@ export function createWebRuntimeHost(
     runtimeEnvironmentState = null;
     world = null;
 
-    if (playerMesh) {
-      playerMesh.geometry.dispose();
-      if (Array.isArray(playerMesh.material)) {
-        for (const material of playerMesh.material) {
-          material.dispose();
-        }
-      } else {
-        playerMesh.material.dispose();
-      }
-      playerMesh = null;
-    }
+    playerVisualController?.dispose();
+    playerVisualController = null;
+    playerEyeHeight = 1.62;
 
     for (const entry of sceneObjectEntries.values()) {
       scene?.remove(entry.root);
@@ -274,7 +269,7 @@ export function createWebRuntimeHost(
       !camera ||
       !renderer ||
       !scene ||
-      !playerMesh ||
+      !playerVisualController ||
       !inputManager
     ) {
       return;
@@ -287,7 +282,9 @@ export function createWebRuntimeHost(
     const playerEntities = world.query(PlayerControlled, Position);
     if (playerEntities.length > 0) {
       const pos = world.getComponent(playerEntities[0], Position)!;
-      playerMesh.position.set(pos.x, 0.7, pos.z);
+      playerVisualController.root.position.set(pos.x, pos.y, pos.z);
+      cameraState.targetY = pos.y + playerEyeHeight;
+      playerVisualController.update(delta);
 
       const { isDragging } = inputManager.getInput();
       cameraState = updateCameraFollow(
@@ -385,21 +382,29 @@ export function createWebRuntimeHost(
       }
     }
 
+    playerEyeHeight = state.playerDefinition.physicalProfile.eyeHeight;
+
     world = new World();
     const player = world.createEntity();
     world.addComponent(player, new Position(0, 0, 0));
     world.addComponent(player, new Velocity());
-    world.addComponent(player, new PlayerControlled(8));
+    world.addComponent(
+      player,
+      new PlayerControlled(state.playerDefinition.movementProfile.walkSpeed)
+    );
     world.addComponent(player, new CameraTarget());
     world.addComponent(player, new Renderable("player", true));
 
-    const playerGeometry = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
-    const playerMaterial = new THREE.MeshStandardMaterial({
-      color: PLAYER_COLOR
+    playerVisualController = createPlayerVisualController(scene);
+    void playerVisualController.apply({
+      playerDefinition: state.playerDefinition,
+      contentLibrary: state.contentLibrary,
+      assetSources: state.assetSources,
+      activeAnimationSlot: state.playerDefinition.presentation.animationAssetBindings.idle
+        ? "idle"
+        : null,
+      isPlaying: true
     });
-    playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
-    playerMesh.position.set(0, 0.7, 0);
-    scene.add(playerMesh);
 
     const movementSystem = new MovementSystem();
     world.addSystem(movementSystem);
@@ -411,6 +416,7 @@ export function createWebRuntimeHost(
     );
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
+    cameraState.targetY = playerEyeHeight;
     inputManager.onRightDrag = (dx, dy) => {
       if (cameraState) {
         cameraState = applyCameraDrag(

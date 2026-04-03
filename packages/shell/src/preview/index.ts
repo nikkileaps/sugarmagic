@@ -10,11 +10,12 @@
 
 import { createStore } from "zustand/vanilla";
 import type { ProductModeId } from "@sugarmagic/productmodes";
-import type { BuildWorkspaceKind } from "../index";
+import type { BuildWorkspaceKind, DesignWorkspaceKind } from "../index";
 
 export interface AuthoringContextSnapshot {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
+  activeDesignWorkspaceKind: DesignWorkspaceKind;
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;
