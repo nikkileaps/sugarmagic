@@ -66,6 +66,29 @@ function createFallbackMesh(): THREE.Mesh {
   );
 }
 
+function createCapsuleFallback(object: SceneObject): THREE.Mesh {
+  const capsule = object.capsule;
+  if (!capsule) {
+    return createFallbackMesh();
+  }
+
+  const mesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(
+      capsule.radius,
+      Math.max(0.05, capsule.height - capsule.radius * 2),
+      8,
+      16
+    ),
+    new THREE.MeshStandardMaterial({
+      color: capsule.color,
+      roughness: 0.38,
+      metalness: 0.04
+    })
+  );
+  mesh.position.y = capsule.height / 2;
+  return mesh;
+}
+
 function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
   root.position.set(
     object.transform.position[0],
@@ -82,6 +105,18 @@ function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
     object.transform.scale[1],
     object.transform.scale[2]
   );
+}
+
+function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  if (size.y <= 0) return;
+
+  const scale = targetHeight / size.y;
+  root.scale.setScalar(scale);
+  box.setFromObject(root);
+  root.position.y -= box.min.y;
 }
 
 function disposeObject(root: THREE.Object3D) {
@@ -107,19 +142,23 @@ async function createRenderableRoot(
   applyObjectTransform(root, object);
 
   const assetSourceUrl =
-    object.assetSourcePath ? assetSources[object.assetSourcePath] ?? null : null;
+    object.modelSourcePath ? assetSources[object.modelSourcePath] ?? null : null;
 
   if (!assetSourceUrl) {
-    root.add(createFallbackMesh());
+    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
     return { root, assetSourceUrl: null };
   }
 
   try {
     const gltf = await gltfLoader.loadAsync(assetSourceUrl);
-    root.add(gltf.scene.clone(true));
+    const renderable = gltf.scene.clone(true);
+    if (object.targetModelHeight) {
+      normalizeModelScale(renderable, object.targetModelHeight);
+    }
+    root.add(renderable);
     return { root, assetSourceUrl };
   } catch {
-    root.add(createFallbackMesh());
+    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
     return { root, assetSourceUrl };
   }
 }
@@ -265,6 +304,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
       const {
         region,
         contentLibrary,
+        playerDefinition,
+        npcDefinitions,
         assetSources,
         environmentOverrideId = null
       } = state;
@@ -275,7 +316,11 @@ export function createAuthoringViewport(): WorkspaceViewport {
         resolveEnvironmentDefinition(region, contentLibrary, environmentOverrideId)
       );
 
-      const currentObjects = resolveSceneObjects(region, contentLibrary);
+      const currentObjects = resolveSceneObjects(region, {
+        contentLibrary,
+        playerDefinition,
+        npcDefinitions
+      });
       const delta = computeSceneDelta(previousObjects, currentObjects);
       const generation = ++renderGeneration;
 
@@ -300,8 +345,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of delta.updated) {
         const existing = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.assetSourcePath
-          ? assetSources[object.assetSourcePath] ?? null
+        const nextAssetSourceUrl = object.modelSourcePath
+          ? assetSources[object.modelSourcePath] ?? null
           : null;
         if (existing && existing.assetSourceUrl === nextAssetSourceUrl) {
           applyObjectTransform(existing.root, object);
@@ -325,8 +370,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of currentObjects) {
         const entry = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.assetSourcePath
-          ? assetSources[object.assetSourcePath] ?? null
+        const nextAssetSourceUrl = object.modelSourcePath
+          ? assetSources[object.modelSourcePath] ?? null
           : null;
         if (entry && entry.assetSourceUrl !== nextAssetSourceUrl) {
           authoredRoot.remove(entry.root);

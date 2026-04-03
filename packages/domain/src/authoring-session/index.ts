@@ -11,6 +11,8 @@ import type { GameProject } from "../game-project";
 import { normalizeGameProject } from "../game-project";
 import type { RegionDocument } from "../region-authoring";
 import {
+  createRegionNPCPresence,
+  createRegionPlayerPresence,
   createDefaultRegionLandscapeState,
   createDefaultRegionLandscapeChannels
 } from "../region-authoring";
@@ -80,6 +82,16 @@ function normalizeRegionDocument(
 
   return {
     ...region,
+    scene: {
+      folders: region.scene.folders,
+      placedAssets: region.scene.placedAssets,
+      playerPresence: region.scene.playerPresence
+        ? createRegionPlayerPresence(region.scene.playerPresence)
+        : null,
+      npcPresences: region.scene.npcPresences.map((presence) =>
+        createRegionNPCPresence(presence)
+      )
+    },
     environmentBinding: {
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ?? defaultEnvironmentId(contentLibrary)

@@ -1,8 +1,8 @@
 import type * as THREE from "three";
 import type {
   ContentLibrarySnapshot,
-  NPCAnimationSlot,
   NPCDefinition,
+  NPCAnimationSlot,
   PlayerAnimationSlot,
   PlayerDefinition,
   RegionDocument,
@@ -17,6 +17,8 @@ export interface ViewportAssetSources {
 export interface ViewportSceneState {
   region: RegionDocument;
   contentLibrary: ContentLibrarySnapshot;
+  playerDefinition: PlayerDefinition;
+  npcDefinitions: NPCDefinition[];
   assetSources: ViewportAssetSources;
   environmentOverrideId?: string | null;
 }

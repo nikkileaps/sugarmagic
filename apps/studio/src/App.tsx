@@ -252,6 +252,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           activeEnvironmentId: snapshot.activeEnvironmentId,
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
+          npcDefinitions: capturedSession.gameProject.npcDefinitions,
           assetSources
         },
         "*"
@@ -325,7 +326,7 @@ export function App() {
       identity: { id: input.regionId, schema: "RegionDocument", version: 1 },
       displayName: input.displayName,
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-      scene: { folders: [], placedAssets: [] },
+      scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [] },
       environmentBinding: {
         defaultEnvironmentId:
           session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
@@ -528,6 +529,8 @@ export function App() {
       buildViewportRef.current.updateFromRegion({
         region: activeRegion,
         contentLibrary: session.contentLibrary,
+        playerDefinition: session.gameProject.playerDefinition,
+        npcDefinitions: session.gameProject.npcDefinitions,
         assetSources,
         environmentOverrideId: environmentViewportOverrideId
       });
@@ -537,7 +540,9 @@ export function App() {
     assetSources,
     environmentViewportOverrideId,
     isBuild,
-    session?.contentLibrary
+    session?.contentLibrary,
+    session?.gameProject.npcDefinitions,
+    session?.gameProject.playerDefinition
   ]);
 
   // --- Build workspace view (owns its own lifecycle) ---

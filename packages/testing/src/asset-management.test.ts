@@ -45,7 +45,9 @@ function makeRegion(): RegionDocument {
     },
     scene: {
       folders: [],
-      placedAssets: []
+      placedAssets: [],
+      playerPresence: null,
+      npcPresences: []
     },
     environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
@@ -235,10 +237,12 @@ describe("asset management loop", () => {
     const region = getActiveRegion(session);
     expect(region).not.toBeNull();
 
-    const sceneObjects = resolveSceneObjects(region!, session.contentLibrary);
+    const sceneObjects = resolveSceneObjects(region!, {
+      contentLibrary: session.contentLibrary
+    });
 
     expect(sceneObjects).toHaveLength(1);
-    expect(sceneObjects[0]?.assetSourcePath).toBe(
+    expect(sceneObjects[0]?.modelSourcePath).toBe(
       "assets/imported/station-building.glb"
     );
   });

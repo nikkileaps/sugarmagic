@@ -1,5 +1,5 @@
 import type { DocumentIdentity } from "../shared/identity";
-import { createScopedId } from "../shared/identity";
+import { createScopedId, createUuid } from "../shared/identity";
 
 export interface RegionPlacement {
   gridPosition: {
@@ -25,6 +25,23 @@ export interface PlacedAssetInstance {
     rotation: [number, number, number];
     scale: [number, number, number];
   };
+}
+
+export interface RegionSceneTransform {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+}
+
+export interface RegionPlayerPresence {
+  presenceId: string;
+  transform: RegionSceneTransform;
+}
+
+export interface RegionNPCPresence {
+  presenceId: string;
+  npcDefinitionId: string;
+  transform: RegionSceneTransform;
 }
 
 export interface RegionEnvironmentBinding {
@@ -74,6 +91,8 @@ export interface RegionDocument {
   scene: {
     folders: RegionSceneFolder[];
     placedAssets: PlacedAssetInstance[];
+    playerPresence: RegionPlayerPresence | null;
+    npcPresences: RegionNPCPresence[];
   };
   environmentBinding: RegionEnvironmentBinding;
   landscape: RegionLandscapeState;
@@ -93,6 +112,43 @@ export const MAX_REGION_LANDSCAPE_CHANNELS = 8;
 
 export function createLandscapeChannelId(): string {
   return createScopedId("landscape-channel");
+}
+
+export function createRegionSceneTransform(
+  overrides: Partial<RegionSceneTransform> = {}
+): RegionSceneTransform {
+  return {
+    position: overrides.position ?? [0, 0, 0],
+    rotation: overrides.rotation ?? [0, 0, 0],
+    scale: overrides.scale ?? [1, 1, 1]
+  };
+}
+
+export function createPlayerPresenceId(): string {
+  return createUuid();
+}
+
+export function createNPCPresenceId(): string {
+  return createUuid();
+}
+
+export function createRegionPlayerPresence(
+  overrides: Partial<RegionPlayerPresence> = {}
+): RegionPlayerPresence {
+  return {
+    presenceId: overrides.presenceId ?? createPlayerPresenceId(),
+    transform: createRegionSceneTransform(overrides.transform)
+  };
+}
+
+export function createRegionNPCPresence(
+  overrides: Partial<RegionNPCPresence> & Pick<RegionNPCPresence, "npcDefinitionId">
+): RegionNPCPresence {
+  return {
+    presenceId: overrides.presenceId ?? createNPCPresenceId(),
+    npcDefinitionId: overrides.npcDefinitionId,
+    transform: createRegionSceneTransform(overrides.transform)
+  };
 }
 
 export function createRegionLandscapeChannelDefinition(

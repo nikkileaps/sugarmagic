@@ -14,6 +14,8 @@ function makeTestRegion(): RegionDocument {
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     scene: {
       folders: [],
+      playerPresence: null,
+      npcPresences: [],
       placedAssets: [
         {
           instanceId: "cube-001",

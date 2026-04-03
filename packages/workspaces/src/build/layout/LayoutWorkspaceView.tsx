@@ -7,15 +7,29 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
-import { ActionIcon, Box, Stack, Text, UnstyledButton } from "@mantine/core";
+import {
+  ActionIcon,
+  Box,
+  Button,
+  Menu,
+  Modal,
+  Stack,
+  Text,
+  TextInput,
+  UnstyledButton
+} from "@mantine/core";
 import type {
   AssetDefinition,
+  NPCDefinition,
+  PlayerDefinition,
   SemanticCommand,
   RegionDocument
 } from "@sugarmagic/domain";
 import {
   getActiveRegion,
+  createNPCPresenceId,
   createPlacedAssetInstanceId,
+  createPlayerPresenceId,
   createSceneFolderId
 } from "@sugarmagic/domain";
 import {
@@ -53,13 +67,19 @@ export interface LayoutWorkspaceViewProps {
   onCommand: (command: SemanticCommand) => void;
   getSelectedId: () => string | null;
   getRegion: () => ReturnType<typeof getActiveRegion>;
+  playerDefinition: PlayerDefinition | null;
+  npcDefinitions: NPCDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
 }
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
-function buildSceneTree(region: RegionDocument): SceneExplorerNode[] {
+function buildSceneTree(
+  region: RegionDocument,
+  playerDefinition: PlayerDefinition | null,
+  npcDefinitions: NPCDefinition[]
+): SceneExplorerNode[] {
   const foldersByParent = new Map<string | null, RegionDocument["scene"]["folders"]>();
   const assetsByParent = new Map<string | null, RegionDocument["scene"]["placedAssets"]>();
 
@@ -87,6 +107,7 @@ function buildSceneTree(region: RegionDocument): SceneExplorerNode[] {
       type: "entity" as const,
       instanceId: asset.instanceId,
       displayName: asset.displayName,
+      entityKind: "asset" as const,
       assetKind: asset.assetDefinitionId,
       assetDefinitionId: asset.assetDefinitionId,
       visible: true
@@ -95,13 +116,40 @@ function buildSceneTree(region: RegionDocument): SceneExplorerNode[] {
     return [...childFolders, ...childAssets];
   };
 
+  const playerNode = region.scene.playerPresence
+    ? [
+        {
+          type: "entity" as const,
+          instanceId: region.scene.playerPresence.presenceId,
+          displayName: playerDefinition?.displayName ?? "Player",
+          entityKind: "player" as const,
+          assetKind: "player",
+          assetDefinitionId: playerDefinition?.definitionId ?? null,
+          visible: true
+        }
+      ]
+    : [];
+
+  const npcNodes = region.scene.npcPresences.map((presence) => ({
+    type: "entity" as const,
+    instanceId: presence.presenceId,
+    displayName:
+      npcDefinitions.find(
+        (definition) => definition.definitionId === presence.npcDefinitionId
+      )?.displayName ?? "NPC",
+    entityKind: "npc" as const,
+    assetKind: "npc",
+    assetDefinitionId: presence.npcDefinitionId,
+    visible: true
+  }));
+
   return [
     {
       type: "folder" as const,
       folderId: SCENE_ROOT_FOLDER_ID,
       displayName: region.displayName,
       isRoot: true,
-      children: buildChildren(null)
+      children: [...playerNode, ...npcNodes, ...buildChildren(null)]
     }
   ];
 }
@@ -119,6 +167,8 @@ export function useLayoutWorkspaceView(
     onCommand,
     getSelectedId,
     getRegion,
+    playerDefinition,
+    npcDefinitions,
     onEditAssetDefinition,
     onImportAsset
   } = props;
@@ -137,6 +187,8 @@ export function useLayoutWorkspaceView(
     x: number;
     y: number;
   } | null>(null);
+  const [addNPCOpen, setAddNPCOpen] = useState(false);
+  const [npcQuery, setNPCQuery] = useState("");
 
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<LayoutWorkspaceInstance | null>(null);
@@ -305,8 +357,9 @@ export function useLayoutWorkspaceView(
       : SCENE_ROOT_FOLDER_ID;
 
   const explorerRoots: SceneExplorerNode[] = useMemo(
-    () => (region ? buildSceneTree(region) : []),
-    [region]
+    () =>
+      region ? buildSceneTree(region, playerDefinition, npcDefinitions) : [],
+    [npcDefinitions, playerDefinition, region]
   );
 
   const selectedAsset = useMemo(() => {
@@ -317,6 +370,37 @@ export function useLayoutWorkspaceView(
       ) ?? null
     );
   }, [region, selectedIds]);
+
+  const selectedPlayerPresence = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    if (region.scene.playerPresence?.presenceId !== selectedIds[0]) return null;
+    return region.scene.playerPresence;
+  }, [region, selectedIds]);
+
+  const selectedNPCPresence = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      region.scene.npcPresences.find(
+        (presence) => presence.presenceId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, selectedIds]);
+
+  const selectedNPCDefinition = useMemo(() => {
+    if (!selectedNPCPresence) return null;
+    return (
+      npcDefinitions.find(
+        (definition) =>
+          definition.definitionId === selectedNPCPresence.npcDefinitionId
+      ) ?? null
+    );
+  }, [npcDefinitions, selectedNPCPresence]);
+
+  const selectedSceneLabel =
+    selectedAsset?.displayName ??
+    (selectedPlayerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
+    selectedNPCDefinition?.displayName ??
+    null;
 
   const handleTransformChange = useCallback(
     (
@@ -330,25 +414,70 @@ export function useLayoutWorkspaceView(
       const asset = currentRegion.scene.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
-      if (!asset) return;
+      const playerPresence =
+        currentRegion.scene.playerPresence?.presenceId === instanceId
+          ? currentRegion.scene.playerPresence
+          : null;
+      const npcPresence =
+        currentRegion.scene.npcPresences.find(
+          (candidate) => candidate.presenceId === instanceId
+        ) ?? null;
+      const source = asset ?? playerPresence ?? npcPresence;
+      if (!source) return;
 
-      const nextPosition: [number, number, number] = [...asset.transform.position];
-      const nextRotation: [number, number, number] = [...asset.transform.rotation];
-      const nextScale: [number, number, number] = [...asset.transform.scale];
+      const nextPosition: [number, number, number] = [...source.transform.position];
+      const nextRotation: [number, number, number] = [...source.transform.rotation];
+      const nextScale: [number, number, number] = [...source.transform.scale];
 
       if (transformKind === "position") nextPosition[axis] = value;
       if (transformKind === "rotation") nextRotation[axis] = value;
       if (transformKind === "scale") nextScale[axis] = value;
 
+      if (asset) {
+        onCommand({
+          kind: "TransformPlacedAsset",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "placed-asset", subjectId: instanceId },
+          payload: {
+            instanceId,
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        });
+        return;
+      }
+
+      if (playerPresence) {
+        onCommand({
+          kind: "TransformPlayerPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "player-presence", subjectId: instanceId },
+          payload: {
+            presenceId: instanceId,
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        });
+        return;
+      }
+
       onCommand({
-        kind: "TransformPlacedAsset",
+        kind: "TransformNPCPresence",
         target: {
           aggregateKind: "region-document",
           aggregateId: currentRegion.identity.id
         },
-        subject: { subjectKind: "placed-asset", subjectId: instanceId },
+        subject: { subjectKind: "npc-presence", subjectId: instanceId },
         payload: {
-          instanceId,
+          presenceId: instanceId,
           position: nextPosition,
           rotation: nextRotation,
           scale: nextScale
@@ -433,32 +562,81 @@ export function useLayoutWorkspaceView(
     onSelect([duplicatedInstanceId]);
   }, [onCommand, onSelect, region]);
 
-  const handleRemoveAsset = useCallback((instanceId: string) => {
+  const handleDeleteEntityFromScene = useCallback((instanceId: string) => {
     if (!region) return;
     const asset = region.scene.placedAssets.find(
       (candidate) => candidate.instanceId === instanceId
     );
-    if (!asset) return;
-    if (!window.confirm(`Remove ${asset.displayName} from this scene?`)) {
-      return;
+    const playerPresence =
+      region.scene.playerPresence?.presenceId === instanceId
+        ? region.scene.playerPresence
+        : null;
+    const npcPresence =
+      region.scene.npcPresences.find(
+        (candidate) => candidate.presenceId === instanceId
+      ) ?? null;
+
+    const label =
+      asset?.displayName ??
+      (playerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
+      (npcPresence
+        ? npcDefinitions.find(
+            (definition) => definition.definitionId === npcPresence.npcDefinitionId
+          )?.displayName ?? "NPC"
+        : null);
+
+    if (!label) return;
+    if (!window.confirm(`Remove ${label} from this scene?`)) return;
+
+    if (asset) {
+      onCommand({
+        kind: "RemovePlacedAsset",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: asset.instanceId
+        },
+        payload: {
+          instanceId: asset.instanceId
+        }
+      });
+    } else if (playerPresence) {
+      onCommand({
+        kind: "RemovePlayerPresence",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "player-presence",
+          subjectId: playerPresence.presenceId
+        },
+        payload: {
+          presenceId: playerPresence.presenceId
+        }
+      });
+    } else if (npcPresence) {
+      onCommand({
+        kind: "RemoveNPCPresence",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "npc-presence",
+          subjectId: npcPresence.presenceId
+        },
+        payload: {
+          presenceId: npcPresence.presenceId
+        }
+      });
     }
 
-    onCommand({
-      kind: "RemovePlacedAsset",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: asset.instanceId
-      },
-      payload: {
-        instanceId: asset.instanceId
-      }
-    });
     onSelect([]);
-  }, [onCommand, onSelect, region]);
+  }, [npcDefinitions, onCommand, onSelect, playerDefinition, region]);
 
   const handleDeleteFolder = useCallback((folderId: string) => {
     if (!region) return;
@@ -526,34 +704,133 @@ export function useLayoutWorkspaceView(
     onSelect([instanceId]);
   }, [onCommand, onImportAsset, onSelect, region, selectedFolderId]);
 
+  const handleAddPlayerToScene = useCallback(() => {
+    if (!region || !playerDefinition) return;
+
+    if (region.scene.playerPresence) {
+      onSelect([region.scene.playerPresence.presenceId]);
+      return;
+    }
+
+    const presenceId = createPlayerPresenceId();
+    onCommand({
+      kind: "CreatePlayerPresence",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: {
+        subjectKind: "player-presence",
+        subjectId: presenceId
+      },
+      payload: {
+        presenceId,
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
+      }
+    });
+    onSelect([presenceId]);
+  }, [onCommand, onSelect, playerDefinition, region]);
+
+  const handleAddNPCPresence = useCallback(
+    (definition: NPCDefinition) => {
+      if (!region) return;
+      const presenceId = createNPCPresenceId();
+      onCommand({
+        kind: "CreateNPCPresence",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "npc-presence",
+          subjectId: presenceId
+        },
+        payload: {
+          presenceId,
+          npcDefinitionId: definition.definitionId,
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      });
+      onSelect([presenceId]);
+      setAddNPCOpen(false);
+      setNPCQuery("");
+    },
+    [onCommand, onSelect, region]
+  );
+
   const handleSnapToOrigin = useCallback(() => {
     if (!region || !contextMenu) return;
 
     const asset = region.scene.placedAssets.find(
       (entry) => entry.instanceId === contextMenu.instanceId
     );
-    if (!asset) return;
+    const playerPresence =
+      region.scene.playerPresence?.presenceId === contextMenu.instanceId
+        ? region.scene.playerPresence
+        : null;
+    const npcPresence =
+      region.scene.npcPresences.find(
+        (entry) => entry.presenceId === contextMenu.instanceId
+      ) ?? null;
+    const source = asset ?? playerPresence ?? npcPresence;
+    if (!source) return;
+
+    if (asset) {
+      onCommand({
+        kind: "TransformPlacedAsset",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: asset.instanceId
+        },
+        payload: {
+          instanceId: asset.instanceId,
+          position: [0, 0, 0],
+          rotation: asset.transform.rotation,
+          scale: asset.transform.scale
+        }
+      });
+      setContextMenu(null);
+      return;
+    }
 
     onCommand({
-      kind: "TransformPlacedAsset",
+      kind: playerPresence ? "TransformPlayerPresence" : "TransformNPCPresence",
       target: {
         aggregateKind: "region-document",
         aggregateId: region.identity.id
       },
       subject: {
-        subjectKind: "placed-asset",
-        subjectId: asset.instanceId
+        subjectKind: playerPresence ? "player-presence" : "npc-presence",
+        subjectId: contextMenu.instanceId
       },
       payload: {
-        instanceId: asset.instanceId,
+        ...(playerPresence
+          ? { presenceId: contextMenu.instanceId }
+          : { presenceId: contextMenu.instanceId }),
         position: [0, 0, 0],
-        rotation: asset.transform.rotation,
-        scale: asset.transform.scale
+        rotation: source.transform.rotation,
+        scale: source.transform.scale
       }
     });
 
     setContextMenu(null);
   }, [contextMenu, onCommand, region]);
+
+  const filteredNPCDefinitions = useMemo(() => {
+    const query = npcQuery.trim().toLowerCase();
+    if (!query) return npcDefinitions;
+    return npcDefinitions.filter((definition) =>
+      definition.displayName.toLowerCase().includes(query)
+    );
+  }, [npcDefinitions, npcQuery]);
 
   return {
     leftPanel: region ? (
@@ -562,14 +839,33 @@ export function useLayoutWorkspaceView(
         icon="🏗️"
         actions={
           <>
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              aria-label="Add asset"
-              onClick={() => void handleImportAssetFromExplorer()}
-            >
-              📦
-            </ActionIcon>
+            <Menu shadow="md" withinPortal position="bottom-end">
+              <Menu.Target>
+                <ActionIcon variant="subtle" size="sm" aria-label="Add scene thing">
+                  ＋
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item onClick={() => void handleImportAssetFromExplorer()}>
+                  Asset
+                </Menu.Item>
+                <Menu.Item
+                  onClick={handleAddPlayerToScene}
+                  disabled={!playerDefinition}
+                >
+                  Player
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() => {
+                    setAddNPCOpen(true);
+                    setNPCQuery("");
+                  }}
+                  disabled={npcDefinitions.length === 0}
+                >
+                  NPC
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
             <ActionIcon
               variant="subtle"
               size="sm"
@@ -599,14 +895,45 @@ export function useLayoutWorkspaceView(
             onDeleteFolder={handleDeleteFolder}
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
-            onDeleteEntity={handleRemoveAsset}
+            onDeleteEntity={handleDeleteEntityFromScene}
           />
         </Stack>
+        <Modal
+          opened={addNPCOpen}
+          onClose={() => setAddNPCOpen(false)}
+          title="Add NPC"
+          centered
+        >
+          <Stack gap="sm">
+            <TextInput
+              placeholder="Search NPCs..."
+              value={npcQuery}
+              onChange={(event) => setNPCQuery(event.currentTarget.value)}
+              autoFocus
+            />
+            {filteredNPCDefinitions.length > 0 ? (
+              filteredNPCDefinitions.map((definition) => (
+                <Button
+                  key={definition.definitionId}
+                  variant="light"
+                  justify="flex-start"
+                  onClick={() => handleAddNPCPresence(definition)}
+                >
+                  {definition.displayName}
+                </Button>
+              ))
+            ) : (
+              <Text size="sm" c="dimmed">
+                No NPCs match that search.
+              </Text>
+            )}
+          </Stack>
+        </Modal>
       </PanelSection>
     ) : null,
 
     rightPanel: region ? (
-      <Inspector selectionLabel={selectedAsset?.displayName ?? null}>
+      <Inspector selectionLabel={selectedSceneLabel}>
         {selectedAsset ? (
           <Stack gap="md">
             <TransformInspector
@@ -633,9 +960,32 @@ export function useLayoutWorkspaceView(
               }
             />
           </Stack>
+        ) : selectedPlayerPresence ? (
+          <Stack gap="md">
+            <TransformInspector
+              label="Spawn Position"
+              value={selectedPlayerPresence.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(selectedPlayerPresence.presenceId, "position", axis, value)
+              }
+            />
+          </Stack>
+        ) : selectedNPCPresence ? (
+          <Stack gap="md">
+            <Text size="sm" fw={600}>
+              {selectedNPCDefinition?.displayName ?? "NPC"}
+            </Text>
+            <TransformInspector
+              label="Spawn Position"
+              value={selectedNPCPresence.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(selectedNPCPresence.presenceId, "position", axis, value)
+              }
+            />
+          </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
-            Select a placed asset to inspect and edit it.
+            Select a scene thing to inspect and position it.
           </Text>
         )}
       </Inspector>
