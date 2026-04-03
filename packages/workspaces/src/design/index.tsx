@@ -8,6 +8,7 @@ import type {
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
+  SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
@@ -23,10 +24,12 @@ import { useItemWorkspaceView } from "./ItemWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
+import { useSpellWorkspaceView } from "./SpellWorkspaceView";
 
 const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
   { id: "npcs", label: "NPCs", icon: "👤" },
+  { id: "spells", label: "Spells", icon: "✨" },
   { id: "items", label: "Items", icon: "📦" },
   { id: "documents", label: "Documents", icon: "📚" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
@@ -38,6 +41,7 @@ export interface DesignProductModeViewProps {
   viewportReadyVersion: number;
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
+  spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -70,6 +74,7 @@ export function useDesignProductModeView(
     viewportReadyVersion,
     gameProjectId,
     playerDefinition,
+    spellDefinitions,
     itemDefinitions,
     documentDefinitions,
     npcDefinitions,
@@ -126,6 +131,14 @@ export function useDesignProductModeView(
     onCommand
   });
 
+  const spellView = useSpellWorkspaceView({
+    isActive: activeDesignKind === "spells",
+    gameProjectId,
+    spellDefinitions,
+    assetDefinitions,
+    onCommand
+  });
+
   const documentView = useDocumentWorkspaceView({
     isActive: activeDesignKind === "documents",
     gameProjectId,
@@ -139,6 +152,7 @@ export function useDesignProductModeView(
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,
+    spellDefinitions,
     onCommand
   });
 
@@ -149,6 +163,7 @@ export function useDesignProductModeView(
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,
+    spellDefinitions,
     onCommand
   });
 
@@ -167,6 +182,8 @@ export function useDesignProductModeView(
           ? questView.leftPanel
           : activeDesignKind === "npcs"
             ? npcView.leftPanel
+            : activeDesignKind === "spells"
+              ? spellView.leftPanel
             : activeDesignKind === "items"
               ? itemView.leftPanel
               : activeDesignKind === "documents"
@@ -179,6 +196,8 @@ export function useDesignProductModeView(
           ? questView.rightPanel
           : activeDesignKind === "npcs"
             ? npcView.rightPanel
+            : activeDesignKind === "spells"
+              ? spellView.rightPanel
             : activeDesignKind === "items"
               ? itemView.rightPanel
               : activeDesignKind === "documents"
@@ -189,6 +208,8 @@ export function useDesignProductModeView(
         ? dialogueView.centerPanel
         : activeDesignKind === "quests"
           ? questView.centerPanel
+          : activeDesignKind === "spells"
+            ? spellView.centerPanel
           : activeDesignKind === "documents"
             ? documentView.centerPanel
           : undefined,
@@ -197,6 +218,8 @@ export function useDesignProductModeView(
         ? dialogueView.viewportOverlay
         : activeDesignKind === "quests"
           ? questView.viewportOverlay
+          : activeDesignKind === "spells"
+            ? spellView.viewportOverlay
           : activeDesignKind === "documents"
             ? documentView.viewportOverlay
           : activeDesignKind === "npcs"

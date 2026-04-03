@@ -27,6 +27,7 @@ export type BuildWorkspaceKind = "layout" | "landscape" | "environment" | "asset
 export type DesignWorkspaceKind =
   | "player"
   | "npcs"
+  | "spells"
   | "items"
   | "documents"
   | "dialogues"

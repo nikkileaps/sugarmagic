@@ -18,6 +18,7 @@ import {
   getAllItemDefinitions,
   getAllNPCDefinitions,
   getAllQuestDefinitions,
+  getAllSpellDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -258,6 +259,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           activeEnvironmentId: snapshot.activeEnvironmentId,
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
+          spellDefinitions: capturedSession.gameProject.spellDefinitions,
           itemDefinitions: capturedSession.gameProject.itemDefinitions,
           documentDefinitions: capturedSession.gameProject.documentDefinitions,
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
@@ -379,6 +381,11 @@ export function App() {
   const itemDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllItemDefinitions(session);
+  }, [session]);
+
+  const spellDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllSpellDefinitions(session);
   }, [session]);
 
   const documentDefinitions = useMemo(() => {
@@ -523,7 +530,8 @@ export function App() {
       (
         activeDesignKind === "dialogues" ||
         activeDesignKind === "quests" ||
-        activeDesignKind === "documents"
+        activeDesignKind === "documents" ||
+        activeDesignKind === "spells"
       )
     ) {
       buildViewportRef.current = null;
@@ -645,6 +653,7 @@ export function App() {
     viewportReadyVersion,
     gameProjectId: session?.gameProject.identity.id ?? null,
     playerDefinition,
+    spellDefinitions,
     itemDefinitions,
     documentDefinitions,
     npcDefinitions,

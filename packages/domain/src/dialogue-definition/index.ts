@@ -46,6 +46,8 @@ export const BUILT_IN_DIALOGUE_SPEAKERS: DialogueBuiltInSpeaker[] = [
 export type DialogueCondition =
   | { type: "flag"; key: string; value?: unknown }
   | { type: "hasItem"; itemId: string; count?: number }
+  | { type: "hasSpell"; spellId: string }
+  | { type: "canCastSpell"; spellId: string }
   | { type: "questActive"; questId: string }
   | { type: "questCompleted"; questId: string }
   | {

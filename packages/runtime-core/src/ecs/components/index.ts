@@ -44,3 +44,16 @@ export class CameraTarget implements Component {
   static readonly type = "CameraTarget";
   readonly type = CameraTarget.type;
 }
+
+export class Caster implements Component {
+  static readonly type = "Caster";
+  readonly type = Caster.type;
+  constructor(
+    public battery: number = 0,
+    public maxBattery: number = 0,
+    public rechargeRate: number = 0,
+    public resonance: number = 0,
+    public allowedSpellTags: string[] = [],
+    public blockedSpellTags: string[] = []
+  ) {}
+}

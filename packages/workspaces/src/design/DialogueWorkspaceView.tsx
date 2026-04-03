@@ -22,6 +22,7 @@ import type {
   DialogueNodeDefinition,
   ItemDefinition,
   NPCDefinition,
+  SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
@@ -41,6 +42,7 @@ export interface DialogueWorkspaceViewProps {
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
+  spellDefinitions: SpellDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
 
@@ -226,12 +228,14 @@ function PlaytestPanel({
 interface DialogueConditionEditorProps {
   condition: DialogueCondition;
   itemDefinitions: ItemDefinition[];
+  spellDefinitions: SpellDefinition[];
   onChange: (condition: DialogueCondition) => void;
 }
 
 function DialogueConditionEditor({
   condition,
   itemDefinitions,
+  spellDefinitions,
   onChange
 }: DialogueConditionEditorProps) {
   function handleTypeChange(type: string) {
@@ -241,6 +245,12 @@ function DialogueConditionEditor({
         break;
       case "hasItem":
         onChange({ type: "hasItem", itemId: "" });
+        break;
+      case "hasSpell":
+        onChange({ type: "hasSpell", spellId: "" });
+        break;
+      case "canCastSpell":
+        onChange({ type: "canCastSpell", spellId: "" });
         break;
       case "questActive":
         onChange({ type: "questActive", questId: "" });
@@ -274,6 +284,7 @@ function DialogueConditionEditor({
           <DialogueConditionEditor
             condition={condition.condition}
             itemDefinitions={itemDefinitions}
+            spellDefinitions={spellDefinitions}
             onChange={(inner) => onChange({ type: "not", condition: inner })}
           />
         </Stack>
@@ -306,6 +317,8 @@ function DialogueConditionEditor({
           data={[
             { value: "flag", label: "Has Flag" },
             { value: "hasItem", label: "Has Item" },
+            { value: "hasSpell", label: "Has Spell" },
+            { value: "canCastSpell", label: "Can Cast Spell" },
             { value: "questActive", label: "Quest Active" },
             { value: "questCompleted", label: "Quest Completed" },
             { value: "questStage", label: "Quest Stage" }
@@ -364,6 +377,32 @@ function DialogueConditionEditor({
               }
             />
           </>
+        )}
+
+        {condition.type === "hasSpell" && (
+          <Select
+            size="xs"
+            label="Spell"
+            data={spellDefinitions.map((spell) => ({
+              value: spell.definitionId,
+              label: spell.displayName
+            }))}
+            value={condition.spellId}
+            onChange={(value) => onChange({ ...condition, spellId: value ?? "" })}
+          />
+        )}
+
+        {condition.type === "canCastSpell" && (
+          <Select
+            size="xs"
+            label="Spell"
+            data={spellDefinitions.map((spell) => ({
+              value: spell.definitionId,
+              label: spell.displayName
+            }))}
+            value={condition.spellId}
+            onChange={(value) => onChange({ ...condition, spellId: value ?? "" })}
+          />
         )}
 
         {condition.type === "questActive" && (
@@ -437,6 +476,7 @@ export function useDialogueWorkspaceView(
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,
+    spellDefinitions,
     onCommand
   } = props;
   const [selectedDialogueId, setSelectedDialogueId] = useState<string | null>(
@@ -1179,6 +1219,7 @@ export function useDialogueWorkspaceView(
                       <DialogueConditionEditor
                         condition={next.condition}
                         itemDefinitions={itemDefinitions}
+                        spellDefinitions={spellDefinitions}
                         onChange={(condition) =>
                           updateNodeEdge(selectedNode, index, { condition })
                         }

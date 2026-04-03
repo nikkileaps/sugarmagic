@@ -27,6 +27,7 @@ function makeProject(): GameProject {
     pluginConfigIds: [],
     contentLibraryId: "wordlark:content-library",
     playerDefinition: createDefaultPlayerDefinition("wordlark"),
+    spellDefinitions: [],
     npcDefinitions: [],
     dialogueDefinitions: [],
     itemDefinitions: [],

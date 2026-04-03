@@ -20,6 +20,10 @@ import {
   type ItemDefinition
 } from "../item-definition";
 import {
+  normalizeSpellDefinition,
+  type SpellDefinition
+} from "../spell-definition";
+import {
   createDefaultPlayerDefinition,
   normalizePlayerDefinition,
   type PlayerDefinition
@@ -33,6 +37,7 @@ export interface GameProject {
   pluginConfigIds: string[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
+  spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -41,8 +46,9 @@ export interface GameProject {
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
+    spellDefinitions?: Array<Partial<SpellDefinition>> | null;
     itemDefinitions?: Array<Partial<ItemDefinition>> | null;
     documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
@@ -55,6 +61,9 @@ export function normalizeGameProject(
     playerDefinition: normalizePlayerDefinition(
       gameProject.playerDefinition,
       gameProject.identity.id
+    ),
+    spellDefinitions: (gameProject.spellDefinitions ?? []).map((definition) =>
+      normalizeSpellDefinition(definition)
     ),
     itemDefinitions: (gameProject.itemDefinitions ?? []).map((definition) =>
       normalizeItemDefinition(definition)
@@ -86,6 +95,7 @@ export function createDefaultGameProject(
     pluginConfigIds: [],
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
+    spellDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: [],
     npcDefinitions: [],

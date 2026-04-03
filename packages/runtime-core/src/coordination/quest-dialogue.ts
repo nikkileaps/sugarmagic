@@ -9,6 +9,8 @@ export interface RuntimeQuestDialogueCoordinator {
     questManager: QuestManager,
     options?: {
       hasItem?: (itemDefinitionId: string, count?: number) => boolean;
+      hasSpell?: (spellDefinitionId: string) => boolean;
+      canCastSpell?: (spellDefinitionId: string) => boolean;
     }
   ) => void;
   resolveNpcDialogueDefinitionId: (npcDefinitionId: string) => string | null;
@@ -30,6 +32,8 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
   let dialogueManager: DialogueManager | null = null;
   let questManager: QuestManager | null = null;
   let hasItem: ((itemDefinitionId: string, count?: number) => boolean) | null = null;
+  let hasSpell: ((spellDefinitionId: string) => boolean) | null = null;
+  let canCastSpell: ((spellDefinitionId: string) => boolean) | null = null;
 
   function syncDialogueConditions() {
     if (!dialogueManager || !questManager) return;
@@ -37,6 +41,8 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
         dialogueManager.setConditionContext({
           hasFlag: (key, value) => questManager?.hasFlag(key, value) ?? false,
           hasItem: (itemDefinitionId, count) => hasItem?.(itemDefinitionId, count) ?? false,
+          hasSpell: (spellDefinitionId) => hasSpell?.(spellDefinitionId) ?? false,
+          canCastSpell: (spellDefinitionId) => canCastSpell?.(spellDefinitionId) ?? false,
           isQuestActive: (questId) => questManager?.isQuestActive(questId) ?? false,
           isQuestCompleted: (questId) => questManager?.isQuestCompleted(questId) ?? false,
           getQuestStageState: (questId, stageId) =>
@@ -76,6 +82,8 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
       dialogueManager = nextDialogueManager;
       questManager = nextQuestManager;
       hasItem = options?.hasItem ?? null;
+      hasSpell = options?.hasSpell ?? null;
+      canCastSpell = options?.canCastSpell ?? null;
       syncDialogueConditions();
     },
 
@@ -123,6 +131,8 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
       dialogueManager = null;
       questManager = null;
       hasItem = null;
+      hasSpell = null;
+      canCastSpell = null;
     }
   };
 }

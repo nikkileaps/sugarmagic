@@ -31,25 +31,28 @@ export function createRuntimeQuestNotificationCenter(
     }
   }
 
+  function pushToast(message: string) {
+    const toast = document.createElement("div");
+    toast.className = "sm-quest-toast";
+    toast.style.setProperty("--toast-index", String(counter++));
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    window.setTimeout(() => {
+      toast.classList.add("leaving");
+      window.setTimeout(() => {
+        if (toast.parentElement === container) {
+          container.removeChild(toast);
+        }
+      }, 180);
+    }, 2400);
+  }
+
   return {
     push(event) {
       const message = createMessage(event);
       if (!message) return;
-
-      const toast = document.createElement("div");
-      toast.className = "sm-quest-toast";
-      toast.style.setProperty("--toast-index", String(counter++));
-      toast.textContent = message;
-      container.appendChild(toast);
-
-      window.setTimeout(() => {
-        toast.classList.add("leaving");
-        window.setTimeout(() => {
-          if (toast.parentElement === container) {
-            container.removeChild(toast);
-          }
-        }, 180);
-      }, 2400);
+      pushToast(message);
     },
     dispose() {
       parentContainer.removeChild(container);

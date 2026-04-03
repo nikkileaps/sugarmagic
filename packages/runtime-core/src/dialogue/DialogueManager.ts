@@ -8,6 +8,8 @@ import type {
 export interface DialogueConditionContext {
   hasFlag?: (key: string, value?: unknown) => boolean;
   hasItem?: (itemId: string, count?: number) => boolean;
+  hasSpell?: (spellId: string) => boolean;
+  canCastSpell?: (spellId: string) => boolean;
   isQuestActive?: (questId: string) => boolean;
   isQuestCompleted?: (questId: string) => boolean;
   getQuestStageState?: (
@@ -51,6 +53,10 @@ function evaluateDialogueCondition(
       return context.hasFlag?.(condition.key, condition.value) ?? false;
     case "hasItem":
       return context.hasItem?.(condition.itemId, condition.count) ?? false;
+    case "hasSpell":
+      return context.hasSpell?.(condition.spellId) ?? false;
+    case "canCastSpell":
+      return context.canCastSpell?.(condition.spellId) ?? false;
     case "questActive":
       return context.isQuestActive?.(condition.questId) ?? false;
     case "questCompleted":
