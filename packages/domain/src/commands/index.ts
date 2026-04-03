@@ -9,6 +9,7 @@ import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
 import type { QuestDefinition } from "../quest-definition";
+import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
@@ -406,8 +407,7 @@ export type RemovePlacedAssetInspectableCommand = SemanticCommandBase<
 export type UpdatePluginConfigurationCommand = SemanticCommandBase<
   "UpdatePluginConfiguration",
   {
-    pluginId: string;
-    enabled: boolean;
+    configuration: PluginConfigurationRecord;
   }
 >;
 

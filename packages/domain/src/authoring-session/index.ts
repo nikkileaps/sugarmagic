@@ -40,7 +40,8 @@ import type {
   UpdateNPCDefinitionCommand,
   UpdateQuestDefinitionCommand,
   UpdateSpellDefinitionCommand,
-  UpdatePlayerDefinitionCommand
+  UpdatePlayerDefinitionCommand,
+  UpdatePluginConfigurationCommand
 } from "../commands";
 import type {
   AssetDefinition,
@@ -52,6 +53,10 @@ import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
+import {
+  upsertPluginConfiguration,
+  type PluginConfigurationRecord
+} from "../plugins";
 import type { TimestampIso } from "../shared";
 import {
   createEmptyContentLibrarySnapshot,
@@ -231,6 +236,12 @@ export function getAllQuestDefinitions(
   return session.gameProject.questDefinitions;
 }
 
+export function getAllPluginConfigurations(
+  session: AuthoringSession
+): PluginConfigurationRecord[] {
+  return session.gameProject.pluginConfigurations;
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
   regions: RegionDocument[],
@@ -299,6 +310,30 @@ function applyEnvironmentDefinitionCommand(
     contentLibrary: {
       ...session.contentLibrary,
       environmentDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdatePluginConfigurationCommand(
+  session: AuthoringSession,
+  command: UpdatePluginConfigurationCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.configuration.identity.id
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      pluginConfigurations: upsertPluginConfiguration(
+        session.gameProject.pluginConfigurations,
+        command.payload.configuration
+      )
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -776,6 +811,10 @@ export function applyCommand(
 
   if (command.kind === "UpdatePlayerDefinition") {
     return applyPlayerDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdatePluginConfiguration") {
+    return applyUpdatePluginConfigurationCommand(session, command);
   }
 
   if (command.kind === "CreateNPCDefinition") {

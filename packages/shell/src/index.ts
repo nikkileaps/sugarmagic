@@ -24,7 +24,7 @@ export * from "./viewport-host";
 export * from "./workspace-host";
 
 export type BuildWorkspaceKind = "layout" | "landscape" | "environment" | "assets";
-export type DesignWorkspaceKind =
+export type CoreDesignWorkspaceKind =
   | "player"
   | "npcs"
   | "spells"
@@ -32,6 +32,32 @@ export type DesignWorkspaceKind =
   | "documents"
   | "dialogues"
   | "quests";
+
+export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
+
+export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
+  "player",
+  "npcs",
+  "spells",
+  "items",
+  "documents",
+  "dialogues",
+  "quests"
+];
+
+export const VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
+  "player",
+  "npcs",
+  "items"
+];
+
+export function designWorkspaceRequiresViewport(
+  kind: DesignWorkspaceKind
+): boolean {
+  return VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS.includes(
+    kind as CoreDesignWorkspaceKind
+  );
+}
 
 export interface ShellSelectionState {
   workspaceId: string | null;

@@ -28,13 +28,18 @@ import {
   normalizePlayerDefinition,
   type PlayerDefinition
 } from "../player-definition";
+import {
+  normalizePluginConfigurationRecords,
+  type PluginConfigurationRecord,
+  type PartialPluginConfigurationRecord
+} from "../plugins";
 
 export interface GameProject {
   identity: DocumentIdentity;
   displayName: string;
   gameRootPath: string;
   regionRegistry: RegionReference[];
-  pluginConfigIds: string[];
+  pluginConfigurations: PluginConfigurationRecord[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
@@ -46,7 +51,8 @@ export interface GameProject {
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+    pluginConfigurations?: Array<PluginConfigurationRecord | PartialPluginConfigurationRecord> | null;
     playerDefinition?: Partial<PlayerDefinition> | null;
     spellDefinitions?: Array<Partial<SpellDefinition>> | null;
     itemDefinitions?: Array<Partial<ItemDefinition>> | null;
@@ -58,6 +64,9 @@ export function normalizeGameProject(
 ): GameProject {
   return {
     ...gameProject,
+    pluginConfigurations: normalizePluginConfigurationRecords(
+      gameProject.pluginConfigurations
+    ),
     playerDefinition: normalizePlayerDefinition(
       gameProject.playerDefinition,
       gameProject.identity.id
@@ -92,7 +101,7 @@ export function createDefaultGameProject(
     displayName: gameName,
     gameRootPath: ".",
     regionRegistry: [],
-    pluginConfigIds: [],
+    pluginConfigurations: [],
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
     spellDefinitions: [],

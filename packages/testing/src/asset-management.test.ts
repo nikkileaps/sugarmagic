@@ -24,7 +24,7 @@ function makeProject(): GameProject {
     displayName: "Wordlark",
     gameRootPath: ".",
     regionRegistry: [{ regionId: "arrival_station" }],
-    pluginConfigIds: [],
+    pluginConfigurations: [],
     contentLibraryId: "wordlark:content-library",
     playerDefinition: createDefaultPlayerDefinition("wordlark"),
     spellDefinitions: [],

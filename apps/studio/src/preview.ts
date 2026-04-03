@@ -3,6 +3,7 @@ import type {
   DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
+  PluginConfigurationRecord,
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
@@ -17,6 +18,8 @@ interface PreviewBootMessage {
   regions: RegionDocument[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  installedPluginIds: string[];
+  pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
@@ -56,6 +59,8 @@ window.addEventListener("message", (event) => {
       regions: data.regions,
       activeRegionId: data.activeRegionId,
       activeEnvironmentId: data.activeEnvironmentId,
+      installedPluginIds: data.installedPluginIds,
+      pluginConfigurations: data.pluginConfigurations,
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,
       spellDefinitions: data.spellDefinitions,
