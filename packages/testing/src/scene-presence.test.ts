@@ -46,6 +46,7 @@ describe("layout scene presences", () => {
         pluginConfigIds: [],
         contentLibraryId: "project:content-library",
         playerDefinition: createDefaultPlayerDefinition("project"),
+        spellDefinitions: [],
         npcDefinitions: [],
         dialogueDefinitions: [],
         itemDefinitions: [],

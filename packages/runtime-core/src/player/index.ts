@@ -9,6 +9,7 @@ import type {
   RegionDocument
 } from "@sugarmagic/domain";
 import {
+  Caster,
   CameraTarget,
   PlayerControlled,
   Position,
@@ -17,6 +18,7 @@ import {
   type Entity,
   type World
 } from "../ecs";
+import { DEFAULT_MAX_BATTERY, MAX_RESONANCE } from "../caster";
 
 const gltfLoader = new GLTFLoader();
 
@@ -137,6 +139,17 @@ export function spawnRuntimePlayerEntity(
   world.addComponent(
     entity,
     new PlayerControlled(playerDefinition.movementProfile.walkSpeed)
+  );
+  world.addComponent(
+    entity,
+    new Caster(
+      Math.max(0, Math.min(DEFAULT_MAX_BATTERY, playerDefinition.casterProfile.initialBattery)),
+      DEFAULT_MAX_BATTERY,
+      playerDefinition.casterProfile.rechargeRate,
+      Math.max(0, Math.min(MAX_RESONANCE, playerDefinition.casterProfile.initialResonance)),
+      [...playerDefinition.casterProfile.allowedSpellTags],
+      [...playerDefinition.casterProfile.blockedSpellTags]
+    )
   );
   world.addComponent(entity, new CameraTarget());
   world.addComponent(entity, new Renderable("player", true));

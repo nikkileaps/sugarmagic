@@ -37,6 +37,7 @@ import {
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
+  type SpellDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -96,6 +97,7 @@ export interface WebRuntimeStartState {
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -193,6 +195,89 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
+interface SpellCastFeedbackHost {
+  show: (spellName: string) => void;
+  dispose: () => void;
+}
+
+function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost {
+  if (!document.getElementById("sm-web-spell-cast-feedback-styles")) {
+    const style = document.createElement("style");
+    style.id = "sm-web-spell-cast-feedback-styles";
+    style.textContent = `
+      .sm-web-spell-cast-feedback {
+        position: absolute;
+        left: 50%;
+        bottom: 28px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      .sm-web-spell-cast-feedback-toast {
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(137, 220, 235, 0.24);
+        background: linear-gradient(180deg, rgba(36, 38, 50, 0.95), rgba(24, 24, 37, 0.97));
+        color: #eef6ff;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+        opacity: 0;
+        transform: translateY(8px);
+        animation: sm-web-spell-cast-feedback-in 180ms ease-out forwards;
+      }
+
+      .sm-web-spell-cast-feedback-toast.leaving {
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 180ms ease-out, transform 180ms ease-out;
+      }
+
+      @keyframes sm-web-spell-cast-feedback-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const container = document.createElement("div");
+  container.className = "sm-web-spell-cast-feedback";
+  parent.appendChild(container);
+
+  return {
+    show(spellName) {
+      const toast = document.createElement("div");
+      toast.className = "sm-web-spell-cast-feedback-toast";
+      toast.textContent = `${spellName} Spell Cast`;
+      container.appendChild(toast);
+
+      window.setTimeout(() => {
+        toast.classList.add("leaving");
+        window.setTimeout(() => {
+          if (toast.parentElement === container) {
+            container.removeChild(toast);
+          }
+        }, 180);
+      }, 1600);
+    },
+    dispose() {
+      if (container.parentElement === parent) {
+        parent.removeChild(container);
+      }
+    }
+  };
+}
+
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
@@ -254,6 +339,7 @@ export function createWebRuntimeHost(
     | null = null;
   let playerEyeHeight = 1.62;
   let grid: THREE.GridHelper | null = null;
+  let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
@@ -275,6 +361,8 @@ export function createWebRuntimeHost(
     playerVisualController = null;
     gameplaySession?.dispose();
     gameplaySession = null;
+    spellCastFeedbackHost?.dispose();
+    spellCastFeedbackHost = null;
     playerEyeHeight = 1.62;
 
     for (const entry of sceneObjectEntries.values()) {
@@ -348,6 +436,7 @@ export function createWebRuntimeHost(
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
     world.update(delta);
+    gameplaySession?.update();
 
     const playerEntities = world.query(PlayerControlled, Position);
     if (playerEntities.length > 0) {
@@ -499,6 +588,7 @@ export function createWebRuntimeHost(
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
+    spellCastFeedbackHost = createSpellCastFeedbackHost(root);
     movementSystem.setInputProvider(
       () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
     );
@@ -508,11 +598,15 @@ export function createWebRuntimeHost(
       inputManager,
       activeRegion,
       playerDefinition: state.playerDefinition,
+      spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
       documentDefinitions: state.documentDefinitions,
       npcDefinitions: state.npcDefinitions,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
+      onSpellCastSuccess: (feedback) => {
+        spellCastFeedbackHost?.show(feedback.message);
+      },
       onItemPresenceCollected: (presenceId) => {
         const entry = sceneObjectEntries.get(presenceId);
         if (!entry || !scene) return;

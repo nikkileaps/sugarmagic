@@ -16,6 +16,7 @@ export interface QuestRuntimeNarrativeHandler {
 }
 
 export type QuestInventoryCountProvider = (itemDefinitionId: string) => number;
+export type QuestSpellStateProvider = (spellDefinitionId: string) => boolean;
 
 export interface QuestActiveObjectiveView {
   questDefinitionId: string;
@@ -129,6 +130,8 @@ export class QuestManager {
   private onAction: QuestRuntimeActionHandler | null = null;
   private onNarrative: QuestRuntimeNarrativeHandler | null = null;
   private getInventoryCount: QuestInventoryCountProvider = () => 0;
+  private hasSpellProvider: QuestSpellStateProvider = () => false;
+  private canCastSpellProvider: QuestSpellStateProvider = () => false;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -155,6 +158,14 @@ export class QuestManager {
 
   setInventoryCountProvider(provider: QuestInventoryCountProvider): void {
     this.getInventoryCount = provider;
+  }
+
+  setHasSpellProvider(provider: QuestSpellStateProvider): void {
+    this.hasSpellProvider = provider;
+  }
+
+  setCanCastSpellProvider(provider: QuestSpellStateProvider): void {
+    this.canCastSpellProvider = provider;
   }
 
   update(): void {
@@ -273,6 +284,29 @@ export class QuestManager {
         const progress = stageProgress.nodeProgress.get(node.nodeId);
         if (!progress || progress.status !== "active") continue;
         if (node.eventName !== eventName) continue;
+        this.completeNode(state, stage, stageProgress, node);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.update();
+    }
+  }
+
+  notifySpellCast(spellDefinitionId: string): void {
+    let changed = false;
+
+    for (const state of this.activeQuests.values()) {
+      const stage = this.getCurrentStageDefinition(state);
+      const stageProgress = this.getCurrentStageProgress(state);
+      if (!stage || !stageProgress) continue;
+
+      for (const node of stage.nodeDefinitions) {
+        const progress = stageProgress.nodeProgress.get(node.nodeId);
+        if (!progress || progress.status !== "active") continue;
+        if (node.nodeBehavior !== "objective" || node.objectiveSubtype !== "castSpell") continue;
+        if (node.targetId !== spellDefinitionId) continue;
         this.completeNode(state, stage, stageProgress, node);
         changed = true;
       }
@@ -711,6 +745,10 @@ export class QuestManager {
     switch (condition.type) {
       case "hasFlag":
         return this.hasFlag(condition.key, condition.value);
+      case "hasSpell":
+        return this.hasSpellProvider(condition.spellDefinitionId);
+      case "canCastSpell":
+        return this.canCastSpellProvider(condition.spellDefinitionId);
       case "questActive":
         return this.isQuestActive(condition.questDefinitionId);
       case "questCompleted":

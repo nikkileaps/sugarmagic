@@ -14,6 +14,14 @@ export interface PlayerMovementProfile {
   acceleration: number;
 }
 
+export interface PlayerCasterProfile {
+  initialBattery: number;
+  rechargeRate: number;
+  initialResonance: number;
+  allowedSpellTags: string[];
+  blockedSpellTags: string[];
+}
+
 export interface PlayerAnimationBindings {
   idle: string | null;
   walk: string | null;
@@ -30,6 +38,7 @@ export interface PlayerDefinition {
   displayName: string;
   physicalProfile: PlayerPhysicalProfile;
   movementProfile: PlayerMovementProfile;
+  casterProfile: PlayerCasterProfile;
   presentation: PlayerPresentationProfile;
 }
 
@@ -43,6 +52,14 @@ export const DEFAULT_PLAYER_MOVEMENT_PROFILE: PlayerMovementProfile = {
   walkSpeed: 4.5,
   runSpeed: 6.5,
   acceleration: 10
+};
+
+export const DEFAULT_PLAYER_CASTER_PROFILE: PlayerCasterProfile = {
+  initialBattery: 100,
+  rechargeRate: 1,
+  initialResonance: 0,
+  allowedSpellTags: [],
+  blockedSpellTags: []
 };
 
 export const DEFAULT_PLAYER_ANIMATION_BINDINGS: PlayerAnimationBindings = {
@@ -68,6 +85,11 @@ export function createDefaultPlayerDefinition(
     displayName: options.displayName ?? "Player",
     physicalProfile: { ...DEFAULT_PLAYER_PHYSICAL_PROFILE },
     movementProfile: { ...DEFAULT_PLAYER_MOVEMENT_PROFILE },
+    casterProfile: {
+      ...DEFAULT_PLAYER_CASTER_PROFILE,
+      allowedSpellTags: [...DEFAULT_PLAYER_CASTER_PROFILE.allowedSpellTags],
+      blockedSpellTags: [...DEFAULT_PLAYER_CASTER_PROFILE.blockedSpellTags]
+    },
     presentation: {
       modelAssetDefinitionId: null,
       animationAssetBindings: { ...DEFAULT_PLAYER_ANIMATION_BINDINGS }
@@ -95,6 +117,18 @@ export function normalizePlayerDefinition(
     movementProfile: {
       ...defaultDefinition.movementProfile,
       ...(playerDefinition.movementProfile ?? {})
+    },
+    casterProfile: {
+      ...defaultDefinition.casterProfile,
+      ...(playerDefinition.casterProfile ?? {}),
+      allowedSpellTags: [
+        ...(playerDefinition.casterProfile?.allowedSpellTags ??
+          defaultDefinition.casterProfile.allowedSpellTags)
+      ],
+      blockedSpellTags: [
+        ...(playerDefinition.casterProfile?.blockedSpellTags ??
+          defaultDefinition.casterProfile.blockedSpellTags)
+      ]
     },
     presentation: {
       modelAssetDefinitionId:

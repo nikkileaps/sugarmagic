@@ -6,8 +6,14 @@ import {
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
+  type SpellDefinition,
   type RegionDocument
 } from "@sugarmagic/domain";
+import {
+  CasterManager,
+  CasterSystem,
+  createRuntimeSpellMenuUI
+} from "../caster";
 import { type World, Position } from "../ecs";
 import {
   createRuntimeDialoguePanel,
@@ -38,18 +44,34 @@ import {
 } from "../quest";
 import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
 
+export interface RuntimeSpellCastFeedback {
+  spellDefinitionId: string;
+  message: string;
+}
+
+export function formatRuntimeSpellCastFeedback(
+  spell: SpellDefinition
+): RuntimeSpellCastFeedback {
+  return {
+    spellDefinitionId: spell.definitionId,
+    message: `${spell.displayName} Spell Cast`
+  };
+}
+
 export interface RuntimeGameplaySessionControllerOptions {
   root: HTMLElement;
   world: World;
   inputManager: RuntimeInputManager;
   activeRegion: RegionDocument | null;
   playerDefinition: PlayerDefinition;
+  spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   onItemPresenceCollected?: (presenceId: string) => void;
+  onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
 }
 
 export interface RuntimeGameplaySessionController {
@@ -57,6 +79,7 @@ export interface RuntimeGameplaySessionController {
   readonly questManager: QuestManager;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
+  update: () => void;
   dispose: () => void;
 }
 
@@ -65,6 +88,7 @@ const JOURNAL_LOCK_ID = "runtime-quest-journal";
 const INVENTORY_LOCK_ID = "runtime-inventory";
 const ITEM_VIEW_LOCK_ID = "runtime-item-view";
 const DOCUMENT_READER_LOCK_ID = "runtime-document-reader";
+const SPELL_MENU_LOCK_ID = "runtime-spell-menu";
 
 export function createRuntimeGameplaySessionController(
   options: RuntimeGameplaySessionControllerOptions
@@ -75,18 +99,23 @@ export function createRuntimeGameplaySessionController(
     inputManager,
     activeRegion,
     playerDefinition,
+    spellDefinitions,
     itemDefinitions,
     documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
-    onItemPresenceCollected
+    onItemPresenceCollected,
+    onSpellCastSuccess
   } = options;
 
   const dialoguePanel = createRuntimeDialoguePanel(root);
   const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root);
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);
+  const casterManager = new CasterManager();
+  const casterSystem = new CasterSystem(casterManager);
+  const spellMenuUi = createRuntimeSpellMenuUI(root, casterManager);
   const inventoryManager = new InventoryManager();
   const inventoryUi = createRuntimeInventoryUI(root);
   const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
@@ -147,6 +176,7 @@ export function createRuntimeGameplaySessionController(
     if (
       dialogueManager.isDialogueActive() ||
       questJournal.isOpen() ||
+      spellMenuUi.isOpen() ||
       inventoryUi.isOpen() ||
       itemViewUi.isOpen() ||
       documentReaderUi.isOpen()
@@ -298,12 +328,21 @@ export function createRuntimeGameplaySessionController(
   questDialogueCoordinator.loadDefinitions(dialogueDefinitions, questDefinitions);
   questDialogueCoordinator.attach(dialogueManager, questManager, {
     hasItem: (itemDefinitionId, count) =>
-      inventoryManager.hasItem(itemDefinitionId, count)
+      inventoryManager.hasItem(itemDefinitionId, count),
+    hasSpell: (spellDefinitionId) => casterManager.hasSpell(spellDefinitionId),
+    canCastSpell: (spellDefinitionId) =>
+      casterManager.canCastSpell(spellDefinitionId).canCast
   });
 
   questManager.registerDefinitions(questDefinitions);
   questManager.setInventoryCountProvider((itemDefinitionId) =>
     inventoryManager.getQuantity(itemDefinitionId)
+  );
+  questManager.setHasSpellProvider((spellDefinitionId) =>
+    casterManager.hasSpell(spellDefinitionId)
+  );
+  questManager.setCanCastSpellProvider((spellDefinitionId) =>
+    casterManager.canCastSpell(spellDefinitionId).canCast
   );
   questManager.setNarrativeHandler((node) => {
     if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
@@ -352,6 +391,23 @@ export function createRuntimeGameplaySessionController(
   });
   questJournal.setOnTrackedQuestChange((questDefinitionId) => {
     questManager.setTrackedQuest(questDefinitionId);
+  });
+  spellMenuUi.setOnOpenChange((isOpen) => {
+    if (isOpen) {
+      inputManager.addMovementLock(SPELL_MENU_LOCK_ID);
+    } else {
+      inputManager.removeMovementLock(SPELL_MENU_LOCK_ID);
+    }
+    syncInteractionPrompt();
+  });
+  spellMenuUi.setCanOpenProvider(() => {
+    return !(
+      dialogueManager.isDialogueActive() ||
+      questJournal.isOpen() ||
+      inventoryUi.isOpen() ||
+      itemViewUi.isOpen() ||
+      documentReaderUi.isOpen()
+    );
   });
   inventoryUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
@@ -412,6 +468,7 @@ export function createRuntimeGameplaySessionController(
     if (
       dialogueManager.isDialogueActive() ||
       questJournal.isOpen() ||
+      spellMenuUi.isOpen() ||
       inventoryUi.isOpen() ||
       itemViewUi.isOpen() ||
       documentReaderUi.isOpen()
@@ -455,6 +512,29 @@ export function createRuntimeGameplaySessionController(
 
   world.addSystem(interactionSystem);
   world.addSystem(questSystem);
+  world.addSystem(casterSystem);
+  casterManager.setWorld(world);
+  casterManager.registerDefinitions(spellDefinitions);
+  casterManager.setSpellCastHandler((spell, result) => {
+    questManager.notifySpellCast(spell.definitionId);
+    onSpellCastSuccess?.(formatRuntimeSpellCastFeedback(spell));
+    for (const effect of result.effects) {
+      if (effect.type === "event" && effect.targetId) {
+        questManager.notifyEvent(effect.targetId);
+        continue;
+      }
+
+      if (effect.type === "dialogue" && effect.targetId) {
+        dialogueManager.start(effect.targetId);
+        continue;
+      }
+
+      if (effect.type === "world-flag" && effect.targetId) {
+        questManager.setFlag(effect.targetId, effect.value ?? true);
+      }
+    }
+    spellMenuUi.update();
+  });
   inventoryManager.registerDefinitions(itemDefinitions);
   inventoryManager.registerDocumentDefinitions(documentDefinitions);
   inventoryManager.setOnChange(() => {
@@ -469,6 +549,7 @@ export function createRuntimeGameplaySessionController(
   syncInventoryUi();
   syncQuestUi();
   syncNpcInteractionAvailability();
+  spellMenuUi.update();
   syncInteractionPrompt();
 
   return {
@@ -476,6 +557,9 @@ export function createRuntimeGameplaySessionController(
     questManager,
     interactionSystem,
     questSystem,
+    update() {
+      spellMenuUi.update();
+    },
     dispose() {
       for (const { entity } of npcInteractableEntities.values()) {
         world.destroyEntity(entity);
@@ -493,6 +577,7 @@ export function createRuntimeGameplaySessionController(
       dialogueManager.dispose();
       questTracker.dispose();
       questJournal.dispose();
+      spellMenuUi.dispose();
       questNotificationCenter.dispose();
       inventoryUi.dispose();
       itemViewUi.dispose();

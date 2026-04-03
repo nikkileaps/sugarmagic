@@ -14,4 +14,5 @@ export * from "./publish-artifacts";
 export * from "./quest-definition";
 export * from "./region-authoring";
 export * from "./shared";
+export * from "./spell-definition";
 export * from "./transactions";

@@ -105,4 +105,57 @@ describe("QuestManager", () => {
       "Find Another Way"
     ]);
   });
+
+  it("completes cast spell objectives and evaluates spell conditions from providers", () => {
+    const stage = createDefaultQuestStageDefinition({
+      nodeDefinitions: [
+        {
+          ...createDefaultQuestNodeDefinition({
+            displayName: "Cast Kindle",
+            description: "Use Kindle on the dark room",
+            objectiveSubtype: "castSpell"
+          }),
+          targetId: "spell:kindle"
+        },
+        {
+          ...createDefaultQuestNodeDefinition({
+            displayName: "Verify Spell Access",
+            description: "Spell conditions should evaluate",
+            nodeBehavior: "condition"
+          }),
+          condition: {
+            type: "not",
+            condition: {
+              type: "canCastSpell",
+              spellDefinitionId: "spell:blocked"
+            }
+          }
+        }
+      ]
+    });
+
+    const quest = createDefaultQuestDefinition({
+      definitionId: "quest:spell-test",
+      displayName: "Spell Test"
+    });
+    const manager = new QuestManager();
+    manager.registerDefinitions([
+      {
+        ...quest,
+        startStageId: stage.stageId,
+        stageDefinitions: [stage]
+      }
+    ]);
+    manager.setHasSpellProvider((spellDefinitionId) => spellDefinitionId === "spell:kindle");
+    manager.setCanCastSpellProvider((spellDefinitionId) => spellDefinitionId === "spell:kindle");
+
+    expect(manager.startQuest("quest:spell-test")).toBe(true);
+    expect(manager.getTrackedQuest()?.objectives.map((objective) => objective.displayName)).toContain(
+      "Cast Kindle"
+    );
+
+    manager.notifySpellCast("spell:kindle");
+
+    expect(manager.isQuestCompleted("quest:spell-test")).toBe(true);
+  });
 });

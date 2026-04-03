@@ -12,6 +12,7 @@ describe("player definition authoring", () => {
     const project = createDefaultGameProject("Sugarmagic", "sugarmagic");
     expect(project.playerDefinition.displayName).toBe("Player");
     expect(project.playerDefinition.physicalProfile.height).toBeGreaterThan(1);
+    expect(project.playerDefinition.casterProfile.initialBattery).toBeGreaterThan(0);
   });
 
   it("updates player definition through the authoring command boundary", () => {
@@ -38,6 +39,11 @@ describe("player definition authoring", () => {
           movementProfile: {
             ...nextDefinition.movementProfile,
             walkSpeed: 5.2
+          },
+          casterProfile: {
+            ...nextDefinition.casterProfile,
+            allowedSpellTags: ["ritual"],
+            initialBattery: 8
           }
         }
       }
@@ -45,6 +51,8 @@ describe("player definition authoring", () => {
 
     expect(getPlayerDefinition(updated).displayName).toBe("Holly");
     expect(getPlayerDefinition(updated).movementProfile.walkSpeed).toBe(5.2);
+    expect(getPlayerDefinition(updated).casterProfile.allowedSpellTags).toEqual(["ritual"]);
+    expect(getPlayerDefinition(updated).casterProfile.initialBattery).toBe(8);
     expect(updated.undoStack).toHaveLength(1);
   });
 });

@@ -26,17 +26,20 @@ import type {
   CreateItemDefinitionCommand,
   CreateNPCDefinitionCommand,
   CreateQuestDefinitionCommand,
+  CreateSpellDefinitionCommand,
   DeleteItemDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
   DeleteDocumentDefinitionCommand,
   DeleteQuestDefinitionCommand,
+  DeleteSpellDefinitionCommand,
   UpdateEnvironmentDefinitionCommand,
   UpdateDialogueDefinitionCommand,
   UpdateDocumentDefinitionCommand,
   UpdateItemDefinitionCommand,
   UpdateNPCDefinitionCommand,
   UpdateQuestDefinitionCommand,
+  UpdateSpellDefinitionCommand,
   UpdatePlayerDefinitionCommand
 } from "../commands";
 import type {
@@ -48,6 +51,7 @@ import type { NPCDefinition } from "../npc-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
+import type { SpellDefinition } from "../spell-definition";
 import type { TimestampIso } from "../shared";
 import {
   createEmptyContentLibrarySnapshot,
@@ -203,6 +207,10 @@ export function getAllNPCDefinitions(session: AuthoringSession): NPCDefinition[]
 
 export function getAllItemDefinitions(session: AuthoringSession): ItemDefinition[] {
   return session.gameProject.itemDefinitions;
+}
+
+export function getAllSpellDefinitions(session: AuthoringSession): SpellDefinition[] {
+  return session.gameProject.spellDefinitions;
 }
 
 export function getAllDocumentDefinitions(
@@ -368,6 +376,30 @@ function applyCreateItemDefinitionCommand(
   };
 }
 
+function applyCreateSpellDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateSpellDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      spellDefinitions: [
+        ...session.gameProject.spellDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyCreateDocumentDefinitionCommand(
   session: AuthoringSession,
   command: CreateDocumentDefinitionCommand
@@ -484,6 +516,32 @@ function applyUpdateItemDefinitionCommand(
     gameProject: {
       ...session.gameProject,
       itemDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateSpellDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateSpellDefinitionCommand
+): AuthoringSession {
+  const nextDefinitions = session.gameProject.spellDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definition.definitionId
+      ? command.payload.definition
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      spellDefinitions: nextDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -616,6 +674,29 @@ function applyDeleteItemDefinitionCommand(
   };
 }
 
+function applyDeleteSpellDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteSpellDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      spellDefinitions: session.gameProject.spellDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyDeleteDocumentDefinitionCommand(
   session: AuthoringSession,
   command: DeleteDocumentDefinitionCommand
@@ -705,6 +786,10 @@ export function applyCommand(
     return applyCreateItemDefinitionCommand(session, command);
   }
 
+  if (command.kind === "CreateSpellDefinition") {
+    return applyCreateSpellDefinitionCommand(session, command);
+  }
+
   if (command.kind === "CreateDocumentDefinition") {
     return applyCreateDocumentDefinitionCommand(session, command);
   }
@@ -725,6 +810,10 @@ export function applyCommand(
     return applyUpdateItemDefinitionCommand(session, command);
   }
 
+  if (command.kind === "UpdateSpellDefinition") {
+    return applyUpdateSpellDefinitionCommand(session, command);
+  }
+
   if (command.kind === "UpdateDocumentDefinition") {
     return applyUpdateDocumentDefinitionCommand(session, command);
   }
@@ -743,6 +832,10 @@ export function applyCommand(
 
   if (command.kind === "DeleteItemDefinition") {
     return applyDeleteItemDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteSpellDefinition") {
+    return applyDeleteSpellDefinitionCommand(session, command);
   }
 
   if (command.kind === "DeleteDocumentDefinition") {

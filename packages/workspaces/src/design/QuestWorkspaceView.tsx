@@ -27,6 +27,7 @@ import type {
   QuestNodeBehavior,
   QuestNodeDefinition,
   QuestStageDefinition,
+  SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
@@ -63,6 +64,7 @@ export interface QuestWorkspaceViewProps {
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
+  spellDefinitions: SpellDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
 
@@ -101,6 +103,12 @@ function validateQuest(quest: QuestDefinition): string[] {
       }
       if (node.nodeBehavior === "objective" && node.objectiveSubtype === "talk" && !node.targetId) {
         warnings.push(`Talk node "${node.displayName}" has no NPC target.`);
+      }
+      if (node.nodeBehavior === "objective" && node.objectiveSubtype === "collect" && !node.targetId) {
+        warnings.push(`Collect node "${node.displayName}" has no item target.`);
+      }
+      if (node.nodeBehavior === "objective" && node.objectiveSubtype === "castSpell" && !node.targetId) {
+        warnings.push(`Cast Spell node "${node.displayName}" has no spell target.`);
       }
       if (node.nodeBehavior === "narrative" && node.narrativeSubtype === "dialogue" && !node.dialogueDefinitionId) {
         warnings.push(`Narrative node "${node.displayName}" has no dialogue selected.`);
@@ -219,15 +227,23 @@ function MiniStageGraph({ stage }: { stage: QuestStageDefinition }) {
 
 function QuestConditionEditor({
   condition,
+  spellDefinitions,
   onChange
 }: {
   condition: QuestConditionDefinition;
+  spellDefinitions: SpellDefinition[];
   onChange: (condition: QuestConditionDefinition) => void;
 }) {
   function handleTypeChange(type: string) {
     switch (type) {
       case "hasFlag":
         onChange({ type: "hasFlag", key: "" });
+        break;
+      case "hasSpell":
+        onChange({ type: "hasSpell", spellDefinitionId: "" });
+        break;
+      case "canCastSpell":
+        onChange({ type: "canCastSpell", spellDefinitionId: "" });
         break;
       case "questActive":
         onChange({ type: "questActive", questDefinitionId: "" });
@@ -252,7 +268,11 @@ function QuestConditionEditor({
         <Text size="xs" fw={600} mb="xs">
           NOT
         </Text>
-        <QuestConditionEditor condition={condition.condition} onChange={(inner) => onChange({ type: "not", condition: inner })} />
+        <QuestConditionEditor
+          condition={condition.condition}
+          spellDefinitions={spellDefinitions}
+          onChange={(inner) => onChange({ type: "not", condition: inner })}
+        />
       </Paper>
     );
   }
@@ -265,6 +285,8 @@ function QuestConditionEditor({
         value={condition.type}
         data={[
           { value: "hasFlag", label: "Flag" },
+          { value: "hasSpell", label: "Has Spell" },
+          { value: "canCastSpell", label: "Can Cast Spell" },
           { value: "questActive", label: "Quest Active" },
           { value: "questCompleted", label: "Quest Completed" },
           { value: "questStage", label: "Quest Stage" },
@@ -287,6 +309,34 @@ function QuestConditionEditor({
             onChange={(event) => onChange({ ...condition, value: event.currentTarget.value })}
           />
         </>
+      )}
+      {condition.type === "hasSpell" && (
+        <Select
+          size="xs"
+          label="Spell"
+          value={condition.spellDefinitionId}
+          data={spellDefinitions.map((spell) => ({
+            value: spell.definitionId,
+            label: spell.displayName
+          }))}
+          onChange={(value) =>
+            onChange({ ...condition, spellDefinitionId: value ?? "" })
+          }
+        />
+      )}
+      {condition.type === "canCastSpell" && (
+        <Select
+          size="xs"
+          label="Spell"
+          value={condition.spellDefinitionId}
+          data={spellDefinitions.map((spell) => ({
+            value: spell.definitionId,
+            label: spell.displayName
+          }))}
+          onChange={(value) =>
+            onChange({ ...condition, spellDefinitionId: value ?? "" })
+          }
+        />
       )}
       {condition.type === "questActive" && (
         <TextInput
@@ -475,6 +525,7 @@ export function useQuestWorkspaceView({
   dialogueDefinitions,
   itemDefinitions,
   npcDefinitions,
+  spellDefinitions,
   onCommand
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
   const [searchQuery, setSearchQuery] = useState("");
@@ -1074,7 +1125,11 @@ export function useQuestWorkspaceView({
               />
               <Select
                 label={
-                  selectedNode.objectiveSubtype === "collect" ? "Target Item" : "Target NPC"
+                  selectedNode.objectiveSubtype === "collect"
+                    ? "Target Item"
+                    : selectedNode.objectiveSubtype === "castSpell"
+                      ? "Target Spell"
+                      : "Target NPC"
                 }
                 clearable
                 value={selectedNode.targetId ?? null}
@@ -1084,6 +1139,11 @@ export function useQuestWorkspaceView({
                         value: item.definitionId,
                         label: item.displayName
                       }))
+                    : selectedNode.objectiveSubtype === "castSpell"
+                      ? spellDefinitions.map((spell) => ({
+                          value: spell.definitionId,
+                          label: spell.displayName
+                        }))
                     : npcDefinitions.map((npc) => ({
                         value: npc.definitionId,
                         label: npc.displayName
@@ -1171,6 +1231,7 @@ export function useQuestWorkspaceView({
           {(selectedNode.nodeBehavior === "condition" || selectedNode.nodeBehavior === "branch") && (
             <QuestConditionEditor
               condition={selectedNode.condition ?? { type: "hasFlag", key: "" }}
+              spellDefinitions={spellDefinitions}
               onChange={(condition) => updateNode({ ...selectedNode, condition })}
             />
           )}

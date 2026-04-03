@@ -42,6 +42,13 @@ function toAssetOptions(assetDefinitions: AssetDefinition[]) {
   }));
 }
 
+function parseTagList(value: string): string[] {
+  return value
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
 function boundAnimationSlotOptions(playerDefinition: PlayerDefinition | null) {
   if (!playerDefinition) return [];
 
@@ -398,6 +405,96 @@ export function usePlayerWorkspaceView(
                     }
                   });
                 }}
+              />
+            </Stack>
+
+            <Stack gap="xs">
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                Caster
+              </Text>
+              <NumberInput
+                label="Initial Battery (%)"
+                size="xs"
+                min={0}
+                max={100}
+                step={1}
+                value={playerDefinition.casterProfile.initialBattery}
+                onChange={(value) => {
+                  if (typeof value !== "number") return;
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    casterProfile: {
+                      ...playerDefinition.casterProfile,
+                      initialBattery: value
+                    }
+                  });
+                }}
+              />
+              <NumberInput
+                label="Recharge Rate (% / min)"
+                size="xs"
+                min={0}
+                max={10}
+                step={0.05}
+                value={playerDefinition.casterProfile.rechargeRate}
+                onChange={(value) => {
+                  if (typeof value !== "number") return;
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    casterProfile: {
+                      ...playerDefinition.casterProfile,
+                      rechargeRate: value
+                    }
+                  });
+                }}
+              />
+              <NumberInput
+                label="Initial Resonance (%)"
+                size="xs"
+                min={0}
+                max={100}
+                step={1}
+                value={playerDefinition.casterProfile.initialResonance}
+                onChange={(value) => {
+                  if (typeof value !== "number") return;
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    casterProfile: {
+                      ...playerDefinition.casterProfile,
+                      initialResonance: value
+                    }
+                  });
+                }}
+              />
+              <TextInput
+                label="Allowed Tags"
+                size="xs"
+                description="Comma-separated spell tags"
+                value={playerDefinition.casterProfile.allowedSpellTags.join(", ")}
+                onChange={(event) =>
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    casterProfile: {
+                      ...playerDefinition.casterProfile,
+                      allowedSpellTags: parseTagList(event.currentTarget.value)
+                    }
+                  })
+                }
+              />
+              <TextInput
+                label="Blocked Tags"
+                size="xs"
+                description="Comma-separated spell tags"
+                value={playerDefinition.casterProfile.blockedSpellTags.join(", ")}
+                onChange={(event) =>
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    casterProfile: {
+                      ...playerDefinition.casterProfile,
+                      blockedSpellTags: parseTagList(event.currentTarget.value)
+                    }
+                  })
+                }
               />
             </Stack>
 

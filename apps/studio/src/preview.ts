@@ -6,6 +6,7 @@ import type {
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
+  SpellDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
@@ -18,6 +19,7 @@ interface PreviewBootMessage {
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -56,6 +58,7 @@ window.addEventListener("message", (event) => {
       activeEnvironmentId: data.activeEnvironmentId,
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,
+      spellDefinitions: data.spellDefinitions,
       itemDefinitions: data.itemDefinitions,
       documentDefinitions: data.documentDefinitions,
       npcDefinitions: data.npcDefinitions,

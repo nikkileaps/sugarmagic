@@ -9,6 +9,7 @@ import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
 import type { QuestDefinition } from "../quest-definition";
+import type { SpellDefinition } from "../spell-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
 export type AuthoringAggregateKind =
@@ -189,6 +190,13 @@ export type CreateItemDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateSpellDefinitionCommand = SemanticCommandBase<
+  "CreateSpellDefinition",
+  {
+    definition: SpellDefinition;
+  }
+>;
+
 export type CreateDocumentDefinitionCommand = SemanticCommandBase<
   "CreateDocumentDefinition",
   {
@@ -224,6 +232,13 @@ export type UpdateItemDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateSpellDefinitionCommand = SemanticCommandBase<
+  "UpdateSpellDefinition",
+  {
+    definition: SpellDefinition;
+  }
+>;
+
 export type UpdateDocumentDefinitionCommand = SemanticCommandBase<
   "UpdateDocumentDefinition",
   {
@@ -254,6 +269,13 @@ export type DeleteNPCDefinitionCommand = SemanticCommandBase<
 
 export type DeleteItemDefinitionCommand = SemanticCommandBase<
   "DeleteItemDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DeleteSpellDefinitionCommand = SemanticCommandBase<
+  "DeleteSpellDefinition",
   {
     definitionId: string;
   }
@@ -409,16 +431,19 @@ export type SemanticCommand =
   | TransformPlayerPresenceCommand
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
+  | CreateSpellDefinitionCommand
   | CreateItemDefinitionCommand
   | CreateDocumentDefinitionCommand
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
   | UpdateNPCDefinitionCommand
+  | UpdateSpellDefinitionCommand
   | UpdateItemDefinitionCommand
   | UpdateDocumentDefinitionCommand
   | UpdateDialogueDefinitionCommand
   | UpdateQuestDefinitionCommand
   | DeleteNPCDefinitionCommand
+  | DeleteSpellDefinitionCommand
   | DeleteItemDefinitionCommand
   | DeleteDocumentDefinitionCommand
   | DeleteDialogueDefinitionCommand

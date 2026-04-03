@@ -13,6 +13,8 @@ export type QuestStageState = "active" | "completed";
 
 export type QuestConditionDefinition =
   | { type: "hasFlag"; key: string; value?: unknown }
+  | { type: "hasSpell"; spellDefinitionId: string }
+  | { type: "canCastSpell"; spellDefinitionId: string }
   | { type: "questActive"; questDefinitionId: string }
   | { type: "questCompleted"; questDefinitionId: string }
   | {
