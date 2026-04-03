@@ -2,8 +2,10 @@ import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
+  BUILT_IN_DIALOGUE_SPEAKERS,
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
+  type DialogueDefinition,
   type NPCDefinition,
   type PlayerDefinition,
   type RegionDocument,
@@ -26,11 +28,16 @@ import {
   computeCameraPosition,
   createRuntimeInputManager,
   createRuntimeBootModel,
+  createRuntimeInteractionPrompt,
   createRuntimeEnvironmentState,
   createEnvironmentSceneController,
   createLandscapeSceneController,
   createRuntimeRenderPipeline,
+  createRuntimeDialoguePanel,
   createPlayerVisualController,
+  DialogueManager,
+  InteractionSystem,
+  Interactable,
   resolveEnvironmentDefinition,
   type SceneObject,
   type GameCameraState,
@@ -67,6 +74,7 @@ export interface WebRuntimeStartState {
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   npcDefinitions: NPCDefinition[];
+  dialogueDefinitions: DialogueDefinition[];
   assetSources: Record<string, string>;
 }
 
@@ -83,6 +91,8 @@ const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
+  kind: SceneObject["kind"];
+  npcDefinitionId: string | null;
 }
 
 interface LandscapeGridSpec {
@@ -222,12 +232,34 @@ export function createWebRuntimeHost(
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
   let playerVisualController: ReturnType<typeof createPlayerVisualController> | null = null;
+  let dialoguePanel: ReturnType<typeof createRuntimeDialoguePanel> | null = null;
+  let dialogueManager: DialogueManager | null = null;
+  let interactionPrompt: ReturnType<typeof createRuntimeInteractionPrompt> | null = null;
+  let interactionSystem: InteractionSystem | null = null;
   let playerEyeHeight = 1.62;
   let grid: THREE.GridHelper | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
+  const dialogueLockId = "runtime-dialogue";
   const sceneObjectEntries = new Map<string, SceneObjectEntry>();
+  const npcDialogueBindings = new Map<string, string>();
+
+  function syncInteractionPrompt() {
+    if (!interactionPrompt) return;
+    if (dialogueManager?.isDialogueActive()) {
+      interactionPrompt.hide();
+      return;
+    }
+
+    const nearby = interactionSystem?.getNearestInteractable() ?? null;
+    if (nearby?.available) {
+      interactionPrompt.show(nearby.promptText);
+      return;
+    }
+
+    interactionPrompt.hide();
+  }
 
   function disposeRuntime() {
     if (animationId !== null) {
@@ -243,7 +275,14 @@ export function createWebRuntimeHost(
 
     playerVisualController?.dispose();
     playerVisualController = null;
+    dialogueManager?.dispose();
+    dialogueManager = null;
+    dialoguePanel = null;
+    interactionPrompt?.dispose();
+    interactionPrompt = null;
+    interactionSystem = null;
     playerEyeHeight = 1.62;
+    npcDialogueBindings.clear();
 
     for (const entry of sceneObjectEntries.values()) {
       scene?.remove(entry.root);
@@ -345,6 +384,8 @@ export function createWebRuntimeHost(
       renderer.render(scene, camera);
     }
 
+    inputManager.endFrame();
+
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
@@ -388,6 +429,50 @@ export function createWebRuntimeHost(
       runtimeEnvironmentState.activeEnvironmentId
     );
     landscapeController.apply(activeRegion);
+    dialoguePanel = createRuntimeDialoguePanel(root);
+    interactionPrompt = createRuntimeInteractionPrompt(root);
+    dialogueManager = new DialogueManager(dialoguePanel);
+    dialogueManager.registerDefinitions(state.dialogueDefinitions);
+    dialogueManager.setSpeakerNameResolver((speakerId) => {
+      if (speakerId === state.playerDefinition.definitionId) {
+        return state.playerDefinition.displayName;
+      }
+
+      const builtInSpeaker = BUILT_IN_DIALOGUE_SPEAKERS.find(
+        (speaker) => speaker.speakerId === speakerId
+      );
+      if (builtInSpeaker) {
+        if (
+          builtInSpeaker.speakerId === "builtin:dialogue-speaker:player" ||
+          builtInSpeaker.speakerId === "builtin:dialogue-speaker:player-vo"
+        ) {
+          return state.playerDefinition.displayName;
+        }
+        return builtInSpeaker.displayName;
+      }
+
+      return (
+        state.npcDefinitions.find((npc) => npc.definitionId === speakerId)?.displayName ??
+        undefined
+      );
+    });
+    dialogueManager.setOnStart(() => {
+      inputManager?.addMovementLock(dialogueLockId);
+      inputManager?.consumeInteract();
+      syncInteractionPrompt();
+    });
+    dialogueManager.setOnEnd(() => {
+      inputManager?.removeMovementLock(dialogueLockId);
+      inputManager?.consumeInteract();
+      syncInteractionPrompt();
+    });
+    for (const definition of state.dialogueDefinitions) {
+      const npcDefinitionId = definition.interactionBinding.npcDefinitionId;
+      if (npcDefinitionId && !npcDialogueBindings.has(npcDefinitionId)) {
+        npcDialogueBindings.set(npcDefinitionId, definition.definitionId);
+      }
+    }
+
     for (const region of state.regions) {
       const objects = resolveSceneObjects(region, {
         contentLibrary: state.contentLibrary,
@@ -398,6 +483,7 @@ export function createWebRuntimeHost(
       for (const object of objects) {
         const rootObject = new THREE.Group();
         rootObject.name = object.instanceId;
+        rootObject.userData.sceneInstanceId = object.instanceId;
         rootObject.position.set(...object.transform.position);
         rootObject.rotation.set(...object.transform.rotation);
         rootObject.scale.set(...object.transform.scale);
@@ -433,7 +519,16 @@ export function createWebRuntimeHost(
         }
 
         scene.add(rootObject);
-        sceneObjectEntries.set(object.instanceId, { root: rootObject });
+        sceneObjectEntries.set(object.instanceId, {
+          root: rootObject,
+          kind: object.kind,
+          npcDefinitionId:
+            object.kind === "npc"
+              ? region.scene.npcPresences.find(
+                  (presence) => presence.presenceId === object.instanceId
+                )?.npcDefinitionId ?? null
+              : null
+        });
       }
     }
 
@@ -463,13 +558,58 @@ export function createWebRuntimeHost(
     });
 
     const movementSystem = new MovementSystem();
+    interactionSystem = new InteractionSystem();
     world.addSystem(movementSystem);
+    world.addSystem(interactionSystem);
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
     movementSystem.setInputProvider(
       () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
     );
+    interactionSystem.setInteractPressedProvider(
+      () => {
+        if (dialogueManager?.isDialogueActive()) {
+          return false;
+        }
+        return inputManager?.isInteractPressed() ?? false;
+      }
+    );
+    interactionSystem.setNearbyChangeHandler(() => {
+      syncInteractionPrompt();
+    });
+    interactionSystem.setInteractHandler((nearby) => {
+      if (nearby.type !== "npc" || !dialogueManager) return;
+      dialogueManager.start(nearby.targetId);
+    });
+
+    if (activeRegion) {
+      for (const presence of activeRegion.scene.npcPresences) {
+        const dialogueDefinitionId = npcDialogueBindings.get(presence.npcDefinitionId);
+        if (!dialogueDefinitionId) continue;
+
+        const npcDefinition = state.npcDefinitions.find(
+          (definition) => definition.definitionId === presence.npcDefinitionId
+        );
+        const interactableEntity = world.createEntity();
+        world.addComponent(
+          interactableEntity,
+          new Position(...presence.transform.position)
+        );
+        world.addComponent(
+          interactableEntity,
+          new Interactable(
+            "npc",
+            presence.presenceId,
+            dialogueDefinitionId,
+            `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
+            2.0,
+            true
+          )
+        );
+      }
+    }
+    syncInteractionPrompt();
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;

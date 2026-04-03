@@ -16,6 +16,9 @@ export interface RuntimeInputManager {
   attach: (element: HTMLElement) => void;
   detach: () => void;
   getInput: () => RuntimeInputState;
+  isInteractPressed: () => boolean;
+  consumeInteract: () => void;
+  endFrame: () => void;
   addMovementLock: (id: string) => void;
   removeMovementLock: (id: string) => void;
   isMovementLocked: () => boolean;
@@ -25,13 +28,18 @@ export interface RuntimeInputManager {
 
 export function createRuntimeInputManager(): RuntimeInputManager {
   const keys = new Set<string>();
+  const keysJustPressed = new Set<string>();
   const movementLocks = new Set<string>();
   let isDragging = false;
   let lastPointerX = 0;
   let lastPointerY = 0;
 
   function handleKeyDown(e: KeyboardEvent) {
-    keys.add(e.key.toLowerCase());
+    const key = e.key.toLowerCase();
+    if (!keys.has(key)) {
+      keysJustPressed.add(key);
+    }
+    keys.add(key);
   }
 
   function handleKeyUp(e: KeyboardEvent) {
@@ -111,6 +119,18 @@ export function createRuntimeInputManager(): RuntimeInputManager {
       }
 
       return { moveX, moveY, isDragging };
+    },
+
+    isInteractPressed() {
+      return keysJustPressed.has("e");
+    },
+
+    consumeInteract() {
+      keysJustPressed.delete("e");
+    },
+
+    endFrame() {
+      keysJustPressed.clear();
     },
 
     addMovementLock(id: string) {

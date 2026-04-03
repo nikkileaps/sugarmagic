@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  DialogueDefinition,
   NPCDefinition,
   PlayerDefinition,
   SemanticCommand
@@ -12,12 +13,14 @@ import type {
   NPCWorkspaceViewport,
   PlayerWorkspaceViewport
 } from "../viewport";
+import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 
 const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
-  { id: "npcs", label: "NPCs", icon: "👤" }
+  { id: "npcs", label: "NPCs", icon: "👤" },
+  { id: "dialogues", label: "Dialogues", icon: "💬" }
 ];
 
 export interface DesignProductModeViewProps {
@@ -26,6 +29,7 @@ export interface DesignProductModeViewProps {
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
   npcDefinitions: NPCDefinition[];
+  dialogueDefinitions: DialogueDefinition[];
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -40,6 +44,7 @@ export interface DesignProductModeViewResult {
   subHeaderPanel: ReactNode;
   leftPanel: ReactNode | null;
   rightPanel: ReactNode;
+  centerPanel?: ReactNode;
   viewportOverlay: ReactNode;
 }
 
@@ -52,6 +57,7 @@ export function useDesignProductModeView(
     gameProjectId,
     playerDefinition,
     npcDefinitions,
+    dialogueDefinitions,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -88,6 +94,14 @@ export function useDesignProductModeView(
     onCommand
   });
 
+  const dialogueView = useDialogueWorkspaceView({
+    isActive: activeDesignKind === "dialogues",
+    gameProjectId,
+    dialogueDefinitions,
+    npcDefinitions,
+    onCommand
+  });
+
   return {
     subHeaderPanel: (
       <BuildSubNav
@@ -96,12 +110,25 @@ export function useDesignProductModeView(
         onSelectKind={(id) => onSelectKind(id as DesignWorkspaceKind)}
       />
     ),
-    leftPanel: activeDesignKind === "npcs" ? npcView.leftPanel : playerView.leftPanel,
+    leftPanel:
+      activeDesignKind === "dialogues"
+        ? dialogueView.leftPanel
+        : activeDesignKind === "npcs"
+          ? npcView.leftPanel
+          : playerView.leftPanel,
     rightPanel:
-      activeDesignKind === "npcs" ? npcView.rightPanel : playerView.rightPanel,
+      activeDesignKind === "dialogues"
+        ? dialogueView.rightPanel
+        : activeDesignKind === "npcs"
+          ? npcView.rightPanel
+          : playerView.rightPanel,
+    centerPanel:
+      activeDesignKind === "dialogues" ? dialogueView.centerPanel : undefined,
     viewportOverlay:
-      activeDesignKind === "npcs"
-        ? npcView.viewportOverlay
-        : playerView.viewportOverlay
+      activeDesignKind === "dialogues"
+        ? dialogueView.viewportOverlay
+        : activeDesignKind === "npcs"
+          ? npcView.viewportOverlay
+          : playerView.viewportOverlay
   };
 }

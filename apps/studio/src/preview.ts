@@ -1,5 +1,6 @@
 import type {
   ContentLibrarySnapshot,
+  DialogueDefinition,
   NPCDefinition,
   PlayerDefinition,
   RegionDocument
@@ -15,6 +16,7 @@ interface PreviewBootMessage {
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   npcDefinitions: NPCDefinition[];
+  dialogueDefinitions: DialogueDefinition[];
   assetSources: Record<string, string>;
 }
 
@@ -49,6 +51,7 @@ window.addEventListener("message", (event) => {
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,
       npcDefinitions: data.npcDefinitions,
+      dialogueDefinitions: data.dialogueDefinitions,
       assetSources: data.assetSources
     });
   }

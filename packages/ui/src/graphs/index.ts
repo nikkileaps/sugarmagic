@@ -1,4 +1,1 @@
-export interface GraphNodeModel {
-  nodeId: string;
-  label: string;
-}
+export * from "./GraphCanvas";
