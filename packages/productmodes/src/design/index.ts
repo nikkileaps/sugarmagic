@@ -4,7 +4,7 @@ export const designProductMode: ProductModeDescriptor = {
   id: "design",
   label: "Design",
   summary: "Author game meaning, progression, dialogue, and systemic content.",
-  workspaceKinds: ["player"],
+  workspaceKinds: ["player", "npcs"],
   commandSurfaceId: "design-command-surface",
   panelLayoutId: "design-panel-layout"
 };

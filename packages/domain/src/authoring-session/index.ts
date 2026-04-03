@@ -17,7 +17,10 @@ import {
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
+  CreateNPCDefinitionCommand,
+  DeleteNPCDefinitionCommand,
   UpdateEnvironmentDefinitionCommand,
+  UpdateNPCDefinitionCommand,
   UpdatePlayerDefinitionCommand
 } from "../commands";
 import type {
@@ -25,6 +28,7 @@ import type {
   ContentLibrarySnapshot,
   EnvironmentDefinition
 } from "../content-library";
+import type { NPCDefinition } from "../npc-definition";
 import type { TimestampIso } from "../shared";
 import {
   createEmptyContentLibrarySnapshot,
@@ -158,6 +162,10 @@ export function getPlayerDefinition(session: AuthoringSession) {
   return session.gameProject.playerDefinition;
 }
 
+export function getAllNPCDefinitions(session: AuthoringSession): NPCDefinition[] {
+  return session.gameProject.npcDefinitions;
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
   regions: RegionDocument[],
@@ -255,6 +263,79 @@ function applyPlayerDefinitionCommand(
   };
 }
 
+function applyCreateNPCDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateNPCDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      npcDefinitions: [
+        ...session.gameProject.npcDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateNPCDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateNPCDefinitionCommand
+): AuthoringSession {
+  const nextDefinitions = session.gameProject.npcDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definition.definitionId
+      ? command.payload.definition
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      npcDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyDeleteNPCDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteNPCDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      npcDefinitions: session.gameProject.npcDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
@@ -265,6 +346,18 @@ export function applyCommand(
 
   if (command.kind === "UpdatePlayerDefinition") {
     return applyPlayerDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "CreateNPCDefinition") {
+    return applyCreateNPCDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdateNPCDefinition") {
+    return applyUpdateNPCDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteNPCDefinition") {
+    return applyDeleteNPCDefinitionCommand(session, command);
   }
 
   const activeRegion = getActiveRegion(session);

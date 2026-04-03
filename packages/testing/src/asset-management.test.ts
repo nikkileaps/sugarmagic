@@ -26,7 +26,8 @@ function makeProject(): GameProject {
     regionRegistry: [{ regionId: "arrival_station" }],
     pluginConfigIds: [],
     contentLibraryId: "wordlark:content-library",
-    playerDefinition: createDefaultPlayerDefinition("wordlark")
+    playerDefinition: createDefaultPlayerDefinition("wordlark"),
+    npcDefinitions: []
   };
 }
 

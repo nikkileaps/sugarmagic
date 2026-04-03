@@ -10,6 +10,7 @@ export * from "./interaction";
 export * from "./jobs";
 export * from "./landscape";
 export * from "./materials";
+export * from "./npc";
 export * from "./player";
 export * from "./plugins";
 export * from "./render";

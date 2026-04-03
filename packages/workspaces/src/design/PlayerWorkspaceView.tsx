@@ -25,6 +25,7 @@ import { createPlayerCameraController } from "./player-camera-controller";
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
   viewportReadyVersion: number;
+  gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
@@ -66,6 +67,7 @@ export function usePlayerWorkspaceView(
   const {
     isActive,
     viewportReadyVersion,
+    gameProjectId,
     playerDefinition,
     contentLibrary,
     assetDefinitions,
@@ -178,11 +180,12 @@ export function usePlayerWorkspaceView(
   ]);
 
   function updatePlayerDefinition(nextDefinition: PlayerDefinition) {
+    if (!gameProjectId) return;
     onCommand({
       kind: "UpdatePlayerDefinition",
       target: {
         aggregateKind: "game-project",
-        aggregateId: nextDefinition.definitionId
+        aggregateId: gameProjectId
       },
       subject: {
         subjectKind: "player-definition",

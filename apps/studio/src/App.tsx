@@ -13,6 +13,7 @@ import {
   getAllRegions,
   getAllAssetDefinitions,
   getAllEnvironmentDefinitions,
+  getAllNPCDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -41,6 +42,7 @@ import {
 import {
   useBuildProductModeView,
   useDesignProductModeView,
+  type NPCWorkspaceViewport,
   type WorkspaceViewport,
   type PlayerWorkspaceViewport
 } from "@sugarmagic/workspaces";
@@ -57,6 +59,7 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
 
 function revokeAssetSources(assetSources: Record<string, string>) {
@@ -351,6 +354,11 @@ export function App() {
     return getPlayerDefinition(session);
   }, [session]);
 
+  const npcDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllNPCDefinitions(session);
+  }, [session]);
+
   const environmentViewportOverrideId =
     activeBuildKind === "environment"
       ? activeEnvironmentId ?? environmentDefinitions[0]?.definitionId ?? null
@@ -468,20 +476,30 @@ export function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const buildViewportRef = useRef<WorkspaceViewport | null>(null);
   const playerViewportRef = useRef<PlayerWorkspaceViewport | null>(null);
+  const npcViewportRef = useRef<NPCWorkspaceViewport | null>(null);
 
   useEffect(() => {
     if (!viewportRef.current || phase !== "active") return;
     const viewport =
       activeProductMode === "design"
-        ? createPlayerViewport()
+        ? activeDesignKind === "npcs"
+          ? createNPCViewport()
+          : createPlayerViewport()
         : createAuthoringViewport();
     viewport.mount(viewportRef.current);
     if (activeProductMode === "design") {
-      playerViewportRef.current = viewport as PlayerWorkspaceViewport;
+      if (activeDesignKind === "npcs") {
+        npcViewportRef.current = viewport as NPCWorkspaceViewport;
+        playerViewportRef.current = null;
+      } else {
+        playerViewportRef.current = viewport as PlayerWorkspaceViewport;
+        npcViewportRef.current = null;
+      }
       buildViewportRef.current = null;
     } else {
       buildViewportRef.current = viewport as WorkspaceViewport;
       playerViewportRef.current = null;
+      npcViewportRef.current = null;
     }
     const readyFrame = window.requestAnimationFrame(() => {
       setViewportReadyVersion((version) => version + 1);
@@ -498,8 +516,9 @@ export function App() {
       viewport.unmount();
       buildViewportRef.current = null;
       playerViewportRef.current = null;
+      npcViewportRef.current = null;
     };
-  }, [activeProductMode, phase]);
+  }, [activeDesignKind, activeProductMode, phase]);
 
   // --- Sync viewport with active region ---
   const activeRegion = session ? getActiveRegion(session) : null;
@@ -550,11 +569,14 @@ export function App() {
   const designView = useDesignProductModeView({
     activeDesignKind,
     viewportReadyVersion,
+    gameProjectId: session?.gameProject.identity.id ?? null,
     playerDefinition,
+    npcDefinitions,
     contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
     assetSources,
-    getViewport: () => playerViewportRef.current,
+    getPlayerViewport: () => playerViewportRef.current,
+    getNPCViewport: () => npcViewportRef.current,
     getViewportElement: () => viewportRef.current,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand

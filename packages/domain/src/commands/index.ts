@@ -3,6 +3,7 @@ import type {
   RegionLandscapePaintPayload
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
+import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
@@ -143,6 +144,27 @@ export type UpdatePlayerDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateNPCDefinitionCommand = SemanticCommandBase<
+  "CreateNPCDefinition",
+  {
+    definition: NPCDefinition;
+  }
+>;
+
+export type UpdateNPCDefinitionCommand = SemanticCommandBase<
+  "UpdateNPCDefinition",
+  {
+    definition: NPCDefinition;
+  }
+>;
+
+export type DeleteNPCDefinitionCommand = SemanticCommandBase<
+  "DeleteNPCDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
 export type TransformPlacedAssetCommand = SemanticCommandBase<
   "TransformPlacedAsset",
   {
@@ -177,6 +199,9 @@ export type SemanticCommand =
   | ConfigureLandscapeCommand
   | UpdateEnvironmentDefinitionCommand
   | UpdatePlayerDefinitionCommand
+  | CreateNPCDefinitionCommand
+  | UpdateNPCDefinitionCommand
+  | DeleteNPCDefinitionCommand
   | UpdatePluginConfigurationCommand;
 
 export {

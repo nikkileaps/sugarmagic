@@ -1,5 +1,9 @@
 import type { DocumentIdentity, RegionReference } from "../shared/identity";
 import {
+  normalizeNPCDefinition,
+  type NPCDefinition
+} from "../npc-definition";
+import {
   createDefaultPlayerDefinition,
   normalizePlayerDefinition,
   type PlayerDefinition
@@ -13,11 +17,13 @@ export interface GameProject {
   pluginConfigIds: string[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
+  npcDefinitions: NPCDefinition[];
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
+    npcDefinitions?: Array<Partial<NPCDefinition>> | null;
   })
 ): GameProject {
   return {
@@ -25,6 +31,9 @@ export function normalizeGameProject(
     playerDefinition: normalizePlayerDefinition(
       gameProject.playerDefinition,
       gameProject.identity.id
+    ),
+    npcDefinitions: (gameProject.npcDefinitions ?? []).map((definition) =>
+      normalizeNPCDefinition(definition)
     )
   };
 }
@@ -40,6 +49,7 @@ export function createDefaultGameProject(
     regionRegistry: [],
     pluginConfigIds: [],
     contentLibraryId: `${slug}:content-library`,
-    playerDefinition: createDefaultPlayerDefinition(slug)
+    playerDefinition: createDefaultPlayerDefinition(slug),
+    npcDefinitions: []
   };
 }

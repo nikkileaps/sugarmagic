@@ -4,6 +4,7 @@ export * from "./content-library";
 export * from "./game-project";
 export * from "./gameplay-authoring";
 export * from "./history";
+export * from "./npc-definition";
 export * from "./plugins";
 export * from "./player-definition";
 export * from "./publish-artifacts";
