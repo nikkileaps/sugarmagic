@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
+  type NPCDefinition,
   type PlayerDefinition,
   type RegionDocument,
   type RegionLandscapeState
@@ -31,6 +32,7 @@ import {
   createRuntimeRenderPipeline,
   createPlayerVisualController,
   resolveEnvironmentDefinition,
+  type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
   type RuntimeCompileProfile,
@@ -64,6 +66,7 @@ export interface WebRuntimeStartState {
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  npcDefinitions: NPCDefinition[];
   assetSources: Record<string, string>;
 }
 
@@ -126,6 +129,29 @@ function createFallbackMesh(): THREE.Mesh {
   );
 }
 
+function createCapsuleFallback(object: SceneObject): THREE.Mesh {
+  const capsule = object.capsule;
+  if (!capsule) {
+    return createFallbackMesh();
+  }
+
+  const mesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(
+      capsule.radius,
+      Math.max(0.05, capsule.height - capsule.radius * 2),
+      8,
+      16
+    ),
+    new THREE.MeshStandardMaterial({
+      color: capsule.color,
+      roughness: 0.38,
+      metalness: 0.04
+    })
+  );
+  mesh.position.y = capsule.height / 2;
+  return mesh;
+}
+
 function disposeObject(root: THREE.Object3D) {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
@@ -138,6 +164,18 @@ function disposeObject(root: THREE.Object3D) {
       child.material.dispose();
     }
   });
+}
+
+function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  if (size.y <= 0) return;
+
+  const scale = targetHeight / size.y;
+  root.scale.setScalar(scale);
+  box.setFromObject(root);
+  root.position.y -= box.min.y;
 }
 
 function getActiveRegion(
@@ -351,7 +389,12 @@ export function createWebRuntimeHost(
     );
     landscapeController.apply(activeRegion);
     for (const region of state.regions) {
-      const objects = resolveSceneObjects(region, state.contentLibrary);
+      const objects = resolveSceneObjects(region, {
+        contentLibrary: state.contentLibrary,
+        playerDefinition: state.playerDefinition,
+        npcDefinitions: state.npcDefinitions,
+        includePlayerPresence: false
+      });
       for (const object of objects) {
         const rootObject = new THREE.Group();
         rootObject.name = object.instanceId;
@@ -359,8 +402,8 @@ export function createWebRuntimeHost(
         rootObject.rotation.set(...object.transform.rotation);
         rootObject.scale.set(...object.transform.scale);
 
-        const assetSourceUrl = object.assetSourcePath
-          ? state.assetSources[object.assetSourcePath] ?? null
+        const assetSourceUrl = object.modelSourcePath
+          ? state.assetSources[object.modelSourcePath] ?? null
           : null;
 
         if (assetSourceUrl) {
@@ -368,13 +411,25 @@ export function createWebRuntimeHost(
             .loadAsync(assetSourceUrl)
             .then((gltf) => {
               if (!scene) return;
-              rootObject.add(gltf.scene.clone(true));
+              const renderable = gltf.scene.clone(true);
+              if (object.targetModelHeight) {
+                normalizeModelScale(renderable, object.targetModelHeight);
+              }
+              rootObject.add(renderable);
             })
             .catch(() => {
-              rootObject.add(createFallbackMesh());
+              rootObject.add(
+                object.kind === "asset"
+                  ? createFallbackMesh()
+                  : createCapsuleFallback(object)
+              );
             });
         } else {
-          rootObject.add(createFallbackMesh());
+          rootObject.add(
+            object.kind === "asset"
+              ? createFallbackMesh()
+              : createCapsuleFallback(object)
+          );
         }
 
         scene.add(rootObject);
@@ -386,7 +441,8 @@ export function createWebRuntimeHost(
 
     world = new World();
     const player = world.createEntity();
-    world.addComponent(player, new Position(0, 0, 0));
+    const playerSpawn = activeRegion?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+    world.addComponent(player, new Position(...playerSpawn));
     world.addComponent(player, new Velocity());
     world.addComponent(
       player,

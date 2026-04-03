@@ -144,6 +144,33 @@ export type UpdatePlayerDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreatePlayerPresenceCommand = SemanticCommandBase<
+  "CreatePlayerPresence",
+  {
+    presenceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type TransformPlayerPresenceCommand = SemanticCommandBase<
+  "TransformPlayerPresence",
+  {
+    presenceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type RemovePlayerPresenceCommand = SemanticCommandBase<
+  "RemovePlayerPresence",
+  {
+    presenceId: string;
+  }
+>;
+
 export type CreateNPCDefinitionCommand = SemanticCommandBase<
   "CreateNPCDefinition",
   {
@@ -162,6 +189,34 @@ export type DeleteNPCDefinitionCommand = SemanticCommandBase<
   "DeleteNPCDefinition",
   {
     definitionId: string;
+  }
+>;
+
+export type CreateNPCPresenceCommand = SemanticCommandBase<
+  "CreateNPCPresence",
+  {
+    presenceId: string;
+    npcDefinitionId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type TransformNPCPresenceCommand = SemanticCommandBase<
+  "TransformNPCPresence",
+  {
+    presenceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type RemoveNPCPresenceCommand = SemanticCommandBase<
+  "RemoveNPCPresence",
+  {
+    presenceId: string;
   }
 >;
 
@@ -199,9 +254,15 @@ export type SemanticCommand =
   | ConfigureLandscapeCommand
   | UpdateEnvironmentDefinitionCommand
   | UpdatePlayerDefinitionCommand
+  | CreatePlayerPresenceCommand
+  | TransformPlayerPresenceCommand
+  | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
   | UpdateNPCDefinitionCommand
   | DeleteNPCDefinitionCommand
+  | CreateNPCPresenceCommand
+  | TransformNPCPresenceCommand
+  | RemoveNPCPresenceCommand
   | UpdatePluginConfigurationCommand;
 
 export {

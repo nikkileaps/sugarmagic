@@ -1,5 +1,6 @@
 import type {
   ContentLibrarySnapshot,
+  NPCDefinition,
   PlayerDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
@@ -13,6 +14,7 @@ interface PreviewBootMessage {
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  npcDefinitions: NPCDefinition[];
   assetSources: Record<string, string>;
 }
 
@@ -46,6 +48,7 @@ window.addEventListener("message", (event) => {
       activeEnvironmentId: data.activeEnvironmentId,
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,
+      npcDefinitions: data.npcDefinitions,
       assetSources: data.assetSources
     });
   }

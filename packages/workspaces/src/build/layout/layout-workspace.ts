@@ -75,16 +75,20 @@ export function createLayoutWorkspace(
   });
 
   function getTransform(instanceId: string): TransformValues | null {
+    const sceneObject = getSceneObject(instanceId);
+    if (!sceneObject) return null;
+    return {
+      position: sceneObject.transform.position,
+      rotation: sceneObject.transform.rotation,
+      scale: sceneObject.transform.scale
+    };
+  }
+
+  function getSceneObject(instanceId: string): SceneObject | null {
     const region = config.getRegion();
     if (!region) return null;
     const objects = resolveSceneObjects(region);
-    const obj = objects.find((o: SceneObject) => o.instanceId === instanceId);
-    if (!obj) return null;
-    return {
-      position: obj.transform.position,
-      rotation: obj.transform.rotation,
-      scale: obj.transform.scale
-    };
+    return objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null;
   }
 
   let transformController: ReturnType<typeof createTransformController> | null = null;
@@ -107,16 +111,54 @@ export function createLayoutWorkspace(
       onCommit(instanceId, values) {
         const region = config.getRegion();
         if (!region) return;
+        const sceneObject = getSceneObject(instanceId);
+        if (!sceneObject) return;
+
+        if (sceneObject.kind === "asset") {
+          config.onCommand({
+            kind: "TransformPlacedAsset",
+            target: {
+              aggregateKind: "region-document",
+              aggregateId: region.identity.id
+            },
+            subject: { subjectKind: "placed-asset", subjectId: instanceId },
+            payload: {
+              instanceId,
+              position: values.position,
+              rotation: values.rotation,
+              scale: values.scale
+            }
+          });
+          return;
+        }
+
+        if (sceneObject.kind === "player") {
+          config.onCommand({
+            kind: "TransformPlayerPresence",
+            target: {
+              aggregateKind: "region-document",
+              aggregateId: region.identity.id
+            },
+            subject: { subjectKind: "player-presence", subjectId: instanceId },
+            payload: {
+              presenceId: instanceId,
+              position: values.position,
+              rotation: values.rotation,
+              scale: values.scale
+            }
+          });
+          return;
+        }
 
         config.onCommand({
-          kind: "TransformPlacedAsset",
+          kind: "TransformNPCPresence",
           target: {
             aggregateKind: "region-document",
             aggregateId: region.identity.id
           },
-          subject: { subjectKind: "placed-asset", subjectId: instanceId },
+          subject: { subjectKind: "npc-presence", subjectId: instanceId },
           payload: {
-            instanceId,
+            presenceId: instanceId,
             position: values.position,
             rotation: values.rotation,
             scale: values.scale

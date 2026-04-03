@@ -128,6 +128,8 @@ export function useBuildProductModeView(
     onCommand,
     getSelectedId: () => selectedIds[0] ?? null,
     getRegion: () => (session ? getActiveRegion(session) : null),
+    playerDefinition: session?.gameProject.playerDefinition ?? null,
+    npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     onImportAsset,
     onEditAssetDefinition: (definitionId) => {
       setSelectedAssetDefinitionId(definitionId);

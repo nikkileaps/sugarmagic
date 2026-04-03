@@ -9,7 +9,9 @@ import type {
   RegionDocument,
   PlacedAssetInstance,
   RegionSceneFolder,
-  RegionLandscapeChannelDefinition
+  RegionLandscapeChannelDefinition,
+  RegionNPCPresence,
+  RegionPlayerPresence
 } from "../region-authoring";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS
@@ -31,7 +33,13 @@ import type {
   CreateLandscapeChannelCommand,
   UpdateLandscapeChannelCommand,
   PaintLandscapeCommand,
-  ConfigureLandscapeCommand
+  ConfigureLandscapeCommand,
+  CreatePlayerPresenceCommand,
+  TransformPlayerPresenceCommand,
+  RemovePlayerPresenceCommand,
+  CreateNPCPresenceCommand,
+  TransformNPCPresenceCommand,
+  RemoveNPCPresenceCommand
 } from "./index";
 
 export interface CommandExecutionResult {
@@ -186,6 +194,146 @@ function applyMovePlacedAssetToFolder(
               parentFolderId: command.payload.parentFolderId
             }
           : asset
+      )
+    }
+  };
+}
+
+function createPlayerPresenceFromCommand(
+  command: CreatePlayerPresenceCommand
+): RegionPlayerPresence {
+  return {
+    presenceId: command.payload.presenceId,
+    transform: {
+      position: command.payload.position,
+      rotation: command.payload.rotation,
+      scale: command.payload.scale
+    }
+  };
+}
+
+function applyCreatePlayerPresence(
+  region: RegionDocument,
+  command: CreatePlayerPresenceCommand
+): RegionDocument {
+  if (region.scene.playerPresence) {
+    return region;
+  }
+
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      playerPresence: createPlayerPresenceFromCommand(command)
+    }
+  };
+}
+
+function applyTransformPlayerPresence(
+  region: RegionDocument,
+  command: TransformPlayerPresenceCommand
+): RegionDocument {
+  if (!region.scene.playerPresence) {
+    return region;
+  }
+
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      playerPresence:
+        region.scene.playerPresence.presenceId === command.payload.presenceId
+          ? {
+              ...region.scene.playerPresence,
+              transform: {
+                position: command.payload.position,
+                rotation: command.payload.rotation,
+                scale: command.payload.scale
+              }
+            }
+          : region.scene.playerPresence
+    }
+  };
+}
+
+function applyRemovePlayerPresence(
+  region: RegionDocument,
+  command: RemovePlayerPresenceCommand
+): RegionDocument {
+  if (region.scene.playerPresence?.presenceId !== command.payload.presenceId) {
+    return region;
+  }
+
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      playerPresence: null
+    }
+  };
+}
+
+function createNPCPresenceFromCommand(
+  command: CreateNPCPresenceCommand
+): RegionNPCPresence {
+  return {
+    presenceId: command.payload.presenceId,
+    npcDefinitionId: command.payload.npcDefinitionId,
+    transform: {
+      position: command.payload.position,
+      rotation: command.payload.rotation,
+      scale: command.payload.scale
+    }
+  };
+}
+
+function applyCreateNPCPresence(
+  region: RegionDocument,
+  command: CreateNPCPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: [...region.scene.npcPresences, createNPCPresenceFromCommand(command)]
+    }
+  };
+}
+
+function applyTransformNPCPresence(
+  region: RegionDocument,
+  command: TransformNPCPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: region.scene.npcPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              transform: {
+                position: command.payload.position,
+                rotation: command.payload.rotation,
+                scale: command.payload.scale
+              }
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applyRemoveNPCPresence(
+  region: RegionDocument,
+  command: RemoveNPCPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: region.scene.npcPresences.filter(
+        (presence) => presence.presenceId !== command.payload.presenceId
       )
     }
   };
@@ -405,6 +553,24 @@ export function executeCommand(
       break;
     case "ConfigureLandscape":
       updatedRegion = applyConfigureLandscape(region, command);
+      break;
+    case "CreatePlayerPresence":
+      updatedRegion = applyCreatePlayerPresence(region, command);
+      break;
+    case "TransformPlayerPresence":
+      updatedRegion = applyTransformPlayerPresence(region, command);
+      break;
+    case "RemovePlayerPresence":
+      updatedRegion = applyRemovePlayerPresence(region, command);
+      break;
+    case "CreateNPCPresence":
+      updatedRegion = applyCreateNPCPresence(region, command);
+      break;
+    case "TransformNPCPresence":
+      updatedRegion = applyTransformNPCPresence(region, command);
+      break;
+    case "RemoveNPCPresence":
+      updatedRegion = applyRemoveNPCPresence(region, command);
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

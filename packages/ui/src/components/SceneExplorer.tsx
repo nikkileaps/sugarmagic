@@ -14,8 +14,9 @@ export interface SceneExplorerEntity {
   type: "entity";
   instanceId: string;
   displayName: string;
+  entityKind: "asset" | "player" | "npc";
   assetKind: string;
-  assetDefinitionId: string;
+  assetDefinitionId: string | null;
   visible: boolean;
 }
 
@@ -64,6 +65,8 @@ type ContextMenuState =
 const KIND_ICONS: Record<string, string> = {
   "builtin:cube": "📦",
   asset: "📦",
+  player: "🧙",
+  npc: "👤",
   light: "💡",
   decal: "🎨",
   marker: "📍",
@@ -361,7 +364,7 @@ export function SceneExplorer({
       ))}
       {entityCount === 0 && (
         <Text size="xs" c="var(--sm-color-overlay0)" p="md" ta="center">
-          No placed objects in this region.
+          No scene objects in this region.
         </Text>
       )}
       <Menu
@@ -390,13 +393,17 @@ export function SceneExplorer({
         <Menu.Dropdown>
           {contextMenu?.kind === "entity" ? (
             <>
-              <Menu.Item onClick={() => onDuplicateEntity?.(contextMenu.instanceId)}>
-                Duplicate
-              </Menu.Item>
-              <Menu.Item onClick={() => onEditEntity?.(contextMenu.instanceId)}>
-                Edit
-              </Menu.Item>
-              <Menu.Divider />
+              {findEntityById(roots, contextMenu.instanceId)?.entityKind === "asset" && (
+                <>
+                  <Menu.Item onClick={() => onDuplicateEntity?.(contextMenu.instanceId)}>
+                    Duplicate
+                  </Menu.Item>
+                  <Menu.Item onClick={() => onEditEntity?.(contextMenu.instanceId)}>
+                    Edit
+                  </Menu.Item>
+                  <Menu.Divider />
+                </>
+              )}
               <Menu.Item color="red" onClick={() => onDeleteEntity?.(contextMenu.instanceId)}>
                 Delete
               </Menu.Item>
@@ -454,5 +461,22 @@ function findFolderById(
       if (child) return child;
     }
   }
+  return null;
+}
+
+function findEntityById(
+  nodes: SceneExplorerNode[],
+  instanceId: string
+): SceneExplorerEntity | null {
+  for (const node of nodes) {
+    if (node.type === "entity") {
+      if (node.instanceId === instanceId) return node;
+      continue;
+    }
+
+    const child = findEntityById(node.children, instanceId);
+    if (child) return child;
+  }
+
   return null;
 }
