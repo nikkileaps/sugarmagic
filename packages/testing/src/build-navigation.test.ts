@@ -27,6 +27,7 @@ describe("Build navigation model", () => {
 
   it("derives design workspace IDs without region context", () => {
     expect(deriveDesignWorkspaceId("player")).toBe("design:player");
+    expect(deriveDesignWorkspaceId("npcs")).toBe("design:npcs");
   });
 
   it("changing to environment workspace uses environment context, not region context", () => {
@@ -96,5 +97,13 @@ describe("Build navigation model", () => {
 
     expect(store.getState().activeDesignWorkspaceKind).toBe("player");
     expect(store.getState().activeWorkspaceId).toBe("design:player");
+  });
+
+  it("switching design workspace kind updates the design workspace ID", () => {
+    const store = createShellStore("design");
+    store.getState().setActiveDesignWorkspaceKind("npcs");
+
+    expect(store.getState().activeDesignWorkspaceKind).toBe("npcs");
+    expect(store.getState().activeWorkspaceId).toBe("design:npcs");
   });
 });

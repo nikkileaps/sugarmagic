@@ -28,3 +28,4 @@ Current plans:
 - [Plan 008: Environment Light Presets and Shared Render Pipeline Epic](/Users/nikki/projects/sugarmagic/docs/plans/008-environment-light-presets-and-shared-render-pipeline-epic.md)
 - [Plan 009: Landscape Ground Plane and Splatmap Epic](/Users/nikki/projects/sugarmagic/docs/plans/009-landscape-ground-plane-and-splatmap-epic.md)
 - [Plan 010: Design Player Definition Epic](/Users/nikki/projects/sugarmagic/docs/plans/010-design-player-definition-epic.md)
+- [Plan 011: Design NPC Definition Epic](/Users/nikki/projects/sugarmagic/docs/plans/011-design-npc-definition-epic.md)

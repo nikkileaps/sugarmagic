@@ -57,13 +57,6 @@ function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
 
 function disposeGrid(grid: THREE.GridHelper) {
   grid.geometry.dispose();
-  if (Array.isArray(grid.material)) {
-    for (const material of grid.material) {
-      material.dispose();
-    }
-  } else {
-    grid.material.dispose();
-  }
 }
 
 function createFallbackMesh(): THREE.Mesh {

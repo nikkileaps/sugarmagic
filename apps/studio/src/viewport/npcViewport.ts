@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import {
-  createPlayerPreviewController,
-  type PlayerPreviewWarning
+  createNPCPreviewController,
+  type NPCPreviewWarning
 } from "@sugarmagic/runtime-core";
-import type { PlayerWorkspaceViewport } from "@sugarmagic/workspaces";
+import type { NPCWorkspaceViewport } from "@sugarmagic/workspaces";
 
 const GRID_COLOR = 0x45475a;
 
@@ -20,10 +20,10 @@ function disposeGrid(grid: THREE.GridHelper) {
 
 function createStagePlane(): THREE.Mesh {
   const plane = new THREE.Mesh(
-    new THREE.CircleGeometry(3.2, 48),
+    new THREE.CircleGeometry(3.1, 48),
     new THREE.MeshStandardMaterial({
-      color: 0x313244,
-      roughness: 0.9,
+      color: 0x2a3038,
+      roughness: 0.92,
       metalness: 0.02
     })
   );
@@ -32,41 +32,40 @@ function createStagePlane(): THREE.Mesh {
   return plane;
 }
 
-export function createPlayerViewport(): PlayerWorkspaceViewport {
+export function createNPCViewport(): NPCWorkspaceViewport {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1e1e2e);
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-  camera.position.set(2.4, 1.8, 3.2);
+  camera.position.set(2.8, 1.7, 3.4);
   camera.lookAt(0, 1, 0);
 
-  const ambientLight = new THREE.HemisphereLight(0xe0f2ff, 0x12131c, 1.15);
+  const ambientLight = new THREE.HemisphereLight(0xe6f7ff, 0x12131c, 1.1);
   scene.add(ambientLight);
 
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.6);
-  keyLight.position.set(4, 6, 3);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+  keyLight.position.set(4, 6, 2);
   scene.add(keyLight);
 
-  const fillLight = new THREE.DirectionalLight(0xa5c7ff, 0.45);
-  fillLight.position.set(-3, 3, -4);
-  scene.add(fillLight);
+  const rimLight = new THREE.DirectionalLight(0xb7ffd9, 0.4);
+  rimLight.position.set(-2, 3, -4);
+  scene.add(rimLight);
 
   const stageRoot = new THREE.Group();
-  stageRoot.name = "player-preview-stage-root";
-  const stagePlane = createStagePlane();
-  stageRoot.add(stagePlane);
+  stageRoot.name = "npc-preview-stage-root";
+  stageRoot.add(createStagePlane());
   scene.add(stageRoot);
 
   const grid = createStageGrid();
   scene.add(grid);
 
-  const previewController = createPlayerPreviewController(scene);
+  const previewController = createNPCPreviewController(scene);
   const frameListeners = new Set<() => void>();
   let renderer: WebGPURenderer | null = null;
   let animationFrameId: number | null = null;
   let container: HTMLElement | null = null;
   let lastFrameTime = 0;
-  let warnings: PlayerPreviewWarning[] = [];
+  let warnings: NPCPreviewWarning[] = [];
 
   function renderLoop(timestamp: number) {
     const deltaSeconds =
@@ -112,7 +111,7 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
           animationFrameId = requestAnimationFrame(renderLoop);
         })
         .catch((error) => {
-          console.error("[sugarmagic] Failed to initialize player preview viewport.", error);
+          console.error("[sugarmagic] Failed to initialize NPC preview viewport.", error);
         });
     },
 
@@ -136,7 +135,7 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
       disposeGrid(grid);
     },
 
-    updateFromPlayer(state) {
+    updateFromNPC(state) {
       void previewController
         .apply({
           ...state,
@@ -145,7 +144,7 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
         .then((result) => {
           warnings = result.warnings;
           if (warnings.length > 0) {
-            console.warn("[sugarmagic] Player preview warnings", warnings);
+            console.warn("[sugarmagic] NPC preview warnings", warnings);
           }
         });
     },
