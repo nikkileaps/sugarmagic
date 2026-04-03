@@ -16,6 +16,7 @@ function makeTestRegion(): RegionDocument {
       folders: [],
       playerPresence: null,
       npcPresences: [],
+      itemPresences: [],
       placedAssets: [
         {
           instanceId: "cube-001",

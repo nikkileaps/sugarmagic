@@ -40,7 +40,7 @@ function makeRegion(): RegionDocument {
     identity: { id: "region-a", schema: "RegionDocument", version: 1 },
     displayName: "Region A",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [] },
+    scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [], itemPresences: [] },
     environmentBinding: { defaultEnvironmentId: "project:environment:night" },
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],

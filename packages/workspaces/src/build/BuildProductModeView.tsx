@@ -129,6 +129,7 @@ export function useBuildProductModeView(
     getSelectedId: () => selectedIds[0] ?? null,
     getRegion: () => (session ? getActiveRegion(session) : null),
     playerDefinition: session?.gameProject.playerDefinition ?? null,
+    itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     onImportAsset,
     onEditAssetDefinition: (definitionId) => {

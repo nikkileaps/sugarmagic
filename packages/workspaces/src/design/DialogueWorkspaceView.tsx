@@ -20,6 +20,7 @@ import type {
   DialogueDefinition,
   DialogueEdgeDefinition,
   DialogueNodeDefinition,
+  ItemDefinition,
   NPCDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
@@ -38,6 +39,7 @@ export interface DialogueWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   dialogueDefinitions: DialogueDefinition[];
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
@@ -223,11 +225,13 @@ function PlaytestPanel({
 
 interface DialogueConditionEditorProps {
   condition: DialogueCondition;
+  itemDefinitions: ItemDefinition[];
   onChange: (condition: DialogueCondition) => void;
 }
 
 function DialogueConditionEditor({
   condition,
+  itemDefinitions,
   onChange
 }: DialogueConditionEditorProps) {
   function handleTypeChange(type: string) {
@@ -269,6 +273,7 @@ function DialogueConditionEditor({
           </Group>
           <DialogueConditionEditor
             condition={condition.condition}
+            itemDefinitions={itemDefinitions}
             onChange={(inner) => onChange({ type: "not", condition: inner })}
           />
         </Stack>
@@ -335,13 +340,15 @@ function DialogueConditionEditor({
 
         {condition.type === "hasItem" && (
           <>
-            <TextInput
+            <Select
               size="xs"
-              label="Item Id"
+              label="Item"
+              data={itemDefinitions.map((item) => ({
+                value: item.definitionId,
+                label: item.displayName
+              }))}
               value={condition.itemId}
-              onChange={(event) =>
-                onChange({ ...condition, itemId: event.currentTarget.value })
-              }
+              onChange={(value) => onChange({ ...condition, itemId: value ?? "" })}
             />
             <TextInput
               size="xs"
@@ -424,7 +431,14 @@ function DialogueConditionEditor({
 export function useDialogueWorkspaceView(
   props: DialogueWorkspaceViewProps
 ): WorkspaceViewContribution {
-  const { isActive, gameProjectId, dialogueDefinitions, npcDefinitions, onCommand } = props;
+  const {
+    isActive,
+    gameProjectId,
+    dialogueDefinitions,
+    itemDefinitions,
+    npcDefinitions,
+    onCommand
+  } = props;
   const [selectedDialogueId, setSelectedDialogueId] = useState<string | null>(
     dialogueDefinitions[0]?.definitionId ?? null
   );
@@ -1164,6 +1178,7 @@ export function useDialogueWorkspaceView(
                     {next.condition && (
                       <DialogueConditionEditor
                         condition={next.condition}
+                        itemDefinitions={itemDefinitions}
                         onChange={(condition) =>
                           updateNodeEdge(selectedNode, index, { condition })
                         }

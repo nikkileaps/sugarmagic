@@ -150,6 +150,24 @@ export function createLayoutWorkspace(
           return;
         }
 
+        if (sceneObject.kind === "item") {
+          config.onCommand({
+            kind: "TransformItemPresence",
+            target: {
+              aggregateKind: "region-document",
+              aggregateId: region.identity.id
+            },
+            subject: { subjectKind: "item-presence", subjectId: instanceId },
+            payload: {
+              presenceId: instanceId,
+              position: values.position,
+              rotation: values.rotation,
+              scale: values.scale
+            }
+          });
+          return;
+        }
+
         config.onCommand({
           kind: "TransformNPCPresence",
           target: {

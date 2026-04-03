@@ -29,6 +29,7 @@ function makeProject(): GameProject {
     playerDefinition: createDefaultPlayerDefinition("wordlark"),
     npcDefinitions: [],
     dialogueDefinitions: [],
+    itemDefinitions: [],
     questDefinitions: []
   };
 }
@@ -49,7 +50,8 @@ function makeRegion(): RegionDocument {
       folders: [],
       placedAssets: [],
       playerPresence: null,
-      npcPresences: []
+      npcPresences: [],
+      itemPresences: []
     },
     environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
     landscape: createDefaultRegionLandscapeState({ enabled: false }),

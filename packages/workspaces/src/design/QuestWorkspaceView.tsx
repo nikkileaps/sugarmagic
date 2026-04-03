@@ -19,6 +19,7 @@ import {
 } from "@mantine/core";
 import type {
   DialogueDefinition,
+  ItemDefinition,
   NPCDefinition,
   QuestActionDefinition,
   QuestConditionDefinition,
@@ -60,6 +61,7 @@ export interface QuestWorkspaceViewProps {
   gameProjectId: string | null;
   questDefinitions: QuestDefinition[];
   dialogueDefinitions: DialogueDefinition[];
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
@@ -336,10 +338,12 @@ function QuestConditionEditor({
 
 function QuestActionsEditor({
   actions,
+  itemDefinitions,
   onChange,
   label
 }: {
   actions: QuestActionDefinition[];
+  itemDefinitions: ItemDefinition[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -418,16 +422,34 @@ function QuestActionsEditor({
                   ×
                 </ActionIcon>
               </Group>
-              <TextInput
-                size="xs"
-                label="Target ID"
-                value={action.targetId ?? ""}
-                onChange={(event) => {
-                  const next = [...actions];
-                  next[index] = { ...action, targetId: event.currentTarget.value || undefined };
-                  onChange(next);
-                }}
-              />
+              {(action.type === "giveItem" || action.type === "removeItem") ? (
+                <Select
+                  size="xs"
+                  label="Item"
+                  clearable
+                  data={itemDefinitions.map((item) => ({
+                    value: item.definitionId,
+                    label: item.displayName
+                  }))}
+                  value={action.targetId ?? null}
+                  onChange={(value) => {
+                    const next = [...actions];
+                    next[index] = { ...action, targetId: value ?? undefined };
+                    onChange(next);
+                  }}
+                />
+              ) : (
+                <TextInput
+                  size="xs"
+                  label="Target ID"
+                  value={action.targetId ?? ""}
+                  onChange={(event) => {
+                    const next = [...actions];
+                    next[index] = { ...action, targetId: event.currentTarget.value || undefined };
+                    onChange(next);
+                  }}
+                />
+              )}
               <TextInput
                 size="xs"
                 label="Value"
@@ -451,6 +473,7 @@ export function useQuestWorkspaceView({
   gameProjectId,
   questDefinitions,
   dialogueDefinitions,
+  itemDefinitions,
   npcDefinitions,
   onCommand
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
@@ -1050,25 +1073,41 @@ export function useQuestWorkspaceView({
                 onChange={(value) => value && updateNode({ ...selectedNode, objectiveSubtype: value as QuestNodeDefinition["objectiveSubtype"] })}
               />
               <Select
-                label="Target NPC"
+                label={
+                  selectedNode.objectiveSubtype === "collect" ? "Target Item" : "Target NPC"
+                }
                 clearable
                 value={selectedNode.targetId ?? null}
-                data={npcDefinitions.map((npc) => ({ value: npc.definitionId, label: npc.displayName }))}
+                data={
+                  selectedNode.objectiveSubtype === "collect"
+                    ? itemDefinitions.map((item) => ({
+                        value: item.definitionId,
+                        label: item.displayName
+                      }))
+                    : npcDefinitions.map((npc) => ({
+                        value: npc.definitionId,
+                        label: npc.displayName
+                      }))
+                }
                 onChange={(value) => updateNode({ ...selectedNode, targetId: value ?? undefined })}
               />
-              <Select
-                label="Dialogue"
-                clearable
-                value={selectedNode.dialogueDefinitionId ?? null}
-                data={dialogueDefinitions.map((dialogue) => ({ value: dialogue.definitionId, label: dialogue.displayName }))}
-                onChange={(value) => updateNode({ ...selectedNode, dialogueDefinitionId: value ?? undefined })}
-              />
-              <TextInput
-                label="Complete On"
-                placeholder="dialogueEnd or node id"
-                value={selectedNode.completeOn ?? ""}
-                onChange={(event) => updateNode({ ...selectedNode, completeOn: event.currentTarget.value || undefined })}
-              />
+              {selectedNode.objectiveSubtype === "talk" && (
+                <>
+                  <Select
+                    label="Dialogue"
+                    clearable
+                    value={selectedNode.dialogueDefinitionId ?? null}
+                    data={dialogueDefinitions.map((dialogue) => ({ value: dialogue.definitionId, label: dialogue.displayName }))}
+                    onChange={(value) => updateNode({ ...selectedNode, dialogueDefinitionId: value ?? undefined })}
+                  />
+                  <TextInput
+                    label="Complete On"
+                    placeholder="dialogueEnd or node id"
+                    value={selectedNode.completeOn ?? ""}
+                    onChange={(event) => updateNode({ ...selectedNode, completeOn: event.currentTarget.value || undefined })}
+                  />
+                </>
+              )}
               <NumberInput
                 label="Count"
                 min={1}
@@ -1145,11 +1184,13 @@ export function useQuestWorkspaceView({
           <QuestActionsEditor
             label="On Enter"
             actions={selectedNode.onEnterActions}
+            itemDefinitions={itemDefinitions}
             onChange={(onEnterActions) => updateNode({ ...selectedNode, onEnterActions })}
           />
           <QuestActionsEditor
             label="On Complete"
             actions={selectedNode.onCompleteActions}
+            itemDefinitions={itemDefinitions}
             onChange={(onCompleteActions) => updateNode({ ...selectedNode, onCompleteActions })}
           />
 

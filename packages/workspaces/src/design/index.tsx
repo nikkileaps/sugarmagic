@@ -3,6 +3,7 @@ import type {
   AssetDefinition,
   ContentLibrarySnapshot,
   DialogueDefinition,
+  ItemDefinition,
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
@@ -11,10 +12,12 @@ import type {
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
 import type { DesignWorkspaceKind } from "@sugarmagic/shell";
 import type {
+  ItemWorkspaceViewport,
   NPCWorkspaceViewport,
   PlayerWorkspaceViewport
 } from "../viewport";
 import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
+import { useItemWorkspaceView } from "./ItemWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
@@ -22,6 +25,7 @@ import { useQuestWorkspaceView } from "./QuestWorkspaceView";
 const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
   { id: "npcs", label: "NPCs", icon: "👤" },
+  { id: "items", label: "Items", icon: "📦" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
   { id: "quests", label: "Quests", icon: "📜" }
 ];
@@ -31,6 +35,7 @@ export interface DesignProductModeViewProps {
   viewportReadyVersion: number;
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -38,6 +43,7 @@ export interface DesignProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
   getPlayerViewport: () => PlayerWorkspaceViewport | null;
+  getItemViewport: () => ItemWorkspaceViewport | null;
   getNPCViewport: () => NPCWorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
@@ -60,6 +66,7 @@ export function useDesignProductModeView(
     viewportReadyVersion,
     gameProjectId,
     playerDefinition,
+    itemDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
@@ -67,6 +74,7 @@ export function useDesignProductModeView(
     assetDefinitions,
     assetSources,
     getPlayerViewport,
+    getItemViewport,
     getNPCViewport,
     getViewportElement,
     onSelectKind,
@@ -99,10 +107,24 @@ export function useDesignProductModeView(
     onCommand
   });
 
+  const itemView = useItemWorkspaceView({
+    isActive: activeDesignKind === "items",
+    viewportReadyVersion,
+    gameProjectId,
+    itemDefinitions,
+    contentLibrary,
+    assetDefinitions,
+    assetSources,
+    getViewport: getItemViewport,
+    getViewportElement,
+    onCommand
+  });
+
   const dialogueView = useDialogueWorkspaceView({
     isActive: activeDesignKind === "dialogues",
     gameProjectId,
     dialogueDefinitions,
+    itemDefinitions,
     npcDefinitions,
     onCommand
   });
@@ -112,6 +134,7 @@ export function useDesignProductModeView(
     gameProjectId,
     questDefinitions,
     dialogueDefinitions,
+    itemDefinitions,
     npcDefinitions,
     onCommand
   });
@@ -131,6 +154,8 @@ export function useDesignProductModeView(
           ? questView.leftPanel
           : activeDesignKind === "npcs"
             ? npcView.leftPanel
+            : activeDesignKind === "items"
+              ? itemView.leftPanel
             : playerView.leftPanel,
     rightPanel:
       activeDesignKind === "dialogues"
@@ -139,6 +164,8 @@ export function useDesignProductModeView(
           ? questView.rightPanel
           : activeDesignKind === "npcs"
             ? npcView.rightPanel
+            : activeDesignKind === "items"
+              ? itemView.rightPanel
             : playerView.rightPanel,
     centerPanel:
       activeDesignKind === "dialogues"
@@ -153,6 +180,8 @@ export function useDesignProductModeView(
           ? questView.viewportOverlay
           : activeDesignKind === "npcs"
             ? npcView.viewportOverlay
+            : activeDesignKind === "items"
+              ? itemView.viewportOverlay
             : playerView.viewportOverlay
   };
 }

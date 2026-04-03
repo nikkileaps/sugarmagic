@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 import type {
   ContentLibrarySnapshot,
+  ItemDefinition,
   NPCDefinition,
   NPCAnimationSlot,
   PlayerAnimationSlot,
@@ -18,6 +19,7 @@ export interface ViewportSceneState {
   region: RegionDocument;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   assetSources: ViewportAssetSources;
   environmentOverrideId?: string | null;
@@ -37,6 +39,12 @@ export interface NPCViewportState {
   assetSources: ViewportAssetSources;
   activeAnimationSlot: NPCAnimationSlot | null;
   isAnimationPlaying: boolean;
+}
+
+export interface ItemViewportState {
+  itemDefinition: ItemDefinition;
+  contentLibrary: ContentLibrarySnapshot;
+  assetSources: ViewportAssetSources;
 }
 
 export interface WorkspaceViewport {
@@ -90,6 +98,17 @@ export interface NPCWorkspaceViewport {
   mount: (container: HTMLElement) => void;
   unmount: () => void;
   updateFromNPC: (state: NPCViewportState) => void;
+  resize: (width: number, height: number) => void;
+  render: () => void;
+  subscribeFrame: (listener: () => void) => () => void;
+}
+
+export interface ItemWorkspaceViewport {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  mount: (container: HTMLElement) => void;
+  unmount: () => void;
+  updateFromItem: (state: ItemViewportState) => void;
   resize: (width: number, height: number) => void;
   render: () => void;
   subscribeFrame: (listener: () => void) => () => void;

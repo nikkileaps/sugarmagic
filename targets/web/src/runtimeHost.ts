@@ -32,6 +32,7 @@ import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
   type DialogueDefinition,
+  type ItemDefinition,
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
@@ -94,6 +95,7 @@ export interface WebRuntimeStartState {
   activeEnvironmentId?: string | null;
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -423,6 +425,7 @@ export function createWebRuntimeHost(
       const objects = resolveSceneObjects(region, {
         contentLibrary: state.contentLibrary,
         playerDefinition: state.playerDefinition,
+        itemDefinitions: state.itemDefinitions,
         npcDefinitions: state.npcDefinitions,
         includePlayerPresence: false
       });
@@ -503,9 +506,17 @@ export function createWebRuntimeHost(
       inputManager,
       activeRegion,
       playerDefinition: state.playerDefinition,
+      itemDefinitions: state.itemDefinitions,
       npcDefinitions: state.npcDefinitions,
       dialogueDefinitions: state.dialogueDefinitions,
-      questDefinitions: state.questDefinitions
+      questDefinitions: state.questDefinitions,
+      onItemPresenceCollected: (presenceId) => {
+        const entry = sceneObjectEntries.get(presenceId);
+        if (!entry || !scene) return;
+        scene.remove(entry.root);
+        disposeObject(entry.root);
+        sceneObjectEntries.delete(presenceId);
+      }
     });
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
