@@ -18,7 +18,8 @@ import {
   updateAssetDefinitionInSession,
   removeAssetDefinitionFromSession,
   assetDefinitionHasSceneReferences,
-  createDefaultEnvironmentDefinition
+  createDefaultEnvironmentDefinition,
+  createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
 import {
   checkDirectoryHasProject,
@@ -310,7 +311,7 @@ export function App() {
         defaultEnvironmentId:
           session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
       },
-      landscape: { enabled: false, channelIds: [] },
+      landscape: createDefaultRegionLandscapeState(),
       markers: [],
       gameplayPlacements: []
     };

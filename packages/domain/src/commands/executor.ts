@@ -5,7 +5,15 @@
  * This is the single mutation boundary per ADR 004.
  */
 
-import type { RegionDocument, PlacedAssetInstance, RegionSceneFolder } from "../region-authoring";
+import type {
+  RegionDocument,
+  PlacedAssetInstance,
+  RegionSceneFolder,
+  RegionLandscapeChannelDefinition
+} from "../region-authoring";
+import {
+  MAX_REGION_LANDSCAPE_CHANNELS
+} from "../region-authoring";
 import type { TransactionBoundary } from "../transactions";
 import type { AuthoringHistory } from "../history";
 import type { TimestampIso } from "../shared";
@@ -19,7 +27,11 @@ import type {
   MovePlacedAssetToFolderCommand,
   CreateSceneFolderCommand,
   RenameSceneFolderCommand,
-  DeleteSceneFolderCommand
+  DeleteSceneFolderCommand,
+  CreateLandscapeChannelCommand,
+  UpdateLandscapeChannelCommand,
+  PaintLandscapeCommand,
+  ConfigureLandscapeCommand
 } from "./index";
 
 export interface CommandExecutionResult {
@@ -259,6 +271,95 @@ function applyDeleteSceneFolder(
   };
 }
 
+function applyCreateLandscapeChannel(
+  region: RegionDocument,
+  command: CreateLandscapeChannelCommand
+): RegionDocument {
+  if (region.landscape.channels.length >= MAX_REGION_LANDSCAPE_CHANNELS) {
+    return region;
+  }
+
+  return {
+    ...region,
+    landscape: {
+      ...region.landscape,
+      channels: [...region.landscape.channels, command.payload.channel]
+    }
+  };
+}
+
+function updateLandscapeChannel(
+  channel: RegionLandscapeChannelDefinition,
+  command: UpdateLandscapeChannelCommand
+): RegionLandscapeChannelDefinition {
+  return {
+    ...channel,
+    ...(command.payload.displayName === undefined
+      ? {}
+      : { displayName: command.payload.displayName }),
+    ...(command.payload.mode === undefined
+      ? {}
+      : { mode: command.payload.mode }),
+    ...(command.payload.color === undefined
+      ? {}
+      : { color: command.payload.color }),
+    ...(command.payload.materialDefinitionId === undefined
+      ? {}
+      : { materialDefinitionId: command.payload.materialDefinitionId })
+  };
+}
+
+function applyUpdateLandscapeChannel(
+  region: RegionDocument,
+  command: UpdateLandscapeChannelCommand
+): RegionDocument {
+  return {
+    ...region,
+    landscape: {
+      ...region.landscape,
+      channels: region.landscape.channels.map((channel) =>
+        channel.channelId === command.payload.channelId
+          ? updateLandscapeChannel(channel, command)
+          : channel
+      )
+    }
+  };
+}
+
+function applyPaintLandscape(
+  region: RegionDocument,
+  command: PaintLandscapeCommand
+): RegionDocument {
+  return {
+    ...region,
+    landscape: {
+      ...region.landscape,
+      paintPayload: command.payload.paintPayload
+    }
+  };
+}
+
+function applyConfigureLandscape(
+  region: RegionDocument,
+  command: ConfigureLandscapeCommand
+): RegionDocument {
+  return {
+    ...region,
+    landscape: {
+      ...region.landscape,
+      ...(command.payload.enabled === undefined
+        ? {}
+        : { enabled: command.payload.enabled }),
+      ...(command.payload.size === undefined
+        ? {}
+        : { size: command.payload.size }),
+      ...(command.payload.subdivisions === undefined
+        ? {}
+        : { subdivisions: command.payload.subdivisions })
+    }
+  };
+}
+
 export function executeCommand(
   region: RegionDocument,
   command: SemanticCommand
@@ -292,6 +393,18 @@ export function executeCommand(
       break;
     case "DeleteSceneFolder":
       updatedRegion = applyDeleteSceneFolder(region, command);
+      break;
+    case "CreateLandscapeChannel":
+      updatedRegion = applyCreateLandscapeChannel(region, command);
+      break;
+    case "UpdateLandscapeChannel":
+      updatedRegion = applyUpdateLandscapeChannel(region, command);
+      break;
+    case "PaintLandscape":
+      updatedRegion = applyPaintLandscape(region, command);
+      break;
+    case "ConfigureLandscape":
+      updatedRegion = applyConfigureLandscape(region, command);
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

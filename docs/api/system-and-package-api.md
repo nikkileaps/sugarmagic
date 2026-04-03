@@ -109,6 +109,24 @@ The default placement should be:
 - domain contracts for canonical authored truth
 - runtime/session contracts for live simulation truth
 
+## Region and Streaming API
+
+Sugarmagic should distinguish between:
+
+- explicit authored regions
+- derived runtime streaming partitions
+
+At the package/API level that means:
+
+- `packages/domain` owns authored region meaning
+- `packages/runtime-core` may derive finer streaming cells/chunks internally
+
+Current authored default:
+
+- new regions start with a `100m x 100m` default landscape footprint
+
+That default is a starting authored ground footprint, not a hard global rule for all future regions.
+
 ## Workspace API
 
 Sugarmagic should treat `Workspace` as a first-class application concept under `ProductMode`.

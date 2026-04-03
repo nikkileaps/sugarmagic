@@ -738,6 +738,32 @@ It should absorb:
 - VFX runtime systems
 - runtime overlays used by ProductModes
 
+### Region and streaming policy
+
+The architecture should distinguish between:
+
+- authored regions
+- derived runtime streaming partitions
+
+`Region Document` is the authored semantic world unit.
+
+It should usually be:
+
+- intentionally named by the author
+- a gameplay/world-composition boundary
+- a preview/test boundary
+- a default load boundary
+
+It should not be forced to also be the smallest runtime streaming cell.
+
+The runtime may derive finer-grained cells/chunks/visibility partitions from authored region content for performance and memory management.
+
+So the architecture should aim for:
+
+```text
+authored regions -> runtime scene assembly -> derived streaming partitions
+```
+
 It should not absorb:
 
 - editor gizmo logic

@@ -12,7 +12,8 @@ import {
   getAllAssetDefinitions,
   applyCommand,
   getActiveRegion,
-  createDefaultEnvironmentDefinition
+  createDefaultEnvironmentDefinition,
+  createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -44,7 +45,7 @@ function makeRegion(): RegionDocument {
       placedAssets: []
     },
     environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
-    landscape: { enabled: false, channelIds: [] },
+    landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []
   };

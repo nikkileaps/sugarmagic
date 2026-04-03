@@ -1,5 +1,10 @@
 import type * as THREE from "three";
-import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
+import type {
+  ContentLibrarySnapshot,
+  RegionDocument,
+  RegionLandscapePaintPayload,
+  RegionLandscapeState
+} from "@sugarmagic/domain";
 
 export interface ViewportAssetSources {
   [relativeAssetPath: string]: string;
@@ -17,9 +22,24 @@ export interface WorkspaceViewport {
   camera: THREE.PerspectiveCamera;
   authoredRoot: THREE.Group;
   overlayRoot: THREE.Group;
+  surfaceRoot: THREE.Group;
   mount: (container: HTMLElement) => void;
   unmount: () => void;
   updateFromRegion: (state: ViewportSceneState) => void;
+  previewLandscape: (landscape: RegionLandscapeState) => void;
+  paintLandscapeAt: (options: {
+    channelIndex: number;
+    worldX: number;
+    worldZ: number;
+    radius: number;
+    strength: number;
+    falloff: number;
+  }) => boolean;
+  renderLandscapeMask: (
+    channelIndex: number,
+    canvas: HTMLCanvasElement
+  ) => void;
+  serializeLandscapePaintPayload: () => RegionLandscapePaintPayload | null;
   previewTransform: (
     instanceId: string,
     position: [number, number, number],

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   createDefaultEnvironmentDefinition,
+  createDefaultRegionLandscapeState,
   type ContentLibrarySnapshot,
   type RegionDocument
 } from "@sugarmagic/domain";
@@ -41,7 +42,7 @@ function makeRegion(): RegionDocument {
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
     scene: { folders: [], placedAssets: [] },
     environmentBinding: { defaultEnvironmentId: "project:environment:night" },
-    landscape: { enabled: false, channelIds: [] },
+    landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []
   };

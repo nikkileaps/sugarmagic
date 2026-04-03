@@ -24,7 +24,7 @@ import type { ReactNode } from "react";
 export interface ShellFrameProps {
   headerPanel: ReactNode;
   subHeaderPanel?: ReactNode;
-  leftPanel: ReactNode;
+  leftPanel?: ReactNode;
   centerPanel: ReactNode;
   rightPanel?: ReactNode;
   bottomPanel: ReactNode;
@@ -43,7 +43,7 @@ export function ShellFrame({
   return (
     <AppShell
       header={{ height: headerHeight }}
-      navbar={{ width: 240, breakpoint: 0 }}
+      navbar={leftPanel ? { width: 240, breakpoint: 0 } : undefined}
       aside={rightPanel ? { width: 280, breakpoint: 0 } : undefined}
       footer={{ height: 28 }}
       padding={0}
@@ -77,16 +77,18 @@ export function ShellFrame({
         {subHeaderPanel}
       </AppShell.Header>
 
-      <AppShell.Navbar
-        styles={{
-          navbar: {
-            background: "var(--sm-panel-bg)",
-            borderRight: "1px solid var(--sm-panel-border)"
-          }
-        }}
-      >
-        {leftPanel}
-      </AppShell.Navbar>
+      {leftPanel && (
+        <AppShell.Navbar
+          styles={{
+            navbar: {
+              background: "var(--sm-panel-bg)",
+              borderRight: "1px solid var(--sm-panel-border)"
+            }
+          }}
+        >
+          {leftPanel}
+        </AppShell.Navbar>
+      )}
 
       <AppShell.Main>{centerPanel}</AppShell.Main>
 

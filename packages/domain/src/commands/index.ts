@@ -1,3 +1,7 @@
+import type {
+  RegionLandscapeChannelDefinition,
+  RegionLandscapePaintPayload
+} from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
@@ -88,11 +92,38 @@ export type DeleteSceneFolderCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateLandscapeChannelCommand = SemanticCommandBase<
+  "CreateLandscapeChannel",
+  {
+    channel: RegionLandscapeChannelDefinition;
+  }
+>;
+
+export type UpdateLandscapeChannelCommand = SemanticCommandBase<
+  "UpdateLandscapeChannel",
+  {
+    channelId: string;
+    displayName?: string;
+    mode?: RegionLandscapeChannelDefinition["mode"];
+    color?: number;
+    materialDefinitionId?: string | null;
+  }
+>;
+
 export type PaintLandscapeCommand = SemanticCommandBase<
   "PaintLandscape",
   {
-    channelId: string;
+    paintPayload: RegionLandscapePaintPayload | null;
     affectedBounds: [number, number, number, number];
+  }
+>;
+
+export type ConfigureLandscapeCommand = SemanticCommandBase<
+  "ConfigureLandscape",
+  {
+    enabled?: boolean;
+    size?: number;
+    subdivisions?: number;
   }
 >;
 
@@ -131,8 +162,11 @@ export type SemanticCommand =
   | CreateSceneFolderCommand
   | RenameSceneFolderCommand
   | DeleteSceneFolderCommand
+  | CreateLandscapeChannelCommand
+  | UpdateLandscapeChannelCommand
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
+  | ConfigureLandscapeCommand
   | UpdateEnvironmentDefinitionCommand
   | UpdatePluginConfigurationCommand;
 

@@ -23,7 +23,7 @@ export * from "./status";
 export * from "./viewport-host";
 export * from "./workspace-host";
 
-export type BuildWorkspaceKind = "layout" | "environment" | "assets";
+export type BuildWorkspaceKind = "layout" | "landscape" | "environment" | "assets";
 
 export interface ShellSelectionState {
   workspaceId: string | null;
