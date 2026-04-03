@@ -12,6 +12,10 @@ import {
   type NPCDefinition
 } from "../npc-definition";
 import {
+  normalizeItemDefinition,
+  type ItemDefinition
+} from "../item-definition";
+import {
   createDefaultPlayerDefinition,
   normalizePlayerDefinition,
   type PlayerDefinition
@@ -25,14 +29,16 @@ export interface GameProject {
   pluginConfigIds: string[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "itemDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
+    itemDefinitions?: Array<Partial<ItemDefinition>> | null;
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
     dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
     questDefinitions?: Array<Partial<QuestDefinition>> | null;
@@ -43,6 +49,9 @@ export function normalizeGameProject(
     playerDefinition: normalizePlayerDefinition(
       gameProject.playerDefinition,
       gameProject.identity.id
+    ),
+    itemDefinitions: (gameProject.itemDefinitions ?? []).map((definition) =>
+      normalizeItemDefinition(definition)
     ),
     npcDefinitions: (gameProject.npcDefinitions ?? []).map((definition) =>
       normalizeNPCDefinition(definition)
@@ -68,6 +77,7 @@ export function createDefaultGameProject(
     pluginConfigIds: [],
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
+    itemDefinitions: [],
     npcDefinitions: [],
     dialogueDefinitions: [],
     questDefinitions: []

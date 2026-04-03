@@ -13,6 +13,7 @@ import {
   Button,
   Menu,
   Modal,
+  NumberInput,
   Stack,
   Text,
   TextInput,
@@ -20,6 +21,7 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
+  ItemDefinition,
   NPCDefinition,
   PlayerDefinition,
   SemanticCommand,
@@ -27,6 +29,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   getActiveRegion,
+  createItemPresenceId,
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
@@ -68,6 +71,7 @@ export interface LayoutWorkspaceViewProps {
   getSelectedId: () => string | null;
   getRegion: () => ReturnType<typeof getActiveRegion>;
   playerDefinition: PlayerDefinition | null;
+  itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
@@ -78,6 +82,7 @@ const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 function buildSceneTree(
   region: RegionDocument,
   playerDefinition: PlayerDefinition | null,
+  itemDefinitions: ItemDefinition[],
   npcDefinitions: NPCDefinition[]
 ): SceneExplorerNode[] {
   const foldersByParent = new Map<string | null, RegionDocument["scene"]["folders"]>();
@@ -143,13 +148,26 @@ function buildSceneTree(
     visible: true
   }));
 
+  const itemNodes = region.scene.itemPresences.map((presence) => ({
+    type: "entity" as const,
+    instanceId: presence.presenceId,
+    displayName:
+      itemDefinitions.find(
+        (definition) => definition.definitionId === presence.itemDefinitionId
+      )?.displayName ?? "Item",
+    entityKind: "item" as const,
+    assetKind: "item",
+    assetDefinitionId: presence.itemDefinitionId,
+    visible: true
+  }));
+
   return [
     {
       type: "folder" as const,
       folderId: SCENE_ROOT_FOLDER_ID,
       displayName: region.displayName,
       isRoot: true,
-      children: [...playerNode, ...npcNodes, ...buildChildren(null)]
+      children: [...playerNode, ...npcNodes, ...itemNodes, ...buildChildren(null)]
     }
   ];
 }
@@ -168,6 +186,7 @@ export function useLayoutWorkspaceView(
     getSelectedId,
     getRegion,
     playerDefinition,
+    itemDefinitions,
     npcDefinitions,
     onEditAssetDefinition,
     onImportAsset
@@ -189,6 +208,8 @@ export function useLayoutWorkspaceView(
   } | null>(null);
   const [addNPCOpen, setAddNPCOpen] = useState(false);
   const [npcQuery, setNPCQuery] = useState("");
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [itemQuery, setItemQuery] = useState("");
 
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const layoutRef = useRef<LayoutWorkspaceInstance | null>(null);
@@ -358,8 +379,8 @@ export function useLayoutWorkspaceView(
 
   const explorerRoots: SceneExplorerNode[] = useMemo(
     () =>
-      region ? buildSceneTree(region, playerDefinition, npcDefinitions) : [],
-    [npcDefinitions, playerDefinition, region]
+      region ? buildSceneTree(region, playerDefinition, itemDefinitions, npcDefinitions) : [],
+    [itemDefinitions, npcDefinitions, playerDefinition, region]
   );
 
   const selectedAsset = useMemo(() => {
@@ -396,10 +417,30 @@ export function useLayoutWorkspaceView(
     );
   }, [npcDefinitions, selectedNPCPresence]);
 
+  const selectedItemPresence = useMemo(() => {
+    if (!region || selectedIds.length !== 1) return null;
+    return (
+      region.scene.itemPresences.find(
+        (presence) => presence.presenceId === selectedIds[0]
+      ) ?? null
+    );
+  }, [region, selectedIds]);
+
+  const selectedItemDefinition = useMemo(() => {
+    if (!selectedItemPresence) return null;
+    return (
+      itemDefinitions.find(
+        (definition) =>
+          definition.definitionId === selectedItemPresence.itemDefinitionId
+      ) ?? null
+    );
+  }, [itemDefinitions, selectedItemPresence]);
+
   const selectedSceneLabel =
     selectedAsset?.displayName ??
     (selectedPlayerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
     selectedNPCDefinition?.displayName ??
+    selectedItemDefinition?.displayName ??
     null;
 
   const handleTransformChange = useCallback(
@@ -422,7 +463,11 @@ export function useLayoutWorkspaceView(
         currentRegion.scene.npcPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
-      const source = asset ?? playerPresence ?? npcPresence;
+      const itemPresence =
+        currentRegion.scene.itemPresences.find(
+          (candidate) => candidate.presenceId === instanceId
+        ) ?? null;
+      const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
       if (!source) return;
 
       const nextPosition: [number, number, number] = [...source.transform.position];
@@ -459,6 +504,24 @@ export function useLayoutWorkspaceView(
             aggregateId: currentRegion.identity.id
           },
           subject: { subjectKind: "player-presence", subjectId: instanceId },
+          payload: {
+            presenceId: instanceId,
+            position: nextPosition,
+            rotation: nextRotation,
+            scale: nextScale
+          }
+        });
+        return;
+      }
+
+      if (itemPresence) {
+        onCommand({
+          kind: "TransformItemPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: currentRegion.identity.id
+          },
+          subject: { subjectKind: "item-presence", subjectId: instanceId },
           payload: {
             presenceId: instanceId,
             position: nextPosition,
@@ -575,6 +638,10 @@ export function useLayoutWorkspaceView(
       region.scene.npcPresences.find(
         (candidate) => candidate.presenceId === instanceId
       ) ?? null;
+    const itemPresence =
+      region.scene.itemPresences.find(
+        (candidate) => candidate.presenceId === instanceId
+      ) ?? null;
 
     const label =
       asset?.displayName ??
@@ -583,6 +650,11 @@ export function useLayoutWorkspaceView(
         ? npcDefinitions.find(
             (definition) => definition.definitionId === npcPresence.npcDefinitionId
           )?.displayName ?? "NPC"
+        : null) ??
+      (itemPresence
+        ? itemDefinitions.find(
+            (definition) => definition.definitionId === itemPresence.itemDefinitionId
+          )?.displayName ?? "Item"
         : null);
 
     if (!label) return;
@@ -633,10 +705,25 @@ export function useLayoutWorkspaceView(
           presenceId: npcPresence.presenceId
         }
       });
+    } else if (itemPresence) {
+      onCommand({
+        kind: "RemoveItemPresence",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "item-presence",
+          subjectId: itemPresence.presenceId
+        },
+        payload: {
+          presenceId: itemPresence.presenceId
+        }
+      });
     }
 
     onSelect([]);
-  }, [npcDefinitions, onCommand, onSelect, playerDefinition, region]);
+  }, [itemDefinitions, npcDefinitions, onCommand, onSelect, playerDefinition, region]);
 
   const handleDeleteFolder = useCallback((folderId: string) => {
     if (!region) return;
@@ -762,6 +849,36 @@ export function useLayoutWorkspaceView(
     [onCommand, onSelect, region]
   );
 
+  const handleAddItemPresence = useCallback(
+    (definition: ItemDefinition) => {
+      if (!region) return;
+      const presenceId = createItemPresenceId();
+      onCommand({
+        kind: "CreateItemPresence",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "item-presence",
+          subjectId: presenceId
+        },
+        payload: {
+          presenceId,
+          itemDefinitionId: definition.definitionId,
+          quantity: 1,
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      });
+      onSelect([presenceId]);
+      setAddItemOpen(false);
+      setItemQuery("");
+    },
+    [onCommand, onSelect, region]
+  );
+
   const handleSnapToOrigin = useCallback(() => {
     if (!region || !contextMenu) return;
 
@@ -776,7 +893,11 @@ export function useLayoutWorkspaceView(
       region.scene.npcPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
-    const source = asset ?? playerPresence ?? npcPresence;
+    const itemPresence =
+      region.scene.itemPresences.find(
+        (entry) => entry.presenceId === contextMenu.instanceId
+      ) ?? null;
+    const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
     if (!source) return;
 
     if (asset) {
@@ -802,19 +923,25 @@ export function useLayoutWorkspaceView(
     }
 
     onCommand({
-      kind: playerPresence ? "TransformPlayerPresence" : "TransformNPCPresence",
+      kind: playerPresence
+        ? "TransformPlayerPresence"
+        : itemPresence
+          ? "TransformItemPresence"
+          : "TransformNPCPresence",
       target: {
         aggregateKind: "region-document",
         aggregateId: region.identity.id
       },
       subject: {
-        subjectKind: playerPresence ? "player-presence" : "npc-presence",
+        subjectKind: playerPresence
+          ? "player-presence"
+          : itemPresence
+            ? "item-presence"
+            : "npc-presence",
         subjectId: contextMenu.instanceId
       },
       payload: {
-        ...(playerPresence
-          ? { presenceId: contextMenu.instanceId }
-          : { presenceId: contextMenu.instanceId }),
+        presenceId: contextMenu.instanceId,
         position: [0, 0, 0],
         rotation: source.transform.rotation,
         scale: source.transform.scale
@@ -831,6 +958,14 @@ export function useLayoutWorkspaceView(
       definition.displayName.toLowerCase().includes(query)
     );
   }, [npcDefinitions, npcQuery]);
+
+  const filteredItemDefinitions = useMemo(() => {
+    const query = itemQuery.trim().toLowerCase();
+    if (!query) return itemDefinitions;
+    return itemDefinitions.filter((definition) =>
+      definition.displayName.toLowerCase().includes(query)
+    );
+  }, [itemDefinitions, itemQuery]);
 
   return {
     leftPanel: region ? (
@@ -863,6 +998,15 @@ export function useLayoutWorkspaceView(
                   disabled={npcDefinitions.length === 0}
                 >
                   NPC
+                </Menu.Item>
+                <Menu.Item
+                  onClick={() => {
+                    setAddItemOpen(true);
+                    setItemQuery("");
+                  }}
+                  disabled={itemDefinitions.length === 0}
+                >
+                  Item
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
@@ -929,6 +1073,37 @@ export function useLayoutWorkspaceView(
             )}
           </Stack>
         </Modal>
+        <Modal
+          opened={addItemOpen}
+          onClose={() => setAddItemOpen(false)}
+          title="Add Item"
+          centered
+        >
+          <Stack gap="sm">
+            <TextInput
+              placeholder="Search items..."
+              value={itemQuery}
+              onChange={(event) => setItemQuery(event.currentTarget.value)}
+              autoFocus
+            />
+            {filteredItemDefinitions.length > 0 ? (
+              filteredItemDefinitions.map((definition) => (
+                <Button
+                  key={definition.definitionId}
+                  variant="light"
+                  justify="flex-start"
+                  onClick={() => handleAddItemPresence(definition)}
+                >
+                  {definition.displayName}
+                </Button>
+              ))
+            ) : (
+              <Text size="sm" c="dimmed">
+                No items match that search.
+              </Text>
+            )}
+          </Stack>
+        </Modal>
       </PanelSection>
     ) : null,
 
@@ -980,6 +1155,43 @@ export function useLayoutWorkspaceView(
               value={selectedNPCPresence.transform.position}
               onChange={(axis, value) =>
                 handleTransformChange(selectedNPCPresence.presenceId, "position", axis, value)
+              }
+            />
+          </Stack>
+        ) : selectedItemPresence ? (
+          <Stack gap="md">
+            <Text size="sm" fw={600}>
+              {selectedItemDefinition?.displayName ?? "Item"}
+            </Text>
+            <NumberInput
+              label="Quantity"
+              size="xs"
+              min={1}
+              value={selectedItemPresence.quantity}
+              onChange={(value) => {
+                if (!region || typeof value !== "number") return;
+                onCommand({
+                  kind: "UpdateItemPresence",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "item-presence",
+                    subjectId: selectedItemPresence.presenceId
+                  },
+                  payload: {
+                    presenceId: selectedItemPresence.presenceId,
+                    quantity: value
+                  }
+                });
+              }}
+            />
+            <TransformInspector
+              label="Spawn Position"
+              value={selectedItemPresence.transform.position}
+              onChange={(axis, value) =>
+                handleTransformChange(selectedItemPresence.presenceId, "position", axis, value)
               }
             />
           </Stack>

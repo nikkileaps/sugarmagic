@@ -14,6 +14,7 @@ import {
   getAllAssetDefinitions,
   getAllDialogueDefinitions,
   getAllEnvironmentDefinitions,
+  getAllItemDefinitions,
   getAllNPCDefinitions,
   getAllQuestDefinitions,
   getPlayerDefinition,
@@ -44,6 +45,7 @@ import {
 import {
   useBuildProductModeView,
   useDesignProductModeView,
+  type ItemWorkspaceViewport,
   type NPCWorkspaceViewport,
   type WorkspaceViewport,
   type PlayerWorkspaceViewport
@@ -61,6 +63,7 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
 
@@ -254,6 +257,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           activeEnvironmentId: snapshot.activeEnvironmentId,
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
+          itemDefinitions: capturedSession.gameProject.itemDefinitions,
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
           dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
           questDefinitions: capturedSession.gameProject.questDefinitions,
@@ -330,7 +334,13 @@ export function App() {
       identity: { id: input.regionId, schema: "RegionDocument", version: 1 },
       displayName: input.displayName,
       placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-      scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [] },
+      scene: {
+        folders: [],
+        placedAssets: [],
+        playerPresence: null,
+        npcPresences: [],
+        itemPresences: []
+      },
       environmentBinding: {
         defaultEnvironmentId:
           session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
@@ -362,6 +372,11 @@ export function App() {
   const npcDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllNPCDefinitions(session);
+  }, [session]);
+
+  const itemDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllItemDefinitions(session);
   }, [session]);
 
   const dialogueDefinitions = useMemo(() => {
@@ -491,6 +506,7 @@ export function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const buildViewportRef = useRef<WorkspaceViewport | null>(null);
   const playerViewportRef = useRef<PlayerWorkspaceViewport | null>(null);
+  const itemViewportRef = useRef<ItemWorkspaceViewport | null>(null);
   const npcViewportRef = useRef<NPCWorkspaceViewport | null>(null);
 
   useEffect(() => {
@@ -501,6 +517,7 @@ export function App() {
     ) {
       buildViewportRef.current = null;
       playerViewportRef.current = null;
+      itemViewportRef.current = null;
       npcViewportRef.current = null;
       const readyFrame = window.requestAnimationFrame(() => {
         setViewportReadyVersion((version) => version + 1);
@@ -514,6 +531,8 @@ export function App() {
       activeProductMode === "design"
         ? activeDesignKind === "npcs"
           ? createNPCViewport()
+          : activeDesignKind === "items"
+            ? createItemViewport()
           : createPlayerViewport()
         : createAuthoringViewport();
     viewport.mount(viewportRef.current);
@@ -521,8 +540,14 @@ export function App() {
       if (activeDesignKind === "npcs") {
         npcViewportRef.current = viewport as NPCWorkspaceViewport;
         playerViewportRef.current = null;
+        itemViewportRef.current = null;
+      } else if (activeDesignKind === "items") {
+        itemViewportRef.current = viewport as ItemWorkspaceViewport;
+        playerViewportRef.current = null;
+        npcViewportRef.current = null;
       } else {
         playerViewportRef.current = viewport as PlayerWorkspaceViewport;
+        itemViewportRef.current = null;
         npcViewportRef.current = null;
       }
       buildViewportRef.current = null;
@@ -546,6 +571,7 @@ export function App() {
       viewport.unmount();
       buildViewportRef.current = null;
       playerViewportRef.current = null;
+      itemViewportRef.current = null;
       npcViewportRef.current = null;
     };
   }, [activeDesignKind, activeProductMode, phase]);
@@ -559,6 +585,7 @@ export function App() {
         region: activeRegion,
         contentLibrary: session.contentLibrary,
         playerDefinition: session.gameProject.playerDefinition,
+        itemDefinitions: session.gameProject.itemDefinitions,
         npcDefinitions: session.gameProject.npcDefinitions,
         assetSources,
         environmentOverrideId: environmentViewportOverrideId
@@ -570,6 +597,7 @@ export function App() {
     environmentViewportOverrideId,
     isBuild,
     session?.contentLibrary,
+    session?.gameProject.itemDefinitions,
     session?.gameProject.npcDefinitions,
     session?.gameProject.playerDefinition
   ]);
@@ -605,6 +633,7 @@ export function App() {
     viewportReadyVersion,
     gameProjectId: session?.gameProject.identity.id ?? null,
     playerDefinition,
+    itemDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
@@ -612,6 +641,7 @@ export function App() {
     assetDefinitions,
     assetSources,
     getPlayerViewport: () => playerViewportRef.current,
+    getItemViewport: () => itemViewportRef.current,
     getNPCViewport: () => npcViewportRef.current,
     getViewportElement: () => viewportRef.current,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),

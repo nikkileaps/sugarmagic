@@ -14,7 +14,7 @@ export interface SceneExplorerEntity {
   type: "entity";
   instanceId: string;
   displayName: string;
-  entityKind: "asset" | "player" | "npc";
+  entityKind: "asset" | "player" | "npc" | "item";
   assetKind: string;
   assetDefinitionId: string | null;
   visible: boolean;
@@ -67,6 +67,7 @@ const KIND_ICONS: Record<string, string> = {
   asset: "📦",
   player: "🧙",
   npc: "👤",
+  item: "📦",
   light: "💡",
   decal: "🎨",
   marker: "📍",

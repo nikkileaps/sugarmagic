@@ -15,6 +15,8 @@ export interface QuestRuntimeNarrativeHandler {
   (node: QuestNodeDefinition): void;
 }
 
+export type QuestInventoryCountProvider = (itemDefinitionId: string) => number;
+
 export interface QuestActiveObjectiveView {
   questDefinitionId: string;
   stageId: string;
@@ -126,6 +128,7 @@ export class QuestManager {
   private onStateChange: (() => void) | null = null;
   private onAction: QuestRuntimeActionHandler | null = null;
   private onNarrative: QuestRuntimeNarrativeHandler | null = null;
+  private getInventoryCount: QuestInventoryCountProvider = () => 0;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -148,6 +151,10 @@ export class QuestManager {
 
   setNarrativeHandler(handler: QuestRuntimeNarrativeHandler): void {
     this.onNarrative = handler;
+  }
+
+  setInventoryCountProvider(provider: QuestInventoryCountProvider): void {
+    this.getInventoryCount = provider;
   }
 
   update(): void {
@@ -490,6 +497,20 @@ export class QuestManager {
             loop = true;
           }
           continue;
+        }
+
+        if (
+          progress.status === "active" &&
+          node.nodeBehavior === "objective" &&
+          node.objectiveSubtype === "collect" &&
+          node.targetId
+        ) {
+          const targetCount = Math.max(1, node.count ?? 1);
+          if (this.getInventoryCount(node.targetId) >= targetCount) {
+            this.completeNode(state, stage, stageProgress, node);
+            changed = true;
+            loop = true;
+          }
         }
 
         if (progress.status === "active" && node.nodeBehavior === "branch") {

@@ -19,7 +19,8 @@ function makeRegion(): RegionDocument {
       folders: [],
       placedAssets: [],
       playerPresence: null,
-      npcPresences: []
+      npcPresences: [],
+      itemPresences: []
     },
     environmentBinding: { defaultEnvironmentId: "project:environment:default" },
     landscape: {
@@ -47,6 +48,7 @@ describe("layout scene presences", () => {
         playerDefinition: createDefaultPlayerDefinition("project"),
         npcDefinitions: [],
         dialogueDefinitions: [],
+        itemDefinitions: [],
         questDefinitions: []
       },
       [makeRegion()],
@@ -141,7 +143,8 @@ describe("layout scene presences", () => {
               scale: [1, 1, 1]
             }
           }
-        ]
+        ],
+        itemPresences: []
       }
     };
 

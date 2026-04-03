@@ -305,6 +305,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
         region,
         contentLibrary,
         playerDefinition,
+        itemDefinitions,
         npcDefinitions,
         assetSources,
         environmentOverrideId = null
@@ -319,6 +320,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
       const currentObjects = resolveSceneObjects(region, {
         contentLibrary,
         playerDefinition,
+        itemDefinitions,
         npcDefinitions
       });
       const delta = computeSceneDelta(previousObjects, currentObjects);

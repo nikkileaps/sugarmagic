@@ -1,9 +1,11 @@
 import {
   getAssetDefinition,
   type ContentLibrarySnapshot,
+  type ItemDefinition,
   type NPCDefinition,
   type PlayerDefinition,
   type RegionDocument,
+  type RegionItemPresence,
   type PlacedAssetInstance,
   type RegionNPCPresence,
   type RegionPlayerPresence
@@ -42,7 +44,7 @@ export interface SceneObjectCapsuleSpec {
   color: number;
 }
 
-export type SceneObjectKind = "asset" | "player" | "npc";
+export type SceneObjectKind = "asset" | "player" | "npc" | "item";
 
 export interface SceneObject {
   instanceId: string;
@@ -65,6 +67,7 @@ export interface SceneDelta {
 export interface SceneResolutionOptions {
   contentLibrary?: ContentLibrarySnapshot;
   playerDefinition?: PlayerDefinition | null;
+  itemDefinitions?: ItemDefinition[];
   npcDefinitions?: NPCDefinition[];
   includePlayerPresence?: boolean;
 }
@@ -76,6 +79,7 @@ export function resolveSceneObjects(
   const {
     contentLibrary,
     playerDefinition = null,
+    itemDefinitions = [],
     npcDefinitions = [],
     includePlayerPresence = true
   } = options;
@@ -96,6 +100,18 @@ export function resolveSceneObjects(
         presence,
         npcDefinitions.find(
           (definition) => definition.definitionId === presence.npcDefinitionId
+        ) ?? null,
+        contentLibrary
+      )
+    );
+  }
+
+  for (const presence of region.scene.itemPresences) {
+    sceneObjects.push(
+      createItemSceneObject(
+        presence,
+        itemDefinitions.find(
+          (definition) => definition.definitionId === presence.itemDefinitionId
         ) ?? null,
         contentLibrary
       )
@@ -231,6 +247,32 @@ function createNPCSceneObject(
       radius,
       color: NPC_CAPSULE_COLOR
     }
+  };
+}
+
+function createItemSceneObject(
+  presence: RegionItemPresence,
+  itemDefinition: ItemDefinition | null,
+  contentLibrary?: ContentLibrarySnapshot
+): SceneObject {
+  const modelAssetDefinitionId = itemDefinition?.presentation.modelAssetDefinitionId ?? null;
+  const modelSourcePath = getAssetSourcePath(modelAssetDefinitionId, contentLibrary);
+  const height = Math.max(itemDefinition?.presentation.modelHeight ?? 0.45, 0.1);
+
+  return {
+    instanceId: presence.presenceId,
+    kind: "item",
+    displayName: itemDefinition?.displayName ?? "Item",
+    assetDefinitionId: modelAssetDefinitionId,
+    modelSourcePath,
+    targetModelHeight: height,
+    transform: {
+      position: presence.transform.position,
+      rotation: presence.transform.rotation,
+      scale: presence.transform.scale
+    },
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${modelSourcePath ?? "fallback"}:${height}:${presence.quantity}`,
+    capsule: null
   };
 }
 

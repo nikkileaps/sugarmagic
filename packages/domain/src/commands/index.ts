@@ -4,6 +4,7 @@ import type {
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
 import type { DialogueDefinition } from "../dialogue-definition";
+import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
 import type { QuestDefinition } from "../quest-definition";
@@ -180,6 +181,13 @@ export type CreateNPCDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateItemDefinitionCommand = SemanticCommandBase<
+  "CreateItemDefinition",
+  {
+    definition: ItemDefinition;
+  }
+>;
+
 export type CreateDialogueDefinitionCommand = SemanticCommandBase<
   "CreateDialogueDefinition",
   {
@@ -201,6 +209,13 @@ export type UpdateNPCDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateItemDefinitionCommand = SemanticCommandBase<
+  "UpdateItemDefinition",
+  {
+    definition: ItemDefinition;
+  }
+>;
+
 export type UpdateDialogueDefinitionCommand = SemanticCommandBase<
   "UpdateDialogueDefinition",
   {
@@ -217,6 +232,13 @@ export type UpdateQuestDefinitionCommand = SemanticCommandBase<
 
 export type DeleteNPCDefinitionCommand = SemanticCommandBase<
   "DeleteNPCDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DeleteItemDefinitionCommand = SemanticCommandBase<
+  "DeleteItemDefinition",
   {
     definitionId: string;
   }
@@ -247,6 +269,18 @@ export type CreateNPCPresenceCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateItemPresenceCommand = SemanticCommandBase<
+  "CreateItemPresence",
+  {
+    presenceId: string;
+    itemDefinitionId: string;
+    quantity: number;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
 export type TransformNPCPresenceCommand = SemanticCommandBase<
   "TransformNPCPresence",
   {
@@ -259,6 +293,31 @@ export type TransformNPCPresenceCommand = SemanticCommandBase<
 
 export type RemoveNPCPresenceCommand = SemanticCommandBase<
   "RemoveNPCPresence",
+  {
+    presenceId: string;
+  }
+>;
+
+export type TransformItemPresenceCommand = SemanticCommandBase<
+  "TransformItemPresence",
+  {
+    presenceId: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  }
+>;
+
+export type UpdateItemPresenceCommand = SemanticCommandBase<
+  "UpdateItemPresence",
+  {
+    presenceId: string;
+    quantity?: number;
+  }
+>;
+
+export type RemoveItemPresenceCommand = SemanticCommandBase<
+  "RemoveItemPresence",
   {
     presenceId: string;
   }
@@ -302,17 +361,24 @@ export type SemanticCommand =
   | TransformPlayerPresenceCommand
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
+  | CreateItemDefinitionCommand
   | CreateDialogueDefinitionCommand
   | CreateQuestDefinitionCommand
   | UpdateNPCDefinitionCommand
+  | UpdateItemDefinitionCommand
   | UpdateDialogueDefinitionCommand
   | UpdateQuestDefinitionCommand
   | DeleteNPCDefinitionCommand
+  | DeleteItemDefinitionCommand
   | DeleteDialogueDefinitionCommand
   | DeleteQuestDefinitionCommand
   | CreateNPCPresenceCommand
+  | CreateItemPresenceCommand
   | TransformNPCPresenceCommand
+  | TransformItemPresenceCommand
+  | UpdateItemPresenceCommand
   | RemoveNPCPresenceCommand
+  | RemoveItemPresenceCommand
   | UpdatePluginConfigurationCommand;
 
 export {

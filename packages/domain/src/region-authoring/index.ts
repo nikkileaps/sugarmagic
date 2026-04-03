@@ -44,6 +44,13 @@ export interface RegionNPCPresence {
   transform: RegionSceneTransform;
 }
 
+export interface RegionItemPresence {
+  presenceId: string;
+  itemDefinitionId: string;
+  quantity: number;
+  transform: RegionSceneTransform;
+}
+
 export interface RegionEnvironmentBinding {
   defaultEnvironmentId: string | null;
 }
@@ -93,6 +100,7 @@ export interface RegionDocument {
     placedAssets: PlacedAssetInstance[];
     playerPresence: RegionPlayerPresence | null;
     npcPresences: RegionNPCPresence[];
+    itemPresences: RegionItemPresence[];
   };
   environmentBinding: RegionEnvironmentBinding;
   landscape: RegionLandscapeState;
@@ -132,6 +140,10 @@ export function createNPCPresenceId(): string {
   return createUuid();
 }
 
+export function createItemPresenceId(): string {
+  return createUuid();
+}
+
 export function createRegionPlayerPresence(
   overrides: Partial<RegionPlayerPresence> = {}
 ): RegionPlayerPresence {
@@ -147,6 +159,18 @@ export function createRegionNPCPresence(
   return {
     presenceId: overrides.presenceId ?? createNPCPresenceId(),
     npcDefinitionId: overrides.npcDefinitionId,
+    transform: createRegionSceneTransform(overrides.transform)
+  };
+}
+
+export function createRegionItemPresence(
+  overrides: Partial<RegionItemPresence> &
+    Pick<RegionItemPresence, "itemDefinitionId">
+): RegionItemPresence {
+  return {
+    presenceId: overrides.presenceId ?? createItemPresenceId(),
+    itemDefinitionId: overrides.itemDefinitionId,
+    quantity: Math.max(1, Math.floor(overrides.quantity ?? 1)),
     transform: createRegionSceneTransform(overrides.transform)
   };
 }

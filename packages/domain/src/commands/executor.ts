@@ -11,7 +11,8 @@ import type {
   RegionSceneFolder,
   RegionLandscapeChannelDefinition,
   RegionNPCPresence,
-  RegionPlayerPresence
+  RegionPlayerPresence,
+  RegionItemPresence
 } from "../region-authoring";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS
@@ -39,7 +40,11 @@ import type {
   RemovePlayerPresenceCommand,
   CreateNPCPresenceCommand,
   TransformNPCPresenceCommand,
-  RemoveNPCPresenceCommand
+  RemoveNPCPresenceCommand,
+  CreateItemPresenceCommand,
+  TransformItemPresenceCommand,
+  UpdateItemPresenceCommand,
+  RemoveItemPresenceCommand
 } from "./index";
 
 export interface CommandExecutionResult {
@@ -287,6 +292,21 @@ function createNPCPresenceFromCommand(
   };
 }
 
+function createItemPresenceFromCommand(
+  command: CreateItemPresenceCommand
+): RegionItemPresence {
+  return {
+    presenceId: command.payload.presenceId,
+    itemDefinitionId: command.payload.itemDefinitionId,
+    quantity: Math.max(1, Math.floor(command.payload.quantity)),
+    transform: {
+      position: command.payload.position,
+      rotation: command.payload.rotation,
+      scale: command.payload.scale
+    }
+  };
+}
+
 function applyCreateNPCPresence(
   region: RegionDocument,
   command: CreateNPCPresenceCommand
@@ -333,6 +353,81 @@ function applyRemoveNPCPresence(
     scene: {
       ...region.scene,
       npcPresences: region.scene.npcPresences.filter(
+        (presence) => presence.presenceId !== command.payload.presenceId
+      )
+    }
+  };
+}
+
+function applyCreateItemPresence(
+  region: RegionDocument,
+  command: CreateItemPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: [...region.scene.itemPresences, createItemPresenceFromCommand(command)]
+    }
+  };
+}
+
+function applyTransformItemPresence(
+  region: RegionDocument,
+  command: TransformItemPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              transform: {
+                position: command.payload.position,
+                rotation: command.payload.rotation,
+                scale: command.payload.scale
+              }
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applyUpdateItemPresence(
+  region: RegionDocument,
+  command: UpdateItemPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              quantity:
+                command.payload.quantity === undefined
+                  ? presence.quantity
+                  : Math.max(1, Math.floor(command.payload.quantity))
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applyRemoveItemPresence(
+  region: RegionDocument,
+  command: RemoveItemPresenceCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.filter(
         (presence) => presence.presenceId !== command.payload.presenceId
       )
     }
@@ -571,6 +666,18 @@ export function executeCommand(
       break;
     case "RemoveNPCPresence":
       updatedRegion = applyRemoveNPCPresence(region, command);
+      break;
+    case "CreateItemPresence":
+      updatedRegion = applyCreateItemPresence(region, command);
+      break;
+    case "TransformItemPresence":
+      updatedRegion = applyTransformItemPresence(region, command);
+      break;
+    case "UpdateItemPresence":
+      updatedRegion = applyUpdateItemPresence(region, command);
+      break;
+    case "RemoveItemPresence":
+      updatedRegion = applyRemoveItemPresence(region, command);
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);

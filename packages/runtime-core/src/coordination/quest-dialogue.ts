@@ -4,7 +4,13 @@ import type { QuestManager } from "../quest";
 
 export interface RuntimeQuestDialogueCoordinator {
   loadDefinitions: (dialogueDefinitions: DialogueDefinition[], questDefinitions: QuestDefinition[]) => void;
-  attach: (dialogueManager: DialogueManager, questManager: QuestManager) => void;
+  attach: (
+    dialogueManager: DialogueManager,
+    questManager: QuestManager,
+    options?: {
+      hasItem?: (itemDefinitionId: string, count?: number) => boolean;
+    }
+  ) => void;
   resolveNpcDialogueDefinitionId: (npcDefinitionId: string) => string | null;
   isNpcInteractableAvailable: (npcDefinitionId: string) => boolean;
   handleDialogueNodeEnter: (nodeId: string) => void;
@@ -23,17 +29,19 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
   let loadedQuestDefinitions: QuestDefinition[] = [];
   let dialogueManager: DialogueManager | null = null;
   let questManager: QuestManager | null = null;
+  let hasItem: ((itemDefinitionId: string, count?: number) => boolean) | null = null;
 
   function syncDialogueConditions() {
     if (!dialogueManager || !questManager) return;
 
-    dialogueManager.setConditionContext({
-      hasFlag: (key, value) => questManager?.hasFlag(key, value) ?? false,
-      isQuestActive: (questId) => questManager?.isQuestActive(questId) ?? false,
-      isQuestCompleted: (questId) => questManager?.isQuestCompleted(questId) ?? false,
-      getQuestStageState: (questId, stageId) =>
-        questManager?.getQuestStageState(questId, stageId) ?? null
-    });
+        dialogueManager.setConditionContext({
+          hasFlag: (key, value) => questManager?.hasFlag(key, value) ?? false,
+          hasItem: (itemDefinitionId, count) => hasItem?.(itemDefinitionId, count) ?? false,
+          isQuestActive: (questId) => questManager?.isQuestActive(questId) ?? false,
+          isQuestCompleted: (questId) => questManager?.isQuestCompleted(questId) ?? false,
+          getQuestStageState: (questId, stageId) =>
+            questManager?.getQuestStageState(questId, stageId) ?? null
+        });
   }
 
   return {
@@ -64,9 +72,10 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
       }
     },
 
-    attach(nextDialogueManager, nextQuestManager) {
+    attach(nextDialogueManager, nextQuestManager, options) {
       dialogueManager = nextDialogueManager;
       questManager = nextQuestManager;
+      hasItem = options?.hasItem ?? null;
       syncDialogueConditions();
     },
 
@@ -113,6 +122,7 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
       currentDialogueNodeId = null;
       dialogueManager = null;
       questManager = null;
+      hasItem = null;
     }
   };
 }
