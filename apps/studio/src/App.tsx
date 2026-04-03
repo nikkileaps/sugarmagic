@@ -13,6 +13,7 @@ import {
   getAllRegions,
   getAllAssetDefinitions,
   getAllDialogueDefinitions,
+  getAllDocumentDefinitions,
   getAllEnvironmentDefinitions,
   getAllItemDefinitions,
   getAllNPCDefinitions,
@@ -258,6 +259,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
           itemDefinitions: capturedSession.gameProject.itemDefinitions,
+          documentDefinitions: capturedSession.gameProject.documentDefinitions,
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
           dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
           questDefinitions: capturedSession.gameProject.questDefinitions,
@@ -377,6 +379,11 @@ export function App() {
   const itemDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllItemDefinitions(session);
+  }, [session]);
+
+  const documentDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllDocumentDefinitions(session);
   }, [session]);
 
   const dialogueDefinitions = useMemo(() => {
@@ -513,7 +520,11 @@ export function App() {
     if (phase !== "active") return;
     if (
       activeProductMode === "design" &&
-      (activeDesignKind === "dialogues" || activeDesignKind === "quests")
+      (
+        activeDesignKind === "dialogues" ||
+        activeDesignKind === "quests" ||
+        activeDesignKind === "documents"
+      )
     ) {
       buildViewportRef.current = null;
       playerViewportRef.current = null;
@@ -611,6 +622,7 @@ export function App() {
     selectedIds,
     session,
     assetDefinitions,
+    documentDefinitions,
     environmentDefinitions,
     getViewport: () => buildViewportRef.current,
     getViewportElement: () => viewportRef.current,
@@ -634,6 +646,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     playerDefinition,
     itemDefinitions,
+    documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,

@@ -1,6 +1,7 @@
 export * from "./authoring-session";
 export * from "./commands";
 export * from "./content-library";
+export * from "./document-definition";
 export * from "./dialogue-definition";
 export * from "./game-project";
 export * from "./gameplay-authoring";

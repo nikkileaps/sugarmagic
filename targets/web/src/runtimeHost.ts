@@ -31,6 +31,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
+  type DocumentDefinition,
   type DialogueDefinition,
   type ItemDefinition,
   type NPCDefinition,
@@ -96,6 +97,7 @@ export interface WebRuntimeStartState {
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -507,6 +509,7 @@ export function createWebRuntimeHost(
       activeRegion,
       playerDefinition: state.playerDefinition,
       itemDefinitions: state.itemDefinitions,
+      documentDefinitions: state.documentDefinitions,
       npcDefinitions: state.npcDefinitions,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,

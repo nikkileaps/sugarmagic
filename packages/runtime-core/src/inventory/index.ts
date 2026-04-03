@@ -1,4 +1,8 @@
-import type { ItemDefinition, ItemReadableSection } from "@sugarmagic/domain";
+import type { DocumentDefinition, ItemDefinition } from "@sugarmagic/domain";
+import {
+  createDocumentDefinitionFromItem,
+  renderDocumentDefinitionHtml
+} from "../document";
 
 function escapeHtml(value: string): string {
   return value
@@ -13,157 +17,18 @@ function textToHtml(value: string): string {
   return escapeHtml(value).replaceAll("\n", "<br />");
 }
 
-function renderMetaLine(value: string): string {
-  return value.trim().length > 0
-    ? `<div class="sm-readable-meta-line">${textToHtml(value)}</div>`
-    : "";
-}
-
-function renderSectionList(sections: ItemReadableSection[]): string {
-  const nonEmptySections = sections.filter(
-    (section) => section.heading.trim().length > 0 || section.body.trim().length > 0
-  );
-
-  return nonEmptySections
-    .map(
-      (section) => `
-        <article class="sm-readable-section">
-          ${
-            section.heading.trim().length > 0
-              ? `<h3 class="sm-readable-section-heading">${textToHtml(section.heading)}</h3>`
-              : ""
-          }
-          <div class="sm-readable-section-body">${textToHtml(section.body)}</div>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderReadableDocumentHtml(definition: ItemDefinition): string {
-  const title = definition.interactionView.title || definition.displayName;
-  const body = definition.interactionView.body || definition.description || "";
-  const document = definition.interactionView.readableDocument;
-  const subtitle = document.subtitle.trim();
-  const author = document.author.trim();
-  const locationLine = document.locationLine.trim();
-  const dateLine = document.dateLine.trim();
-  const footer = document.footer.trim();
-  const backBody = document.backBody.trim();
-
-  switch (document.template) {
-    case "book": {
-      const pages = document.pages.filter((page) => page.trim().length > 0);
-      return `
-        <div class="sm-readable sm-readable-book">
-          <section class="sm-readable-book-cover">
-            <div class="sm-readable-title">${textToHtml(title)}</div>
-            ${subtitle ? `<div class="sm-readable-subtitle">${textToHtml(subtitle)}</div>` : ""}
-            ${author ? `<div class="sm-readable-byline">by ${textToHtml(author)}</div>` : ""}
-            ${body ? `<div class="sm-readable-cover-copy">${textToHtml(body)}</div>` : ""}
-          </section>
-          <section class="sm-readable-book-pages">
-            ${pages
-              .map(
-                (page, index) => `
-                  <article class="sm-readable-book-page">
-                    <div class="sm-readable-book-page-number">Page ${index + 1}</div>
-                    <div class="sm-readable-book-page-body">${textToHtml(page)}</div>
-                  </article>
-                `
-              )
-              .join("")}
-          </section>
-        </div>
-      `;
-    }
-    case "newspaper": {
-      return `
-        <div class="sm-readable sm-readable-newspaper">
-          <section class="sm-readable-newspaper-masthead">
-            <div class="sm-readable-title">${textToHtml(title)}</div>
-            ${subtitle ? `<div class="sm-readable-subtitle">${textToHtml(subtitle)}</div>` : ""}
-            <div class="sm-readable-newspaper-meta">
-              ${renderMetaLine(locationLine)}
-              ${renderMetaLine(dateLine)}
-            </div>
-          </section>
-          ${
-            body
-              ? `<section class="sm-readable-newspaper-banner">${textToHtml(body)}</section>`
-              : ""
-          }
-          <section class="sm-readable-newspaper-columns">${renderSectionList(
-            document.sections
-          )}</section>
-          ${
-            footer
-              ? `<div class="sm-readable-footer sm-readable-newspaper-footer">${textToHtml(footer)}</div>`
-              : ""
-          }
-        </div>
-      `;
-    }
-    case "letter":
-      return `
-        <div class="sm-readable sm-readable-letter">
-          <div class="sm-readable-letter-paper">
-            <div class="sm-readable-letter-meta">
-              ${renderMetaLine(locationLine)}
-              ${renderMetaLine(dateLine)}
-            </div>
-            <div class="sm-readable-title">${textToHtml(title)}</div>
-            ${subtitle ? `<div class="sm-readable-subtitle">${textToHtml(subtitle)}</div>` : ""}
-            <div class="sm-readable-letter-body">${textToHtml(body)}</div>
-            ${
-              footer || author
-                ? `<div class="sm-readable-letter-signoff">${textToHtml(
-                    footer || author
-                  )}</div>`
-                : ""
-            }
-          </div>
-        </div>
-      `;
-    case "postcard":
-      return `
-        <div class="sm-readable sm-readable-postcard">
-          <section class="sm-readable-postcard-face">
-            <div class="sm-readable-postcard-label">Front</div>
-            <div class="sm-readable-title">${textToHtml(title)}</div>
-            ${subtitle ? `<div class="sm-readable-subtitle">${textToHtml(subtitle)}</div>` : ""}
-            <div class="sm-readable-postcard-body">${textToHtml(body)}</div>
-          </section>
-          <section class="sm-readable-postcard-face sm-readable-postcard-back">
-            <div class="sm-readable-postcard-label">Back</div>
-            <div class="sm-readable-postcard-stamp"></div>
-            <div class="sm-readable-postcard-meta">
-              ${renderMetaLine(locationLine)}
-              ${renderMetaLine(dateLine)}
-            </div>
-            <div class="sm-readable-postcard-body">${textToHtml(backBody)}</div>
-          </section>
-        </div>
-      `;
-    case "flyer":
-      return `
-        <div class="sm-readable sm-readable-flyer">
-          <div class="sm-readable-title">${textToHtml(title)}</div>
-          ${subtitle ? `<div class="sm-readable-subtitle">${textToHtml(subtitle)}</div>` : ""}
-          <div class="sm-readable-flyer-body">${textToHtml(body)}</div>
-          ${
-            footer
-              ? `<div class="sm-readable-footer sm-readable-flyer-footer">${textToHtml(footer)}</div>`
-              : ""
-          }
-        </div>
-      `;
-  }
-}
-
-function renderItemViewContentHtml(definition: ItemDefinition): string {
+function renderItemViewContentHtml(
+  definition: ItemDefinition,
+  documentDefinitions: DocumentDefinition[]
+): string {
   if (definition.interactionView.kind === "readable") {
-    return renderReadableDocumentHtml(definition);
+    const documentDefinition = createDocumentDefinitionFromItem(
+      definition,
+      documentDefinitions
+    );
+    if (documentDefinition) {
+      return renderDocumentDefinitionHtml(documentDefinition);
+    }
   }
 
   const body = definition.interactionView.body || definition.description || "";
@@ -180,6 +45,7 @@ export interface RuntimeInventoryEntry {
 
 export class InventoryManager {
   private definitions = new Map<string, ItemDefinition>();
+  private documentDefinitions = new Map<string, DocumentDefinition>();
   private quantities = new Map<string, number>();
   private onChange: (() => void) | null = null;
 
@@ -189,6 +55,13 @@ export class InventoryManager {
       this.definitions.set(definition.definitionId, definition);
     }
     this.emitChange();
+  }
+
+  registerDocumentDefinitions(definitions: DocumentDefinition[]): void {
+    this.documentDefinitions.clear();
+    for (const definition of definitions) {
+      this.documentDefinitions.set(definition.definitionId, definition);
+    }
   }
 
   setOnChange(handler: (() => void) | null): void {
@@ -238,6 +111,10 @@ export class InventoryManager {
 
   getDefinition(itemDefinitionId: string): ItemDefinition | null {
     return this.definitions.get(itemDefinitionId) ?? null;
+  }
+
+  getDocumentDefinitions(): DocumentDefinition[] {
+    return Array.from(this.documentDefinitions.values());
   }
 
   getEntries(): RuntimeInventoryEntry[] {
@@ -385,7 +262,8 @@ export interface RuntimeItemViewUI {
 }
 
 export function createRuntimeItemViewUI(
-  parentContainer: HTMLElement
+  parentContainer: HTMLElement,
+  documentDefinitions: DocumentDefinition[] = []
 ): RuntimeItemViewUI {
   injectInventoryStyles();
 
@@ -418,7 +296,7 @@ export function createRuntimeItemViewUI(
     const title = activeDefinition.interactionView.title || activeDefinition.displayName;
     const kicker =
       activeDefinition.interactionView.kind === "readable"
-        ? `readable · ${activeDefinition.interactionView.readableDocument.template}`
+        ? "readable document"
         : activeDefinition.interactionView.kind;
     panel.innerHTML = `
       <div class="sm-item-view-header">
@@ -429,7 +307,10 @@ export function createRuntimeItemViewUI(
         </div>
         <button type="button" class="sm-item-view-close">Close</button>
       </div>
-      <div class="sm-item-view-body">${renderItemViewContentHtml(activeDefinition)}</div>
+      <div class="sm-item-view-body">${renderItemViewContentHtml(
+        activeDefinition,
+        documentDefinitions
+      )}</div>
       <div class="sm-item-view-actions"></div>
     `;
 

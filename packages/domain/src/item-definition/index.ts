@@ -2,12 +2,6 @@ import { createUuid } from "../shared/identity";
 
 export type ItemCategory = "quest" | "gift" | "key" | "misc";
 export type ItemViewKind = "none" | "readable" | "examine" | "consumable";
-export type ItemReadableTemplate =
-  | "book"
-  | "newspaper"
-  | "letter"
-  | "postcard"
-  | "flyer";
 
 export interface ItemInventoryProfile {
   stackable: boolean;
@@ -20,29 +14,12 @@ export interface ItemPresentationProfile {
   modelHeight: number;
 }
 
-export interface ItemReadableSection {
-  heading: string;
-  body: string;
-}
-
-export interface ItemReadableDocument {
-  template: ItemReadableTemplate;
-  subtitle: string;
-  author: string;
-  locationLine: string;
-  dateLine: string;
-  footer: string;
-  backBody: string;
-  pages: string[];
-  sections: ItemReadableSection[];
-}
-
 export interface ItemInteractionView {
   kind: ItemViewKind;
   title: string;
   body: string;
   consumeLabel: string;
-  readableDocument: ItemReadableDocument;
+  documentDefinitionId: string | null;
 }
 
 export interface ItemDefinition {
@@ -59,22 +36,6 @@ export const DEFAULT_ITEM_MODEL_HEIGHT = 0.45;
 
 export function createItemDefinitionId(): string {
   return createUuid();
-}
-
-export function createDefaultReadableDocument(
-  template: ItemReadableTemplate = "book"
-): ItemReadableDocument {
-  return {
-    template,
-    subtitle: "",
-    author: "",
-    locationLine: "",
-    dateLine: "",
-    footer: "",
-    backBody: "",
-    pages: [""],
-    sections: [{ heading: "", body: "" }]
-  };
 }
 
 export function createDefaultItemDefinition(
@@ -103,7 +64,7 @@ export function createDefaultItemDefinition(
       title: "",
       body: "",
       consumeLabel: "Use",
-      readableDocument: createDefaultReadableDocument()
+      documentDefinitionId: null
     }
   };
 }
@@ -146,42 +107,9 @@ export function normalizeItemDefinition(
       consumeLabel:
         itemDefinition.interactionView?.consumeLabel ??
         defaultDefinition.interactionView.consumeLabel,
-      readableDocument: {
-        template:
-          itemDefinition.interactionView?.readableDocument?.template ??
-          defaultDefinition.interactionView.readableDocument.template,
-        subtitle:
-          itemDefinition.interactionView?.readableDocument?.subtitle ??
-          defaultDefinition.interactionView.readableDocument.subtitle,
-        author:
-          itemDefinition.interactionView?.readableDocument?.author ??
-          defaultDefinition.interactionView.readableDocument.author,
-        locationLine:
-          itemDefinition.interactionView?.readableDocument?.locationLine ??
-          defaultDefinition.interactionView.readableDocument.locationLine,
-        dateLine:
-          itemDefinition.interactionView?.readableDocument?.dateLine ??
-          defaultDefinition.interactionView.readableDocument.dateLine,
-        footer:
-          itemDefinition.interactionView?.readableDocument?.footer ??
-          defaultDefinition.interactionView.readableDocument.footer,
-        backBody:
-          itemDefinition.interactionView?.readableDocument?.backBody ??
-          defaultDefinition.interactionView.readableDocument.backBody,
-        pages:
-          itemDefinition.interactionView?.readableDocument?.pages?.length &&
-          itemDefinition.interactionView.readableDocument.pages.length > 0
-            ? itemDefinition.interactionView.readableDocument.pages.map((page) => page ?? "")
-            : defaultDefinition.interactionView.readableDocument.pages,
-        sections:
-          itemDefinition.interactionView?.readableDocument?.sections?.length &&
-          itemDefinition.interactionView.readableDocument.sections.length > 0
-            ? itemDefinition.interactionView.readableDocument.sections.map((section) => ({
-                heading: section.heading ?? "",
-                body: section.body ?? ""
-              }))
-            : defaultDefinition.interactionView.readableDocument.sections
-      }
+      documentDefinitionId:
+        itemDefinition.interactionView?.documentDefinitionId ??
+        defaultDefinition.interactionView.documentDefinitionId
     }
   };
 }

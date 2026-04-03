@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
   NPCDefinition,
@@ -17,6 +18,7 @@ import type {
   PlayerWorkspaceViewport
 } from "../viewport";
 import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
+import { useDocumentWorkspaceView } from "./DocumentWorkspaceView";
 import { useItemWorkspaceView } from "./ItemWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
@@ -26,6 +28,7 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
   { id: "npcs", label: "NPCs", icon: "👤" },
   { id: "items", label: "Items", icon: "📦" },
+  { id: "documents", label: "Documents", icon: "📚" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
   { id: "quests", label: "Quests", icon: "📜" }
 ];
@@ -36,6 +39,7 @@ export interface DesignProductModeViewProps {
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -67,6 +71,7 @@ export function useDesignProductModeView(
     gameProjectId,
     playerDefinition,
     itemDefinitions,
+    documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
@@ -112,11 +117,19 @@ export function useDesignProductModeView(
     viewportReadyVersion,
     gameProjectId,
     itemDefinitions,
+    documentDefinitions,
     contentLibrary,
     assetDefinitions,
     assetSources,
     getViewport: getItemViewport,
     getViewportElement,
+    onCommand
+  });
+
+  const documentView = useDocumentWorkspaceView({
+    isActive: activeDesignKind === "documents",
+    gameProjectId,
+    documentDefinitions,
     onCommand
   });
 
@@ -156,6 +169,8 @@ export function useDesignProductModeView(
             ? npcView.leftPanel
             : activeDesignKind === "items"
               ? itemView.leftPanel
+              : activeDesignKind === "documents"
+                ? documentView.leftPanel
             : playerView.leftPanel,
     rightPanel:
       activeDesignKind === "dialogues"
@@ -166,18 +181,24 @@ export function useDesignProductModeView(
             ? npcView.rightPanel
             : activeDesignKind === "items"
               ? itemView.rightPanel
+              : activeDesignKind === "documents"
+                ? documentView.rightPanel
             : playerView.rightPanel,
     centerPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.centerPanel
         : activeDesignKind === "quests"
           ? questView.centerPanel
+          : activeDesignKind === "documents"
+            ? documentView.centerPanel
           : undefined,
     viewportOverlay:
       activeDesignKind === "dialogues"
         ? dialogueView.viewportOverlay
         : activeDesignKind === "quests"
           ? questView.viewportOverlay
+          : activeDesignKind === "documents"
+            ? documentView.viewportOverlay
           : activeDesignKind === "npcs"
             ? npcView.viewportOverlay
             : activeDesignKind === "items"

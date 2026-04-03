@@ -1,5 +1,6 @@
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
+  type DocumentDefinition,
   type DialogueDefinition,
   type ItemDefinition,
   type NPCDefinition,
@@ -12,6 +13,10 @@ import {
   createRuntimeDialoguePanel,
   DialogueManager
 } from "../dialogue";
+import {
+  createDocumentDefinitionFromItem,
+  createRuntimeDocumentReaderUI
+} from "../document";
 import { type RuntimeInputManager } from "../input";
 import {
   createRuntimeInventoryUI,
@@ -40,6 +45,7 @@ export interface RuntimeGameplaySessionControllerOptions {
   activeRegion: RegionDocument | null;
   playerDefinition: PlayerDefinition;
   itemDefinitions: ItemDefinition[];
+  documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
@@ -58,6 +64,7 @@ const DIALOGUE_LOCK_ID = "runtime-dialogue";
 const JOURNAL_LOCK_ID = "runtime-quest-journal";
 const INVENTORY_LOCK_ID = "runtime-inventory";
 const ITEM_VIEW_LOCK_ID = "runtime-item-view";
+const DOCUMENT_READER_LOCK_ID = "runtime-document-reader";
 
 export function createRuntimeGameplaySessionController(
   options: RuntimeGameplaySessionControllerOptions
@@ -69,6 +76,7 @@ export function createRuntimeGameplaySessionController(
     activeRegion,
     playerDefinition,
     itemDefinitions,
+    documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
@@ -81,9 +89,10 @@ export function createRuntimeGameplaySessionController(
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);
   const inventoryManager = new InventoryManager();
   const inventoryUi = createRuntimeInventoryUI(root);
-  const itemViewUi = createRuntimeItemViewUI(root);
+  const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
   const itemPickupNotifications = createRuntimeItemPickupNotificationCenter(root);
   const interactionPrompt = createRuntimeInteractionPrompt(root);
+  const documentReaderUi = createRuntimeDocumentReaderUI(root);
   const dialogueManager = new DialogueManager(dialoguePanel);
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();
@@ -96,6 +105,10 @@ export function createRuntimeGameplaySessionController(
   const itemInteractableEntities = new Map<
     string,
     { itemDefinitionId: string; quantity: number; entity: number }
+  >();
+  const inspectableInteractableEntities = new Map<
+    string,
+    { documentDefinitionId: string; promptText: string; entity: number }
   >();
 
   function resolveSpeakerName(speakerId: string): string | undefined {
@@ -135,7 +148,8 @@ export function createRuntimeGameplaySessionController(
       dialogueManager.isDialogueActive() ||
       questJournal.isOpen() ||
       inventoryUi.isOpen() ||
-      itemViewUi.isOpen()
+      itemViewUi.isOpen() ||
+      documentReaderUi.isOpen()
     ) {
       interactionPrompt.hide();
       return;
@@ -200,6 +214,37 @@ export function createRuntimeGameplaySessionController(
       itemInteractableEntities.set(presence.presenceId, {
         itemDefinitionId: presence.itemDefinitionId,
         quantity: presence.quantity,
+        entity: interactableEntity
+      });
+    }
+  }
+
+  function registerInspectableInteractables() {
+    if (!activeRegion) return;
+
+    for (const asset of activeRegion.scene.placedAssets) {
+      if (!asset.inspectable) continue;
+
+      const promptText = asset.inspectable.promptText?.trim() || "Inspect";
+      const interactableEntity = world.createEntity();
+      world.addComponent(
+        interactableEntity,
+        new Position(...asset.transform.position)
+      );
+      world.addComponent(
+        interactableEntity,
+        new Interactable(
+          "inspectable",
+          asset.instanceId,
+          asset.inspectable.documentDefinitionId,
+          promptText,
+          2.0,
+          true
+        )
+      );
+      inspectableInteractableEntities.set(asset.instanceId, {
+        documentDefinitionId: asset.inspectable.documentDefinitionId,
+        promptText,
         entity: interactableEntity
       });
     }
@@ -319,6 +364,19 @@ export function createRuntimeGameplaySessionController(
   inventoryUi.setOnInspectItem((itemDefinitionId) => {
     const definition = inventoryManager.getDefinition(itemDefinitionId);
     if (!definition) return;
+
+    if (definition.interactionView.kind === "readable") {
+      const documentDefinition = createDocumentDefinitionFromItem(
+        definition,
+        documentDefinitions
+      );
+      if (!documentDefinition) {
+        return;
+      }
+      documentReaderUi.show(documentDefinition, { kicker: "Inventory document" });
+      return;
+    }
+
     itemViewUi.show(definition, inventoryManager.getQuantity(itemDefinitionId));
   });
   itemViewUi.setOnOpenChange((isOpen) => {
@@ -326,6 +384,14 @@ export function createRuntimeGameplaySessionController(
       inputManager.addMovementLock(ITEM_VIEW_LOCK_ID);
     } else {
       inputManager.removeMovementLock(ITEM_VIEW_LOCK_ID);
+    }
+    syncInteractionPrompt();
+  });
+  documentReaderUi.setOnOpenChange((isOpen) => {
+    if (isOpen) {
+      inputManager.addMovementLock(DOCUMENT_READER_LOCK_ID);
+    } else {
+      inputManager.removeMovementLock(DOCUMENT_READER_LOCK_ID);
     }
     syncInteractionPrompt();
   });
@@ -347,7 +413,8 @@ export function createRuntimeGameplaySessionController(
       dialogueManager.isDialogueActive() ||
       questJournal.isOpen() ||
       inventoryUi.isOpen() ||
-      itemViewUi.isOpen()
+      itemViewUi.isOpen() ||
+      documentReaderUi.isOpen()
     ) {
       return false;
     }
@@ -368,12 +435,28 @@ export function createRuntimeGameplaySessionController(
 
     if (nearby.type === "item") {
       collectItemPresence(nearby.instanceId);
+      return;
+    }
+
+    if (nearby.type === "inspectable") {
+      const inspectable = inspectableInteractableEntities.get(nearby.instanceId);
+      if (!inspectable) return;
+
+      const documentDefinition = documentDefinitions.find(
+        (definition) => definition.definitionId === inspectable.documentDefinitionId
+      );
+      if (!documentDefinition) return;
+
+      documentReaderUi.show(documentDefinition, {
+        kicker: inspectable.promptText
+      });
     }
   });
 
   world.addSystem(interactionSystem);
   world.addSystem(questSystem);
   inventoryManager.registerDefinitions(itemDefinitions);
+  inventoryManager.registerDocumentDefinitions(documentDefinitions);
   inventoryManager.setOnChange(() => {
     syncInventoryUi();
     questManager.update();
@@ -381,6 +464,7 @@ export function createRuntimeGameplaySessionController(
   });
   registerNpcInteractables();
   registerItemInteractables();
+  registerInspectableInteractables();
   questDialogueCoordinator.startInitialQuests();
   syncInventoryUi();
   syncQuestUi();
@@ -401,6 +485,10 @@ export function createRuntimeGameplaySessionController(
         world.destroyEntity(entity);
       }
       itemInteractableEntities.clear();
+      for (const { entity } of inspectableInteractableEntities.values()) {
+        world.destroyEntity(entity);
+      }
+      inspectableInteractableEntities.clear();
       questDialogueCoordinator.reset();
       dialogueManager.dispose();
       questTracker.dispose();
@@ -408,6 +496,7 @@ export function createRuntimeGameplaySessionController(
       questNotificationCenter.dispose();
       inventoryUi.dispose();
       itemViewUi.dispose();
+      documentReaderUi.dispose();
       itemPickupNotifications.dispose();
       interactionPrompt.dispose();
     }

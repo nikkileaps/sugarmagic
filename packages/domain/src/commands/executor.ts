@@ -8,6 +8,7 @@
 import type {
   RegionDocument,
   PlacedAssetInstance,
+  RegionInspectableBehavior,
   RegionSceneFolder,
   RegionLandscapeChannelDefinition,
   RegionNPCPresence,
@@ -44,7 +45,10 @@ import type {
   CreateItemPresenceCommand,
   TransformItemPresenceCommand,
   UpdateItemPresenceCommand,
-  RemoveItemPresenceCommand
+  RemoveItemPresenceCommand,
+  AssignPlacedAssetInspectableCommand,
+  UpdatePlacedAssetInspectableCommand,
+  RemovePlacedAssetInspectableCommand
 } from "./index";
 
 export interface CommandExecutionResult {
@@ -113,6 +117,7 @@ function createPlacedAssetFromCommand(
     assetDefinitionId: command.payload.assetDefinitionId,
     displayName: command.payload.displayName,
     parentFolderId: command.payload.parentFolderId,
+    inspectable: null,
     transform: {
       position: command.payload.position,
       rotation: command.payload.rotation,
@@ -197,6 +202,93 @@ function applyMovePlacedAssetToFolder(
           ? {
               ...asset,
               parentFolderId: command.payload.parentFolderId
+            }
+          : asset
+      )
+    }
+  };
+}
+
+function createInspectableBehaviorFromCommand(
+  command: AssignPlacedAssetInspectableCommand
+): RegionInspectableBehavior {
+  return {
+    behaviorId: command.payload.behaviorId,
+    documentDefinitionId: command.payload.documentDefinitionId,
+    ...(command.payload.promptText === undefined
+      ? {}
+      : { promptText: command.payload.promptText })
+  };
+}
+
+function applyAssignPlacedAssetInspectable(
+  region: RegionDocument,
+  command: AssignPlacedAssetInspectableCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              inspectable: createInspectableBehaviorFromCommand(command)
+            }
+          : asset
+      )
+    }
+  };
+}
+
+function applyUpdatePlacedAssetInspectable(
+  region: RegionDocument,
+  command: UpdatePlacedAssetInspectableCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) => {
+        if (asset.instanceId !== command.payload.instanceId || !asset.inspectable) {
+          return asset;
+        }
+
+        return {
+          ...asset,
+          inspectable: {
+            ...asset.inspectable,
+            ...(command.payload.documentDefinitionId === undefined
+              ? {}
+              : { documentDefinitionId: command.payload.documentDefinitionId }),
+            ...(command.payload.promptText === undefined
+              ? {}
+              : {
+                  promptText:
+                    command.payload.promptText.trim().length > 0
+                      ? command.payload.promptText
+                      : undefined
+                })
+          }
+        };
+      })
+    }
+  };
+}
+
+function applyRemovePlacedAssetInspectable(
+  region: RegionDocument,
+  command: RemovePlacedAssetInspectableCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              inspectable: null
             }
           : asset
       )
@@ -627,6 +719,15 @@ export function executeCommand(
       break;
     case "MovePlacedAssetToFolder":
       updatedRegion = applyMovePlacedAssetToFolder(region, command);
+      break;
+    case "AssignPlacedAssetInspectable":
+      updatedRegion = applyAssignPlacedAssetInspectable(region, command);
+      break;
+    case "UpdatePlacedAssetInspectable":
+      updatedRegion = applyUpdatePlacedAssetInspectable(region, command);
+      break;
+    case "RemovePlacedAssetInspectable":
+      updatedRegion = applyRemovePlacedAssetInspectable(region, command);
       break;
     case "CreateSceneFolder":
       updatedRegion = applyCreateSceneFolder(region, command);

@@ -20,6 +20,7 @@ export interface PlacedAssetInstance {
   assetDefinitionId: string;
   displayName: string;
   parentFolderId: string | null;
+  inspectable: RegionInspectableBehavior | null;
   transform: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -49,6 +50,12 @@ export interface RegionItemPresence {
   itemDefinitionId: string;
   quantity: number;
   transform: RegionSceneTransform;
+}
+
+export interface RegionInspectableBehavior {
+  behaviorId: string;
+  documentDefinitionId: string;
+  promptText?: string;
 }
 
 export interface RegionEnvironmentBinding {
@@ -141,6 +148,10 @@ export function createNPCPresenceId(): string {
 }
 
 export function createItemPresenceId(): string {
+  return createUuid();
+}
+
+export function createInspectableBehaviorId(): string {
   return createUuid();
 }
 
