@@ -31,3 +31,4 @@ Current plans:
 - [Plan 011: Design NPC Definition Epic](/Users/nikki/projects/sugarmagic/docs/plans/011-design-npc-definition-epic.md)
 - [Plan 012: Layout Player and NPC Scene Placement Epic](/Users/nikki/projects/sugarmagic/docs/plans/012-layout-player-and-npc-scene-placement-epic.md)
 - [Plan 013: Design Dialogue Graph Epic](/Users/nikki/projects/sugarmagic/docs/plans/013-design-dialogue-graph-epic.md)
+- [Plan 014: Design Quest Graph Epic](/Users/nikki/projects/sugarmagic/docs/plans/014-design-quest-graph-epic.md)

@@ -5,8 +5,18 @@ import type {
   AssetDefinition,
   ContentLibrarySnapshot,
   PlayerAnimationSlot,
-  PlayerDefinition
+  PlayerDefinition,
+  RegionDocument
 } from "@sugarmagic/domain";
+import {
+  CameraTarget,
+  PlayerControlled,
+  Position,
+  Renderable,
+  Velocity,
+  type Entity,
+  type World
+} from "../ecs";
 
 const gltfLoader = new GLTFLoader();
 
@@ -107,6 +117,35 @@ export interface PlayerPreviewController {
   }) => Promise<PlayerPreviewApplyResult>;
   update: (deltaSeconds: number) => void;
   dispose: () => void;
+}
+
+export interface RuntimePlayerSpawn {
+  entity: Entity;
+  eyeHeight: number;
+  position: [number, number, number];
+}
+
+export function spawnRuntimePlayerEntity(
+  world: World,
+  region: RegionDocument | null,
+  playerDefinition: PlayerDefinition
+): RuntimePlayerSpawn {
+  const entity = world.createEntity();
+  const position = region?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+  world.addComponent(entity, new Position(...position));
+  world.addComponent(entity, new Velocity());
+  world.addComponent(
+    entity,
+    new PlayerControlled(playerDefinition.movementProfile.walkSpeed)
+  );
+  world.addComponent(entity, new CameraTarget());
+  world.addComponent(entity, new Renderable("player", true));
+
+  return {
+    entity,
+    eyeHeight: playerDefinition.physicalProfile.eyeHeight,
+    position
+  };
 }
 
 export function createPlayerVisualController(

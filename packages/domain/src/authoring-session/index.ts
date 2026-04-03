@@ -21,11 +21,14 @@ import type {
   SemanticCommand,
   CreateDialogueDefinitionCommand,
   CreateNPCDefinitionCommand,
+  CreateQuestDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
+  DeleteQuestDefinitionCommand,
   UpdateEnvironmentDefinitionCommand,
   UpdateDialogueDefinitionCommand,
   UpdateNPCDefinitionCommand,
+  UpdateQuestDefinitionCommand,
   UpdatePlayerDefinitionCommand
 } from "../commands";
 import type {
@@ -35,6 +38,7 @@ import type {
 } from "../content-library";
 import type { NPCDefinition } from "../npc-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
+import type { QuestDefinition } from "../quest-definition";
 import type { TimestampIso } from "../shared";
 import {
   createEmptyContentLibrarySnapshot,
@@ -188,6 +192,12 @@ export function getAllDialogueDefinitions(
   return session.gameProject.dialogueDefinitions;
 }
 
+export function getAllQuestDefinitions(
+  session: AuthoringSession
+): QuestDefinition[] {
+  return session.gameProject.questDefinitions;
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
   regions: RegionDocument[],
@@ -333,6 +343,30 @@ function applyCreateDialogueDefinitionCommand(
   };
 }
 
+function applyCreateQuestDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateQuestDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      questDefinitions: [
+        ...session.gameProject.questDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyUpdateNPCDefinitionCommand(
   session: AuthoringSession,
   command: UpdateNPCDefinitionCommand
@@ -377,6 +411,32 @@ function applyUpdateDialogueDefinitionCommand(
     gameProject: {
       ...session.gameProject,
       dialogueDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateQuestDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateQuestDefinitionCommand
+): AuthoringSession {
+  const nextDefinitions = session.gameProject.questDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definition.definitionId
+      ? command.payload.definition
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      questDefinitions: nextDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -431,6 +491,29 @@ function applyDeleteDialogueDefinitionCommand(
   };
 }
 
+function applyDeleteQuestDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteQuestDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      questDefinitions: session.gameProject.questDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
@@ -451,6 +534,10 @@ export function applyCommand(
     return applyCreateDialogueDefinitionCommand(session, command);
   }
 
+  if (command.kind === "CreateQuestDefinition") {
+    return applyCreateQuestDefinitionCommand(session, command);
+  }
+
   if (command.kind === "UpdateNPCDefinition") {
     return applyUpdateNPCDefinitionCommand(session, command);
   }
@@ -459,12 +546,20 @@ export function applyCommand(
     return applyUpdateDialogueDefinitionCommand(session, command);
   }
 
+  if (command.kind === "UpdateQuestDefinition") {
+    return applyUpdateQuestDefinitionCommand(session, command);
+  }
+
   if (command.kind === "DeleteNPCDefinition") {
     return applyDeleteNPCDefinitionCommand(session, command);
   }
 
   if (command.kind === "DeleteDialogueDefinition") {
     return applyDeleteDialogueDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteQuestDefinition") {
+    return applyDeleteQuestDefinitionCommand(session, command);
   }
 
   const activeRegion = getActiveRegion(session);

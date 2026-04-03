@@ -92,7 +92,9 @@ export class DialogueManager {
   private currentDialogue: DialogueDefinition | null = null;
   private currentNode: DialogueNodeDefinition | null = null;
   private onDialogueStart: (() => void) | null = null;
-  private onDialogueEnd: (() => void) | null = null;
+  private onDialogueEnd:
+    | ((dialogueDefinitionId: string | null, reason: "completed" | "cancelled") => void)
+    | null = null;
   private onEvent: DialogueEventHandler | null = null;
   private onNodeEnter: DialogueNodeHandler | null = null;
   private speakerNameResolver: SpeakerNameResolver | null = null;
@@ -115,7 +117,9 @@ export class DialogueManager {
     this.onDialogueStart = handler;
   }
 
-  setOnEnd(handler: () => void): void {
+  setOnEnd(
+    handler: (dialogueDefinitionId: string | null, reason: "completed" | "cancelled") => void
+  ): void {
     this.onDialogueEnd = handler;
   }
 
@@ -145,7 +149,7 @@ export class DialogueManager {
 
   start(definitionId: string): boolean {
     if (this.isDialogueActive()) {
-      this.end();
+      this.end("cancelled");
     }
 
     const dialogue = this.definitions.get(definitionId);
@@ -160,7 +164,7 @@ export class DialogueManager {
 
     const startNode = dialogue.nodes.find((node) => node.nodeId === dialogue.startNodeId);
     if (!startNode) {
-      this.end();
+      this.end("cancelled");
       return false;
     }
 
@@ -168,15 +172,16 @@ export class DialogueManager {
     return true;
   }
 
-  end(): void {
+  end(reason: "completed" | "cancelled" = "completed"): void {
+    const currentDialogueId = this.currentDialogue?.definitionId ?? null;
     this.presenter.hide();
     this.currentDialogue = null;
     this.currentNode = null;
-    this.onDialogueEnd?.();
+    this.onDialogueEnd?.(currentDialogueId, reason);
   }
 
   dispose(): void {
-    this.end();
+    this.end("cancelled");
     this.presenter.dispose?.();
   }
 
@@ -203,19 +208,19 @@ export class DialogueManager {
     this.presenter.showNode(
       displayNode,
       (selected) => this.handleAdvance(selected),
-      () => this.end()
+      () => this.end("cancelled")
     );
   }
 
   private handleAdvance(selected?: DialogueEdgeDefinition): void {
     if (!this.currentDialogue || !this.currentNode) {
-      this.end();
+      this.end("completed");
       return;
     }
 
     const nextNodeId = selected?.targetNodeId ?? this.currentNode.next[0]?.targetNodeId;
     if (!nextNodeId) {
-      this.end();
+      this.end("completed");
       return;
     }
 
@@ -223,7 +228,7 @@ export class DialogueManager {
       (candidate) => candidate.nodeId === nextNodeId
     );
     if (!nextNode) {
-      this.end();
+      this.end("completed");
       return;
     }
 

@@ -46,7 +46,8 @@ describe("layout scene presences", () => {
         contentLibraryId: "project:content-library",
         playerDefinition: createDefaultPlayerDefinition("project"),
         npcDefinitions: [],
-        dialogueDefinitions: []
+        dialogueDefinitions: [],
+        questDefinitions: []
       },
       [makeRegion()],
       {

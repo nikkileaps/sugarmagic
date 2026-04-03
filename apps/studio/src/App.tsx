@@ -15,6 +15,7 @@ import {
   getAllDialogueDefinitions,
   getAllEnvironmentDefinitions,
   getAllNPCDefinitions,
+  getAllQuestDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -255,6 +256,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           playerDefinition: capturedSession.gameProject.playerDefinition,
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
           dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
+          questDefinitions: capturedSession.gameProject.questDefinitions,
           assetSources
         },
         "*"
@@ -365,6 +367,11 @@ export function App() {
   const dialogueDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllDialogueDefinitions(session);
+  }, [session]);
+
+  const questDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllQuestDefinitions(session);
   }, [session]);
 
   const environmentViewportOverrideId =
@@ -488,7 +495,10 @@ export function App() {
 
   useEffect(() => {
     if (phase !== "active") return;
-    if (activeProductMode === "design" && activeDesignKind === "dialogues") {
+    if (
+      activeProductMode === "design" &&
+      (activeDesignKind === "dialogues" || activeDesignKind === "quests")
+    ) {
       buildViewportRef.current = null;
       playerViewportRef.current = null;
       npcViewportRef.current = null;
@@ -597,6 +607,7 @@ export function App() {
     playerDefinition,
     npcDefinitions,
     dialogueDefinitions,
+    questDefinitions,
     contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
     assetSources,

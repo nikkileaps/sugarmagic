@@ -5,6 +5,7 @@ import type {
   DialogueDefinition,
   NPCDefinition,
   PlayerDefinition,
+  QuestDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
@@ -16,11 +17,13 @@ import type {
 import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
+import { useQuestWorkspaceView } from "./QuestWorkspaceView";
 
 const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
   { id: "npcs", label: "NPCs", icon: "👤" },
-  { id: "dialogues", label: "Dialogues", icon: "💬" }
+  { id: "dialogues", label: "Dialogues", icon: "💬" },
+  { id: "quests", label: "Quests", icon: "📜" }
 ];
 
 export interface DesignProductModeViewProps {
@@ -30,6 +33,7 @@ export interface DesignProductModeViewProps {
   playerDefinition: PlayerDefinition | null;
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
+  questDefinitions: QuestDefinition[];
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -58,6 +62,7 @@ export function useDesignProductModeView(
     playerDefinition,
     npcDefinitions,
     dialogueDefinitions,
+    questDefinitions,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -102,6 +107,15 @@ export function useDesignProductModeView(
     onCommand
   });
 
+  const questView = useQuestWorkspaceView({
+    isActive: activeDesignKind === "quests",
+    gameProjectId,
+    questDefinitions,
+    dialogueDefinitions,
+    npcDefinitions,
+    onCommand
+  });
+
   return {
     subHeaderPanel: (
       <BuildSubNav
@@ -113,22 +127,32 @@ export function useDesignProductModeView(
     leftPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.leftPanel
-        : activeDesignKind === "npcs"
-          ? npcView.leftPanel
-          : playerView.leftPanel,
+        : activeDesignKind === "quests"
+          ? questView.leftPanel
+          : activeDesignKind === "npcs"
+            ? npcView.leftPanel
+            : playerView.leftPanel,
     rightPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.rightPanel
-        : activeDesignKind === "npcs"
-          ? npcView.rightPanel
-          : playerView.rightPanel,
+        : activeDesignKind === "quests"
+          ? questView.rightPanel
+          : activeDesignKind === "npcs"
+            ? npcView.rightPanel
+            : playerView.rightPanel,
     centerPanel:
-      activeDesignKind === "dialogues" ? dialogueView.centerPanel : undefined,
+      activeDesignKind === "dialogues"
+        ? dialogueView.centerPanel
+        : activeDesignKind === "quests"
+          ? questView.centerPanel
+          : undefined,
     viewportOverlay:
       activeDesignKind === "dialogues"
         ? dialogueView.viewportOverlay
-        : activeDesignKind === "npcs"
-          ? npcView.viewportOverlay
-          : playerView.viewportOverlay
+        : activeDesignKind === "quests"
+          ? questView.viewportOverlay
+          : activeDesignKind === "npcs"
+            ? npcView.viewportOverlay
+            : playerView.viewportOverlay
   };
 }

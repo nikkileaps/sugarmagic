@@ -9,6 +9,7 @@ export * from "./npc-definition";
 export * from "./plugins";
 export * from "./player-definition";
 export * from "./publish-artifacts";
+export * from "./quest-definition";
 export * from "./region-authoring";
 export * from "./shared";
 export * from "./transactions";
