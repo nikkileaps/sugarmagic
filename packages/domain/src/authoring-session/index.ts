@@ -19,9 +19,12 @@ import {
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
+  CreateDialogueDefinitionCommand,
   CreateNPCDefinitionCommand,
   DeleteNPCDefinitionCommand,
+  DeleteDialogueDefinitionCommand,
   UpdateEnvironmentDefinitionCommand,
+  UpdateDialogueDefinitionCommand,
   UpdateNPCDefinitionCommand,
   UpdatePlayerDefinitionCommand
 } from "../commands";
@@ -31,6 +34,7 @@ import type {
   EnvironmentDefinition
 } from "../content-library";
 import type { NPCDefinition } from "../npc-definition";
+import type { DialogueDefinition } from "../dialogue-definition";
 import type { TimestampIso } from "../shared";
 import {
   createEmptyContentLibrarySnapshot,
@@ -178,6 +182,12 @@ export function getAllNPCDefinitions(session: AuthoringSession): NPCDefinition[]
   return session.gameProject.npcDefinitions;
 }
 
+export function getAllDialogueDefinitions(
+  session: AuthoringSession
+): DialogueDefinition[] {
+  return session.gameProject.dialogueDefinitions;
+}
+
 export function createAuthoringSession(
   gameProject: GameProject,
   regions: RegionDocument[],
@@ -299,6 +309,30 @@ function applyCreateNPCDefinitionCommand(
   };
 }
 
+function applyCreateDialogueDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateDialogueDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      dialogueDefinitions: [
+        ...session.gameProject.dialogueDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyUpdateNPCDefinitionCommand(
   session: AuthoringSession,
   command: UpdateNPCDefinitionCommand
@@ -317,6 +351,32 @@ function applyUpdateNPCDefinitionCommand(
     gameProject: {
       ...session.gameProject,
       npcDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateDialogueDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateDialogueDefinitionCommand
+): AuthoringSession {
+  const nextDefinitions = session.gameProject.dialogueDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definition.definitionId
+      ? command.payload.definition
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      dialogueDefinitions: nextDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -348,6 +408,29 @@ function applyDeleteNPCDefinitionCommand(
   };
 }
 
+function applyDeleteDialogueDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteDialogueDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      dialogueDefinitions: session.gameProject.dialogueDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
@@ -364,12 +447,24 @@ export function applyCommand(
     return applyCreateNPCDefinitionCommand(session, command);
   }
 
+  if (command.kind === "CreateDialogueDefinition") {
+    return applyCreateDialogueDefinitionCommand(session, command);
+  }
+
   if (command.kind === "UpdateNPCDefinition") {
     return applyUpdateNPCDefinitionCommand(session, command);
   }
 
+  if (command.kind === "UpdateDialogueDefinition") {
+    return applyUpdateDialogueDefinitionCommand(session, command);
+  }
+
   if (command.kind === "DeleteNPCDefinition") {
     return applyDeleteNPCDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteDialogueDefinition") {
+    return applyDeleteDialogueDefinitionCommand(session, command);
   }
 
   const activeRegion = getActiveRegion(session);

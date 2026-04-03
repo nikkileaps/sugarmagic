@@ -17,5 +17,6 @@ export interface WorkspaceViewContext {
 export interface WorkspaceViewContribution {
   leftPanel: ReactNode;
   rightPanel: ReactNode;
+  centerPanel?: ReactNode;
   viewportOverlay: ReactNode;
 }

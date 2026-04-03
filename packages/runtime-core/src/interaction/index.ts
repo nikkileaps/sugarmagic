@@ -1,5 +1,2 @@
-export interface InteractionPreviewSession {
-  sessionId: string;
-  workspaceId: string;
-  isTransient: true;
-}
+export * from "./InteractionPrompt";
+export * from "./InteractionSystem";

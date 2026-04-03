@@ -29,3 +29,5 @@ Current plans:
 - [Plan 009: Landscape Ground Plane and Splatmap Epic](/Users/nikki/projects/sugarmagic/docs/plans/009-landscape-ground-plane-and-splatmap-epic.md)
 - [Plan 010: Design Player Definition Epic](/Users/nikki/projects/sugarmagic/docs/plans/010-design-player-definition-epic.md)
 - [Plan 011: Design NPC Definition Epic](/Users/nikki/projects/sugarmagic/docs/plans/011-design-npc-definition-epic.md)
+- [Plan 012: Layout Player and NPC Scene Placement Epic](/Users/nikki/projects/sugarmagic/docs/plans/012-layout-player-and-npc-scene-placement-epic.md)
+- [Plan 013: Design Dialogue Graph Epic](/Users/nikki/projects/sugarmagic/docs/plans/013-design-dialogue-graph-epic.md)

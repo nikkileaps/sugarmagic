@@ -1,5 +1,9 @@
 import type { DocumentIdentity, RegionReference } from "../shared/identity";
 import {
+  normalizeDialogueDefinition,
+  type DialogueDefinition
+} from "../dialogue-definition";
+import {
   normalizeNPCDefinition,
   type NPCDefinition
 } from "../npc-definition";
@@ -18,12 +22,14 @@ export interface GameProject {
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
   npcDefinitions: NPCDefinition[];
+  dialogueDefinitions: DialogueDefinition[];
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "playerDefinition" | "npcDefinitions" | "dialogueDefinitions"> & {
     playerDefinition?: Partial<PlayerDefinition> | null;
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
+    dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
   })
 ): GameProject {
   return {
@@ -34,6 +40,9 @@ export function normalizeGameProject(
     ),
     npcDefinitions: (gameProject.npcDefinitions ?? []).map((definition) =>
       normalizeNPCDefinition(definition)
+    ),
+    dialogueDefinitions: (gameProject.dialogueDefinitions ?? []).map((definition) =>
+      normalizeDialogueDefinition(definition)
     )
   };
 }
@@ -50,6 +59,7 @@ export function createDefaultGameProject(
     pluginConfigIds: [],
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
-    npcDefinitions: []
+    npcDefinitions: [],
+    dialogueDefinitions: []
   };
 }

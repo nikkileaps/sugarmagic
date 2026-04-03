@@ -3,6 +3,7 @@ import type {
   RegionLandscapePaintPayload
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
+import type { DialogueDefinition } from "../dialogue-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
 import type { DocumentId, SubjectReference } from "../shared/identity";
@@ -178,6 +179,13 @@ export type CreateNPCDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateDialogueDefinitionCommand = SemanticCommandBase<
+  "CreateDialogueDefinition",
+  {
+    definition: DialogueDefinition;
+  }
+>;
+
 export type UpdateNPCDefinitionCommand = SemanticCommandBase<
   "UpdateNPCDefinition",
   {
@@ -185,8 +193,22 @@ export type UpdateNPCDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateDialogueDefinitionCommand = SemanticCommandBase<
+  "UpdateDialogueDefinition",
+  {
+    definition: DialogueDefinition;
+  }
+>;
+
 export type DeleteNPCDefinitionCommand = SemanticCommandBase<
   "DeleteNPCDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DeleteDialogueDefinitionCommand = SemanticCommandBase<
+  "DeleteDialogueDefinition",
   {
     definitionId: string;
   }
@@ -258,8 +280,11 @@ export type SemanticCommand =
   | TransformPlayerPresenceCommand
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
+  | CreateDialogueDefinitionCommand
   | UpdateNPCDefinitionCommand
+  | UpdateDialogueDefinitionCommand
   | DeleteNPCDefinitionCommand
+  | DeleteDialogueDefinitionCommand
   | CreateNPCPresenceCommand
   | TransformNPCPresenceCommand
   | RemoveNPCPresenceCommand

@@ -28,6 +28,7 @@ describe("Build navigation model", () => {
   it("derives design workspace IDs without region context", () => {
     expect(deriveDesignWorkspaceId("player")).toBe("design:player");
     expect(deriveDesignWorkspaceId("npcs")).toBe("design:npcs");
+    expect(deriveDesignWorkspaceId("dialogues")).toBe("design:dialogues");
   });
 
   it("changing to environment workspace uses environment context, not region context", () => {

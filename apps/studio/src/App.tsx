@@ -12,6 +12,7 @@ import {
   getActiveRegion,
   getAllRegions,
   getAllAssetDefinitions,
+  getAllDialogueDefinitions,
   getAllEnvironmentDefinitions,
   getAllNPCDefinitions,
   getPlayerDefinition,
@@ -253,6 +254,7 @@ function handleStartPreview(assetSources: Record<string, string>) {
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
+          dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
           assetSources
         },
         "*"
@@ -358,6 +360,11 @@ export function App() {
   const npcDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllNPCDefinitions(session);
+  }, [session]);
+
+  const dialogueDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllDialogueDefinitions(session);
   }, [session]);
 
   const environmentViewportOverrideId =
@@ -480,7 +487,19 @@ export function App() {
   const npcViewportRef = useRef<NPCWorkspaceViewport | null>(null);
 
   useEffect(() => {
-    if (!viewportRef.current || phase !== "active") return;
+    if (phase !== "active") return;
+    if (activeProductMode === "design" && activeDesignKind === "dialogues") {
+      buildViewportRef.current = null;
+      playerViewportRef.current = null;
+      npcViewportRef.current = null;
+      const readyFrame = window.requestAnimationFrame(() => {
+        setViewportReadyVersion((version) => version + 1);
+      });
+      return () => {
+        window.cancelAnimationFrame(readyFrame);
+      };
+    }
+    if (!viewportRef.current) return;
     const viewport =
       activeProductMode === "design"
         ? activeDesignKind === "npcs"
@@ -577,6 +596,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     playerDefinition,
     npcDefinitions,
+    dialogueDefinitions,
     contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
     assetSources,
@@ -654,17 +674,21 @@ export function App() {
           <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
         }
         centerPanel={
-          <ViewportFrame>
-            {phase === "active" ? (
-              <>
-                <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
-                {isBuild && buildView.viewportOverlay}
-                {isDesign && designView.viewportOverlay}
-              </>
-            ) : (
-              <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>
-            )}
-          </ViewportFrame>
+          phase === "active" && isDesign && designView.centerPanel ? (
+            designView.centerPanel
+          ) : (
+            <ViewportFrame>
+              {phase === "active" ? (
+                <>
+                  <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
+                  {isBuild && buildView.viewportOverlay}
+                  {isDesign && designView.viewportOverlay}
+                </>
+              ) : (
+                <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>
+              )}
+            </ViewportFrame>
+          )
         }
       />
     </>
