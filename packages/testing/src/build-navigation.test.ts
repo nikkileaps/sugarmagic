@@ -9,6 +9,9 @@ describe("Build navigation model", () => {
     expect(deriveBuildWorkspaceId("layout", "forest_north")).toBe(
       "build:layout:forest_north"
     );
+    expect(deriveBuildWorkspaceId("landscape", "forest_north")).toBe(
+      "build:landscape:forest_north"
+    );
     expect(deriveBuildWorkspaceId("environment", "env_default")).toBe(
       "build:environment:env_default"
     );
@@ -49,12 +52,12 @@ describe("Build navigation model", () => {
   it("changing region preserves workspace kind and updates workspace ID for region-scoped workspaces", () => {
     const store = createShellStore("build");
     store.getState().setActiveRegionId("forest_north");
-    store.getState().setActiveBuildWorkspaceKind("assets");
+    store.getState().setActiveBuildWorkspaceKind("landscape");
 
     store.getState().setActiveRegionId("cave_01");
-    expect(store.getState().activeBuildWorkspaceKind).toBe("assets");
+    expect(store.getState().activeBuildWorkspaceKind).toBe("landscape");
     expect(store.getState().activeRegionId).toBe("cave_01");
-    expect(store.getState().activeWorkspaceId).toBe("build:assets:cave_01");
+    expect(store.getState().activeWorkspaceId).toBe("build:landscape:cave_01");
   });
 
   it("clears selection and tool session on workspace kind change", () => {

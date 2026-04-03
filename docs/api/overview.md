@@ -24,6 +24,14 @@ The architectural rule is:
 - these contexts share one runtime semantics layer in `runtime-core`
 - they differ in shell ownership, target hosting, and compile profile behavior
 
+For authored world composition, regions should be treated as explicit semantic units rather than fixed engine tiles.
+
+Current default policy:
+
+- new regions start with a `100m x 100m` default authored ground footprint
+- that default is expressed first through the region landscape plane
+- runtime may later derive smaller streaming partitions behind the scenes
+
 ### Boundary summary
 
 The package split should be read like this:

@@ -28,11 +28,13 @@ import type { WorkspaceViewContribution } from "../workspace-view";
 import type { WorkspaceViewport } from "../viewport";
 import { applyLightingPresetToEnvironmentDefinition } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
+import { useLandscapeWorkspaceView } from "./landscape";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "layout", label: "Layout", icon: "🏗️" },
+  { id: "landscape", label: "Landscape", icon: "⛰️" },
   { id: "environment", label: "Environment", icon: "🌅" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
@@ -63,7 +65,7 @@ export interface BuildProductModeViewProps {
 
 export interface BuildProductModeViewResult {
   subHeaderPanel: React.ReactNode;
-  leftPanel: React.ReactNode;
+  leftPanel: React.ReactNode | null;
   rightPanel: React.ReactNode;
   viewportOverlay: React.ReactNode;
   environmentOverrideId: string | null;
@@ -170,6 +172,16 @@ export function useBuildProductModeView(
     }
   });
 
+  const landscapeView = useLandscapeWorkspaceView({
+    isActive: activeBuildKind === "landscape",
+    viewportReadyVersion,
+    getViewport: activeBuildKind === "landscape" ? getViewport : () => null,
+    getViewportElement:
+      activeBuildKind === "landscape" ? getViewportElement : () => null,
+    region: activeRegion,
+    onCommand
+  });
+
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
@@ -216,12 +228,14 @@ export function useBuildProductModeView(
   const activeView: WorkspaceViewContribution =
     activeBuildKind === "layout"
       ? layoutView
+      : activeBuildKind === "landscape"
+        ? landscapeView
       : activeBuildKind === "environment"
         ? environmentView
         : assetsView;
 
   const contextSelector: BuildContextSelector | null =
-    activeBuildKind === "layout"
+    activeBuildKind === "layout" || activeBuildKind === "landscape"
       ? {
           items: regions,
           activeId: activeRegionId,
@@ -255,22 +269,22 @@ export function useBuildProductModeView(
         contextSelector={contextSelector}
       />
     ),
-
-    leftPanel: (
-      <Stack gap={0} h="100%">
-        {!activeRegion && activeBuildKind === "layout" && (
-          <Stack gap="sm" align="center" p="xl" mt="xl">
-            <Text size="sm" c="var(--sm-color-overlay0)" ta="center">
-              No region selected.
-            </Text>
-            <Text size="xs" c="var(--sm-color-overlay0)" ta="center">
-              Use the region selector above to create or select a region.
-            </Text>
-          </Stack>
-        )}
-        {activeView.leftPanel}
-      </Stack>
-    ),
+    leftPanel:
+      activeBuildKind === "layout" ? (
+        <Stack gap={0} h="100%">
+          {!activeRegion && (
+            <Stack gap="sm" align="center" p="xl" mt="xl">
+              <Text size="sm" c="var(--sm-color-overlay0)" ta="center">
+                No region selected.
+              </Text>
+              <Text size="xs" c="var(--sm-color-overlay0)" ta="center">
+                Use the region selector above to create or select a region.
+              </Text>
+            </Stack>
+          )}
+          {activeView.leftPanel}
+        </Stack>
+      ) : activeView.leftPanel ?? null,
 
     rightPanel: activeView.rightPanel,
     viewportOverlay: activeView.viewportOverlay,

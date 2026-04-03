@@ -1,7 +1,12 @@
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
+import {
+  DEFAULT_REGION_LANDSCAPE_SIZE,
+  type ContentLibrarySnapshot,
+  type RegionDocument,
+  type RegionLandscapeState
+} from "@sugarmagic/domain";
 import {
   World,
   Position,
@@ -21,6 +26,7 @@ import {
   createRuntimeBootModel,
   createRuntimeEnvironmentState,
   createEnvironmentSceneController,
+  createLandscapeSceneController,
   createRuntimeRenderPipeline,
   resolveEnvironmentDefinition,
   type GameCameraState,
@@ -72,6 +78,43 @@ const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
+}
+
+interface LandscapeGridSpec {
+  size: number;
+  divisions: number;
+}
+
+function resolveLandscapeGridSpec(
+  landscape: RegionLandscapeState | null | undefined
+): LandscapeGridSpec {
+  const size =
+    landscape && Number.isFinite(landscape.size) && landscape.size > 0
+      ? landscape.size
+      : DEFAULT_REGION_LANDSCAPE_SIZE;
+
+  return {
+    size,
+    divisions: Math.max(1, Math.min(200, Math.round(size)))
+  };
+}
+
+function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
+  const grid = new THREE.GridHelper(spec.size, spec.divisions, GRID_COLOR, GRID_COLOR);
+  grid.position.y = 0.01;
+  grid.name = "runtime-landscape-grid";
+  return grid;
+}
+
+function disposeGrid(grid: THREE.GridHelper) {
+  grid.geometry.dispose();
+  if (Array.isArray(grid.material)) {
+    for (const material of grid.material) {
+      material.dispose();
+    }
+  } else {
+    grid.material.dispose();
+  }
 }
 
 function createFallbackMesh(): THREE.Mesh {
@@ -133,11 +176,13 @@ export function createWebRuntimeHost(
   let camera: THREE.PerspectiveCamera | null = null;
   let renderer: WebGPURenderer | null = null;
   let environmentController: ReturnType<typeof createEnvironmentSceneController> | null = null;
+  let landscapeController: ReturnType<typeof createLandscapeSceneController> | null = null;
   let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
   let playerMesh: THREE.Mesh | null = null;
+  let grid: THREE.GridHelper | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
@@ -175,6 +220,13 @@ export function createWebRuntimeHost(
 
     environmentController?.dispose();
     environmentController = null;
+    landscapeController?.dispose();
+    landscapeController = null;
+    if (grid && scene) {
+      scene.remove(grid);
+      disposeGrid(grid);
+      grid = null;
+    }
     renderPipeline?.dispose();
     renderPipeline = null;
 
@@ -272,6 +324,7 @@ export function createWebRuntimeHost(
 
     scene = new THREE.Scene();
     environmentController = createEnvironmentSceneController(scene);
+    landscapeController = createLandscapeSceneController(scene);
 
     camera = new THREE.PerspectiveCamera(
       DEFAULT_CAMERA_CONFIG.fov,
@@ -286,9 +339,9 @@ export function createWebRuntimeHost(
     renderer.domElement.style.height = "100%";
     root.appendChild(renderer.domElement);
 
-    scene.add(new THREE.GridHelper(40, 40, GRID_COLOR, GRID_COLOR));
-
     const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
+    grid = createLandscapeGrid(resolveLandscapeGridSpec(activeRegion?.landscape ?? null));
+    scene.add(grid);
     runtimeEnvironmentState = createRuntimeEnvironmentState({
       region: activeRegion,
       contentLibrary: state.contentLibrary,
@@ -299,6 +352,7 @@ export function createWebRuntimeHost(
       state.contentLibrary,
       runtimeEnvironmentState.activeEnvironmentId
     );
+    landscapeController.apply(activeRegion);
     for (const region of state.regions) {
       const objects = resolveSceneObjects(region, state.contentLibrary);
       for (const object of objects) {

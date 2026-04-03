@@ -3,7 +3,8 @@ import type { RegionDocument, SemanticCommand } from "@sugarmagic/domain";
 import {
   executeCommand,
   pushTransaction,
-  createEmptyHistory
+  createEmptyHistory,
+  createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
 
 function makeTestRegion(): RegionDocument {
@@ -28,7 +29,7 @@ function makeTestRegion(): RegionDocument {
       ]
     },
     environmentBinding: { defaultEnvironmentId: "env:default" },
-    landscape: { enabled: false, channelIds: [] },
+    landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []
   };

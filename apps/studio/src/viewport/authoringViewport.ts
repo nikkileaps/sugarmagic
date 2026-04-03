@@ -2,9 +2,14 @@ import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
+  DEFAULT_REGION_LANDSCAPE_SIZE,
+  type RegionLandscapeState
+} from "@sugarmagic/domain";
+import {
   resolveSceneObjects,
   computeSceneDelta,
   createEnvironmentSceneController,
+  createLandscapeSceneController,
   createRuntimeRenderPipeline,
   resolveEnvironmentDefinition,
   type SceneObject
@@ -22,6 +27,43 @@ const gltfLoader = new GLTFLoader();
 interface SceneObjectEntry {
   root: THREE.Group;
   assetSourceUrl: string | null;
+}
+
+interface LandscapeGridSpec {
+  size: number;
+  divisions: number;
+}
+
+function resolveLandscapeGridSpec(
+  landscape: RegionLandscapeState | null | undefined
+): LandscapeGridSpec {
+  const size =
+    landscape && Number.isFinite(landscape.size) && landscape.size > 0
+      ? landscape.size
+      : DEFAULT_REGION_LANDSCAPE_SIZE;
+
+  return {
+    size,
+    divisions: Math.max(1, Math.min(200, Math.round(size)))
+  };
+}
+
+function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
+  const grid = new THREE.GridHelper(spec.size, spec.divisions, GRID_COLOR, GRID_COLOR);
+  grid.position.y = 0.01;
+  grid.name = "authoring-landscape-grid";
+  return grid;
+}
+
+function disposeGrid(grid: THREE.GridHelper) {
+  grid.geometry.dispose();
+  if (Array.isArray(grid.material)) {
+    for (const material of grid.material) {
+      material.dispose();
+    }
+  } else {
+    grid.material.dispose();
+  }
 }
 
 function createFallbackMesh(): THREE.Mesh {
@@ -92,6 +134,7 @@ async function createRenderableRoot(
 export function createAuthoringViewport(): WorkspaceViewport {
   const scene = new THREE.Scene();
   const environmentController = createEnvironmentSceneController(scene);
+  const landscapeController = createLandscapeSceneController(scene);
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
   camera.position.set(5, 5, 5);
@@ -99,8 +142,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
   let renderer: WebGPURenderer | null = null;
   let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
-
-  const grid = new THREE.GridHelper(20, 20, GRID_COLOR, GRID_COLOR);
+  let currentGridSpec = resolveLandscapeGridSpec(null);
+  let grid = createLandscapeGrid(currentGridSpec);
   scene.add(grid);
 
   const authoredRoot = new THREE.Group();
@@ -114,10 +157,27 @@ export function createAuthoringViewport(): WorkspaceViewport {
   const objectMap = new Map<string, SceneObjectEntry>();
   const frameListeners = new Set<() => void>();
   let previousObjects: SceneObject[] = [];
+  let currentState: ViewportSceneState | null = null;
   let animationId: number | null = null;
   let container: HTMLElement | null = null;
   let renderGeneration = 0;
   let mountGeneration = 0;
+
+  function syncLandscapeGrid(landscape: RegionLandscapeState | null | undefined) {
+    const nextSpec = resolveLandscapeGridSpec(landscape);
+    if (
+      nextSpec.size === currentGridSpec.size &&
+      nextSpec.divisions === currentGridSpec.divisions
+    ) {
+      return;
+    }
+
+    scene.remove(grid);
+    disposeGrid(grid);
+    grid = createLandscapeGrid(nextSpec);
+    scene.add(grid);
+    currentGridSpec = nextSpec;
+  }
 
   function renderLoop() {
     for (const listener of frameListeners) {
@@ -136,6 +196,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
     camera,
     authoredRoot,
     overlayRoot,
+    surfaceRoot: landscapeController.surfaceRoot,
 
     mount(element: HTMLElement) {
       container = element;
@@ -192,7 +253,9 @@ export function createAuthoringViewport(): WorkspaceViewport {
         disposeObject(entry.root);
       }
       objectMap.clear();
+      currentState = null;
       environmentController.dispose();
+      landscapeController.dispose();
       renderPipeline?.dispose();
       renderPipeline = null;
 
@@ -205,6 +268,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
     },
 
     updateFromRegion(state: ViewportSceneState) {
+      currentState = state;
       const {
         region,
         contentLibrary,
@@ -212,6 +276,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
         environmentOverrideId = null
       } = state;
       environmentController.apply(region, contentLibrary, environmentOverrideId);
+      landscapeController.apply(region);
+      syncLandscapeGrid(region.landscape);
       renderPipeline?.applyEnvironment(
         resolveEnvironmentDefinition(region, contentLibrary, environmentOverrideId)
       );
@@ -289,6 +355,31 @@ export function createAuthoringViewport(): WorkspaceViewport {
       }
 
       previousObjects = currentObjects;
+    },
+
+    previewLandscape(landscape) {
+      if (!currentState) return;
+      landscapeController.applyLandscape(landscape);
+      syncLandscapeGrid(landscape);
+    },
+
+    paintLandscapeAt(options) {
+      return landscapeController.paintStroke({
+        channelIndex: options.channelIndex,
+        worldX: options.worldX,
+        worldZ: options.worldZ,
+        radius: options.radius,
+        strength: options.strength,
+        falloff: options.falloff
+      });
+    },
+
+    renderLandscapeMask(channelIndex, canvas) {
+      landscapeController.renderMaskToCanvas(channelIndex, canvas);
+    },
+
+    serializeLandscapePaintPayload() {
+      return landscapeController.serializePaintPayload();
     },
 
     previewTransform(instanceId, position, rotation, scale) {

@@ -179,6 +179,35 @@ But whatever shape is chosen later, it must preserve this rule:
 
 A `Region Document` is the canonical authored description of one world region in Sugarmagic.
 
+### Region meaning
+
+A `Region Document` should be understood as an explicit authored world unit.
+
+It is:
+
+- a meaningful authoring boundary
+- a meaningful gameplay/world-composition boundary
+- a meaningful preview/test boundary
+- a default runtime load boundary
+
+It is not necessarily:
+
+- the smallest runtime streaming unit
+- a camera-cut boundary
+- a room-by-room partition by default
+- a fixed-size world tile
+
+### Region versus runtime streaming
+
+Sugarmagic should use a two-layer model:
+
+- `Region Document`
+  - explicit, authored, semantic world unit
+- derived runtime streaming partitions
+  - internal runtime optimization units generated from authored world data
+
+That means the author should choose regions intentionally, while the runtime remains free to derive finer-grained streaming cells, chunks, or visibility partitions behind the scenes.
+
 It owns:
 
 - the region's identity
@@ -351,8 +380,10 @@ The region landscape subdomain owns the terrain-like painted ground state for th
 - extent/size
 - subdivision/resolution policy
 - channel definitions
+- an implicit base channel definition
 - channel bindings to colors or materials
 - painted influence field
+- canonical splatmap layer payloads
 
 ### Region Landscape should not include
 
@@ -366,6 +397,35 @@ Those are editor workspace concerns, not authored region truth.
 ### Important rule
 
 The region landscape must be sufficient to reconstruct the same landscape in both edit mode and play mode.
+
+### Important distinction
+
+Landscape size is the authored ground footprint.
+
+It should not be confused with a final universal `Region` size contract.
+
+A region may later contain:
+
+- authored content beyond the landscape footprint
+- off-ground content
+- multiple gameplay spaces
+- runtime-derived streaming partitions
+
+So:
+
+- grid size is editor visualization only
+- landscape size is canonical ground-surface extent
+- region size remains an authored semantic concept, not a globally fixed tile size
+
+### Default authored footprint policy
+
+Even though region size should not be globally fixed, Sugarmagic should still provide a standard default authored ground footprint for new regions.
+
+Recommended default:
+
+- `100m x 100m`
+
+That default should initialize the region landscape footprint, while remaining overridable per region later.
 
 ## 6. Region Markers
 

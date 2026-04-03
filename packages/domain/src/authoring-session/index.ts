@@ -9,6 +9,10 @@
 
 import type { GameProject } from "../game-project";
 import type { RegionDocument } from "../region-authoring";
+import {
+  createDefaultRegionLandscapeState,
+  createDefaultRegionLandscapeChannels
+} from "../region-authoring";
 import type { AuthoringHistory } from "../history";
 import type { SemanticCommand, UpdateEnvironmentDefinitionCommand } from "../commands";
 import type {
@@ -52,6 +56,14 @@ function normalizeRegionDocument(
   region: RegionDocument,
   contentLibrary: ContentLibrarySnapshot
 ): RegionDocument {
+  const legacyLandscape = (region as RegionDocument & {
+    landscape?: Partial<ReturnType<typeof createDefaultRegionLandscapeState>> & {
+      baseColor?: number;
+    };
+  }).landscape;
+  const defaultLandscape = createDefaultRegionLandscapeState({
+    channels: createDefaultRegionLandscapeChannels(legacyLandscape?.baseColor)
+  });
   const normalizedBinding = (region as RegionDocument & {
     environmentBinding?: { defaultEnvironmentId?: string | null };
   }).environmentBinding;
@@ -61,7 +73,16 @@ function normalizeRegionDocument(
     environmentBinding: {
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ?? defaultEnvironmentId(contentLibrary)
-    }
+    },
+    landscape: createDefaultRegionLandscapeState({
+      ...defaultLandscape,
+      ...(legacyLandscape ?? {}),
+      channels:
+        legacyLandscape?.channels && legacyLandscape.channels.length > 0
+          ? legacyLandscape.channels
+          : defaultLandscape.channels,
+      paintPayload: legacyLandscape?.paintPayload ?? null
+    })
   };
 }
 

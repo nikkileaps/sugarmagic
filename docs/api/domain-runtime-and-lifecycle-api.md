@@ -477,9 +477,31 @@ Compile output may vary by profile.
 
 Landscape work should be understood through these concepts.
 
+### `region`
+
+An explicit authored world unit.
+
+Regions are semantic authored boundaries, not necessarily the smallest runtime streaming units.
+
+### `landscape size`
+
+The canonical ground-surface footprint for a region landscape.
+
+This is not automatically the same thing as final region bounds.
+
+For new regions, Sugarmagic should use a standard default authored ground footprint of `100m x 100m` unless the author overrides it.
+
 ### `canonical landscape state`
 
 The authored painted and configured landscape truth.
+
+In the current implementation this means:
+
+- a region-owned landscape definition
+- channel definitions, with channel `0` as the implicit base layer
+- an inline raw splatmap payload made of base64-encoded RGBA layer pages
+
+That payload is the authored source of truth for painted influence.
 
 ### `brush session`
 
@@ -494,6 +516,12 @@ Any packed or accelerated form of the landscape used by runtime or publish flows
 Brush state is not the landscape.
 
 The painted result is the landscape.
+
+### Rule
+
+Authored regions are explicit.
+
+Runtime may derive smaller streaming partitions behind the scenes.
 
 ## Plugin API Concepts
 
