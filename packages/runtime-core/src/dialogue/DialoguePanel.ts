@@ -1,13 +1,15 @@
 import {
   EXCERPT_SPEAKER,
   PLAYER_SPEAKER,
-  PLAYER_VO_SPEAKER,
-  type DialogueEdgeDefinition
+  PLAYER_VO_SPEAKER
 } from "@sugarmagic/domain";
 import {
-  type DialogueSessionNode,
   type DialoguePresenter
 } from "./DialogueManager";
+import type {
+  ConversationPlayerInput,
+  ConversationTurnEnvelope
+} from "../conversation";
 
 export interface RuntimeDialoguePanel extends DialoguePresenter {
   getElement: () => HTMLElement;
@@ -48,15 +50,15 @@ export function createRuntimeDialoguePanel(
   container.appendChild(panel);
   parentContainer.appendChild(container);
 
-  let currentNext: DialogueEdgeDefinition[] = [];
-  let onComplete: ((selected?: DialogueEdgeDefinition) => void) | null = null;
+  let currentChoices: ConversationTurnEnvelope["choices"] = [];
+  let onInput: ((input: ConversationPlayerInput) => void) | null = null;
   let onCancel: (() => void) | null = null;
   let entryCount = 0;
 
   function stopCurrent() {
-    onComplete = null;
+    onInput = null;
     onCancel = null;
-    currentNext = [];
+    currentChoices = [];
     actionsContainer.innerHTML = "";
     enrichmentContainer.innerHTML = "";
   }
@@ -79,17 +81,17 @@ export function createRuntimeDialoguePanel(
     return null;
   }
 
-  function createEntry(node: DialogueSessionNode): HTMLDivElement {
+  function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
     const entry = document.createElement("div");
     entry.className = "sm-dialogue-entry";
     entry.classList.add(entryCount % 2 === 0 ? "align-left" : "align-right");
     entryCount += 1;
-    const speakerClass = getSpeakerClass(node.speakerId);
+    const speakerClass = getSpeakerClass(turn.speakerId);
     if (speakerClass) {
       entry.classList.add(speakerClass);
     }
 
-    const speakerName = node.speakerLabel;
+    const speakerName = turn.speakerLabel;
     if (speakerName) {
       const speakerElement = document.createElement("div");
       speakerElement.className = "sm-dialogue-entry-speaker";
@@ -99,29 +101,31 @@ export function createRuntimeDialoguePanel(
 
     const textElement = document.createElement("div");
     textElement.className = "sm-dialogue-entry-text";
-    textElement.textContent = node.text;
+    textElement.textContent = turn.text;
     entry.appendChild(textElement);
     return entry;
   }
 
-  function complete(selected?: DialogueEdgeDefinition) {
-    const handler = onComplete;
+  function submitInput(input: ConversationPlayerInput) {
+    const handler = onInput;
     stopCurrent();
-    handler?.(selected);
+    handler?.(input);
   }
 
   function renderActions() {
     actionsContainer.innerHTML = "";
 
-    if (currentNext.length > 1) {
-      currentNext.forEach((next, index) => {
+    if (currentChoices.length > 1) {
+      currentChoices.forEach((choice, index) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "sm-dialogue-choice-btn";
         button.innerHTML = `<span class="choice-number">${index + 1}</span><span class="choice-text">${
-          next.choiceText ?? `Choice ${index + 1}`
+          choice.label
         }</span>`;
-        button.addEventListener("click", () => complete(next));
+        button.addEventListener("click", () =>
+          submitInput({ kind: "choice", choiceId: choice.choiceId })
+        );
         actionsContainer.appendChild(button);
       });
       return;
@@ -130,7 +134,7 @@ export function createRuntimeDialoguePanel(
     const hint = document.createElement("div");
     hint.className = "sm-dialogue-continue-hint";
     hint.textContent =
-      currentNext.length === 1 ? "Press Enter to continue" : "Press Enter to close";
+      currentChoices.length === 1 ? "Press Enter to continue" : "Press Enter to close";
     actionsContainer.appendChild(hint);
   }
 
@@ -143,18 +147,18 @@ export function createRuntimeDialoguePanel(
       return;
     }
 
-    if (currentNext.length > 1) {
+    if (currentChoices.length > 1) {
       const index = Number.parseInt(event.key, 10) - 1;
-      if (index >= 0 && index < currentNext.length) {
+      if (index >= 0 && index < currentChoices.length) {
         event.preventDefault();
-        complete(currentNext[index]);
+        submitInput({ kind: "choice", choiceId: currentChoices[index]!.choiceId });
       }
       return;
     }
 
     if (event.key === "Enter") {
       event.preventDefault();
-      complete(currentNext[0]);
+      submitInput({ kind: "advance" });
     }
   }
 
@@ -182,13 +186,13 @@ export function createRuntimeDialoguePanel(
       enrichmentContainer.innerHTML = "";
       entryCount = 0;
     },
-    showNode(node, handleComplete, handleCancel) {
+    showTurn(turn, handleTurnInput, handleCancel) {
       graduateActive();
-      onComplete = handleComplete;
+      onInput = handleTurnInput;
       onCancel = handleCancel ?? null;
-      currentNext = node.next;
+      currentChoices = turn.choices;
       activeContainer.innerHTML = "";
-      activeContainer.appendChild(createEntry(node));
+      activeContainer.appendChild(createEntry(turn));
       renderActions();
       container.classList.add("visible");
       scrollToBottom();

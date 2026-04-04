@@ -15,7 +15,9 @@ import {
 } from "@sugarmagic/plugins";
 import {
   createRuntimeBootModel,
-  createRuntimePluginManager
+  createRuntimePluginManager,
+  type ConversationMiddleware,
+  type ConversationProvider
 } from "@sugarmagic/runtime-core";
 
 function makeProject(): GameProject {
@@ -82,6 +84,32 @@ describe("plugin infrastructure", () => {
       createPluginConfigurationRecord("beta", true),
       createPluginConfigurationRecord("gamma", false)
     ];
+    const alphaProvider: ConversationProvider = {
+      providerId: "alpha",
+      displayName: "Alpha Provider",
+      priority: 100,
+      canHandle: () => true,
+      startSession: () => ({
+        session: { advance: () => null },
+        initialTurn: null
+      })
+    };
+    const betaProvider: ConversationProvider = {
+      providerId: "beta",
+      displayName: "Beta Provider",
+      priority: 60,
+      canHandle: () => true,
+      startSession: () => ({
+        session: { advance: () => null },
+        initialTurn: null
+      })
+    };
+    const betaMiddleware: ConversationMiddleware = {
+      middlewareId: "beta",
+      displayName: "Beta Middleware",
+      priority: 50,
+      stage: "policy"
+    };
     const instances = createRuntimePluginInstances(
       boot,
       configurations,
@@ -100,7 +128,8 @@ describe("plugin infrastructure", () => {
                   payload: {
                     providerId: "alpha",
                     summary: "alpha",
-                    status: "ready"
+                    status: "ready",
+                    provider: alphaProvider
                   }
                 }
               ]
@@ -122,7 +151,8 @@ describe("plugin infrastructure", () => {
                     middlewareId: "beta",
                     summary: "beta",
                     stage: "policy",
-                    status: "ready"
+                    status: "ready",
+                    middleware: betaMiddleware
                   }
                 },
                 {
@@ -134,7 +164,8 @@ describe("plugin infrastructure", () => {
                   payload: {
                     providerId: "beta",
                     summary: "beta",
-                    status: "ready"
+                    status: "ready",
+                    provider: betaProvider
                   }
                 }
               ]

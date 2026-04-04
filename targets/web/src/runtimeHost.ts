@@ -43,8 +43,7 @@ import {
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
-  createRuntimePluginInstances,
-  getDiscoveredPluginDefinition
+  createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
   World,
@@ -60,9 +59,7 @@ import {
   computeCameraPosition,
   createRuntimeInputManager,
   createRuntimeBootModel,
-  createRuntimeGameplaySessionController,
-  createRuntimePluginManager,
-  RuntimePluginSystem,
+  createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
   createEnvironmentSceneController,
@@ -405,9 +402,11 @@ export function createWebRuntimeHost(
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
   let playerVisualController: ReturnType<typeof createPlayerVisualController> | null = null;
   let gameplaySession:
-    | ReturnType<typeof createRuntimeGameplaySessionController>
+    | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
-  let pluginManager: ReturnType<typeof createRuntimePluginManager> | null = null;
+  let gameplayAssembly:
+    | ReturnType<typeof createRuntimeGameplayAssembly>
+    | null = null;
   let playerEyeHeight = 1.62;
   let grid: THREE.GridHelper | null = null;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
@@ -431,10 +430,9 @@ export function createWebRuntimeHost(
 
     playerVisualController?.dispose();
     playerVisualController = null;
-    gameplaySession?.dispose();
+    void gameplayAssembly?.dispose();
+    gameplayAssembly = null;
     gameplaySession = null;
-    void pluginManager?.dispose();
-    pluginManager = null;
     spellCastFeedbackHost?.dispose();
     spellCastFeedbackHost = null;
     pluginBannerHost?.dispose();
@@ -641,18 +639,10 @@ export function createWebRuntimeHost(
       }
     }
     world = new World();
-    const runtimePlugins = createRuntimePluginInstances(
+    const pluginManager = createResolvedRuntimePluginManager(
       adapter.boot,
+      state.installedPluginIds,
       state.pluginConfigurations,
-      (pluginId) => {
-        if (!state.installedPluginIds.includes(pluginId)) return null;
-        const plugin = getDiscoveredPluginDefinition(pluginId);
-        if (!plugin) return null;
-        return {
-          displayName: plugin.manifest.displayName,
-          runtime: plugin.runtime
-        };
-      }
     );
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
@@ -674,12 +664,6 @@ export function createWebRuntimeHost(
 
     const movementSystem = new MovementSystem();
     world.addSystem(movementSystem);
-    pluginManager = createRuntimePluginManager({
-      boot: adapter.boot,
-      plugins: runtimePlugins
-    });
-    void pluginManager.init();
-    world.addSystem(new RuntimePluginSystem(pluginManager));
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
@@ -689,7 +673,7 @@ export function createWebRuntimeHost(
     movementSystem.setInputProvider(
       () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
     );
-    gameplaySession = createRuntimeGameplaySessionController({
+    gameplayAssembly = createRuntimeGameplayAssembly({
       root,
       world,
       inputManager,
@@ -701,6 +685,7 @@ export function createWebRuntimeHost(
       npcDefinitions: state.npcDefinitions,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
+      pluginManager,
       onSpellCastSuccess: (feedback) => {
         spellCastFeedbackHost?.show(feedback.message);
       },
@@ -712,6 +697,7 @@ export function createWebRuntimeHost(
         sceneObjectEntries.delete(presenceId);
       }
     });
+    gameplaySession = gameplayAssembly.gameplaySession;
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;

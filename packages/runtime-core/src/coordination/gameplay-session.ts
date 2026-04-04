@@ -16,6 +16,8 @@ import {
 } from "../caster";
 import { type World, Position } from "../ecs";
 import {
+  type ConversationMiddleware,
+  type ConversationProvider,
   createRuntimeDialoguePanel,
   DialogueManager
 } from "../dialogue";
@@ -43,6 +45,8 @@ import {
   QuestSystem
 } from "../quest";
 import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
+import type { RuntimePluginManager } from "../plugins";
+import { RuntimePluginSystem } from "../plugins";
 
 export interface RuntimeSpellCastFeedback {
   spellDefinitionId: string;
@@ -70,6 +74,7 @@ export interface RuntimeGameplaySessionControllerOptions {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  pluginManager?: RuntimePluginManager | null;
   onItemPresenceCollected?: (presenceId: string) => void;
   onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
 }
@@ -81,6 +86,17 @@ export interface RuntimeGameplaySessionController {
   readonly questSystem: QuestSystem;
   update: () => void;
   dispose: () => void;
+}
+
+export interface RuntimeGameplayAssemblyOptions
+  extends RuntimeGameplaySessionControllerOptions {
+  pluginManager?: RuntimePluginManager | null;
+}
+
+export interface RuntimeGameplayAssembly {
+  readonly pluginManager: RuntimePluginManager | null;
+  readonly gameplaySession: RuntimeGameplaySessionController;
+  dispose: () => Promise<void>;
 }
 
 const DIALOGUE_LOCK_ID = "runtime-dialogue";
@@ -105,6 +121,7 @@ export function createRuntimeGameplaySessionController(
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    pluginManager,
     onItemPresenceCollected,
     onSpellCastSuccess
   } = options;
@@ -127,6 +144,14 @@ export function createRuntimeGameplaySessionController(
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
+  const conversationProviders: ConversationProvider[] =
+    pluginManager?.getContributions("conversation.provider").map(
+      (entry) => entry.payload.provider
+    ) ?? [];
+  const conversationMiddlewares: ConversationMiddleware[] =
+    pluginManager?.getContributions("conversation.middleware").map(
+      (entry) => entry.payload.middleware
+    ) ?? [];
   const npcInteractableEntities = new Map<
     string,
     { npcDefinitionId: string; entity: number }
@@ -310,6 +335,8 @@ export function createRuntimeGameplaySessionController(
 
   dialogueManager.registerDefinitions(dialogueDefinitions);
   dialogueManager.setSpeakerNameResolver(resolveSpeakerName);
+  dialogueManager.setConversationProviders(conversationProviders);
+  dialogueManager.setConversationMiddlewares(conversationMiddlewares);
   dialogueManager.setOnStart(() => {
     inputManager.addMovementLock(DIALOGUE_LOCK_ID);
     inputManager.consumeInteract();
@@ -346,7 +373,7 @@ export function createRuntimeGameplaySessionController(
   );
   questManager.setNarrativeHandler((node) => {
     if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
-      dialogueManager.start(node.dialogueDefinitionId);
+      void dialogueManager.start(node.dialogueDefinitionId);
       return;
     }
     if (node.eventName) {
@@ -486,7 +513,7 @@ export function createRuntimeGameplaySessionController(
         nearby.targetId
       );
       if (!dialogueDefinitionId) return;
-      dialogueManager.start(dialogueDefinitionId);
+      void dialogueManager.start(dialogueDefinitionId);
       return;
     }
 
@@ -525,7 +552,7 @@ export function createRuntimeGameplaySessionController(
       }
 
       if (effect.type === "dialogue" && effect.targetId) {
-        dialogueManager.start(effect.targetId);
+        void dialogueManager.start(effect.targetId);
         continue;
       }
 
@@ -584,6 +611,28 @@ export function createRuntimeGameplaySessionController(
       documentReaderUi.dispose();
       itemPickupNotifications.dispose();
       interactionPrompt.dispose();
+    }
+  };
+}
+
+export function createRuntimeGameplayAssembly(
+  options: RuntimeGameplayAssemblyOptions
+): RuntimeGameplayAssembly {
+  const pluginManager = options.pluginManager ?? null;
+
+  if (pluginManager) {
+    void pluginManager.init();
+    options.world.addSystem(new RuntimePluginSystem(pluginManager));
+  }
+
+  const gameplaySession = createRuntimeGameplaySessionController(options);
+
+  return {
+    pluginManager,
+    gameplaySession,
+    async dispose() {
+      gameplaySession.dispose();
+      await pluginManager?.dispose();
     }
   };
 }
