@@ -1,4 +1,8 @@
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
+import type {
+  ConversationMiddleware,
+  ConversationProvider
+} from "../conversation";
 import { System, type World } from "../ecs";
 
 export type RuntimePluginContributionKind =
@@ -25,6 +29,7 @@ export type ConversationProviderContribution = RuntimePluginContributionBase<
     providerId: string;
     summary: string;
     status: "placeholder" | "ready";
+    provider: ConversationProvider;
   }
 >;
 
@@ -35,6 +40,7 @@ export type ConversationMiddlewareContribution = RuntimePluginContributionBase<
     summary: string;
     stage: "context" | "policy" | "analysis" | "generic";
     status: "placeholder" | "ready";
+    middleware: ConversationMiddleware;
   }
 >;
 

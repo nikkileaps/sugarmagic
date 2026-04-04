@@ -2,35 +2,38 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDefaultDialogueDefinition,
   createDialogueNodeId,
-  type DialogueDefinition,
-  type DialogueEdgeDefinition
+  type DialogueDefinition
 } from "@sugarmagic/domain";
 import {
   DialogueManager,
-  type DialoguePresenter,
-  type DialogueSessionNode
+  type DialoguePresenter
+} from "@sugarmagic/runtime-core";
+import type {
+  ConversationPlayerInput,
+  ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
 
 function createMockPresenter() {
-  let latestNode: DialogueSessionNode | null = null;
-  let latestComplete: ((selected?: DialogueEdgeDefinition) => void) | null = null;
+  let latestTurn: ConversationTurnEnvelope | null = null;
+  let latestInput: ((input: ConversationPlayerInput) => void) | null = null;
   let latestCancel: (() => void) | null = null;
 
   const presenter: DialoguePresenter = {
     show: vi.fn(),
     hide: vi.fn(),
     clearHistory: vi.fn(),
-    showNode: vi.fn((node, onComplete, onCancel) => {
-      latestNode = node;
-      latestComplete = onComplete;
+    showTurn: vi.fn((turn, onInput, onCancel) => {
+      latestTurn = turn;
+      latestInput = onInput;
       latestCancel = onCancel ?? null;
     })
   };
 
   return {
     presenter,
-    getLatestNode: () => latestNode,
-    advance: (selected?: DialogueEdgeDefinition) => latestComplete?.(selected),
+    getLatestTurn: () => latestTurn,
+    advance: (input: ConversationPlayerInput = { kind: "advance" }) =>
+      latestInput?.(input),
     cancel: () => latestCancel?.()
   };
 }
@@ -83,7 +86,7 @@ function createConditionalDialogue(): DialogueDefinition {
 }
 
 describe("DialogueManager", () => {
-  it("filters conditional edges and resolves speaker labels", () => {
+  it("filters conditional edges and resolves speaker labels", async () => {
     const mock = createMockPresenter();
     const manager = new DialogueManager(mock.presenter);
     manager.registerDefinition(createConditionalDialogue());
@@ -94,15 +97,15 @@ describe("DialogueManager", () => {
       speakerId === "builtin:dialogue-speaker:narrator" ? "Narrator" : undefined
     );
 
-    expect(manager.start("dialogue:test")).toBe(true);
+    expect(await manager.start("dialogue:test")).toBe(true);
 
-    const node = mock.getLatestNode();
-    expect(node?.speakerLabel).toBe("Narrator");
-    expect(node?.next).toHaveLength(2);
-    expect(node?.next[0]?.choiceText).toBe("Open gate");
+    const turn = mock.getLatestTurn();
+    expect(turn?.speakerLabel).toBe("Narrator");
+    expect(turn?.choices).toHaveLength(2);
+    expect(turn?.choices[0]?.label).toBe("Open gate");
   });
 
-  it("runs node enter events and ends cleanly on cancel", () => {
+  it("runs node enter events and ends cleanly on cancel", async () => {
     const mock = createMockPresenter();
     const manager = new DialogueManager(mock.presenter);
     const onStart = vi.fn();
@@ -115,8 +118,18 @@ describe("DialogueManager", () => {
     manager.setOnEnd(onEnd);
     manager.setOnEvent(onEvent);
 
-    manager.start("dialogue:test");
-    mock.advance({ targetNodeId: dialogue.nodes[2]!.nodeId });
+    await manager.start("dialogue:test");
+    const firstTurn = mock.getLatestTurn();
+    const fallbackChoice = firstTurn?.choices.find(
+      (choice) =>
+        choice.metadata?.targetNodeId === dialogue.nodes[2]!.nodeId
+    );
+    mock.advance({
+      kind: "choice",
+      choiceId: fallbackChoice!.choiceId
+    });
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onStart).toHaveBeenCalledTimes(1);
     expect(onEvent).toHaveBeenCalledWith("dialogue:leave");

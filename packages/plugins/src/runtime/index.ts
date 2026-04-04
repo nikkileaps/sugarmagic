@@ -2,8 +2,11 @@ import type { PluginConfigurationRecord } from "@sugarmagic/domain";
 import type {
   RuntimeBootModel,
   RuntimePluginContribution,
-  RuntimePluginInstance
+  RuntimePluginInstance,
+  RuntimePluginManager
 } from "@sugarmagic/runtime-core";
+import { createRuntimePluginManager } from "@sugarmagic/runtime-core";
+import { getDiscoveredPluginDefinition } from "../builtin";
 
 export interface PluginRuntimeContributionDefinition {
   contributions: RuntimePluginContribution[];
@@ -70,4 +73,35 @@ export function createRuntimePluginInstances(
   }
 
   return instances;
+}
+
+export function resolveInstalledRuntimePluginInstances(
+  boot: RuntimeBootModel,
+  installedPluginIds: string[],
+  configurations: PluginConfigurationRecord[]
+): RuntimePluginInstance[] {
+  return createRuntimePluginInstances(boot, configurations, (pluginId) => {
+    if (!installedPluginIds.includes(pluginId)) return null;
+    const plugin = getDiscoveredPluginDefinition(pluginId);
+    if (!plugin) return null;
+    return {
+      displayName: plugin.manifest.displayName,
+      runtime: plugin.runtime
+    };
+  });
+}
+
+export function createResolvedRuntimePluginManager(
+  boot: RuntimeBootModel,
+  installedPluginIds: string[],
+  configurations: PluginConfigurationRecord[]
+): RuntimePluginManager {
+  return createRuntimePluginManager({
+    boot,
+    plugins: resolveInstalledRuntimePluginInstances(
+      boot,
+      installedPluginIds,
+      configurations
+    )
+  });
 }
