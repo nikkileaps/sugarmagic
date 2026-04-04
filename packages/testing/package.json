@@ -6,6 +6,7 @@
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
     "@sugarmagic/io": "workspace:*",
+    "@sugarmagic/plugins": "workspace:*",
     "@sugarmagic/productmodes": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
     "@sugarmagic/shell": "workspace:*",

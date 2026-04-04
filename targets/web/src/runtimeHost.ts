@@ -35,12 +35,17 @@ import {
   type DialogueDefinition,
   type ItemDefinition,
   type NPCDefinition,
+  type PluginConfigurationRecord,
   type PlayerDefinition,
   type QuestDefinition,
   type SpellDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
+import {
+  createRuntimePluginInstances,
+  getDiscoveredPluginDefinition
+} from "@sugarmagic/plugins";
 import {
   World,
   MovementSystem,
@@ -56,6 +61,9 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeGameplaySessionController,
+  createRuntimePluginManager,
+  RuntimePluginSystem,
+  type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
   createEnvironmentSceneController,
   createLandscapeSceneController,
@@ -95,6 +103,8 @@ export interface WebRuntimeStartState {
   regions: RegionDocument[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  installedPluginIds: string[];
+  pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
@@ -200,6 +210,11 @@ interface SpellCastFeedbackHost {
   dispose: () => void;
 }
 
+interface RuntimePluginBannerHost {
+  apply: (banners: RuntimeBannerContribution[]) => void;
+  dispose: () => void;
+}
+
 function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost {
   if (!document.getElementById("sm-web-spell-cast-feedback-styles")) {
     const style = document.createElement("style");
@@ -278,6 +293,61 @@ function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost
   };
 }
 
+function createRuntimePluginBannerHost(parent: HTMLElement): RuntimePluginBannerHost {
+  if (!document.getElementById("sm-web-plugin-banner-styles")) {
+    const style = document.createElement("style");
+    style.id = "sm-web-plugin-banner-styles";
+    style.textContent = `
+      .sm-web-plugin-banners {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        pointer-events: none;
+        z-index: 18;
+      }
+
+      .sm-web-plugin-banner {
+        min-width: 220px;
+        max-width: min(720px, calc(100vw - 48px));
+        padding: 10px 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(137, 180, 250, 0.28);
+        background: rgba(17, 17, 27, 0.88);
+        color: #eef6ff;
+        text-align: center;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const container = document.createElement("div");
+  container.className = "sm-web-plugin-banners";
+  parent.appendChild(container);
+
+  return {
+    apply(banners) {
+      container.replaceChildren();
+      for (const banner of banners) {
+        const element = document.createElement("div");
+        element.className = "sm-web-plugin-banner";
+        element.textContent = banner.payload.message;
+        container.appendChild(element);
+      }
+    },
+    dispose() {
+      if (container.parentElement === parent) {
+        parent.removeChild(container);
+      }
+    }
+  };
+}
+
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
@@ -337,9 +407,11 @@ export function createWebRuntimeHost(
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplaySessionController>
     | null = null;
+  let pluginManager: ReturnType<typeof createRuntimePluginManager> | null = null;
   let playerEyeHeight = 1.62;
   let grid: THREE.GridHelper | null = null;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
+  let pluginBannerHost: RuntimePluginBannerHost | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
@@ -361,8 +433,12 @@ export function createWebRuntimeHost(
     playerVisualController = null;
     gameplaySession?.dispose();
     gameplaySession = null;
+    void pluginManager?.dispose();
+    pluginManager = null;
     spellCastFeedbackHost?.dispose();
     spellCastFeedbackHost = null;
+    pluginBannerHost?.dispose();
+    pluginBannerHost = null;
     playerEyeHeight = 1.62;
 
     for (const entry of sceneObjectEntries.values()) {
@@ -565,6 +641,19 @@ export function createWebRuntimeHost(
       }
     }
     world = new World();
+    const runtimePlugins = createRuntimePluginInstances(
+      adapter.boot,
+      state.pluginConfigurations,
+      (pluginId) => {
+        if (!state.installedPluginIds.includes(pluginId)) return null;
+        const plugin = getDiscoveredPluginDefinition(pluginId);
+        if (!plugin) return null;
+        return {
+          displayName: plugin.manifest.displayName,
+          runtime: plugin.runtime
+        };
+      }
+    );
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,
@@ -585,10 +674,18 @@ export function createWebRuntimeHost(
 
     const movementSystem = new MovementSystem();
     world.addSystem(movementSystem);
+    pluginManager = createRuntimePluginManager({
+      boot: adapter.boot,
+      plugins: runtimePlugins
+    });
+    void pluginManager.init();
+    world.addSystem(new RuntimePluginSystem(pluginManager));
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
     spellCastFeedbackHost = createSpellCastFeedbackHost(root);
+    pluginBannerHost = createRuntimePluginBannerHost(root);
+    pluginBannerHost.apply(pluginManager.getContributions("runtime.banner"));
     movementSystem.setInputProvider(
       () => inputManager?.getInput() ?? { moveX: 0, moveY: 0 }
     );

@@ -15,6 +15,7 @@
     "@sugarmagic/domain": "workspace:*",
     "@sugarmagic/io": "workspace:*",
     "@sugarmagic/productmodes": "workspace:*",
+    "@sugarmagic/plugins": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
     "@sugarmagic/shell": "workspace:*",
     "@sugarmagic/ui": "workspace:*",

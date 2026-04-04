@@ -65,6 +65,9 @@ importers:
       '@sugarmagic/io':
         specifier: workspace:*
         version: link:../../packages/io
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../../packages/productmodes
@@ -150,6 +153,9 @@ importers:
       '@sugarmagic/io':
         specifier: workspace:*
         version: link:../io
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../productmodes
@@ -186,6 +192,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core
@@ -210,6 +219,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core

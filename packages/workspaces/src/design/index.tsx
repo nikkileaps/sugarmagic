@@ -47,6 +47,11 @@ export interface DesignProductModeViewProps {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  extraWorkspaceItems: Array<{
+    workspaceKind: string;
+    label: string;
+    icon: string;
+  }>;
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -80,6 +85,7 @@ export function useDesignProductModeView(
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    extraWorkspaceItems,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -167,10 +173,19 @@ export function useDesignProductModeView(
     onCommand
   });
 
+  const allWorkspaceKinds: BuildWorkspaceKindItem[] = [
+    ...designWorkspaceKinds,
+    ...extraWorkspaceItems.map((workspace) => ({
+      id: workspace.workspaceKind,
+      label: workspace.label,
+      icon: workspace.icon
+    }))
+  ];
+
   return {
     subHeaderPanel: (
       <BuildSubNav
-        workspaceKinds={designWorkspaceKinds}
+        workspaceKinds={allWorkspaceKinds}
         activeKindId={activeDesignKind}
         onSelectKind={(id) => onSelectKind(id as DesignWorkspaceKind)}
       />

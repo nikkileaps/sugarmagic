@@ -43,7 +43,7 @@ describe("layout scene presences", () => {
         displayName: "Project",
         gameRootPath: ".",
         regionRegistry: [{ regionId: "station" }],
-        pluginConfigIds: [],
+        pluginConfigurations: [],
         contentLibraryId: "project:content-library",
         playerDefinition: createDefaultPlayerDefinition("project"),
         spellDefinitions: [],

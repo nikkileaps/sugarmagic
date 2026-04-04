@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, Group, Menu, UnstyledButton } from "@mantine/core";
+import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import type { SemanticCommand, RegionDocument } from "@sugarmagic/domain";
 import {
@@ -17,6 +17,8 @@ import {
   getAllEnvironmentDefinitions,
   getAllItemDefinitions,
   getAllNPCDefinitions,
+  getAllPluginConfigurations,
+  getPluginConfiguration,
   getAllQuestDefinitions,
   getAllSpellDefinitions,
   getPlayerDefinition,
@@ -28,6 +30,12 @@ import {
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
+import {
+  collectPluginShellContributions,
+  ensureDiscoveredPluginConfiguration,
+  listDiscoveredPluginDefinitions,
+  resolveInstalledPluginDefinitions
+} from "@sugarmagic/plugins";
 import {
   checkDirectoryHasProject,
   createProjectInDirectory,
@@ -42,6 +50,8 @@ import {
   createShellStore,
   createProjectStore,
   createPreviewStore,
+  CORE_DESIGN_WORKSPACE_KINDS,
+  designWorkspaceRequiresViewport,
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
 import {
@@ -68,6 +78,15 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
+import {
+  installPluginId,
+  readInstalledPluginIds,
+  uninstallPluginId
+} from "./plugins/install-state";
+import {
+  getStudioPluginWorkspaceDefinition,
+  listStudioPluginWorkspaceDefinitions
+} from "./plugins/catalog";
 
 function revokeAssetSources(assetSources: Record<string, string>) {
   for (const url of Object.values(assetSources)) {
@@ -214,7 +233,10 @@ function handleRegionSelect(regionId: string) {
 
 // --- Preview ---
 
-function handleStartPreview(assetSources: Record<string, string>) {
+function handleStartPreview(
+  assetSources: Record<string, string>,
+  installedPluginIds: string[]
+) {
   const { session } = projectStore.getState();
   if (!session) return;
 
@@ -257,6 +279,8 @@ function handleStartPreview(assetSources: Record<string, string>) {
           regions,
           activeRegionId: capturedSession.activeRegionId,
           activeEnvironmentId: snapshot.activeEnvironmentId,
+          installedPluginIds,
+          pluginConfigurations: capturedSession.gameProject.pluginConfigurations,
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
           spellDefinitions: capturedSession.gameProject.spellDefinitions,
@@ -329,6 +353,10 @@ export function App() {
   }, [session]);
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [installedPluginIds, setInstalledPluginIds] = useState<string[]>(() =>
+    readInstalledPluginIds()
+  );
   const [assetSources, setAssetSources] = useState<Record<string, string>>({});
   const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
 
@@ -403,6 +431,62 @@ export function App() {
     return getAllQuestDefinitions(session);
   }, [session]);
 
+  const pluginConfigurations = useMemo(() => {
+    if (!session) return [];
+    return getAllPluginConfigurations(session);
+  }, [session]);
+
+  const discoveredPlugins = useMemo(() => listDiscoveredPluginDefinitions(), []);
+  const installedPlugins = useMemo(
+    () => resolveInstalledPluginDefinitions(installedPluginIds),
+    [installedPluginIds]
+  );
+  const availablePlugins = useMemo(
+    () =>
+      discoveredPlugins.filter(
+        (plugin) => !installedPluginIds.includes(plugin.manifest.pluginId)
+      ),
+    [discoveredPlugins, installedPluginIds]
+  );
+  const pluginShellContributions = useMemo(
+    () =>
+      collectPluginShellContributions(pluginConfigurations, (pluginId) =>
+        installedPlugins.find((plugin) => plugin.manifest.pluginId === pluginId)?.shell ??
+        null
+      ),
+    [installedPlugins, pluginConfigurations]
+  );
+  const studioPluginWorkspaceDefinitions = useMemo(
+    () => listStudioPluginWorkspaceDefinitions(),
+    []
+  );
+  const studioPluginWorkspaceKinds = useMemo(
+    () =>
+      new Set(
+        studioPluginWorkspaceDefinitions.map(
+          (definition) => definition.workspaceKind
+        )
+      ),
+    [studioPluginWorkspaceDefinitions]
+  );
+  const renderablePluginWorkspaceItems = useMemo(
+    () =>
+      pluginShellContributions.designWorkspaces.filter(
+        (workspace) => studioPluginWorkspaceKinds.has(workspace.workspaceKind)
+      ),
+    [pluginShellContributions.designWorkspaces, studioPluginWorkspaceKinds]
+  );
+
+  useEffect(() => {
+    if (activeProductMode !== "design") return;
+    const availableDesignWorkspaceKinds = new Set<string>([
+      ...CORE_DESIGN_WORKSPACE_KINDS,
+      ...renderablePluginWorkspaceItems.map((workspace) => workspace.workspaceKind)
+    ]);
+    if (availableDesignWorkspaceKinds.has(activeDesignKind)) return;
+    shellStore.getState().setActiveDesignWorkspaceKind("player");
+  }, [activeDesignKind, activeProductMode, renderablePluginWorkspaceItems]);
+
   const environmentViewportOverrideId =
     activeBuildKind === "environment"
       ? activeEnvironmentId ?? environmentDefinitions[0]?.definitionId ?? null
@@ -416,6 +500,79 @@ export function App() {
     if (!firstEnvironmentId) return;
     shellStore.getState().setActiveEnvironmentId(firstEnvironmentId);
   }, [activeEnvironmentId, session]);
+
+  function handleSetPluginEnabled(pluginId: string, enabled: boolean) {
+    if (!session) return;
+    if (!installedPluginIds.includes(pluginId)) return;
+    const configuration = ensureDiscoveredPluginConfiguration(
+      pluginConfigurations,
+      pluginId,
+      enabled
+    );
+    dispatchCommand({
+      kind: "UpdatePluginConfiguration",
+      target: {
+        aggregateKind: "plugin-config",
+        aggregateId: configuration.identity.id
+      },
+      subject: {
+        subjectKind: "plugin-configuration",
+        subjectId: configuration.identity.id
+      },
+      payload: {
+        configuration
+      }
+    });
+  }
+
+  function handleInstallPlugin(pluginId: string) {
+    if (session && !getPluginConfiguration(pluginConfigurations, pluginId)) {
+      const configuration = ensureDiscoveredPluginConfiguration(
+        pluginConfigurations,
+        pluginId,
+        false
+      );
+      dispatchCommand({
+        kind: "UpdatePluginConfiguration",
+        target: {
+          aggregateKind: "plugin-config",
+          aggregateId: configuration.identity.id
+        },
+        subject: {
+          subjectKind: "plugin-configuration",
+          subjectId: configuration.identity.id
+        },
+        payload: {
+          configuration
+        }
+      });
+    }
+    setInstalledPluginIds((current) => installPluginId(current, pluginId));
+  }
+
+  function handleUninstallPlugin(pluginId: string) {
+    const configuration = getPluginConfiguration(pluginConfigurations, pluginId);
+    if (configuration?.enabled) {
+      dispatchCommand({
+        kind: "UpdatePluginConfiguration",
+        target: {
+          aggregateKind: "plugin-config",
+          aggregateId: configuration.identity.id
+        },
+        subject: {
+          subjectKind: "plugin-configuration",
+          subjectId: configuration.identity.id
+        },
+        payload: {
+          configuration: {
+            ...configuration,
+            enabled: false
+          }
+        }
+      });
+    }
+    setInstalledPluginIds((current) => uninstallPluginId(current, pluginId));
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -527,12 +684,7 @@ export function App() {
     if (phase !== "active") return;
     if (
       activeProductMode === "design" &&
-      (
-        activeDesignKind === "dialogues" ||
-        activeDesignKind === "quests" ||
-        activeDesignKind === "documents" ||
-        activeDesignKind === "spells"
-      )
+      !designWorkspaceRequiresViewport(activeDesignKind)
     ) {
       buildViewportRef.current = null;
       playerViewportRef.current = null;
@@ -552,7 +704,7 @@ export function App() {
           ? createNPCViewport()
           : activeDesignKind === "items"
             ? createItemViewport()
-          : createPlayerViewport()
+            : createPlayerViewport()
         : createAuthoringViewport();
     viewport.mount(viewportRef.current);
     if (activeProductMode === "design") {
@@ -659,6 +811,7 @@ export function App() {
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    extraWorkspaceItems: renderablePluginWorkspaceItems,
     contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
     assetSources,
@@ -669,6 +822,23 @@ export function App() {
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand
   });
+  const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
+    activeDesignKind
+  );
+  const activePluginView = useMemo(() => {
+    if (!activePluginWorkspaceDefinition) return null;
+    return activePluginWorkspaceDefinition.createWorkspaceView({
+      gameProjectId: session?.gameProject.identity.id ?? null,
+      pluginConfigurations,
+      onCommand: dispatchCommand
+    });
+  }, [
+    activePluginWorkspaceDefinition,
+    pluginConfigurations,
+    session?.gameProject.identity.id
+  ]);
+
+  const activeDesignPanels = activePluginView ?? designView;
 
   const handleUndo = useCallback(() => {
     const { session: s } = projectStore.getState();
@@ -687,6 +857,155 @@ export function App() {
     <>
       <ProjectManagerDialog opened={phase === "no-project"} onOpen={handleOpenProject} onCreate={handleCreateProject} />
       <CreateRegionDialog opened={createRegionOpen} onClose={() => setCreateRegionOpen(false)} onCreate={handleCreateRegion} />
+      <Modal
+        opened={pluginsOpen}
+        onClose={() => setPluginsOpen(false)}
+        title="Plugins"
+        centered
+        styles={{
+          header: { background: "var(--sm-color-surface1)", borderBottom: "1px solid var(--sm-panel-border)" },
+          title: { color: "var(--sm-color-text)", fontWeight: 600 },
+          body: { background: "var(--sm-color-surface1)", padding: "20px" },
+          content: { background: "var(--sm-color-surface1)" },
+          close: { color: "var(--sm-color-overlay1)", "&:hover": { background: "var(--sm-active-bg)" } }
+        }}
+      >
+        <Stack gap="md">
+          <Stack gap="xs">
+            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              Installed Plugins
+            </Text>
+            {installedPlugins.length === 0 ? (
+              <Text size="sm" c="var(--sm-color-overlay0)">
+                No plugins installed in this editor app yet.
+              </Text>
+            ) : (
+              installedPlugins.map((plugin) => {
+                const configuration = pluginConfigurations.find(
+                  (entry) => entry.pluginId === plugin.manifest.pluginId
+                ) ?? null;
+                return (
+                  <Stack
+                    key={plugin.manifest.pluginId}
+                    gap="xs"
+                    p="md"
+                    style={{
+                      border: "1px solid var(--sm-panel-border)",
+                      borderRadius: "var(--sm-radius-md)",
+                      background: "var(--sm-color-surface2)"
+                    }}
+                  >
+                    <Group justify="space-between" align="flex-start">
+                      <Stack gap={4} style={{ flex: 1 }}>
+                        <Text fw={600}>{plugin.manifest.displayName}</Text>
+                        <Text size="sm" c="var(--sm-color-subtext)">
+                          {plugin.manifest.summary}
+                        </Text>
+                      </Stack>
+                      <Stack gap="xs" align="flex-end">
+                        <Switch
+                          checked={configuration?.enabled === true}
+                          onChange={() =>
+                            handleSetPluginEnabled(
+                              plugin.manifest.pluginId,
+                              configuration?.enabled !== true
+                            )
+                          }
+                          label="Enabled"
+                        />
+                        <UnstyledButton
+                          onClick={() => handleUninstallPlugin(plugin.manifest.pluginId)}
+                          style={{
+                            color: "var(--sm-color-overlay1)",
+                            fontSize: "var(--sm-font-size-sm)"
+                          }}
+                        >
+                          Uninstall
+                        </UnstyledButton>
+                      </Stack>
+                    </Group>
+                    <Group gap={6}>
+                      {plugin.manifest.capabilityIds.map((capabilityId) => (
+                        <Badge key={capabilityId} variant="light" color="blue">
+                          {capabilityId}
+                        </Badge>
+                      ))}
+                    </Group>
+                    {plugin.shell ? (
+                      <Stack gap={4}>
+                        {(plugin.shell.projectSettings ?? []).map((entry) => (
+                          <Text key={entry.settingsId} size="xs" c="var(--sm-color-subtext)">
+                            Project Settings: {entry.label}
+                          </Text>
+                        ))}
+                        {(plugin.shell.designWorkspaces ?? []).map((entry) => (
+                          <Text key={entry.workspaceKind} size="xs" c="var(--sm-color-subtext)">
+                            Design Workspace: {entry.label}
+                          </Text>
+                        ))}
+                        {(plugin.shell.designSections ?? []).map((entry) => (
+                          <Text key={entry.sectionId} size="xs" c="var(--sm-color-subtext)">
+                            Design Section: {entry.workspaceKind} / {entry.label}
+                          </Text>
+                        ))}
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                );
+              })
+            )}
+          </Stack>
+          <Stack gap="xs">
+            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              Available To Install
+            </Text>
+            {availablePlugins.length === 0 ? (
+              <Text size="sm" c="var(--sm-color-overlay0)">
+                No newly discovered plugins are waiting to be installed.
+              </Text>
+            ) : (
+              availablePlugins.map((plugin) => (
+                <Stack
+                  key={plugin.manifest.pluginId}
+                  gap="xs"
+                  p="md"
+                  style={{
+                    border: "1px solid var(--sm-panel-border)",
+                    borderRadius: "var(--sm-radius-md)",
+                    background: "var(--sm-color-surface2)"
+                  }}
+                >
+                  <Group justify="space-between" align="flex-start">
+                    <Stack gap={4} style={{ flex: 1 }}>
+                      <Text fw={600}>{plugin.manifest.displayName}</Text>
+                      <Text size="sm" c="var(--sm-color-subtext)">
+                        {plugin.manifest.summary}
+                      </Text>
+                    </Stack>
+                    <UnstyledButton
+                      onClick={() => handleInstallPlugin(plugin.manifest.pluginId)}
+                      style={{
+                        color: "var(--sm-accent-blue)",
+                        fontSize: "var(--sm-font-size-sm)",
+                        fontWeight: 600
+                      }}
+                    >
+                      Install
+                    </UnstyledButton>
+                  </Group>
+                  <Group gap={6}>
+                    {plugin.manifest.capabilityIds.map((capabilityId) => (
+                      <Badge key={capabilityId} variant="light" color="gray">
+                        {capabilityId}
+                      </Badge>
+                    ))}
+                  </Group>
+                </Stack>
+              ))
+            )}
+          </Stack>
+        </Stack>
+      </Modal>
 
       <ShellFrame
         headerPanel={
@@ -703,6 +1022,7 @@ export function App() {
                   <Menu.Item onClick={handleSave} disabled={!isDirty} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘S</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>💾 Save Game</Menu.Item>
                   <Menu.Item onClick={handleUndo} disabled={undoCount === 0} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘Z</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>↩ Undo</Menu.Item>
                   <Menu.Divider styles={{ divider: { borderColor: "var(--sm-panel-border)" } }} />
+                  <Menu.Item onClick={() => setPluginsOpen(true)} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🧩 Plugins</Menu.Item>
                   <Menu.Item onClick={handleReload} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🔄 Reload Project</Menu.Item>
                 </Menu.Dropdown>
               </Menu>
@@ -711,7 +1031,7 @@ export function App() {
             {phase === "active" && (
               <ActionStripe
                 isPreviewRunning={isPreviewRunning}
-                onStartPreview={() => handleStartPreview(assetSources)}
+                onStartPreview={() => handleStartPreview(assetSources, installedPluginIds)}
                 onStopPreview={handleStopPreview}
                 previewDisabled={!session}
               />
@@ -728,24 +1048,24 @@ export function App() {
             : undefined
         }
         leftPanel={
-          isBuild ? buildView.leftPanel : isDesign ? designView.leftPanel : null
+          isBuild ? buildView.leftPanel : isDesign ? activeDesignPanels.leftPanel : null
         }
         rightPanel={
-          isBuild ? buildView.rightPanel : isDesign ? designView.rightPanel : undefined
+          isBuild ? buildView.rightPanel : isDesign ? activeDesignPanels.rightPanel : undefined
         }
         bottomPanel={
           <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
         }
         centerPanel={
-          phase === "active" && isDesign && designView.centerPanel ? (
-            designView.centerPanel
+          phase === "active" && isDesign && activeDesignPanels.centerPanel ? (
+            activeDesignPanels.centerPanel
           ) : (
             <ViewportFrame>
               {phase === "active" ? (
                 <>
                   <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
                   {isBuild && buildView.viewportOverlay}
-                  {isDesign && designView.viewportOverlay}
+                  {isDesign && activeDesignPanels.viewportOverlay}
                 </>
               ) : (
                 <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>
