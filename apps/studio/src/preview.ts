@@ -10,6 +10,7 @@ import type {
   SpellDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
+import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import { createWebRuntimeHost } from "@sugarmagic/target-web";
 
@@ -19,6 +20,7 @@ interface PreviewBootMessage {
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   installedPluginIds: string[];
+  pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
@@ -60,6 +62,7 @@ window.addEventListener("message", (event) => {
       activeRegionId: data.activeRegionId,
       activeEnvironmentId: data.activeEnvironmentId,
       installedPluginIds: data.installedPluginIds,
+      pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
       pluginConfigurations: data.pluginConfigurations,
       contentLibrary: data.contentLibrary,
       playerDefinition: data.playerDefinition,

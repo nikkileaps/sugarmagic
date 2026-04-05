@@ -6,9 +6,11 @@ import {
   createConversationHost,
   createScriptedDialogueConversationProvider,
   type ConversationHost,
+  type ConversationActionProposal,
   type ConversationMiddleware,
   type ConversationPlayerInput,
   type ConversationProvider,
+  type ConversationSelectionContext,
   type ConversationTurnEnvelope,
   type DialogueConditionContext,
   type SpeakerNameResolver
@@ -28,6 +30,11 @@ export interface DialoguePresenter {
   show: () => void;
   hide: () => void;
   clearHistory: () => void;
+  showPending: (options?: {
+    speakerLabel?: string | null;
+    inputPlaceholder?: string | null;
+    onCancel?: () => void;
+  }) => void;
   showTurn: (
     turn: ConversationTurnEnvelope,
     onInput: (input: ConversationPlayerInput) => void,
@@ -38,6 +45,10 @@ export interface DialoguePresenter {
 
 export type DialogueEventHandler = (eventName: string) => void;
 export type DialogueNodeHandler = (nodeId: string) => void;
+export type DialogueTurnHandler = (
+  turn: ConversationTurnEnvelope,
+  proposedActions: ConversationActionProposal[]
+) => void;
 
 export class DialogueManager {
   private definitions: DialogueDefinition[] = [];
@@ -49,11 +60,15 @@ export class DialogueManager {
     | null = null;
   private onEvent: DialogueEventHandler | null = null;
   private onNodeEnter: DialogueNodeHandler | null = null;
+  private onTurn: DialogueTurnHandler | null = null;
   private speakerNameResolver: SpeakerNameResolver | null = null;
   private conditionContext: DialogueConditionContext = {};
   private conversationProviders: ConversationProvider[] = [];
   private conversationMiddlewares: ConversationMiddleware[] = [];
   private conversationHost: ConversationHost | null = null;
+  private pending = false;
+  private activeRequestId = 0;
+  private autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly presenter: DialoguePresenter) {}
 
@@ -87,6 +102,10 @@ export class DialogueManager {
     this.onNodeEnter = handler;
   }
 
+  setOnTurn(handler: DialogueTurnHandler): void {
+    this.onTurn = handler;
+  }
+
   setSpeakerNameResolver(resolver: SpeakerNameResolver): void {
     this.speakerNameResolver = resolver;
   }
@@ -104,7 +123,7 @@ export class DialogueManager {
   }
 
   isDialogueActive(): boolean {
-    return this.conversationHost?.isSessionActive() ?? false;
+    return this.pending || (this.conversationHost?.isSessionActive() ?? false);
   }
 
   getCurrentDialogueId(): string | null {
@@ -126,31 +145,57 @@ export class DialogueManager {
   }
 
   async start(definitionId: string): Promise<boolean> {
+    return this.startConversation({
+      conversationKind: "scripted-dialogue",
+      dialogueDefinitionId: definitionId
+    });
+  }
+
+  async startConversation(
+    selection: ConversationSelectionContext
+  ): Promise<boolean> {
     if (this.isDialogueActive()) {
       this.end("cancelled");
     }
 
     const host = this.createConversationHost();
-    const initialTurn = await host.startSession({
-      conversationKind: "scripted-dialogue",
-      dialogueDefinitionId: definitionId
+    const requestId = ++this.activeRequestId;
+    this.pending = true;
+    this.currentDialogueId = selection.dialogueDefinitionId ?? null;
+    this.currentNodeId = null;
+    this.presenter.clearHistory();
+    this.presenter.show();
+    this.presenter.showPending({
+      speakerLabel: selection.npcDisplayName ?? null,
+      onCancel: () => this.end("cancelled")
     });
+    this.onDialogueStart?.();
+
+    const initialTurn = await host.startSession(selection);
+    if (requestId !== this.activeRequestId) {
+      return false;
+    }
+    this.pending = false;
     if (!initialTurn) {
+      this.presenter.hide();
       this.currentDialogueId = null;
       this.currentNodeId = null;
       return false;
     }
 
     this.conversationHost = host;
-    this.currentDialogueId = definitionId;
-    this.presenter.clearHistory();
-    this.presenter.show();
-    this.onDialogueStart?.();
+    this.currentDialogueId = selection.dialogueDefinitionId ?? null;
     this.presentTurn(initialTurn);
     return true;
   }
 
   end(reason: "completed" | "cancelled" = "completed"): void {
+    this.activeRequestId += 1;
+    this.pending = false;
+    if (this.autoCloseTimer) {
+      clearTimeout(this.autoCloseTimer);
+      this.autoCloseTimer = null;
+    }
     const currentDialogueId = this.currentDialogueId;
     this.presenter.hide();
     this.currentDialogueId = null;
@@ -168,11 +213,21 @@ export class DialogueManager {
   }
 
   private presentTurn(turn: ConversationTurnEnvelope): void {
+    if (this.autoCloseTimer) {
+      clearTimeout(this.autoCloseTimer);
+      this.autoCloseTimer = null;
+    }
     const nodeId =
       typeof turn.metadata?.nodeId === "string" ? turn.metadata.nodeId : null;
     const onEnterEventId =
       typeof turn.metadata?.onEnterEventId === "string"
         ? turn.metadata.onEnterEventId
+        : null;
+    const autoCloseAfterMs =
+      typeof turn.metadata?.autoCloseAfterMs === "number" &&
+      Number.isFinite(turn.metadata.autoCloseAfterMs) &&
+      turn.metadata.autoCloseAfterMs > 0
+        ? Math.floor(turn.metadata.autoCloseAfterMs)
         : null;
 
     this.currentNodeId = nodeId;
@@ -183,6 +238,8 @@ export class DialogueManager {
       this.onEvent?.(onEnterEventId);
     }
 
+    this.onTurn?.(turn, turn.proposedActions ?? []);
+
     this.presenter.showTurn(
       turn,
       (input) => {
@@ -190,15 +247,42 @@ export class DialogueManager {
       },
       () => this.end("cancelled")
     );
+
+    if (autoCloseAfterMs !== null) {
+      this.autoCloseTimer = setTimeout(() => {
+        this.autoCloseTimer = null;
+        this.end("completed");
+      }, autoCloseAfterMs);
+    }
   }
 
   private async handleAdvance(input: ConversationPlayerInput): Promise<void> {
+    if (this.pending) {
+      return;
+    }
     if (!this.conversationHost) {
       this.end("completed");
       return;
     }
+    if (this.autoCloseTimer) {
+      clearTimeout(this.autoCloseTimer);
+      this.autoCloseTimer = null;
+    }
 
+    const requestId = ++this.activeRequestId;
+    this.pending = true;
+    this.presenter.showPending({
+      speakerLabel:
+        this.conversationHost.getCurrentTurn()?.speakerLabel ??
+        this.conversationHost.getCurrentTurn()?.displayName ??
+        this.currentDialogueId,
+      onCancel: () => this.end("cancelled")
+    });
     const nextTurn = await this.conversationHost.submitInput(input);
+    if (requestId !== this.activeRequestId) {
+      return;
+    }
+    this.pending = false;
     if (!nextTurn) {
       this.end("completed");
       return;

@@ -53,6 +53,14 @@ export async function writeJsonFile(
   pathSegments: string[],
   data: unknown
 ): Promise<void> {
+  return writeTextFile(dirHandle, pathSegments, JSON.stringify(data, null, 2));
+}
+
+export async function writeTextFile(
+  dirHandle: FileSystemDirectoryHandle,
+  pathSegments: string[],
+  data: string
+): Promise<void> {
   let current = dirHandle;
   for (const segment of pathSegments.slice(0, -1)) {
     current = await current.getDirectoryHandle(segment, { create: true });
@@ -60,7 +68,7 @@ export async function writeJsonFile(
   const fileName = pathSegments[pathSegments.length - 1];
   const fileHandle = await current.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
-  await writable.write(JSON.stringify(data, null, 2));
+  await writable.write(data);
   await writable.close();
 }
 
@@ -93,6 +101,24 @@ export async function readBlobFile(
     const fileHandle = await current.getFileHandle(fileName);
     const file = await fileHandle.getFile();
     return file;
+  } catch {
+    return null;
+  }
+}
+
+export async function readTextFile(
+  dirHandle: FileSystemDirectoryHandle,
+  ...pathSegments: string[]
+): Promise<string | null> {
+  try {
+    let current = dirHandle;
+    for (const segment of pathSegments.slice(0, -1)) {
+      current = await current.getDirectoryHandle(segment);
+    }
+    const fileName = pathSegments[pathSegments.length - 1];
+    const fileHandle = await current.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    return file.text();
   } catch {
     return null;
   }

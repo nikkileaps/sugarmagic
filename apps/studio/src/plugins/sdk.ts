@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type {
+  GameProject,
   PluginConfigurationRecord,
   SemanticCommand
 } from "@sugarmagic/domain";
@@ -13,6 +14,7 @@ export interface PluginWorkspaceViewContribution {
 
 export interface PluginWorkspaceViewProps {
   gameProjectId: string | null;
+  gameProject: GameProject | null;
   pluginConfigurations: PluginConfigurationRecord[];
   onCommand: (command: SemanticCommand) => void;
 }

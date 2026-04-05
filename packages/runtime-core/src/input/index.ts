@@ -34,7 +34,17 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   let lastPointerX = 0;
   let lastPointerY = 0;
 
+  function isTextInputTarget(event: KeyboardEvent): boolean {
+    const target = event.target;
+    return (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    );
+  }
+
   function handleKeyDown(e: KeyboardEvent) {
+    if (isTextInputTarget(e)) return;
     const key = e.key.toLowerCase();
     if (!keys.has(key)) {
       keysJustPressed.add(key);
@@ -43,6 +53,7 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   }
 
   function handleKeyUp(e: KeyboardEvent) {
+    if (isTextInputTarget(e)) return;
     keys.delete(e.key.toLowerCase());
   }
 

@@ -217,6 +217,15 @@ export function createRuntimeInventoryUI(
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+
     if (event.key.toLowerCase() === "i") {
       event.preventDefault();
       setOpen(!open);

@@ -1,0 +1,15 @@
+import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
+
+export function readStudioPluginRuntimeEnvironment(): RuntimePluginEnvironment {
+  return {
+    SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL:
+      import.meta.env.VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL,
+    SUGARMAGIC_ANTHROPIC_API_KEY: import.meta.env.VITE_SUGARMAGIC_ANTHROPIC_API_KEY,
+    SUGARMAGIC_ANTHROPIC_MODEL: import.meta.env.VITE_SUGARMAGIC_ANTHROPIC_MODEL,
+    SUGARMAGIC_OPENAI_API_KEY: import.meta.env.VITE_SUGARMAGIC_OPENAI_API_KEY,
+    SUGARMAGIC_OPENAI_EMBEDDING_MODEL:
+      import.meta.env.VITE_SUGARMAGIC_OPENAI_EMBEDDING_MODEL,
+    SUGARMAGIC_OPENAI_VECTOR_STORE_ID:
+      import.meta.env.VITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID
+  };
+}

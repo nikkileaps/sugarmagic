@@ -34,6 +34,7 @@ import {
   collectPluginShellContributions,
   ensureDiscoveredPluginConfiguration,
   listDiscoveredPluginDefinitions,
+  planGameDeployment,
   resolveInstalledPluginDefinitions
 } from "@sugarmagic/plugins";
 import {
@@ -43,6 +44,8 @@ import {
   pickDirectory,
   readBlobFile,
   saveProject,
+  saveProjectWithManagedFiles,
+  inspectManagedProjectFiles,
   reloadProject,
   importSourceAsset
 } from "@sugarmagic/io";
@@ -87,6 +90,8 @@ import {
   getStudioPluginWorkspaceDefinition,
   listStudioPluginWorkspaceDefinitions
 } from "./plugins/catalog";
+import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
+import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
 
 function revokeAssetSources(assetSources: Record<string, string>) {
   for (const url of Object.values(assetSources)) {
@@ -192,13 +197,88 @@ function dispatchCommand(command: SemanticCommand) {
 async function handleSave() {
   const { handle, descriptor, session } = projectStore.getState();
   if (!handle || !descriptor || !session) return;
-  await saveProject({
+  const sugarDeployConfiguration = getPluginConfiguration(
+    session.gameProject.pluginConfigurations,
+    SUGARDEPLOY_PLUGIN_ID
+  );
+  const canRunSugarDeploy =
+    sugarDeployConfiguration?.enabled === true &&
+    readInstalledPluginIds().includes(SUGARDEPLOY_PLUGIN_ID);
+  const deploymentPlan =
+    canRunSugarDeploy && session.gameProject.deployment.deploymentTargetId
+      ? planGameDeployment(session.gameProject)
+      : null;
+
+  if (deploymentPlan?.status === "invalid") {
+    window.alert(
+      `Deployment plan is invalid and managed deployment files were not generated:\n\n${deploymentPlan.conflicts
+        .map((conflict) => `- ${conflict.message}`)
+        .join("\n")}`
+    );
+    await saveProject({
+      handle,
+      descriptor,
+      gameProject: session.gameProject,
+      contentLibrary: session.contentLibrary,
+      regions: getAllRegions(session)
+    });
+    projectStore.getState().updateSession(markSessionClean(session));
+    return;
+  }
+
+  const managedFiles = deploymentPlan?.managedFiles ?? [];
+  const inspection = await inspectManagedProjectFiles({
+    handle,
+    managedFiles
+  });
+
+  if (inspection.changedManagedFiles.length > 0) {
+    const changedOnly = inspection.changedManagedFiles.filter(
+      (path) => !inspection.driftedManagedFiles.includes(path)
+    );
+    const messageParts = [
+      "SugarDeploy detected existing managed deployment files that will be regenerated on save."
+    ];
+    if (changedOnly.length > 0) {
+      messageParts.push(
+        "",
+        "Generated files to overwrite:",
+        ...changedOnly.map((path) => `- ${path}`)
+      );
+    }
+    if (inspection.driftedManagedFiles.length > 0) {
+      messageParts.push(
+        "",
+        "Files with manual edits that will be overwritten:",
+        ...inspection.driftedManagedFiles.map((path) => `- ${path}`)
+      );
+    }
+    messageParts.push("", "Overwrite these managed deployment files?");
+
+    const confirmed = window.confirm(messageParts.join("\n"));
+    if (!confirmed) {
+      await saveProject({
+        handle,
+        descriptor,
+        gameProject: session.gameProject,
+        contentLibrary: session.contentLibrary,
+        regions: getAllRegions(session)
+      });
+      projectStore.getState().updateSession(markSessionClean(session));
+      return;
+    }
+  }
+
+  await saveProjectWithManagedFiles({
     handle,
     descriptor,
     gameProject: session.gameProject,
     contentLibrary: session.contentLibrary,
-    regions: getAllRegions(session)
+    regions: getAllRegions(session),
+    managedFiles,
+    overwriteManagedFiles: inspection.changedManagedFiles.length > 0
   });
+
   projectStore.getState().updateSession(markSessionClean(session));
 }
 
@@ -280,6 +360,7 @@ function handleStartPreview(
           activeRegionId: capturedSession.activeRegionId,
           activeEnvironmentId: snapshot.activeEnvironmentId,
           installedPluginIds,
+          pluginRuntimeEnvironment: readStudioPluginRuntimeEnvironment(),
           pluginConfigurations: capturedSession.gameProject.pluginConfigurations,
           contentLibrary: capturedSession.contentLibrary,
           playerDefinition: capturedSession.gameProject.playerDefinition,
@@ -829,12 +910,14 @@ export function App() {
     if (!activePluginWorkspaceDefinition) return null;
     return activePluginWorkspaceDefinition.createWorkspaceView({
       gameProjectId: session?.gameProject.identity.id ?? null,
+      gameProject: session?.gameProject ?? null,
       pluginConfigurations,
       onCommand: dispatchCommand
     });
   }, [
     activePluginWorkspaceDefinition,
     pluginConfigurations,
+    session?.gameProject,
     session?.gameProject.identity.id
   ]);
 
@@ -898,9 +981,6 @@ export function App() {
                     <Group justify="space-between" align="flex-start">
                       <Stack gap={4} style={{ flex: 1 }}>
                         <Text fw={600}>{plugin.manifest.displayName}</Text>
-                        <Text size="sm" c="var(--sm-color-subtext)">
-                          {plugin.manifest.summary}
-                        </Text>
                       </Stack>
                       <Stack gap="xs" align="flex-end">
                         <Switch
@@ -978,9 +1058,6 @@ export function App() {
                   <Group justify="space-between" align="flex-start">
                     <Stack gap={4} style={{ flex: 1 }}>
                       <Text fw={600}>{plugin.manifest.displayName}</Text>
-                      <Text size="sm" c="var(--sm-color-subtext)">
-                        {plugin.manifest.summary}
-                      </Text>
                     </Stack>
                     <UnstyledButton
                       onClick={() => handleInstallPlugin(plugin.manifest.pluginId)}

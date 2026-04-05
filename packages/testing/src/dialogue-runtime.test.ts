@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDefaultDialogueDefinition,
   createDialogueNodeId,
@@ -17,11 +17,18 @@ function createMockPresenter() {
   let latestTurn: ConversationTurnEnvelope | null = null;
   let latestInput: ((input: ConversationPlayerInput) => void) | null = null;
   let latestCancel: (() => void) | null = null;
+  let pendingCalls = 0;
+  let latestPendingSpeakerLabel: string | null = null;
 
   const presenter: DialoguePresenter = {
     show: vi.fn(),
     hide: vi.fn(),
     clearHistory: vi.fn(),
+    showPending: vi.fn((options) => {
+      pendingCalls += 1;
+      latestPendingSpeakerLabel = options?.speakerLabel ?? null;
+      latestCancel = options?.onCancel ?? null;
+    }),
     showTurn: vi.fn((turn, onInput, onCancel) => {
       latestTurn = turn;
       latestInput = onInput;
@@ -32,6 +39,8 @@ function createMockPresenter() {
   return {
     presenter,
     getLatestTurn: () => latestTurn,
+    getPendingCalls: () => pendingCalls,
+    getLatestPendingSpeakerLabel: () => latestPendingSpeakerLabel,
     advance: (input: ConversationPlayerInput = { kind: "advance" }) =>
       latestInput?.(input),
     cancel: () => latestCancel?.()
@@ -86,6 +95,10 @@ function createConditionalDialogue(): DialogueDefinition {
 }
 
 describe("DialogueManager", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("filters conditional edges and resolves speaker labels", async () => {
     const mock = createMockPresenter();
     const manager = new DialogueManager(mock.presenter);
@@ -103,6 +116,7 @@ describe("DialogueManager", () => {
     expect(turn?.speakerLabel).toBe("Narrator");
     expect(turn?.choices).toHaveLength(2);
     expect(turn?.choices[0]?.label).toBe("Open gate");
+    expect(mock.getPendingCalls()).toBe(1);
   });
 
   it("runs node enter events and ends cleanly on cancel", async () => {
@@ -136,6 +150,154 @@ describe("DialogueManager", () => {
 
     mock.cancel();
     expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(manager.isDialogueActive()).toBe(false);
+  });
+
+  it("becomes active immediately and shows pending state while the first turn is loading", async () => {
+    const mock = createMockPresenter();
+    const manager = new DialogueManager(mock.presenter);
+    manager.setConversationProviders([
+      {
+        providerId: "test.provider",
+        displayName: "Test",
+        priority: 10,
+        canHandle: () => true,
+        async startSession() {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {
+            session: {
+              advance: () => null
+            },
+            initialTurn: {
+              turnId: "turn:test",
+              providerId: "test.provider",
+              conversationKind: "free-form",
+              speakerId: "npc:test",
+              speakerLabel: "Station Manager",
+              text: "Hello there.",
+              choices: [],
+              inputMode: "free_text"
+            }
+          };
+        }
+      }
+    ]);
+
+    const startPromise = manager.startConversation({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:station-manager",
+      npcDisplayName: "Station Manager",
+      interactionMode: "agent"
+    });
+
+    expect(manager.isDialogueActive()).toBe(true);
+    expect(mock.presenter.show).toHaveBeenCalledTimes(1);
+    expect(mock.getPendingCalls()).toBe(1);
+    expect(mock.getLatestPendingSpeakerLabel()).toBe("Station Manager");
+
+    await startPromise;
+
+    expect(mock.getLatestTurn()?.speakerLabel).toBe("Station Manager");
+    expect(manager.isDialogueActive()).toBe(true);
+  });
+
+  it("can be cancelled while the first turn is still pending", async () => {
+    const mock = createMockPresenter();
+    const manager = new DialogueManager(mock.presenter);
+    const onEnd = vi.fn();
+    manager.setOnEnd(onEnd);
+    manager.setConversationProviders([
+      {
+        providerId: "test.provider",
+        displayName: "Test",
+        priority: 10,
+        canHandle: () => true,
+        async startSession() {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {
+            session: {
+              advance: () => null
+            },
+            initialTurn: {
+              turnId: "turn:test",
+              providerId: "test.provider",
+              conversationKind: "free-form",
+              speakerId: "npc:test",
+              speakerLabel: "Station Manager",
+              text: "Hello there.",
+              choices: [],
+              inputMode: "free_text"
+            }
+          };
+        }
+      }
+    ]);
+
+    const startPromise = manager.startConversation({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:station-manager",
+      npcDisplayName: "Station Manager",
+      interactionMode: "agent"
+    });
+
+    expect(manager.isDialogueActive()).toBe(true);
+    mock.cancel();
+
+    expect(onEnd).toHaveBeenCalledWith(null, "cancelled");
+    expect(manager.isDialogueActive()).toBe(false);
+
+    await startPromise;
+    expect(manager.isDialogueActive()).toBe(false);
+  });
+
+  it("auto-closes a turn that declares autoCloseAfterMs", async () => {
+    vi.useFakeTimers();
+
+    const mock = createMockPresenter();
+    const manager = new DialogueManager(mock.presenter);
+    const onEnd = vi.fn();
+    manager.setOnEnd(onEnd);
+    manager.setConversationProviders([
+      {
+        providerId: "test.provider",
+        displayName: "Test",
+        priority: 10,
+        canHandle: () => true,
+        async startSession() {
+          return {
+            session: {
+              advance: () => null
+            },
+            initialTurn: {
+              turnId: "turn:test",
+              providerId: "test.provider",
+              conversationKind: "free-form",
+              speakerId: "npc:test",
+              speakerLabel: "Station Manager",
+              text: "Sorry, I need to get back to work. Let's chat later.",
+              choices: [],
+              inputMode: "advance",
+              metadata: {
+                autoCloseAfterMs: 100
+              }
+            }
+          };
+        }
+      }
+    ]);
+
+    await manager.startConversation({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:station-manager",
+      npcDisplayName: "Station Manager",
+      interactionMode: "agent"
+    });
+
+    expect(manager.isDialogueActive()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onEnd).toHaveBeenCalledWith(null, "completed");
     expect(manager.isDialogueActive()).toBe(false);
   });
 });

@@ -5,13 +5,31 @@ import type {
   DialogueNodeDefinition
 } from "@sugarmagic/domain";
 
-export type ConversationKind = "scripted-dialogue" | "free-form" | "hybrid";
+export type ConversationKind = "scripted-dialogue" | "free-form" | "guided";
+export type ConversationInteractionMode = "scripted" | "agent" | "guided";
+
+export interface ConversationActiveQuestObjectiveContext {
+  nodeId: string;
+  displayName: string;
+  description: string;
+}
+
+export interface ConversationActiveQuestContext {
+  questDefinitionId: string;
+  displayName: string;
+  stageDisplayName: string;
+  objectives: ConversationActiveQuestObjectiveContext[];
+}
 
 export interface ConversationSelectionContext {
   conversationKind: ConversationKind;
   dialogueDefinitionId?: string;
   npcDefinitionId?: string;
-  interactionMode?: "scripted" | "agent" | "hybrid";
+  npcDisplayName?: string;
+  interactionMode?: ConversationInteractionMode;
+  lorePageId?: string | null;
+  activeQuest?: ConversationActiveQuestContext | null;
+  scriptedFollowupDialogueDefinitionId?: string | null;
   learnerBandOverride?: string | null;
   targetLanguage?: string | null;
   supportLanguage?: string | null;
@@ -29,6 +47,17 @@ export interface ConversationChoice {
   metadata?: Record<string, unknown>;
 }
 
+export type ConversationActionProposal =
+  | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
+  | { kind: "set-conversation-flag"; key: string; value: unknown }
+  | { kind: "surface-beat-evidence"; beatId: string; evidence: string }
+  | { kind: "request-close" }
+  | {
+      kind: "propose-quest-hook";
+      questTemplateId: string;
+      params: Record<string, unknown>;
+    };
+
 export interface ConversationTurnEnvelope {
   turnId: string;
   providerId: string;
@@ -38,6 +67,9 @@ export interface ConversationTurnEnvelope {
   displayName?: string;
   text: string;
   choices: ConversationChoice[];
+  inputMode?: ConversationPlayerInput["kind"];
+  inputPlaceholder?: string;
+  proposedActions?: ConversationActionProposal[];
   metadata?: Record<string, unknown>;
   annotations?: Record<string, unknown>;
   diagnostics?: Record<string, unknown>;
@@ -352,6 +384,7 @@ function createTurnFromNode(options: {
         targetNodeId: edge.targetNodeId
       }
     })),
+    inputMode: resolvedChoices.length > 1 ? "choice" : "advance",
     metadata: {
       dialogueDefinitionId,
       nodeId: node.nodeId,

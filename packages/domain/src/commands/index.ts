@@ -11,6 +11,7 @@ import type { PlayerDefinition } from "../player-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
+import type { DeploymentSettings } from "../deployment";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 
 export type AuthoringAggregateKind =
@@ -411,6 +412,13 @@ export type UpdatePluginConfigurationCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
+  "UpdateDeploymentSettings",
+  {
+    settings: DeploymentSettings;
+  }
+>;
+
 export type SemanticCommand =
   | MovePlacedAssetCommand
   | PlaceAssetInstanceCommand
@@ -458,7 +466,8 @@ export type SemanticCommand =
   | AssignPlacedAssetInspectableCommand
   | UpdatePlacedAssetInspectableCommand
   | RemovePlacedAssetInspectableCommand
-  | UpdatePluginConfigurationCommand;
+  | UpdatePluginConfigurationCommand
+  | UpdateDeploymentSettingsCommand;
 
 export {
   executeCommand,

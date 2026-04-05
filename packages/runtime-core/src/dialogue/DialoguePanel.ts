@@ -26,6 +26,15 @@ export function createRuntimeDialoguePanel(
   const panel = document.createElement("div");
   panel.className = "sm-dialogue-panel";
 
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "sm-dialogue-panel-close";
+  closeButton.setAttribute("aria-label", "Close conversation");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => {
+    onCancel?.();
+  });
+
   const scrollArea = document.createElement("div");
   scrollArea.className = "sm-dialogue-panel-scroll";
 
@@ -47,20 +56,33 @@ export function createRuntimeDialoguePanel(
   actionsContainer.className = "sm-dialogue-panel-actions";
   panel.appendChild(actionsContainer);
 
+  const inputContainer = document.createElement("div");
+  inputContainer.className = "sm-dialogue-panel-input";
+  panel.appendChild(inputContainer);
+
   container.appendChild(panel);
   parentContainer.appendChild(container);
 
   let currentChoices: ConversationTurnEnvelope["choices"] = [];
+  let currentInputMode: ConversationTurnEnvelope["inputMode"] = "advance";
+  let currentInputPlaceholder = "";
   let onInput: ((input: ConversationPlayerInput) => void) | null = null;
   let onCancel: (() => void) | null = null;
   let entryCount = 0;
+  let textInput: HTMLTextAreaElement | null = null;
+  let pendingSpeakerLabel: string | null = null;
 
   function stopCurrent() {
     onInput = null;
     onCancel = null;
     currentChoices = [];
+    currentInputMode = "advance";
+    currentInputPlaceholder = "";
     actionsContainer.innerHTML = "";
     enrichmentContainer.innerHTML = "";
+    inputContainer.innerHTML = "";
+    textInput = null;
+    pendingSpeakerLabel = null;
   }
 
   function scrollToBottom() {
@@ -72,6 +94,10 @@ export function createRuntimeDialoguePanel(
     while (activeContainer.firstChild) {
       historyContainer.appendChild(activeContainer.firstChild);
     }
+  }
+
+  function activeContainsPendingEntry(): boolean {
+    return activeContainer.querySelector(".sm-dialogue-entry-pending") !== null;
   }
 
   function getSpeakerClass(speakerId: string | undefined): string | null {
@@ -106,14 +132,124 @@ export function createRuntimeDialoguePanel(
     return entry;
   }
 
+  function createPendingEntry(speakerLabel: string | null): HTMLDivElement {
+    const entry = document.createElement("div");
+    entry.className = "sm-dialogue-entry sm-dialogue-entry-pending align-left";
+
+    if (speakerLabel) {
+      const speakerElement = document.createElement("div");
+      speakerElement.className = "sm-dialogue-entry-speaker";
+      speakerElement.textContent = speakerLabel;
+      entry.appendChild(speakerElement);
+    }
+
+    const textElement = document.createElement("div");
+    textElement.className = "sm-dialogue-entry-text sm-dialogue-entry-thinking";
+
+    const dots = document.createElement("span");
+    dots.className = "sm-dialogue-thinking-dots";
+    dots.innerHTML = `
+      <span class="sm-dialogue-thinking-dot"></span>
+      <span class="sm-dialogue-thinking-dot"></span>
+      <span class="sm-dialogue-thinking-dot"></span>
+    `;
+
+    textElement.appendChild(dots);
+    entry.appendChild(textElement);
+    return entry;
+  }
+
   function submitInput(input: ConversationPlayerInput) {
     const handler = onInput;
+    if (input.kind === "free_text") {
+      const trimmed = input.text.trim();
+      if (!trimmed) return;
+      activeContainer.appendChild(
+        createEntry({
+          turnId: `player:${crypto.randomUUID()}`,
+          providerId: "runtime:player-input",
+          conversationKind: "free-form",
+          speakerId: PLAYER_SPEAKER.speakerId,
+          speakerLabel: PLAYER_SPEAKER.displayName,
+          text: trimmed,
+          choices: []
+        })
+      );
+      scrollToBottom();
+      stopCurrent();
+      handler?.({ kind: "free_text", text: trimmed });
+      return;
+    }
     stopCurrent();
     handler?.(input);
   }
 
   function renderActions() {
     actionsContainer.innerHTML = "";
+    inputContainer.innerHTML = "";
+    textInput = null;
+
+    function createFooterRow(hintText: string, includeSubmit: boolean): HTMLDivElement {
+      const footer = document.createElement("div");
+      footer.className = "sm-dialogue-input-footer";
+
+      const hint = document.createElement("div");
+      hint.className = "sm-dialogue-text-hint";
+      hint.innerHTML = hintText;
+      footer.appendChild(hint);
+
+      const controls = document.createElement("div");
+      controls.className = "sm-dialogue-footer-controls";
+
+      const dismissButton = closeButton.cloneNode(true) as HTMLButtonElement;
+      dismissButton.addEventListener("click", () => {
+        onCancel?.();
+      });
+      controls.appendChild(dismissButton);
+
+      if (includeSubmit) {
+        const submitButton = document.createElement("button");
+        submitButton.type = "submit";
+        submitButton.className = "sm-dialogue-submit-btn";
+        submitButton.textContent = "Send";
+        controls.appendChild(submitButton);
+      }
+
+      footer.appendChild(controls);
+      return footer;
+    }
+
+    if (currentInputMode === "free_text") {
+      const form = document.createElement("form");
+      form.className = "sm-dialogue-input-form";
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!textInput) return;
+        submitInput({ kind: "free_text", text: textInput.value });
+      });
+
+      textInput = document.createElement("textarea");
+      textInput.className = "sm-dialogue-text-input";
+      textInput.rows = 3;
+      textInput.placeholder = currentInputPlaceholder || "Type your response...";
+      textInput.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+      });
+      textInput.addEventListener("keyup", (event) => {
+        event.stopPropagation();
+      });
+      form.appendChild(textInput);
+
+      form.appendChild(
+        createFooterRow(
+          'Enter to send, Shift+Enter for a new line, <span class="sm-dialogue-key-hint">Esc</span> to close',
+          true
+        )
+      );
+      inputContainer.appendChild(form);
+      queueMicrotask(() => textInput?.focus());
+      return;
+    }
 
     if (currentChoices.length > 1) {
       currentChoices.forEach((choice, index) => {
@@ -128,14 +264,23 @@ export function createRuntimeDialoguePanel(
         );
         actionsContainer.appendChild(button);
       });
+      actionsContainer.appendChild(
+        createFooterRow(
+          'Press a number to choose or <span class="sm-dialogue-key-hint">Esc</span> to close',
+          false
+        )
+      );
       return;
     }
 
-    const hint = document.createElement("div");
-    hint.className = "sm-dialogue-continue-hint";
-    hint.textContent =
-      currentChoices.length === 1 ? "Press Enter to continue" : "Press Enter to close";
-    actionsContainer.appendChild(hint);
+    actionsContainer.appendChild(
+      createFooterRow(
+        currentChoices.length === 1
+          ? 'Press Enter to continue or <span class="sm-dialogue-key-hint">Esc</span> to close'
+          : 'Press Enter to close or <span class="sm-dialogue-key-hint">Esc</span> to close',
+        false
+      )
+    );
   }
 
   function handleKeyDown(event: KeyboardEvent) {
@@ -144,6 +289,17 @@ export function createRuntimeDialoguePanel(
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel?.();
+      return;
+    }
+
+    if (currentInputMode === "free_text") {
+      if (event.key === "Enter" && !event.shiftKey) {
+        const target = event.target;
+        if (target instanceof HTMLTextAreaElement && target === textInput) {
+          event.preventDefault();
+          submitInput({ kind: "free_text", text: target.value });
+        }
+      }
       return;
     }
 
@@ -176,6 +332,7 @@ export function createRuntimeDialoguePanel(
       activeContainer.innerHTML = "";
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
+      inputContainer.innerHTML = "";
       entryCount = 0;
       stopCurrent();
     },
@@ -184,13 +341,32 @@ export function createRuntimeDialoguePanel(
       activeContainer.innerHTML = "";
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
+      inputContainer.innerHTML = "";
       entryCount = 0;
     },
-    showTurn(turn, handleTurnInput, handleCancel) {
+    showPending(options) {
+      pendingSpeakerLabel = options?.speakerLabel ?? null;
       graduateActive();
+      stopCurrent();
+      onCancel = options?.onCancel ?? null;
+      activeContainer.innerHTML = "";
+      activeContainer.appendChild(createPendingEntry(pendingSpeakerLabel));
+      container.classList.add("visible");
+      scrollToBottom();
+    },
+    showTurn(turn, handleTurnInput, handleCancel) {
+      if (activeContainsPendingEntry()) {
+        activeContainer.innerHTML = "";
+      } else {
+        graduateActive();
+      }
       onInput = handleTurnInput;
       onCancel = handleCancel ?? null;
       currentChoices = turn.choices;
+      currentInputMode =
+        turn.inputMode ??
+        (turn.choices.length > 1 ? "choice" : "advance");
+      currentInputPlaceholder = turn.inputPlaceholder ?? "";
       activeContainer.innerHTML = "";
       activeContainer.appendChild(createEntry(turn));
       renderActions();
@@ -241,6 +417,29 @@ function injectStyles() {
       backdrop-filter: blur(20px);
     }
 
+    .sm-dialogue-panel-close {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: rgba(240, 232, 223, 0.88);
+      font: inherit;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s ease-out, border-color 0.15s ease-out;
+    }
+
+    .sm-dialogue-panel-close:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.24);
+    }
+
     .sm-dialogue-panel-scroll {
       flex: 1;
       overflow-y: auto;
@@ -269,6 +468,15 @@ function injectStyles() {
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+
+    .sm-dialogue-panel-input:empty {
+      display: none;
+    }
+
+    .sm-dialogue-panel-input {
+      padding: 0 20px 20px;
+      border-top: 1px solid rgba(255,255,255,0.06);
     }
 
     .sm-dialogue-entry {
@@ -300,6 +508,50 @@ function injectStyles() {
       color: rgba(240, 232, 223, 0.9);
       font-size: 16px;
       line-height: 1.6;
+    }
+
+    .sm-dialogue-entry-pending .sm-dialogue-entry-text {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+    }
+
+    .sm-dialogue-entry-thinking {
+      color: rgba(240, 232, 223, 0.72);
+    }
+
+    .sm-dialogue-thinking-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sm-dialogue-thinking-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(240, 232, 223, 0.82);
+      animation: sm-dialogue-thinking-bounce 1s infinite ease-in-out;
+    }
+
+    .sm-dialogue-thinking-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .sm-dialogue-thinking-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes sm-dialogue-thinking-bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.45;
+      }
+
+      40% {
+        transform: translateY(-4px);
+        opacity: 1;
+      }
     }
 
     .sm-dialogue-entry.player .sm-dialogue-entry-speaker,
@@ -360,6 +612,67 @@ function injectStyles() {
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
+    }
+
+    .sm-dialogue-input-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sm-dialogue-text-input {
+      width: 100%;
+      resize: vertical;
+      min-height: 84px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: #f0e8df;
+      font: inherit;
+    }
+
+    .sm-dialogue-text-input::placeholder {
+      color: rgba(240,232,223,0.45);
+    }
+
+    .sm-dialogue-input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sm-dialogue-footer-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .sm-dialogue-text-hint {
+      color: rgba(240,232,223,0.55);
+      font-size: 12px;
+    }
+
+    .sm-dialogue-key-hint {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: rgba(240,232,223,0.72);
+    }
+
+    .sm-dialogue-submit-btn {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(137,180,250,0.45);
+      background: rgba(137,180,250,0.18);
+      color: #f0e8df;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
     }
   `;
   document.head.appendChild(style);

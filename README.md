@@ -36,3 +36,8 @@ Current plans:
 - [Plan 016: Design Documents and Layout Inspectables Epic](/Users/nikki/projects/sugarmagic/docs/plans/016-design-documents-and-layout-inspectables-epic.md)
 - [Plan 017: Design Spells and Runtime Caster Epic](/Users/nikki/projects/sugarmagic/docs/plans/017-design-spells-and-runtime-caster-epic.md)
 - [Plan 018: Plugin System and SugarAgent Sugarlang Composition Epic](/Users/nikki/projects/sugarmagic/docs/plans/018-plugin-system-and-sugaragent-sugarlang-composition-epic.md)
+- [Plan 019: SugarAgent Conversation Provider and Turn Lifecycle Epic](/Users/nikki/projects/sugarmagic/docs/plans/019-sugaragent-conversation-provider-and-turn-lifecycle-epic.md)
+- [Plan 020: Telemetry Metrics and Sink Abstractions Epic](/Users/nikki/projects/sugarmagic/docs/plans/020-telemetry-metrics-and-sink-abstractions-epic.md)
+- [Plan 021: Deployment Plugin and Publish Deploy Target Architecture Epic](/Users/nikki/projects/sugarmagic/docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md)
+- [Plan 022: SugarAgent Lore Wiki Source of Truth and Gateway Ingestion Epic](/Users/nikki/projects/sugarmagic/docs/plans/022-sugaragent-lore-wiki-source-of-truth-and-gateway-ingestion-epic.md)
+- [Plan 023: Runtime-Core Blackboard and World State Architecture Epic](/Users/nikki/projects/sugarmagic/docs/plans/023-runtime-core-blackboard-and-world-state-architecture-epic.md)

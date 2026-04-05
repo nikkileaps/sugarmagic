@@ -1,6 +1,7 @@
 import { createUuid } from "../shared/identity";
 
 export type NPCAnimationSlot = "idle" | "walk" | "run";
+export type NPCInteractionMode = "scripted" | "agent" | "guided";
 
 export interface NPCAnimationBindings {
   idle: string | null;
@@ -18,6 +19,8 @@ export interface NPCDefinition {
   definitionId: string;
   displayName: string;
   description?: string;
+  interactionMode: NPCInteractionMode;
+  lorePageId: string | null;
   presentation: NPCPresentationProfile;
 }
 
@@ -44,6 +47,8 @@ export function createDefaultNPCDefinition(
     definitionId: options.definitionId ?? createNPCDefinitionId(),
     displayName: options.displayName ?? "New NPC",
     description: options.description,
+    interactionMode: "scripted",
+    lorePageId: null,
     presentation: {
       modelAssetDefinitionId: null,
       modelHeight: DEFAULT_NPC_MODEL_HEIGHT,
@@ -65,6 +70,17 @@ export function normalizeNPCDefinition(
     definitionId: npcDefinition.definitionId ?? defaultDefinition.definitionId,
     displayName: npcDefinition.displayName ?? defaultDefinition.displayName,
     description: npcDefinition.description ?? undefined,
+    interactionMode:
+      npcDefinition.interactionMode === "agent" ||
+      npcDefinition.interactionMode === "guided" ||
+      npcDefinition.interactionMode === "scripted"
+        ? npcDefinition.interactionMode
+        : defaultDefinition.interactionMode,
+    lorePageId:
+      typeof npcDefinition.lorePageId === "string" &&
+      npcDefinition.lorePageId.trim().length > 0
+        ? npcDefinition.lorePageId.trim()
+        : null,
     presentation: {
       modelAssetDefinitionId:
         npcDefinition.presentation?.modelAssetDefinitionId ??
