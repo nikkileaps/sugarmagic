@@ -33,11 +33,17 @@ import {
   type PluginConfigurationRecord,
   type PartialPluginConfigurationRecord
 } from "../plugins";
+import {
+  createDefaultDeploymentSettings,
+  normalizeDeploymentSettings,
+  type DeploymentSettings
+} from "../deployment";
 
 export interface GameProject {
   identity: DocumentIdentity;
   displayName: string;
   gameRootPath: string;
+  deployment: DeploymentSettings;
   regionRegistry: RegionReference[];
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibraryId: string | null;
@@ -51,7 +57,8 @@ export interface GameProject {
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "deployment" | "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+    deployment?: Partial<DeploymentSettings> | null;
     pluginConfigurations?: Array<PluginConfigurationRecord | PartialPluginConfigurationRecord> | null;
     playerDefinition?: Partial<PlayerDefinition> | null;
     spellDefinitions?: Array<Partial<SpellDefinition>> | null;
@@ -64,6 +71,7 @@ export function normalizeGameProject(
 ): GameProject {
   return {
     ...gameProject,
+    deployment: normalizeDeploymentSettings(gameProject.deployment),
     pluginConfigurations: normalizePluginConfigurationRecords(
       gameProject.pluginConfigurations
     ),
@@ -100,6 +108,7 @@ export function createDefaultGameProject(
     identity: { id: slug, schema: "GameProject", version: 1 },
     displayName: gameName,
     gameRootPath: ".",
+    deployment: createDefaultDeploymentSettings(),
     regionRegistry: [],
     pluginConfigurations: [],
     contentLibraryId: `${slug}:content-library`,

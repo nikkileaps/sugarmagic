@@ -14,7 +14,9 @@ import {
   ensureDirectory,
   pickDirectory,
   readJsonFile,
+  readTextFile,
   storeProjectHandle,
+  writeTextFile,
   writeJsonFile
 } from "../fs-access";
 import type { GameRootDescriptor } from "../game-root";
@@ -35,6 +37,40 @@ export interface CreateProjectInput {
 const PROJECT_FILE = "project.sgrmagic";
 const CONTENT_LIBRARY_FILE = "content-library.sgrmagic";
 const REGIONS_DIR = "regions";
+const DEPLOYMENT_MANIFEST_FILE = [".sugarmagic", "deployment-manifest.sgrmagic"];
+
+export interface ManagedProjectFile {
+  relativePath: string;
+  content: string;
+  contentType: "text" | "json";
+}
+
+interface DeploymentManifest {
+  files: Array<{
+    relativePath: string;
+    contentHash: string;
+  }>;
+}
+
+export interface SaveProjectResult {
+  changedManagedFiles: string[];
+  driftedManagedFiles: string[];
+  writtenManagedFiles: string[];
+}
+
+export interface ManagedProjectFileInspectionResult {
+  changedManagedFiles: string[];
+  driftedManagedFiles: string[];
+}
+
+function hashText(input: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a-${(hash >>> 0).toString(16)}`;
+}
 
 function makeEmptyProject(
   gameName: string,
@@ -128,6 +164,65 @@ export async function loadProjectFromHandle(
 }
 
 export async function saveProject(active: ActiveProject): Promise<void> {
+  await saveProjectWithManagedFiles(active);
+}
+
+export async function inspectManagedProjectFiles(
+  active: Pick<ActiveProject, "handle"> & {
+    managedFiles?: ManagedProjectFile[];
+  }
+): Promise<ManagedProjectFileInspectionResult> {
+  const managedFiles = active.managedFiles ?? [];
+  if (managedFiles.length === 0) {
+    return {
+      changedManagedFiles: [],
+      driftedManagedFiles: []
+    };
+  }
+
+  const existingManifest =
+    (await readJsonFile<DeploymentManifest>(
+      active.handle,
+      ...DEPLOYMENT_MANIFEST_FILE
+    )) ?? { files: [] };
+  const previousHashes = new Map(
+    existingManifest.files.map((entry) => [entry.relativePath, entry.contentHash])
+  );
+
+  const changedManagedFiles: string[] = [];
+  const driftedManagedFiles: string[] = [];
+  for (const file of managedFiles) {
+    const existingText = await readTextFile(
+      active.handle,
+      ...file.relativePath.split("/").filter(Boolean)
+    );
+    if (existingText == null) continue;
+
+    if (existingText !== file.content) {
+      changedManagedFiles.push(file.relativePath);
+    }
+
+    const previousHash = previousHashes.get(file.relativePath);
+    if (!previousHash) continue;
+    const existingHash = hashText(existingText);
+    const nextHash = hashText(file.content);
+    if (existingHash !== previousHash && existingHash !== nextHash) {
+      driftedManagedFiles.push(file.relativePath);
+    }
+  }
+
+  return {
+    changedManagedFiles,
+    driftedManagedFiles
+  };
+}
+
+export async function saveProjectWithManagedFiles(
+  active: ActiveProject & {
+    managedFiles?: ManagedProjectFile[];
+    overwriteManagedFiles?: boolean;
+  }
+): Promise<SaveProjectResult> {
   await writeJsonFile(active.handle, [PROJECT_FILE], active.gameProject);
   await writeJsonFile(active.handle, [CONTENT_LIBRARY_FILE], active.contentLibrary);
   for (const region of active.regions) {
@@ -137,6 +232,52 @@ export async function saveProject(active: ActiveProject): Promise<void> {
       region
     );
   }
+
+  const managedFiles = active.managedFiles ?? [];
+  if (managedFiles.length === 0) {
+    return {
+      changedManagedFiles: [],
+      driftedManagedFiles: [],
+      writtenManagedFiles: []
+    };
+  }
+
+  const inspection = await inspectManagedProjectFiles(active);
+
+  if (
+    inspection.driftedManagedFiles.length > 0 &&
+    active.overwriteManagedFiles !== true
+  ) {
+    return {
+      changedManagedFiles: inspection.changedManagedFiles,
+      driftedManagedFiles: inspection.driftedManagedFiles,
+      writtenManagedFiles: []
+    };
+  }
+
+  const writtenManagedFiles: string[] = [];
+  for (const file of managedFiles) {
+    await writeTextFile(
+      active.handle,
+      file.relativePath.split("/").filter(Boolean),
+      file.content
+    );
+    writtenManagedFiles.push(file.relativePath);
+  }
+
+  await ensureDirectory(active.handle, ".sugarmagic");
+  await writeJsonFile(active.handle, DEPLOYMENT_MANIFEST_FILE, {
+    files: managedFiles.map((file) => ({
+      relativePath: file.relativePath,
+      contentHash: hashText(file.content)
+    }))
+  } satisfies DeploymentManifest);
+
+  return {
+    changedManagedFiles: inspection.changedManagedFiles,
+    driftedManagedFiles: [],
+    writtenManagedFiles
+  };
 }
 
 export async function reloadProject(

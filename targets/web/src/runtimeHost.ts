@@ -43,6 +43,7 @@ import {
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
+  type RuntimePluginEnvironment,
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
@@ -101,6 +102,7 @@ export interface WebRuntimeStartState {
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   installedPluginIds: string[];
+  pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
   playerDefinition: PlayerDefinition;
@@ -643,6 +645,7 @@ export function createWebRuntimeHost(
       adapter.boot,
       state.installedPluginIds,
       state.pluginConfigurations,
+      state.pluginRuntimeEnvironment ?? {},
     );
     const playerSpawn = spawnRuntimePlayerEntity(
       world,

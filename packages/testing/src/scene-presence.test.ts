@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RegionDocument } from "@sugarmagic/domain";
 import {
   createDefaultEnvironmentDefinition,
+  createDefaultDeploymentSettings,
   createDefaultNPCDefinition,
   createDefaultPlayerDefinition,
   createAuthoringSession,
@@ -42,6 +43,7 @@ describe("layout scene presences", () => {
         identity: { id: "project", schema: "GameProject", version: 1 },
         displayName: "Project",
         gameRootPath: ".",
+        deployment: createDefaultDeploymentSettings(),
         regionRegistry: [{ regionId: "station" }],
         pluginConfigurations: [],
         contentLibraryId: "project:content-library",

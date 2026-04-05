@@ -6,6 +6,11 @@ import {
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import type { DiscoveredPluginDefinition } from "../sdk";
 export { HELLO_PLUGIN_ID, normalizeHelloPluginConfig } from "../catalog/hello";
+export {
+  SUGARAGENT_PLUGIN_ID,
+  normalizeSugarAgentPluginConfig
+} from "../catalog/sugaragent";
+export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 
 interface PluginModule {
   pluginDefinition: DiscoveredPluginDefinition;

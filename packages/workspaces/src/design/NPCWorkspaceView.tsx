@@ -454,6 +454,29 @@ export function useNPCWorkspaceView(
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Identity
               </Text>
+              <Select
+                label="Interaction Mode"
+                size="xs"
+                data={[
+                  { value: "scripted", label: "Scripted" },
+                  { value: "agent", label: "Agent" },
+                  { value: "guided", label: "Guided" }
+                ]}
+                value={selectedNPC.interactionMode}
+                onChange={(value) => {
+                  if (
+                    value !== "scripted" &&
+                    value !== "agent" &&
+                    value !== "guided"
+                  ) {
+                    return;
+                  }
+                  updateNPC({
+                    ...selectedNPC,
+                    interactionMode: value
+                  });
+                }}
+              />
               <TextInput
                 label="Display Name"
                 size="xs"
@@ -477,6 +500,28 @@ export function useNPCWorkspaceView(
                     description: event.currentTarget.value.trim().length > 0
                       ? event.currentTarget.value
                       : undefined
+                  })
+                }
+              />
+            </Stack>
+
+            <Stack gap="xs">
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                Lore Binding
+              </Text>
+              <TextInput
+                label="Lore Page ID"
+                size="xs"
+                description="Canonical lore wiki page id for this NPC, for example root.characters.station_manager."
+                placeholder="root.characters.station_manager"
+                value={selectedNPC.lorePageId ?? ""}
+                onChange={(event) =>
+                  updateNPC({
+                    ...selectedNPC,
+                    lorePageId:
+                      event.currentTarget.value.trim().length > 0
+                        ? event.currentTarget.value.trim()
+                        : null
                   })
                 }
               />

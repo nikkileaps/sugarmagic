@@ -41,7 +41,8 @@ import type {
   UpdateQuestDefinitionCommand,
   UpdateSpellDefinitionCommand,
   UpdatePlayerDefinitionCommand,
-  UpdatePluginConfigurationCommand
+  UpdatePluginConfigurationCommand,
+  UpdateDeploymentSettingsCommand
 } from "../commands";
 import type {
   AssetDefinition,
@@ -334,6 +335,27 @@ function applyUpdatePluginConfigurationCommand(
         session.gameProject.pluginConfigurations,
         command.payload.configuration
       )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateDeploymentSettingsCommand(
+  session: AuthoringSession,
+  command: UpdateDeploymentSettingsCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    session.gameProject.identity.id
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      deployment: command.payload.settings
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -815,6 +837,10 @@ export function applyCommand(
 
   if (command.kind === "UpdatePluginConfiguration") {
     return applyUpdatePluginConfigurationCommand(session, command);
+  }
+
+  if (command.kind === "UpdateDeploymentSettings") {
+    return applyUpdateDeploymentSettingsCommand(session, command);
   }
 
   if (command.kind === "CreateNPCDefinition") {

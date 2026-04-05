@@ -12,6 +12,7 @@ import {
   getAllAssetDefinitions,
   applyCommand,
   getActiveRegion,
+  createDefaultDeploymentSettings,
   createDefaultPlayerDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState
@@ -23,6 +24,7 @@ function makeProject(): GameProject {
     identity: { id: "wordlark", schema: "GameProject", version: 1 },
     displayName: "Wordlark",
     gameRootPath: ".",
+    deployment: createDefaultDeploymentSettings(),
     regionRegistry: [{ regionId: "arrival_station" }],
     pluginConfigurations: [],
     contentLibraryId: "wordlark:content-library",

@@ -16,8 +16,10 @@ import {
 } from "../caster";
 import { type World, Position } from "../ecs";
 import {
+  type ConversationActionProposal,
   type ConversationMiddleware,
   type ConversationProvider,
+  type ConversationSelectionContext,
   createRuntimeDialoguePanel,
   DialogueManager
 } from "../dialogue";
@@ -164,6 +166,7 @@ export function createRuntimeGameplaySessionController(
     string,
     { documentDefinitionId: string; promptText: string; entity: number }
   >();
+  let pendingScriptedFollowupDialogueId: string | null = null;
 
   function resolveSpeakerName(speakerId: string): string | undefined {
     if (speakerId === playerDefinition.definitionId) {
@@ -192,8 +195,91 @@ export function createRuntimeGameplaySessionController(
     for (const { npcDefinitionId, entity } of npcInteractableEntities.values()) {
       const interactable = world.getComponent(entity, Interactable);
       if (!interactable) continue;
-      interactable.available =
-        questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
+      const npcDefinition = npcDefinitions.find(
+        (candidate) => candidate.definitionId === npcDefinitionId
+      );
+      if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
+        interactable.available =
+          questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
+        continue;
+      }
+
+      interactable.available = true;
+    }
+  }
+
+  function resolveNpcConversationSelection(
+    npcDefinitionId: string
+  ): ConversationSelectionContext | null {
+    const npcDefinition =
+      npcDefinitions.find((candidate) => candidate.definitionId === npcDefinitionId) ??
+      null;
+    if (!npcDefinition) return null;
+
+    if (npcDefinition.interactionMode === "scripted") {
+      const dialogueDefinitionId =
+        questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
+      if (!dialogueDefinitionId) return null;
+      return {
+        conversationKind: "scripted-dialogue",
+        dialogueDefinitionId,
+        npcDefinitionId,
+        npcDisplayName: npcDefinition.displayName,
+        interactionMode: "scripted"
+      };
+    }
+
+    const trackedQuest = questManager.getTrackedQuest();
+    const dialogueDefinitionId =
+      questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
+
+    return {
+      conversationKind:
+        npcDefinition.interactionMode === "guided" ? "guided" : "free-form",
+      dialogueDefinitionId:
+        npcDefinition.interactionMode === "guided" ? dialogueDefinitionId ?? undefined : undefined,
+      npcDefinitionId,
+      npcDisplayName: npcDefinition.displayName,
+      interactionMode: npcDefinition.interactionMode,
+      lorePageId: npcDefinition.lorePageId,
+      activeQuest: trackedQuest
+        ? {
+            questDefinitionId: trackedQuest.questDefinitionId,
+            displayName: trackedQuest.displayName,
+            stageDisplayName: trackedQuest.stageDisplayName,
+            objectives: trackedQuest.objectives.map((objective) => ({
+              nodeId: objective.nodeId,
+              displayName: objective.displayName,
+              description: objective.description
+            }))
+          }
+        : null,
+      scriptedFollowupDialogueDefinitionId: dialogueDefinitionId
+    };
+  }
+
+  function handleConversationActionProposal(
+    proposal: ConversationActionProposal
+  ): void {
+    switch (proposal.kind) {
+      case "set-conversation-flag":
+        questManager.setFlag(proposal.key, proposal.value);
+        return;
+      case "surface-beat-evidence":
+        console.debug("[runtime-core] conversation beat evidence", proposal);
+        return;
+      case "start-scripted-followup":
+        pendingScriptedFollowupDialogueId = proposal.dialogueDefinitionId;
+        return;
+      case "request-close":
+        return;
+      case "propose-quest-hook":
+        console.debug("[runtime-core] ignored quest hook proposal", proposal);
+        return;
+      default: {
+        const exhaustive: never = proposal;
+        console.debug("[runtime-core] unhandled conversation action proposal", exhaustive);
+      }
     }
   }
 
@@ -350,6 +436,19 @@ export function createRuntimeGameplaySessionController(
     inputManager.consumeInteract();
     questDialogueCoordinator.handleDialogueEnd(dialogueDefinitionId, reason);
     syncInteractionPrompt();
+    const followupDialogueDefinitionId =
+      reason === "completed" ? pendingScriptedFollowupDialogueId : null;
+    pendingScriptedFollowupDialogueId = null;
+    if (followupDialogueDefinitionId) {
+      queueMicrotask(() => {
+        void dialogueManager.start(followupDialogueDefinitionId);
+      });
+    }
+  });
+  dialogueManager.setOnTurn((_turn, proposedActions) => {
+    for (const proposal of proposedActions) {
+      handleConversationActionProposal(proposal);
+    }
   });
 
   questDialogueCoordinator.loadDefinitions(dialogueDefinitions, questDefinitions);
@@ -509,11 +608,9 @@ export function createRuntimeGameplaySessionController(
   });
   interactionSystem.setInteractHandler((nearby) => {
     if (nearby.type === "npc") {
-      const dialogueDefinitionId = questDialogueCoordinator.resolveNpcDialogueDefinitionId(
-        nearby.targetId
-      );
-      if (!dialogueDefinitionId) return;
-      void dialogueManager.start(dialogueDefinitionId);
+      const selection = resolveNpcConversationSelection(nearby.targetId);
+      if (!selection) return;
+      void dialogueManager.startConversation(selection);
       return;
     }
 

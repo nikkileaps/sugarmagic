@@ -12,9 +12,12 @@ export interface PluginRuntimeContributionDefinition {
   contributions: RuntimePluginContribution[];
 }
 
+export type RuntimePluginEnvironment = Record<string, string | undefined>;
+
 export interface RuntimePluginFactoryContext {
   boot: RuntimeBootModel;
   configuration: PluginConfigurationRecord;
+  environment?: RuntimePluginEnvironment;
 }
 
 export interface RuntimePluginDefinition {
@@ -48,7 +51,8 @@ function createStaticRuntimePluginInstance(
 export function createRuntimePluginInstances(
   boot: RuntimeBootModel,
   configurations: PluginConfigurationRecord[],
-  resolver: (pluginId: string) => { displayName: string; runtime?: RuntimePluginDefinition } | null
+  resolver: (pluginId: string) => { displayName: string; runtime?: RuntimePluginDefinition } | null,
+  environment: RuntimePluginEnvironment = {}
 ): RuntimePluginInstance[] {
   const instances: RuntimePluginInstance[] = [];
 
@@ -59,7 +63,8 @@ export function createRuntimePluginInstances(
 
     const instance = installed.runtime.createRuntimePlugin?.({
       boot,
-      configuration
+      configuration,
+      environment
     }) ?? createStaticRuntimePluginInstance(
       boot,
       configuration,
@@ -78,7 +83,8 @@ export function createRuntimePluginInstances(
 export function resolveInstalledRuntimePluginInstances(
   boot: RuntimeBootModel,
   installedPluginIds: string[],
-  configurations: PluginConfigurationRecord[]
+  configurations: PluginConfigurationRecord[],
+  environment: RuntimePluginEnvironment = {}
 ): RuntimePluginInstance[] {
   return createRuntimePluginInstances(boot, configurations, (pluginId) => {
     if (!installedPluginIds.includes(pluginId)) return null;
@@ -88,20 +94,22 @@ export function resolveInstalledRuntimePluginInstances(
       displayName: plugin.manifest.displayName,
       runtime: plugin.runtime
     };
-  });
+  }, environment);
 }
 
 export function createResolvedRuntimePluginManager(
   boot: RuntimeBootModel,
   installedPluginIds: string[],
-  configurations: PluginConfigurationRecord[]
+  configurations: PluginConfigurationRecord[],
+  environment: RuntimePluginEnvironment = {}
 ): RuntimePluginManager {
   return createRuntimePluginManager({
     boot,
     plugins: resolveInstalledRuntimePluginInstances(
       boot,
       installedPluginIds,
-      configurations
+      configurations,
+      environment
     )
   });
 }

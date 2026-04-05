@@ -1,4 +1,4 @@
-import type { PluginConfigurationRecord } from "@sugarmagic/domain";
+import type { DeploymentRequirement, PluginConfigurationRecord } from "@sugarmagic/domain";
 import type { RuntimePluginDefinition } from "../runtime";
 import type { PluginShellContributionDefinition } from "../shell";
 
@@ -12,6 +12,7 @@ export interface PluginManifest {
 export interface InstalledPluginDefinition {
   manifest: PluginManifest;
   defaultConfig?: Record<string, unknown>;
+  deploymentRequirements?: DeploymentRequirement[];
 }
 
 export interface DiscoveredPluginDefinition extends InstalledPluginDefinition {
