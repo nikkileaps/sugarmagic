@@ -9,34 +9,84 @@ import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
 import type {
   InterpretResult,
+  RetrievedEvidenceItem,
   RetrieveResult,
   TurnStage,
   TurnStageResult,
   TurnStageContext
 } from "../types";
 
+function mergeEvidencePacks(
+  ...packs: RetrievedEvidenceItem[][]
+): RetrievedEvidenceItem[] {
+  const merged: RetrievedEvidenceItem[] = [];
+  const seen = new Set<string>();
+
+  for (const pack of packs) {
+    for (const item of pack) {
+      const dedupeKey = [
+        item.fileId,
+        item.filename,
+        String(item.attributes.page_id ?? ""),
+        item.text
+      ].join("::");
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 function buildCurrentLocationEvidence(
   execution: ConversationExecutionContext
 ): RetrieveResult["evidencePack"][number] | null {
   const currentLocation = execution.runtimeContext?.here;
-  if (!currentLocation?.regionDisplayName) {
+  if (!currentLocation?.regionDisplayName && !currentLocation?.area?.displayName) {
     return null;
   }
 
-  const locationText = currentLocation.sceneDisplayName
-    ? `The current location is ${currentLocation.sceneDisplayName} in ${currentLocation.regionDisplayName}.`
-    : `The current location is ${currentLocation.regionDisplayName}.`;
+  const locationSegments: string[] = [];
+  if (currentLocation.area?.displayName) {
+    locationSegments.push(`The current area is ${currentLocation.area.displayName}.`);
+  }
+  if (currentLocation.parentArea?.displayName) {
+    locationSegments.push(`It is within ${currentLocation.parentArea.displayName}.`);
+  }
+  const npcPlayerRelation = execution.runtimeContext?.npcPlayerRelation;
+  if (npcPlayerRelation) {
+    locationSegments.push(
+      npcPlayerRelation.sameArea
+        ? "The player and NPC are in the same area right now."
+        : `The player and NPC are ${npcPlayerRelation.proximityBand} to one another.`
+    );
+  }
+  if (currentLocation.sceneDisplayName) {
+    locationSegments.push(
+      `The current scene is ${currentLocation.sceneDisplayName} in ${currentLocation.regionDisplayName}.`
+    );
+  } else if (currentLocation.regionDisplayName) {
+    locationSegments.push(`The current region is ${currentLocation.regionDisplayName}.`);
+  }
 
   return {
     fileId: "runtime:blackboard:current-location",
     filename: "runtime.current-location",
     score: 1,
-    text: locationText,
+    text: locationSegments.join(" "),
     attributes: {
       source: "runtime-blackboard",
       region_id: currentLocation.regionId,
       scene_id: currentLocation.sceneId,
-      page_id: currentLocation.regionLorePageId
+      area_id: currentLocation.area?.areaId ?? null,
+      parent_area_id: currentLocation.parentArea?.areaId ?? null,
+      page_id:
+        currentLocation.area?.lorePageId ??
+        currentLocation.parentArea?.lorePageId ??
+        currentLocation.regionLorePageId
     }
   };
 }
@@ -53,11 +103,22 @@ function resolveEffectiveSearchQuery(
     interpret.interpretation.facet === "location"
   ) {
     const currentLocation = execution.runtimeContext?.here;
+    if (currentLocation?.area?.displayName) {
+      segments.push(`Current area: ${currentLocation.area.displayName}`);
+    }
+    if (currentLocation?.parentArea?.displayName) {
+      segments.push(`Containing area: ${currentLocation.parentArea.displayName}`);
+    }
     if (currentLocation?.regionDisplayName) {
       segments.push(`Current location: ${currentLocation.regionDisplayName}`);
     }
     if (currentLocation?.sceneDisplayName) {
       segments.push(`Current scene: ${currentLocation.sceneDisplayName}`);
+    }
+    if (execution.runtimeContext?.npcPlayerRelation?.proximityBand) {
+      segments.push(
+        `Player proximity to NPC: ${execution.runtimeContext.npcPlayerRelation.proximityBand}`
+      );
     }
   }
 
@@ -98,6 +159,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
   ): Promise<TurnStageResult<RetrieveResult>> {
     const startedAt = Date.now();
     const runtimeCurrentLocation = input.execution.runtimeContext?.here ?? null;
+    const npcPlayerRelation = input.execution.runtimeContext?.npcPlayerRelation ?? null;
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
       input.execution.selection.activeQuest?.displayName ??
@@ -107,10 +169,14 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       input.execution.selection.lorePageId.trim().length > 0
         ? input.execution.selection.lorePageId.trim()
         : null;
+    const rawLocationLorePageId =
+      runtimeCurrentLocation?.area?.lorePageId ??
+      runtimeCurrentLocation?.parentArea?.lorePageId ??
+      runtimeCurrentLocation?.regionLorePageId ??
+      null;
     const currentLocationLorePageId =
-      typeof runtimeCurrentLocation?.regionLorePageId === "string" &&
-      runtimeCurrentLocation.regionLorePageId.trim().length > 0
-        ? runtimeCurrentLocation.regionLorePageId.trim()
+      typeof rawLocationLorePageId === "string" && rawLocationLorePageId.trim().length > 0
+        ? rawLocationLorePageId.trim()
         : null;
     const skipRetrieval = input.interpret.turnRouting.path === "social_fast";
     const searchQuery = resolveEffectiveSearchQuery(
@@ -127,11 +193,16 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
     let status: TurnStageResult<RetrieveResult>["status"] = "ok";
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     let broadenedBeyondLorePage = false;
+    let pinnedNpcLoreEvidence = false;
     const targetedLorePageId =
       input.interpret.interpretation.contextAnchor === "current_location" &&
       currentLocationLorePageId
         ? currentLocationLorePageId
         : npcLorePageId;
+    const shouldPinNpcLore =
+      !skipRetrieval &&
+      npcLorePageId !== null &&
+      npcLorePageId !== targetedLorePageId;
     const retrievalFilters: OpenAIVectorStoreFilter | undefined =
       !skipRetrieval && targetedLorePageId
         ? {
@@ -165,19 +236,42 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       (context.config.openAiVectorStoreId.trim() || canUseProxyDefaults)
     ) {
       try {
-        evidencePack = await this.vectorStoreProvider.searchLore({
-          vectorStoreId: context.config.openAiVectorStoreId,
-          query: searchQuery,
-          maxResults: context.config.maxEvidenceResults,
-          filters: retrievalFilters
-        });
-        if (evidencePack.length === 0 && retrievalFilters) {
-          evidencePack = await this.vectorStoreProvider.searchLore({
+        const reservedNpcLoreResults = shouldPinNpcLore ? 1 : 0;
+        const primaryMaxResults = Math.max(
+          1,
+          context.config.maxEvidenceResults - reservedNpcLoreResults
+        );
+
+        const searchLore = (filters?: OpenAIVectorStoreFilter) =>
+          this.vectorStoreProvider!.searchLore({
             vectorStoreId: context.config.openAiVectorStoreId,
             query: searchQuery,
-            maxResults: context.config.maxEvidenceResults
+            maxResults: filters ? primaryMaxResults : context.config.maxEvidenceResults,
+            filters
           });
+
+        evidencePack = await searchLore(retrievalFilters);
+        if (evidencePack.length === 0 && retrievalFilters) {
+          evidencePack = await searchLore();
           broadenedBeyondLorePage = true;
+        }
+
+        if (shouldPinNpcLore && npcLorePageId) {
+          const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
+            vectorStoreId: context.config.openAiVectorStoreId,
+            query: searchQuery,
+            maxResults: 1,
+            filters: {
+              type: "eq",
+              key: OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
+              value: npcLorePageId
+            }
+          });
+          pinnedNpcLoreEvidence = npcLoreEvidence.length > 0;
+          evidencePack = mergeEvidencePacks(evidencePack, npcLoreEvidence).slice(
+            0,
+            context.config.maxEvidenceResults
+          );
         }
         vectorSearchPerformed = true;
       } catch {
@@ -222,11 +316,21 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           evidencePackSummary: summarizeEvidence(evidencePack),
           evidenceCount: evidencePack.length,
           npcLorePageId,
+          currentAreaDisplayName: runtimeCurrentLocation?.area?.displayName ?? null,
+          currentParentAreaDisplayName:
+            runtimeCurrentLocation?.parentArea?.displayName ?? null,
+          proximityBand: npcPlayerRelation?.proximityBand ?? null,
+          sameArea: npcPlayerRelation?.sameArea ?? null,
+          sameParentArea: npcPlayerRelation?.sameParentArea ?? null,
           currentLocationLorePageId,
           targetedLorePageId,
-          currentLocationDisplayName: runtimeCurrentLocation?.regionDisplayName ?? null,
+          currentLocationDisplayName:
+            runtimeCurrentLocation?.area?.displayName ??
+            runtimeCurrentLocation?.regionDisplayName ??
+            null,
           retrievalFilters,
           broadenedBeyondLorePage,
+          pinnedNpcLoreEvidence,
           usedEmbeddings,
           vectorSearchPerformed,
           semanticQueryDimensions: semanticQueryFingerprint?.length ?? 0

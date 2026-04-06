@@ -18,7 +18,7 @@ function calculateIsometricOffset(distance: number): THREE.Vector3 {
 
 export interface LayoutCameraController {
   attach: (
-    camera: THREE.PerspectiveCamera,
+    camera: THREE.Camera,
     domElement: HTMLElement,
     subscribeFrame: (listener: () => void) => () => void
   ) => void;

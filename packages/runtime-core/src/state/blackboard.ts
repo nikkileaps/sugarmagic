@@ -1,3 +1,5 @@
+import type { RegionAreaKind } from "@sugarmagic/domain";
+
 export type BlackboardScopeKind =
   | "global"
   | "region"
@@ -69,12 +71,21 @@ export interface BlackboardClearFactOptions<TValue> {
   sourceSystem: string;
 }
 
+export interface AreaReference {
+  areaId: string | null;
+  displayName: string | null;
+  lorePageId: string | null;
+  kind: RegionAreaKind | null;
+}
+
 export interface LocationReference {
   regionId: string | null;
   regionDisplayName: string | null;
   regionLorePageId: string | null;
   sceneId: string | null;
   sceneDisplayName: string | null;
+  area: AreaReference | null;
+  parentArea: AreaReference | null;
 }
 
 export interface EntityPositionFact {
@@ -89,6 +100,28 @@ export interface EntityPositionFact {
 export interface EntityLocationFact {
   entityId: string;
   location: LocationReference;
+}
+
+export interface EntityCurrentAreaFact {
+  entityId: string;
+  area: AreaReference | null;
+  parentArea: AreaReference | null;
+}
+
+export type SpatialProximityBand =
+  | "immediate"
+  | "local"
+  | "remote";
+
+export interface EntityPlayerSpatialRelationFact {
+  entityId: string;
+  playerEntityId: string;
+  entityAreaId: string | null;
+  playerAreaId: string | null;
+  sameArea: boolean;
+  sameParentArea: boolean;
+  proximityBand: SpatialProximityBand;
+  distanceMeters: number | null;
 }
 
 export type EntityMood =
@@ -152,6 +185,21 @@ export const ENTITY_LOCATION_FACT = defineBlackboardFact<EntityLocationFact>({
   lifecycle: { kind: "session" }
 });
 
+export const ENTITY_CURRENT_AREA_FACT = defineBlackboardFact<EntityCurrentAreaFact>({
+  key: "entity.current-area",
+  ownerSystem: "spatial-system",
+  allowedScopeKinds: ["entity"],
+  lifecycle: { kind: "frame" }
+});
+
+export const ENTITY_PLAYER_SPATIAL_RELATION_FACT =
+  defineBlackboardFact<EntityPlayerSpatialRelationFact>({
+    key: "entity.player-spatial-relation",
+    ownerSystem: "spatial-system",
+    allowedScopeKinds: ["entity"],
+    lifecycle: { kind: "frame" }
+  });
+
 export const ENTITY_AFFECT_FACT = defineBlackboardFact<EntityAffectFact>({
   key: "entity.affect",
   ownerSystem: "behavior-system",
@@ -184,6 +232,8 @@ export const QUEST_ACTIVE_OBJECTIVES_FACT =
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
+  ENTITY_CURRENT_AREA_FACT,
+  ENTITY_PLAYER_SPATIAL_RELATION_FACT,
   ENTITY_AFFECT_FACT,
   TRACKED_QUEST_FACT,
   QUEST_ACTIVE_STAGE_FACT,
@@ -436,6 +486,54 @@ export function getEntityLocation(
     blackboard.getFact(ENTITY_LOCATION_FACT, createBlackboardScope("entity", entityId))?.value ??
     null
   );
+}
+
+export function getEntityCurrentArea(
+  blackboard: RuntimeBlackboard,
+  entityId: string
+): EntityCurrentAreaFact | null {
+  return (
+    blackboard.getFact(ENTITY_CURRENT_AREA_FACT, createBlackboardScope("entity", entityId))
+      ?.value ?? null
+  );
+}
+
+export function setEntityCurrentArea(
+  blackboard: RuntimeBlackboard,
+  value: EntityCurrentAreaFact,
+  options: { sourceSystem?: string } = {}
+): BlackboardFactEnvelope<EntityCurrentAreaFact> {
+  return blackboard.setFact({
+    definition: ENTITY_CURRENT_AREA_FACT,
+    scope: createBlackboardScope("entity", value.entityId),
+    value,
+    sourceSystem: options.sourceSystem ?? ENTITY_CURRENT_AREA_FACT.ownerSystem
+  });
+}
+
+export function getEntityPlayerSpatialRelation(
+  blackboard: RuntimeBlackboard,
+  entityId: string
+): EntityPlayerSpatialRelationFact | null {
+  return (
+    blackboard.getFact(
+      ENTITY_PLAYER_SPATIAL_RELATION_FACT,
+      createBlackboardScope("entity", entityId)
+    )?.value ?? null
+  );
+}
+
+export function setEntityPlayerSpatialRelation(
+  blackboard: RuntimeBlackboard,
+  value: EntityPlayerSpatialRelationFact,
+  options: { sourceSystem?: string } = {}
+): BlackboardFactEnvelope<EntityPlayerSpatialRelationFact> {
+  return blackboard.setFact({
+    definition: ENTITY_PLAYER_SPATIAL_RELATION_FACT,
+    scope: createBlackboardScope("entity", value.entityId),
+    value,
+    sourceSystem: options.sourceSystem ?? ENTITY_PLAYER_SPATIAL_RELATION_FACT.ownerSystem
+  });
 }
 
 export function setEntityLocation(

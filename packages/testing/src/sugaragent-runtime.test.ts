@@ -478,7 +478,14 @@ describe("SugarAgent runtime provider", () => {
           regionDisplayName: "Earendale",
           regionLorePageId: "lore.locations.towns.earendale",
           sceneId: null,
-          sceneDisplayName: null
+          sceneDisplayName: null,
+          area: {
+            areaId: "area:earendale-square",
+            displayName: "Earendale Square",
+            lorePageId: "lore.locations.towns.earendale.square",
+            kind: "zone" as const
+          },
+          parentArea: null
         };
 
         return {
@@ -490,11 +497,14 @@ describe("SugarAgent runtime provider", () => {
               location: currentLocation
             },
             playerPosition: null,
+            playerArea: null,
             npcLocation: {
               entityId: "npc:rick-roll",
               location: currentLocation
             },
             npcPosition: null,
+            npcArea: null,
+            npcPlayerRelation: null,
             trackedQuest: null,
             activeQuestStage: null,
             activeQuestObjectives: null
@@ -532,16 +542,16 @@ describe("SugarAgent runtime provider", () => {
     expect(searchRequest?.body?.filters).toEqual({
       type: "eq",
       key: "page_id",
-      value: "lore.locations.towns.earendale"
+      value: "lore.locations.towns.earendale.square"
     });
-    expect(String(searchRequest?.body?.query ?? "")).toContain("Current location: Earendale");
+    expect(String(searchRequest?.body?.query ?? "")).toContain("Current area: Earendale Square");
     expect(reply?.text).toBe("We're in Earendale.");
     expect(
       (
         (reply?.diagnostics?.stages as Record<string, { payload?: Record<string, unknown> }> | undefined)
           ?.Retrieve?.payload?.currentLocationDisplayName
       )
-    ).toBe("Earendale");
+    ).toBe("Earendale Square");
   });
 
   it("retries transient Anthropic overloads, then exits politely and closes the conversation", async () => {

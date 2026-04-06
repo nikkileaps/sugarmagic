@@ -23,7 +23,12 @@ export * from "./status";
 export * from "./viewport-host";
 export * from "./workspace-host";
 
-export type BuildWorkspaceKind = "layout" | "landscape" | "environment" | "assets";
+export type BuildWorkspaceKind =
+  | "layout"
+  | "landscape"
+  | "spatial"
+  | "environment"
+  | "assets";
 export type CoreDesignWorkspaceKind =
   | "player"
   | "npcs"

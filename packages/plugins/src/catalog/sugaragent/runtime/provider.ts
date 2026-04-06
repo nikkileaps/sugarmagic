@@ -302,7 +302,7 @@ async function executePipeline(args: {
   );
   const { output: audit, diagnostics: auditDiagnostics } = await runStage(
     stages.audit,
-    { generate, plan },
+    { execution, generate, plan },
     context
   );
   const { output: repair, diagnostics: repairDiagnostics } = await runStage(

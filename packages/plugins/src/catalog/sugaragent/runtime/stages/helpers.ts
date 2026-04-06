@@ -1,3 +1,4 @@
+import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import type { InterpretResult, PlanResult, RetrieveResult } from "../types";
 
 const META_LEAK_PATTERNS: Array<{ violation: string; pattern: RegExp }> = [
@@ -90,6 +91,42 @@ export function findGenericOnlyViolations(text: string): string[] {
     /\b(station|cargo|freighter|dock|docking|bay|uniform|report|reports|tablet|tablets|datapad|datapads|schedule|schedules|maintenance|comm|pressure doors|holographic|transit|hub|regulars|office|terminal)\b/i;
   if (unsupportedSpecificDetailPattern.test(normalized)) {
     violations.push("generic-only-unsupported-specific-detail");
+  }
+
+  return violations;
+}
+
+export function findSpatialGroundingViolations(
+  text: string,
+  execution: ConversationExecutionContext
+): string[] {
+  const violations: string[] = [];
+  const normalized = text.trim();
+  if (!normalized) {
+    return violations;
+  }
+
+  const currentAreaKind =
+    execution.runtimeContext?.here?.area?.kind ??
+    execution.runtimeContext?.npcArea?.area?.kind ??
+    null;
+
+  if (
+    currentAreaKind === "exterior" &&
+    /\b(inside|indoors|in this room|in the room|inside the station)\b/i.test(normalized)
+  ) {
+    violations.push("spatial-contradiction-inside-vs-exterior");
+  }
+
+  if (
+    currentAreaKind &&
+    currentAreaKind !== "shop" &&
+    currentAreaKind !== "stall" &&
+    /\b(?:right here at|here at|in|inside)\s+my\s+(?:shop|store|stall|kiosk)\b|\bmy\s+(?:shop|store|stall|kiosk)\s+here\b/i.test(
+      normalized
+    )
+  ) {
+    violations.push("spatial-contradiction-deictic-shop-claim");
   }
 
   return violations;

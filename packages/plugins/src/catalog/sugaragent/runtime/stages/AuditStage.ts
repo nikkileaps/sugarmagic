@@ -2,6 +2,7 @@ import { createDiagnostics } from "./diagnostics";
 import {
   findGenericOnlyViolations,
   findMetaLeakViolations,
+  findSpatialGroundingViolations,
   findStageDirectionViolations
 } from "./helpers";
 import type {
@@ -24,6 +25,7 @@ import type {
  * - stage input/output
  */
 export interface AuditStageInput {
+  execution: import("@sugarmagic/runtime-core").ConversationExecutionContext;
   generate: GenerateResult;
   plan: PlanResult;
 }
@@ -37,7 +39,8 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     const startedAt = Date.now();
     const violations: string[] = [
       ...findMetaLeakViolations(input.generate.text),
-      ...findStageDirectionViolations(input.generate.text)
+      ...findStageDirectionViolations(input.generate.text),
+      ...findSpatialGroundingViolations(input.generate.text, input.execution)
     ];
     if (input.plan.responseSpecificity === "generic-only") {
       violations.push(...findGenericOnlyViolations(input.generate.text));
@@ -80,7 +83,14 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
         {
           passed: output.passed,
           responseSpecificity: input.plan.responseSpecificity,
-          violations
+          violations,
+          currentAreaDisplayName:
+            input.execution.runtimeContext?.here?.area?.displayName ??
+            input.execution.runtimeContext?.here?.regionDisplayName ??
+            null,
+          currentAreaKind: input.execution.runtimeContext?.here?.area?.kind ?? null,
+          proximityBand:
+            input.execution.runtimeContext?.npcPlayerRelation?.proximityBand ?? null
         },
         output.passed ? null : "audit-violations"
       ),

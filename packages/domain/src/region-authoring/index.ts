@@ -98,6 +98,30 @@ export interface RegionGameplayPlacement {
   definitionId: string;
 }
 
+export type RegionAreaKind =
+  | "zone"
+  | "interior"
+  | "exterior"
+  | "room"
+  | "stall"
+  | "platform"
+  | "shop";
+
+export interface RegionAreaBounds {
+  kind: "box";
+  center: [number, number, number];
+  size: [number, number, number];
+}
+
+export interface RegionAreaDefinition {
+  areaId: string;
+  displayName: string;
+  lorePageId: string | null;
+  parentAreaId: string | null;
+  kind: RegionAreaKind;
+  bounds: RegionAreaBounds;
+}
+
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
@@ -111,6 +135,7 @@ export interface RegionDocument {
     itemPresences: RegionItemPresence[];
   };
   environmentBinding: RegionEnvironmentBinding;
+  areas: RegionAreaDefinition[];
   landscape: RegionLandscapeState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
@@ -125,6 +150,36 @@ export const DEFAULT_REGION_LANDSCAPE_GRASS_COLOR = 0x5c8a5a;
 export const LANDSCAPE_BASE_CHANNEL_ID = "base";
 export const LANDSCAPE_DEFAULT_CHANNEL_ID = "grass";
 export const MAX_REGION_LANDSCAPE_CHANNELS = 8;
+export const DEFAULT_REGION_AREA_HEIGHT = 12;
+
+export function createRegionAreaId(): string {
+  return createScopedId("region-area");
+}
+
+export function createRegionAreaBounds(
+  overrides: Partial<RegionAreaBounds> = {}
+): RegionAreaBounds {
+  return {
+    kind: "box",
+    center: overrides.center ?? [0, DEFAULT_REGION_AREA_HEIGHT / 2, 0],
+    size: overrides.size ?? [4, DEFAULT_REGION_AREA_HEIGHT, 4]
+  };
+}
+
+export function createRegionAreaDefinition(
+  overrides: Partial<RegionAreaDefinition> = {}
+): RegionAreaDefinition {
+  return {
+    areaId: overrides.areaId ?? createRegionAreaId(),
+    displayName: overrides.displayName ?? "Area",
+    lorePageId:
+      overrides.lorePageId === undefined ? null : overrides.lorePageId,
+    parentAreaId:
+      overrides.parentAreaId === undefined ? null : overrides.parentAreaId,
+    kind: overrides.kind ?? "zone",
+    bounds: createRegionAreaBounds(overrides.bounds)
+  };
+}
 
 export function createLandscapeChannelId(): string {
   return createScopedId("landscape-channel");

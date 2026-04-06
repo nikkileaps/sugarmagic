@@ -53,19 +53,22 @@ import {
   clearTrackedQuest,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
+  getEntityCurrentArea,
   getActiveQuestStage,
   getEntityLocation,
+  getEntityPlayerSpatialRelation,
   getEntityPosition,
   getTrackedQuest as getTrackedQuestFact,
   setActiveQuestObjectives,
   setActiveQuestStage,
-  setEntityLocation,
-  setEntityPosition,
   setTrackedQuest,
-  type LocationReference,
   type RuntimeBlackboard
 } from "../state";
 import { PlayerControlled } from "../ecs";
+import {
+  buildLocationReference
+} from "../spatial";
+import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 
 export interface RuntimeSpellCastFeedback {
   spellDefinitionId: string;
@@ -125,6 +128,10 @@ const INVENTORY_LOCK_ID = "runtime-inventory";
 const ITEM_VIEW_LOCK_ID = "runtime-item-view";
 const DOCUMENT_READER_LOCK_ID = "runtime-document-reader";
 const SPELL_MENU_LOCK_ID = "runtime-spell-menu";
+// Require a few consecutive frames before committing ambiguous area transitions.
+// Three frames is enough to smooth threshold jitter in preview movement without
+// making normal walking feel sticky when crossing authored boundaries.
+const SPATIAL_AREA_CONFIRMATION_FRAMES = 3;
 
 export function createRuntimeGameplaySessionController(
   options: RuntimeGameplaySessionControllerOptions
@@ -187,6 +194,18 @@ export function createRuntimeGameplaySessionController(
   >();
   let pendingScriptedFollowupDialogueId: string | null = null;
   let lastTrackedQuestDefinitionId: string | null = null;
+  const spatialResolverSystem =
+    activeRegion
+      ? createRuntimeSpatialResolverSystem({
+          blackboard,
+          region: activeRegion,
+          playerEntityId: playerDefinition.definitionId,
+          confirmationFrames: SPATIAL_AREA_CONFIRMATION_FRAMES,
+          logDebug(event, payload) {
+            console.info(`[runtime-core] ${event}`, payload ?? {});
+          }
+        })
+      : null;
 
   function logConversationDebug(
     event: string,
@@ -195,18 +214,14 @@ export function createRuntimeGameplaySessionController(
     console.info(`[runtime-core] ${event}`, payload ?? {});
   }
 
-  function buildActiveRegionLocationReference(): LocationReference | null {
+  function buildActiveRegionLocationReference() {
     if (!activeRegion) {
       return null;
     }
-
-    return {
-      regionId: activeRegion.identity.id,
-      regionDisplayName: activeRegion.displayName,
-      regionLorePageId: activeRegion.lorePageId ?? null,
-      sceneId: null,
-      sceneDisplayName: null
-    };
+    return (
+      spatialResolverSystem?.buildRegionLocationReference() ??
+      buildLocationReference(activeRegion, null)
+    );
   }
 
   function resolvePlayerPositionTuple(): [number, number, number] {
@@ -224,40 +239,21 @@ export function createRuntimeGameplaySessionController(
 
   function syncBlackboardSpatialFacts() {
     const region = activeRegion;
-    const currentLocation = buildActiveRegionLocationReference();
-    if (!currentLocation || !region) {
+    if (!region || !spatialResolverSystem) {
       return;
     }
 
     const [playerX, playerY, playerZ] = resolvePlayerPositionTuple();
-    setEntityPosition(blackboard, {
-      entityId: playerDefinition.definitionId,
-      x: playerX,
-      y: playerY,
-      z: playerZ,
-      regionId: currentLocation.regionId,
-      sceneId: currentLocation.sceneId
+    spatialResolverSystem.sync({
+      playerPosition: { x: playerX, y: playerY, z: playerZ },
+      npcPositions: region.scene.npcPresences.map((presence) => {
+        const [x, y, z] = presence.transform.position;
+        return {
+          entityId: presence.npcDefinitionId,
+          position: { x, y, z }
+        };
+      })
     });
-    setEntityLocation(blackboard, {
-      entityId: playerDefinition.definitionId,
-      location: currentLocation
-    });
-
-    for (const presence of region.scene.npcPresences) {
-      const [x, y, z] = presence.transform.position;
-      setEntityPosition(blackboard, {
-        entityId: presence.npcDefinitionId,
-        x,
-        y,
-        z,
-        regionId: currentLocation.regionId,
-        sceneId: currentLocation.sceneId
-      });
-      setEntityLocation(blackboard, {
-        entityId: presence.npcDefinitionId,
-        location: currentLocation
-      });
-    }
   }
 
   function syncBlackboardQuestFacts() {
@@ -316,6 +312,7 @@ export function createRuntimeGameplaySessionController(
         trackedQuest ? getActiveQuestObjectives(blackboard, trackedQuest.questId) : null;
       const playerLocation = getEntityLocation(blackboard, playerDefinition.definitionId);
       const playerPosition = getEntityPosition(blackboard, playerDefinition.definitionId);
+      const playerArea = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
       const npcLocation =
         context.selection.npcDefinitionId
           ? getEntityLocation(blackboard, context.selection.npcDefinitionId)
@@ -324,12 +321,26 @@ export function createRuntimeGameplaySessionController(
         context.selection.npcDefinitionId
           ? getEntityPosition(blackboard, context.selection.npcDefinitionId)
           : null;
+      const npcArea =
+        context.selection.npcDefinitionId
+          ? getEntityCurrentArea(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const npcPlayerRelation =
+        context.selection.npcDefinitionId
+          ? getEntityPlayerSpatialRelation(blackboard, context.selection.npcDefinitionId)
+          : null;
       const runtimeContext: ConversationRuntimeContext = {
-        here: playerLocation?.location ?? npcLocation?.location ?? buildActiveRegionLocationReference(),
+        here:
+          playerLocation?.location ??
+          npcLocation?.location ??
+          buildActiveRegionLocationReference(),
         playerLocation,
         playerPosition,
         npcLocation,
         npcPosition,
+        playerArea,
+        npcArea,
+        npcPlayerRelation,
         trackedQuest,
         activeQuestStage,
         activeQuestObjectives
@@ -931,6 +942,7 @@ export function createRuntimeGameplaySessionController(
       spellMenuUi.update();
     },
     dispose() {
+      spatialResolverSystem?.reset();
       for (const { entity } of npcInteractableEntities.values()) {
         world.destroyEntity(entity);
       }

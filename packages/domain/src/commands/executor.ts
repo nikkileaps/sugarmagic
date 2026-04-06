@@ -5,6 +5,7 @@
  * This is the single mutation boundary per ADR 004.
  */
 
+import { createRegionAreaDefinition, MAX_REGION_LANDSCAPE_CHANNELS } from "../region-authoring";
 import type {
   RegionDocument,
   PlacedAssetInstance,
@@ -14,9 +15,6 @@ import type {
   RegionNPCPresence,
   RegionPlayerPresence,
   RegionItemPresence
-} from "../region-authoring";
-import {
-  MAX_REGION_LANDSCAPE_CHANNELS
 } from "../region-authoring";
 import type { TransactionBoundary } from "../transactions";
 import type { AuthoringHistory } from "../history";
@@ -32,6 +30,9 @@ import type {
   CreateSceneFolderCommand,
   RenameSceneFolderCommand,
   DeleteSceneFolderCommand,
+  CreateRegionAreaCommand,
+  UpdateRegionAreaCommand,
+  DeleteRegionAreaCommand,
   CreateLandscapeChannelCommand,
   UpdateLandscapeChannelCommand,
   PaintLandscapeCommand,
@@ -628,6 +629,77 @@ function applyUpdateRegionMetadata(
   };
 }
 
+function applyCreateRegionArea(
+  region: RegionDocument,
+  command: CreateRegionAreaCommand
+): RegionDocument {
+  return {
+    ...region,
+    areas: [
+      ...region.areas,
+      createRegionAreaDefinition({
+        areaId: command.payload.areaId,
+        displayName: command.payload.displayName,
+        lorePageId: command.payload.lorePageId,
+        parentAreaId: command.payload.parentAreaId,
+        kind: command.payload.kind,
+        bounds: command.payload.bounds
+      })
+    ]
+  };
+}
+
+function applyUpdateRegionArea(
+  region: RegionDocument,
+  command: UpdateRegionAreaCommand
+): RegionDocument {
+  return {
+    ...region,
+    areas: region.areas.map((area) =>
+      area.areaId !== command.payload.areaId
+        ? area
+        : createRegionAreaDefinition({
+            ...area,
+            ...(command.payload.displayName === undefined
+              ? {}
+              : { displayName: command.payload.displayName }),
+            ...(command.payload.lorePageId === undefined
+              ? {}
+              : { lorePageId: command.payload.lorePageId }),
+            ...(command.payload.parentAreaId === undefined
+              ? {}
+              : { parentAreaId: command.payload.parentAreaId }),
+            ...(command.payload.kind === undefined
+              ? {}
+              : { kind: command.payload.kind }),
+            ...(command.payload.bounds === undefined
+              ? {}
+              : { bounds: command.payload.bounds })
+          })
+    )
+  };
+}
+
+function applyDeleteRegionArea(
+  region: RegionDocument,
+  command: DeleteRegionAreaCommand
+): RegionDocument {
+  const deletedAreaId = command.payload.areaId;
+  return {
+    ...region,
+    areas: region.areas
+      .filter((area) => area.areaId !== deletedAreaId)
+      .map((area) =>
+        area.parentAreaId === deletedAreaId
+          ? {
+              ...area,
+              parentAreaId: null
+            }
+          : area
+      )
+  };
+}
+
 function applyCreateLandscapeChannel(
   region: RegionDocument,
   command: CreateLandscapeChannelCommand
@@ -762,6 +834,15 @@ export function executeCommand(
       break;
     case "UpdateRegionMetadata":
       updatedRegion = applyUpdateRegionMetadata(region, command);
+      break;
+    case "CreateRegionArea":
+      updatedRegion = applyCreateRegionArea(region, command);
+      break;
+    case "UpdateRegionArea":
+      updatedRegion = applyUpdateRegionArea(region, command);
+      break;
+    case "DeleteRegionArea":
+      updatedRegion = applyDeleteRegionArea(region, command);
       break;
     case "CreateLandscapeChannel":
       updatedRegion = applyCreateLandscapeChannel(region, command);

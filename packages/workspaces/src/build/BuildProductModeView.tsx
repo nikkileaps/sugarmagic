@@ -30,12 +30,14 @@ import type { WorkspaceViewport } from "../viewport";
 import { applyLightingPresetToEnvironmentDefinition } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useLandscapeWorkspaceView } from "./landscape";
+import { useSpatialWorkspaceView } from "./spatial";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "layout", label: "Layout", icon: "🏗️" },
   { id: "landscape", label: "Landscape", icon: "⛰️" },
+  { id: "spatial", label: "Spatial", icon: "🗺️" },
   { id: "environment", label: "Environment", icon: "🌅" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
@@ -189,6 +191,16 @@ export function useBuildProductModeView(
     onCommand
   });
 
+  const spatialView = useSpatialWorkspaceView({
+    isActive: activeBuildKind === "spatial",
+    viewportReadyVersion,
+    getViewport: activeBuildKind === "spatial" ? getViewport : () => null,
+    getViewportElement:
+      activeBuildKind === "spatial" ? getViewportElement : () => null,
+    region: activeRegion,
+    onCommand
+  });
+
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
@@ -237,12 +249,16 @@ export function useBuildProductModeView(
       ? layoutView
       : activeBuildKind === "landscape"
         ? landscapeView
+        : activeBuildKind === "spatial"
+          ? spatialView
       : activeBuildKind === "environment"
         ? environmentView
         : assetsView;
 
   const contextSelector: BuildContextSelector | null =
-    activeBuildKind === "layout" || activeBuildKind === "landscape"
+    activeBuildKind === "layout" ||
+    activeBuildKind === "landscape" ||
+    activeBuildKind === "spatial"
       ? {
           items: regions,
           activeId: activeRegionId,

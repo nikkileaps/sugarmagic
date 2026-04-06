@@ -41,3 +41,4 @@ Current plans:
 - [Plan 021: Deployment Plugin and Publish Deploy Target Architecture Epic](/Users/nikki/projects/sugarmagic/docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md)
 - [Plan 022: SugarAgent Lore Wiki Source of Truth and Gateway Ingestion Epic](/Users/nikki/projects/sugarmagic/docs/plans/022-sugaragent-lore-wiki-source-of-truth-and-gateway-ingestion-epic.md)
 - [Plan 023: Runtime-Core Blackboard and World State Architecture Epic](/Users/nikki/projects/sugarmagic/docs/plans/023-runtime-core-blackboard-and-world-state-architecture-epic.md)
+- [Plan 024: Spatial Language Grounding and Region Area Semantics Epic](/Users/nikki/projects/sugarmagic/docs/plans/024-spatial-language-grounding-and-region-area-semantics-epic.md)

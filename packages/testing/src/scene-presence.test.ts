@@ -24,6 +24,7 @@ function makeRegion(): RegionDocument {
       itemPresences: []
     },
     environmentBinding: { defaultEnvironmentId: "project:environment:default" },
+    areas: [],
     landscape: {
       enabled: false,
       size: 100,
