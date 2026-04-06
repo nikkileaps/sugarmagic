@@ -72,7 +72,10 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
 
     let responseIntent: PlanResult["responseIntent"] = "answer";
     const hasEvidence = input.retrieve.evidencePack.length > 0;
-    const hasActiveQuest = Boolean(input.execution.selection.activeQuest?.displayName);
+    const hasActiveQuest = Boolean(
+      input.execution.runtimeContext?.trackedQuest?.displayName ??
+        input.execution.selection.activeQuest?.displayName
+    );
     const hasScriptedFollowup = Boolean(
       typeof scriptedFollowupDialogueDefinitionId === "string" &&
         scriptedFollowupDialogueDefinitionId.length > 0

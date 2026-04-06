@@ -43,6 +43,10 @@ export class RepairStage implements TurnStage<RepairStageInput, RepairResult> {
     input: RepairStageInput
   ): Promise<TurnStageResult<RepairResult>> {
     const startedAt = Date.now();
+    const activeQuestDisplayName =
+      input.execution.runtimeContext?.trackedQuest?.displayName ??
+      input.execution.selection.activeQuest?.displayName ??
+      null;
     if (input.audit.passed) {
       return {
         output: {
@@ -63,7 +67,7 @@ export class RepairStage implements TurnStage<RepairStageInput, RepairResult> {
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
         evidenceSummary: summarizeEvidence(input.retrieve.evidencePack),
-        activeQuestDisplayName: input.execution.selection.activeQuest?.displayName ?? null
+        activeQuestDisplayName
       })),
       actionProposals: input.generate.actionProposals,
       llmBackend: "deterministic",

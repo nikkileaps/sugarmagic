@@ -6,6 +6,7 @@ import type {
   DialogueDefinition,
   ItemDefinition,
   NPCDefinition,
+  NPCInteractionMode,
   PlayerDefinition,
   QuestDefinition,
   SpellDefinition,
@@ -52,6 +53,11 @@ export interface DesignProductModeViewProps {
     label: string;
     icon: string;
   }>;
+  npcInteractionOptions: Array<{
+    value: NPCInteractionMode;
+    label: string;
+    description?: string;
+  }>;
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -86,6 +92,7 @@ export function useDesignProductModeView(
     dialogueDefinitions,
     questDefinitions,
     extraWorkspaceItems,
+    npcInteractionOptions,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -115,6 +122,7 @@ export function useDesignProductModeView(
     viewportReadyVersion,
     gameProjectId,
     npcDefinitions,
+    interactionModeOptions: npcInteractionOptions,
     contentLibrary,
     assetDefinitions,
     assetSources,

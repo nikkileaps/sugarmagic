@@ -1,4 +1,5 @@
 import type {
+  ContextAnchor,
   InterpretResult,
   PendingExpectation,
   QueryFacet,
@@ -30,7 +31,9 @@ const KNOWLEDGE_PATTERN =
 const SELF_PATTERN =
   /\b(who are you|what(?:'s| is) your name|your name|what do you do|what(?:'s| is) your job|where do you work|what are you doing|what are you up to|where are you|where are you from|tell me about yourself|about yourself|your background|your past|do you remember me|have we met|did we meet)\b/i;
 const LOCATION_PATTERN =
-  /\b(where are we|where am i|where are you|where is this|this place|that place|cargo bay|station|office|terminal|dock|gate|room)\b/i;
+  /\b(where are we|where am i|where are you|where is this|this place|that place|near here|around here|close by|nearby|cargo bay|station|office|terminal|dock|gate|room)\b/i;
+const CURRENT_LOCATION_ANCHOR_PATTERN =
+  /\b(where are we|where am i|where is this|this place|near here|around here|close by|nearby|here)\b/i;
 const BACKGROUND_PATTERN = /\b(background|past|family|where are you from|about yourself)\b/i;
 const PREFERENCE_PATTERN =
   /\b(favorite|like|love|hate|prefer|do you like|do you love|do you hate|do you prefer|what do you like|what do you prefer)\b/i;
@@ -149,6 +152,15 @@ function inferTimeframe(inputText: string | null) {
   return "unknown" as const;
 }
 
+function inferContextAnchor(inputText: string | null): ContextAnchor {
+  if (!inputText) {
+    return "none";
+  }
+  return CURRENT_LOCATION_ANCHOR_PATTERN.test(inputText)
+    ? "current_location"
+    : "none";
+}
+
 export function detectPendingExpectation(
   state: SugarAgentProviderState
 ): PendingExpectation {
@@ -196,6 +208,7 @@ export function interpretPlayerTurn(input: {
   const hasSocialCue = socialMove !== "none";
   const facet = inferFacet(userText);
   const timeframe = inferTimeframe(userText);
+  const contextAnchor = inferContextAnchor(userText);
 
   let interpretation: TurnInterpretation;
   if (!userText) {
@@ -206,6 +219,7 @@ export function interpretPlayerTurn(input: {
       facet: "unknown",
       timeframe: "unknown",
       socialMove: "greeting",
+      contextAnchor,
       declaredIdentityName: null,
       focusText,
       confidence: 1,
@@ -220,6 +234,7 @@ export function interpretPlayerTurn(input: {
       facet: "unknown",
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.96,
@@ -234,6 +249,7 @@ export function interpretPlayerTurn(input: {
       facet: "general_lore",
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.88,
@@ -252,6 +268,7 @@ export function interpretPlayerTurn(input: {
       facet: "identity",
       timeframe: "current",
       socialMove: declaredIdentityName ? "introduction" : "acknowledgement",
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.84,
@@ -266,6 +283,7 @@ export function interpretPlayerTurn(input: {
       facet: socialMove === "introduction" ? "relationship" : "unknown",
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.82,
@@ -280,6 +298,7 @@ export function interpretPlayerTurn(input: {
       facet: "relationship",
       timeframe: "past",
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.78,
@@ -302,6 +321,7 @@ export function interpretPlayerTurn(input: {
       facet,
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.8,
@@ -324,6 +344,7 @@ export function interpretPlayerTurn(input: {
       facet,
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.72,
@@ -338,6 +359,7 @@ export function interpretPlayerTurn(input: {
       facet: facet === "unknown" ? "general_lore" : facet,
       timeframe,
       socialMove,
+      contextAnchor,
       declaredIdentityName,
       focusText,
       confidence: 0.38,

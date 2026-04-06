@@ -58,3 +58,5 @@ export function createRuntimeEnvironmentState(options: {
     activeEnvironmentId: resolveInitialRuntimeEnvironmentId(options)
   };
 }
+
+export * from "./blackboard";

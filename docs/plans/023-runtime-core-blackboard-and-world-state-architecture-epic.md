@@ -207,6 +207,25 @@ interface RuntimeBlackboard {
 }
 ```
 
+Note:
+
+- `listFacts(...)` is primarily for inspection, debugging, and tooling surfaces
+- typed gameplay/runtime consumers should prefer dedicated typed accessors over `listFacts(...)` plus casts
+
+Recommended pattern:
+
+```ts
+function getEntityPosition(blackboard: RuntimeBlackboard, entityId: string): EntityPositionFact | null {
+  return blackboard.getFact<EntityPositionFact>({ kind: "entity", id: entityId }, "entity.position");
+}
+```
+
+This keeps typed fact domains aligned with:
+
+- one type per behavior
+- one source of truth
+- less stringly-typed usage in gameplay systems
+
 This is intentionally simple.
 
 The important part is not the exact method names.
@@ -218,6 +237,107 @@ The important part is:
 - explicit key
 - explicit source system
 - one shared state facility
+- enforceable write ownership rather than write provenance only
+
+### 1a. Write ownership enforcement
+
+Every blackboard fact key should have one declared owner system.
+
+Recommended conceptual shape:
+
+```ts
+interface BlackboardFactDefinition<TValue> {
+  key: string;
+  ownerSystem: string;
+  allowedScopeKinds: BlackboardScopeKind[];
+}
+```
+
+Recommended write rule:
+
+- `setFact(...)` must reject writes from systems that do not own the target fact key
+- `sourceSystem` is not just metadata; it is part of the enforcement path
+- development builds should fail loudly on invalid writes
+- production builds may either reject or reject-and-log, but should not silently accept invalid ownership
+
+This closes the most common blackboard failure mode:
+
+- everyone can write everything
+- ownership becomes social convention rather than system behavior
+- source of truth silently collapses
+
+### 1b. Scope write boundaries
+
+The blackboard should also enforce scope-direction rules.
+
+Recommended rule:
+
+- narrower child scopes must not write broader parent-scope facts
+
+Examples:
+
+- a `conversation` scope must not overwrite `entity.position`
+- an `entity` scope must not overwrite `global` quest-wide facts unless that fact key explicitly belongs there and the caller owns it
+
+This keeps both dimensions explicit:
+
+- who owns a fact key
+- which scope kinds may write that fact key
+
+### 1c. Fact lifecycle and expiry
+
+Every blackboard fact definition should declare its lifecycle, not just its type and owner.
+
+Recommended conceptual shape:
+
+```ts
+type BlackboardFactLifecycle =
+  | { kind: "persistent" }
+  | { kind: "session" }
+  | { kind: "ephemeral"; expiresAfterMs?: number }
+  | { kind: "frame" };
+
+interface BlackboardFactDefinition<TValue> {
+  key: string;
+  ownerSystem: string;
+  allowedScopeKinds: BlackboardScopeKind[];
+  lifecycle: BlackboardFactLifecycle;
+}
+```
+
+Recommended rule:
+
+- consumers must be able to distinguish "currently true" from "was true recently"
+- facts that are not continuously maintained must either expire automatically or be explicitly cleared by their owner system
+- the blackboard should not rely on every consumer inventing its own stale-data heuristics
+
+Recommended lifecycle semantics:
+
+- `persistent`
+  - remains until explicitly overwritten or cleared
+- `session`
+  - remains for the lifetime of the current gameplay/session scope and is cleared on session end
+- `ephemeral`
+  - expires after a declared timeout if not refreshed by its owner
+- `frame`
+  - valid only for the current update tick/frame and must not survive into later reads
+
+Examples:
+
+- `entity.position`
+  - effectively persistent-but-refreshed by the movement/placement system
+- `entity.attentionTarget` during combat
+  - usually `ephemeral` or `session`, depending on the system
+- `conversation.lastTopic`
+  - likely `session` or conversation-scoped
+- one-frame trigger facts
+  - `frame`
+
+This prevents the second major blackboard failure mode:
+
+- facts remain readable long after their owner stopped maintaining them
+- consumers treat stale facts as live truth
+- ghost state accumulates and behavior becomes incoherent
 
 ### 2. Typed fact domains
 
@@ -253,11 +373,15 @@ interface EntityPositionFact {
   z: number;
 }
 
+type EntityMood = "neutral" | "friendly" | "hostile" | "anxious" | "relieved";
+type EntityUrgency = "calm" | "alert" | "urgent" | "critical";
+type EntityStance = "open" | "guarded" | "defensive" | "aggressive";
+
 interface EntityAffectFact {
   entityId: string;
-  mood: string | null;
-  urgency: string | null;
-  stance: string | null;
+  mood: EntityMood | null;
+  urgency: EntityUrgency | null;
+  stance: EntityStance | null;
 }
 
 interface QuestActiveStageFact {
@@ -268,6 +392,12 @@ interface QuestActiveStageFact {
 ```
 
 The exact set can evolve, but the system should begin with typed high-value facts, not free-form sprawl.
+
+Important note for affect/state facts:
+
+- fields such as `mood`, `urgency`, and `stance` should use constrained enum/union values rather than free-form strings
+- these are runtime-authored NPC state facts, not authored lore descriptors
+- these facts should normally use `ephemeral` or `session` lifecycle semantics rather than behaving like permanent canonical character properties
 
 ## Scope model
 
@@ -357,6 +487,118 @@ Examples of likely consumers:
 - trigger systems
 - quest logic
 - debugging/inspection tools
+
+## World truth vs agent beliefs
+
+The runtime blackboard should hold authoritative engine-scoped world truth, not private agent beliefs or perceptions.
+
+### Blackboard = authoritative engine truth
+
+Examples:
+
+- where an entity is
+- which region/scene is active
+- which quest stage is active
+- whether an NPC is currently assigned to a task
+- objective runtime state the engine is prepared to enforce
+
+These facts should be interpreted as:
+
+- what the engine currently says is true
+
+### Beliefs = agent-local modeled understanding
+
+If a future agent system needs to represent things like:
+
+- what NPC A thinks about NPC B
+- what the NPC believes the player already knows
+- what the NPC suspects but has not confirmed
+- what an NPC remembers from an earlier encounter
+- what an NPC perceives from incomplete or stale information
+
+those are not authoritative blackboard facts.
+
+Those are beliefs.
+
+Beliefs may be:
+
+- agent-scoped
+- incomplete
+- stale
+- wrong
+
+### Explicit rule
+
+Do not use the runtime blackboard as the storage surface for private or potentially incorrect agent beliefs.
+
+The blackboard is for:
+
+- engine truth
+- authoritative runtime state
+- facts the engine is willing to treat as currently true
+
+Belief models, if introduced later, should live in a separate agent-scoped state system.
+
+### Clarifying note on affect/state fields
+
+When this epic refers to facts such as:
+
+- `entity.affect`
+- `entity.currentGoal`
+- `entity.attentionTarget`
+
+those should be interpreted as engine-authored runtime assessments or assignments, not arbitrary subjective beliefs.
+
+For example:
+
+- `entity.currentGoal = run_kiosk` means the runtime behavior system currently assigns that goal
+- it does not mean every other actor perfectly knows that goal
+
+That keeps the conceptual boundary clear:
+
+- blackboard = world truth from the engine's point of view
+- beliefs = local modeled understanding from an agent's point of view
+
+## Polling vs observation
+
+Sugarmagic should choose one primary blackboard change-discovery model and use it consistently.
+
+### Recommendation
+
+The runtime blackboard should use observation/change notification as the primary model.
+
+That means:
+
+- the blackboard publishes fact changes through a first-class observation API
+- consumers discover blackboard changes through subscription, not ad hoc polling loops
+- systems that need current values still read the authoritative snapshot from the blackboard, but change discovery happens through observation
+
+### Explicit rule
+
+Do not build the runtime blackboard as a polling-first system.
+
+If a system needs to react to world-state changes, it should subscribe to blackboard change notifications rather than independently polling and inventing its own stale-change detection.
+
+This is the cleaner foundation because it preserves:
+
+- one way to discover state changes
+- one source of truth for when state actually changed
+- less duplicated polling logic
+- less disagreement between systems about when a fact became true, changed, or expired
+
+### Practical interpretation
+
+This does not mean every system becomes callback spaghetti.
+
+It means the blackboard owns change publication, and consumers may:
+
+- subscribe directly
+- update their own local cached view from notifications
+- evaluate their own logic on tick against that synchronized local view if needed
+
+But the blackboard itself should have one primary change model:
+
+- observation, not polling
 
 ## Plugin integration recommendation
 

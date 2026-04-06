@@ -48,7 +48,8 @@ import type {
   RemoveItemPresenceCommand,
   AssignPlacedAssetInspectableCommand,
   UpdatePlacedAssetInspectableCommand,
-  RemovePlacedAssetInspectableCommand
+  RemovePlacedAssetInspectableCommand,
+  UpdateRegionMetadataCommand
 } from "./index";
 
 export interface CommandExecutionResult {
@@ -606,6 +607,27 @@ function applyDeleteSceneFolder(
   };
 }
 
+function applyUpdateRegionMetadata(
+  region: RegionDocument,
+  command: UpdateRegionMetadataCommand
+): RegionDocument {
+  return {
+    ...region,
+    ...(command.payload.displayName === undefined
+      ? {}
+      : { displayName: command.payload.displayName }),
+    ...(command.payload.lorePageId === undefined
+      ? {}
+      : {
+          lorePageId:
+            typeof command.payload.lorePageId === "string" &&
+            command.payload.lorePageId.trim().length > 0
+              ? command.payload.lorePageId.trim()
+              : null
+        })
+  };
+}
+
 function applyCreateLandscapeChannel(
   region: RegionDocument,
   command: CreateLandscapeChannelCommand
@@ -737,6 +759,9 @@ export function executeCommand(
       break;
     case "DeleteSceneFolder":
       updatedRegion = applyDeleteSceneFolder(region, command);
+      break;
+    case "UpdateRegionMetadata":
+      updatedRegion = applyUpdateRegionMetadata(region, command);
       break;
     case "CreateLandscapeChannel":
       updatedRegion = applyCreateLandscapeChannel(region, command);

@@ -272,6 +272,20 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     }
   },
   shell: {
+    npcInteractionOptions: [
+      {
+        pluginId: SUGARAGENT_PLUGIN_ID,
+        interactionMode: "agent",
+        label: "Agent",
+        summary: "Free-form grounded conversation through SugarAgent."
+      },
+      {
+        pluginId: SUGARAGENT_PLUGIN_ID,
+        interactionMode: "guided",
+        label: "Guided",
+        summary: "Quest-aware agent conversation under stronger authored rails."
+      }
+    ],
     designWorkspaces: [
       {
         pluginId: SUGARAGENT_PLUGIN_ID,

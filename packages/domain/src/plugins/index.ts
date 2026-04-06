@@ -76,6 +76,15 @@ export function upsertPluginConfiguration(
   );
 }
 
+export function removePluginConfiguration(
+  records: PluginConfigurationRecord[],
+  pluginId: string
+): PluginConfigurationRecord[] {
+  return records
+    .filter((record) => record.pluginId !== pluginId)
+    .sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+}
+
 export function isPluginEnabled(
   records: PluginConfigurationRecord[],
   pluginId: string

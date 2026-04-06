@@ -180,6 +180,8 @@ function FolderRow({
   onToggleVisibility?: (id: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
 }) {
+  const folderIcon = node.isRoot ? "🗺️" : "📁";
+
   return (
     <>
       <Box
@@ -239,7 +241,7 @@ function FolderRow({
           </Text>
         </ActionIcon>
         <Text component="span" size="xs">
-          📁
+          {folderIcon}
         </Text>
         <Text size="xs" fw={500}>
           {node.displayName}

@@ -6,6 +6,7 @@ import {
   SUGARAGENT_PLUGIN_ID
 } from "@sugarmagic/plugins";
 import {
+  type ConversationMiddleware,
   createConversationHost,
   createRuntimeBootModel,
   type ConversationProvider
@@ -416,6 +417,131 @@ describe("SugarAgent runtime provider", () => {
           ?.Retrieve?.payload?.broadenedBeyondLorePage
       )
     ).toBe(true);
+  });
+
+  it("uses blackboard-backed current location context for 'where are we' retrieval", async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const body =
+          typeof init?.body === "string" && init.body.trim().length > 0
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : null;
+        requests.push({ url, body });
+
+        if (url.endsWith("/api/sugaragent/retrieve/embed")) {
+          return new Response(
+            JSON.stringify({ embedding: [0.4, 0.2, 0.1], requestId: "embed-here" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  fileId: "chunk-location-1",
+                  filename: "locations.earendale.md",
+                  score: 0.97,
+                  attributes: { page_id: "lore.locations.towns.earendale" },
+                  text: "Earendale is a market town near the rail station."
+                }
+              ],
+              requestId: "search-here"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          return new Response(
+            JSON.stringify({
+              text: "We're in Earendale.",
+              requestId: "gen-here"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+
+    const runtimeContextMiddleware: ConversationMiddleware = {
+      middlewareId: "test.runtime-location-context",
+      displayName: "Test Runtime Location Context",
+      priority: -100,
+      stage: "context",
+      prepare(context) {
+        const currentLocation = {
+          regionId: "region:earendale",
+          regionDisplayName: "Earendale",
+          regionLorePageId: "lore.locations.towns.earendale",
+          sceneId: null,
+          sceneDisplayName: null
+        };
+
+        return {
+          ...context,
+          runtimeContext: {
+            here: currentLocation,
+            playerLocation: {
+              entityId: "player:hero",
+              location: currentLocation
+            },
+            playerPosition: null,
+            npcLocation: {
+              entityId: "npc:rick-roll",
+              location: currentLocation
+            },
+            npcPosition: null,
+            trackedQuest: null,
+            activeQuestStage: null,
+            activeQuestObjectives: null
+          }
+        };
+      }
+    };
+
+    const host = createConversationHost({
+      providers: [
+        resolveSugarAgentProvider({
+          ...TEST_ENVIRONMENT,
+          SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: "http://localhost:8787"
+        })
+      ],
+      middlewares: [runtimeContextMiddleware]
+    });
+
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:rick-roll",
+      npcDisplayName: "Rick Roll",
+      interactionMode: "agent",
+      lorePageId: "lore.entities.npcs.rick-roll"
+    });
+
+    const reply = await host.submitInput({
+      kind: "free_text",
+      text: "Where are we?"
+    });
+
+    const searchRequest = requests.find((request) =>
+      request.url.endsWith("/api/sugaragent/retrieve/search")
+    );
+    expect(searchRequest?.body?.filters).toEqual({
+      type: "eq",
+      key: "page_id",
+      value: "lore.locations.towns.earendale"
+    });
+    expect(String(searchRequest?.body?.query ?? "")).toContain("Current location: Earendale");
+    expect(reply?.text).toBe("We're in Earendale.");
+    expect(
+      (
+        (reply?.diagnostics?.stages as Record<string, { payload?: Record<string, unknown> }> | undefined)
+          ?.Retrieve?.payload?.currentLocationDisplayName
+      )
+    ).toBe("Earendale");
   });
 
   it("retries transient Anthropic overloads, then exits politely and closes the conversation", async () => {
