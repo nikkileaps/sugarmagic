@@ -168,9 +168,19 @@ export function createAuthoringViewport(): WorkspaceViewport {
   const environmentController = createEnvironmentSceneController(scene);
   const landscapeController = createLandscapeSceneController(scene);
 
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-  camera.position.set(5, 5, 5);
-  camera.lookAt(0, 0, 0);
+  const perspectiveCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+  perspectiveCamera.position.set(5, 5, 5);
+  perspectiveCamera.lookAt(0, 0, 0);
+
+  const orthographicCamera = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 1000);
+  orthographicCamera.position.set(0, 48, 0.001);
+  orthographicCamera.up.set(0, 0, -1);
+  orthographicCamera.lookAt(0, 0, 0);
+  orthographicCamera.zoom = 1;
+  orthographicCamera.updateProjectionMatrix();
+
+  let projectionMode: "perspective" | "orthographic-top" = "perspective";
+  let activeCamera: THREE.Camera = perspectiveCamera;
 
   let renderer: WebGPURenderer | null = null;
   let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
@@ -195,6 +205,26 @@ export function createAuthoringViewport(): WorkspaceViewport {
   let renderGeneration = 0;
   let mountGeneration = 0;
 
+  function syncCameraProjection(width: number, height: number) {
+    const safeWidth = Math.max(1, width);
+    const safeHeight = Math.max(1, height);
+    const aspect = safeWidth / safeHeight;
+
+    perspectiveCamera.aspect = aspect;
+    perspectiveCamera.updateProjectionMatrix();
+
+    const halfHeight = 20;
+    orthographicCamera.left = -halfHeight * aspect;
+    orthographicCamera.right = halfHeight * aspect;
+    orthographicCamera.top = halfHeight;
+    orthographicCamera.bottom = -halfHeight;
+    orthographicCamera.updateProjectionMatrix();
+  }
+
+  function updateRenderPipelineCamera() {
+    renderPipeline?.setCamera(activeCamera);
+  }
+
   function syncLandscapeGrid(landscape: RegionLandscapeState | null | undefined) {
     const nextSpec = resolveLandscapeGridSpec(landscape);
     if (
@@ -218,17 +248,27 @@ export function createAuthoringViewport(): WorkspaceViewport {
     if (renderPipeline) {
       renderPipeline.render();
     } else if (renderer) {
-      renderer.render(scene, camera);
+      renderer.render(scene, activeCamera);
     }
     animationId = requestAnimationFrame(renderLoop);
   }
 
   return {
     scene,
-    camera,
+    get camera() {
+      return activeCamera;
+    },
     authoredRoot,
     overlayRoot,
     surfaceRoot: landscapeController.surfaceRoot,
+    setProjectionMode(mode) {
+      projectionMode = mode;
+      activeCamera =
+        projectionMode === "orthographic-top"
+          ? orthographicCamera
+          : perspectiveCamera;
+      updateRenderPipelineCamera();
+    },
 
     mount(element: HTMLElement) {
       container = element;
@@ -255,12 +295,11 @@ export function createAuthoringViewport(): WorkspaceViewport {
           const width = element.clientWidth || 1;
           const height = element.clientHeight || 1;
           nextRenderer.setSize(width, height, false);
-          camera.aspect = width / height;
-          camera.updateProjectionMatrix();
+          syncCameraProjection(width, height);
           renderPipeline = createRuntimeRenderPipeline({
             renderer: nextRenderer,
             scene,
-            camera,
+            camera: activeCamera,
             width,
             height
           });
@@ -434,8 +473,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
       renderer?.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
+      syncCameraProjection(width, height);
       renderPipeline?.resize(width, height);
     },
 
@@ -443,7 +481,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
       if (renderPipeline) {
         renderPipeline.render();
       } else if (renderer) {
-        renderer.render(scene, camera);
+        renderer.render(scene, activeCamera);
       }
     },
 

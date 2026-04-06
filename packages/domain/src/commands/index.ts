@@ -109,6 +109,37 @@ export type UpdateRegionMetadataCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateRegionAreaCommand = SemanticCommandBase<
+  "CreateRegionArea",
+  {
+    areaId: string;
+    displayName: string;
+    lorePageId: string | null;
+    parentAreaId: string | null;
+    kind: import("../region-authoring").RegionAreaKind;
+    bounds: import("../region-authoring").RegionAreaBounds;
+  }
+>;
+
+export type UpdateRegionAreaCommand = SemanticCommandBase<
+  "UpdateRegionArea",
+  {
+    areaId: string;
+    displayName?: string;
+    lorePageId?: string | null;
+    parentAreaId?: string | null;
+    kind?: import("../region-authoring").RegionAreaKind;
+    bounds?: import("../region-authoring").RegionAreaBounds;
+  }
+>;
+
+export type DeleteRegionAreaCommand = SemanticCommandBase<
+  "DeleteRegionArea",
+  {
+    areaId: string;
+  }
+>;
+
 export type CreateLandscapeChannelCommand = SemanticCommandBase<
   "CreateLandscapeChannel",
   {
@@ -444,6 +475,9 @@ export type SemanticCommand =
   | RenameSceneFolderCommand
   | DeleteSceneFolderCommand
   | UpdateRegionMetadataCommand
+  | CreateRegionAreaCommand
+  | UpdateRegionAreaCommand
+  | DeleteRegionAreaCommand
   | CreateLandscapeChannelCommand
   | UpdateLandscapeChannelCommand
   | TransformPlacedAssetCommand

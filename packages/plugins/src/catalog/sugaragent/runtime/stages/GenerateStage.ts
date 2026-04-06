@@ -86,9 +86,14 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       input.execution.selection.activeQuest?.stageDisplayName ??
       null;
     const currentLocationDisplayName =
+      input.execution.runtimeContext?.here?.area?.displayName ??
       input.execution.runtimeContext?.here?.sceneDisplayName ??
       input.execution.runtimeContext?.here?.regionDisplayName ??
       null;
+    const currentParentAreaDisplayName =
+      input.execution.runtimeContext?.here?.parentArea?.displayName ?? null;
+    const npcPlayerRelation =
+      input.execution.runtimeContext?.npcPlayerRelation ?? null;
 
     let text: string;
     let llmBackend: GenerateResult["llmBackend"] = "deterministic";
@@ -135,6 +140,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             responseSpecificity: input.plan.responseSpecificity,
             turnPath: input.plan.turnPath,
             evidenceCount: input.retrieve.evidencePack.length,
+            proximityBand: npcPlayerRelation?.proximityBand ?? null,
             textPreview: text.slice(0, 180),
             proposedActions: output.actionProposals.map((proposal) => proposal.kind)
           },
@@ -155,12 +161,20 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         `Use only the provided evidence, quest context, NPC profile, and recent history as grounded context for this turn.`,
         `Do not introduce institutions, locations, factions, setting names, or world facts that are not supported by that grounded context.`,
         `If grounded context is insufficient, ask a clarifying question or say you do not know enough yet.`,
+        `Do not use deictic spatial claims like "here", "inside", "outside", "at my shop", or "in this room" unless grounded runtime location supports them.`,
+        `If the NPC is associated with another place but is not currently there, describe that place as elsewhere or nearby rather than as the current location.`,
         `Interaction mode: ${input.execution.selection.interactionMode ?? "agent"}.`,
         activeQuestDisplayName
           ? `Active quest: ${activeQuestDisplayName} / ${activeQuestStageDisplayName ?? "current stage"}`
           : null,
         currentLocationDisplayName
           ? `Current location: ${currentLocationDisplayName}.`
+          : null,
+        currentParentAreaDisplayName
+          ? `Containing area: ${currentParentAreaDisplayName}.`
+          : null,
+        npcPlayerRelation
+          ? `Player proximity: ${npcPlayerRelation.proximityBand}. Same area: ${npcPlayerRelation.sameArea ? "yes" : "no"}.`
           : null
       ]
         .filter(Boolean)
@@ -190,6 +204,12 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : "Keep the reply generic, in-character, and low-specificity.",
         currentLocationDisplayName
           ? `Current runtime location: ${currentLocationDisplayName}.`
+          : null,
+        currentParentAreaDisplayName
+          ? `Current containing area: ${currentParentAreaDisplayName}.`
+          : null,
+        npcPlayerRelation
+          ? `Player/NPC proximity band: ${npcPlayerRelation.proximityBand}.`
           : null,
         evidenceSummary.length > 0
           ? `Evidence:\n- ${evidenceSummary.join("\n- ")}`
@@ -289,6 +309,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           interpretIntent: input.interpret.interpretation.intent,
           socialMove: input.interpret.interpretation.socialMove,
           evidenceCount: input.retrieve.evidencePack.length,
+          currentAreaDisplayName: currentLocationDisplayName,
+          proximityBand: npcPlayerRelation?.proximityBand ?? null,
           retryCount,
           systemPromptPreview,
           textPreview: text.slice(0, 180),

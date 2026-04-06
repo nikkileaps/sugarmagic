@@ -33,6 +33,7 @@ function makeTestRegion(): RegionDocument {
       ]
     },
     environmentBinding: { defaultEnvironmentId: "env:default" },
+    areas: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []

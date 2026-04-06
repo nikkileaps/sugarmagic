@@ -449,6 +449,7 @@ export function App() {
         defaultEnvironmentId:
           session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
       },
+      areas: [],
       landscape: createDefaultRegionLandscapeState(),
       markers: [],
       gameplayPlacements: []

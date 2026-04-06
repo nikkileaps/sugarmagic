@@ -263,6 +263,8 @@ export function useLayoutWorkspaceView(
     const viewportElement = getViewportElementRef.current();
     if (!viewport || !viewportElement) return;
 
+    viewport.setProjectionMode("perspective");
+
     const layout = createLayoutWorkspace({
       onCommand: (command) => onCommandRef.current(command),
       onSelect: (ids) => onSelectRef.current(ids),

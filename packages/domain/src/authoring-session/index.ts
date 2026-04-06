@@ -16,7 +16,8 @@ import {
   createRegionPlayerPresence,
   createRegionItemPresence,
   createDefaultRegionLandscapeState,
-  createDefaultRegionLandscapeChannels
+  createDefaultRegionLandscapeChannels,
+  createRegionAreaDefinition
 } from "../region-authoring";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -135,6 +136,19 @@ function normalizeRegionDocument(
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ?? defaultEnvironmentId(contentLibrary)
     },
+    areas: (region.areas ?? []).map((area) =>
+      createRegionAreaDefinition({
+        ...area,
+        lorePageId:
+          typeof area.lorePageId === "string" && area.lorePageId.trim().length > 0
+            ? area.lorePageId.trim()
+            : null,
+        parentAreaId:
+          typeof area.parentAreaId === "string" && area.parentAreaId.trim().length > 0
+            ? area.parentAreaId.trim()
+            : null
+      })
+    ),
     landscape: createDefaultRegionLandscapeState({
       ...defaultLandscape,
       ...(legacyLandscape ?? {}),

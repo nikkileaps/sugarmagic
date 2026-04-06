@@ -325,6 +325,8 @@ export function useLandscapeWorkspaceView(
     const viewportElement = getViewportElementRef.current();
     if (!viewport || !viewportElement || !regionRef.current) return;
 
+    viewport.setProjectionMode("perspective");
+
     const landscapeWorkspace = createLandscapeWorkspace({
       getLandscape: () => regionRef.current?.landscape ?? null,
       previewLandscape: (landscape) => viewport.previewLandscape(landscape),

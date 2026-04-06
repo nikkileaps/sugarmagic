@@ -8,14 +8,14 @@ export interface RuntimeRenderPipeline {
   applyEnvironment: (definition: EnvironmentDefinition | null) => EnvironmentSceneWarning[];
   render: () => void;
   resize: (width: number, height: number) => void;
-  setCamera: (camera: THREE.PerspectiveCamera) => void;
+  setCamera: (camera: THREE.Camera) => void;
   dispose: () => void;
 }
 
 export function createRuntimeRenderPipeline(options: {
   renderer: WebGPURenderer;
   scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
+  camera: THREE.Camera;
   width: number;
   height: number;
 }): RuntimeRenderPipeline {

@@ -23,6 +23,7 @@ export * from "./quest";
 export * from "./render";
 export * from "./scene";
 export * from "./state";
+export * from "./spatial";
 export * from "./streaming";
 export * from "./vfx";
 

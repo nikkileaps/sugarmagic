@@ -5,7 +5,9 @@ import type {
   DialogueNodeDefinition
 } from "@sugarmagic/domain";
 import type {
+  EntityCurrentAreaFact,
   EntityLocationFact,
+  EntityPlayerSpatialRelationFact,
   EntityPositionFact,
   QuestActiveObjectivesFact,
   QuestActiveStageFact,
@@ -95,8 +97,11 @@ export interface ConversationRuntimeContext {
   here: LocationReference | null;
   playerLocation: EntityLocationFact | null;
   playerPosition: EntityPositionFact | null;
+  playerArea?: EntityCurrentAreaFact | null;
   npcLocation: EntityLocationFact | null;
   npcPosition: EntityPositionFact | null;
+  npcArea?: EntityCurrentAreaFact | null;
+  npcPlayerRelation?: EntityPlayerSpatialRelationFact | null;
   trackedQuest: TrackedQuestFact | null;
   activeQuestStage: QuestActiveStageFact | null;
   activeQuestObjectives: QuestActiveObjectivesFact | null;

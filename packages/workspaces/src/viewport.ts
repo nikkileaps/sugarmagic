@@ -49,10 +49,11 @@ export interface ItemViewportState {
 
 export interface WorkspaceViewport {
   scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
+  camera: THREE.Camera;
   authoredRoot: THREE.Group;
   overlayRoot: THREE.Group;
   surfaceRoot: THREE.Group;
+  setProjectionMode: (mode: "perspective" | "orthographic-top") => void;
   mount: (container: HTMLElement) => void;
   unmount: () => void;
   updateFromRegion: (state: ViewportSceneState) => void;
