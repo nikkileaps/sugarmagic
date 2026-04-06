@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -18,6 +18,7 @@ import type {
   ContentLibrarySnapshot,
   NPCAnimationSlot,
   NPCDefinition,
+  NPCInteractionMode,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
@@ -32,6 +33,11 @@ export interface NPCWorkspaceViewProps {
   viewportReadyVersion: number;
   gameProjectId: string | null;
   npcDefinitions: NPCDefinition[];
+  interactionModeOptions: Array<{
+    value: NPCInteractionMode;
+    label: string;
+    description?: string;
+  }>;
   contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
@@ -74,6 +80,7 @@ export function useNPCWorkspaceView(
     viewportReadyVersion,
     gameProjectId,
     npcDefinitions,
+    interactionModeOptions,
     contentLibrary,
     assetDefinitions,
     assetSources,
@@ -147,6 +154,11 @@ export function useNPCWorkspaceView(
     return (animationSlotOptions[0]?.value as NPCAnimationSlot | undefined) ?? null;
   }, [activeAnimationSlot, animationSlotOptions, selectedNPC]);
 
+  const availableInteractionModes = useMemo(
+    () => new Set(interactionModeOptions.map((option) => option.value)),
+    [interactionModeOptions]
+  );
+
   function createNPC() {
     if (!gameProjectId) return;
     const nextDefinition = createDefaultNPCDefinition({
@@ -169,7 +181,7 @@ export function useNPCWorkspaceView(
     setSelectedNpcId(nextDefinition.definitionId);
   }
 
-  function updateNPC(nextDefinition: NPCDefinition) {
+  const updateNPC = useCallback((nextDefinition: NPCDefinition) => {
     if (!gameProjectId) return;
     onCommand({
       kind: "UpdateNPCDefinition",
@@ -185,7 +197,18 @@ export function useNPCWorkspaceView(
         definition: nextDefinition
       }
     });
-  }
+  }, [gameProjectId, onCommand]);
+
+  useEffect(() => {
+    if (!selectedNPC) return;
+    if (availableInteractionModes.has(selectedNPC.interactionMode)) {
+      return;
+    }
+    updateNPC({
+      ...selectedNPC,
+      interactionMode: "scripted"
+    });
+  }, [availableInteractionModes, selectedNPC, updateNPC]);
 
   function deleteNPC(definitionId: string) {
     if (!gameProjectId) return;
@@ -457,12 +480,20 @@ export function useNPCWorkspaceView(
               <Select
                 label="Interaction Mode"
                 size="xs"
-                data={[
-                  { value: "scripted", label: "Scripted" },
-                  { value: "agent", label: "Agent" },
-                  { value: "guided", label: "Guided" }
-                ]}
-                value={selectedNPC.interactionMode}
+                description={
+                  interactionModeOptions.find(
+                    (option) => option.value === selectedNPC.interactionMode
+                  )?.description
+                }
+                data={interactionModeOptions.map((option) => ({
+                  value: option.value,
+                  label: option.label
+                }))}
+                value={
+                  availableInteractionModes.has(selectedNPC.interactionMode)
+                    ? selectedNPC.interactionMode
+                    : "scripted"
+                }
                 onChange={(value) => {
                   if (
                     value !== "scripted" &&

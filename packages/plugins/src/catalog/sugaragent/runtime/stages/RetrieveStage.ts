@@ -15,6 +15,59 @@ import type {
   TurnStageContext
 } from "../types";
 
+function buildCurrentLocationEvidence(
+  execution: ConversationExecutionContext
+): RetrieveResult["evidencePack"][number] | null {
+  const currentLocation = execution.runtimeContext?.here;
+  if (!currentLocation?.regionDisplayName) {
+    return null;
+  }
+
+  const locationText = currentLocation.sceneDisplayName
+    ? `The current location is ${currentLocation.sceneDisplayName} in ${currentLocation.regionDisplayName}.`
+    : `The current location is ${currentLocation.regionDisplayName}.`;
+
+  return {
+    fileId: "runtime:blackboard:current-location",
+    filename: "runtime.current-location",
+    score: 1,
+    text: locationText,
+    attributes: {
+      source: "runtime-blackboard",
+      region_id: currentLocation.regionId,
+      scene_id: currentLocation.sceneId,
+      page_id: currentLocation.regionLorePageId
+    }
+  };
+}
+
+function resolveEffectiveSearchQuery(
+  interpret: InterpretResult,
+  execution: ConversationExecutionContext,
+  activeQuestDisplayName: string | null
+): string {
+  const segments: string[] = [interpret.searchQuery];
+
+  if (
+    interpret.interpretation.contextAnchor === "current_location" ||
+    interpret.interpretation.facet === "location"
+  ) {
+    const currentLocation = execution.runtimeContext?.here;
+    if (currentLocation?.regionDisplayName) {
+      segments.push(`Current location: ${currentLocation.regionDisplayName}`);
+    }
+    if (currentLocation?.sceneDisplayName) {
+      segments.push(`Current scene: ${currentLocation.sceneDisplayName}`);
+    }
+  }
+
+  if (interpret.interpretation.intent === "quest_guidance" && activeQuestDisplayName) {
+    segments.push(`Active quest: ${activeQuestDisplayName}`);
+  }
+
+  return segments.filter(Boolean).join("\n");
+}
+
 /**
  * Retrieve gathers grounded world context for the turn.
  * It resolves the evidence pack that later stages use for planning,
@@ -44,17 +97,27 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
     context: TurnStageContext
   ): Promise<TurnStageResult<RetrieveResult>> {
     const startedAt = Date.now();
-    const activeQuest = input.execution.selection.activeQuest;
-    const lorePageId =
+    const runtimeCurrentLocation = input.execution.runtimeContext?.here ?? null;
+    const activeQuestDisplayName =
+      input.execution.runtimeContext?.trackedQuest?.displayName ??
+      input.execution.selection.activeQuest?.displayName ??
+      null;
+    const npcLorePageId =
       typeof input.execution.selection.lorePageId === "string" &&
       input.execution.selection.lorePageId.trim().length > 0
         ? input.execution.selection.lorePageId.trim()
         : null;
+    const currentLocationLorePageId =
+      typeof runtimeCurrentLocation?.regionLorePageId === "string" &&
+      runtimeCurrentLocation.regionLorePageId.trim().length > 0
+        ? runtimeCurrentLocation.regionLorePageId.trim()
+        : null;
     const skipRetrieval = input.interpret.turnRouting.path === "social_fast";
-    const searchQuery =
-      input.interpret.interpretation.intent === "quest_guidance" && activeQuest?.displayName
-        ? `${input.interpret.searchQuery}\nActive quest: ${activeQuest.displayName}`
-        : input.interpret.searchQuery;
+    const searchQuery = resolveEffectiveSearchQuery(
+      input.interpret,
+      input.execution,
+      activeQuestDisplayName
+    );
 
     let semanticQueryFingerprint: number[] | null = null;
     let usedEmbeddings = false;
@@ -64,12 +127,17 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
     let status: TurnStageResult<RetrieveResult>["status"] = "ok";
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     let broadenedBeyondLorePage = false;
+    const targetedLorePageId =
+      input.interpret.interpretation.contextAnchor === "current_location" &&
+      currentLocationLorePageId
+        ? currentLocationLorePageId
+        : npcLorePageId;
     const retrievalFilters: OpenAIVectorStoreFilter | undefined =
-      !skipRetrieval && lorePageId
+      !skipRetrieval && targetedLorePageId
         ? {
             type: "eq",
             key: OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
-            value: lorePageId
+            value: targetedLorePageId
           }
         : undefined;
 
@@ -123,6 +191,16 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       ...item,
       text: normalizeRetrievedEvidenceText(item.text)
     }));
+    const runtimeCurrentLocationEvidence = buildCurrentLocationEvidence(input.execution);
+    if (
+      runtimeCurrentLocationEvidence &&
+      (
+        input.interpret.interpretation.contextAnchor === "current_location" ||
+        input.interpret.interpretation.facet === "location"
+      )
+    ) {
+      evidencePack = [runtimeCurrentLocationEvidence, ...evidencePack];
+    }
 
     const output: RetrieveResult = {
       evidencePack,
@@ -143,7 +221,10 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           skippedRetrieval: skipRetrieval,
           evidencePackSummary: summarizeEvidence(evidencePack),
           evidenceCount: evidencePack.length,
-          lorePageId,
+          npcLorePageId,
+          currentLocationLorePageId,
+          targetedLorePageId,
+          currentLocationDisplayName: runtimeCurrentLocation?.regionDisplayName ?? null,
           retrievalFilters,
           broadenedBeyondLorePage,
           usedEmbeddings,

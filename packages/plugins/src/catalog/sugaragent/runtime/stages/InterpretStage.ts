@@ -54,6 +54,7 @@ export class InterpretStage implements TurnStage<InterpretStageInput, InterpretR
         lane: result.interpretation.lane,
         facet: result.interpretation.facet,
         socialMove: result.interpretation.socialMove,
+        contextAnchor: result.interpretation.contextAnchor,
         turnPath: result.turnRouting.path,
         pendingExpectation: result.pendingExpectation.kind,
         hasUserText: Boolean(result.userText)

@@ -473,11 +473,19 @@ export function useLayoutWorkspaceView(
   }, [documentDefinitions, selectedAsset]);
 
   const selectedSceneLabel =
+    (selectedIds.length === 0 && selectedFolderId === SCENE_ROOT_FOLDER_ID
+      ? region?.displayName ?? null
+      : null) ??
     selectedAsset?.displayName ??
     (selectedPlayerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
     selectedNPCDefinition?.displayName ??
     selectedItemDefinition?.displayName ??
     null;
+
+  const isRegionRootSelected =
+    Boolean(region) &&
+    selectedIds.length === 0 &&
+    selectedFolderId === SCENE_ROOT_FOLDER_ID;
 
   const handleTransformChange = useCallback(
     (
@@ -1145,7 +1153,64 @@ export function useLayoutWorkspaceView(
 
     rightPanel: region ? (
       <Inspector selectionLabel={selectedSceneLabel}>
-        {selectedAsset ? (
+        {isRegionRootSelected ? (
+          <Stack gap="md">
+            <Text size="sm" fw={600}>
+              Region
+            </Text>
+            <TextInput
+              label="Display Name"
+              size="xs"
+              value={region.displayName}
+              onChange={(event) =>
+                onCommand({
+                  kind: "UpdateRegionMetadata",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "region-document",
+                    subjectId: region.identity.id
+                  },
+                  payload: {
+                    displayName: event.currentTarget.value
+                  }
+                })
+              }
+            />
+            <TextInput
+              label="Lore Page ID"
+              size="xs"
+              placeholder="root.locations.earendale"
+              value={region.lorePageId ?? ""}
+              onChange={(event) =>
+                onCommand({
+                  kind: "UpdateRegionMetadata",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "region-document",
+                    subjectId: region.identity.id
+                  },
+                  payload: {
+                    lorePageId: event.currentTarget.value
+                  }
+                })
+              }
+            />
+            <Stack gap={2}>
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                Region ID
+              </Text>
+              <Text size="xs" c="var(--sm-color-overlay0)">
+                {region.identity.id}
+              </Text>
+            </Stack>
+          </Stack>
+        ) : selectedAsset ? (
           <Stack gap="md">
             <TransformInspector
               label="Position"

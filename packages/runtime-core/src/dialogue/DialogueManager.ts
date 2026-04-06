@@ -72,6 +72,10 @@ export class DialogueManager {
 
   constructor(private readonly presenter: DialoguePresenter) {}
 
+  private logDebug(event: string, payload?: Record<string, unknown>): void {
+    console.info(`[dialogue] ${event}`, payload ?? {});
+  }
+
   registerDefinition(definition: DialogueDefinition): void {
     const nextDefinitions = this.definitions.filter(
       (candidate) => candidate.definitionId !== definition.definitionId
@@ -154,7 +158,15 @@ export class DialogueManager {
   async startConversation(
     selection: ConversationSelectionContext
   ): Promise<boolean> {
+    this.logDebug("start-conversation", {
+      conversationKind: selection.conversationKind,
+      dialogueDefinitionId: selection.dialogueDefinitionId ?? null,
+      npcDefinitionId: selection.npcDefinitionId ?? null,
+      npcDisplayName: selection.npcDisplayName ?? null,
+      interactionMode: selection.interactionMode ?? null
+    });
     if (this.isDialogueActive()) {
+      this.logDebug("start-conversation-cancel-existing-session");
       this.end("cancelled");
     }
 
@@ -173,10 +185,18 @@ export class DialogueManager {
 
     const initialTurn = await host.startSession(selection);
     if (requestId !== this.activeRequestId) {
+      this.logDebug("start-conversation-stale-request", {
+        requestId,
+        activeRequestId: this.activeRequestId
+      });
       return false;
     }
     this.pending = false;
     if (!initialTurn) {
+      this.logDebug("start-conversation-no-initial-turn", {
+        dialogueDefinitionId: selection.dialogueDefinitionId ?? null,
+        conversationKind: selection.conversationKind
+      });
       this.presenter.hide();
       this.currentDialogueId = null;
       this.currentNodeId = null;
@@ -185,11 +205,24 @@ export class DialogueManager {
 
     this.conversationHost = host;
     this.currentDialogueId = selection.dialogueDefinitionId ?? null;
+    this.logDebug("start-conversation-initial-turn", {
+      speakerLabel: initialTurn.speakerLabel ?? null,
+      displayName: initialTurn.displayName ?? null,
+      textPreview: initialTurn.text.slice(0, 120),
+      proposedActionCount: initialTurn.proposedActions?.length ?? 0
+    });
     this.presentTurn(initialTurn);
     return true;
   }
 
   end(reason: "completed" | "cancelled" = "completed"): void {
+    this.logDebug("end-conversation", {
+      reason,
+      currentDialogueId: this.currentDialogueId,
+      currentNodeId: this.currentNodeId,
+      hasConversationHost: Boolean(this.conversationHost),
+      pending: this.pending
+    });
     this.activeRequestId += 1;
     this.pending = false;
     if (this.autoCloseTimer) {
@@ -231,6 +264,13 @@ export class DialogueManager {
         : null;
 
     this.currentNodeId = nodeId;
+    this.logDebug("present-turn", {
+      nodeId,
+      speakerLabel: turn.speakerLabel ?? null,
+      displayName: turn.displayName ?? null,
+      textPreview: turn.text.slice(0, 120),
+      autoCloseAfterMs
+    });
     if (nodeId) {
       this.onNodeEnter?.(nodeId);
     }
@@ -258,9 +298,15 @@ export class DialogueManager {
 
   private async handleAdvance(input: ConversationPlayerInput): Promise<void> {
     if (this.pending) {
+      this.logDebug("advance-ignored-pending", {
+        currentDialogueId: this.currentDialogueId
+      });
       return;
     }
     if (!this.conversationHost) {
+      this.logDebug("advance-without-host", {
+        currentDialogueId: this.currentDialogueId
+      });
       this.end("completed");
       return;
     }
@@ -271,6 +317,14 @@ export class DialogueManager {
 
     const requestId = ++this.activeRequestId;
     this.pending = true;
+    this.logDebug("submit-input", {
+      requestId,
+      inputKind: input.kind,
+      text:
+        input.kind === "free_text"
+          ? input.text.slice(0, 120)
+          : null
+    });
     this.presenter.showPending({
       speakerLabel:
         this.conversationHost.getCurrentTurn()?.speakerLabel ??
@@ -280,13 +334,26 @@ export class DialogueManager {
     });
     const nextTurn = await this.conversationHost.submitInput(input);
     if (requestId !== this.activeRequestId) {
+      this.logDebug("submit-input-stale-request", {
+        requestId,
+        activeRequestId: this.activeRequestId
+      });
       return;
     }
     this.pending = false;
     if (!nextTurn) {
+      this.logDebug("submit-input-no-next-turn", {
+        requestId
+      });
       this.end("completed");
       return;
     }
+    this.logDebug("submit-input-next-turn", {
+      requestId,
+      speakerLabel: nextTurn.speakerLabel ?? null,
+      displayName: nextTurn.displayName ?? null,
+      textPreview: nextTurn.text.slice(0, 120)
+    });
     this.presentTurn(nextTurn);
   }
 }

@@ -77,7 +77,18 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
   ): Promise<TurnStageResult<GenerateResult>> {
     const startedAt = Date.now();
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
-    const activeQuest = input.execution.selection.activeQuest;
+    const activeQuestDisplayName =
+      input.execution.runtimeContext?.trackedQuest?.displayName ??
+      input.execution.selection.activeQuest?.displayName ??
+      null;
+    const activeQuestStageDisplayName =
+      input.execution.runtimeContext?.activeQuestStage?.stageDisplayName ??
+      input.execution.selection.activeQuest?.stageDisplayName ??
+      null;
+    const currentLocationDisplayName =
+      input.execution.runtimeContext?.here?.sceneDisplayName ??
+      input.execution.runtimeContext?.here?.regionDisplayName ??
+      null;
 
     let text: string;
     let llmBackend: GenerateResult["llmBackend"] = "deterministic";
@@ -145,8 +156,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         `Do not introduce institutions, locations, factions, setting names, or world facts that are not supported by that grounded context.`,
         `If grounded context is insufficient, ask a clarifying question or say you do not know enough yet.`,
         `Interaction mode: ${input.execution.selection.interactionMode ?? "agent"}.`,
-        activeQuest?.displayName
-          ? `Active quest: ${activeQuest.displayName} / ${activeQuest.stageDisplayName ?? "current stage"}`
+        activeQuestDisplayName
+          ? `Active quest: ${activeQuestDisplayName} / ${activeQuestStageDisplayName ?? "current stage"}`
+          : null,
+        currentLocationDisplayName
+          ? `Current location: ${currentLocationDisplayName}.`
           : null
       ]
         .filter(Boolean)
@@ -174,6 +188,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         input.plan.responseSpecificity === "grounded"
           ? "Use grounded evidence when present, but do not add unsupported specifics."
           : "Keep the reply generic, in-character, and low-specificity.",
+        currentLocationDisplayName
+          ? `Current runtime location: ${currentLocationDisplayName}.`
+          : null,
         evidenceSummary.length > 0
           ? `Evidence:\n- ${evidenceSummary.join("\n- ")}`
           : "Evidence: none retrieved.",
@@ -226,7 +243,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             interpret: input.interpret,
             responseIntent: input.plan.responseIntent,
             evidenceSummary,
-            activeQuestDisplayName: activeQuest?.displayName ?? null
+            activeQuestDisplayName
           }));
         }
       }
@@ -237,7 +254,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
         evidenceSummary: summarizeEvidence(input.retrieve.evidencePack),
-        activeQuestDisplayName: activeQuest?.displayName ?? null
+        activeQuestDisplayName
       }));
     }
 

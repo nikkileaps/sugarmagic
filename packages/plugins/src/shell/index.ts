@@ -23,23 +23,33 @@ export interface PluginDesignSectionContribution {
   summary: string;
 }
 
+export interface PluginNPCInteractionOptionContribution {
+  pluginId?: string;
+  interactionMode: string;
+  label: string;
+  summary?: string;
+}
+
 export interface PluginShellContributionSet {
   projectSettings: PluginProjectSettingsContribution[];
   designWorkspaces: PluginDesignWorkspaceContribution[];
   designSections: PluginDesignSectionContribution[];
+  npcInteractionOptions: PluginNPCInteractionOptionContribution[];
 }
 
 export interface PluginShellContributionDefinition {
   projectSettings?: PluginProjectSettingsContribution[];
   designWorkspaces?: PluginDesignWorkspaceContribution[];
   designSections?: PluginDesignSectionContribution[];
+  npcInteractionOptions?: PluginNPCInteractionOptionContribution[];
 }
 
 export function createEmptyPluginShellContributionSet(): PluginShellContributionSet {
   return {
     projectSettings: [],
     designWorkspaces: [],
-    designSections: []
+    designSections: [],
+    npcInteractionOptions: []
   };
 }
 
@@ -56,6 +66,7 @@ export function collectPluginShellContributions(
     result.projectSettings.push(...(definition.projectSettings ?? []));
     result.designWorkspaces.push(...(definition.designWorkspaces ?? []));
     result.designSections.push(...(definition.designSections ?? []));
+    result.npcInteractionOptions.push(...(definition.npcInteractionOptions ?? []));
   }
 
   result.projectSettings.sort((left, right) => left.label.localeCompare(right.label));
@@ -64,6 +75,9 @@ export function collectPluginShellContributions(
     left.workspaceKind === right.workspaceKind
       ? left.label.localeCompare(right.label)
       : left.workspaceKind.localeCompare(right.workspaceKind)
+  );
+  result.npcInteractionOptions.sort((left, right) =>
+    left.label.localeCompare(right.label)
   );
 
   return result;

@@ -270,6 +270,10 @@ async function executePipeline(args: {
   const { execution, state, config, logger, stages } =
     args;
   const context = createTurnContext(execution.selection, config, state, logger);
+  const activeQuestDisplayName =
+    execution.runtimeContext?.trackedQuest?.displayName ??
+    execution.selection.activeQuest?.displayName ??
+    null;
 
   const { output: interpret, diagnostics: interpretDiagnostics } = await runStage(
     stages.interpret,
@@ -331,7 +335,7 @@ async function executePipeline(args: {
   if (state.consecutiveFallbackTurns >= 3) {
     finalText = buildTerminalFallbackReply({
       interpret,
-      activeQuestDisplayName: execution.selection.activeQuest?.displayName ?? null
+      activeQuestDisplayName
     });
     finalActionProposals = [
       ...repair.actionProposals.filter((proposal) => proposal.kind !== "request-close"),

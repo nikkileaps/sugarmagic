@@ -82,16 +82,12 @@ import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
 import {
-  installPluginId,
-  readInstalledPluginIds,
-  uninstallPluginId
-} from "./plugins/install-state";
-import {
   getStudioPluginWorkspaceDefinition,
   listStudioPluginWorkspaceDefinitions
 } from "./plugins/catalog";
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
+import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
 
 function revokeAssetSources(assetSources: Record<string, string>) {
   for (const url of Object.values(assetSources)) {
@@ -201,9 +197,7 @@ async function handleSave() {
     session.gameProject.pluginConfigurations,
     SUGARDEPLOY_PLUGIN_ID
   );
-  const canRunSugarDeploy =
-    sugarDeployConfiguration?.enabled === true &&
-    readInstalledPluginIds().includes(SUGARDEPLOY_PLUGIN_ID);
+  const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
   const deploymentPlan =
     canRunSugarDeploy && session.gameProject.deployment.deploymentTargetId
       ? planGameDeployment(session.gameProject)
@@ -435,9 +429,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [installedPluginIds, setInstalledPluginIds] = useState<string[]>(() =>
-    readInstalledPluginIds()
-  );
   const [assetSources, setAssetSources] = useState<Record<string, string>>({});
   const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
 
@@ -516,6 +507,10 @@ export function App() {
     if (!session) return [];
     return getAllPluginConfigurations(session);
   }, [session]);
+  const installedPluginIds = useMemo(
+    () => pluginConfigurations.map((configuration) => configuration.pluginId),
+    [pluginConfigurations]
+  );
 
   const discoveredPlugins = useMemo(() => listDiscoveredPluginDefinitions(), []);
   const installedPlugins = useMemo(
@@ -556,6 +551,10 @@ export function App() {
         (workspace) => studioPluginWorkspaceKinds.has(workspace.workspaceKind)
       ),
     [pluginShellContributions.designWorkspaces, studioPluginWorkspaceKinds]
+  );
+  const npcInteractionOptions = useMemo(
+    () => resolveNPCInteractionOptions(pluginShellContributions.npcInteractionOptions),
+    [pluginShellContributions.npcInteractionOptions]
   );
 
   useEffect(() => {
@@ -607,52 +606,48 @@ export function App() {
   }
 
   function handleInstallPlugin(pluginId: string) {
-    if (session && !getPluginConfiguration(pluginConfigurations, pluginId)) {
-      const configuration = ensureDiscoveredPluginConfiguration(
-        pluginConfigurations,
-        pluginId,
-        false
-      );
-      dispatchCommand({
-        kind: "UpdatePluginConfiguration",
-        target: {
-          aggregateKind: "plugin-config",
-          aggregateId: configuration.identity.id
-        },
-        subject: {
-          subjectKind: "plugin-configuration",
-          subjectId: configuration.identity.id
-        },
-        payload: {
-          configuration
-        }
-      });
-    }
-    setInstalledPluginIds((current) => installPluginId(current, pluginId));
+    if (!session) return;
+    if (getPluginConfiguration(pluginConfigurations, pluginId)) return;
+
+    const configuration = ensureDiscoveredPluginConfiguration(
+      pluginConfigurations,
+      pluginId,
+      false
+    );
+    dispatchCommand({
+      kind: "UpdatePluginConfiguration",
+      target: {
+        aggregateKind: "plugin-config",
+        aggregateId: configuration.identity.id
+      },
+      subject: {
+        subjectKind: "plugin-configuration",
+        subjectId: configuration.identity.id
+      },
+      payload: {
+        configuration
+      }
+    });
   }
 
   function handleUninstallPlugin(pluginId: string) {
     const configuration = getPluginConfiguration(pluginConfigurations, pluginId);
-    if (configuration?.enabled) {
-      dispatchCommand({
-        kind: "UpdatePluginConfiguration",
-        target: {
-          aggregateKind: "plugin-config",
-          aggregateId: configuration.identity.id
-        },
-        subject: {
-          subjectKind: "plugin-configuration",
-          subjectId: configuration.identity.id
-        },
-        payload: {
-          configuration: {
-            ...configuration,
-            enabled: false
-          }
-        }
-      });
-    }
-    setInstalledPluginIds((current) => uninstallPluginId(current, pluginId));
+    if (!configuration) return;
+
+    dispatchCommand({
+      kind: "DeletePluginConfiguration",
+      target: {
+        aggregateKind: "plugin-config",
+        aggregateId: configuration.identity.id
+      },
+      subject: {
+        subjectKind: "plugin-configuration",
+        subjectId: configuration.identity.id
+      },
+      payload: {
+        pluginId
+      }
+    });
   }
 
   useEffect(() => {
@@ -893,6 +888,7 @@ export function App() {
     dialogueDefinitions,
     questDefinitions,
     extraWorkspaceItems: renderablePluginWorkspaceItems,
+    npcInteractionOptions,
     contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
     assetSources,
@@ -960,7 +956,7 @@ export function App() {
             </Text>
             {installedPlugins.length === 0 ? (
               <Text size="sm" c="var(--sm-color-overlay0)">
-                No plugins installed in this editor app yet.
+                No plugins installed in this project yet.
               </Text>
             ) : (
               installedPlugins.map((plugin) => {

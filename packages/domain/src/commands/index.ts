@@ -101,6 +101,14 @@ export type DeleteSceneFolderCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateRegionMetadataCommand = SemanticCommandBase<
+  "UpdateRegionMetadata",
+  {
+    displayName?: string;
+    lorePageId?: string | null;
+  }
+>;
+
 export type CreateLandscapeChannelCommand = SemanticCommandBase<
   "CreateLandscapeChannel",
   {
@@ -412,6 +420,13 @@ export type UpdatePluginConfigurationCommand = SemanticCommandBase<
   }
 >;
 
+export type DeletePluginConfigurationCommand = SemanticCommandBase<
+  "DeletePluginConfiguration",
+  {
+    pluginId: string;
+  }
+>;
+
 export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
   "UpdateDeploymentSettings",
   {
@@ -428,6 +443,7 @@ export type SemanticCommand =
   | CreateSceneFolderCommand
   | RenameSceneFolderCommand
   | DeleteSceneFolderCommand
+  | UpdateRegionMetadataCommand
   | CreateLandscapeChannelCommand
   | UpdateLandscapeChannelCommand
   | TransformPlacedAssetCommand
@@ -467,6 +483,7 @@ export type SemanticCommand =
   | UpdatePlacedAssetInspectableCommand
   | RemovePlacedAssetInspectableCommand
   | UpdatePluginConfigurationCommand
+  | DeletePluginConfigurationCommand
   | UpdateDeploymentSettingsCommand;
 
 export {

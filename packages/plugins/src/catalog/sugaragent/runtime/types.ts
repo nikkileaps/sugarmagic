@@ -117,6 +117,7 @@ export type SocialMove =
   | "acknowledgement"
   | "smalltalk"
   | "farewell";
+export type ContextAnchor = "none" | "current_location";
 
 export interface ResolvedPrimaryReferent {
   text: string;
@@ -132,6 +133,7 @@ export interface TurnInterpretation {
   facet: QueryFacet;
   timeframe: QueryTimeframe;
   socialMove: SocialMove;
+  contextAnchor: ContextAnchor;
   declaredIdentityName: string | null;
   focusText: string;
   confidence: number;

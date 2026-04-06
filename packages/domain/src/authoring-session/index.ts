@@ -42,6 +42,7 @@ import type {
   UpdateSpellDefinitionCommand,
   UpdatePlayerDefinitionCommand,
   UpdatePluginConfigurationCommand,
+  DeletePluginConfigurationCommand,
   UpdateDeploymentSettingsCommand
 } from "../commands";
 import type {
@@ -55,6 +56,7 @@ import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
 import {
+  removePluginConfiguration,
   upsertPluginConfiguration,
   type PluginConfigurationRecord
 } from "../plugins";
@@ -109,6 +111,10 @@ function normalizeRegionDocument(
 
   return {
     ...region,
+    lorePageId:
+      typeof region.lorePageId === "string" && region.lorePageId.trim().length > 0
+        ? region.lorePageId.trim()
+        : null,
     scene: {
       folders: region.scene.folders,
       placedAssets: region.scene.placedAssets.map((asset) => ({
@@ -334,6 +340,30 @@ function applyUpdatePluginConfigurationCommand(
       pluginConfigurations: upsertPluginConfiguration(
         session.gameProject.pluginConfigurations,
         command.payload.configuration
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyDeletePluginConfigurationCommand(
+  session: AuthoringSession,
+  command: DeletePluginConfigurationCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    session.gameProject.identity.id
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      pluginConfigurations: removePluginConfiguration(
+        session.gameProject.pluginConfigurations,
+        command.payload.pluginId
       )
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
@@ -837,6 +867,10 @@ export function applyCommand(
 
   if (command.kind === "UpdatePluginConfiguration") {
     return applyUpdatePluginConfigurationCommand(session, command);
+  }
+
+  if (command.kind === "DeletePluginConfiguration") {
+    return applyDeletePluginConfigurationCommand(session, command);
   }
 
   if (command.kind === "UpdateDeploymentSettings") {

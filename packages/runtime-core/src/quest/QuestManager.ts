@@ -31,6 +31,7 @@ export interface QuestActiveObjectiveView {
 export interface QuestTrackerView {
   questDefinitionId: string;
   displayName: string;
+  stageId: string;
   stageDisplayName: string;
   objectives: QuestActiveObjectiveView[];
 }
@@ -397,6 +398,7 @@ export class QuestManager {
     return {
       questDefinitionId,
       displayName: definition.displayName,
+      stageId: stage.stageId,
       stageDisplayName: stage.displayName,
       objectives: this.getActiveObjectivesForStage(
         definition.definitionId,

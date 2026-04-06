@@ -4,6 +4,14 @@ import type {
   DialogueEdgeDefinition,
   DialogueNodeDefinition
 } from "@sugarmagic/domain";
+import type {
+  EntityLocationFact,
+  EntityPositionFact,
+  QuestActiveObjectivesFact,
+  QuestActiveStageFact,
+  TrackedQuestFact,
+  LocationReference
+} from "../state";
 
 export type ConversationKind = "scripted-dialogue" | "free-form" | "guided";
 export type ConversationInteractionMode = "scripted" | "agent" | "guided";
@@ -80,6 +88,18 @@ export interface ConversationExecutionContext {
   input: ConversationPlayerInput | null;
   state: Record<string, unknown>;
   annotations: Record<string, unknown>;
+  runtimeContext?: ConversationRuntimeContext;
+}
+
+export interface ConversationRuntimeContext {
+  here: LocationReference | null;
+  playerLocation: EntityLocationFact | null;
+  playerPosition: EntityPositionFact | null;
+  npcLocation: EntityLocationFact | null;
+  npcPosition: EntityPositionFact | null;
+  trackedQuest: TrackedQuestFact | null;
+  activeQuestStage: QuestActiveStageFact | null;
+  activeQuestObjectives: QuestActiveObjectivesFact | null;
 }
 
 export interface ConversationProviderContext {
@@ -196,6 +216,10 @@ export function createConversationHost(options: {
   );
   const middlewares = sortMiddlewares(options.middlewares ?? []);
 
+  function logDebug(event: string, payload?: Record<string, unknown>): void {
+    console.info(`[conversation-host] ${event}`, payload ?? {});
+  }
+
   let activeSession:
     | {
         provider: ConversationProvider;
@@ -209,8 +233,21 @@ export function createConversationHost(options: {
   async function resolveProvider(
     selection: ConversationSelectionContext
   ): Promise<ConversationProvider | null> {
+    logDebug("resolve-provider", {
+      conversationKind: selection.conversationKind,
+      interactionMode: selection.interactionMode ?? null,
+      npcDefinitionId: selection.npcDefinitionId ?? null,
+      providerIds: providers.map((provider) => provider.providerId)
+    });
     for (const provider of providers) {
-      if (await provider.canHandle(selection)) {
+      const canHandle = await provider.canHandle(selection);
+      logDebug("provider-can-handle", {
+        providerId: provider.providerId,
+        canHandle,
+        conversationKind: selection.conversationKind,
+        interactionMode: selection.interactionMode ?? null
+      });
+      if (canHandle) {
         return provider;
       }
     }
@@ -223,9 +260,21 @@ export function createConversationHost(options: {
 
       const provider = await resolveProvider(selection);
       if (!provider) {
+        logDebug("start-session-no-provider", {
+          conversationKind: selection.conversationKind,
+          interactionMode: selection.interactionMode ?? null,
+          npcDefinitionId: selection.npcDefinitionId ?? null
+        });
         currentTurn = null;
         return null;
       }
+
+      logDebug("start-session-provider-selected", {
+        providerId: provider.providerId,
+        conversationKind: selection.conversationKind,
+        interactionMode: selection.interactionMode ?? null,
+        npcDefinitionId: selection.npcDefinitionId ?? null
+      });
 
       const execution = await prepareExecutionContext(middlewares, {
         selection,
@@ -239,6 +288,12 @@ export function createConversationHost(options: {
         execution
       });
       if (!start) {
+        logDebug("start-session-provider-returned-null", {
+          providerId: provider.providerId,
+          conversationKind: selection.conversationKind,
+          interactionMode: selection.interactionMode ?? null,
+          npcDefinitionId: selection.npcDefinitionId ?? null
+        });
         currentTurn = null;
         return null;
       }
@@ -251,6 +306,21 @@ export function createConversationHost(options: {
       };
 
       currentTurn = await finalizeTurn(middlewares, execution, start.initialTurn);
+      if (!currentTurn) {
+        logDebug("start-session-finalize-returned-null", {
+          providerId: provider.providerId,
+          conversationKind: selection.conversationKind,
+          interactionMode: selection.interactionMode ?? null,
+          npcDefinitionId: selection.npcDefinitionId ?? null
+        });
+      } else {
+        logDebug("start-session-finalized-turn", {
+          providerId: provider.providerId,
+          speakerLabel: currentTurn.speakerLabel ?? null,
+          displayName: currentTurn.displayName ?? null,
+          textPreview: currentTurn.text.slice(0, 120)
+        });
+      }
       return currentTurn;
     },
 

@@ -19,14 +19,12 @@ import {
   type ConversationActionProposal,
   type ConversationMiddleware,
   type ConversationProvider,
+  type ConversationRuntimeContext,
   type ConversationSelectionContext,
   createRuntimeDialoguePanel,
   DialogueManager
 } from "../dialogue";
-import {
-  createDocumentDefinitionFromItem,
-  createRuntimeDocumentReaderUI
-} from "../document";
+import { createDocumentDefinitionFromItem, createRuntimeDocumentReaderUI } from "../document";
 import { type RuntimeInputManager } from "../input";
 import {
   createRuntimeInventoryUI,
@@ -49,6 +47,25 @@ import {
 import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
 import type { RuntimePluginManager } from "../plugins";
 import { RuntimePluginSystem } from "../plugins";
+import {
+  clearActiveQuestObjectives,
+  clearActiveQuestStage,
+  clearTrackedQuest,
+  createRuntimeBlackboard,
+  getActiveQuestObjectives,
+  getActiveQuestStage,
+  getEntityLocation,
+  getEntityPosition,
+  getTrackedQuest as getTrackedQuestFact,
+  setActiveQuestObjectives,
+  setActiveQuestStage,
+  setEntityLocation,
+  setEntityPosition,
+  setTrackedQuest,
+  type LocationReference,
+  type RuntimeBlackboard
+} from "../state";
+import { PlayerControlled } from "../ecs";
 
 export interface RuntimeSpellCastFeedback {
   spellDefinitionId: string;
@@ -86,6 +103,7 @@ export interface RuntimeGameplaySessionController {
   readonly questManager: QuestManager;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
+  readonly blackboard: RuntimeBlackboard;
   update: () => void;
   dispose: () => void;
 }
@@ -145,6 +163,7 @@ export function createRuntimeGameplaySessionController(
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
+  const blackboard = createRuntimeBlackboard();
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
     pluginManager?.getContributions("conversation.provider").map(
@@ -167,6 +186,161 @@ export function createRuntimeGameplaySessionController(
     { documentDefinitionId: string; promptText: string; entity: number }
   >();
   let pendingScriptedFollowupDialogueId: string | null = null;
+  let lastTrackedQuestDefinitionId: string | null = null;
+
+  function logConversationDebug(
+    event: string,
+    payload?: Record<string, unknown>
+  ) {
+    console.info(`[runtime-core] ${event}`, payload ?? {});
+  }
+
+  function buildActiveRegionLocationReference(): LocationReference | null {
+    if (!activeRegion) {
+      return null;
+    }
+
+    return {
+      regionId: activeRegion.identity.id,
+      regionDisplayName: activeRegion.displayName,
+      regionLorePageId: activeRegion.lorePageId ?? null,
+      sceneId: null,
+      sceneDisplayName: null
+    };
+  }
+
+  function resolvePlayerPositionTuple(): [number, number, number] {
+    const runtimePlayerEntity =
+      world.query(PlayerControlled, Position)[0] ?? null;
+    if (runtimePlayerEntity !== null) {
+      const runtimePosition = world.getComponent(runtimePlayerEntity, Position);
+      if (runtimePosition) {
+        return [runtimePosition.x, runtimePosition.y, runtimePosition.z];
+      }
+    }
+
+    return activeRegion?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+  }
+
+  function syncBlackboardSpatialFacts() {
+    const region = activeRegion;
+    const currentLocation = buildActiveRegionLocationReference();
+    if (!currentLocation || !region) {
+      return;
+    }
+
+    const [playerX, playerY, playerZ] = resolvePlayerPositionTuple();
+    setEntityPosition(blackboard, {
+      entityId: playerDefinition.definitionId,
+      x: playerX,
+      y: playerY,
+      z: playerZ,
+      regionId: currentLocation.regionId,
+      sceneId: currentLocation.sceneId
+    });
+    setEntityLocation(blackboard, {
+      entityId: playerDefinition.definitionId,
+      location: currentLocation
+    });
+
+    for (const presence of region.scene.npcPresences) {
+      const [x, y, z] = presence.transform.position;
+      setEntityPosition(blackboard, {
+        entityId: presence.npcDefinitionId,
+        x,
+        y,
+        z,
+        regionId: currentLocation.regionId,
+        sceneId: currentLocation.sceneId
+      });
+      setEntityLocation(blackboard, {
+        entityId: presence.npcDefinitionId,
+        location: currentLocation
+      });
+    }
+  }
+
+  function syncBlackboardQuestFacts() {
+    const trackedQuest = questManager.getTrackedQuest();
+    if (!trackedQuest) {
+      if (lastTrackedQuestDefinitionId) {
+        clearActiveQuestStage(blackboard, lastTrackedQuestDefinitionId);
+        clearActiveQuestObjectives(blackboard, lastTrackedQuestDefinitionId);
+      }
+      clearTrackedQuest(blackboard);
+      lastTrackedQuestDefinitionId = null;
+      return;
+    }
+
+    if (
+      lastTrackedQuestDefinitionId &&
+      lastTrackedQuestDefinitionId !== trackedQuest.questDefinitionId
+    ) {
+      clearActiveQuestStage(blackboard, lastTrackedQuestDefinitionId);
+      clearActiveQuestObjectives(blackboard, lastTrackedQuestDefinitionId);
+    }
+
+    setTrackedQuest(blackboard, {
+      questId: trackedQuest.questDefinitionId,
+      displayName: trackedQuest.displayName
+    });
+    setActiveQuestStage(blackboard, {
+      questId: trackedQuest.questDefinitionId,
+      stageId: trackedQuest.stageId,
+      stageDisplayName: trackedQuest.stageDisplayName
+    });
+    setActiveQuestObjectives(blackboard, {
+      questId: trackedQuest.questDefinitionId,
+      displayName: trackedQuest.displayName,
+      stageId: trackedQuest.stageId,
+      stageDisplayName: trackedQuest.stageDisplayName,
+      objectives: trackedQuest.objectives.map((objective) => ({
+        nodeId: objective.nodeId,
+        displayName: objective.displayName,
+        description: objective.description
+      }))
+    });
+    lastTrackedQuestDefinitionId = trackedQuest.questDefinitionId;
+  }
+
+  const runtimeBlackboardConversationMiddleware: ConversationMiddleware = {
+    middlewareId: "runtime.blackboard-context",
+    displayName: "Runtime Blackboard Context",
+    priority: -100,
+    stage: "context",
+    prepare(context) {
+      const trackedQuest = getTrackedQuestFact(blackboard);
+      const activeQuestStage =
+        trackedQuest ? getActiveQuestStage(blackboard, trackedQuest.questId) : null;
+      const activeQuestObjectives =
+        trackedQuest ? getActiveQuestObjectives(blackboard, trackedQuest.questId) : null;
+      const playerLocation = getEntityLocation(blackboard, playerDefinition.definitionId);
+      const playerPosition = getEntityPosition(blackboard, playerDefinition.definitionId);
+      const npcLocation =
+        context.selection.npcDefinitionId
+          ? getEntityLocation(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const npcPosition =
+        context.selection.npcDefinitionId
+          ? getEntityPosition(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const runtimeContext: ConversationRuntimeContext = {
+        here: playerLocation?.location ?? npcLocation?.location ?? buildActiveRegionLocationReference(),
+        playerLocation,
+        playerPosition,
+        npcLocation,
+        npcPosition,
+        trackedQuest,
+        activeQuestStage,
+        activeQuestObjectives
+      };
+
+      return {
+        ...context,
+        runtimeContext
+      };
+    }
+  };
 
   function resolveSpeakerName(speakerId: string): string | undefined {
     if (speakerId === playerDefinition.definitionId) {
@@ -214,26 +388,45 @@ export function createRuntimeGameplaySessionController(
     const npcDefinition =
       npcDefinitions.find((candidate) => candidate.definitionId === npcDefinitionId) ??
       null;
-    if (!npcDefinition) return null;
+    if (!npcDefinition) {
+      logConversationDebug("conversation-selection-missing-npc", {
+        npcDefinitionId
+      });
+      return null;
+    }
 
     if (npcDefinition.interactionMode === "scripted") {
       const dialogueDefinitionId =
         questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
-      if (!dialogueDefinitionId) return null;
-      return {
+      if (!dialogueDefinitionId) {
+        logConversationDebug("conversation-selection-scripted-missing-dialogue", {
+          npcDefinitionId,
+          interactionMode: npcDefinition.interactionMode
+        });
+        return null;
+      }
+      const selection: ConversationSelectionContext = {
         conversationKind: "scripted-dialogue",
         dialogueDefinitionId,
         npcDefinitionId,
         npcDisplayName: npcDefinition.displayName,
         interactionMode: "scripted"
       };
+      logConversationDebug("conversation-selection-resolved", {
+        npcDefinitionId,
+        npcDisplayName: npcDefinition.displayName,
+        interactionMode: npcDefinition.interactionMode,
+        conversationKind: selection.conversationKind,
+        dialogueDefinitionId
+      });
+      return selection;
     }
 
     const trackedQuest = questManager.getTrackedQuest();
     const dialogueDefinitionId =
       questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
 
-    return {
+    const selection: ConversationSelectionContext = {
       conversationKind:
         npcDefinition.interactionMode === "guided" ? "guided" : "free-form",
       dialogueDefinitionId:
@@ -256,6 +449,16 @@ export function createRuntimeGameplaySessionController(
         : null,
       scriptedFollowupDialogueDefinitionId: dialogueDefinitionId
     };
+    logConversationDebug("conversation-selection-resolved", {
+      npcDefinitionId,
+      npcDisplayName: npcDefinition.displayName,
+      interactionMode: npcDefinition.interactionMode,
+      conversationKind: selection.conversationKind,
+      dialogueDefinitionId: selection.dialogueDefinitionId ?? null,
+      lorePageId: selection.lorePageId ?? null,
+      hasActiveQuest: Boolean(selection.activeQuest?.displayName)
+    });
+    return selection;
   }
 
   function handleConversationActionProposal(
@@ -422,7 +625,10 @@ export function createRuntimeGameplaySessionController(
   dialogueManager.registerDefinitions(dialogueDefinitions);
   dialogueManager.setSpeakerNameResolver(resolveSpeakerName);
   dialogueManager.setConversationProviders(conversationProviders);
-  dialogueManager.setConversationMiddlewares(conversationMiddlewares);
+  dialogueManager.setConversationMiddlewares([
+    runtimeBlackboardConversationMiddleware,
+    ...conversationMiddlewares
+  ]);
   dialogueManager.setOnStart(() => {
     inputManager.addMovementLock(DIALOGUE_LOCK_ID);
     inputManager.consumeInteract();
@@ -500,6 +706,7 @@ export function createRuntimeGameplaySessionController(
   });
   questManager.setStateChangeHandler(() => {
     syncQuestUi();
+    syncBlackboardQuestFacts();
     syncNpcInteractionAvailability();
     syncInteractionPrompt();
   });
@@ -591,6 +798,11 @@ export function createRuntimeGameplaySessionController(
   });
 
   interactionSystem.setInteractPressedProvider(() => {
+    const interactPressed = inputManager.isInteractPressed();
+    if (!interactPressed) {
+      return false;
+    }
+
     if (
       dialogueManager.isDialogueActive() ||
       questJournal.isOpen() ||
@@ -599,17 +811,46 @@ export function createRuntimeGameplaySessionController(
       itemViewUi.isOpen() ||
       documentReaderUi.isOpen()
     ) {
+      logConversationDebug("interact-press-blocked", {
+        dialogueActive: dialogueManager.isDialogueActive(),
+        questJournalOpen: questJournal.isOpen(),
+        spellMenuOpen: spellMenuUi.isOpen(),
+        inventoryOpen: inventoryUi.isOpen(),
+        itemViewOpen: itemViewUi.isOpen(),
+        documentReaderOpen: documentReaderUi.isOpen()
+      });
       return false;
     }
-    return inputManager.isInteractPressed();
+
+    logConversationDebug("interact-press-accepted", {
+      nearestInteractable: interactionSystem.getNearestInteractable()
+    });
+    return true;
   });
-  interactionSystem.setNearbyChangeHandler(() => {
+  interactionSystem.setNearbyChangeHandler((nearby) => {
+    logConversationDebug("nearby-interactable-changed", {
+      nearby
+    });
     syncInteractionPrompt();
   });
   interactionSystem.setInteractHandler((nearby) => {
+    logConversationDebug("interact-handler-invoked", {
+      nearby
+    });
     if (nearby.type === "npc") {
       const selection = resolveNpcConversationSelection(nearby.targetId);
-      if (!selection) return;
+      if (!selection) {
+        logConversationDebug("conversation-start-aborted-no-selection", {
+          nearby
+        });
+        return;
+      }
+      logConversationDebug("conversation-start-requested", {
+        npcDefinitionId: selection.npcDefinitionId ?? null,
+        npcDisplayName: selection.npcDisplayName ?? null,
+        conversationKind: selection.conversationKind,
+        interactionMode: selection.interactionMode ?? null
+      });
       void dialogueManager.startConversation(selection);
       return;
     }
@@ -670,6 +911,8 @@ export function createRuntimeGameplaySessionController(
   registerItemInteractables();
   registerInspectableInteractables();
   questDialogueCoordinator.startInitialQuests();
+  syncBlackboardSpatialFacts();
+  syncBlackboardQuestFacts();
   syncInventoryUi();
   syncQuestUi();
   syncNpcInteractionAvailability();
@@ -681,7 +924,10 @@ export function createRuntimeGameplaySessionController(
     questManager,
     interactionSystem,
     questSystem,
+    blackboard,
     update() {
+      blackboard.advanceFrame();
+      syncBlackboardSpatialFacts();
       spellMenuUi.update();
     },
     dispose() {

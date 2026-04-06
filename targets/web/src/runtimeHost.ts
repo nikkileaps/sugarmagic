@@ -647,6 +647,17 @@ export function createWebRuntimeHost(
       state.pluginConfigurations,
       state.pluginRuntimeEnvironment ?? {},
     );
+    console.info("[web-runtime] plugin-bootstrap", {
+      installedPluginIds: state.installedPluginIds,
+      pluginConfigurations: state.pluginConfigurations.map((configuration) => ({
+        pluginId: configuration.pluginId,
+        enabled: configuration.enabled
+      })),
+      runtimePluginIds: pluginManager.getPlugins().map((plugin) => plugin.pluginId),
+      conversationProviderContributionIds: pluginManager
+        .getContributions("conversation.provider")
+        .map((contribution) => contribution.payload.providerId)
+    });
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,

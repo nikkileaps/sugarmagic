@@ -101,6 +101,7 @@ export interface RegionGameplayPlacement {
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
+  lorePageId?: string | null;
   placement: RegionPlacement;
   scene: {
     folders: RegionSceneFolder[];
