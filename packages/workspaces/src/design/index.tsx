@@ -9,11 +9,13 @@ import type {
   NPCInteractionMode,
   PlayerDefinition,
   QuestDefinition,
+  RegionDocument,
   SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
 import type { DesignWorkspaceKind } from "@sugarmagic/shell";
+import type { WorkspaceNavigationTarget } from "../workspace-view";
 import type {
   ItemWorkspaceViewport,
   NPCWorkspaceViewport,
@@ -41,6 +43,7 @@ export interface DesignProductModeViewProps {
   activeDesignKind: DesignWorkspaceKind;
   viewportReadyVersion: number;
   gameProjectId: string | null;
+  regions: RegionDocument[];
   playerDefinition: PlayerDefinition | null;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -67,6 +70,9 @@ export interface DesignProductModeViewProps {
   getViewportElement: () => HTMLElement | null;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
+  navigationTarget?: WorkspaceNavigationTarget | null;
+  onConsumeNavigationTarget?: () => void;
+  onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
 }
 
 export interface DesignProductModeViewResult {
@@ -84,6 +90,7 @@ export function useDesignProductModeView(
     activeDesignKind,
     viewportReadyVersion,
     gameProjectId,
+    regions,
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -101,7 +108,10 @@ export function useDesignProductModeView(
     getNPCViewport,
     getViewportElement,
     onSelectKind,
-    onCommand
+    onCommand,
+    navigationTarget,
+    onConsumeNavigationTarget,
+    onNavigateToTarget
   } = props;
 
   const playerView = usePlayerWorkspaceView({
@@ -174,11 +184,15 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "quests",
     gameProjectId,
     questDefinitions,
+    regions,
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,
     spellDefinitions,
-    onCommand
+    onCommand,
+    navigationTarget,
+    onConsumeNavigationTarget,
+    onNavigateToTarget
   });
 
   const allWorkspaceKinds: BuildWorkspaceKindItem[] = [

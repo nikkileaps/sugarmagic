@@ -46,8 +46,7 @@ const SUGARAGENT_STATE_KEY = "sugaragent.session";
 
 function isAgentSelection(selection: ConversationProviderContext["selection"]): boolean {
   return (
-    (selection.conversationKind === "free-form" ||
-      selection.conversationKind === "guided") &&
+    selection.conversationKind === "free-form" &&
     typeof selection.npcDefinitionId === "string"
   );
 }

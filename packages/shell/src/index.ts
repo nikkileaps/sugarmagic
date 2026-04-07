@@ -27,6 +27,7 @@ export type BuildWorkspaceKind =
   | "layout"
   | "landscape"
   | "spatial"
+  | "behavior"
   | "environment"
   | "assets";
 export type CoreDesignWorkspaceKind =

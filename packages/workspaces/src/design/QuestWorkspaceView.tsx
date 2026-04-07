@@ -27,6 +27,7 @@ import type {
   QuestNodeBehavior,
   QuestNodeDefinition,
   QuestStageDefinition,
+  RegionDocument,
   SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
@@ -37,7 +38,10 @@ import {
   createQuestNodeId
 } from "@sugarmagic/domain";
 import { GraphCanvas, Inspector, type GraphCanvasEdge, type GraphCanvasNode } from "@sugarmagic/ui";
-import type { WorkspaceViewContribution } from "../workspace-view";
+import type {
+  WorkspaceNavigationTarget,
+  WorkspaceViewContribution
+} from "../workspace-view";
 
 const NODE_SPACING_Y = 150;
 
@@ -61,11 +65,15 @@ export interface QuestWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   questDefinitions: QuestDefinition[];
+  regions: RegionDocument[];
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
   spellDefinitions: SpellDefinition[];
   onCommand: (command: SemanticCommand) => void;
+  navigationTarget?: WorkspaceNavigationTarget | null;
+  onConsumeNavigationTarget?: () => void;
+  onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
 }
 
 function validateQuest(quest: QuestDefinition): string[] {
@@ -522,11 +530,15 @@ export function useQuestWorkspaceView({
   isActive,
   gameProjectId,
   questDefinitions,
+  regions,
   dialogueDefinitions,
   itemDefinitions,
   npcDefinitions,
   spellDefinitions,
-  onCommand
+  onCommand,
+  navigationTarget = null,
+  onConsumeNavigationTarget,
+  onNavigateToTarget
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(
@@ -567,6 +579,61 @@ export function useQuestWorkspaceView({
     () => selectedStage?.nodeDefinitions.find((node) => node.nodeId === selectedNodeId) ?? null,
     [selectedStage, selectedNodeId]
   );
+
+  const linkedBehaviorsByStageId = useMemo(() => {
+    const links = new Map<
+      string,
+      Array<{
+        regionId: string;
+        regionDisplayName: string;
+        behaviorId: string;
+        behaviorDisplayName: string;
+        taskId: string;
+        taskDisplayName: string;
+        npcDisplayName: string;
+      }>
+    >();
+
+    for (const region of regions) {
+      for (const behavior of region.behaviors) {
+        const npcDisplayName =
+          npcDefinitions.find((npc) => npc.definitionId === behavior.npcDefinitionId)
+            ?.displayName ?? "NPC";
+        for (const task of behavior.tasks) {
+          if (task.activation.questDefinitionId !== effectiveSelectedQuestId) {
+            continue;
+          }
+          const stageKey = task.activation.questStageId ?? "__quest__";
+          const stageLinks = links.get(stageKey) ?? [];
+          stageLinks.push({
+            regionId: region.identity.id,
+            regionDisplayName: region.displayName,
+            behaviorId: behavior.behaviorId,
+            behaviorDisplayName: behavior.displayName,
+            taskId: task.taskId,
+            taskDisplayName: task.displayName,
+            npcDisplayName
+          });
+          links.set(stageKey, stageLinks);
+        }
+      }
+    }
+
+    return links;
+  }, [effectiveSelectedQuestId, npcDefinitions, regions]);
+
+  useEffect(() => {
+    if (navigationTarget?.kind !== "quest-stage") {
+      return;
+    }
+
+    queueMicrotask(() => {
+      setSelectedQuestId(navigationTarget.questDefinitionId);
+      setGraphStageId(navigationTarget.stageId);
+      setSelectedNodeId(null);
+      onConsumeNavigationTarget?.();
+    });
+  }, [navigationTarget, onConsumeNavigationTarget]);
 
   useEffect(() => {
     selectedQuestRef.current = selectedQuest;
@@ -942,6 +1009,11 @@ export function useQuestWorkspaceView({
                       {selectedQuest.startStageId === stage.stageId && <Text c="#a6e3a1">▶</Text>}
                       <Text fw={600}>{stage.displayName}</Text>
                       <Badge size="xs" variant="light">{stage.nodeDefinitions.length} nodes</Badge>
+                      {(linkedBehaviorsByStageId.get(stage.stageId)?.length ?? 0) > 0 && (
+                        <Badge size="xs" variant="light" color="grape">
+                          {linkedBehaviorsByStageId.get(stage.stageId)?.length} linked tasks
+                        </Badge>
+                      )}
                     </Group>
                     <MiniStageGraph stage={stage} />
                     {stage.nextStageId && <Text size="xs" c="dimmed">Next → {selectedQuest.stageDefinitions.find((candidate) => candidate.stageId === stage.nextStageId)?.displayName ?? stage.nextStageId}</Text>}
@@ -953,6 +1025,26 @@ export function useQuestWorkspaceView({
                     <Button size="xs" variant="subtle" onClick={() => { setGraphStageId(null); setSelectedNodeId(null); }}>
                       Select
                     </Button>
+                    {(linkedBehaviorsByStageId.get(stage.stageId)?.length ?? 0) > 0 && (
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        onClick={() => {
+                          const firstLinkedTask = linkedBehaviorsByStageId.get(stage.stageId)?.[0];
+                          if (!firstLinkedTask) {
+                            return;
+                          }
+                          onNavigateToTarget?.({
+                            kind: "behavior-task",
+                            regionId: firstLinkedTask.regionId,
+                            behaviorId: firstLinkedTask.behaviorId,
+                            taskId: firstLinkedTask.taskId
+                          });
+                        }}
+                      >
+                        Open Linked Task
+                      </Button>
+                    )}
                   </Group>
                 </Group>
                 {index < selectedQuest.stageDefinitions.length - 1 && (
@@ -1015,6 +1107,45 @@ export function useQuestWorkspaceView({
             checked={selectedQuest.repeatable}
             onChange={(event) => commitQuest({ ...selectedQuest, repeatable: event.currentTarget.checked })}
           />
+          <Stack gap="xs">
+            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              Linked Behavior Tasks
+            </Text>
+            {(linkedBehaviorsByStageId.get("__quest__")?.length ?? 0) === 0 ? (
+              <Text size="xs" c="dimmed">
+                No region behavior tasks currently reference this quest outside a specific stage.
+              </Text>
+            ) : (
+              linkedBehaviorsByStageId.get("__quest__")!.map((link) => (
+                <Paper key={`${link.regionId}:${link.behaviorId}:${link.taskId}`} p="xs" style={{ background: "#181825" }}>
+                  <Group justify="space-between" align="center" gap="xs">
+                    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+                      <Text size="xs" fw={600} truncate>
+                        {link.taskDisplayName}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {link.npcDisplayName} · {link.regionDisplayName}
+                      </Text>
+                    </Stack>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      onClick={() =>
+                        onNavigateToTarget?.({
+                          kind: "behavior-task",
+                          regionId: link.regionId,
+                          behaviorId: link.behaviorId,
+                          taskId: link.taskId
+                        })
+                      }
+                    >
+                      Open
+                    </Button>
+                  </Group>
+                </Paper>
+              ))
+            )}
+          </Stack>
         </Stack>
       )}
 
@@ -1044,6 +1175,45 @@ export function useQuestWorkspaceView({
               commitQuest({ ...selectedQuest, startStageId: selectedStage.stageId });
             }}
           />
+          <Stack gap="xs">
+            <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              Linked Behavior Tasks
+            </Text>
+            {(linkedBehaviorsByStageId.get(selectedStage.stageId)?.length ?? 0) === 0 ? (
+              <Text size="xs" c="dimmed">
+                No NPC behavior tasks currently reference this quest stage.
+              </Text>
+            ) : (
+              linkedBehaviorsByStageId.get(selectedStage.stageId)!.map((link) => (
+                <Paper key={`${link.regionId}:${link.behaviorId}:${link.taskId}`} p="xs" style={{ background: "#181825" }}>
+                  <Group justify="space-between" align="center" gap="xs">
+                    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+                      <Text size="xs" fw={600} truncate>
+                        {link.taskDisplayName}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {link.npcDisplayName} · {link.regionDisplayName}
+                      </Text>
+                    </Stack>
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      onClick={() =>
+                        onNavigateToTarget?.({
+                          kind: "behavior-task",
+                          regionId: link.regionId,
+                          behaviorId: link.behaviorId,
+                          taskId: link.taskId
+                        })
+                      }
+                    >
+                      Open
+                    </Button>
+                  </Group>
+                </Paper>
+              ))
+            )}
+          </Stack>
           <Button
             color="red"
             variant="light"

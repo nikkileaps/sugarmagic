@@ -17,7 +17,9 @@ import {
   createRegionItemPresence,
   createDefaultRegionLandscapeState,
   createDefaultRegionLandscapeChannels,
-  createRegionAreaDefinition
+  createRegionAreaDefinition,
+  createRegionNPCBehaviorDefinition,
+  createRegionNPCBehaviorTask
 } from "../region-authoring";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -51,7 +53,10 @@ import type {
   ContentLibrarySnapshot,
   EnvironmentDefinition
 } from "../content-library";
-import type { NPCDefinition } from "../npc-definition";
+import {
+  normalizeNPCDefinitionForWrite,
+  type NPCDefinition
+} from "../npc-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
@@ -146,7 +151,70 @@ function normalizeRegionDocument(
         parentAreaId:
           typeof area.parentAreaId === "string" && area.parentAreaId.trim().length > 0
             ? area.parentAreaId.trim()
-            : null
+          : null
+      })
+    ),
+    behaviors: (region.behaviors ?? []).map((behavior) =>
+      createRegionNPCBehaviorDefinition({
+        ...behavior,
+        displayName:
+          typeof behavior.displayName === "string" && behavior.displayName.trim().length > 0
+            ? behavior.displayName.trim()
+            : undefined,
+        tasks: (behavior.tasks ?? []).map((task) =>
+          createRegionNPCBehaviorTask({
+            ...task,
+            displayName:
+              typeof task.displayName === "string" && task.displayName.trim().length > 0
+                ? task.displayName.trim()
+                : undefined,
+            description:
+              typeof task.description === "string" && task.description.trim().length > 0
+                ? task.description
+                : null,
+            currentActivity:
+              typeof task.currentActivity === "string" &&
+              task.currentActivity.trim().length > 0
+                ? task.currentActivity.trim()
+                : undefined,
+            currentGoal:
+              typeof task.currentGoal === "string" &&
+              task.currentGoal.trim().length > 0
+                ? task.currentGoal.trim()
+                : undefined,
+            targetAreaId:
+              typeof task.targetAreaId === "string" &&
+              task.targetAreaId.trim().length > 0
+                ? task.targetAreaId.trim()
+                : null,
+            activation: {
+              questDefinitionId:
+                typeof task.activation?.questDefinitionId === "string" &&
+                task.activation.questDefinitionId.trim().length > 0
+                  ? task.activation.questDefinitionId.trim()
+                  : null,
+              questStageId:
+                typeof task.activation?.questStageId === "string" &&
+                task.activation.questStageId.trim().length > 0
+                  ? task.activation.questStageId.trim()
+                  : null,
+              worldFlagEquals:
+                typeof task.activation?.worldFlagEquals?.key === "string" &&
+                task.activation.worldFlagEquals.key.trim().length > 0
+                  ? {
+                      key: task.activation.worldFlagEquals.key.trim(),
+                      valueType:
+                        task.activation.worldFlagEquals.valueType ?? "boolean",
+                      value:
+                        typeof task.activation.worldFlagEquals.value === "string" &&
+                        task.activation.worldFlagEquals.value.trim().length > 0
+                          ? task.activation.worldFlagEquals.value.trim()
+                          : null
+                    }
+                  : null
+            }
+          })
+        )
       })
     ),
     landscape: createDefaultRegionLandscapeState({
@@ -433,18 +501,18 @@ function applyCreateNPCDefinitionCommand(
   session: AuthoringSession,
   command: CreateNPCDefinitionCommand
 ): AuthoringSession {
+  const normalizedDefinition = normalizeNPCDefinitionForWrite(
+    command.payload.definition
+  );
   const transaction = createTransactionForCommand(command, [
-    command.payload.definition.definitionId
+    normalizedDefinition.definitionId
   ]);
 
   return {
     ...session,
     gameProject: {
       ...session.gameProject,
-      npcDefinitions: [
-        ...session.gameProject.npcDefinitions,
-        command.payload.definition
-      ]
+      npcDefinitions: [...session.gameProject.npcDefinitions, normalizedDefinition]
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -577,13 +645,16 @@ function applyUpdateNPCDefinitionCommand(
   session: AuthoringSession,
   command: UpdateNPCDefinitionCommand
 ): AuthoringSession {
+  const normalizedDefinition = normalizeNPCDefinitionForWrite(
+    command.payload.definition
+  );
   const nextDefinitions = session.gameProject.npcDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
+    definition.definitionId === normalizedDefinition.definitionId
+      ? normalizedDefinition
       : definition
   );
   const transaction = createTransactionForCommand(command, [
-    command.payload.definition.definitionId
+    normalizedDefinition.definitionId
   ]);
 
   return {

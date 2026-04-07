@@ -43,6 +43,7 @@ function makeRegion(): RegionDocument {
     scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [], itemPresences: [] },
     environmentBinding: { defaultEnvironmentId: "project:environment:night" },
     areas: [],
+    behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []

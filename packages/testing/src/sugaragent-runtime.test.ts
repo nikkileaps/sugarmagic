@@ -266,16 +266,16 @@ describe("SugarAgent runtime provider", () => {
     expect(host.isSessionActive()).toBe(false);
   });
 
-  it("surfaces scripted followup proposals for guided interactions", async () => {
+  it("surfaces scripted followup proposals for agent interactions", async () => {
     const host = createConversationHost({
       providers: [resolveSugarAgentProvider()]
     });
 
     await host.startSession({
-      conversationKind: "guided",
+      conversationKind: "free-form",
       npcDefinitionId: "npc:guard",
       npcDisplayName: "Captain Vale",
-      interactionMode: "guided",
+      interactionMode: "agent",
       lorePageId: "root.characters.captain_vale",
       scriptedFollowupDialogueDefinitionId: "dialogue:diamond-briefing",
       activeQuest: {
@@ -505,6 +505,18 @@ describe("SugarAgent runtime provider", () => {
             npcPosition: null,
             npcArea: null,
             npcPlayerRelation: null,
+            npcBehavior: {
+              movement: null,
+              task: {
+                npcDefinitionId: "npc:rick-roll",
+                taskId: "task:unpack-cheese",
+                displayName: "Unpack Cheese Delivery",
+                description:
+                  "Rick is sorting through fresh cheese wheels outside before carrying them into the shop."
+              },
+              activity: null,
+              goal: null
+            },
             trackedQuest: null,
             activeQuestStage: null,
             activeQuestObjectives: null
@@ -552,6 +564,20 @@ describe("SugarAgent runtime provider", () => {
           ?.Retrieve?.payload?.currentLocationDisplayName
       )
     ).toBe("Earendale Square");
+    expect(
+      (
+        (reply?.diagnostics?.stages as Record<string, { payload?: Record<string, unknown> }> | undefined)
+          ?.Retrieve?.payload?.currentTaskDisplayName
+      )
+    ).toBe("Unpack Cheese Delivery");
+    expect(
+      (
+        (reply?.diagnostics?.stages as Record<string, { payload?: Record<string, unknown> }> | undefined)
+          ?.Generate?.payload?.currentTaskDescription
+      )
+    ).toBe(
+      "Rick is sorting through fresh cheese wheels outside before carrying them into the shop."
+    );
   });
 
   it("retries transient Anthropic overloads, then exits politely and closes the conversation", async () => {

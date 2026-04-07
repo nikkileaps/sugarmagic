@@ -102,6 +102,7 @@ function makeRegion(): RegionDocument {
         }
       }
     ],
+    behaviors: [],
     landscape: {
       enabled: false,
       size: 100,

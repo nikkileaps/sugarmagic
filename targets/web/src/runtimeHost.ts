@@ -512,7 +512,15 @@ export function createWebRuntimeHost(
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
     world.update(delta);
-    gameplaySession?.update();
+    gameplaySession?.update(delta);
+
+    for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
+      const entry = sceneObjectEntries.get(snapshot.presenceId);
+      if (!entry) {
+        continue;
+      }
+      entry.root.position.set(...snapshot.position);
+    }
 
     const playerEntities = world.query(PlayerControlled, Position);
     if (playerEntities.length > 0) {

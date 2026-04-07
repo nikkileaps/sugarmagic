@@ -20,3 +20,5 @@ export interface WorkspaceViewContribution {
   centerPanel?: ReactNode;
   viewportOverlay: ReactNode;
 }
+
+export type { WorkspaceNavigationTarget } from "./workspace-navigation";
