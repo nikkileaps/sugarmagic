@@ -57,11 +57,33 @@ function buildCurrentLocationEvidence(
     locationSegments.push(`It is within ${currentLocation.parentArea.displayName}.`);
   }
   const npcPlayerRelation = execution.runtimeContext?.npcPlayerRelation;
+  const npcBehavior = execution.runtimeContext?.npcBehavior ?? null;
+  const npcMovement = npcBehavior?.movement ?? null;
+  const npcCurrentTask = npcBehavior?.task ?? null;
+  const npcCurrentActivity = npcBehavior?.activity ?? null;
+  const npcCurrentGoal = npcBehavior?.goal ?? null;
   if (npcPlayerRelation) {
     locationSegments.push(
       npcPlayerRelation.sameArea
         ? "The player and NPC are in the same area right now."
         : `The player and NPC are ${npcPlayerRelation.proximityBand} to one another.`
+    );
+  }
+  if (npcCurrentTask?.displayName) {
+    locationSegments.push(`The NPC's current task is ${npcCurrentTask.displayName}.`);
+  }
+  if (npcCurrentTask?.description) {
+    locationSegments.push(`Task context: ${npcCurrentTask.description}.`);
+  }
+  if (npcCurrentActivity?.activity) {
+    locationSegments.push(`The NPC's current activity is ${npcCurrentActivity.activity}.`);
+  }
+  if (npcCurrentGoal?.goal) {
+    locationSegments.push(`The NPC's current goal is ${npcCurrentGoal.goal}.`);
+  }
+  if (npcMovement?.targetAreaDisplayName) {
+    locationSegments.push(
+      `The NPC movement status is ${npcMovement.status} toward ${npcMovement.targetAreaDisplayName}.`
     );
   }
   if (currentLocation.sceneDisplayName) {
@@ -83,6 +105,10 @@ function buildCurrentLocationEvidence(
       scene_id: currentLocation.sceneId,
       area_id: currentLocation.area?.areaId ?? null,
       parent_area_id: currentLocation.parentArea?.areaId ?? null,
+      movement_status: npcMovement?.status ?? null,
+      current_task_display_name: npcCurrentTask?.displayName ?? null,
+      current_activity: npcCurrentActivity?.activity ?? null,
+      current_goal: npcCurrentGoal?.goal ?? null,
       page_id:
         currentLocation.area?.lorePageId ??
         currentLocation.parentArea?.lorePageId ??
@@ -160,6 +186,11 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
     const startedAt = Date.now();
     const runtimeCurrentLocation = input.execution.runtimeContext?.here ?? null;
     const npcPlayerRelation = input.execution.runtimeContext?.npcPlayerRelation ?? null;
+    const npcBehavior = input.execution.runtimeContext?.npcBehavior ?? null;
+    const npcMovement = npcBehavior?.movement ?? null;
+    const npcCurrentTask = npcBehavior?.task ?? null;
+    const npcCurrentActivity = npcBehavior?.activity ?? null;
+    const npcCurrentGoal = npcBehavior?.goal ?? null;
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
       input.execution.selection.activeQuest?.displayName ??
@@ -320,6 +351,11 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           currentParentAreaDisplayName:
             runtimeCurrentLocation?.parentArea?.displayName ?? null,
           proximityBand: npcPlayerRelation?.proximityBand ?? null,
+          movementStatus: npcMovement?.status ?? null,
+          currentTaskDisplayName: npcCurrentTask?.displayName ?? null,
+          currentTaskDescription: npcCurrentTask?.description ?? null,
+          currentActivity: npcCurrentActivity?.activity ?? null,
+          currentGoal: npcCurrentGoal?.goal ?? null,
           sameArea: npcPlayerRelation?.sameArea ?? null,
           sameParentArea: npcPlayerRelation?.sameParentArea ?? null,
           currentLocationLorePageId,

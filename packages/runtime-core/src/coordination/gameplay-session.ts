@@ -48,14 +48,21 @@ import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
 import type { RuntimePluginManager } from "../plugins";
 import { RuntimePluginSystem } from "../plugins";
 import {
+  createRuntimeNpcBehaviorSystem,
+  type RuntimeNpcBehaviorSystem
+} from "../behavior";
+import {
   clearActiveQuestObjectives,
   clearActiveQuestStage,
   clearTrackedQuest,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
+  getEntityCurrentActivity,
   getEntityCurrentArea,
+  getEntityCurrentGoal,
   getActiveQuestStage,
   getEntityLocation,
+  getEntityMovement,
   getEntityPlayerSpatialRelation,
   getEntityPosition,
   getTrackedQuest as getTrackedQuestFact,
@@ -107,7 +114,12 @@ export interface RuntimeGameplaySessionController {
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
-  update: () => void;
+  update: (deltaSeconds?: number) => void;
+  getNpcRuntimeSnapshots: () => Array<{
+    presenceId: string;
+    npcDefinitionId: string;
+    position: [number, number, number];
+  }>;
   dispose: () => void;
 }
 
@@ -194,6 +206,7 @@ export function createRuntimeGameplaySessionController(
   >();
   let pendingScriptedFollowupDialogueId: string | null = null;
   let lastTrackedQuestDefinitionId: string | null = null;
+  let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
   const spatialResolverSystem =
     activeRegion
       ? createRuntimeSpatialResolverSystem({
@@ -247,7 +260,14 @@ export function createRuntimeGameplaySessionController(
     spatialResolverSystem.sync({
       playerPosition: { x: playerX, y: playerY, z: playerZ },
       npcPositions: region.scene.npcPresences.map((presence) => {
-        const [x, y, z] = presence.transform.position;
+        const runtimeNpcEntity = npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
+        const runtimePosition =
+          runtimeNpcEntity !== null
+            ? world.getComponent(runtimeNpcEntity, Position)
+            : null;
+        const [x, y, z] = runtimePosition
+          ? [runtimePosition.x, runtimePosition.y, runtimePosition.z]
+          : presence.transform.position;
         return {
           entityId: presence.npcDefinitionId,
           position: { x, y, z }
@@ -329,6 +349,31 @@ export function createRuntimeGameplaySessionController(
         context.selection.npcDefinitionId
           ? getEntityPlayerSpatialRelation(blackboard, context.selection.npcDefinitionId)
           : null;
+      const npcMovement =
+        context.selection.npcDefinitionId
+          ? getEntityMovement(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const npcCurrentTask =
+        context.selection.npcDefinitionId
+          ? npcBehaviorSystem?.getCurrentTask(context.selection.npcDefinitionId) ?? null
+          : null;
+      const npcCurrentActivity =
+        context.selection.npcDefinitionId
+          ? getEntityCurrentActivity(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const npcCurrentGoal =
+        context.selection.npcDefinitionId
+          ? getEntityCurrentGoal(blackboard, context.selection.npcDefinitionId)
+          : null;
+      const npcBehavior =
+        context.selection.npcDefinitionId
+          ? {
+              movement: npcMovement,
+              task: npcCurrentTask,
+              activity: npcCurrentActivity,
+              goal: npcCurrentGoal
+            }
+          : null;
       const runtimeContext: ConversationRuntimeContext = {
         here:
           playerLocation?.location ??
@@ -341,6 +386,7 @@ export function createRuntimeGameplaySessionController(
         playerArea,
         npcArea,
         npcPlayerRelation,
+        npcBehavior,
         trackedQuest,
         activeQuestStage,
         activeQuestObjectives
@@ -438,10 +484,7 @@ export function createRuntimeGameplaySessionController(
       questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
 
     const selection: ConversationSelectionContext = {
-      conversationKind:
-        npcDefinition.interactionMode === "guided" ? "guided" : "free-form",
-      dialogueDefinitionId:
-        npcDefinition.interactionMode === "guided" ? dialogueDefinitionId ?? undefined : undefined,
+      conversationKind: "free-form",
       npcDefinitionId,
       npcDisplayName: npcDefinition.displayName,
       interactionMode: npcDefinition.interactionMode,
@@ -919,6 +962,23 @@ export function createRuntimeGameplaySessionController(
     syncInteractionPrompt();
   });
   registerNpcInteractables();
+  if (activeRegion) {
+    npcBehaviorSystem = createRuntimeNpcBehaviorSystem({
+      region: activeRegion,
+      world,
+      blackboard,
+      getNpcEntities: () =>
+        Array.from(npcInteractableEntities.entries()).map(([presenceId, entry]) => ({
+          presenceId,
+          npcDefinitionId: entry.npcDefinitionId,
+          entity: entry.entity
+        })),
+      hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      logDebug(event, payload) {
+        console.info(`[runtime-core] ${event}`, payload ?? {});
+      }
+    });
+  }
   registerItemInteractables();
   registerInspectableInteractables();
   questDialogueCoordinator.startInitialQuests();
@@ -936,12 +996,37 @@ export function createRuntimeGameplaySessionController(
     interactionSystem,
     questSystem,
     blackboard,
-    update() {
+    update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
+      const trackedQuest = questManager.getTrackedQuest();
+      npcBehaviorSystem?.sync({
+        deltaSeconds,
+        activeQuest: trackedQuest
+          ? {
+              questDefinitionId: trackedQuest.questDefinitionId,
+              stageId: trackedQuest.stageId
+            }
+          : null
+      });
       syncBlackboardSpatialFacts();
+      syncBlackboardQuestFacts();
       spellMenuUi.update();
     },
+    getNpcRuntimeSnapshots() {
+      return Array.from(npcInteractableEntities.entries()).flatMap(([presenceId, entry]) => {
+        const position = world.getComponent(entry.entity, Position);
+        if (!position) {
+          return [];
+        }
+        return [{
+          presenceId,
+          npcDefinitionId: entry.npcDefinitionId,
+          position: [position.x, position.y, position.z] as [number, number, number]
+        }];
+      });
+    },
     dispose() {
+      npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
       for (const { entity } of npcInteractableEntities.values()) {
         world.destroyEntity(entity);

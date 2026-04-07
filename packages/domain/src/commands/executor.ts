@@ -5,7 +5,11 @@
  * This is the single mutation boundary per ADR 004.
  */
 
-import { createRegionAreaDefinition, MAX_REGION_LANDSCAPE_CHANNELS } from "../region-authoring";
+import {
+  createRegionAreaDefinition,
+  createRegionNPCBehaviorDefinition,
+  MAX_REGION_LANDSCAPE_CHANNELS
+} from "../region-authoring";
 import type {
   RegionDocument,
   PlacedAssetInstance,
@@ -33,6 +37,9 @@ import type {
   CreateRegionAreaCommand,
   UpdateRegionAreaCommand,
   DeleteRegionAreaCommand,
+  CreateRegionNPCBehaviorCommand,
+  UpdateRegionNPCBehaviorCommand,
+  DeleteRegionNPCBehaviorCommand,
   CreateLandscapeChannelCommand,
   UpdateLandscapeChannelCommand,
   PaintLandscapeCommand,
@@ -700,6 +707,45 @@ function applyDeleteRegionArea(
   };
 }
 
+function applyCreateRegionNPCBehavior(
+  region: RegionDocument,
+  command: CreateRegionNPCBehaviorCommand
+): RegionDocument {
+  return {
+    ...region,
+    behaviors: [
+      ...region.behaviors,
+      createRegionNPCBehaviorDefinition(command.payload.behavior)
+    ]
+  };
+}
+
+function applyUpdateRegionNPCBehavior(
+  region: RegionDocument,
+  command: UpdateRegionNPCBehaviorCommand
+): RegionDocument {
+  return {
+    ...region,
+    behaviors: region.behaviors.map((behavior) =>
+      behavior.behaviorId === command.payload.behavior.behaviorId
+        ? createRegionNPCBehaviorDefinition(command.payload.behavior)
+        : behavior
+    )
+  };
+}
+
+function applyDeleteRegionNPCBehavior(
+  region: RegionDocument,
+  command: DeleteRegionNPCBehaviorCommand
+): RegionDocument {
+  return {
+    ...region,
+    behaviors: region.behaviors.filter(
+      (behavior) => behavior.behaviorId !== command.payload.behaviorId
+    )
+  };
+}
+
 function applyCreateLandscapeChannel(
   region: RegionDocument,
   command: CreateLandscapeChannelCommand
@@ -843,6 +889,15 @@ export function executeCommand(
       break;
     case "DeleteRegionArea":
       updatedRegion = applyDeleteRegionArea(region, command);
+      break;
+    case "CreateRegionNPCBehavior":
+      updatedRegion = applyCreateRegionNPCBehavior(region, command);
+      break;
+    case "UpdateRegionNPCBehavior":
+      updatedRegion = applyUpdateRegionNPCBehavior(region, command);
+      break;
+    case "DeleteRegionNPCBehavior":
+      updatedRegion = applyDeleteRegionNPCBehavior(region, command);
       break;
     case "CreateLandscapeChannel":
       updatedRegion = applyCreateLandscapeChannel(region, command);

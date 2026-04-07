@@ -1,5 +1,6 @@
 import type { DocumentDefinition } from "../document-definition";
 import type {
+  RegionNPCBehaviorDefinition,
   RegionLandscapeChannelDefinition,
   RegionLandscapePaintPayload
 } from "../region-authoring";
@@ -137,6 +138,27 @@ export type DeleteRegionAreaCommand = SemanticCommandBase<
   "DeleteRegionArea",
   {
     areaId: string;
+  }
+>;
+
+export type CreateRegionNPCBehaviorCommand = SemanticCommandBase<
+  "CreateRegionNPCBehavior",
+  {
+    behavior: RegionNPCBehaviorDefinition;
+  }
+>;
+
+export type UpdateRegionNPCBehaviorCommand = SemanticCommandBase<
+  "UpdateRegionNPCBehavior",
+  {
+    behavior: RegionNPCBehaviorDefinition;
+  }
+>;
+
+export type DeleteRegionNPCBehaviorCommand = SemanticCommandBase<
+  "DeleteRegionNPCBehavior",
+  {
+    behaviorId: string;
   }
 >;
 
@@ -478,6 +500,9 @@ export type SemanticCommand =
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand
+  | CreateRegionNPCBehaviorCommand
+  | UpdateRegionNPCBehaviorCommand
+  | DeleteRegionNPCBehaviorCommand
   | CreateLandscapeChannelCommand
   | UpdateLandscapeChannelCommand
   | TransformPlacedAssetCommand

@@ -16,6 +16,9 @@ describe("Build navigation model", () => {
     expect(deriveBuildWorkspaceId("spatial", "forest_north")).toBe(
       "build:spatial:forest_north"
     );
+    expect(deriveBuildWorkspaceId("behavior", "forest_north")).toBe(
+      "build:behavior:forest_north"
+    );
     expect(deriveBuildWorkspaceId("environment", "env_default")).toBe(
       "build:environment:env_default"
     );

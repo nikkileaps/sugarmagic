@@ -42,3 +42,4 @@ Current plans:
 - [Plan 022: SugarAgent Lore Wiki Source of Truth and Gateway Ingestion Epic](/Users/nikki/projects/sugarmagic/docs/plans/022-sugaragent-lore-wiki-source-of-truth-and-gateway-ingestion-epic.md)
 - [Plan 023: Runtime-Core Blackboard and World State Architecture Epic](/Users/nikki/projects/sugarmagic/docs/plans/023-runtime-core-blackboard-and-world-state-architecture-epic.md)
 - [Plan 024: Spatial Language Grounding and Region Area Semantics Epic](/Users/nikki/projects/sugarmagic/docs/plans/024-spatial-language-grounding-and-region-area-semantics-epic.md)
+- [Plan 025: NPC Movement, Schedules, Tasks, Activities, and Current Goals Epic](/Users/nikki/projects/sugarmagic/docs/plans/025-guided-npc-schedules-activities-and-current-goals-epic.md)

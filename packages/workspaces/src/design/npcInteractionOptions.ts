@@ -27,8 +27,7 @@ export function resolveNPCInteractionOptions(
   for (const option of pluginOptions) {
     if (
       option.interactionMode !== "scripted" &&
-      option.interactionMode !== "agent" &&
-      option.interactionMode !== "guided"
+      option.interactionMode !== "agent"
     ) {
       continue;
     }

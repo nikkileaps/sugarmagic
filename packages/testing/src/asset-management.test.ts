@@ -59,6 +59,7 @@ function makeRegion(): RegionDocument {
     },
     environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
     areas: [],
+    behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled: false }),
     markers: [],
     gameplayPlacements: []

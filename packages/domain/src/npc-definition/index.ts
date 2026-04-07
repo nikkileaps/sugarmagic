@@ -1,7 +1,7 @@
 import { createUuid } from "../shared/identity";
 
 export type NPCAnimationSlot = "idle" | "walk" | "run";
-export type NPCInteractionMode = "scripted" | "agent" | "guided";
+export type NPCInteractionMode = "scripted" | "agent";
 
 export interface NPCAnimationBindings {
   idle: string | null;
@@ -57,10 +57,56 @@ export function createDefaultNPCDefinition(
   };
 }
 
+let hasWarnedLegacyGuidedInteractionMode = false;
+
+function warnLegacyGuidedInteractionMode(): void {
+  if (hasWarnedLegacyGuidedInteractionMode) {
+    return;
+  }
+  hasWarnedLegacyGuidedInteractionMode = true;
+  console.warn(
+    '[domain] NPC interaction mode "guided" is deprecated and will be migrated to "agent" on load.'
+  );
+}
+
+function normalizeNPCInteractionModeForRead(
+  interactionMode: string | undefined,
+  fallback: NPCInteractionMode
+): NPCInteractionMode {
+  if (interactionMode === "scripted") {
+    return "scripted";
+  }
+  if (interactionMode === "agent") {
+    return "agent";
+  }
+  if (interactionMode === "guided") {
+    warnLegacyGuidedInteractionMode();
+    return "agent";
+  }
+  return fallback;
+}
+
+function normalizeNPCInteractionModeForWrite(
+  interactionMode: string | undefined
+): NPCInteractionMode {
+  if (interactionMode === "scripted" || interactionMode === "agent") {
+    return interactionMode;
+  }
+  if (interactionMode === "guided") {
+    throw new Error(
+      'NPC interaction mode "guided" is no longer supported. Use "agent" instead.'
+    );
+  }
+  throw new Error(
+    `Unsupported NPC interaction mode "${interactionMode ?? "undefined"}".`
+  );
+}
+
 export function normalizeNPCDefinition(
   npcDefinition: Partial<NPCDefinition> | null | undefined
 ): NPCDefinition {
   const defaultDefinition = createDefaultNPCDefinition();
+  const rawInteractionMode = npcDefinition?.interactionMode as string | undefined;
 
   if (!npcDefinition) {
     return defaultDefinition;
@@ -70,12 +116,10 @@ export function normalizeNPCDefinition(
     definitionId: npcDefinition.definitionId ?? defaultDefinition.definitionId,
     displayName: npcDefinition.displayName ?? defaultDefinition.displayName,
     description: npcDefinition.description ?? undefined,
-    interactionMode:
-      npcDefinition.interactionMode === "agent" ||
-      npcDefinition.interactionMode === "guided" ||
-      npcDefinition.interactionMode === "scripted"
-        ? npcDefinition.interactionMode
-        : defaultDefinition.interactionMode,
+    interactionMode: normalizeNPCInteractionModeForRead(
+      rawInteractionMode,
+      defaultDefinition.interactionMode
+    ),
     lorePageId:
       typeof npcDefinition.lorePageId === "string" &&
       npcDefinition.lorePageId.trim().length > 0
@@ -94,4 +138,15 @@ export function normalizeNPCDefinition(
       }
     }
   };
+}
+
+export function normalizeNPCDefinitionForWrite(
+  npcDefinition: Partial<NPCDefinition> | null | undefined
+): NPCDefinition {
+  const rawInteractionMode = npcDefinition?.interactionMode as string | undefined;
+
+  return normalizeNPCDefinition({
+    ...npcDefinition,
+    interactionMode: normalizeNPCInteractionModeForWrite(rawInteractionMode)
+  });
 }

@@ -12,7 +12,9 @@ import type {
   SemanticCommand,
   AssetDefinition,
   DocumentDefinition,
-  EnvironmentDefinition
+  EnvironmentDefinition,
+  NPCDefinition,
+  QuestDefinition
 } from "@sugarmagic/domain";
 import {
   getActiveRegion,
@@ -25,12 +27,16 @@ import {
   type BuildContextSelector
 } from "@sugarmagic/ui";
 import type { BuildWorkspaceKind } from "@sugarmagic/shell";
-import type { WorkspaceViewContribution } from "../workspace-view";
+import type {
+  WorkspaceNavigationTarget,
+  WorkspaceViewContribution
+} from "../workspace-view";
 import type { WorkspaceViewport } from "../viewport";
 import { applyLightingPresetToEnvironmentDefinition } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useLandscapeWorkspaceView } from "./landscape";
 import { useSpatialWorkspaceView } from "./spatial";
+import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
 
@@ -38,6 +44,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "layout", label: "Layout", icon: "🏗️" },
   { id: "landscape", label: "Landscape", icon: "⛰️" },
   { id: "spatial", label: "Spatial", icon: "🗺️" },
+  { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
@@ -52,6 +59,8 @@ export interface BuildProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
+  npcDefinitions: NPCDefinition[];
+  questDefinitions: QuestDefinition[];
   getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   regions: { id: string; displayName: string }[];
@@ -62,6 +71,9 @@ export interface BuildProductModeViewProps {
   onCreateEnvironment: () => void;
   onSelect: (ids: string[]) => void;
   onCommand: (command: SemanticCommand) => void;
+  navigationTarget?: WorkspaceNavigationTarget | null;
+  onConsumeNavigationTarget?: () => void;
+  onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
@@ -71,6 +83,7 @@ export interface BuildProductModeViewResult {
   subHeaderPanel: React.ReactNode;
   leftPanel: React.ReactNode | null;
   rightPanel: React.ReactNode;
+  centerPanel?: React.ReactNode;
   viewportOverlay: React.ReactNode;
   environmentOverrideId: string | null;
 }
@@ -88,6 +101,8 @@ export function useBuildProductModeView(
     assetDefinitions,
     documentDefinitions,
     environmentDefinitions,
+    npcDefinitions,
+    questDefinitions,
     getViewport,
     getViewportElement,
     regions,
@@ -98,6 +113,9 @@ export function useBuildProductModeView(
     onCreateEnvironment,
     onSelect,
     onCommand,
+    navigationTarget,
+    onConsumeNavigationTarget,
+    onNavigateToTarget,
     onImportAsset,
     onUpdateAssetDefinition,
     onRemoveAssetDefinition
@@ -201,6 +219,16 @@ export function useBuildProductModeView(
     onCommand
   });
 
+  const behaviorView = useBehaviorWorkspaceView({
+    region: activeRegion,
+    npcDefinitions,
+    questDefinitions,
+    onCommand,
+    navigationTarget,
+    onConsumeNavigationTarget,
+    onNavigateToTarget
+  });
+
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
@@ -251,6 +279,8 @@ export function useBuildProductModeView(
         ? landscapeView
         : activeBuildKind === "spatial"
           ? spatialView
+          : activeBuildKind === "behavior"
+            ? behaviorView
       : activeBuildKind === "environment"
         ? environmentView
         : assetsView;
@@ -258,7 +288,8 @@ export function useBuildProductModeView(
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||
     activeBuildKind === "landscape" ||
-    activeBuildKind === "spatial"
+    activeBuildKind === "spatial" ||
+    activeBuildKind === "behavior"
       ? {
           items: regions,
           activeId: activeRegionId,
@@ -310,6 +341,7 @@ export function useBuildProductModeView(
       ) : activeView.leftPanel ?? null,
 
     rightPanel: activeView.rightPanel,
+    centerPanel: activeView.centerPanel,
     viewportOverlay: activeView.viewportOverlay,
     environmentOverrideId:
       activeBuildKind === "environment"
