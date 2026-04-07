@@ -7,16 +7,20 @@ import type {
 import type {
   EntityCurrentAreaFact,
   EntityLocationFact,
+  EntityCurrentActivityFact,
   EntityPlayerSpatialRelationFact,
   EntityPositionFact,
+  EntityCurrentGoalFact,
+  EntityMovementFact,
   QuestActiveObjectivesFact,
   QuestActiveStageFact,
   TrackedQuestFact,
   LocationReference
 } from "../state";
+import type { RuntimeNpcCurrentTask } from "../behavior";
 
-export type ConversationKind = "scripted-dialogue" | "free-form" | "guided";
-export type ConversationInteractionMode = "scripted" | "agent" | "guided";
+export type ConversationKind = "scripted-dialogue" | "free-form";
+export type ConversationInteractionMode = "scripted" | "agent";
 
 export interface ConversationActiveQuestObjectiveContext {
   nodeId: string;
@@ -102,9 +106,17 @@ export interface ConversationRuntimeContext {
   npcPosition: EntityPositionFact | null;
   npcArea?: EntityCurrentAreaFact | null;
   npcPlayerRelation?: EntityPlayerSpatialRelationFact | null;
+  npcBehavior?: ConversationRuntimeNpcBehaviorContext | null;
   trackedQuest: TrackedQuestFact | null;
   activeQuestStage: QuestActiveStageFact | null;
   activeQuestObjectives: QuestActiveObjectivesFact | null;
+}
+
+export interface ConversationRuntimeNpcBehaviorContext {
+  movement: EntityMovementFact | null;
+  task: RuntimeNpcCurrentTask | null;
+  activity: EntityCurrentActivityFact | null;
+  goal: EntityCurrentGoalFact | null;
 }
 
 export interface ConversationProviderContext {

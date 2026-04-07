@@ -122,6 +122,60 @@ export interface RegionAreaDefinition {
   bounds: RegionAreaBounds;
 }
 
+export interface RegionBehaviorQuestBinding {
+  questDefinitionId: string | null;
+  questStageId: string | null;
+  worldFlagEquals: RegionBehaviorWorldFlagCondition | null;
+}
+
+export interface RegionBehaviorWorldFlagCondition {
+  key: string | null;
+  valueType: "boolean" | "number" | "string";
+  value: string | null;
+}
+
+export interface RegionNPCBehaviorTask {
+  taskId: string;
+  displayName: string;
+  description: string | null;
+  targetAreaId: string | null;
+  currentActivity: string;
+  currentGoal: string;
+  activation: RegionBehaviorQuestBinding;
+}
+
+export const REGION_NPC_BEHAVIOR_ACTIVITY_OPTIONS = [
+  { value: "idle", label: "Idle" },
+  { value: "waiting", label: "Waiting" },
+  { value: "walking", label: "Walking" },
+  { value: "collecting_delivery", label: "Collecting Delivery" },
+  { value: "unpacking_inventory", label: "Unpacking Inventory" },
+  { value: "running_shop", label: "Running Shop" },
+  { value: "serving_customers", label: "Serving Customers" },
+  { value: "helping_player", label: "Helping Player" },
+  { value: "searching", label: "Searching" },
+  { value: "observing", label: "Observing" }
+] as const;
+
+export const REGION_NPC_BEHAVIOR_GOAL_OPTIONS = [
+  { value: "idle", label: "Idle" },
+  { value: "wait_for_delivery", label: "Wait for Delivery" },
+  { value: "collect_delivery", label: "Collect Delivery" },
+  { value: "stock_shop", label: "Stock Shop" },
+  { value: "serve_customers", label: "Serve Customers" },
+  { value: "help_player", label: "Help Player" },
+  { value: "search_area", label: "Search Area" },
+  { value: "return_to_shop", label: "Return to Shop" },
+  { value: "observe_situation", label: "Observe Situation" }
+] as const;
+
+export interface RegionNPCBehaviorDefinition {
+  behaviorId: string;
+  npcDefinitionId: string;
+  displayName: string;
+  tasks: RegionNPCBehaviorTask[];
+}
+
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
@@ -136,6 +190,7 @@ export interface RegionDocument {
   };
   environmentBinding: RegionEnvironmentBinding;
   areas: RegionAreaDefinition[];
+  behaviors: RegionNPCBehaviorDefinition[];
   landscape: RegionLandscapeState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
@@ -154,6 +209,14 @@ export const DEFAULT_REGION_AREA_HEIGHT = 12;
 
 export function createRegionAreaId(): string {
   return createScopedId("region-area");
+}
+
+export function createRegionNPCBehaviorId(): string {
+  return createScopedId("region-behavior");
+}
+
+export function createRegionNPCBehaviorTaskId(): string {
+  return createScopedId("region-behavior-task");
 }
 
 export function createRegionAreaBounds(
@@ -178,6 +241,76 @@ export function createRegionAreaDefinition(
       overrides.parentAreaId === undefined ? null : overrides.parentAreaId,
     kind: overrides.kind ?? "zone",
     bounds: createRegionAreaBounds(overrides.bounds)
+  };
+}
+
+export function createRegionBehaviorQuestBinding(
+  overrides: Partial<RegionBehaviorQuestBinding> = {}
+): RegionBehaviorQuestBinding {
+  return {
+    questDefinitionId:
+      typeof overrides.questDefinitionId === "string" &&
+      overrides.questDefinitionId.trim().length > 0
+        ? overrides.questDefinitionId.trim()
+        : null,
+    questStageId:
+      typeof overrides.questStageId === "string" &&
+      overrides.questStageId.trim().length > 0
+        ? overrides.questStageId.trim()
+        : null,
+    worldFlagEquals:
+      typeof overrides.worldFlagEquals?.key === "string" &&
+      overrides.worldFlagEquals.key.trim().length > 0
+        ? {
+            key: overrides.worldFlagEquals.key.trim(),
+            valueType: overrides.worldFlagEquals.valueType ?? "boolean",
+            value:
+              typeof overrides.worldFlagEquals.value === "string" &&
+              overrides.worldFlagEquals.value.trim().length > 0
+                ? overrides.worldFlagEquals.value.trim()
+                : null
+          }
+        : null
+  };
+}
+
+export function createRegionNPCBehaviorTask(
+  overrides: Partial<RegionNPCBehaviorTask> = {}
+): RegionNPCBehaviorTask {
+  return {
+    taskId: overrides.taskId ?? createRegionNPCBehaviorTaskId(),
+    displayName: overrides.displayName ?? "Behavior Task",
+    description:
+      typeof overrides.description === "string" && overrides.description.trim().length > 0
+        ? overrides.description
+        : null,
+    targetAreaId:
+      typeof overrides.targetAreaId === "string" && overrides.targetAreaId.trim().length > 0
+        ? overrides.targetAreaId.trim()
+        : null,
+    currentActivity:
+      typeof overrides.currentActivity === "string" && overrides.currentActivity.trim().length > 0
+        ? overrides.currentActivity.trim()
+        : "idle",
+    currentGoal:
+      typeof overrides.currentGoal === "string" && overrides.currentGoal.trim().length > 0
+        ? overrides.currentGoal.trim()
+        : "idle",
+    activation: createRegionBehaviorQuestBinding(overrides.activation)
+  };
+}
+
+export function createRegionNPCBehaviorDefinition(
+  overrides: Partial<RegionNPCBehaviorDefinition> &
+    Pick<RegionNPCBehaviorDefinition, "npcDefinitionId">,
+): RegionNPCBehaviorDefinition {
+  return {
+    behaviorId: overrides.behaviorId ?? createRegionNPCBehaviorId(),
+    npcDefinitionId: overrides.npcDefinitionId,
+    displayName: overrides.displayName ?? "NPC Behavior",
+    tasks: (overrides.tasks ?? []).map((task) =>
+      createRegionNPCBehaviorTask(task)
+    )
   };
 }
 

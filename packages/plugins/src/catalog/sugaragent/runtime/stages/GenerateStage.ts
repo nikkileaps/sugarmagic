@@ -94,6 +94,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       input.execution.runtimeContext?.here?.parentArea?.displayName ?? null;
     const npcPlayerRelation =
       input.execution.runtimeContext?.npcPlayerRelation ?? null;
+    const npcBehavior = input.execution.runtimeContext?.npcBehavior ?? null;
+    const npcMovement = npcBehavior?.movement ?? null;
+    const npcCurrentTask = npcBehavior?.task ?? null;
+    const npcCurrentActivity = npcBehavior?.activity ?? null;
+    const npcCurrentGoal = npcBehavior?.goal ?? null;
 
     let text: string;
     let llmBackend: GenerateResult["llmBackend"] = "deterministic";
@@ -141,6 +146,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             turnPath: input.plan.turnPath,
             evidenceCount: input.retrieve.evidencePack.length,
             proximityBand: npcPlayerRelation?.proximityBand ?? null,
+            movementStatus: npcMovement?.status ?? null,
+            currentTaskDisplayName: npcCurrentTask?.displayName ?? null,
+            currentTaskDescription: npcCurrentTask?.description ?? null,
+            currentActivity: npcCurrentActivity?.activity ?? null,
+            currentGoal: npcCurrentGoal?.goal ?? null,
             textPreview: text.slice(0, 180),
             proposedActions: output.actionProposals.map((proposal) => proposal.kind)
           },
@@ -175,6 +185,21 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         npcPlayerRelation
           ? `Player proximity: ${npcPlayerRelation.proximityBand}. Same area: ${npcPlayerRelation.sameArea ? "yes" : "no"}.`
+          : null,
+        npcCurrentTask?.displayName
+          ? `Current task: ${npcCurrentTask.displayName}.`
+          : null,
+        npcCurrentTask?.description
+          ? `Task context: ${npcCurrentTask.description}.`
+          : null,
+        npcCurrentActivity?.activity
+          ? `Current activity: ${npcCurrentActivity.activity}.`
+          : null,
+        npcCurrentGoal?.goal
+          ? `Current goal: ${npcCurrentGoal.goal}.`
+          : null,
+        npcMovement?.status
+          ? `Movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
           : null
       ]
         .filter(Boolean)
@@ -210,6 +235,21 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         npcPlayerRelation
           ? `Player/NPC proximity band: ${npcPlayerRelation.proximityBand}.`
+          : null,
+        npcCurrentTask?.displayName
+          ? `NPC current task: ${npcCurrentTask.displayName}.`
+          : null,
+        npcCurrentTask?.description
+          ? `NPC task context: ${npcCurrentTask.description}.`
+          : null,
+        npcCurrentActivity?.activity
+          ? `NPC current activity: ${npcCurrentActivity.activity}.`
+          : null,
+        npcCurrentGoal?.goal
+          ? `NPC current goal: ${npcCurrentGoal.goal}.`
+          : null,
+        npcMovement?.status
+          ? `NPC movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
           : null,
         evidenceSummary.length > 0
           ? `Evidence:\n- ${evidenceSummary.join("\n- ")}`
@@ -311,6 +351,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           evidenceCount: input.retrieve.evidencePack.length,
           currentAreaDisplayName: currentLocationDisplayName,
           proximityBand: npcPlayerRelation?.proximityBand ?? null,
+          movementStatus: npcMovement?.status ?? null,
+          currentTaskDisplayName: npcCurrentTask?.displayName ?? null,
+          currentTaskDescription: npcCurrentTask?.description ?? null,
+          currentActivity: npcCurrentActivity?.activity ?? null,
+          currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
           systemPromptPreview,
           textPreview: text.slice(0, 180),

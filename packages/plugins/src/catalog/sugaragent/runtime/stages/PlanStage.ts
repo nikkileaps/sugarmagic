@@ -44,7 +44,7 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
 
     const actionProposals: ConversationActionProposal[] = [];
     if (
-      input.execution.selection.interactionMode === "guided" &&
+      input.execution.selection.interactionMode === "agent" &&
       input.interpret.interpretation.intent === "quest_guidance" &&
       typeof scriptedFollowupDialogueDefinitionId === "string" &&
       scriptedFollowupDialogueDefinitionId.length > 0

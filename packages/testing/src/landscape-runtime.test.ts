@@ -17,6 +17,7 @@ function makeRegion(enabled = true): RegionDocument {
     scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [], itemPresences: [] },
     environmentBinding: { defaultEnvironmentId: null },
     areas: [],
+    behaviors: [],
     landscape: createDefaultRegionLandscapeState({ enabled }),
     markers: [],
     gameplayPlacements: []

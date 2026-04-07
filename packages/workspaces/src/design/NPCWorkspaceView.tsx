@@ -495,11 +495,7 @@ export function useNPCWorkspaceView(
                     : "scripted"
                 }
                 onChange={(value) => {
-                  if (
-                    value !== "scripted" &&
-                    value !== "agent" &&
-                    value !== "guided"
-                  ) {
+                  if (value !== "scripted" && value !== "agent") {
                     return;
                   }
                   updateNPC({

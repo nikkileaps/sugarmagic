@@ -62,6 +62,7 @@ import {
   useDesignProductModeView,
   type ItemWorkspaceViewport,
   type NPCWorkspaceViewport,
+  type WorkspaceNavigationTarget,
   type WorkspaceViewport,
   type PlayerWorkspaceViewport
 } from "@sugarmagic/workspaces";
@@ -426,11 +427,31 @@ export function App() {
     if (!session) return [];
     return getAllRegions(session).map((r) => ({ id: r.identity.id, displayName: r.displayName }));
   }, [session]);
+  const regionDocuments = useMemo(() => {
+    if (!session) return [];
+    return getAllRegions(session);
+  }, [session]);
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [assetSources, setAssetSources] = useState<Record<string, string>>({});
   const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
+  const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
+    useState<WorkspaceNavigationTarget | null>(null);
+
+  const handleWorkspaceNavigation = useCallback((target: WorkspaceNavigationTarget) => {
+    setWorkspaceNavigationTarget(target);
+    const shell = shellStore.getState();
+    if (target.kind === "quest-stage") {
+      shell.setActiveProductMode("design");
+      shell.setActiveDesignWorkspaceKind("quests");
+      return;
+    }
+
+    shell.setActiveProductMode("build");
+    shell.setActiveRegionId(target.regionId);
+    shell.setActiveBuildWorkspaceKind("behavior");
+  }, []);
 
   function handleCreateRegion(input: { displayName: string; regionId: string }) {
     if (!session) return;
@@ -450,6 +471,7 @@ export function App() {
           session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
       },
       areas: [],
+      behaviors: [],
       landscape: createDefaultRegionLandscapeState(),
       markers: [],
       gameplayPlacements: []
@@ -861,6 +883,8 @@ export function App() {
     assetDefinitions,
     documentDefinitions,
     environmentDefinitions,
+    npcDefinitions,
+    questDefinitions,
     getViewport: () => buildViewportRef.current,
     getViewportElement: () => viewportRef.current,
     regions,
@@ -872,6 +896,9 @@ export function App() {
     onCreateEnvironment: handleCreateEnvironment,
     onSelect: (ids) => shellStore.getState().setSelection(ids),
     onCommand: dispatchCommand,
+    navigationTarget: workspaceNavigationTarget,
+    onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
+    onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
     onRemoveAssetDefinition: handleRemoveAssetDefinition
@@ -881,6 +908,7 @@ export function App() {
     activeDesignKind,
     viewportReadyVersion,
     gameProjectId: session?.gameProject.identity.id ?? null,
+    regions: regionDocuments,
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -898,7 +926,10 @@ export function App() {
     getNPCViewport: () => npcViewportRef.current,
     getViewportElement: () => viewportRef.current,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
-    onCommand: dispatchCommand
+    onCommand: dispatchCommand,
+    navigationTarget: workspaceNavigationTarget,
+    onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
+    onNavigateToTarget: handleWorkspaceNavigation
   });
   const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
     activeDesignKind
@@ -1131,7 +1162,9 @@ export function App() {
           <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
         }
         centerPanel={
-          phase === "active" && isDesign && activeDesignPanels.centerPanel ? (
+          phase === "active" && isBuild && buildView.centerPanel ? (
+            buildView.centerPanel
+          ) : phase === "active" && isDesign && activeDesignPanels.centerPanel ? (
             activeDesignPanels.centerPanel
           ) : (
             <ViewportFrame>

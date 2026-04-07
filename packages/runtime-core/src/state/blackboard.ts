@@ -124,6 +124,27 @@ export interface EntityPlayerSpatialRelationFact {
   distanceMeters: number | null;
 }
 
+export type EntityMovementStatus = "idle" | "en_route" | "at_target" | "blocked";
+
+export interface EntityMovementFact {
+  entityId: string;
+  targetAreaId: string | null;
+  targetAreaDisplayName: string | null;
+  status: EntityMovementStatus;
+  distanceToTargetMeters: number | null;
+  failureReason: "stuck" | "missing-target-area" | null;
+}
+
+export interface EntityCurrentActivityFact {
+  entityId: string;
+  activity: string;
+}
+
+export interface EntityCurrentGoalFact {
+  entityId: string;
+  goal: string;
+}
+
 export type EntityMood =
   | "neutral"
   | "friendly"
@@ -207,6 +228,28 @@ export const ENTITY_AFFECT_FACT = defineBlackboardFact<EntityAffectFact>({
   lifecycle: { kind: "session" }
 });
 
+export const ENTITY_MOVEMENT_FACT = defineBlackboardFact<EntityMovementFact>({
+  key: "entity.movement",
+  ownerSystem: "movement-system",
+  allowedScopeKinds: ["entity"],
+  lifecycle: { kind: "session" }
+});
+
+export const ENTITY_CURRENT_ACTIVITY_FACT =
+  defineBlackboardFact<EntityCurrentActivityFact>({
+    key: "entity.current-activity",
+    ownerSystem: "behavior-system",
+    allowedScopeKinds: ["entity"],
+    lifecycle: { kind: "session" }
+  });
+
+export const ENTITY_CURRENT_GOAL_FACT = defineBlackboardFact<EntityCurrentGoalFact>({
+  key: "entity.current-goal",
+  ownerSystem: "behavior-system",
+  allowedScopeKinds: ["entity"],
+  lifecycle: { kind: "session" }
+});
+
 export const TRACKED_QUEST_FACT = defineBlackboardFact<TrackedQuestFact>({
   key: "quest.tracked",
   ownerSystem: "quest-system",
@@ -235,6 +278,9 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_CURRENT_AREA_FACT,
   ENTITY_PLAYER_SPATIAL_RELATION_FACT,
   ENTITY_AFFECT_FACT,
+  ENTITY_MOVEMENT_FACT,
+  ENTITY_CURRENT_ACTIVITY_FACT,
+  ENTITY_CURRENT_GOAL_FACT,
   TRACKED_QUEST_FACT,
   QUEST_ACTIVE_STAGE_FACT,
   QUEST_ACTIVE_OBJECTIVES_FACT
@@ -569,6 +615,77 @@ export function setEntityAffect(
     scope: createBlackboardScope("entity", value.entityId),
     value,
     sourceSystem: options.sourceSystem ?? ENTITY_AFFECT_FACT.ownerSystem
+  });
+}
+
+export function getEntityMovement(
+  blackboard: RuntimeBlackboard,
+  entityId: string
+): EntityMovementFact | null {
+  return (
+    blackboard.getFact(ENTITY_MOVEMENT_FACT, createBlackboardScope("entity", entityId))
+      ?.value ?? null
+  );
+}
+
+export function setEntityMovement(
+  blackboard: RuntimeBlackboard,
+  value: EntityMovementFact,
+  options: { sourceSystem?: string } = {}
+): BlackboardFactEnvelope<EntityMovementFact> {
+  return blackboard.setFact({
+    definition: ENTITY_MOVEMENT_FACT,
+    scope: createBlackboardScope("entity", value.entityId),
+    value,
+    sourceSystem: options.sourceSystem ?? ENTITY_MOVEMENT_FACT.ownerSystem
+  });
+}
+
+export function getEntityCurrentActivity(
+  blackboard: RuntimeBlackboard,
+  entityId: string
+): EntityCurrentActivityFact | null {
+  return (
+    blackboard.getFact(
+      ENTITY_CURRENT_ACTIVITY_FACT,
+      createBlackboardScope("entity", entityId)
+    )?.value ?? null
+  );
+}
+
+export function setEntityCurrentActivity(
+  blackboard: RuntimeBlackboard,
+  value: EntityCurrentActivityFact,
+  options: { sourceSystem?: string } = {}
+): BlackboardFactEnvelope<EntityCurrentActivityFact> {
+  return blackboard.setFact({
+    definition: ENTITY_CURRENT_ACTIVITY_FACT,
+    scope: createBlackboardScope("entity", value.entityId),
+    value,
+    sourceSystem: options.sourceSystem ?? ENTITY_CURRENT_ACTIVITY_FACT.ownerSystem
+  });
+}
+
+export function getEntityCurrentGoal(
+  blackboard: RuntimeBlackboard,
+  entityId: string
+): EntityCurrentGoalFact | null {
+  return (
+    blackboard.getFact(ENTITY_CURRENT_GOAL_FACT, createBlackboardScope("entity", entityId))
+      ?.value ?? null
+  );
+}
+
+export function setEntityCurrentGoal(
+  blackboard: RuntimeBlackboard,
+  value: EntityCurrentGoalFact,
+  options: { sourceSystem?: string } = {}
+): BlackboardFactEnvelope<EntityCurrentGoalFact> {
+  return blackboard.setFact({
+    definition: ENTITY_CURRENT_GOAL_FACT,
+    scope: createBlackboardScope("entity", value.entityId),
+    value,
+    sourceSystem: options.sourceSystem ?? ENTITY_CURRENT_GOAL_FACT.ownerSystem
   });
 }
 
