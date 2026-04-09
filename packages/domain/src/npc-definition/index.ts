@@ -1,3 +1,23 @@
+/**
+ * packages/domain/src/npc-definition/index.ts
+ *
+ * Purpose: Defines the canonical authored NPC model and its normalization rules.
+ *
+ * Exports:
+ *   - NPCDefinition and related presentation types
+ *   - createDefaultNPCDefinition
+ *   - normalizeNPCDefinition
+ *   - normalizeNPCDefinitionForWrite
+ *
+ * Relationships:
+ *   - Is consumed by authored project state, runtime NPC assembly, and conversation selection.
+ *   - Owns the plugin metadata extension point used by sugarlang and future plugins.
+ *
+ * Implements: Epic 2 domain prerequisite for NPC metadata propagation
+ *
+ * Status: active
+ */
+
 import { createUuid } from "../shared/identity";
 
 export type NPCAnimationSlot = "idle" | "walk" | "run";
@@ -21,6 +41,9 @@ export interface NPCDefinition {
   description?: string;
   interactionMode: NPCInteractionMode;
   lorePageId: string | null;
+  // Plugin metadata keys must follow the namespace convention documented in
+  // packages/domain/README.md ("Plugin Metadata Convention").
+  metadata?: Record<string, unknown>;
   presentation: NPCPresentationProfile;
 }
 
@@ -31,6 +54,20 @@ export const DEFAULT_NPC_ANIMATION_BINDINGS: NPCAnimationBindings = {
 };
 
 export const DEFAULT_NPC_MODEL_HEIGHT = 1.7;
+
+function isMetadataRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeNpcMetadata(
+  metadata: unknown
+): Record<string, unknown> | undefined {
+  if (!isMetadataRecord(metadata)) {
+    return undefined;
+  }
+
+  return { ...metadata };
+}
 
 export function createNPCDefinitionId(): string {
   return createUuid();
@@ -107,6 +144,7 @@ export function normalizeNPCDefinition(
 ): NPCDefinition {
   const defaultDefinition = createDefaultNPCDefinition();
   const rawInteractionMode = npcDefinition?.interactionMode as string | undefined;
+  const normalizedMetadata = normalizeNpcMetadata(npcDefinition?.metadata);
 
   if (!npcDefinition) {
     return defaultDefinition;
@@ -125,6 +163,7 @@ export function normalizeNPCDefinition(
       npcDefinition.lorePageId.trim().length > 0
         ? npcDefinition.lorePageId.trim()
         : null,
+    ...(normalizedMetadata ? { metadata: normalizedMetadata } : {}),
     presentation: {
       modelAssetDefinitionId:
         npcDefinition.presentation?.modelAssetDefinitionId ??

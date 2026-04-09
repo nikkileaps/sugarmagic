@@ -1,6 +1,6 @@
 # Epic 2: Domain Prerequisites
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Placement Interaction Contract](../../proposals/001-adaptive-language-learning-architecture.md#placement-interaction-contract)
 **Depends on:** Epic 1 (skeleton + QA sign-off)
