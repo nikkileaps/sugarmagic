@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sugarlang Placement Questions Stub Schema",
+  "description": "Epic 1 skeleton placeholder for placement question banks.",
+  "type": "object"
+}

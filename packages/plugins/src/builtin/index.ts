@@ -11,6 +11,10 @@ export {
   normalizeSugarAgentPluginConfig
 } from "../catalog/sugaragent";
 export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
+export {
+  SUGARLANG_PLUGIN_ID,
+  normalizeSugarLangPluginConfig
+} from "../catalog/sugarlang";
 
 interface PluginModule {
   pluginDefinition: DiscoveredPluginDefinition;
