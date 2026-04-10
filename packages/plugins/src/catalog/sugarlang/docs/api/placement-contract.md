@@ -66,3 +66,13 @@ V1 discipline: the plugin owns the questionnaire bank. The types define the
 shape, but the actual question sets ship from
 `data/languages/<lang>/placement-questionnaire.json`. Projects do not customize
 that bank in v1.
+
+## Runtime Loader
+
+Epic 4 adds `runtime/placement/placement-questionnaire-loader.ts` as the single
+runtime loader for the canonical question bank. It fails fast on missing or
+malformed data and currently ships Spanish and Italian plugin-owned banks.
+
+Generic plugin questionnaires remain the fallback source of truth in v1. If a
+future project-level character-voiced override exists, it should override the
+generic bank explicitly rather than partially mutate it in place.

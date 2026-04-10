@@ -26,3 +26,14 @@ Epic 3 also defines the observation-side types the Budgeter consumes later:
   - `provisionalEvidenceDelta`
 
 This split is how sugarlang keeps receptive FSRS progress separate from productive strength and provisional skim-past evidence. See Proposal 001 § Receptive vs. Productive Knowledge and § Observer Latency Bias.
+
+## Language Data Consumed
+
+The Budgeter does not read morphology or placement banks directly. Its
+language-data dependency is the lexical atlas:
+
+- `data/languages/<lang>/cefrlex.json`
+
+The atlas provides CEFR priors, frequency ranks, and glosses through
+`CefrLexAtlasProvider`. Epic 4 also makes `atlasVersion` part of the data file so
+compile/cache consumers can invalidate when the lexical foundation changes.

@@ -20,3 +20,22 @@ Epic 3 locks in the three exemption kinds that later classifier work must preser
 - `prescription-introduce`
 - `named-entity`
 - `quest-essential`
+
+## Language Data Consumed
+
+Epic 4 gives the classifier two plugin-owned data files per language:
+
+- `data/languages/<lang>/morphology.json`
+  - Loaded through `runtime/classifier/morphology-loader.ts`
+  - Current checked-in snapshots expose 7,203 Spanish forms and 2,883 Italian forms
+- `data/languages/<lang>/simplifications.json`
+  - Loaded through `runtime/classifier/simplifications-loader.ts`
+  - Supplies deterministic lower-band substitutions or gloss fallbacks
+
+The loader discipline is fail-fast: missing or malformed data throws during load
+instead of silently degrading to an empty lookup table.
+
+## Coverage Notes
+
+- Spanish currently ships a real ELELex-backed atlas, with explicit smoke coverage for `corriendo -> correr`.
+- Italian ships a real Kelly-backed atlas with frequency-derived backfill for Kelly rows that lack CEFR points, with explicit smoke coverage for `correndo -> correre`.

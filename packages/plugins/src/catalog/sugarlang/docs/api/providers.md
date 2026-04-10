@@ -32,3 +32,17 @@ Epic 3 also wires an architectural test that checks:
 
 These types define the full shape of data crossing the provider seams before any
 later implementation logic lands.
+
+## Epic 4 Implementation Notes
+
+Epic 4 fills in the lexical-atlas side with
+`runtime/providers/impls/cefr-lex-atlas-provider.ts`.
+
+- Source of truth: `data/languages/<lang>/cefrlex.json`
+- Load timing: lazy, cached in memory after first lookup
+- Failure mode: throw immediately if the requested language is missing or malformed
+- Versioning: `getAtlasVersion(lang)` surfaces the file's `atlasVersion` so
+  compile and cache code can include it in invalidation keys
+
+The current checked-in atlas snapshots cover Spanish and Italian and can be
+loaded independently without shared mutable state or language collision.

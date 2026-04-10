@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/morphology.schema.json",
+  "title": "Sugarlang Morphology Index",
+  "description": "Plugin-shipped surface-form to lemma lookup data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lang", "forms"],
+  "properties": {
+    "lang": {
+      "type": "string",
+      "minLength": 2
+    },
+    "forms": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/morphologyEntry"
+      }
+    }
+  },
+  "$defs": {
+    "morphologyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lemmaId"],
+      "properties": {
+        "lemmaId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "partsOfSpeech": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

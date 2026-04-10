@@ -1,1 +1,161 @@
-{}
+{
+  "schemaVersion": 1,
+  "lang": "it",
+  "targetLanguage": "it",
+  "supportLanguage": "en",
+  "formTitle": "Modulo di Arrivo",
+  "formIntro": "Rispondi in italiano quando puoi. Lascia vuoto quello che ancora non capisci.",
+  "minAnswersForValid": 6,
+  "questions": [
+    {
+      "kind": "multiple-choice",
+      "questionId": "it-q1",
+      "targetBand": "A1",
+      "promptText": "Come ti chiami?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Mi chiamo Luca.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "Ho una valigia.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Lavoro qui.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "fill-in-blank",
+      "questionId": "it-q2",
+      "targetBand": "A1",
+      "promptText": "Completa la frase.",
+      "sentenceTemplate": "Io ___ del Canada.",
+      "acceptableAnswers": [
+        "sono"
+      ],
+      "acceptableLemmas": [
+        "essere"
+      ]
+    },
+    {
+      "kind": "yes-no",
+      "questionId": "it-q3",
+      "targetBand": "A1",
+      "promptText": "Parli un po di italiano?",
+      "correctAnswer": "yes",
+      "yesLabel": "si",
+      "noLabel": "no"
+    },
+    {
+      "kind": "free-text",
+      "questionId": "it-q4",
+      "targetBand": "A2",
+      "promptText": "Scrivi una frase sul tuo lavoro.",
+      "expectedLemmas": [
+        "lavorare"
+      ],
+      "acceptableForms": [
+        "lavoro",
+        "lavorare",
+        "lavorando"
+      ],
+      "minExpectedLength": 10
+    },
+    {
+      "kind": "multiple-choice",
+      "questionId": "it-q5",
+      "targetBand": "A2",
+      "promptText": "Quanto tempo resti in citta?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Due settimane.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "La stazione e grande.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Mi piace il formaggio.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "yes-no",
+      "questionId": "it-q6",
+      "targetBand": "A2",
+      "promptText": "Viaggi da solo oggi?",
+      "correctAnswer": "yes",
+      "yesLabel": "si",
+      "noLabel": "no"
+    },
+    {
+      "kind": "fill-in-blank",
+      "questionId": "it-q7",
+      "targetBand": "B1",
+      "promptText": "Completa la frase.",
+      "sentenceTemplate": "Ho bisogno del mio ___ per il treno.",
+      "acceptableAnswers": [
+        "biglietto"
+      ],
+      "acceptableLemmas": [
+        "biglietto"
+      ]
+    },
+    {
+      "kind": "free-text",
+      "questionId": "it-q8",
+      "targetBand": "B1",
+      "promptText": "Spiega perche vieni in questa citta.",
+      "expectedLemmas": [
+        "venire",
+        "citta"
+      ],
+      "minExpectedLength": 18
+    },
+    {
+      "kind": "multiple-choice",
+      "questionId": "it-q9",
+      "targetBand": "B2",
+      "promptText": "Quale documento presenti alla dogana?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Il mio passaporto.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "Il mio formaggio preferito.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Il mio calendario.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "free-text",
+      "questionId": "it-q10",
+      "targetBand": "B2",
+      "promptText": "Descrivi un problema di viaggio che hai risolto di recente.",
+      "expectedLemmas": [
+        "risolvere",
+        "viaggiare"
+      ],
+      "minExpectedLength": 24
+    }
+  ]
+}

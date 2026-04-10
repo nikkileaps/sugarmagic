@@ -1,6 +1,240 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Sugarlang Placement Questions Stub Schema",
-  "description": "Epic 1 skeleton placeholder for placement question banks.",
-  "type": "object"
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/placement-questionnaire.schema.json",
+  "title": "Sugarlang Placement Questionnaire",
+  "description": "Plugin-owned placement questionnaire data shape.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "lang",
+    "targetLanguage",
+    "supportLanguage",
+    "formTitle",
+    "formIntro",
+    "questions",
+    "minAnswersForValid"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "lang": {
+      "type": "string",
+      "minLength": 2
+    },
+    "targetLanguage": {
+      "type": "string",
+      "minLength": 2
+    },
+    "supportLanguage": {
+      "type": "string",
+      "minLength": 2
+    },
+    "formTitle": {
+      "type": "string",
+      "minLength": 1
+    },
+    "formIntro": {
+      "type": "string",
+      "minLength": 1
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/question"
+      }
+    },
+    "minAnswersForValid": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "cefrBand": {
+      "type": "string",
+      "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "baseQuestion": {
+      "type": "object",
+      "required": ["kind", "questionId", "targetBand", "promptText"],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "questionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetBand": {
+          "$ref": "#/$defs/cefrBand"
+        },
+        "promptText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supportText": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "multipleChoiceQuestion": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseQuestion"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "multiple-choice"
+            },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["optionId", "text", "isCorrect"],
+                "properties": {
+                  "optionId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "isCorrect": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          },
+          "required": ["options"]
+        }
+      ]
+    },
+    "freeTextQuestion": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseQuestion"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "free-text"
+            },
+            "expectedLemmas": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "acceptableForms": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "minExpectedLength": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": ["expectedLemmas"]
+        }
+      ]
+    },
+    "yesNoQuestion": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseQuestion"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "yes-no"
+            },
+            "correctAnswer": {
+              "type": "string",
+              "enum": ["yes", "no"]
+            },
+            "yesLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "noLabel": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["correctAnswer", "yesLabel", "noLabel"]
+        }
+      ]
+    },
+    "fillInBlankQuestion": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseQuestion"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "fill-in-blank"
+            },
+            "sentenceTemplate": {
+              "type": "string",
+              "minLength": 1
+            },
+            "acceptableAnswers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "acceptableLemmas": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": ["sentenceTemplate", "acceptableAnswers"]
+        }
+      ]
+    },
+    "question": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/multipleChoiceQuestion"
+        },
+        {
+          "$ref": "#/$defs/freeTextQuestion"
+        },
+        {
+          "$ref": "#/$defs/yesNoQuestion"
+        },
+        {
+          "$ref": "#/$defs/fillInBlankQuestion"
+        }
+      ]
+    }
+  }
 }

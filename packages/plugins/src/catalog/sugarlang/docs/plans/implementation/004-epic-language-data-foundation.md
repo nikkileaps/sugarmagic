@@ -1,6 +1,6 @@
 # Epic 4: Language Data Foundation
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Multi-Language Handling](../../proposals/001-adaptive-language-learning-architecture.md#multi-language-handling)
 **Depends on:** Epic 1 (skeleton with `data/languages/` placeholders)
@@ -13,6 +13,11 @@ The Proposal 001 architecture is language-parameterized: every language is a dat
 This epic populates the **Spanish (`es`)** and **Italian (`it`)** data directories with real content. Spanish is well-resourced (ELELex). Italian is under-resourced and requires a derived-frequency pipeline using OpenSubtitles + Wikipedia + Kelly project + optional compile-time Claude batch classification. Both languages must ship with all four files and pass schema validation before any downstream epic can start consuming them.
 
 This epic is largely **offline data preparation work**. The compile scripts run once (or occasionally, when upstream data updates), and their outputs are checked into the repo. The runtime only reads the final JSON files.
+
+Implementation note: the current checked-in pass imports Spanish from ELELex and
+Italian from the published Kelly Italian list. The Italian OPUS/Wikipedia
+augmentation path remains a future refresh step, but the checked-in assets are
+now source-backed rather than synthetic placeholders.
 
 ## Prerequisites
 
@@ -211,7 +216,7 @@ This epic is largely **offline data preparation work**. The compile scripts run 
 - **Upstream data licensing.** ELELex is research-permissive, Kelly project is free, OpenSubtitles/OPUS is permissive. Verify each license before checkin and include terms in the README. If any license requires attribution at runtime (unlikely but possible), the plugin must surface it.
 - **Morphology library choice.** Spanish and Italian morphology can be generated via spaCy (Python), Stanza, or pure-JS lemmatizer libraries. Python sidecar at build time is fine (scripts live in `scripts/data-prep/` and run offline), but the runtime must not depend on Python. Confirm the runtime loader uses pure-JS trie lookup.
 - **Compile script dependencies.** The `scripts/data-prep/` directory might need Python + pip packages for spaCy. This pulls in a build-time Python dependency. Alternatives: (a) use pure-JS libraries if acceptable coverage exists, (b) pre-commit the generated output and only run Python locally when data updates. Prefer (b) — don't force every dev to install spaCy.
-- **Placement questions as code or content.** For v1, generic-voice placement questions ship as plugin data. Character-voiced questions (Orrin Lark's lines) are content owned by the project per Plan 001-Wordlark-Hollow. The split is: generic questions are the *fallback*, character-voiced questions *override* them when provided. Document the precedence rule.
+- **Placement questions as code or content.** For v1, generic-voice placement questions ship as plugin data. Character-voiced questions (Orrin Lark's lines) are content owned by the project per Plan 001-Wordlark-Hollow. The split is: generic questions are the _fallback_, character-voiced questions _override_ them when provided. Document the precedence rule.
 - **Italian quality ceiling.** Derived-frequency CEFR assignment correlates with human judgment at ~0.78 per research. That's "good enough for placement" but not equivalent to hand-curated. Expect some noticeable rough edges; the `cefrPriorSource` tagging and `review-queue.yaml` are the release valves for fixing them post-launch.
 
 ## Exit Criteria

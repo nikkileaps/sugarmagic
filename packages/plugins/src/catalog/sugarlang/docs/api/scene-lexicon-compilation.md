@@ -36,3 +36,15 @@ This document records the compiled scene-lexicon artifact shape.
 population lands later in Epic 14. `CompiledSceneLexicon.chunks` is therefore
 optional: freshly compiled scenes may not have chunk data yet, while later
 background extraction can populate it without changing the schema.
+
+## Atlas Version Source
+
+Epic 4 makes `atlasVersion` a data-backed value sourced from
+`data/languages/<lang>/cefrlex.json` through `CefrLexAtlasProvider`. That keeps
+scene-lexicon compilation tied to the actual lexical atlas snapshot instead of a
+hardcoded compile constant.
+
+Current source patterns:
+
+- Spanish: ELELex import
+- Italian: Kelly import with frequency-derived backfill

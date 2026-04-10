@@ -31,3 +31,11 @@ splice.
 The Director is invoked through `DirectorPolicy.invoke(context)` from the ADR 010
 provider contract. Prompt-building, schema parsing, caching, and fallback
 behavior all sit behind that seam in later epics.
+
+## Language Data Boundary
+
+The Director does not load plugin language files directly in Epic 4. It consumes
+Budgeter prescriptions and middleware-assembled context that were already shaped
+by the lexical atlas and learner state. Placement banks are intentionally not a
+Director concern: the plugin-owned placement questionnaire lives under
+`runtime/placement/` and bypasses the Director during the opening-dialog phase.

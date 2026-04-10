@@ -12,13 +12,31 @@
  *
  * Implements: Proposal 001 §2. Envelope Classifier
  *
- * Status: skeleton (no implementation yet; see Epic 5)
+ * Status: active
  */
 
+import {
+  lemmatizeWithMorphology,
+  type MorphologyDataFile
+} from "./morphology-loader";
+
+function isMorphologyDataFile(
+  morphologyIndex: MorphologyDataFile | Record<string, string>
+): morphologyIndex is MorphologyDataFile {
+  return "forms" in morphologyIndex;
+}
+
 export function lemmatize(
-  _token: string,
-  _lang: string,
-  _morphologyIndex: Record<string, string>
+  token: string,
+  lang: string,
+  morphologyIndex?: MorphologyDataFile | Record<string, string>
 ): string | null {
-  throw new Error("TODO: Epic 5");
+  if (morphologyIndex && isMorphologyDataFile(morphologyIndex)) {
+    return morphologyIndex.forms[token.trim().toLowerCase()]?.lemmaId ?? null;
+  }
+  if (morphologyIndex) {
+    return morphologyIndex[token.trim().toLowerCase()] ?? null;
+  }
+
+  return lemmatizeWithMorphology(token, lang);
 }
