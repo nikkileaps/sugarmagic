@@ -67,6 +67,23 @@ shape, but the actual question sets ship from
 `data/languages/<lang>/placement-questionnaire.json`. Projects do not customize
 that bank in v1.
 
+## Placement Status Fact
+
+Epic 7 adds `SUGARLANG_PLACEMENT_STATUS_FACT` as the persistent runtime fact for
+placement progress and completion state. Its payload shape is:
+
+```ts
+{
+  status: "not-started" | "in-progress" | "completed";
+  cefrBand?: CEFRBand;
+  confidence?: number;
+  completedAt?: number;
+}
+```
+
+When no value has been written yet, sugarlang reads the default as
+`{ status: "not-started" }`.
+
 ## Runtime Loader
 
 Epic 4 adds `runtime/placement/placement-questionnaire-loader.ts` as the single

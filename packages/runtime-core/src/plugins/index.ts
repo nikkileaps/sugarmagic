@@ -3,6 +3,7 @@ import type {
   ConversationMiddleware,
   ConversationProvider
 } from "../conversation";
+import type { BlackboardFactDefinition } from "../state";
 import { System, type World } from "../ecs";
 
 export type RuntimePluginContributionKind =
@@ -96,6 +97,7 @@ export interface RuntimePluginInstance {
   pluginId: string;
   displayName: string;
   contributions: RuntimePluginContribution[];
+  blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
   serializeState?: () => unknown;

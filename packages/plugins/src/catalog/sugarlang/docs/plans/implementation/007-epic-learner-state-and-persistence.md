@@ -1,6 +1,6 @@
 # Epic 7: Learner State and Persistence
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Learner State Model](../../proposals/001-adaptive-language-learning-architecture.md#learner-state-model)
 **Depends on:** Epic 1 (skeleton), Epic 3 (types), Epic 4 (loaders)

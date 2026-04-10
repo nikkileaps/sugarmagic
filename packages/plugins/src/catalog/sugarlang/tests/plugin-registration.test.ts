@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/plugin-registration.test.ts
  *
- * Purpose: Verifies that the skeleton sugarlang plugin can be imported and instantiated without throwing.
+ * Purpose: Verifies that the sugarlang plugin can be imported and instantiated without throwing.
  *
  * Exports:
  *   - none
@@ -12,7 +12,7 @@
  *
  * Implements: Proposal 001 §The Substrate (Untouched) / §File Structure
  *
- * Status: skeleton (no implementation yet; see Epic 1 Story 1.9)
+ * Status: active
  */
 
 import { createPluginConfigurationRecord } from "@sugarmagic/domain";
@@ -39,6 +39,7 @@ describe("sugarlang plugin registration", () => {
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
     expect(instance.contributions).toEqual([]);
+    expect(instance.blackboardFactDefinitions).toHaveLength(4);
     expect(typeof instance.init).toBe("function");
     expect(typeof instance.dispose).toBe("function");
   });

@@ -86,6 +86,7 @@ import {
   getEntityPlayerSpatialRelation,
   getEntityPosition,
   getTrackedQuest as getTrackedQuestFact,
+  RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   setActiveQuestObjectives,
   setActiveQuestStage,
   setTrackedQuest,
@@ -280,7 +281,14 @@ export function createRuntimeGameplaySessionController(
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
-  const blackboard = createRuntimeBlackboard();
+  const blackboard = createRuntimeBlackboard({
+    definitions: [
+      ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
+      ...(pluginManager?.getPlugins().flatMap(
+        (plugin) => plugin.blackboardFactDefinitions ?? []
+      ) ?? [])
+    ]
+  });
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
     pluginManager?.getContributions("conversation.provider").map(

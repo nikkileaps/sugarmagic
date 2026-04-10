@@ -1,6 +1,6 @@
 # Provider API
 
-Status: Updated in Epic 3
+Status: Updated in Epic 7
 
 This document records the ADR 010 provider boundaries:
 
@@ -46,3 +46,18 @@ Epic 4 fills in the lexical-atlas side with
 
 The current checked-in atlas snapshots cover Spanish and Italian and can be
 loaded independently without shared mutable state or language collision.
+
+## Epic 7 Read-Side Implementations
+
+Epic 7 adds the learner-side provider implementations:
+
+- `runtime/providers/impls/fsrs-learner-prior-provider.ts`
+  Responsibility: deterministic seeding of `LemmaCard` values and CEFR posterior
+  priors from the lexical atlas
+- `runtime/providers/impls/blackboard-learner-store.ts`
+  Responsibility: read-only access to the current learner profile plus delegated
+  learner-prior helpers
+
+`BlackboardLearnerStore` is intentionally read-only. It may load and clone the
+current profile, but it does not write back into the blackboard. The single
+writer remains `LearnerStateReducer` in `runtime/learner/`.

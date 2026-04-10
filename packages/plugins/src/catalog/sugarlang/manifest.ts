@@ -41,6 +41,9 @@ import {
 import {
   seedSugarlangRuntimeCompileCache
 } from "./runtime/compile/runtime-cache-state";
+import {
+  SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
+} from "./runtime/learner/fact-definitions";
 import { sugarlangShellContributionDefinition } from "./ui/shell/contributions";
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
@@ -55,6 +58,7 @@ export function createSugarlangPlugin(
     pluginId: context.configuration.pluginId,
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions: [],
+    blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
     async init(runtimeContext) {
       const lexicons = extractSugarlangPreviewBootLexicons(
         runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
