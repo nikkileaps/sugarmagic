@@ -17,11 +17,13 @@
 
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
+import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { ManualRebuildButton } from "./manual-rebuild-button";
 import { NpcInspectorRoleDropdown } from "./npc-inspector-role-dropdown";
 import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
+import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -109,6 +111,22 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
           createElement(PlacementQuestionBankViewer, {
             targetLanguage: props.targetLanguage
           })
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "turn-inspector",
+        label: "Turn Inspector",
+        summary: "Inspects per-turn Sugarlang rationale traces from preview telemetry.",
+        render: () => createElement(SugarlangTurnInspector)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "comprehension-check-monitor",
+        label: "Comprehension Monitor",
+        summary: "Shows probe lifecycle telemetry, outcomes, and session rollups.",
+        render: () => createElement(ComprehensionCheckMonitor)
       }
     ],
     npcInteractionOptions: []

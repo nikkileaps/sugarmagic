@@ -48,10 +48,8 @@ import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
 import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
-import {
-  createNoOpTelemetrySink,
-  SugarlangRuntimeServices
-} from "./runtime/runtime-services";
+import { SugarlangRuntimeServices } from "./runtime/runtime-services";
+import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
 import { sugarlangShellContributionDefinition } from "./ui/shell/contributions";
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
@@ -80,7 +78,7 @@ export function createSugarlangPlugin(
         }
       }
     : createNoOpSugarlangLogger();
-  const telemetry = createNoOpTelemetrySink();
+  const telemetry = resolveSugarlangTelemetrySink(context.boot);
   const services = new SugarlangRuntimeServices({
     config,
     environment: context.environment,

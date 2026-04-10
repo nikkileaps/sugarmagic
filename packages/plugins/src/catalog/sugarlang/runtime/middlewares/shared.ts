@@ -61,9 +61,14 @@ export interface PlacementFlowAnnotation {
 }
 
 export interface StoredComprehensionCheck {
+  probeId: string;
   targetLemmas: LemmaRef[];
   probeStyle: "recall" | "recognition" | "production";
   characterVoiceReminder: string;
+  sceneId: string | null;
+  npcId: string | null;
+  npcDisplayName: string | null;
+  promptedAtMs: number;
   triggerReason: string;
 }
 
@@ -85,6 +90,8 @@ export const SUGARLANG_CONSTRAINT_ANNOTATION = "sugarlang.constraint";
 export const SUGARLANG_DIRECTIVE_ANNOTATION = "sugarlang.directive";
 export const SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION =
   "sugarlang.comprehensionCheckInFlight";
+export const SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION =
+  "sugarlang.comprehensionProbeId";
 export const SUGARLANG_CHOICE_LEMMA_ANNOTATION = "sugarlang.choiceLemma";
 export const SUGARLANG_HOVER_LEMMA_ANNOTATION = "sugarlang.hoverLemma";
 export const SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION =
@@ -391,6 +398,26 @@ export function getSugarAgentTurnCount(execution: ConversationExecutionContext):
     return (state as { turnCount: number }).turnCount;
   }
   return 0;
+}
+
+export function getSugarlangTelemetryTurnId(
+  execution: ConversationExecutionContext,
+  phase: "prepare" | "finalize" = "finalize"
+): string {
+  const sessionId = getSugarAgentSessionId(execution);
+  const turnCount = getSugarAgentTurnCount(execution);
+  const ordinal = phase === "prepare" ? turnCount + 1 : Math.max(1, turnCount);
+  return `sugarlang:${sessionId}:turn:${ordinal}`;
+}
+
+export function getSugarlangConversationId(
+  execution: ConversationExecutionContext
+): string {
+  return (
+    execution.selection.npcDefinitionId ??
+    execution.selection.dialogueDefinitionId ??
+    "conversation"
+  );
 }
 
 export function normalizeTurn(

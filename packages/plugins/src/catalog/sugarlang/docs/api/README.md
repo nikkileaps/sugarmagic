@@ -13,7 +13,7 @@ from skeleton to implementation.
 | `middlewares.md`               | Middleware ordering, annotation contracts, SugarAgent integration, and placement flow ownership. | Epic 2, Epic 10, Epic 11 | Updated in Epic 11 |
 | `placement-contract.md`        | Placement capability boundary, questionnaire ownership, scoring, configuration, and replay inertness. | Epic 2, Epic 3, Epic 11 | Updated in Epic 11 |
 | `editor-contributions.md`      | Studio-facing shell contribution surfaces and editor-only plugin UI.                    | Epic 1, Epic 11, Epic 12 | Updated in Epic 11 |
-| `telemetry.md`                 | Telemetry sink contract, rationale traces, and debug-panel-facing data surfaces.        | Epic 1, Epic 13         | Stub              |
+| `telemetry.md`                 | Telemetry sink contract, rationale traces, and debug-panel-facing data surfaces.        | Epic 1, Epic 13         | Updated           |
 | `providers.md`                 | ADR 010 provider interfaces and implementation ownership boundaries.                    | Epic 3                  | Updated in Epic 3 |
 
 ## Import Surface

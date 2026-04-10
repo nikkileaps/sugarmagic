@@ -23,14 +23,13 @@ import type {
   DirectorPolicy,
   PedagogicalDirective
 } from "../types";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import { DirectorInvocationError } from "./claude-director-policy";
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 export interface SugarLangDirectorOptions {
   claudePolicy: DirectorPolicy;
@@ -49,7 +48,7 @@ export class SugarLangDirector {
     this.claudePolicy = options.claudePolicy;
     this.fallbackPolicy = options.fallbackPolicy;
     this.cache = options.cache;
-    this.telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+    this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
   }
 
   async invoke(context: DirectorContext): Promise<PedagogicalDirective> {
@@ -61,11 +60,36 @@ export class SugarLangDirector {
     };
     const cached = this.cache.get(effectiveContext.conversationId);
     if (cached) {
-      await this.telemetry.emit("director.cache-hit", {
-        conversationId: effectiveContext.conversationId,
-        fallback: cached.isFallbackDirective,
-        timestamp: Date.now()
-      });
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("director.cache-hit", {
+          conversationId: effectiveContext.conversationId,
+          sessionId: effectiveContext.telemetryContext?.sessionId,
+          turnId: effectiveContext.telemetryContext?.turnId,
+          timestamp: Date.now(),
+          sceneId: effectiveContext.scene.sceneId,
+          npcId: effectiveContext.npc.npcDefinitionId,
+          npcDisplayName: effectiveContext.npc.displayName,
+          fallback: cached.isFallbackDirective
+        })
+      );
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("director.invocation-completed", {
+          conversationId: effectiveContext.conversationId,
+          sessionId: effectiveContext.telemetryContext?.sessionId,
+          turnId: effectiveContext.telemetryContext?.turnId,
+          timestamp: Date.now(),
+          sceneId: effectiveContext.scene.sceneId,
+          npcId: effectiveContext.npc.npcDefinitionId,
+          npcDisplayName: effectiveContext.npc.displayName,
+          directive: cached,
+          cacheHit: true,
+          fallback: cached.isFallbackDirective,
+          latencyMs: 0,
+          parseMode: "cached"
+        })
+      );
       return cached;
     }
 
@@ -85,13 +109,21 @@ export class SugarLangDirector {
     }
 
     this.cache.set(effectiveContext.conversationId, directive);
-    await this.telemetry.emit("director.invocation-resolved", {
-      conversationId: effectiveContext.conversationId,
-      outcome,
-      fallback: directive.isFallbackDirective,
-      calibrationActive,
-      timestamp: Date.now()
-    });
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("director.invocation-resolved", {
+        conversationId: effectiveContext.conversationId,
+        sessionId: effectiveContext.telemetryContext?.sessionId,
+        turnId: effectiveContext.telemetryContext?.turnId,
+        timestamp: Date.now(),
+        sceneId: effectiveContext.scene.sceneId,
+        npcId: effectiveContext.npc.npcDefinitionId,
+        npcDisplayName: effectiveContext.npc.displayName,
+        outcome,
+        fallback: directive.isFallbackDirective,
+        calibrationActive
+      })
+    );
 
     return directive;
   }

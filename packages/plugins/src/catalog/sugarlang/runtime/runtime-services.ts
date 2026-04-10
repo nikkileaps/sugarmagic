@@ -6,7 +6,6 @@
  * Exports:
  *   - SugarlangLoggerLike
  *   - SugarlangRuntimeServices
- *   - createNoOpTelemetrySink
  *
  * Relationships:
  *   - Depends on runtime-core blackboard and authored content passed through plugin init.
@@ -56,7 +55,10 @@ import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { FsrsLearnerPriorProvider } from "./providers/impls/fsrs-learner-prior-provider";
-import type { TelemetrySink } from "./telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  type TelemetrySink
+} from "./telemetry/telemetry";
 
 export interface SugarlangLoggerLike {
   debug: (message: string, payload?: Record<string, unknown>) => void;
@@ -105,16 +107,6 @@ interface BoundRuntimeContext {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
-}
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
-
-export function createNoOpTelemetrySink(): TelemetrySink {
-  return NO_OP_TELEMETRY;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -173,7 +165,7 @@ export class SugarlangRuntimeServices {
     this.config = options.config;
     this.environment = options.environment;
     this.logger = options.logger;
-    this.telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+    this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
     const anthropicApiKey = this.environment?.SUGARMAGIC_ANTHROPIC_API_KEY?.trim() ?? "";
     const anthropicModel =
       this.environment?.SUGARMAGIC_ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-6";

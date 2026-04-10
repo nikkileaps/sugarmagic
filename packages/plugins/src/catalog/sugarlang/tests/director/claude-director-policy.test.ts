@@ -96,14 +96,14 @@ describe("ClaudeDirectorPolicy", () => {
 
     await policy.invoke(createDirectorContext());
 
-    expect(telemetry.emit).toHaveBeenCalledWith(
-      "director.invocation-started",
-      expect.objectContaining({
-        conversationId: "conversation-1"
-      })
-    );
-    expect(telemetry.emit).toHaveBeenCalledWith(
-      "director.invocation-completed",
+    const eventKinds = telemetry.emit.mock.calls.map((call) => call[0].kind);
+    expect(eventKinds).toContain("director.invocation-started");
+    expect(eventKinds).toContain("director.invocation-completed");
+    expect(
+      telemetry.emit.mock.calls.find(
+        (call) => call[0].kind === "director.invocation-completed"
+      )?.[0]
+    ).toEqual(
       expect.objectContaining({
         conversationId: "conversation-1",
         parseMode: "validated"

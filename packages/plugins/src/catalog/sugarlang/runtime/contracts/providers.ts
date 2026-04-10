@@ -127,6 +127,10 @@ export interface DirectorLanguageContext {
  */
 export interface DirectorContext {
   conversationId: string;
+  telemetryContext?: {
+    turnId: string;
+    sessionId: string;
+  };
   learner: LearnerProfile;
   scene: CompiledSceneLexicon;
   prescription: LexicalPrescription;

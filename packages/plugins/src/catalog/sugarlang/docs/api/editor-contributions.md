@@ -1,6 +1,6 @@
 # Editor Contributions API
 
-Status: Updated in Epic 12
+Status: Updated in Epic 13
 
 This document tracks the Studio-facing contribution surfaces owned by
 Sugarlang. These are editor affordances only. They sit on top of the runtime
@@ -23,12 +23,14 @@ The canonical registration point is:
 Sugarlang contributes:
 
 - One `design.workspace`: `sugarlang`
-- Five `design.section` surfaces:
+- Seven `design.section` surfaces:
   - NPC inspector role dropdown
   - Scene density histogram
   - Quest placement event hint
   - Compile status + rebuild panel
   - Placement question bank viewer
+  - Turn inspector
+  - Comprehension check monitor
 
 The Studio host mounts these sections generically through the plugin shell
 contribution contract in `packages/plugins/src/shell/index.ts`.
@@ -97,6 +99,38 @@ Behavior:
 - Loads the canonical plugin-shipped `placement-questionnaire.json`
 - Groups questions by CEFR band
 - Stays read-only in v1
+
+## Turn Inspector
+
+File:
+
+`packages/plugins/src/catalog/sugarlang/ui/shell/sugarlang-turn-inspector.tsx`
+
+Workspace:
+
+- `sugarlang`
+
+Behavior:
+
+- Lists recent telemetry-backed conversations
+- Lists the turns inside a selected conversation
+- Renders the reconstructed rationale trace for a selected turn
+
+## Comprehension Check Monitor
+
+File:
+
+`packages/plugins/src/catalog/sugarlang/ui/shell/comprehension-check-monitor.tsx`
+
+Workspace:
+
+- `sugarlang`
+
+Behavior:
+
+- Lists recent comprehension probes from preview telemetry
+- Shows a per-session probe rollup
+- Shows the full lifecycle detail for a selected probe
 
 ## Quest Placement Event Hint
 

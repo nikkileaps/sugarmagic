@@ -27,16 +27,15 @@ import type {
   DirectorPolicy,
   PedagogicalDirective
 } from "../types";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 
 const DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 900;
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 export interface DirectorClaudeClientResult {
   text: string;
@@ -111,7 +110,7 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
 
   constructor(options: ClaudeDirectorPolicyOptions) {
     this.client = options.client;
-    this.telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+    this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
     this.model = options.model ?? DEFAULT_DIRECTOR_MODEL;
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
     this.now = options.now ?? (() => Date.now());
@@ -128,12 +127,29 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
       : prompt.user;
     const startedAt = this.now();
 
-    await this.telemetry.emit("director.invocation-started", {
-      conversationId: context.conversationId,
-      model: this.model,
-      timestamp: startedAt,
-      cacheMarkers: prompt.cacheMarkers
-    });
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("director.invocation-started", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: startedAt,
+        sceneId: context.scene.sceneId,
+        npcId: context.npc.npcDefinitionId,
+        npcDisplayName: context.npc.displayName,
+        directorContext: {
+          calibrationActive: context.calibrationActive,
+          citedQuestEssentialCount: context.activeQuestEssentialLemmas.length,
+          pendingProvisionalCount: context.pendingProvisionalLemmas.length,
+          learnerBand: context.learner.estimatedCefrBand
+        },
+        cacheHit: false,
+        model: this.model,
+        cacheMarkers: prompt.cacheMarkers,
+        pendingProvisionalSnapshot: context.pendingProvisionalLemmas,
+        probeFloorState: context.probeFloorState
+      })
+    );
 
     let response: DirectorClaudeClientResult;
     try {
@@ -145,13 +161,21 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
         cacheMarkers: prompt.cacheMarkers
       });
     } catch (error) {
-      await this.telemetry.emit("director.invocation-failed", {
-        conversationId: context.conversationId,
-        model: this.model,
-        latencyMs: this.now() - startedAt,
-        reason: error instanceof Error ? error.message : "Claude request failed",
-        timestamp: this.now()
-      });
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("director.invocation-failed", {
+          conversationId: context.conversationId,
+          sessionId: context.telemetryContext?.sessionId,
+          turnId: context.telemetryContext?.turnId,
+          timestamp: this.now(),
+          sceneId: context.scene.sceneId,
+          npcId: context.npc.npcDefinitionId,
+          npcDisplayName: context.npc.displayName,
+          model: this.model,
+          latencyMs: this.now() - startedAt,
+          reason: error instanceof Error ? error.message : "Claude request failed"
+        })
+      );
       throw new DirectorInvocationError(
         error instanceof Error ? error.message : "Claude request failed",
         undefined,
@@ -189,21 +213,33 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
     }
 
     const endedAt = this.now();
-    await this.telemetry.emit("director.invocation-completed", {
-      conversationId: context.conversationId,
-      model: this.model,
-      latencyMs: endedAt - startedAt,
-      requestId: response.requestId ?? null,
-      parseMode,
-      cacheHit: false,
-      timestamp: endedAt,
-      inputTokens:
-        response.inputTokens ??
-        estimatePromptTokens(prompt.system) + estimatePromptTokens(userPrompt),
-      outputTokens: response.outputTokens ?? estimatePromptTokens(response.text),
-      cacheReadInputTokens: response.cacheReadInputTokens ?? null,
-      cacheCreationInputTokens: response.cacheCreationInputTokens ?? null
-    });
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("director.invocation-completed", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: endedAt,
+        sceneId: context.scene.sceneId,
+        npcId: context.npc.npcDefinitionId,
+        npcDisplayName: context.npc.displayName,
+        directive,
+        model: this.model,
+        latencyMs: endedAt - startedAt,
+        requestId: response.requestId ?? null,
+        parseMode,
+        cacheHit: false,
+        fallback: directive.isFallbackDirective,
+        tokenCost: {
+          inputTokens:
+            response.inputTokens ??
+            estimatePromptTokens(prompt.system) + estimatePromptTokens(userPrompt),
+          outputTokens: response.outputTokens ?? estimatePromptTokens(response.text),
+          cacheReadInputTokens: response.cacheReadInputTokens ?? null,
+          cacheCreationInputTokens: response.cacheCreationInputTokens ?? null
+        }
+      })
+    );
 
     return directive;
   }

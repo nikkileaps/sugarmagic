@@ -35,7 +35,9 @@ describe("sugarlang shell contributions", () => {
       "scene-density",
       "placement-event-hint",
       "compile-status",
-      "placement-question-bank"
+      "placement-question-bank",
+      "turn-inspector",
+      "comprehension-check-monitor"
     ]);
   });
 });

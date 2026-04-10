@@ -118,8 +118,8 @@ describe("parseDirective", () => {
       expect(result.error.code).toBe("hard_floor_violated");
     }
     expect(telemetry.emit).toHaveBeenCalledWith(
-      "comprehension.director-hard-floor-violated",
       expect.objectContaining({
+        kind: "comprehension.director-hard-floor-violated",
         conversationId: "conversation-1"
       })
     );
@@ -148,8 +148,8 @@ describe("parseDirective", () => {
       expect(result.error.code).toBe("quest_essential_glossing_required");
     }
     expect(telemetry.emit).toHaveBeenCalledWith(
-      "quest-essential.director-forced-glossing",
       expect.objectContaining({
+        kind: "quest-essential.director-forced-glossing",
         correctedGlossingStrategy: "parenthetical"
       })
     );

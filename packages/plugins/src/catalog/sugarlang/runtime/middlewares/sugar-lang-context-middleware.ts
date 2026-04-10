@@ -22,7 +22,12 @@ import {
   createSugarlangPlacementStatusScope,
   getSugarlangPlacementStatus
 } from "../learner/fact-definitions";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import {
   advancePlacementPhase,
@@ -45,17 +50,14 @@ import {
   computePendingProvisionalLemmas,
   computeProbeFloorState,
   createNoOpSugarlangLogger,
+  getSugarlangConversationId,
+  getSugarlangTelemetryTurnId,
+  getSugarAgentSessionId,
   getSceneId,
   getTurnsSinceLastProbe,
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 export interface SugarLangContextMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -142,7 +144,7 @@ export function createSugarLangContextMiddleware(
   deps: SugarLangContextMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createNoOpSugarlangLogger();
-  const telemetry = deps.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.context",
@@ -287,15 +289,23 @@ export function createSugarLangContextMiddleware(
             description: npc?.description ?? null,
             supportLanguage: execution.selection.supportLanguage ?? "en"
           });
-        await telemetry.emit("pre-placement.opening-dialog-turn", {
-          npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-          phase: placementPhase,
-          lineId: (
-            execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] as {
-              lineId: string;
-            }
-          ).lineId
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("pre-placement.opening-dialog-turn", {
+            conversationId: getSugarlangConversationId(execution),
+            sessionId: getSugarAgentSessionId(execution),
+            turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
+            timestamp: Date.now(),
+            npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+            phase: placementPhase,
+            lineId: (
+              execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] as {
+                lineId: string;
+              }
+            ).lineId
+          }),
+          logger
+        );
         return execution;
       }
 
@@ -382,6 +392,26 @@ export function createSugarLangContextMiddleware(
       if (probeFloorState.hardFloorReached) {
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] = true;
       }
+
+      await emitTelemetry(
+        telemetry,
+        createTelemetryEvent("budgeter.prescription-generated", {
+          conversationId: getSugarlangConversationId(execution),
+          sessionId: getSugarAgentSessionId(execution),
+          turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
+          timestamp: Date.now(),
+          sceneId,
+          learnerSnapshot: buildLearnerSnapshot(refreshedLearner),
+          prescription,
+          rationale: prescription.rationale,
+          pendingProvisionalSnapshot: pendingProvisional,
+          probeFloorState,
+          questEssentialState: {
+            activeQuestEssentialLemmas
+          }
+        }),
+        logger
+      );
 
       return execution;
     }

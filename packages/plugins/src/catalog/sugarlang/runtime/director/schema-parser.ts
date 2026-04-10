@@ -29,19 +29,19 @@ import type {
   LexicalPrescription,
   PedagogicalDirective
 } from "../types";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetryEvent,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 
 const ajv = new Ajv({
   allErrors: true,
   strict: false,
   removeAdditional: false
 });
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 const SUPPORT_POSTURES = [
   "anchored",
@@ -380,12 +380,8 @@ function getDefaultDirectiveLifetime(): DirectiveLifetime {
   };
 }
 
-function maybeEmit(
-  telemetry: TelemetrySink,
-  eventName: string,
-  payload: Record<string, unknown>
-): void {
-  void telemetry.emit(eventName, payload);
+function maybeEmit(event: TelemetryEvent, telemetry: TelemetrySink): void {
+  void emitTelemetry(telemetry, event);
 }
 
 function enforceDirectiveRequirements(
@@ -398,13 +394,19 @@ function enforceDirectiveRequirements(
     (directive.glossingStrategy === "hover-only" ||
       directive.glossingStrategy === "none")
   ) {
-    maybeEmit(telemetry, "quest-essential.director-forced-glossing", {
-      conversationId: context.conversationId,
-      originalGlossingStrategy: directive.glossingStrategy,
-      correctedGlossingStrategy: "parenthetical",
-      questEssentialLemmaCount: context.activeQuestEssentialLemmas.length,
-      timestamp: Date.now()
-    });
+    maybeEmit(
+      createTelemetryEvent("quest-essential.director-forced-glossing", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: Date.now(),
+        sceneId: context.scene.sceneId,
+        originalGlossingStrategy: directive.glossingStrategy,
+        correctedGlossingStrategy: "parenthetical",
+        questEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+      }),
+      telemetry
+    );
     return {
       code: "quest_essential_glossing_required",
       message:
@@ -420,11 +422,17 @@ function enforceDirectiveRequirements(
   }
 
   if (context.probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
-    maybeEmit(telemetry, "comprehension.director-hard-floor-violated", {
-      conversationId: context.conversationId,
-      hardFloorReason: context.probeFloorState.hardFloorReason ?? null,
-      timestamp: Date.now()
-    });
+    maybeEmit(
+      createTelemetryEvent("comprehension.director-hard-floor-violated", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: Date.now(),
+        sceneId: context.scene.sceneId,
+        hardFloorReason: context.probeFloorState.hardFloorReason ?? null
+      }),
+      telemetry
+    );
     return {
       code: "hard_floor_violated",
       message:
@@ -446,7 +454,7 @@ export function parseDirective(
   json: string,
   options: ParseDirectiveOptions = {}
 ): ParseResult {
-  const telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = options.telemetry ?? createNoOpTelemetrySink();
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -498,7 +506,7 @@ export function repairDirective(
   context: DirectorContext,
   options: RepairDirectiveOptions = {}
 ): PedagogicalDirective {
-  const telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = options.telemetry ?? createNoOpTelemetrySink();
   const record = isRecord(partial) ? partial : {};
   const targetVocab = isRecord(record.targetVocab) ? record.targetVocab : {};
   const questEssential = buildQuestEssentialSet(context);
@@ -526,11 +534,17 @@ export function repairDirective(
     .filter((lemma) => questEssential.has(`${lemma.lang}:${lemma.lemmaId}`))
     .map((lemma) => lemma.lemmaId);
   if (contaminatedLemmaIds.length > 0) {
-    maybeEmit(telemetry, "quest-essential.director-targetvocab-contamination", {
-      conversationId: context.conversationId,
-      lemmaIds: contaminatedLemmaIds,
-      timestamp: Date.now()
-    });
+    maybeEmit(
+      createTelemetryEvent("quest-essential.director-targetvocab-contamination", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: Date.now(),
+        sceneId: context.scene.sceneId,
+        contaminatedLemmas: contaminatedLemmaIds
+      }),
+      telemetry
+    );
   }
 
   const repairedIntroduce = introduce.length > 0 ? introduce : [...prescription.introduce];

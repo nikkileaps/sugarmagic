@@ -16,7 +16,12 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type {
   ActiveQuestEssentialLemma,
@@ -28,6 +33,7 @@ import type {
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
+  SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_DIRECTIVE_ANNOTATION,
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
@@ -38,14 +44,12 @@ import {
   extractCharacterVoiceReminder,
   buildEmptyPrescription,
   createNoOpSugarlangLogger,
+  getSugarlangConversationId,
+  getSugarlangTelemetryTurnId,
+  getSugarAgentSessionId,
+  getSceneId,
   type SugarlangLoggerLike
 } from "./shared";
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 export interface SugarLangDirectorMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -116,7 +120,7 @@ export function createSugarLangDirectorMiddleware(
   deps: SugarLangDirectorMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createNoOpSugarlangLogger();
-  const telemetry = deps.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.director",
@@ -152,26 +156,36 @@ export function createSugarLangDirectorMiddleware(
           ? null
           : await services.sceneLexiconStore.ensure(sceneId);
       let directive: PedagogicalDirective;
+      const conversationId = getSugarlangConversationId(execution);
+      const sessionId = getSugarAgentSessionId(execution);
+      const traceTurnId = getSugarlangTelemetryTurnId(execution, "prepare");
+      const currentSceneId = getSceneId(execution);
 
       if (prePlacementOpeningLine) {
         directive = createPrePlacementDirective();
-        await telemetry.emit("director.pre-placement-bypass", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation",
-          lineId: prePlacementOpeningLine.lineId
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("director.pre-placement-bypass", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId: currentSceneId,
+            lineId: prePlacementOpeningLine.lineId
+          }),
+          logger
+        );
       } else {
         if (!scene) {
           logger.warn("Skipping Sugarlang director middleware - no scene id.");
           return execution;
         }
         directive = await services.director.invoke({
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation",
+          conversationId,
+          telemetryContext: {
+            turnId: traceTurnId,
+            sessionId
+          },
           learner,
           scene,
           prescription,
@@ -308,17 +322,41 @@ export function createSugarLangDirectorMiddleware(
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
       if (constraint.comprehensionCheckInFlight) {
+        const probeId = `${traceTurnId}:probe:${constraint.comprehensionCheckInFlight.targetLemmas
+          .map((lemma) => lemma.lemmaId)
+          .join(",")}`;
         execution.annotations[SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION] = true;
-        await telemetry.emit("comprehension.probe-triggered", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation",
-          targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas.map(
-            (lemma) => lemma.lemmaId
-          ),
-          triggerReason: constraint.comprehensionCheckInFlight.triggerReason
-        });
+        execution.annotations[SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION] = probeId;
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("comprehension.probe-triggered", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            probeId,
+            sceneId: currentSceneId ?? "unknown-scene",
+            npcId: execution.selection.npcDefinitionId ?? null,
+            npcDisplayName: execution.selection.npcDisplayName ?? null,
+            targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas,
+            probeStyle: constraint.comprehensionCheckInFlight.probeStyle,
+            triggerReason: constraint.comprehensionCheckInFlight.triggerReason,
+            characterVoiceReminder:
+              constraint.comprehensionCheckInFlight.characterVoiceReminder,
+            currentPendingProvisionalCount: (
+              execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] as
+                | Array<unknown>
+                | undefined
+            )?.length ?? 0,
+            turnsSinceLastProbe:
+              (
+                execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
+                  | ProbeFloorState
+                  | undefined
+              )?.turnsSinceLastProbe ?? 0
+          }),
+          logger
+        );
       }
 
       if (
@@ -326,12 +364,23 @@ export function createSugarLangDirectorMiddleware(
         directive.comprehensionCheck.trigger &&
         directive.comprehensionCheck.triggerReason === "director-deferred-override"
       ) {
-        await telemetry.emit("comprehension.director-hard-floor-violated", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("comprehension.director-hard-floor-violated", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId: currentSceneId ?? undefined,
+            hardFloorReason:
+              (
+                execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
+                  | ProbeFloorState
+                  | undefined
+              )?.hardFloorReason ?? null
+          }),
+          logger
+        );
       }
 
       return execution;

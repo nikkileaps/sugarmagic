@@ -16,7 +16,12 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import type { LemmaRef, SugarlangConstraint } from "../types";
@@ -25,6 +30,7 @@ import { buildPlacementCompletionEvent } from "../placement/placement-flow-orche
 import { emitPlacementCompleted } from "../quest-integration/placement-completion";
 import {
   SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION,
+  SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   createNoOpSugarlangLogger,
@@ -33,6 +39,10 @@ import {
   getHoverLemma,
   getSceneId,
   getStoredComprehensionCheck,
+  getSugarlangConversationId,
+  getSugarlangTelemetryTurnId,
+  getSugarAgentSessionId,
+  getSugarAgentTurnCount,
   getTurnsSinceLastProbe,
   normalizeTurn,
   setStoredComprehensionCheck,
@@ -41,19 +51,16 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
-
 export interface SugarLangObserveMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
   telemetry?: TelemetrySink;
 }
 
-function collectLemmasFromText(text: string, lang: string): Array<{ surface: string; lemmaId: string | null }> {
+function collectLemmasFromText(
+  text: string,
+  lang: string
+): Array<{ surface: string; lemmaId: string | null }> {
   return tokenize(text, lang)
     .filter((token) => token.kind === "word")
     .map((token) => ({
@@ -70,11 +77,27 @@ function buildTargetLemmaSet(constraint: SugarlangConstraint): Set<string> {
   );
 }
 
+function extractProbeQuestion(text: string): string | null {
+  const sentences = text
+    .split(/(?<=[?.!])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const question = [...sentences].reverse().find((sentence) => sentence.endsWith("?"));
+  return question ?? null;
+}
+
+function isLikelySupportLanguageFallback(
+  responseText: string,
+  targetLemmaCount: number
+): boolean {
+  return targetLemmaCount === 0 && /[A-Za-z]/.test(responseText);
+}
+
 export function createSugarLangObserveMiddleware(
   deps: SugarLangObserveMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createNoOpSugarlangLogger();
-  const telemetry = deps.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.observe",
@@ -88,26 +111,42 @@ export function createSugarLangObserveMiddleware(
         return turn;
       }
 
+      const conversationId = getSugarlangConversationId(execution);
+      const sessionId = getSugarAgentSessionId(execution);
+      const traceTurnId = getSugarlangTelemetryTurnId(execution, "finalize");
+      const sceneId = getSceneId(execution);
+      const now = Date.now();
+
       const placementFlow = execution.annotations[
         SUGARLANG_PLACEMENT_FLOW_ANNOTATION
       ] as PlacementFlowAnnotation | undefined;
       if (placementFlow?.phase === "opening-dialog") {
-        await telemetry.emit("observer.pre-placement-bypass", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("observer.pre-placement-bypass", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: now,
+            sceneId
+          }),
+          logger
+        );
         return normalizedTurn;
       }
 
       if (placementFlow?.phase === "questionnaire") {
-        await telemetry.emit("observer.placement-questionnaire-bypass", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("observer.placement-questionnaire-bypass", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: now,
+            sceneId
+          }),
+          logger
+        );
         return normalizedTurn;
       }
 
@@ -127,12 +166,21 @@ export function createSugarLangObserveMiddleware(
           ];
 
           const confidenceFloor = deps.services.getConfig().placement.confidenceFloor;
-          await telemetry.emit("placement.completed", {
-            cefrBand: placementFlow.scoreResult.cefrBand,
-            confidence: placementFlow.scoreResult.confidence,
-            questionnaireVersion: placementFlow.scoreResult.questionnaireVersion,
-            seededLemmaCount: placementFlow.scoreResult.lemmasSeededFromFreeText.length
-          });
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("placement.completed", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: Date.now(),
+              finalBand: placementFlow.scoreResult.cefrBand,
+              confidence: placementFlow.scoreResult.confidence,
+              turnCount: getSugarAgentTurnCount(execution),
+              questionnaireVersion: placementFlow.scoreResult.questionnaireVersion,
+              result: placementFlow.scoreResult
+            }),
+            logger
+          );
           if (placementFlow.scoreResult.confidence < confidenceFloor) {
             logger.warn("Placement completed below configured confidence floor.", {
               confidence: placementFlow.scoreResult.confidence,
@@ -159,18 +207,64 @@ export function createSugarLangObserveMiddleware(
             .map((entry) => entry.lemmaId)
             .filter((lemmaId): lemmaId is string => typeof lemmaId === "string")
         );
+        const responseTimestamp = Date.now();
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("comprehension.probe-response-received", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: responseTimestamp,
+            probeId: storedCheck.probeId,
+            sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+            npcId: storedCheck.npcId,
+            npcDisplayName: storedCheck.npcDisplayName,
+            targetLemmas: storedCheck.targetLemmas,
+            playerResponseText: execution.input.text,
+            responseLatencyMs: Math.max(0, responseTimestamp - storedCheck.promptedAtMs),
+            responseInputKind: "free_text"
+          }),
+          logger
+        );
+
         const passed = storedCheck.targetLemmas.filter((lemma) =>
           responseLemmas.has(lemma.lemmaId)
         );
         const failed = storedCheck.targetLemmas.filter(
           (lemma) => !responseLemmas.has(lemma.lemmaId)
         );
+        const classifierReasoning =
+          passed.length > 0
+            ? `Response lemmatized to ${[...responseLemmas].join(", ")} and matched target lemmas.`
+            : "No target lemmas were found in the lemmatized response.";
+
+        if (isLikelySupportLanguageFallback(execution.input.text, responseLemmas.size)) {
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("comprehension.probe-language-fallback", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: responseTimestamp,
+              probeId: storedCheck.probeId,
+              sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+              npcId: storedCheck.npcId,
+              npcDisplayName: storedCheck.npcDisplayName,
+              targetLemmas: storedCheck.targetLemmas,
+              playerResponseText: execution.input.text,
+              detectedLang: learner.supportLanguage
+            }),
+            logger
+          );
+        }
+
         if (passed.length > 0) {
           await services.learnerStateReducer.apply({
             type: "commit-provisional-evidence",
             targetLemmas: passed,
-            committedAtMs: Date.now(),
+            committedAtMs: responseTimestamp,
             probeTelemetry: {
+              probeId: storedCheck.probeId,
               triggerReason: storedCheck.triggerReason
             }
           });
@@ -179,32 +273,83 @@ export function createSugarLangObserveMiddleware(
           await services.learnerStateReducer.apply({
             type: "discard-provisional-evidence",
             targetLemmas: failed,
-            discardedAtMs: Date.now(),
+            discardedAtMs: responseTimestamp,
             probeTelemetry: {
+              probeId: storedCheck.probeId,
               triggerReason: storedCheck.triggerReason
             }
           });
         }
-        await telemetry.emit(
-          passed.length === storedCheck.targetLemmas.length
-            ? "comprehension.probe-passed"
-            : failed.length === storedCheck.targetLemmas.length
-              ? "comprehension.probe-failed"
-              : "comprehension.probe-mixed-result",
-          {
-            passed: passed.map((lemma) => lemma.lemmaId),
-            failed: failed.map((lemma) => lemma.lemmaId)
-          }
-        );
+
+        if (passed.length === storedCheck.targetLemmas.length) {
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("comprehension.probe-passed", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: responseTimestamp,
+              probeId: storedCheck.probeId,
+              sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+              npcId: storedCheck.npcId,
+              npcDisplayName: storedCheck.npcDisplayName,
+              targetLemmas: storedCheck.targetLemmas,
+              playerResponseText: execution.input.text,
+              lemmasPassed: passed.map((lemma) => lemma.lemmaId),
+              classifierReasoning
+            }),
+            logger
+          );
+        } else if (failed.length === storedCheck.targetLemmas.length) {
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("comprehension.probe-failed", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: responseTimestamp,
+              probeId: storedCheck.probeId,
+              sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+              npcId: storedCheck.npcId,
+              npcDisplayName: storedCheck.npcDisplayName,
+              targetLemmas: storedCheck.targetLemmas,
+              playerResponseText: execution.input.text,
+              lemmasFailed: failed.map((lemma) => lemma.lemmaId),
+              classifierReasoning
+            }),
+            logger
+          );
+        } else {
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("comprehension.probe-mixed-result", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: responseTimestamp,
+              probeId: storedCheck.probeId,
+              sceneId: storedCheck.sceneId ?? sceneId ?? "unknown-scene",
+              npcId: storedCheck.npcId,
+              npcDisplayName: storedCheck.npcDisplayName,
+              targetLemmas: storedCheck.targetLemmas,
+              playerResponseText: execution.input.text,
+              lemmasPassed: passed.map((lemma) => lemma.lemmaId),
+              lemmasFailed: failed.map((lemma) => lemma.lemmaId),
+              classifierReasoning
+            }),
+            logger
+          );
+        }
+
         setStoredComprehensionCheck(execution, null);
       }
 
       const targetLemmaSet = buildTargetLemmaSet(constraint);
       const observedAtMs = Date.now();
-      const sceneId = getSceneId(execution);
       if (!sceneId) {
         return normalizedTurn;
       }
+      const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];
 
       if (execution.input?.kind === "free_text") {
         const lemmaCandidates = collectLemmasFromText(
@@ -217,90 +362,109 @@ export function createSugarLangObserveMiddleware(
               lemmaId: candidate.lemmaId,
               lang: learner.targetLanguage
             };
+            const observationEvent = createObservationEvent({
+              execution,
+              lemma: lemmaRef,
+              observation: targetLemmaSet.has(candidate.lemmaId)
+                ? {
+                    kind: "produced-typed",
+                    inputText: candidate.surface,
+                    observedAtMs
+                  }
+                : {
+                    kind: "produced-unprompted",
+                    observedAtMs
+                  }
+            });
+            appliedObservations.push(observationEvent);
             await services.learnerStateReducer.apply({
               type: "observation",
-              observationEvent: createObservationEvent({
-                execution,
-                lemma: lemmaRef,
-                observation: targetLemmaSet.has(candidate.lemmaId)
-                  ? {
-                      kind: "produced-typed",
-                      inputText: candidate.surface,
-                      observedAtMs
-                    }
-                  : {
-                      kind: "produced-unprompted",
-                      observedAtMs
-                    }
-              })
+              observationEvent
             });
-          } else if (constraint.targetVocab.introduce[0] || constraint.targetVocab.reinforce[0]) {
+          } else if (
+            constraint.targetVocab.introduce[0] ||
+            constraint.targetVocab.reinforce[0]
+          ) {
             const expectedLemma =
               constraint.targetVocab.introduce[0] ?? constraint.targetVocab.reinforce[0];
+            const observationEvent = createObservationEvent({
+              execution,
+              lemma: expectedLemma,
+              observation: {
+                kind: "produced-incorrect",
+                attemptedForm: candidate.surface,
+                expectedForm: expectedLemma.lemmaId,
+                observedAtMs
+              }
+            });
+            appliedObservations.push(observationEvent);
             await services.learnerStateReducer.apply({
               type: "observation",
-              observationEvent: createObservationEvent({
-                execution,
-                lemma: expectedLemma,
-                observation: {
-                  kind: "produced-incorrect",
-                  attemptedForm: candidate.surface,
-                  expectedForm: expectedLemma.lemmaId,
-                  observedAtMs
-                }
-              })
+              observationEvent
             });
           }
         }
       }
 
-      const choiceLemma = getChoiceLemmaRef(execution.input, normalizedTurn.choices, execution);
+      const choiceLemma = getChoiceLemmaRef(
+        execution.input,
+        normalizedTurn.choices,
+        execution
+      );
       if (choiceLemma) {
+        const observationEvent = createObservationEvent({
+          execution,
+          lemma: choiceLemma,
+          observation: {
+            kind: "produced-chosen",
+            choiceSetId:
+              execution.input?.kind === "choice" ? execution.input.choiceId : "choice",
+            observedAtMs
+          }
+        });
+        appliedObservations.push(observationEvent);
         await services.learnerStateReducer.apply({
           type: "observation",
-          observationEvent: createObservationEvent({
-            execution,
-            lemma: choiceLemma,
-            observation: {
-              kind: "produced-chosen",
-              choiceSetId: execution.input?.kind === "choice" ? execution.input.choiceId : "choice",
-              observedAtMs
-            }
-          })
+          observationEvent
         });
       }
 
       const hoverLemma = getHoverLemma(execution);
       if (hoverLemma) {
+        const observationEvent = createObservationEvent({
+          execution,
+          lemma: hoverLemma.lemma,
+          observation: {
+            kind: "hovered",
+            dwellMs: hoverLemma.dwellMs,
+            observedAtMs
+          }
+        });
+        appliedObservations.push(observationEvent);
         await services.learnerStateReducer.apply({
           type: "observation",
-          observationEvent: createObservationEvent({
-            execution,
-            lemma: hoverLemma.lemma,
-            observation: {
-              kind: "hovered",
-              dwellMs: hoverLemma.dwellMs,
-              observedAtMs
-            }
-          })
+          observationEvent
         });
       }
 
       const turnLemmas = collectLemmasFromText(normalizedTurn.text, learner.targetLanguage);
       for (const introduce of constraint.targetVocab.introduce) {
-        if (turnLemmas.some((entry) => entry.lemmaId === introduce.lemmaId)) {
-          await services.learnerStateReducer.apply({
-            type: "observation",
-            observationEvent: createObservationEvent({
-              execution,
-              lemma: introduce,
-              observation: {
-                kind: "encountered",
-                observedAtMs
-              }
-            })
-          });
+        if (!turnLemmas.some((entry) => entry.lemmaId === introduce.lemmaId)) {
+          continue;
         }
+        const observationEvent = createObservationEvent({
+          execution,
+          lemma: introduce,
+          observation: {
+            kind: "encountered",
+            observedAtMs
+          }
+        });
+        appliedObservations.push(observationEvent);
+        await services.learnerStateReducer.apply({
+          type: "observation",
+          observationEvent
+        });
       }
 
       const completedObjectiveNodeIds = execution.annotations[
@@ -315,31 +479,82 @@ export function createSugarLangObserveMiddleware(
             if (!entry.lemmaId) {
               continue;
             }
+            const observationEvent = createObservationEvent({
+              execution,
+              lemma: {
+                lemmaId: entry.lemmaId,
+                lang: learner.targetLanguage
+              },
+              observation: {
+                kind: "quest-success",
+                objectiveNodeId: active.nodeId,
+                observedAtMs
+              }
+            });
+            appliedObservations.push(observationEvent);
             await services.learnerStateReducer.apply({
               type: "observation",
-              observationEvent: createObservationEvent({
-                execution,
-                lemma: {
-                  lemmaId: entry.lemmaId,
-                  lang: learner.targetLanguage
-                },
-                observation: {
-                  kind: "quest-success",
-                  objectiveNodeId: active.nodeId,
-                  observedAtMs
-                }
-              })
+              observationEvent
             });
           }
         }
       }
 
+      if (appliedObservations.length > 0) {
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("observe.observations-applied", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId,
+            observations: appliedObservations,
+            learnerDelta: {
+              updatedLemmaIds: [
+                ...new Set(
+                  appliedObservations.map((event) => event.lemma.lemmaId)
+                )
+              ]
+            }
+          }),
+          logger
+        );
+      }
+
       if (constraint.comprehensionCheckInFlight) {
+        const probeId =
+          (execution.annotations[
+            SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION
+          ] as string | undefined) ?? `${traceTurnId}:probe`;
+        const promptedAtMs = Date.now();
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("comprehension.probe-fired", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: promptedAtMs,
+            probeId,
+            sceneId,
+            npcId: execution.selection.npcDefinitionId ?? null,
+            npcDisplayName: execution.selection.npcDisplayName ?? null,
+            targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas,
+            generatedText: normalizedTurn.text,
+            probeQuestionExtract: extractProbeQuestion(normalizedTurn.text)
+          }),
+          logger
+        );
         setStoredComprehensionCheck(execution, {
+          probeId,
           targetLemmas: constraint.comprehensionCheckInFlight.targetLemmas,
           probeStyle: constraint.comprehensionCheckInFlight.probeStyle,
           characterVoiceReminder:
             constraint.comprehensionCheckInFlight.characterVoiceReminder,
+          sceneId,
+          npcId: execution.selection.npcDefinitionId ?? null,
+          npcDisplayName: execution.selection.npcDisplayName ?? null,
+          promptedAtMs,
           triggerReason: constraint.comprehensionCheckInFlight.triggerReason
         });
         setTurnsSinceLastProbe(execution, 0);

@@ -17,25 +17,28 @@
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import { autoSimplify } from "../classifier/auto-simplify";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
+  buildLearnerSnapshot,
   createNoOpSugarlangLogger,
   findQuestEssentialUses,
+  getSugarlangConversationId,
+  getSugarlangTelemetryTurnId,
+  getSugarAgentSessionId,
   getSceneId,
   normalizeTurn,
   textMentionsLemma,
   type SugarlangLoggerLike
 } from "./shared";
-
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
 
 export interface SugarLangVerifyMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -79,7 +82,7 @@ export function createSugarLangVerifyMiddleware(
   deps: SugarLangVerifyMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createNoOpSugarlangLogger();
-  const telemetry = deps.telemetry ?? NO_OP_TELEMETRY;
+  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.verify",
@@ -102,13 +105,21 @@ export function createSugarLangVerifyMiddleware(
       const placementFlow = execution.annotations[
         SUGARLANG_PLACEMENT_FLOW_ANNOTATION
       ] as { phase?: string } | undefined;
+      const conversationId = getSugarlangConversationId(execution);
+      const sessionId = getSugarAgentSessionId(execution);
+      const traceTurnId = getSugarlangTelemetryTurnId(execution, "finalize");
       if (constraint.prePlacementOpeningLine || placementFlow?.phase === "opening-dialog") {
-        await telemetry.emit("verify.pre-placement-bypass", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("verify.pre-placement-bypass", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId: getSceneId(execution)
+          }),
+          logger
+        );
         return normalizedTurn;
       }
 
@@ -116,6 +127,7 @@ export function createSugarLangVerifyMiddleware(
       if (!services) {
         return normalizedTurn;
       }
+      const originalTurnText = normalizedTurn.text;
 
       const learner = await services.learnerStore.getCurrentProfile();
       const sceneId = getSceneId(execution);
@@ -132,6 +144,47 @@ export function createSugarLangVerifyMiddleware(
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
         lang: constraint.targetLanguage
       });
+      await emitTelemetry(
+        telemetry,
+        createTelemetryEvent("classifier.verdict", {
+          conversationId,
+          sessionId,
+          turnId: traceTurnId,
+          timestamp: Date.now(),
+          sceneId,
+          learnerSnapshot: buildLearnerSnapshot(learner),
+          prescription: constraint.rawPrescription,
+          verdict,
+          inputText: normalizedTurn.text,
+          constraint
+        }),
+        logger
+      );
+      for (const lemmaId of verdict.profile.questEssentialLemmasMatched) {
+        const questEssential = constraint.questEssentialLemmas?.find(
+          (entry) => entry.lemmaRef.lemmaId === lemmaId
+        );
+        if (!questEssential) {
+          continue;
+        }
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("quest-essential.classifier-exempted-lemma", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId,
+            lemmaRef: questEssential.lemmaRef,
+            cefrBand:
+              scene.questEssentialLemmas.find((entry) => entry.lemmaId === lemmaId)?.cefrBand ??
+              "unknown",
+            learnerBand: learner.estimatedCefrBand,
+            sourceObjectiveDisplayName: questEssential.sourceObjectiveDisplayName
+          }),
+          logger
+        );
+      }
 
       const questUses = findQuestEssentialUses(normalizedTurn.text, constraint);
       const missingGloss = questUses.find(
@@ -146,22 +199,45 @@ export function createSugarLangVerifyMiddleware(
           ? constraint.questEssentialLemmas?.[0] ?? null
           : null;
       if (missingGloss) {
-        await telemetry.emit("quest-essential.generator-missed-gloss", {
-          lemmaId: missingGloss.lemmaId,
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        const questEssential = constraint.questEssentialLemmas?.find(
+          (entry) => entry.lemmaRef.lemmaId === missingGloss.lemmaId
+        );
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("quest-essential.generator-missed-gloss", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId,
+            lemmaRef:
+              questEssential?.lemmaRef ?? {
+                lemmaId: missingGloss.lemmaId,
+                lang: constraint.targetLanguage
+              },
+            expectedGloss: missingGloss.supportLanguageGloss,
+            generatedText: normalizedTurn.text,
+            sourceObjectiveDisplayName: questEssential?.sourceObjectiveDisplayName
+          }),
+          logger
+        );
       }
       if (missingRequiredQuestEssential) {
-        await telemetry.emit("quest-essential.generator-missed-required", {
-          lemmaId: missingRequiredQuestEssential.lemmaRef.lemmaId,
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation"
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("quest-essential.generator-missed-required", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId,
+            expectedLemmas: [missingRequiredQuestEssential.lemmaRef],
+            generatedText: normalizedTurn.text,
+            sourceObjectiveDisplayName:
+              missingRequiredQuestEssential.sourceObjectiveDisplayName
+          }),
+          logger
+        );
       }
 
       if (verdict.withinEnvelope && !missingGloss && !missingRequiredQuestEssential) {
@@ -214,13 +290,21 @@ export function createSugarLangVerifyMiddleware(
           !repairedMissingRequired
         ) {
           normalizedTurn.text = repairedText;
-          await telemetry.emit("verify.turn-repaired", {
-            conversationId:
-              execution.selection.npcDefinitionId ??
-              execution.selection.dialogueDefinitionId ??
-              "conversation",
-            repaired: true
-          });
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("verify.repair-triggered", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: Date.now(),
+              sceneId,
+              originalText: originalTurnText,
+              repairedText,
+              violations: instructions,
+              repairPrompt: instructions
+            }),
+            logger
+          );
           return normalizedTurn;
         }
       }
@@ -231,14 +315,24 @@ export function createSugarLangVerifyMiddleware(
           verdict.violations.map((violation) => violation.lemmaRef),
           learner
         );
+        const originalText = normalizedTurn.text;
         normalizedTurn.text = simplified.text;
-        await telemetry.emit("verify.turn-auto-simplified", {
-          conversationId:
-            execution.selection.npcDefinitionId ??
-            execution.selection.dialogueDefinitionId ??
-            "conversation",
-          substitutionCount: simplified.substitutionCount
-        });
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("verify.auto-simplify-triggered", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId,
+            originalText,
+            simplifiedText: simplified.text,
+            substitutions: verdict.violations.map(
+              (violation) => violation.lemmaRef.lemmaId
+            )
+          }),
+          logger
+        );
       } catch (error) {
         logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
           reason: error instanceof Error ? error.message : String(error)

@@ -50,7 +50,12 @@ import {
   SUGARLANG_PLACEMENT_WRITER,
   createSugarlangPlacementStatusScope
 } from "./fact-definitions";
-import type { TelemetrySink } from "../telemetry/telemetry";
+import {
+  createNoOpTelemetrySink,
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
 import { observationToOutcome } from "../budgeter/observations";
 import {
   applyOutcome,
@@ -141,12 +146,6 @@ interface SessionAccumulator {
   lastObservedAtMs: number | null;
 }
 
-const NO_OP_TELEMETRY: TelemetrySink = {
-  emit() {
-    return undefined;
-  }
-};
-
 function createSessionAccumulator(profile: LearnerProfile): SessionAccumulator {
   const currentSession = profile.currentSession;
   if (!currentSession) {
@@ -206,7 +205,7 @@ export class LearnerStateReducer {
   private readonly sessionAccumulators = new Map<string, SessionAccumulator>();
 
   constructor(private readonly options: LearnerStateReducerOptions) {
-    this.telemetry = options.telemetry ?? NO_OP_TELEMETRY;
+    this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
   }
 
   async apply(event: ReducerEvent): Promise<void> {
@@ -236,6 +235,14 @@ export class LearnerStateReducer {
           fatigueScore: 0
         };
         this.sessionAccumulators.set(event.sessionId, createSessionAccumulator(profile));
+        await emitTelemetry(
+          this.telemetry,
+          createTelemetryEvent("session.started", {
+            sessionId: event.sessionId,
+            timestamp: event.startedAtMs,
+            learnerId: this.options.profileId
+          })
+        );
         break;
       case "session-end":
         if (profile.currentSession) {
@@ -248,6 +255,15 @@ export class LearnerStateReducer {
               turns: profile.currentSession.turns
             }
           ].slice(-20);
+          await emitTelemetry(
+            this.telemetry,
+            createTelemetryEvent("session.ended", {
+              sessionId: profile.currentSession.sessionId,
+              timestamp: event.completedAtMs,
+              learnerId: this.options.profileId,
+              completedAtMs: event.completedAtMs
+            })
+          );
           this.sessionAccumulators.delete(profile.currentSession.sessionId);
           profile.currentSession = null;
         }
@@ -303,11 +319,16 @@ export class LearnerStateReducer {
           );
           profile.lemmaCards[nextCard.lemmaId] = nextCard;
           changedCards.push(nextCard);
-          await this.telemetry.emit("fsrs.seeded-from-placement", {
-            lemmaId: nextCard.lemmaId,
-            cefrBand: event.cefrBand,
-            completedAtMs: event.completedAtMs
-          });
+          await emitTelemetry(
+            this.telemetry,
+            createTelemetryEvent("fsrs.seeded-from-placement", {
+              sessionId: profile.currentSession?.sessionId,
+              timestamp: event.completedAtMs,
+              lemmaId: nextCard.lemmaId,
+              cefrBand: event.cefrBand,
+              completedAtMs: event.completedAtMs
+            })
+          );
         }
         break;
       case "observation":
@@ -340,10 +361,15 @@ export class LearnerStateReducer {
       sourceSystem: LEARNER_PROFILE_FACT.ownerSystem,
       changedCards
     });
-    await this.telemetry.emit("learner-profile.updated", {
-      eventType: event.type,
-      learnerId: this.options.profileId
-    });
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("learner-profile.updated", {
+        sessionId: profile.currentSession?.sessionId,
+        timestamp: Date.now(),
+        eventType: event.type,
+        learnerId: this.options.profileId
+      })
+    );
   }
 
   private async applyObservation(
@@ -401,12 +427,20 @@ export class LearnerStateReducer {
     );
 
     if (observationEvent.observation.kind === "rapid-advance") {
-      await this.telemetry.emit("fsrs.provisional-evidence-accumulated", {
-        lemmaId: nextCard.lemmaId,
-        previousEvidence: seededCard.provisionalEvidence,
-        nextEvidence: nextCard.provisionalEvidence,
-        dwellMs: observationEvent.observation.dwellMs
-      });
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("fsrs.provisional-evidence-accumulated", {
+          sessionId: currentSession.sessionId,
+          turnId: observationEvent.context.turnId,
+          conversationId: observationEvent.context.conversationId,
+          timestamp: observationEvent.observation.observedAtMs,
+          lemmaId: nextCard.lemmaId,
+          previousEvidence: seededCard.provisionalEvidence,
+          newEvidence: nextCard.provisionalEvidence,
+          dwellMs: observationEvent.observation.dwellMs,
+          sessionTurn: accumulator.turns
+        })
+      );
     }
 
     const success = computeObservationSuccess(outcome);
@@ -460,12 +494,21 @@ export class LearnerStateReducer {
       const nextCard = commitCardProvisionalEvidence(card, event.committedAtMs);
       profile.lemmaCards[target.lemmaId] = nextCard;
       changedCards.push(nextCard);
-      await this.telemetry.emit("fsrs.provisional-evidence-committed", {
-        lemmaId: target.lemmaId,
-        previousEvidence,
-        stabilityDelta: nextCard.stability - beforeStability,
-        probeTelemetry: event.probeTelemetry ?? null
-      });
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("fsrs.provisional-evidence-committed", {
+          sessionId: profile.currentSession?.sessionId,
+          timestamp: event.committedAtMs,
+          probeId:
+            typeof event.probeTelemetry?.probeId === "string"
+              ? event.probeTelemetry.probeId
+              : null,
+          lemmaId: target.lemmaId,
+          committedAmount: previousEvidence,
+          previousStability: beforeStability,
+          newStability: nextCard.stability
+        })
+      );
     }
 
     return changedCards;
@@ -486,12 +529,19 @@ export class LearnerStateReducer {
       const nextCard = discardCardProvisionalEvidence(card);
       profile.lemmaCards[target.lemmaId] = nextCard;
       changedCards.push(nextCard);
-      await this.telemetry.emit("fsrs.provisional-evidence-discarded", {
-        lemmaId: target.lemmaId,
-        discardedEvidence: card.provisionalEvidence,
-        probeTelemetry: event.probeTelemetry ?? null,
-        discardedAtMs: event.discardedAtMs
-      });
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("fsrs.provisional-evidence-discarded", {
+          sessionId: profile.currentSession?.sessionId,
+          timestamp: event.discardedAtMs,
+          probeId:
+            typeof event.probeTelemetry?.probeId === "string"
+              ? event.probeTelemetry.probeId
+              : null,
+          lemmaId: target.lemmaId,
+          discardedAmount: card.provisionalEvidence
+        })
+      );
     }
 
     return changedCards;
@@ -513,10 +563,25 @@ export class LearnerStateReducer {
         }
         profile.lemmaCards[nextCard.lemmaId] = nextCard;
         changedCards.push(nextCard);
-        await this.telemetry.emit("fsrs.provisional-evidence-decayed", {
-          lemmaId: nextCard.lemmaId,
-          decayedAtMs: event.decayedAtMs
-        });
+        await emitTelemetry(
+          this.telemetry,
+          createTelemetryEvent("fsrs.provisional-evidence-decayed", {
+            sessionId: profile.currentSession?.sessionId,
+            timestamp: event.decayedAtMs,
+            lemmaId: nextCard.lemmaId,
+            decayedAmount: Math.max(
+              0,
+              card.provisionalEvidence - nextCard.provisionalEvidence
+            ),
+            turnsPending:
+              card.provisionalEvidenceFirstSeenTurn === null
+                ? undefined
+                : Math.max(
+                    0,
+                    event.currentSessionTurn - card.provisionalEvidenceFirstSeenTurn
+                  )
+          })
+        );
       }
 
       if (!page.nextCursor) {

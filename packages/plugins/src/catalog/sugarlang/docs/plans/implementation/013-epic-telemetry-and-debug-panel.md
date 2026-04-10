@@ -1,6 +1,6 @@
 # Epic 13: Telemetry and Debug Panel
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § v2 Training Path](../../proposals/001-adaptive-language-learning-architecture.md#v2-training-path), [§ Verification, Failure Modes, and Guardrails](../../proposals/001-adaptive-language-learning-architecture.md#verification-failure-modes-and-guardrails)
 **Depends on:** Epic 10 (middlewares have the hooks to emit telemetry)

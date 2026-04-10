@@ -146,8 +146,10 @@ describe("LearnerStateReducer", () => {
       completedAt: 5000
     });
     expect(emit).toHaveBeenCalledWith(
-      "fsrs.seeded-from-placement",
-      expect.objectContaining({ lemmaId: "viajar" })
+      expect.objectContaining({
+        kind: "fsrs.seeded-from-placement",
+        lemmaId: "viajar"
+      })
     );
   });
 
