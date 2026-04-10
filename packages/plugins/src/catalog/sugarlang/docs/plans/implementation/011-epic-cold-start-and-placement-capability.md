@@ -1,6 +1,6 @@
 # Epic 11: Cold Start and Placement Capability
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Cold Start Sequence](../../proposals/001-adaptive-language-learning-architecture.md#cold-start-sequence), [§ Placement Interaction Contract](../../proposals/001-adaptive-language-learning-architecture.md#placement-interaction-contract)
 **Depends on:** Epic 2 (NPCDefinition.metadata), Epic 3 Story 3.7b (PlacementQuestionnaire types), Epic 4 Story 4.2/4.3 (plugin-shipped questionnaire data), Epic 7 (learner state + reducer), Epic 10 Story 10.1 (Context middleware placement-phase detection), Epic 10 Story 10.5 (Observer middleware questionnaire-submission handling)

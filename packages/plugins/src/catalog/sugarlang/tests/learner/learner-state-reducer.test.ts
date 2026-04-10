@@ -85,7 +85,12 @@ describe("LearnerStateReducer", () => {
 
   it("handles self-report, observation, and placement-completion events in sequence", async () => {
     const blackboard = createLearnerBlackboard();
-    const atlas = createAtlasProvider([{ lemmaId: "hola", cefrPriorBand: "A1" }]);
+    const emit = vi.fn().mockResolvedValue(undefined);
+    const atlas = createAtlasProvider([
+      { lemmaId: "hola", cefrPriorBand: "A1" },
+      { lemmaId: "viajar", cefrPriorBand: "A2" },
+      { lemmaId: "familia", cefrPriorBand: "A1" }
+    ]);
     const reducer = new LearnerStateReducer({
       profileId: "learner-epic-7" as ReturnType<typeof createLearnerProfile>["learnerId"],
       playerEntityId: "player-1",
@@ -94,7 +99,8 @@ describe("LearnerStateReducer", () => {
       blackboard,
       cardStore: new MemoryCardStore(),
       atlas,
-      learnerPriorProvider: new FsrsLearnerPriorProvider(atlas)
+      learnerPriorProvider: new FsrsLearnerPriorProvider(atlas),
+      telemetry: { emit }
     });
 
     await reducer.apply({ type: "self-report", band: "A2" });
@@ -115,7 +121,11 @@ describe("LearnerStateReducer", () => {
       type: "placement-completion",
       cefrBand: "A2",
       confidence: 0.82,
-      completedAtMs: 5000
+      completedAtMs: 5000,
+      lemmasSeededFromFreeText: [
+        { lemmaId: "viajar", lang: "es" },
+        { lemmaId: "familia", lang: "es" }
+      ]
     });
 
     const profile =
@@ -125,6 +135,9 @@ describe("LearnerStateReducer", () => {
     expect(profile?.estimatedCefrBand).toBe("A2");
     expect(profile?.assessment.status).toBe("evaluated");
     expect(profile?.lemmaCards.hola.reviewCount).toBe(1);
+    expect(profile?.lemmaCards.viajar.reviewCount).toBe(1);
+    expect(profile?.lemmaCards.familia.reviewCount).toBe(1);
+    expect(profile?.lemmaCards.viajar.productiveStrength).toBeGreaterThan(0);
     expect(profile?.currentSession?.turns).toBe(1);
     expect(getSugarlangPlacementStatus(blackboard, "learner-epic-7")).toEqual({
       status: "completed",
@@ -132,6 +145,10 @@ describe("LearnerStateReducer", () => {
       confidence: 0.82,
       completedAt: 5000
     });
+    expect(emit).toHaveBeenCalledWith(
+      "fsrs.seeded-from-placement",
+      expect.objectContaining({ lemmaId: "viajar" })
+    );
   });
 
   it("serializes parallel apply calls through the reducer queue", async () => {

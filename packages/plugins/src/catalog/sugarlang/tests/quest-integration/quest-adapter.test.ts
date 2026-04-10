@@ -1,23 +1,39 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/quest-integration/quest-adapter.test.ts
  *
- * Purpose: Reserves the quest-adapter test file owned by Epic 11.
+ * Purpose: Verifies the thin quest action-proposal helpers used by placement completion.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Imports ../../runtime/quest-integration/quest-adapter to keep the module path stable.
- *   - Will hold quest-adapter tests once Epic 11 lands.
+ *   - Depends on ../../runtime/quest-integration/quest-adapter.
+ *   - Guards the action shapes consumed later by runtime-core gameplay-session handling.
  *
- * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ * Implements: Epic 11 quest integration
  *
- * Status: skeleton (no implementation yet; see Epic 11)
+ * Status: active
  */
 
-import "../../runtime/quest-integration/quest-adapter";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import {
+  notifySugarlangQuestEvent,
+  setSugarlangQuestFlag
+} from "../../runtime/quest-integration/quest-adapter";
 
-describe("TODO: Epic 11", () => {
-  it.todo("implement quest-adapter tests in Epic 11");
+describe("quest-adapter", () => {
+  it("builds a set-conversation-flag proposal", () => {
+    expect(setSugarlangQuestFlag("sugarlang.placement.status", "completed")).toEqual({
+      kind: "set-conversation-flag",
+      key: "sugarlang.placement.status",
+      value: "completed"
+    });
+  });
+
+  it("builds a notify-quest-event proposal", () => {
+    expect(notifySugarlangQuestEvent("sugarlang.placement.completed")).toEqual({
+      kind: "notify-quest-event",
+      eventName: "sugarlang.placement.completed"
+    });
+  });
 });

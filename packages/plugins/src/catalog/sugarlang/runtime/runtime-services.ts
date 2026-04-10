@@ -34,6 +34,7 @@ import type {
 } from "@sugarmagic/runtime-core";
 import { AnthropicClient, AnthropicLLMProvider } from "../../sugaragent/runtime/clients";
 import type { LLMProvider } from "../../sugaragent/runtime/clients";
+import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage } from "../config";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
 import { EnvelopeClassifier } from "./classifier/envelope-classifier";
@@ -48,6 +49,10 @@ import { FallbackDirectorPolicy } from "./director/fallback-director-policy";
 import { SugarLangDirector } from "./director/sugar-lang-director";
 import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
 import { LearnerStateReducer } from "./learner/learner-state-reducer";
+import {
+  PlacementQuestionnaireLoader
+} from "./placement/placement-questionnaire-loader";
+import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { FsrsLearnerPriorProvider } from "./providers/impls/fsrs-learner-prior-provider";
@@ -65,6 +70,8 @@ export interface SugarlangExecutionServices {
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
   budgeter: LexicalBudgeter;
+  placementQuestionnaireLoader: PlacementQuestionnaireLoader;
+  placementScoreEngine: PlacementScoreEngine;
   learnerStore: BlackboardLearnerStore;
   learnerStateReducer: LearnerStateReducer;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
@@ -73,6 +80,7 @@ export interface SugarlangExecutionServices {
 }
 
 export interface SugarlangRuntimeServicesOptions {
+  config: SugarLangPluginConfig;
   environment?: RuntimePluginEnvironment;
   logger: SugarlangLoggerLike;
   telemetry?: TelemetrySink;
@@ -83,6 +91,8 @@ interface LanguageBundle {
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
   budgeter: LexicalBudgeter;
+  placementQuestionnaireLoader: PlacementQuestionnaireLoader;
+  placementScoreEngine: PlacementScoreEngine;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
 }
 
@@ -146,6 +156,7 @@ function createCardStore(profileId: string): CardStore {
 }
 
 export class SugarlangRuntimeServices {
+  private readonly config: SugarLangPluginConfig;
   private readonly environment: RuntimePluginEnvironment | undefined;
   private readonly logger: SugarlangLoggerLike;
   private readonly telemetry: TelemetrySink;
@@ -159,6 +170,7 @@ export class SugarlangRuntimeServices {
     | null;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
+    this.config = options.config;
     this.environment = options.environment;
     this.logger = options.logger;
     this.telemetry = options.telemetry ?? NO_OP_TELEMETRY;
@@ -218,6 +230,10 @@ export class SugarlangRuntimeServices {
 
   getBlackboard(): RuntimeBlackboard | null {
     return this.boundContext?.blackboard ?? null;
+  }
+
+  getConfig(): SugarLangPluginConfig {
+    return this.config;
   }
 
   findNpcDefinition(npcDefinitionId: string | undefined): NPCDefinition | null {
@@ -325,6 +341,8 @@ export class SugarlangRuntimeServices {
       atlas,
       learnerPriorProvider
     });
+    const placementQuestionnaireLoader = new PlacementQuestionnaireLoader();
+    const placementScoreEngine = new PlacementScoreEngine(atlas, morphology);
     const compileCache = getSugarlangRuntimeCompileCache();
     const scheduler = new RuntimeCompileScheduler({
       getScene: (sceneId) => {
@@ -367,6 +385,8 @@ export class SugarlangRuntimeServices {
       morphology,
       classifier,
       budgeter,
+      placementQuestionnaireLoader,
+      placementScoreEngine,
       sceneLexiconStore
     };
     this.languageBundles.set(targetLanguage, bundle);

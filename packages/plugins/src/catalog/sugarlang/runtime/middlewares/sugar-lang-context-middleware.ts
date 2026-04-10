@@ -16,14 +16,25 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import { getSugarlangPlacementStatus } from "../learner/fact-definitions";
+import {
+  SUGARLANG_PLACEMENT_STATUS_FACT,
+  SUGARLANG_PLACEMENT_WRITER,
+  createSugarlangPlacementStatusScope,
+  getSugarlangPlacementStatus
+} from "../learner/fact-definitions";
 import type { TelemetrySink } from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
+import {
+  advancePlacementPhase,
+  getPlacementQuestionnaireVersion,
+  type PlacementPhaseStateValue
+} from "../placement/placement-flow-orchestrator";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
   SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
+  SUGARLANG_PLACEMENT_PHASE_STATE,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PRESCRIPTION_ANNOTATION,
@@ -34,11 +45,9 @@ import {
   computePendingProvisionalLemmas,
   computeProbeFloorState,
   createNoOpSugarlangLogger,
-  getPlacementPhase,
   getSceneId,
   getTurnsSinceLastProbe,
-  maybeAdvancePlacementPhase,
-  setPlacementPhase,
+  type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
 
@@ -52,6 +61,62 @@ export interface SugarLangContextMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
   telemetry?: TelemetrySink;
+}
+
+function readPlacementState(
+  execution: { state: Record<string, unknown> }
+): PlacementPhaseStateValue | null {
+  const value = execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    if (
+      (record.phase === "opening-dialog" ||
+        record.phase === "questionnaire" ||
+        record.phase === "closing-dialog") &&
+      typeof record.enteredAtTurn === "number"
+    ) {
+      return {
+        phase: record.phase,
+        enteredAtTurn: record.enteredAtTurn
+      };
+    }
+  }
+  if (
+    value === "opening-dialog" ||
+    value === "questionnaire" ||
+    value === "closing-dialog"
+  ) {
+    return {
+      phase: value,
+      enteredAtTurn: 0
+    };
+  }
+  return null;
+}
+
+function writePlacementState(
+  execution: { state: Record<string, unknown> },
+  phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active",
+  enteredAtTurn: number
+): void {
+  if (phase === "not-active") {
+    delete execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
+    return;
+  }
+
+  execution.state[SUGARLANG_PLACEMENT_PHASE_STATE] = {
+    phase,
+    enteredAtTurn
+  } satisfies PlacementPhaseStateValue;
+}
+
+function resolvePlacementMinAnswersForValid(
+  questionnaireMinAnswersForValid: number,
+  configuredMinAnswersForValid: number | "use-bank-default"
+): number {
+  return typeof configuredMinAnswersForValid === "number"
+    ? configuredMinAnswersForValid
+    : questionnaireMinAnswersForValid;
 }
 
 function pickPrePlacementOpeningLine(executionText: {
@@ -95,23 +160,110 @@ export function createSugarLangContextMiddleware(
       }
 
       const learner = await services.learnerStore.getCurrentProfile();
-      const placementStatus = deps.services.getBlackboard()
-        ? getSugarlangPlacementStatus(
-            deps.services.getBlackboard()!,
-            learner.learnerId
-          )
+      const config = deps.services.getConfig();
+      const blackboard = deps.services.getBlackboard();
+      const placementStatus = blackboard
+        ? getSugarlangPlacementStatus(blackboard, learner.learnerId)
         : null;
-      let placementPhase = maybeAdvancePlacementPhase(
-        execution,
-        placementStatus?.status === "completed"
-          ? "not-active"
-          : getPlacementPhase(execution, learner)
-      );
-      setPlacementPhase(execution, placementPhase);
-      if (placementPhase !== "not-active") {
-        execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
-          phase: placementPhase
+      const turnCount = execution.state["sugaragent.session"] &&
+        typeof execution.state["sugaragent.session"] === "object" &&
+        execution.state["sugaragent.session"] !== null &&
+        typeof (execution.state["sugaragent.session"] as { turnCount?: unknown }).turnCount ===
+          "number"
+        ? (execution.state["sugaragent.session"] as { turnCount: number }).turnCount
+        : 0;
+      const placementState = readPlacementState(execution);
+      const isPlacementNpc =
+        config.placement.enabled &&
+        execution.selection.metadata?.sugarlangRole === "placement";
+      let placementPhase: PlacementFlowAnnotation["phase"] =
+        !isPlacementNpc || placementStatus?.status === "completed"
+          ? placementState?.phase === "closing-dialog" &&
+            turnCount - placementState.enteredAtTurn < config.placement.closingDialogTurns
+            ? "closing-dialog"
+            : "not-active"
+          : placementState?.phase ?? "opening-dialog";
+      let placementFlowAnnotation: PlacementFlowAnnotation | null = null;
+
+      if (
+        placementPhase === "questionnaire" &&
+        execution.input?.kind === "placement_questionnaire"
+      ) {
+        const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
+          execution.selection.targetLanguage ?? learner.targetLanguage
+        );
+        const scoreResult = services.placementScoreEngine.scoreResponses(
+          execution.input.response,
+          questionnaire
+        );
+        placementPhase = "closing-dialog";
+        writePlacementState(execution, "closing-dialog", turnCount);
+        placementFlowAnnotation = {
+          phase: "closing-dialog",
+          questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
+          scoreResult
         };
+      } else if (placementPhase !== "not-active") {
+        const advancedPhase = advancePlacementPhase({
+          currentPhase: placementPhase,
+          currentTurnCount: placementState ? turnCount - placementState.enteredAtTurn : turnCount,
+          openingDialogTurns: config.placement.openingDialogTurns,
+          closingDialogTurns: config.placement.closingDialogTurns,
+          questionnaireSubmitted: false
+        });
+        if (advancedPhase !== placementPhase) {
+          writePlacementState(execution, advancedPhase, turnCount);
+          placementPhase = advancedPhase;
+        } else {
+          writePlacementState(execution, placementPhase, placementState?.enteredAtTurn ?? turnCount);
+        }
+      } else {
+        writePlacementState(execution, "not-active", turnCount);
+      }
+
+      if (placementPhase !== "not-active") {
+        const questionnaire =
+          placementPhase === "questionnaire"
+            ? services.placementQuestionnaireLoader.getQuestionnaire(
+                execution.selection.targetLanguage ?? learner.targetLanguage
+              )
+            : null;
+        if (placementFlowAnnotation) {
+          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] =
+            placementFlowAnnotation;
+        } else {
+          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
+            phase: placementPhase,
+            ...(questionnaire
+              ? {
+                  questionnaireVersion:
+                    getPlacementQuestionnaireVersion(questionnaire),
+                  minAnswersForValid: resolvePlacementMinAnswersForValid(
+                    questionnaire.minAnswersForValid,
+                    config.placement.minAnswersForValid
+                  )
+                }
+              : {})
+          } satisfies PlacementFlowAnnotation;
+        }
+      }
+
+      if (
+        isPlacementNpc &&
+        blackboard &&
+        placementStatus?.status !== "completed" &&
+        (placementPhase === "opening-dialog" || placementPhase === "questionnaire")
+      ) {
+        blackboard.setFact({
+          definition: SUGARLANG_PLACEMENT_STATUS_FACT,
+          scope: createSugarlangPlacementStatusScope(learner.learnerId),
+          value: {
+            status: "in-progress",
+            ...(placementStatus?.cefrBand ? { cefrBand: placementStatus.cefrBand } : {}),
+            ...(placementStatus?.confidence ? { confidence: placementStatus.confidence } : {})
+          },
+          sourceSystem: SUGARLANG_PLACEMENT_WRITER
+        });
       }
 
       if (placementPhase === "questionnaire") {

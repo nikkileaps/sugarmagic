@@ -21,6 +21,8 @@ import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
+import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
+import { emitPlacementCompleted } from "../quest-integration/placement-completion";
 import {
   SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
@@ -35,6 +37,7 @@ import {
   normalizeTurn,
   setStoredComprehensionCheck,
   setTurnsSinceLastProbe,
+  type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
 
@@ -80,21 +83,14 @@ export function createSugarLangObserveMiddleware(
     stage: "analysis",
     async finalize(execution, turn) {
       const normalizedTurn = normalizeTurn(turn);
-      const constraint = execution.annotations[
-        SUGARLANG_CONSTRAINT_ANNOTATION
-      ] as SugarlangConstraint | undefined;
-      if (!normalizedTurn || !constraint) {
-        return turn;
-      }
-
       const services = deps.services.resolveForExecution(execution);
       if (!services) {
-        return normalizedTurn;
+        return turn;
       }
 
       const placementFlow = execution.annotations[
         SUGARLANG_PLACEMENT_FLOW_ANNOTATION
-      ] as { phase?: string } | undefined;
+      ] as PlacementFlowAnnotation | undefined;
       if (placementFlow?.phase === "opening-dialog") {
         await telemetry.emit("observer.pre-placement-bypass", {
           conversationId:
@@ -103,6 +99,56 @@ export function createSugarLangObserveMiddleware(
             "conversation"
         });
         return normalizedTurn;
+      }
+
+      if (placementFlow?.phase === "questionnaire") {
+        await telemetry.emit("observer.placement-questionnaire-bypass", {
+          conversationId:
+            execution.selection.npcDefinitionId ??
+            execution.selection.dialogueDefinitionId ??
+            "conversation"
+        });
+        return normalizedTurn;
+      }
+
+      if (execution.input?.kind === "placement_questionnaire") {
+        if (
+          normalizedTurn &&
+          placementFlow?.phase === "closing-dialog" &&
+          placementFlow.scoreResult
+        ) {
+          const learner = await services.learnerStore.getCurrentProfile();
+          await services.learnerStateReducer.apply(
+            buildPlacementCompletionEvent(placementFlow.scoreResult, learner)
+          );
+          normalizedTurn.proposedActions = [
+            ...(normalizedTurn.proposedActions ?? []),
+            ...emitPlacementCompleted(placementFlow.scoreResult)
+          ];
+
+          const confidenceFloor = deps.services.getConfig().placement.confidenceFloor;
+          await telemetry.emit("placement.completed", {
+            cefrBand: placementFlow.scoreResult.cefrBand,
+            confidence: placementFlow.scoreResult.confidence,
+            questionnaireVersion: placementFlow.scoreResult.questionnaireVersion,
+            seededLemmaCount: placementFlow.scoreResult.lemmasSeededFromFreeText.length
+          });
+          if (placementFlow.scoreResult.confidence < confidenceFloor) {
+            logger.warn("Placement completed below configured confidence floor.", {
+              confidence: placementFlow.scoreResult.confidence,
+              confidenceFloor
+            });
+          }
+        }
+
+        return normalizedTurn;
+      }
+
+      const constraint = execution.annotations[
+        SUGARLANG_CONSTRAINT_ANNOTATION
+      ] as SugarlangConstraint | undefined;
+      if (!normalizedTurn || !constraint) {
+        return turn;
       }
 
       const learner = await services.learnerStore.getCurrentProfile();

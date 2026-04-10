@@ -35,6 +35,8 @@
     "fake-indexeddb": "^6.2.5",
     "globals": "^17.4.0",
     "prettier": "^3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.0",

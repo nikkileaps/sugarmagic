@@ -1,6 +1,6 @@
 # Learner State API
 
-Status: Updated in Epic 7
+Status: Updated in Epic 11
 
 This document records the runtime learner-state model owned by sugarlang.
 
@@ -144,6 +144,20 @@ Handled event kinds:
 The reducer reads the latest profile, produces a new immutable state, persists
 changed cards, writes the updated profile back through the blackboard owner id,
 and emits telemetry audit events.
+
+## Placement Seeding
+
+On `placement-completion`, the reducer now does more than write the assessment:
+
+- updates `assessment.status`, `assessment.evaluatedCefrBand`,
+  `assessment.cefrConfidence`, and `assessment.evaluatedAtMs`
+- updates `estimatedCefrBand`
+- persists `SUGARLANG_PLACEMENT_STATUS_FACT`
+- seeds any `lemmasSeededFromFreeText` into FSRS using a synthetic
+  `produced-typed` outcome
+
+That gives cold-start learners a small amount of real productive evidence before
+normal gameplay begins.
 
 ## Exported Constants
 

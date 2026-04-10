@@ -82,6 +82,7 @@ export function createSugarlangPlugin(
     : createNoOpSugarlangLogger();
   const telemetry = createNoOpTelemetrySink();
   const services = new SugarlangRuntimeServices({
+    config,
     environment: context.environment,
     logger,
     telemetry

@@ -179,6 +179,16 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
   return {
     resolveForExecution: () => null,
     getBlackboard: () => null,
+    getConfig: () => ({
+      debugLogging: false,
+      placement: {
+        enabled: true,
+        minAnswersForValid: "use-bank-default" as const,
+        confidenceFloor: 0.3,
+        openingDialogTurns: 2,
+        closingDialogTurns: 2
+      }
+    }),
     findNpcDefinition: () => null,
     ...overrides
   };

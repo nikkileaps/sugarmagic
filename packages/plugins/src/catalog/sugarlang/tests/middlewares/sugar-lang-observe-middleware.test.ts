@@ -19,7 +19,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createSugarLangObserveMiddleware } from "../../runtime/middlewares/sugar-lang-observe-middleware";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
-  SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE
+  SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE,
+  SUGARLANG_PLACEMENT_FLOW_ANNOTATION
 } from "../../runtime/middlewares/shared";
 import {
   createBaseConstraint,
@@ -72,5 +73,81 @@ describe("SugarLangObserveMiddleware", () => {
     expect(
       execution.state[SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE]
     ).toBeUndefined();
+  });
+
+  it("applies placement completion and emits quest proposals on questionnaire submission", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: {
+          apply
+        }
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution({
+      input: {
+        kind: "placement_questionnaire",
+        response: {
+          questionnaireId: "es-placement-v1",
+          submittedAtMs: 1234,
+          answers: {}
+        }
+      }
+    });
+    execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
+      phase: "closing-dialog",
+      questionnaireVersion: "es-placement-v1",
+      scoreResult: {
+        cefrBand: "A2",
+        confidence: 0.72,
+        perBandScores: {
+          A1: { correct: 2, total: 2 },
+          A2: { correct: 2, total: 2 },
+          B1: { correct: 0, total: 0 },
+          B2: { correct: 0, total: 0 },
+          C1: { correct: 0, total: 0 },
+          C2: { correct: 0, total: 0 }
+        },
+        lemmasSeededFromFreeText: [{ lemmaId: "viajar", lang: "es" }],
+        skippedCount: 1,
+        totalCount: 6,
+        scoredAtMs: 1234,
+        questionnaireVersion: "es-placement-v1"
+      }
+    };
+
+    const finalized = await middleware.finalize?.(
+      execution,
+      createTestTurn("Perfecto. Ya tengo tu formulario.")
+    );
+
+    expect(apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "placement-completion",
+        cefrBand: "A2",
+        lemmasSeededFromFreeText: [{ lemmaId: "viajar", lang: "es" }]
+      })
+    );
+    expect(finalized?.proposedActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "set-conversation-flag",
+          key: "sugarlang.placement.status",
+          value: "completed"
+        }),
+        expect.objectContaining({
+          kind: "notify-quest-event",
+          eventName: "sugarlang.placement.completed"
+        })
+      ])
+    );
   });
 });

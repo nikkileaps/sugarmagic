@@ -50,10 +50,27 @@ export interface ConversationSelectionContext {
   metadata?: Record<string, unknown>;
 }
 
+export interface ConversationPlacementQuestionnaireResponse {
+  questionnaireId: string;
+  submittedAtMs: number;
+  answers: Record<
+    string,
+    | { kind: "multiple-choice"; optionId: string }
+    | { kind: "free-text"; text: string }
+    | { kind: "yes-no"; answer: "yes" | "no" }
+    | { kind: "fill-in-blank"; text: string }
+    | { kind: "skipped" }
+  >;
+}
+
 export type ConversationPlayerInput =
   | { kind: "advance" }
   | { kind: "choice"; choiceId: string }
-  | { kind: "free_text"; text: string };
+  | { kind: "free_text"; text: string }
+  | {
+      kind: "placement_questionnaire";
+      response: ConversationPlacementQuestionnaireResponse;
+    };
 
 export interface ConversationChoice {
   choiceId: string;
@@ -64,6 +81,7 @@ export interface ConversationChoice {
 export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
   | { kind: "set-conversation-flag"; key: string; value: unknown }
+  | { kind: "notify-quest-event"; eventName: string }
   | { kind: "surface-beat-evidence"; beatId: string; evidence: string }
   | { kind: "request-close" }
   | {

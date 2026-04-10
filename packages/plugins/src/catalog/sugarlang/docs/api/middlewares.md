@@ -1,6 +1,6 @@
 # Middleware API
 
-Status: Updated in Epic 10
+Status: Updated in Epic 11
 
 Sugarlang contributes four `conversation.middleware` entries that run in a fixed
 order:
@@ -68,3 +68,18 @@ Two behaviors are now live:
 - Pre-placement opening dialog turns bypass prompt assembly entirely and return a
   direct `ConversationTurnEnvelope`, which skips LLM generation, audit, and
   repair.
+- Placement questionnaire turns also bypass LLM generation. SugarAgent returns a
+  deterministic envelope with `inputMode: "placement_questionnaire"` and the
+  questionnaire payload in turn metadata so the conversation host can render the
+  form UI directly.
+
+## Placement Flow Ownership
+
+Epic 11 tightens the phase split:
+
+- `sugarlang.context` computes and annotates the placement phase, stages the
+  questionnaire metadata, and keeps replay inertness authoritative.
+- `sugarlang.director` skips work during the questionnaire phase.
+- `sugarlang.observe` bypasses opening-dialog and questionnaire display turns,
+  then applies placement completion plus quest proposals on the questionnaire
+  submission turn.

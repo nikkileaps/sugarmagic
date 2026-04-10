@@ -3,6 +3,7 @@ import type {
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
 import type { SugarlangConstraint } from "../../../sugarlang/runtime/types";
+import { loadPlacementQuestionnaire } from "../../../sugarlang/runtime/placement/placement-questionnaire-loader";
 import type { LLMProvider } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import {
@@ -105,6 +106,47 @@ function buildPrePlacementEnvelope(
   };
 }
 
+function buildPlacementQuestionnaireEnvelope(
+  input: GenerateStageInput,
+  context: TurnStageContext,
+  placementFlow: { minAnswersForValid?: unknown } | undefined
+): ConversationTurnEnvelope | null {
+  const targetLanguage = input.execution.selection.targetLanguage?.trim().toLowerCase();
+  if (!targetLanguage) {
+    return null;
+  }
+
+  const questionnaire = loadPlacementQuestionnaire(targetLanguage);
+  const effectiveQuestionnaire =
+    typeof placementFlow?.minAnswersForValid === "number"
+      ? {
+          ...questionnaire,
+          minAnswersForValid: placementFlow.minAnswersForValid
+        }
+      : questionnaire;
+  return {
+    turnId: context.turnId,
+    providerId: "sugaragent.provider",
+    conversationKind: input.execution.selection.conversationKind,
+    speakerId: input.execution.selection.npcDefinitionId,
+    speakerLabel: input.execution.selection.npcDisplayName,
+    displayName: input.execution.selection.npcDisplayName,
+    text: effectiveQuestionnaire.formIntro,
+    choices: [],
+    inputMode: "placement_questionnaire",
+    proposedActions: [],
+    metadata: {
+      "sugarlang.placementQuestionnaire": effectiveQuestionnaire,
+      "sugarlang.placementQuestionnaireVersion": `${effectiveQuestionnaire.lang}-placement-v${effectiveQuestionnaire.schemaVersion}`
+    },
+    annotations: input.execution.annotations,
+    diagnostics: {
+      placementQuestionnaire: true,
+      llmCallsMade: 0
+    }
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -163,6 +205,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     const constraint = input.execution.annotations[
       "sugarlang.constraint"
     ] as SugarlangConstraint | undefined;
+    const placementFlow = input.execution.annotations["sugarlang.placementFlow"] as
+      | { phase?: string; minAnswersForValid?: unknown }
+      | undefined;
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
@@ -219,6 +264,35 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         ),
         status: "ok"
       };
+    }
+
+    if (placementFlow?.phase === "questionnaire") {
+      const envelopeOverride = buildPlacementQuestionnaireEnvelope(
+        input,
+        context,
+        placementFlow
+      );
+      if (envelopeOverride) {
+        return {
+          output: {
+            text: envelopeOverride.text,
+            usedLlm: false,
+            llmBackend: "deterministic",
+            actionProposals: [],
+            envelopeOverride
+          },
+          diagnostics: createDiagnostics(
+            this.stageId,
+            startedAt,
+            "ok",
+            {
+              placementQuestionnaire: true,
+              usedLlm: false
+            }
+          ),
+          status: "ok"
+        };
+      }
     }
 
     if (

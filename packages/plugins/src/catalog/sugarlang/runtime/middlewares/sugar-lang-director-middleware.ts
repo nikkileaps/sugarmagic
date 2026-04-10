@@ -130,6 +130,12 @@ export function createSugarLangDirectorMiddleware(
       if (!prescription) {
         return execution;
       }
+      const placementFlow = execution.annotations["sugarlang.placementFlow"] as
+        | { phase?: string }
+        | undefined;
+      if (placementFlow?.phase === "questionnaire") {
+        return execution;
+      }
 
       const services = deps.services.resolveForExecution(execution);
       if (!services) {

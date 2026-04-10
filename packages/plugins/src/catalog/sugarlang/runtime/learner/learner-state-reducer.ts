@@ -69,6 +69,7 @@ export interface PlacementCompletionEvent {
   cefrBand: CEFRBand;
   confidence: number;
   completedAtMs: number;
+  lemmasSeededFromFreeText: LemmaRef[];
 }
 
 export interface SessionStartEvent {
@@ -281,6 +282,33 @@ export class LearnerStateReducer {
           },
           sourceSystem: SUGARLANG_PLACEMENT_WRITER
         });
+        for (const lemma of event.lemmasSeededFromFreeText) {
+          const existingCard = profile.lemmaCards[lemma.lemmaId];
+          const seededCard =
+            existingCard ??
+            this.options.learnerPriorProvider.getInitialLemmaCard(
+              lemma.lemmaId,
+              lemma.lang,
+              event.cefrBand
+            );
+          const nextCard = applyOutcome(
+            seededCard,
+            observationToOutcome({
+              kind: "produced-typed",
+              inputText: lemma.surfaceForm ?? lemma.lemmaId,
+              observedAtMs: event.completedAtMs
+            }),
+            event.completedAtMs,
+            profile.currentSession?.turns ?? 0
+          );
+          profile.lemmaCards[nextCard.lemmaId] = nextCard;
+          changedCards.push(nextCard);
+          await this.telemetry.emit("fsrs.seeded-from-placement", {
+            lemmaId: nextCard.lemmaId,
+            cefrBand: event.cefrBand,
+            completedAtMs: event.completedAtMs
+          });
+        }
         break;
       case "observation":
         changedCards.push(

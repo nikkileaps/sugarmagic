@@ -616,6 +616,9 @@ export function createRuntimeGameplaySessionController(
       case "set-conversation-flag":
         questManager.setFlag(proposal.key, proposal.value);
         return;
+      case "notify-quest-event":
+        questManager.notifyEvent(proposal.eventName);
+        return;
       case "surface-beat-evidence":
         console.debug("[runtime-core] conversation beat evidence", proposal);
         return;

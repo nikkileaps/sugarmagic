@@ -305,6 +305,32 @@ Tickets 1, 2, 6, 7, and 15 are strictly on sugarlang's critical path. Tickets 8,
 7. **Character voice passes review.** A reviewer unfamiliar with sugarlang's CEFR mechanics reads the 16-turn transcript (or plays it live) and reports the experience as "warm, naturalistic, felt like meeting a person" — not "I felt assessed."
 8. **Works identically in Preview and Published.** The same Orrin, the same quest, the same question bank, the same compiled scene lexicon. No editor-only variation.
 
+## v1 Scope Boundaries
+
+This plan assumes the Epic 11 v1 placement contract exactly as shipped.
+
+### In scope
+
+- One plugin-shipped questionnaire per supported language
+- Placement activation through `metadata.sugarlangRole = "placement"`
+- Opening-dialog -> questionnaire -> closing-dialog flow
+- Deterministic scoring with CEFR estimate and confidence
+- FSRS seeding from correct free-text answers
+- Replay inertness after completion
+- Quest completion through `sugarlang.placement.completed`
+- Global placement disable through plugin config
+
+### Out of scope
+
+- Per-NPC questionnaire overrides
+- Per-project questionnaire editing
+- Re-placement after first completion
+- Adaptive branching question selection
+- Multi-session partial-form persistence
+- Audio or image-based question types
+- Per-learner customized forms
+- Partial-credit scoring
+
 ## Open Questions
 
 - **Per-NPC placement question overrides.** Can a project override the shipped question bank with NPC-specific lines without forking the plugin's data file? Probably yes via a future NPCDefinition `metadata.sugarlangPlacementQuestionOverrideId` pointer. Out of scope for v1; v1 uses the shipped plugin-level bank for all placement NPCs regardless of character.

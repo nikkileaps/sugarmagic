@@ -8,11 +8,11 @@ from skeleton to implementation.
 | `budgeter.md`                  | Public Budgeter inputs, outputs, scoring hooks, and rationale surfaces.                 | Epic 3, Epic 8          | Updated in Epic 3 |
 | `classifier.md`                | Public Envelope Classifier interfaces, deterministic pipeline, and repair entry points. | Epic 3, Epic 5          | Updated in Epic 3 |
 | `director.md`                  | Director output contract, prompt boundary, schema parsing, and fallback policy seams.   | Epic 3, Epic 9          | Updated in Epic 3 |
-| `learner-state.md`             | Learner profile, reducer-owned state, persistence, and session signal surfaces.         | Epic 3, Epic 7          | Updated in Epic 3 |
+| `learner-state.md`             | Learner profile, reducer-owned state, persistence, session signals, and placement seeding. | Epic 3, Epic 7, Epic 11 | Updated in Epic 11 |
 | `scene-lexicon-compilation.md` | Scene compiler, content hashing, cache ownership, and compile-profile contract.         | Epic 3, Epic 6          | Updated in Epic 3 |
-| `middlewares.md`               | Middleware ordering, annotation contracts, and SugarAgent integration seam.             | Epic 2, Epic 10         | Updated in Epic 10 |
-| `placement-contract.md`        | Placement capability boundary, questionnaire ownership, and quest signaling contract.   | Epic 2, Epic 3, Epic 11 | Updated in Epic 3 |
-| `editor-contributions.md`      | Studio-facing shell contribution surfaces and editor-only plugin UI.                    | Epic 1, Epic 12         | Stub              |
+| `middlewares.md`               | Middleware ordering, annotation contracts, SugarAgent integration, and placement flow ownership. | Epic 2, Epic 10, Epic 11 | Updated in Epic 11 |
+| `placement-contract.md`        | Placement capability boundary, questionnaire ownership, scoring, configuration, and replay inertness. | Epic 2, Epic 3, Epic 11 | Updated in Epic 11 |
+| `editor-contributions.md`      | Studio-facing shell contribution surfaces and editor-only plugin UI.                    | Epic 1, Epic 11, Epic 12 | Updated in Epic 11 |
 | `telemetry.md`                 | Telemetry sink contract, rationale traces, and debug-panel-facing data surfaces.        | Epic 1, Epic 13         | Stub              |
 | `providers.md`                 | ADR 010 provider interfaces and implementation ownership boundaries.                    | Epic 3                  | Updated in Epic 3 |
 

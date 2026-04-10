@@ -25,7 +25,8 @@ function createStageInput() {
         conversationKind: "free-form" as const,
         npcDefinitionId: "npc-1",
         npcDisplayName: "Marisol",
-        interactionMode: "agent" as const
+        interactionMode: "agent" as const,
+        targetLanguage: "es"
       },
       input: null,
       state: {},
@@ -221,5 +222,26 @@ describe("GenerateStage", () => {
         )
       })
     );
+  });
+
+  it("returns the placement questionnaire envelope without using the llm", async () => {
+    const stage = new GenerateStage(null);
+    const input = createStageInput();
+    input.execution.selection.targetLanguage = "es";
+    input.execution.annotations["sugarlang.placementFlow"] = {
+      phase: "questionnaire",
+      minAnswersForValid: 4
+    };
+
+    const result = await stage.execute(input as never, createStageContext() as never);
+
+    expect(result.output.usedLlm).toBe(false);
+    expect(result.output.envelopeOverride?.inputMode).toBe("placement_questionnaire");
+    expect(
+      result.output.envelopeOverride?.metadata?.["sugarlang.placementQuestionnaire"]
+    ).toMatchObject({
+      lang: "es",
+      minAnswersForValid: 4
+    });
   });
 });

@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/quest-integration/quest-adapter.ts
  *
- * Purpose: Reserves the thin quest-manager wrapper used by the placement capability.
+ * Purpose: Owns the thin action-proposal wrapper used by Sugarlang's placement capability.
  *
  * Exports:
  *   - setSugarlangQuestFlag
@@ -13,16 +13,27 @@
  *
  * Implements: Proposal 001 §Placement Interaction Contract
  *
- * Status: skeleton (no implementation yet; see Epic 11)
+ * Status: active
  */
 
+import type { ConversationActionProposal } from "@sugarmagic/runtime-core";
+
 export function setSugarlangQuestFlag(
-  _key: string,
-  _value: string
-): void {
-  throw new Error("TODO: Epic 11");
+  key: string,
+  value: string
+): ConversationActionProposal {
+  return {
+    kind: "set-conversation-flag",
+    key,
+    value
+  };
 }
 
-export function notifySugarlangQuestEvent(_eventName: string): void {
-  throw new Error("TODO: Epic 11");
+export function notifySugarlangQuestEvent(
+  eventName: string
+): ConversationActionProposal {
+  return {
+    kind: "notify-quest-event",
+    eventName
+  };
 }

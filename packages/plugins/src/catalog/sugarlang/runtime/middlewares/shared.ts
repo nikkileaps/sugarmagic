@@ -31,6 +31,7 @@ import type {
   LemmaRef,
   LexicalPrescription,
   PendingProvisional,
+  PlacementScoreResult,
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
@@ -54,8 +55,9 @@ export interface LearnerSnapshot {
 
 export interface PlacementFlowAnnotation {
   phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active";
+  minAnswersForValid?: number;
   questionnaireVersion?: string;
-  scoreResult?: Record<string, unknown>;
+  scoreResult?: PlacementScoreResult;
 }
 
 export interface StoredComprehensionCheck {
@@ -193,58 +195,6 @@ export function buildEmptyPrescription(summary: string): LexicalPrescription {
       reasons: []
     }
   };
-}
-
-export function getPlacementPhase(
-  execution: ConversationExecutionContext,
-  learner: LearnerProfile
-): PlacementFlowAnnotation["phase"] {
-  const role = execution.selection.metadata?.sugarlangRole;
-  if (role !== "placement" || learner.assessment.status === "evaluated") {
-    return "not-active";
-  }
-
-  const phase = execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-  if (
-    phase === "opening-dialog" ||
-    phase === "questionnaire" ||
-    phase === "closing-dialog"
-  ) {
-    return phase;
-  }
-  return "opening-dialog";
-}
-
-export function maybeAdvancePlacementPhase(
-  execution: ConversationExecutionContext,
-  currentPhase: PlacementFlowAnnotation["phase"]
-): PlacementFlowAnnotation["phase"] {
-  if (currentPhase === "opening-dialog") {
-    const turnCount = getSugarAgentTurnCount(execution);
-    if (turnCount >= 2) {
-      return "questionnaire";
-    }
-  }
-
-  if (
-    currentPhase === "questionnaire" &&
-    execution.annotations["sugarlang.placementQuestionnaireSubmitted"] === true
-  ) {
-    return "closing-dialog";
-  }
-
-  return currentPhase;
-}
-
-export function setPlacementPhase(
-  execution: ConversationExecutionContext,
-  phase: PlacementFlowAnnotation["phase"]
-): void {
-  if (phase === "not-active") {
-    delete execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-    return;
-  }
-  execution.state[SUGARLANG_PLACEMENT_PHASE_STATE] = phase;
 }
 
 export function getTurnsSinceLastProbe(execution: ConversationExecutionContext): number {
