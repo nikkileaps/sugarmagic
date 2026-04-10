@@ -41,5 +41,8 @@
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
     "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "ts-fsrs": "^5.3.2"
   }
 }

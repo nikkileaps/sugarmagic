@@ -20,7 +20,10 @@
  */
 
 import type { LearnerProfile } from "./learner-profile";
-import type { CompiledSceneLexicon } from "./scene-lexicon";
+import type {
+  CompiledSceneLexicon,
+  QuestEssentialLemma
+} from "./scene-lexicon";
 
 /**
  * Lightweight lemma reference passed between sugarlang subsystems.
@@ -51,6 +54,13 @@ export interface LexicalBudget {
 export interface LexicalPriorityScore {
   lemmaRef: LemmaRef;
   score: number;
+  components?: {
+    due: number;
+    new: number;
+    anchor: number;
+    prodgap: number;
+    lapse: number;
+  };
   reasons: string[];
 }
 
@@ -65,6 +75,10 @@ export interface LexicalRationale {
   envelopeSurvivorCount: number;
   priorityScores: LexicalPriorityScore[];
   reasons: string[];
+  levelCap?: number;
+  chosenIntroduce?: LemmaRef[];
+  chosenReinforce?: LemmaRef[];
+  droppedByEnvelope?: LemmaRef[];
   questEssentialExclusionLemmaIds?: string[];
 }
 
@@ -91,4 +105,5 @@ export interface LexicalPrescriptionInput {
   learner: LearnerProfile;
   sceneLexicon: CompiledSceneLexicon;
   conversationState: Record<string, unknown>;
+  activeQuestEssentialLemmas?: QuestEssentialLemma[];
 }

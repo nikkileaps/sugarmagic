@@ -24,17 +24,9 @@ import type {
 } from "../../types";
 import {
   createUniformCefrPosterior,
-  seedCefrPosteriorFromSelfReport,
-  CEFR_BAND_ORDER
+  seedCefrPosteriorFromSelfReport
 } from "../../learner/cefr-posterior";
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getBandIndex(band: CEFRBand): number {
-  return CEFR_BAND_ORDER.indexOf(band);
-}
+import { seedCardFromAtlas } from "../../budgeter/fsrs-adapter";
 
 export class FsrsLearnerPriorProvider implements LearnerPriorProvider {
   constructor(private readonly atlas: LexicalAtlasProvider) {}
@@ -45,24 +37,16 @@ export class FsrsLearnerPriorProvider implements LearnerPriorProvider {
     learnerBand: CEFRBand
   ): LemmaCard {
     const atlasEntry = this.atlas.getLemma(lemmaId, lang);
-    const cefrPriorBand = atlasEntry?.cefrPriorBand ?? learnerBand;
-    const bandDelta = getBandIndex(cefrPriorBand) - getBandIndex(learnerBand);
 
-    return {
+    return seedCardFromAtlas(
       lemmaId,
-      difficulty: clamp(3 + bandDelta * 0.75, 1, 8),
-      stability: clamp(2.4 - bandDelta * 0.35, 0.4, 5),
-      retrievability: clamp(0.82 - bandDelta * 0.08, 0.2, 0.97),
-      lastReviewedAt: null,
-      reviewCount: 0,
-      lapseCount: 0,
-      cefrPriorBand,
-      priorWeight: atlasEntry?.cefrPriorSource === "frequency-derived" ? 0.8 : 1,
-      productiveStrength: 0,
-      lastProducedAtMs: null,
-      provisionalEvidence: 0,
-      provisionalEvidenceFirstSeenTurn: null
-    };
+      lang,
+      {
+        cefrPriorBand: atlasEntry?.cefrPriorBand ?? learnerBand,
+        cefrPriorSource: atlasEntry?.cefrPriorSource
+      },
+      learnerBand
+    );
   }
 
   getCefrInitialPosterior(selfReportedBand?: CEFRBand): CefrPosterior {

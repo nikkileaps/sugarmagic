@@ -1,6 +1,6 @@
 # Epic 8: Lexical Budgeter
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Lexical Budgeter](../../proposals/001-adaptive-language-learning-architecture.md#1-lexical-budgeter)
 **Depends on:** Epic 1, Epic 3, Epic 4, Epic 6, Epic 7

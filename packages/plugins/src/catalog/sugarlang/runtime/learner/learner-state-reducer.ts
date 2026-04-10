@@ -30,10 +30,6 @@ import type {
   ObservationEvent,
   ObservationOutcome
 } from "../types";
-import {
-  PROVISIONAL_EVIDENCE_DECAY_TURN_THRESHOLD,
-  PROVISIONAL_EVIDENCE_MAX
-} from "../types";
 import type { CardStore } from "./card-store";
 import {
   computePointEstimate,
@@ -50,12 +46,18 @@ import {
 } from "./persistence";
 import {
   LEARNER_PROFILE_FACT,
-  SUGARLANG_LEARNER_STATE_WRITER,
   SUGARLANG_PLACEMENT_STATUS_FACT,
   SUGARLANG_PLACEMENT_WRITER,
   createSugarlangPlacementStatusScope
 } from "./fact-definitions";
 import type { TelemetrySink } from "../telemetry/telemetry";
+import { observationToOutcome } from "../budgeter/observations";
+import {
+  applyOutcome,
+  commitProvisionalEvidence as commitCardProvisionalEvidence,
+  decayProvisionalEvidence as decayCardProvisionalEvidence,
+  discardProvisionalEvidence as discardCardProvisionalEvidence
+} from "../budgeter/fsrs-adapter";
 
 interface ReducerObservationEvent {
   type: "observation";
@@ -144,18 +146,6 @@ const NO_OP_TELEMETRY: TelemetrySink = {
   }
 };
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function clamp01(value: number): number {
-  return clamp(value, 0, 1);
-}
-
-function cloneCard(card: LemmaCard): LemmaCard {
-  return { ...card };
-}
-
 function createSessionAccumulator(profile: LearnerProfile): SessionAccumulator {
   const currentSession = profile.currentSession;
   if (!currentSession) {
@@ -194,93 +184,6 @@ function createSeedProfile(options: LearnerStateReducerOptions): LearnerProfile 
   };
 }
 
-function mapObservationToOutcome(event: ObservationEvent): ObservationOutcome {
-  switch (event.observation.kind) {
-    case "encountered":
-      return {
-        receptiveGrade: null,
-        productiveStrengthDelta: 0,
-        provisionalEvidenceDelta: 0
-      };
-    case "rapid-advance":
-      return {
-        receptiveGrade: null,
-        productiveStrengthDelta: 0,
-        provisionalEvidenceDelta: computeProvisionalEvidenceDelta(
-          event.observation.dwellMs
-        )
-      };
-    case "hovered":
-      return {
-        receptiveGrade: "Hard",
-        productiveStrengthDelta: -0.05,
-        provisionalEvidenceDelta: 0
-      };
-    case "quest-success":
-      return {
-        receptiveGrade: "Good",
-        productiveStrengthDelta: 0,
-        provisionalEvidenceDelta: 0
-      };
-    case "produced-chosen":
-      return {
-        receptiveGrade: "Good",
-        productiveStrengthDelta: 0.15,
-        provisionalEvidenceDelta: 0
-      };
-    case "produced-typed":
-      return {
-        receptiveGrade: "Easy",
-        productiveStrengthDelta: 0.3,
-        provisionalEvidenceDelta: 0
-      };
-    case "produced-unprompted":
-      return {
-        receptiveGrade: "Easy",
-        productiveStrengthDelta: 0.5,
-        provisionalEvidenceDelta: 0
-      };
-    case "produced-incorrect":
-      return {
-        receptiveGrade: "Again",
-        productiveStrengthDelta: -0.2,
-        provisionalEvidenceDelta: 0
-      };
-  }
-}
-
-function applyFsrsGrade(card: LemmaCard, grade: "Again" | "Hard" | "Good" | "Easy", reviewedAtMs: number): LemmaCard {
-  const next = cloneCard(card);
-  next.lastReviewedAt = reviewedAtMs;
-  next.reviewCount += 1;
-
-  switch (grade) {
-    case "Again":
-      next.difficulty = clamp(next.difficulty + 0.6, 1, 10);
-      next.stability = clamp(next.stability * 0.65, 0.2, 365);
-      next.retrievability = clamp(next.retrievability * 0.45, 0.05, 1);
-      next.lapseCount += 1;
-      break;
-    case "Hard":
-      next.difficulty = clamp(next.difficulty + 0.15, 1, 10);
-      next.stability = clamp(next.stability * 1.05 + 0.15, 0.2, 365);
-      next.retrievability = clamp(next.retrievability + 0.03, 0.05, 1);
-      break;
-    case "Good":
-      next.difficulty = clamp(next.difficulty - 0.1, 1, 10);
-      next.stability = clamp(next.stability * 1.25 + 0.35, 0.2, 365);
-      next.retrievability = clamp(next.retrievability + 0.08, 0.05, 1);
-      break;
-    case "Easy":
-      next.difficulty = clamp(next.difficulty - 0.2, 1, 10);
-      next.stability = clamp(next.stability * 1.45 + 0.5, 0.2, 365);
-      next.retrievability = clamp(next.retrievability + 0.12, 0.05, 1);
-      break;
-  }
-
-  return next;
-}
-
 function computeObservationSuccess(outcome: ObservationOutcome): boolean | null {
   switch (outcome.receptiveGrade) {
     case "Good":
@@ -291,11 +194,9 @@ function computeObservationSuccess(outcome: ObservationOutcome): boolean | null 
       return false;
     case null:
       return null;
+    default:
+      return null;
   }
-}
-
-export function computeProvisionalEvidenceDelta(dwellMs: number): number {
-  return clamp(dwellMs / 10000, 0.05, 0.4);
 }
 
 export class LearnerStateReducer {
@@ -463,37 +364,21 @@ export class LearnerStateReducer {
         observationEvent.lemma.lang,
         profile.estimatedCefrBand
       );
-    let nextCard = cloneCard(seededCard);
-    const outcome = mapObservationToOutcome(observationEvent);
+    const outcome = observationToOutcome(observationEvent.observation);
+    const nextCard = applyOutcome(
+      seededCard,
+      outcome,
+      observationEvent.observation.observedAtMs,
+      accumulator.turns
+    );
 
     if (observationEvent.observation.kind === "rapid-advance") {
-      nextCard.provisionalEvidence = clamp(
-        nextCard.provisionalEvidence + outcome.provisionalEvidenceDelta,
-        0,
-        PROVISIONAL_EVIDENCE_MAX
-      );
-      if (nextCard.provisionalEvidenceFirstSeenTurn === null) {
-        nextCard.provisionalEvidenceFirstSeenTurn = accumulator.turns;
-      }
       await this.telemetry.emit("fsrs.provisional-evidence-accumulated", {
         lemmaId: nextCard.lemmaId,
         previousEvidence: seededCard.provisionalEvidence,
         nextEvidence: nextCard.provisionalEvidence,
         dwellMs: observationEvent.observation.dwellMs
       });
-    } else if (outcome.receptiveGrade) {
-      nextCard = applyFsrsGrade(
-        nextCard,
-        outcome.receptiveGrade,
-        observationEvent.observation.observedAtMs
-      );
-    }
-
-    nextCard.productiveStrength = clamp01(
-      nextCard.productiveStrength + outcome.productiveStrengthDelta
-    );
-    if (outcome.productiveStrengthDelta > 0) {
-      nextCard.lastProducedAtMs = observationEvent.observation.observedAtMs;
     }
 
     const success = computeObservationSuccess(outcome);
@@ -544,12 +429,7 @@ export class LearnerStateReducer {
 
       const previousEvidence = card.provisionalEvidence;
       const beforeStability = card.stability;
-      let nextCard = applyFsrsGrade(card, "Good", event.committedAtMs);
-      nextCard = {
-        ...nextCard,
-        provisionalEvidence: 0,
-        provisionalEvidenceFirstSeenTurn: null
-      };
+      const nextCard = commitCardProvisionalEvidence(card, event.committedAtMs);
       profile.lemmaCards[target.lemmaId] = nextCard;
       changedCards.push(nextCard);
       await this.telemetry.emit("fsrs.provisional-evidence-committed", {
@@ -575,11 +455,7 @@ export class LearnerStateReducer {
         continue;
       }
 
-      const nextCard = {
-        ...card,
-        provisionalEvidence: 0,
-        provisionalEvidenceFirstSeenTurn: null
-      };
+      const nextCard = discardCardProvisionalEvidence(card);
       profile.lemmaCards[target.lemmaId] = nextCard;
       changedCards.push(nextCard);
       await this.telemetry.emit("fsrs.provisional-evidence-discarded", {
@@ -603,19 +479,10 @@ export class LearnerStateReducer {
     while (true) {
       const page = await this.options.cardStore.listPage(cursor);
       for (const card of page.cards) {
-        if (
-          card.provisionalEvidenceFirstSeenTurn === null ||
-          event.currentSessionTurn - card.provisionalEvidenceFirstSeenTurn <=
-            PROVISIONAL_EVIDENCE_DECAY_TURN_THRESHOLD
-        ) {
+        const nextCard = decayCardProvisionalEvidence(card, event.currentSessionTurn);
+        if (nextCard.provisionalEvidence === card.provisionalEvidence) {
           continue;
         }
-
-        const nextCard = {
-          ...card,
-          provisionalEvidence: 0,
-          provisionalEvidenceFirstSeenTurn: null
-        };
         profile.lemmaCards[nextCard.lemmaId] = nextCard;
         changedCards.push(nextCard);
         await this.telemetry.emit("fsrs.provisional-evidence-decayed", {
