@@ -16,7 +16,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { CoverageProfile, LemmaRef, LexicalPrescription } from "../../runtime/types";
+import type {
+  CoverageProfile,
+  LemmaRef,
+  LexicalPrescription,
+  LexicalChunk
+} from "../../runtime/types";
 import {
   ENVELOPE_KRASHEN_FLOOR,
   ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE,
@@ -50,8 +55,24 @@ function createProfile(
     outOfEnvelopeLemmas: [],
     ceilingExceededLemmas: [],
     questEssentialLemmasMatched: [],
+    matchedChunks: [],
+    matchedChunkTokens: [],
     coverageRatio: 1,
     ...overrides
+  };
+}
+
+function createChunk(normalizedForm: string): LexicalChunk {
+  return {
+    chunkId: normalizedForm.replace(/\s+/g, "_"),
+    normalizedForm,
+    surfaceForms: [normalizedForm.replace(/_/g, " ")],
+    cefrBand: "B1",
+    constituentLemmas: ["vez", "cuando"],
+    extractedByModel: "test-model",
+    extractedAtMs: 1,
+    extractorPromptVersion: "1",
+    source: "llm-extracted"
   };
 }
 
@@ -214,6 +235,34 @@ describe("applyEnvelopeRule", () => {
     );
 
     expect(result.withinEnvelope).toBe(false);
+  });
+
+  it("treats introduced chunk constituents as a prescription exemption", () => {
+    const result = applyEnvelopeRule(
+      createProfile({
+        outOfEnvelopeLemmas: [createLemma("de_vez_en_cuando", "de vez en cuando")],
+        ceilingExceededLemmas: [createLemma("de_vez_en_cuando", "de vez en cuando")],
+        matchedChunks: [createChunk("de_vez_en_cuando")],
+        matchedChunkTokens: [
+          {
+            chunkId: "de_vez_en_cuando",
+            normalizedForm: "de_vez_en_cuando",
+            surfaceMatched: "de vez en cuando",
+            start: 0,
+            end: 18,
+            cefrBand: "B1",
+            constituentLemmaIds: ["vez", "cuando"]
+          }
+        ]
+      }),
+      "A1",
+      {
+        prescription: createPrescription(["vez"])
+      }
+    );
+
+    expect(result.withinEnvelope).toBe(true);
+    expect(result.exemptionsApplied).toEqual(["prescription-introduce"]);
   });
 
   it("uses deterministic exemption attribution priority", () => {

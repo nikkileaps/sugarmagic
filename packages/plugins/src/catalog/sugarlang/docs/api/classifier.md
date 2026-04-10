@@ -1,6 +1,6 @@
 # Classifier API
 
-Status: Completed in Epic 5
+Status: Updated in Epic 14
 
 This document records the deterministic classifier API owned by
 `packages/plugins/src/catalog/sugarlang/runtime/classifier/`.
@@ -45,14 +45,34 @@ This document records the deterministic classifier API owned by
   - `outOfEnvelopeLemmas`
   - `ceilingExceededLemmas`
   - `questEssentialLemmasMatched`
+  - `matchedChunks`
+  - `matchedChunkTokens`
   - `coverageRatio`
 - Coverage rules:
+  - lexical chunks are scanned first when a scene lexicon provides `chunks`
+  - matched chunk spans are removed from lemma processing and replaced by virtual chunk tokens
   - numbers count as known and in-band
   - allowlisted named entities count as known and in-band
   - learner cards with `stability > 0` count as known even if the lemma band is above the learner band
   - `outOfEnvelopeLemmas` means atlas-known lemmas above the learner band
   - `ceilingExceededLemmas` means atlas-known lemmas above `learnerBand + 1`
   - empty text returns `coverageRatio = 1.0`
+
+## Virtual Chunk Tokens
+
+- `VirtualChunkToken`
+  - `chunkId`
+  - `normalizedForm`
+  - `surfaceMatched`
+  - `start`
+  - `end`
+  - `cefrBand`
+  - `constituentLemmaIds`
+- The chunk pre-pass uses a cached trie matcher.
+- Longest-match wins when chunks overlap.
+- Matching is case-insensitive, while `surfaceMatched` preserves the original text span for rationale output.
+- Backwards-compatibility guarantee:
+  - if `sceneLexicon.chunks` is `undefined` or empty, the classifier behaves identically to the Epic 5 lemma-only path
 
 ## Envelope Rule
 
@@ -76,12 +96,17 @@ This document records the deterministic classifier API owned by
   - `knownEntities`
   - `questEssentialLemmas`
   - `lang`
+  - `sceneLexicon`
+  - optional `conversationId` / `turnId` / `sessionId` for chunk-hit telemetry
 - The facade runs:
   1. `tokenize`
-  2. `computeCoverage`
-  3. `applyEnvelopeRule`
-  4. violation ranking and `worstViolation` selection
+  2. chunk-scan pre-pass
+  3. lemma coverage on unmatched tokens
+  4. `applyEnvelopeRule`
+  5. violation ranking and `worstViolation` selection
 - Default language comes from `learner.targetLanguage`
+- Chunk-hit telemetry:
+  - emits `chunk.hit-during-classification` when matched chunks are present and turn context is provided
 - Performance target from Epic 5:
   - p95 at or below ~5ms for a typical 50-80 token NPC reply
 

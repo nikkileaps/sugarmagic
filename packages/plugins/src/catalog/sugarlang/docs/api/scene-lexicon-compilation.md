@@ -1,6 +1,6 @@
 # Scene Lexicon Compilation API
 
-Status: Completed in Epic 6
+Status: Updated in Epic 14
 
 This document records the compiler, cache, and store surface for compiled
 sugarlang scene lexicons.
@@ -112,8 +112,81 @@ sugarlang scene lexicons.
 - `SugarlangAuthoringCompileScheduler`
   - debounced background compiler for warm-cache authoring flows
   - compiles both `runtime-preview` and `authoring-preview` artifacts
+  - optional tier-2 `chunkPipeline`
+  - `flushChunks()` runs the lexical chunk pass explicitly for tests and manual rebuild flows
 - `RuntimeCompileScheduler`
   - lazy on-demand compiler for runtime cache misses
+
+## Lexical Chunk Extraction
+
+- `EXTRACTOR_PROMPT_VERSION`
+  - explicit prompt-cache bust key for the chunk extractor
+- `buildExtractChunksPrompt(sceneText, lang, atlas, promptVersion?)`
+  - stable prompt builder used for reviewer-auditable snapshots
+- `extractChunks(input)`
+  - best-effort extractor
+  - returns `chunks: []` plus `failure` metadata on errors instead of throwing
+  - emits:
+    - `chunk.extraction-started`
+    - `chunk.extraction-completed`
+    - `chunk.extraction-failed`
+- extractor output is normalized into `LexicalChunk[]`
+  - `chunkId`
+  - `normalizedForm`
+  - `surfaceForms`
+  - `cefrBand`
+  - `constituentLemmas`
+  - `extractedByModel`
+  - `extractedAtMs`
+  - `extractorPromptVersion`
+  - `source`
+
+## Chunk Cache
+
+- `SugarlangChunkCache`
+  - `get(key)`
+  - `set(entry)`
+  - `has(key)`
+  - `invalidate(contentHash?)`
+  - `listEntries()`
+- `ChunkCacheKey`
+  - `contentHash`
+  - `lang`
+  - `extractorPromptVersion`
+- `MemoryChunkCache`
+  - in-memory LRU cache
+  - bounded by entry count and byte budget
+- `IndexedDBChunkCache`
+  - browser-persistent workspace-scoped implementation
+  - falls back to memory when IndexedDB is unavailable
+- Drift detection:
+  - `set()` compares the new entry against any prior entry at the same `contentHash + lang`
+  - emits `chunk.extraction-drift-detected` when chunk count or normalized-form membership changes
+
+## Tier-2 Background Chunk Extraction
+
+- Tier 1 remains lemma compilation only.
+- Tier 2 is an optional `chunkPipeline` on `SugarlangAuthoringCompileScheduler`.
+- Tier 2 behavior:
+  - uses the same `contentHash` as the base lexicon
+  - skips the LLM on chunk-cache hits
+  - writes chunk manifests back into both preview-profile lexicons in the compile cache
+  - emits `chunk.extraction-stale-discarded` when scene content changes before chunk write-back
+  - can emit the lifecycle callback `sugarlang.scene-chunks-updated`
+
+## Publish Path
+
+- `publishSugarlangArtifacts(request)`
+  - sequence:
+    1. compile base `published-target` lexicon
+    2. synchronously extract chunks
+    3. gzip and write `compiled/sugarlang/scenes/<sceneId>.lexicon.json.gz`
+  - fails loudly if extraction reports `failure`
+  - supports bounded parallelism via `concurrency`
+- `loadPublishedSugarlangLexiconArtifact(path)`
+  - node-side helper used by tests to confirm published artifacts load back with chunks intact
+- Operational note:
+  - publish now includes LLM chunk extraction cost and latency, so authors should treat full publish as a deliberate offline step rather than a casual preview action
 
 ## Runtime Store
 
@@ -141,4 +214,5 @@ sugarlang scene lexicons.
   - debug fields (`sources`, `diagnostics`)
   - storage tier
   - downstream loading path
+- Chunk extraction is a second-stage metadata pass keyed to that same compiler output
 - All later epics should treat the compiled lexicon artifact as the one source of truth for scene vocabulary

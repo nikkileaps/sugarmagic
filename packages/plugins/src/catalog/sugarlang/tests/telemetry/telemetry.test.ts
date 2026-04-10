@@ -80,4 +80,44 @@ describe("telemetry sinks", () => {
       })
     );
   });
+
+  it("stores and queries the chunk telemetry event family", async () => {
+    const sink = new MemoryTelemetrySink();
+    sink.emit(
+      createTelemetryEvent("chunk.extraction-started", {
+        timestamp: 1,
+        sceneId: "scene-1",
+        contentHash: "hash-1",
+        lang: "es",
+        extractorModel: "claude-sonnet-4-6",
+        extractorPromptVersion: "1"
+      })
+    );
+    sink.emit(
+      createTelemetryEvent("chunk.hit-during-classification", {
+        timestamp: 2,
+        conversationId: "conversation-1",
+        turnId: "turn-1",
+        sceneId: "scene-1",
+        matchedChunks: [
+          {
+            chunkId: "de_vez_en_cuando",
+            cefrBand: "A2",
+            surfaceMatched: "de vez en cuando"
+          }
+        ]
+      })
+    );
+
+    const events = await sink.query({
+      eventKinds: [
+        "chunk.extraction-started",
+        "chunk.hit-during-classification"
+      ]
+    });
+    expect(events.map((event) => event.kind)).toEqual([
+      "chunk.extraction-started",
+      "chunk.hit-during-classification"
+    ]);
+  });
 });

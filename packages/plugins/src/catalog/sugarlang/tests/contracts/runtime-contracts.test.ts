@@ -371,6 +371,18 @@ describe("sugarlang runtime contracts", () => {
       outOfEnvelopeLemmas: [{ lemmaId: "ferrocarril", lang: "es" }],
       ceilingExceededLemmas: [{ lemmaId: "ferrocarril", lang: "es" }],
       questEssentialLemmasMatched: ["billete"],
+      matchedChunks: [chunk],
+      matchedChunkTokens: [
+        {
+          chunkId: chunk.chunkId,
+          normalizedForm: chunk.normalizedForm,
+          surfaceMatched: chunk.surfaceForms[0]!,
+          start: 0,
+          end: 18,
+          cefrBand: chunk.cefrBand,
+          constituentLemmaIds: [...chunk.constituentLemmas]
+        }
+      ],
       coverageRatio: 0.9
     };
     const verdict: EnvelopeVerdict = {

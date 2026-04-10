@@ -212,6 +212,75 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
+      "chunk.extraction-started",
+      {
+        sceneId: string;
+        contentHash: string;
+        lang: string;
+        extractorModel: string;
+        extractorPromptVersion: string;
+      }
+    >
+  | TelemetryEventOf<
+      "chunk.extraction-completed",
+      {
+        sceneId: string;
+        contentHash: string;
+        lang: string;
+        chunkCount: number;
+        latencyMs: number;
+        tokenCost: {
+          input: number;
+          output: number;
+        };
+        extractorModel: string;
+      }
+    >
+  | TelemetryEventOf<
+      "chunk.extraction-failed",
+      {
+        sceneId: string;
+        contentHash: string;
+        lang: string;
+        error: {
+          code: string;
+          message: string;
+        };
+        extractorModel: string;
+      }
+    >
+  | TelemetryEventOf<
+      "chunk.extraction-drift-detected",
+      {
+        sceneId: string;
+        contentHash: string;
+        previousChunkCount: number;
+        newChunkCount: number;
+        previousExtractorModel: string;
+        newExtractorModel: string;
+        changedChunks: string[];
+      }
+    >
+  | TelemetryEventOf<
+      "chunk.hit-during-classification",
+      {
+        sceneId: string;
+        matchedChunks: Array<{
+          chunkId: string;
+          cefrBand: CEFRBand;
+          surfaceMatched: string;
+        }>;
+      }
+    >
+  | TelemetryEventOf<
+      "chunk.extraction-stale-discarded",
+      {
+        sceneId: string;
+        contentHash: string;
+        reason: string;
+      }
+    >
+  | TelemetryEventOf<
       "verify.repair-triggered",
       {
         sceneId: string;

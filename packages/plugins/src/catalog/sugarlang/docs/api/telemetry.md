@@ -1,6 +1,6 @@
 # Telemetry API
 
-Status: Updated in Epic 13
+Status: Updated in Epic 14
 
 Sugarlang now logs typed telemetry events for the adaptive-learning runtime and
 exposes two Studio-facing readers on top of the same event stream.
@@ -32,6 +32,12 @@ Core turn events:
 - `director.invocation-started`
 - `director.invocation-completed`
 - `classifier.verdict`
+- `chunk.extraction-started`
+- `chunk.extraction-completed`
+- `chunk.extraction-failed`
+- `chunk.extraction-drift-detected`
+- `chunk.hit-during-classification`
+- `chunk.extraction-stale-discarded`
 - `verify.repair-triggered`
 - `verify.auto-simplify-triggered`
 - `observe.observations-applied`
@@ -103,3 +109,20 @@ The comprehension monitor uses `ComprehensionMonitorDataSource`, which provides:
 - `getProbeDetail(probeId)`
 - `getSessionRollup(sessionId)`
 - `getLemmaProbeHistory(lemmaRef, learnerId)`
+
+## Chunk Event Notes
+
+- `chunk.extraction-started`
+  - emitted when the compile-time extractor begins work for one `sceneId + contentHash`
+- `chunk.extraction-completed`
+  - emitted when extraction succeeds, including `chunkCount`, `latencyMs`, and token-cost estimates
+- `chunk.extraction-failed`
+  - emitted on request or parse failure; Preview degrades gracefully to lemma-only mode
+- `chunk.extraction-drift-detected`
+  - emitted by the chunk cache when re-extraction changes chunk count or normalized-form membership
+- `chunk.hit-during-classification`
+  - emitted during classifier runs when the chunk pre-pass matches one or more lexical chunks in generated text
+- `chunk.extraction-stale-discarded`
+  - emitted when authoring-time extraction finishes against an old content hash and the write-back is intentionally dropped
+
+`RationaleTraceBuilder` now includes `matchedChunks` per turn so the Studio turn inspector can show exactly which chunk spans affected the classifier verdict.

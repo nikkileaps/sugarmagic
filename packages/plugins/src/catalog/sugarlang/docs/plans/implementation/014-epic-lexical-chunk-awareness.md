@@ -1,6 +1,6 @@
 # Epic 14: Lexical Chunk Awareness
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Lexical Chunk Awareness (LLM-as-Metadata-Author)](../../proposals/001-adaptive-language-learning-architecture.md#lexical-chunk-awareness-llm-as-metadata-author)
 **Depends on:** Epic 3 (LexicalChunk type + CompiledSceneLexicon.chunks field), Epic 5 (Envelope Classifier base layer), Epic 6 (compile cache + authoring scheduler + publish path), Epic 9 (Director schema-parser pattern), Epic 13 (telemetry sink + event schema)

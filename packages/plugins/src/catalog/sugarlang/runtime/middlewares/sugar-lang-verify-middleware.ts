@@ -142,7 +142,11 @@ export function createSugarLangVerifyMiddleware(
         prescription: constraint.rawPrescription,
         knownEntities: new Set(scene.properNouns),
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
-        lang: constraint.targetLanguage
+        lang: constraint.targetLanguage,
+        sceneLexicon: scene,
+        conversationId,
+        sessionId,
+        turnId: traceTurnId
       });
       await emitTelemetry(
         telemetry,
@@ -270,7 +274,11 @@ export function createSugarLangVerifyMiddleware(
           prescription: constraint.rawPrescription,
           knownEntities: new Set(scene.properNouns),
           questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
-          lang: constraint.targetLanguage
+          lang: constraint.targetLanguage,
+          sceneLexicon: scene,
+          conversationId,
+          sessionId,
+          turnId: traceTurnId
         });
         const repairedQuestUses = findQuestEssentialUses(repairedText, constraint);
         const repairedMissingGloss = repairedQuestUses.find(

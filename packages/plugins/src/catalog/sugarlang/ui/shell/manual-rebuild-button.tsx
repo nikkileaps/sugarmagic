@@ -37,7 +37,8 @@ const EMPTY_STATUS: SugarlangCompileStatusSummary = {
   totalScenes: 0,
   cachedScenes: 0,
   staleScenes: 0,
-  missingScenes: 0
+  missingScenes: 0,
+  chunkCachedScenes: 0
 };
 
 export function ManualRebuildButton(
@@ -106,7 +107,7 @@ export function ManualRebuildButton(
     <PanelSection title="Sugarlang Compile Status" icon="🛠️">
       <div style={{ display: "grid", gap: "1rem" }}>
         <p style={{ margin: 0, color: "var(--sm-color-subtext)" }}>
-          Cached scenes: {status.cachedScenes} / {status.totalScenes}. Stale: {status.staleScenes}. Missing: {status.missingScenes}.
+          Cached scenes: {status.cachedScenes} / {status.totalScenes}. Chunk-ready: {status.chunkCachedScenes}. Stale: {status.staleScenes}. Missing: {status.missingScenes}.
         </p>
 
         <button

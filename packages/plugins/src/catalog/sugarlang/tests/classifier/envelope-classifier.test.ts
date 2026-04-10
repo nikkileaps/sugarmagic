@@ -17,6 +17,7 @@
 
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
+import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import { EnvelopeClassifier } from "../../runtime/classifier/envelope-classifier";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
@@ -87,6 +88,104 @@ describe("EnvelopeClassifier", () => {
     expect(failingVerdict.withinEnvelope).toBe(false);
     expect(failingVerdict.worstViolation?.lemmaRef.lemmaId).toBe("arcano");
     expect(repairedVerdict.withinEnvelope).toBe(true);
+  });
+
+  it("treats chunk matches as in-envelope units for an A2 learner", async () => {
+    const atlas = createLexicalAtlasProvider("es", [
+      { lemmaId: "voy", cefrPriorBand: "A1" },
+      { lemmaId: "al", cefrPriorBand: "A1" },
+      { lemmaId: "mercado", cefrPriorBand: "A1" },
+      { lemmaId: "vez", cefrPriorBand: "B2" },
+      { lemmaId: "cuando", cefrPriorBand: "A1" }
+    ]);
+    const morphology = new MorphologyLoader({
+      es: createMorphologyData("es", {
+        voy: "voy",
+        de: "de",
+        vez: "vez",
+        en: "en",
+        cuando: "cuando",
+        al: "al",
+        mercado: "mercado"
+      })
+    });
+    const telemetry = new MemoryTelemetrySink();
+    const classifier = new EnvelopeClassifier(atlas, morphology, {
+      telemetry
+    });
+    const learner = createLearnerProfile("A2");
+    const sceneLexicon = {
+      sceneId: "scene-1",
+      contentHash: "hash-1",
+      chunks: [
+        {
+          chunkId: "de_vez_en_cuando",
+          normalizedForm: "de_vez_en_cuando",
+          surfaceForms: ["de vez en cuando"],
+          cefrBand: "A2" as const,
+          constituentLemmas: ["vez", "cuando"],
+          extractedByModel: "test-model",
+          extractedAtMs: 1,
+          extractorPromptVersion: "1",
+          source: "llm-extracted" as const
+        }
+      ]
+    };
+
+    const verdict = classifier.check("Voy de vez en cuando al mercado", learner, {
+      lang: "es",
+      sceneLexicon,
+      conversationId: "conversation-1",
+      turnId: "turn-1",
+      sessionId: "session-1"
+    });
+    const events = await telemetry.query({
+      conversationId: "conversation-1",
+      turnId: "turn-1",
+      eventKinds: ["chunk.hit-during-classification"]
+    });
+
+    expect(verdict.withinEnvelope).toBe(true);
+    expect(verdict.profile.matchedChunks).toEqual(sceneLexicon.chunks);
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: "chunk.hit-during-classification",
+        sceneId: "scene-1"
+      })
+    );
+  });
+
+  it("reuses the cached chunk matcher for repeated scene checks", () => {
+    const classifier = new EnvelopeClassifier();
+    const learner = createLearnerProfile("A2");
+    const sceneLexicon = {
+      sceneId: "scene-1",
+      contentHash: "hash-shared",
+      chunks: [
+        {
+          chunkId: "de_vez_en_cuando",
+          normalizedForm: "de_vez_en_cuando",
+          surfaceForms: ["de vez en cuando"],
+          cefrBand: "A2" as const,
+          constituentLemmas: ["vez", "cuando"],
+          extractedByModel: "test-model",
+          extractedAtMs: 1,
+          extractorPromptVersion: "1",
+          source: "llm-extracted" as const
+        }
+      ]
+    };
+
+    classifier.check("Voy de vez en cuando", learner, {
+      lang: "es",
+      sceneLexicon
+    });
+    classifier.check("Voy de vez en cuando", learner, {
+      lang: "es",
+      sceneLexicon
+    });
+
+    expect(classifier.getCachedChunkMatcherCount()).toBe(1);
   });
 
   it("handles typical real Spanish and Italian reply lengths", () => {

@@ -100,6 +100,22 @@ describe("DebugPanelDataSource", () => {
         latencyMs: 12
       })
     );
+    sink.emit(
+      createTelemetryEvent("chunk.hit-during-classification", {
+        conversationId: "conversation-1",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        timestamp: 3,
+        sceneId: "scene-1",
+        matchedChunks: [
+          {
+            chunkId: "de_vez_en_cuando",
+            cefrBand: "A2",
+            surfaceMatched: "de vez en cuando"
+          }
+        ]
+      })
+    );
 
     const dataSource = new DebugPanelDataSource({
       telemetrySink: sink
@@ -112,5 +128,12 @@ describe("DebugPanelDataSource", () => {
     expect(turns[0]?.turnId).toBe("turn-1");
     expect(trace.turnContext.sceneId).toBe("scene-1");
     expect(trace.directive?.directive.rationale).toBe("test");
+    expect(trace.matchedChunks).toEqual([
+      {
+        chunkId: "de_vez_en_cuando",
+        cefrBand: "A2",
+        surfaceMatched: "de vez en cuando"
+      }
+    ]);
   });
 });

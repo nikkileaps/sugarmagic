@@ -88,6 +88,11 @@ export interface RationaleTrace {
   }>;
   probeFloorState: ProbeFloorState | null;
   questEssentialState: QuestEssentialTelemetryState | null;
+  matchedChunks: Array<{
+    chunkId: string;
+    cefrBand: string;
+    surfaceMatched: string;
+  }>;
   events: TelemetryEvent[];
 }
 
@@ -129,6 +134,7 @@ export class RationaleTraceBuilder {
     const prescriptionEvent = firstOfKind(sorted, "budgeter.prescription-generated");
     const directiveEvent = firstOfKind(sorted, "director.invocation-completed");
     const verdictEvent = firstOfKind(sorted, "classifier.verdict");
+    const chunkHitEvent = firstOfKind(sorted, "chunk.hit-during-classification");
     const repairEvent = firstOfKind(sorted, "verify.repair-triggered");
     const simplifyEvent = firstOfKind(sorted, "verify.auto-simplify-triggered");
     const observeEvent = firstOfKind(sorted, "observe.observations-applied");
@@ -218,6 +224,7 @@ export class RationaleTraceBuilder {
         prescriptionEvent?.pendingProvisionalSnapshot ?? [],
       probeFloorState: prescriptionEvent?.probeFloorState ?? null,
       questEssentialState: prescriptionEvent?.questEssentialState ?? null,
+      matchedChunks: chunkHitEvent?.matchedChunks ?? [],
       events: sorted
     };
   }

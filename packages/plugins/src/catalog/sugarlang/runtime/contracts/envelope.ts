@@ -23,6 +23,22 @@
 
 import type { CEFRBand } from "./learner-profile";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
+import type { LexicalChunk } from "./scene-lexicon";
+
+/**
+ * Virtual token emitted by the chunk-scan pre-pass before lemma coverage runs.
+ *
+ * Implements: Proposal 001 §Lexical Chunk Awareness
+ */
+export interface VirtualChunkToken {
+  chunkId: string;
+  normalizedForm: string;
+  surfaceMatched: string;
+  start: number;
+  end: number;
+  cefrBand: CEFRBand;
+  constituentLemmaIds: string[];
+}
 
 /**
  * Per-turn coverage statistics computed over a generated line.
@@ -38,6 +54,8 @@ export interface CoverageProfile {
   outOfEnvelopeLemmas: LemmaRef[];
   ceilingExceededLemmas: LemmaRef[];
   questEssentialLemmasMatched: string[];
+  matchedChunks: LexicalChunk[];
+  matchedChunkTokens: VirtualChunkToken[];
   coverageRatio: number;
 }
 

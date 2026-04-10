@@ -122,4 +122,41 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
 
     expect(listener).toHaveBeenCalledWith("scene-a");
   });
+
+  it("merges chunk updates into an already-seeded scene", () => {
+    const scheduler = {
+      ensureScene: vi.fn()
+    } as unknown as RuntimeCompileScheduler;
+    const store = new DefaultSugarlangSceneLexiconStore(scheduler);
+    store.seed([
+      {
+        sceneId: "scene-a",
+        contentHash: "hash",
+        pipelineVersion: "1",
+        atlasVersion: "atlas",
+        profile: "runtime-preview",
+        lemmas: {},
+        properNouns: [],
+        anchors: [],
+        questEssentialLemmas: []
+      }
+    ]);
+
+    const merged = store.mergeChunks("scene-a", "hash", [
+      {
+        chunkId: "de_vez_en_cuando",
+        normalizedForm: "de_vez_en_cuando",
+        surfaceForms: ["de vez en cuando"],
+        cefrBand: "A2",
+        constituentLemmas: ["vez", "cuando"],
+        extractedByModel: "test-model",
+        extractedAtMs: 1,
+        extractorPromptVersion: "1",
+        source: "llm-extracted"
+      }
+    ]);
+
+    expect(merged).toBe(true);
+    expect(store.get("scene-a")?.chunks).toHaveLength(1);
+  });
 });

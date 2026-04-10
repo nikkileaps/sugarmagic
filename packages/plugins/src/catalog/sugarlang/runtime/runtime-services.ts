@@ -327,7 +327,9 @@ export class SugarlangRuntimeServices {
 
     const atlas = new CefrLexAtlasProvider();
     const morphology = new MorphologyLoader();
-    const classifier = new EnvelopeClassifier(atlas, morphology);
+    const classifier = new EnvelopeClassifier(atlas, morphology, {
+      telemetry: this.telemetry
+    });
     const learnerPriorProvider = new FsrsLearnerPriorProvider(atlas);
     const budgeter = new LexicalBudgeter({
       atlas,

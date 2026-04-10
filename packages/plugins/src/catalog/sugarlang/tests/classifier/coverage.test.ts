@@ -17,6 +17,7 @@
 
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
+import { createChunkMatcher } from "../../runtime/classifier/chunk-matcher";
 import { computeCoverage } from "../../runtime/classifier/coverage";
 import { tokenize } from "../../runtime/classifier/tokenize";
 import {
@@ -132,6 +133,65 @@ describe("computeCoverage", () => {
 
     expect(profile.totalTokens).toBe(0);
     expect(profile.coverageRatio).toBe(1);
+    expect(profile.matchedChunks).toEqual([]);
+    expect(profile.matchedChunkTokens).toEqual([]);
+  });
+
+  it("matches lexical chunks before lemma processing", () => {
+    const learner = createLearnerProfile("A2");
+    const atlas = createLexicalAtlasProvider("es", [
+      { lemmaId: "voy", cefrPriorBand: "A1" },
+      { lemmaId: "al", cefrPriorBand: "A1" },
+      { lemmaId: "mercado", cefrPriorBand: "A1" },
+      { lemmaId: "vez", cefrPriorBand: "B2" },
+      { lemmaId: "cuando", cefrPriorBand: "A1" }
+    ]);
+    const morphology = createMorphologyData("es", {
+      voy: "voy",
+      de: "de",
+      vez: "vez",
+      en: "en",
+      cuando: "cuando",
+      al: "al",
+      mercado: "mercado"
+    });
+    const chunks = [
+      {
+        chunkId: "de_vez_en_cuando",
+        normalizedForm: "de_vez_en_cuando",
+        surfaceForms: ["de vez en cuando"],
+        cefrBand: "A2" as const,
+        constituentLemmas: ["vez", "cuando"],
+        extractedByModel: "test-model",
+        extractedAtMs: 1,
+        extractorPromptVersion: "1",
+        source: "llm-extracted" as const
+      }
+    ];
+    const text = "Voy de vez en cuando al mercado";
+    const tokens = tokenize(text, "es");
+    const matcher = createChunkMatcher(chunks, "es", text);
+
+    const profile = computeCoverage(
+      tokens,
+      learner,
+      atlas,
+      new Set(),
+      morphology,
+      new Set(),
+      matcher,
+      chunks
+    );
+
+    expect(profile.matchedChunks).toEqual(chunks);
+    expect(profile.matchedChunkTokens[0]).toEqual(
+      expect.objectContaining({
+        chunkId: "de_vez_en_cuando",
+        surfaceMatched: "de vez en cuando",
+        cefrBand: "A2"
+      })
+    );
+    expect(profile.outOfEnvelopeLemmas).toEqual([]);
   });
 
   it("stays within the performance budget for typical NPC reply lengths", () => {

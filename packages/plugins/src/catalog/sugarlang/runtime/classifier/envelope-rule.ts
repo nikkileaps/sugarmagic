@@ -48,6 +48,7 @@ function normalizeLookup(values: Iterable<string>): Set<string> {
 
 function resolveExemption(
   lemma: LemmaRef,
+  profile: CoverageProfile,
   options: EnvelopeRuleOptions
 ): EnvelopeExemptionKind | null {
   const normalizedLemmaId = lemma.lemmaId.normalize("NFC").toLocaleLowerCase();
@@ -59,8 +60,17 @@ function resolveExemption(
   );
   const knownEntities = normalizeLookup(options.knownEntities ?? []);
   const questEssentialLemmas = normalizeLookup(options.questEssentialLemmas ?? []);
+  const matchedChunk = profile.matchedChunkTokens.find(
+    (entry) =>
+      entry.normalizedForm.normalize("NFC").toLocaleLowerCase() === normalizedLemmaId
+  );
 
-  if (prescriptionIntroduce.has(normalizedLemmaId)) {
+  if (
+    prescriptionIntroduce.has(normalizedLemmaId) ||
+    matchedChunk?.constituentLemmaIds.some((lemmaId) =>
+      prescriptionIntroduce.has(lemmaId.normalize("NFC").toLocaleLowerCase())
+    )
+  ) {
     return "prescription-introduce";
   }
   if (
@@ -95,7 +105,7 @@ export function applyEnvelopeRule(
   const violations: LemmaRef[] = [];
 
   for (const lemma of profile.outOfEnvelopeLemmas) {
-    const exemption = resolveExemption(lemma, options);
+    const exemption = resolveExemption(lemma, profile, options);
     if (exemption) {
       exemptedLemmaIds.add(lemma.lemmaId);
       exemptionsApplied.push(exemption);
@@ -108,7 +118,7 @@ export function applyEnvelopeRule(
   const nonExemptCeilingExceeded = profile.ceilingExceededLemmas.filter(
     (lemma) =>
       !exemptedLemmaIds.has(lemma.lemmaId) &&
-      resolveExemption(lemma, options) === null
+      resolveExemption(lemma, profile, options) === null
   );
 
   const withinEnvelope =

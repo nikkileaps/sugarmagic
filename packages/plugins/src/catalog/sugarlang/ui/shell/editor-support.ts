@@ -26,6 +26,7 @@ import type {
 } from "@sugarmagic/domain";
 import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
+import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
@@ -62,6 +63,7 @@ export interface SugarlangCompileStatusSummary {
   cachedScenes: number;
   staleScenes: number;
   missingScenes: number;
+  chunkCachedScenes: number;
 }
 
 export interface SugarlangRebuildProgress {
@@ -236,6 +238,21 @@ async function collectAuthoringCacheEntries(
     }));
 }
 
+async function collectChunkCacheEntries(
+  workspaceId: string
+): Promise<
+  Array<{
+    contentHash: string;
+  }>
+> {
+  const cache = new IndexedDBChunkCache({ workspaceId });
+  const entries = await cache.listEntries();
+
+  return entries.map((entry) => ({
+    contentHash: entry.contentHash
+  }));
+}
+
 function computeCurrentSceneHashes(
   scenes: SceneAuthoringContext[]
 ): Map<string, string> {
@@ -259,10 +276,13 @@ export async function readSugarlangCompileStatus(
   const scenes = createSugarlangSceneContexts(gameProject, regions, targetLanguage);
   const currentHashes = computeCurrentSceneHashes(scenes);
   const entries = await collectAuthoringCacheEntries(workspaceId);
+  const chunkEntries = await collectChunkCacheEntries(workspaceId);
+  const chunkHashes = new Set(chunkEntries.map((entry) => entry.contentHash));
 
   let cachedScenes = 0;
   let staleScenes = 0;
   let missingScenes = 0;
+  let chunkCachedScenes = 0;
 
   for (const scene of scenes) {
     const currentHash = currentHashes.get(scene.sceneId);
@@ -273,6 +293,9 @@ export async function readSugarlangCompileStatus(
     }
     if (sceneEntries.some((entry) => entry.contentHash === currentHash)) {
       cachedScenes += 1;
+      if (currentHash && chunkHashes.has(currentHash)) {
+        chunkCachedScenes += 1;
+      }
       continue;
     }
     staleScenes += 1;
@@ -282,7 +305,8 @@ export async function readSugarlangCompileStatus(
     totalScenes: scenes.length,
     cachedScenes,
     staleScenes,
-    missingScenes
+    missingScenes,
+    chunkCachedScenes
   };
 }
 

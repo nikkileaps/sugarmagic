@@ -17,12 +17,16 @@
  */
 
 import type { CompiledSceneLexicon } from "../types";
-import { compileSugarlangScene } from "./compile-sugarlang-scene";
 import type { RuntimeCompileScheduler } from "./compile-scheduler";
 
 export interface SugarlangSceneLexiconStore {
   get: (sceneId: string) => CompiledSceneLexicon | undefined;
   ensure: (sceneId: string) => Promise<CompiledSceneLexicon>;
+  mergeChunks: (
+    sceneId: string,
+    contentHash: string,
+    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+  ) => boolean;
   onInvalidate: (listener: (sceneId: string) => void) => () => void;
 }
 
@@ -50,6 +54,23 @@ export class DefaultSugarlangSceneLexiconStore
 
   get(sceneId: string): CompiledSceneLexicon | undefined {
     return this.lexicons.get(sceneId);
+  }
+
+  mergeChunks(
+    sceneId: string,
+    contentHash: string,
+    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+  ): boolean {
+    const current = this.lexicons.get(sceneId);
+    if (!current || current.contentHash !== contentHash) {
+      return false;
+    }
+
+    this.lexicons.set(sceneId, {
+      ...current,
+      chunks: [...chunks]
+    });
+    return true;
   }
 
   async ensure(sceneId: string): Promise<CompiledSceneLexicon> {
