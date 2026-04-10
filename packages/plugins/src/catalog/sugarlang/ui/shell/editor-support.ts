@@ -28,6 +28,10 @@ import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
+import { extractChunks } from "../../runtime/compile/extract-chunks";
+import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
+import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
+import { SUGARLANG_PROXY_BASE_URL_ENV } from "../../config";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
@@ -330,20 +334,42 @@ export async function rebuildSugarlangCompileCache(
 
   await cache.invalidate();
 
+  const chunkExtractionEnabled = options?.chunkExtractionEnabled ?? true;
+  const proxyBaseUrl =
+    typeof globalThis !== "undefined" &&
+    typeof (globalThis as Record<string, unknown>)[SUGARLANG_PROXY_BASE_URL_ENV] === "string"
+      ? ((globalThis as Record<string, unknown>)[SUGARLANG_PROXY_BASE_URL_ENV] as string)
+      : "";
+  const gatewayAvailable = proxyBaseUrl.trim().length > 0;
+  const gatewayClient = gatewayAvailable
+    ? new SugarlangGatewayClient(proxyBaseUrl)
+    : null;
+
   const scheduler = new SugarlangAuthoringCompileScheduler({
     getScenes: () => scenes,
     atlas,
     morphology,
     cache,
     debounceMs: 0,
-    // TODO: Wire chunkPipeline here once sugarlang has its own gateway
-    // provider. The config flag (options.chunkExtractionEnabled) gates
-    // whether chunk extraction fires — pass chunkPipeline: undefined
-    // when disabled, or the real pipeline when enabled AND the gateway
-    // provider is available. See the LLM gateway tech-debt note in
-    // runtime/telemetry/telemetry.ts and the sugarlang gateway provider
-    // task. Until then, tier-2 chunk extraction is structurally ready
-    // but not wired to an LLM backend.
+    chunkPipeline:
+      chunkExtractionEnabled && gatewayClient
+        ? {
+            cache: new IndexedDBChunkCache({ workspaceId }),
+            extractSceneChunks: async (scene, contentHash) => {
+              const blobs = collectSceneText(scene);
+              return extractChunks({
+                sceneText: blobs,
+                lang: scene.targetLanguage,
+                atlas,
+                llmClient: gatewayClient,
+                promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
+                sceneId: scene.sceneId,
+                contentHash
+              });
+            },
+            promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION
+          }
+        : undefined,
     onLog(message, detail) {
       if (message !== "compiled-scene") {
         return;

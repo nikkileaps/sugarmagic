@@ -19,9 +19,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EXTRACTOR_PROMPT_VERSION,
   buildExtractChunksPrompt,
-  extractChunks,
-  type ChunkExtractorClient
+  extractChunks
 } from "../../runtime/compile/extract-chunks";
+import type { SugarlangLLMClient } from "../../runtime/llm/types";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import type { TextBlob } from "../../runtime/compile/scene-traversal";
 import { createTestAtlasProvider } from "./test-helpers";
@@ -43,13 +43,11 @@ function createSceneText(): TextBlob[] {
   ];
 }
 
-function createMockClient(text: string): ChunkExtractorClient {
+function createMockClient(text: string): SugarlangLLMClient {
   return {
-    generateStructuredChunks: vi.fn(async () => ({
+    generate: vi.fn(async () => ({
       text,
-      model: "claude-sonnet-4-6",
-      inputTokens: 100,
-      outputTokens: 20
+      requestId: null
     }))
   };
 }
@@ -136,8 +134,8 @@ describe("extractChunks", () => {
   it("returns an empty result and failure metadata when the client throws", async () => {
     const atlas = createTestAtlasProvider("es", []);
     const telemetry = new MemoryTelemetrySink();
-    const llmClient: ChunkExtractorClient = {
-      generateStructuredChunks: vi.fn(async () => {
+    const llmClient: SugarlangLLMClient = {
+      generate: vi.fn(async () => {
         throw new Error("rate limited");
       })
     };

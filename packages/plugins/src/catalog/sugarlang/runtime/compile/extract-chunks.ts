@@ -7,7 +7,7 @@
  *   - EXTRACTOR_PROMPT_VERSION
  *   - EXTRACT_CHUNKS_PROMPT_TEMPLATE
  *   - extractor prompt/build types and helpers
- *   - createAnthropicChunkExtractorClient
+ *   - extractChunks
  *   - extractChunks
  *
  * Relationships:
@@ -21,7 +21,7 @@
 
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
-import { AnthropicClient } from "../../../sugaragent/runtime/clients";
+import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider, LexicalChunk } from "../types";
 import type { TextBlob } from "./scene-traversal";
 import {
@@ -98,32 +98,11 @@ interface ExtractedChunkPayload {
   chunks: ExtractedChunkSchema[];
 }
 
-export interface ChunkExtractorClientRequest {
-  model: string;
-  systemPrompt: string;
-  userPrompt: string;
-  maxTokens: number;
-}
-
-export interface ChunkExtractorClientResult {
-  text: string;
-  model: string;
-  inputTokens?: number | null;
-  outputTokens?: number | null;
-  requestId?: string | null;
-}
-
-export interface ChunkExtractorClient {
-  generateStructuredChunks: (
-    request: ChunkExtractorClientRequest
-  ) => Promise<ChunkExtractorClientResult>;
-}
-
 export interface ExtractChunksInput {
   sceneText: TextBlob[];
   lang: string;
   atlas: LexicalAtlasProvider;
-  llmClient: ChunkExtractorClient;
+  llmClient: SugarlangLLMClient;
   promptVersion?: string;
   model?: string;
   maxTokens?: number;
@@ -291,28 +270,9 @@ function sanitizeChunk(
   };
 }
 
-export function createAnthropicChunkExtractorClient(
-  client: AnthropicClient
-): ChunkExtractorClient {
-  return {
-    async generateStructuredChunks(
-      request: ChunkExtractorClientRequest
-    ): Promise<ChunkExtractorClientResult> {
-      const response = await client.generateMessage({
-        model: request.model,
-        system: request.systemPrompt,
-        userMessage: request.userPrompt,
-        maxTokens: request.maxTokens
-      });
-
-      return {
-        text: response.text,
-        requestId: response.requestId ?? null,
-        model: request.model
-      };
-    }
-  };
-}
+// NOTE: The old createAnthropicChunkExtractorClient was removed because
+// sugarlang must not import from sugaragent. All LLM calls go through
+// SugarlangLLMClient (the gateway). See runtime/llm/gateway-client.ts.
 
 export async function extractChunks(
   input: ExtractChunksInput
@@ -342,9 +302,9 @@ export async function extractChunks(
     })
   );
 
-  let response: ChunkExtractorClientResult;
+  let response: { text: string; requestId: string | null };
   try {
-    response = await input.llmClient.generateStructuredChunks({
+    response = await input.llmClient.generate({
       model,
       systemPrompt: prompt.system,
       userPrompt: prompt.user,
@@ -386,7 +346,7 @@ export async function extractChunks(
         sanitizeChunk(
           chunk,
           input.lang,
-          response.model,
+          model,
           extractedAtMs,
           promptVersion
         )
@@ -407,21 +367,21 @@ export async function extractChunks(
         chunkCount: dedupedChunks.length,
         latencyMs: extractedAtMs - startedAt,
         tokenCost: {
-          input: response.inputTokens ?? estimateTokens(prompt.system) + estimateTokens(prompt.user),
-          output: response.outputTokens ?? estimateTokens(response.text)
+          input: estimateTokens(prompt.system) + estimateTokens(prompt.user),
+          output: estimateTokens(response.text)
         },
-        extractorModel: response.model
+        extractorModel: model
       })
     );
 
     return {
       chunks: dedupedChunks,
       tokenCost: {
-        input: response.inputTokens ?? estimateTokens(prompt.system) + estimateTokens(prompt.user),
-        output: response.outputTokens ?? estimateTokens(response.text)
+        input: estimateTokens(prompt.system) + estimateTokens(prompt.user),
+        output: estimateTokens(response.text)
       },
       latencyMs: extractedAtMs - startedAt,
-      model: response.model
+      model: model
     };
   } catch (error) {
     const failure = {
@@ -435,7 +395,7 @@ export async function extractChunks(
         sceneId: input.sceneId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
-        extractorModel: response.model,
+        extractorModel: model,
         error: failure
       })
     );
@@ -443,11 +403,11 @@ export async function extractChunks(
     return {
       chunks: [],
       tokenCost: {
-        input: response.inputTokens ?? estimateTokens(prompt.system) + estimateTokens(prompt.user),
-        output: response.outputTokens ?? estimateTokens(response.text)
+        input: estimateTokens(prompt.system) + estimateTokens(prompt.user),
+        output: estimateTokens(response.text)
       },
       latencyMs: now() - startedAt,
-      model: response.model,
+      model: model,
       failure
     };
   }

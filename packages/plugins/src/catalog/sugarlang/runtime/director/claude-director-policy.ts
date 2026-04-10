@@ -15,7 +15,7 @@
  * Status: active
  */
 
-import { AnthropicClient } from "../../../sugaragent/runtime/clients";
+import type { SugarlangLLMClient } from "../llm/types";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "./calibration-mode";
 import {
   buildDirectorPrompt,
@@ -81,15 +81,19 @@ export class DirectorInvocationError extends Error {
   }
 }
 
-export function createAnthropicDirectorClient(
-  client: AnthropicClient
+/**
+ * Creates a DirectorClaudeClient backed by sugarlang's own gateway.
+ * No dependency on sugaragent — all calls go through the gateway proxy.
+ */
+export function createGatewayDirectorClient(
+  gateway: SugarlangLLMClient
 ): DirectorClaudeClient {
   return {
     async generateStructuredDirective(request): Promise<DirectorClaudeClientResult> {
-      const response = await client.generateMessage({
+      const response = await gateway.generate({
         model: request.model,
-        system: request.systemPrompt,
-        userMessage: request.userPrompt,
+        systemPrompt: request.systemPrompt,
+        userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
       });
 

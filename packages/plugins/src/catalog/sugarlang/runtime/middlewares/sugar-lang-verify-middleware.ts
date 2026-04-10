@@ -23,6 +23,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import {
@@ -49,20 +50,14 @@ export interface SugarLangVerifyMiddlewareDeps {
 async function attemptRepair(
   originalText: string,
   instructions: string[],
-  llmProvider: SugarlangRuntimeServices["resolveForExecution"] extends (
-    ...args: any[]
-  ) => infer T | null
-    ? T extends { llmProvider: infer P }
-      ? P
-      : never
-    : never,
+  llmClient: SugarlangLLMClient | null,
   constraint: SugarlangConstraint
 ): Promise<string | null> {
-  if (!llmProvider) {
+  if (!llmClient) {
     return null;
   }
 
-  const repaired = await llmProvider.generateStructuredTurn({
+  const result = await llmClient.generate({
     model: "claude-sonnet-4-6",
     systemPrompt:
       "Rewrite the NPC turn so it keeps the same meaning but uses simpler vocabulary and obeys the supplied language-learning constraints. Return only the rewritten NPC line.",
@@ -75,7 +70,7 @@ async function attemptRepair(
     ].join("\n"),
     maxTokens: 220
   });
-  return repaired.trim() || null;
+  return result.text.trim() || null;
 }
 
 export function createSugarLangVerifyMiddleware(
@@ -266,7 +261,7 @@ export function createSugarLangVerifyMiddleware(
       const repairedText = await attemptRepair(
         normalizedTurn.text,
         instructions,
-        services.llmProvider,
+        services.llmClient,
         constraint
       );
       if (repairedText) {

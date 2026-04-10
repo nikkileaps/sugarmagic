@@ -92,8 +92,8 @@ describe("SugarLangVerifyMiddleware", () => {
         violations: [],
         exemptionsApplied: []
       });
-    const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("texto simple")
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: "texto simple", requestId: null })
     };
     const services = createServicesStub({
       resolveForExecution: () => ({
@@ -118,7 +118,7 @@ describe("SugarLangVerifyMiddleware", () => {
         classifier: {
           check: classifierCheck
         },
-        llmProvider
+        llmClient
       })
     });
     const middleware = createSugarLangVerifyMiddleware({
@@ -145,7 +145,7 @@ describe("SugarLangVerifyMiddleware", () => {
       createTestTurn("texto complicado")
     );
 
-    expect(llmProvider.generateStructuredTurn).toHaveBeenCalledTimes(1);
+    expect(llmClient.generate).toHaveBeenCalledTimes(1);
     expect(result?.text).toBe("texto simple");
   });
 });

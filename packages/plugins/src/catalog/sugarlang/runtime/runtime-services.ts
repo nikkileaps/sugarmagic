@@ -31,10 +31,10 @@ import type {
   ConversationExecutionContext,
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
-import { AnthropicClient, AnthropicLLMProvider } from "../../sugaragent/runtime/clients";
-import type { LLMProvider } from "../../sugaragent/runtime/clients";
 import type { SugarLangPluginConfig } from "../config";
-import { resolveSugarLangTargetLanguage } from "../config";
+import { resolveSugarLangTargetLanguage, SUGARLANG_PROXY_BASE_URL_ENV } from "../config";
+import { SugarlangGatewayClient } from "./llm/gateway-client";
+import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
 import { EnvelopeClassifier } from "./classifier/envelope-classifier";
 import { MorphologyLoader } from "./classifier/morphology-loader";
@@ -42,7 +42,7 @@ import { RuntimeCompileScheduler } from "./compile/compile-scheduler";
 import { getSugarlangRuntimeCompileCache } from "./compile/runtime-cache-state";
 import { DefaultSugarlangSceneLexiconStore } from "./compile/scene-lexicon-store";
 import { createSceneAuthoringContext } from "./compile/scene-traversal";
-import { ClaudeDirectorPolicy, createAnthropicDirectorClient } from "./director/claude-director-policy";
+import { ClaudeDirectorPolicy, createGatewayDirectorClient } from "./director/claude-director-policy";
 import { DirectiveCache } from "./director/directive-cache";
 import { FallbackDirectorPolicy } from "./director/fallback-director-policy";
 import { SugarLangDirector } from "./director/sugar-lang-director";
@@ -78,7 +78,7 @@ export interface SugarlangExecutionServices {
   learnerStateReducer: LearnerStateReducer;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   director: SugarLangDirector;
-  llmProvider: LLMProvider | null;
+  llmClient: SugarlangLLMClient | null;
 }
 
 export interface SugarlangRuntimeServicesOptions {
@@ -156,33 +156,23 @@ export class SugarlangRuntimeServices {
   private readonly executionServices = new Map<string, SugarlangExecutionServices>();
   private readonly previewLexicons = new Map<string, unknown>();
   private boundContext: BoundRuntimeContext | null = null;
-  private readonly llmProvider: LLMProvider | null;
-  private readonly directorClientFactory:
-    | (() => ClaudeDirectorPolicy | null)
-    | null;
+  private readonly gatewayClient: SugarlangLLMClient | null;
+  private readonly llmModel: string;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
     this.environment = options.environment;
     this.logger = options.logger;
     this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
-    const anthropicApiKey = this.environment?.SUGARMAGIC_ANTHROPIC_API_KEY?.trim() ?? "";
-    const anthropicModel =
+    this.llmModel =
       this.environment?.SUGARMAGIC_ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-6";
 
-    if (anthropicApiKey) {
-      const client = new AnthropicClient(anthropicApiKey);
-      this.llmProvider = new AnthropicLLMProvider(client);
-      this.directorClientFactory = () =>
-        new ClaudeDirectorPolicy({
-          client: createAnthropicDirectorClient(client),
-          telemetry: this.telemetry,
-          model: anthropicModel
-        });
-    } else {
-      this.llmProvider = null;
-      this.directorClientFactory = null;
-    }
+    // All sugarlang LLM calls go through the gateway. No direct vendor API calls.
+    const proxyBaseUrl =
+      this.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ?? "";
+    this.gatewayClient = proxyBaseUrl
+      ? new SugarlangGatewayClient(proxyBaseUrl)
+      : null;
   }
 
   bindRuntime(context: RuntimePluginContext): void {
@@ -292,12 +282,20 @@ export class SugarlangRuntimeServices {
     });
     const fallbackPolicy = new FallbackDirectorPolicy();
     const claudePolicy =
-      this.directorClientFactory?.() ??
-      {
-        async invoke() {
-          throw new Error("Sugarlang Claude policy is not configured.");
-        }
-      };
+      this.gatewayClient
+        ? new ClaudeDirectorPolicy({
+            client: createGatewayDirectorClient(this.gatewayClient),
+            telemetry: this.telemetry,
+            model: this.llmModel
+          })
+        : {
+            async invoke() {
+              throw new Error(
+                "Sugarlang LLM gateway is not configured. " +
+                "Set SUGARMAGIC_SUGARLANG_PROXY_BASE_URL in your environment."
+              );
+            }
+          };
     const director = new SugarLangDirector({
       claudePolicy,
       fallbackPolicy,
@@ -310,7 +308,7 @@ export class SugarlangRuntimeServices {
       learnerStore,
       learnerStateReducer,
       director,
-      llmProvider: this.llmProvider
+      llmClient: this.gatewayClient
     };
     this.executionServices.set(key, services);
     return services;

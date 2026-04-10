@@ -45,6 +45,9 @@ export interface SugarLangPluginConfig {
 export const SUGARLANG_TARGET_LANGUAGE_ENV =
   "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE";
 
+export const SUGARLANG_PROXY_BASE_URL_ENV =
+  "SUGARMAGIC_SUGARLANG_PROXY_BASE_URL";
+
 function readEnvBoolean(
   environment: RuntimePluginEnvironment | undefined,
   key: string
