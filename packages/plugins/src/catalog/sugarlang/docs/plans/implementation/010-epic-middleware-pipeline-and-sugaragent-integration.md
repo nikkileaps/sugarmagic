@@ -1,6 +1,6 @@
 # Epic 10: Middleware Pipeline and SugarAgent Integration
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § End-to-End Turn Flow](../../proposals/001-adaptive-language-learning-architecture.md#end-to-end-turn-flow)
 **Depends on:** Epic 2 (NPCDefinition.metadata), Epic 3, Epic 5, Epic 6, Epic 7, Epic 8, Epic 9

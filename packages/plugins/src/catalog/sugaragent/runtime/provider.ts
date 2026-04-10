@@ -299,6 +299,36 @@ async function executePipeline(args: {
     { execution, state, interpret, retrieve, plan },
     context
   );
+  if (generate.envelopeOverride) {
+    state.turnCount += 1;
+    state.lastTurnDiagnostics = {
+      Interpret: interpretDiagnostics,
+      Retrieve: retrieveDiagnostics,
+      Plan: planDiagnostics,
+      Generate: generateDiagnostics
+    };
+    state.consecutiveFallbackTurns = 0;
+    state.closeRequested = Boolean(
+      generate.envelopeOverride.proposedActions?.some(
+        (proposal) =>
+          proposal.kind === "request-close" ||
+          proposal.kind === "start-scripted-followup"
+      )
+    );
+    pushHistoryEntry(state, "assistant", generate.envelopeOverride.text);
+
+    return {
+      ...generate.envelopeOverride,
+      diagnostics: {
+        ...(generate.envelopeOverride.diagnostics ?? {}),
+        stages: state.lastTurnDiagnostics,
+        turnCount: state.turnCount,
+        historyLength: state.history.length,
+        llmBackend: generate.llmBackend,
+        consecutiveFallbackTurns: state.consecutiveFallbackTurns
+      }
+    };
+  }
   const { output: audit, diagnostics: auditDiagnostics } = await runStage(
     stages.audit,
     { execution, generate, plan },

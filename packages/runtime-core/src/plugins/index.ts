@@ -3,7 +3,17 @@ import type {
   ConversationMiddleware,
   ConversationProvider
 } from "../conversation";
-import type { BlackboardFactDefinition } from "../state";
+import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
+import type {
+  DocumentDefinition,
+  DialogueDefinition,
+  ItemDefinition,
+  NPCDefinition,
+  PlayerDefinition,
+  QuestDefinition,
+  RegionDocument,
+  SpellDefinition
+} from "@sugarmagic/domain";
 import { System, type World } from "../ecs";
 
 export type RuntimePluginContributionKind =
@@ -91,6 +101,15 @@ export type RuntimePluginContribution =
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
+  blackboard?: RuntimeBlackboard;
+  activeRegion?: RegionDocument | null;
+  playerDefinition?: PlayerDefinition;
+  spellDefinitions?: SpellDefinition[];
+  itemDefinitions?: ItemDefinition[];
+  documentDefinitions?: DocumentDefinition[];
+  npcDefinitions?: NPCDefinition[];
+  dialogueDefinitions?: DialogueDefinition[];
+  questDefinitions?: QuestDefinition[];
 }
 
 export interface RuntimePluginInstance {
@@ -113,7 +132,7 @@ export interface RuntimePluginManagerOptions {
 
 export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
-  init: () => Promise<void>;
+  init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
@@ -143,10 +162,14 @@ export function createRuntimePluginManager(
 
   return {
     boot,
-    async init() {
+    async init(context = {}) {
       if (initialized) return;
       for (const plugin of plugins) {
-        await plugin.init?.({ boot, pluginBootPayloads });
+        await plugin.init?.({
+          boot,
+          pluginBootPayloads,
+          ...context
+        });
       }
       initialized = true;
     },

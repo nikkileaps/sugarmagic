@@ -25,7 +25,7 @@ import {
 } from "../index";
 
 describe("sugarlang plugin registration", () => {
-  it("creates a skeleton runtime plugin instance", () => {
+  it("creates a runtime plugin instance with the four middleware contributions", () => {
     const instance = createSugarlangPlugin({
       boot: createRuntimeBootModel({
         hostKind: "studio",
@@ -38,7 +38,13 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toEqual([]);
+    expect(instance.contributions).toHaveLength(4);
+    expect(instance.contributions.map((entry) => entry.kind)).toEqual([
+      "conversation.middleware",
+      "conversation.middleware",
+      "conversation.middleware",
+      "conversation.middleware"
+    ]);
     expect(instance.blackboardFactDefinitions).toHaveLength(4);
     expect(typeof instance.init).toBe("function");
     expect(typeof instance.dispose).toBe("function");

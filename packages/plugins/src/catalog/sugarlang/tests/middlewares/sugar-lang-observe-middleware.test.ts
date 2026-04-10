@@ -1,23 +1,76 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/middlewares/sugar-lang-observe-middleware.test.ts
  *
- * Purpose: Reserves the observe-middleware test file owned by Epic 10.
+ * Purpose: Verifies probe-response handling and reducer routing in the Sugarlang observe middleware.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Imports ../../runtime/middlewares/sugar-lang-observe-middleware to keep the module path stable.
- *   - Will hold observe-middleware tests once Epic 10 lands.
+ *   - Depends on ../../runtime/middlewares/sugar-lang-observe-middleware.
+ *   - Uses shared middleware test fixtures from ./test-helpers.
  *
- * Implements: Proposal 001 §End-to-End Turn Flow
+ * Implements: Epic 10 Story 10.5
  *
- * Status: skeleton (no implementation yet; see Epic 10)
+ * Status: active
  */
 
-import "../../runtime/middlewares/sugar-lang-observe-middleware";
-import { describe, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createSugarLangObserveMiddleware } from "../../runtime/middlewares/sugar-lang-observe-middleware";
+import {
+  SUGARLANG_CONSTRAINT_ANNOTATION,
+  SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE
+} from "../../runtime/middlewares/shared";
+import {
+  createBaseConstraint,
+  createServicesStub,
+  createTestExecution,
+  createTestLearnerProfile,
+  createTestTurn
+} from "./test-helpers";
 
-describe("TODO: Epic 10", () => {
-  it.todo("implement SugarLangObserveMiddleware tests in Epic 10");
+describe("SugarLangObserveMiddleware", () => {
+  it("commits provisional evidence when the player answers a stored probe with the target lemma", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: {
+          apply
+        }
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution({
+      input: {
+        kind: "free_text",
+        text: "carta"
+      }
+    });
+    execution.state[SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE] = {
+      targetLemmas: [{ lemmaId: "carta", lang: "es" }],
+      probeStyle: "recognition",
+      characterVoiceReminder: "Stay in character.",
+      triggerReason: "soft-floor"
+    };
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    await middleware.finalize?.(execution, createTestTurn("Aqui tienes la carta."));
+
+    expect(apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "commit-provisional-evidence",
+        targetLemmas: [{ lemmaId: "carta", lang: "es" }]
+      })
+    );
+    expect(
+      execution.state[SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE]
+    ).toBeUndefined();
+  });
 });

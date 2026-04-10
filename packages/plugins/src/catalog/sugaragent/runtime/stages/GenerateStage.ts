@@ -1,4 +1,8 @@
-import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
+import type {
+  ConversationExecutionContext,
+  ConversationTurnEnvelope
+} from "@sugarmagic/runtime-core";
+import type { SugarlangConstraint } from "../../../sugarlang/runtime/types";
 import type { LLMProvider } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import {
@@ -20,6 +24,86 @@ import type {
 } from "../types";
 
 const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
+
+function listLemmaIds(lemmas: Array<{ lemmaId: string }>): string {
+  return lemmas.map((lemma) => lemma.lemmaId).join(", ");
+}
+
+function buildSugarlangConstraintLines(
+  constraint: SugarlangConstraint
+): string[] {
+  const lines = [
+    `Language constraint: Reply primarily in ${constraint.targetLanguage}.`,
+    `Must-use vocabulary (weave naturally into your reply): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
+    `New vocabulary to introduce this turn (use each exactly once, clearly in context): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}.`,
+    `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
+    `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
+    `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`
+  ];
+
+  if (constraint.comprehensionCheckInFlight) {
+    lines.push(
+      "",
+      "COMPREHENSION CHECK - THIS TURN MUST INCLUDE A PROBE:",
+      "",
+      "After speaking naturally in character, include a short in-character question that elicits a response demonstrating comprehension of one or more of these lemmas:",
+      `  ${listLemmaIds(constraint.comprehensionCheckInFlight.targetLemmas)}`,
+      "",
+      `Probe style: ${constraint.comprehensionCheckInFlight.probeStyle}`,
+      `Character voice reminder: ${constraint.comprehensionCheckInFlight.characterVoiceReminder}`,
+      "",
+      "IMPORTANT:",
+      "- Stay in character.",
+      "- The probe can be a natural non-sequitur if needed.",
+      "- The probe should be the LAST thing in your reply.",
+      "Reply length constraint: keep the reply to 2-3 sentences including the probe question."
+    );
+  }
+
+  if (constraint.questEssentialLemmas?.length) {
+    lines.push(
+      "",
+      "QUEST-ESSENTIAL VOCABULARY - MANDATORY PARENTHETICAL GLOSSING:",
+      "",
+      ...constraint.questEssentialLemmas.map(
+        (entry) =>
+          `- ${entry.lemmaRef.lemmaId} -> "(${entry.supportLanguageGloss})"`
+      ),
+      "",
+      "If you use one of these words, add the parenthetical gloss immediately after its first use."
+    );
+  }
+
+  return lines;
+}
+
+function buildPrePlacementEnvelope(
+  input: GenerateStageInput,
+  context: TurnStageContext,
+  constraint: SugarlangConstraint
+): ConversationTurnEnvelope {
+  return {
+    turnId: context.turnId,
+    providerId: "sugaragent.provider",
+    conversationKind: input.execution.selection.conversationKind,
+    speakerId: input.execution.selection.npcDefinitionId,
+    speakerLabel: input.execution.selection.npcDisplayName,
+    displayName: input.execution.selection.npcDisplayName,
+    text: constraint.prePlacementOpeningLine?.text ?? "",
+    choices: [],
+    inputMode: "advance",
+    proposedActions: [],
+    metadata: {
+      "sugarlang.prePlacementOpeningLine.lineId":
+        constraint.prePlacementOpeningLine?.lineId ?? ""
+    },
+    annotations: input.execution.annotations,
+    diagnostics: {
+      prePlacementBypass: true,
+      llmCallsMade: 0
+    }
+  };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -76,6 +160,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     context: TurnStageContext
   ): Promise<TurnStageResult<GenerateResult>> {
     const startedAt = Date.now();
+    const constraint = input.execution.annotations[
+      "sugarlang.constraint"
+    ] as SugarlangConstraint | undefined;
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
@@ -108,6 +195,31 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let retryCount = 0;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
+
+    if (constraint?.prePlacementOpeningLine) {
+      const output: GenerateResult = {
+        text: constraint.prePlacementOpeningLine.text,
+        usedLlm: false,
+        llmBackend: "deterministic",
+        actionProposals: [],
+        envelopeOverride: buildPrePlacementEnvelope(input, context, constraint)
+      };
+
+      return {
+        output,
+        diagnostics: createDiagnostics(
+          this.stageId,
+          startedAt,
+          "ok",
+          {
+            prePlacementBypass: true,
+            lineId: constraint.prePlacementOpeningLine.lineId,
+            usedLlm: false
+          }
+        ),
+        status: "ok"
+      };
+    }
 
     if (
       input.plan.responseSpecificity === "generic-only" &&
@@ -200,7 +312,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         npcMovement?.status
           ? `Movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
-          : null
+          : null,
+        ...(constraint ? buildSugarlangConstraintLines(constraint) : [])
       ]
         .filter(Boolean)
         .join("\n");

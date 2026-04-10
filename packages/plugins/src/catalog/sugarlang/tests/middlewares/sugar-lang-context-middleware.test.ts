@@ -1,23 +1,94 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/middlewares/sugar-lang-context-middleware.test.ts
  *
- * Purpose: Reserves the context-middleware test file owned by Epic 10.
+ * Purpose: Verifies the Sugarlang context middleware's placement and annotation flow.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Imports ../../runtime/middlewares/sugar-lang-context-middleware to keep the module path stable.
- *   - Will hold context-middleware tests once Epic 10 lands.
+ *   - Depends on ../../runtime/middlewares/sugar-lang-context-middleware.
+ *   - Uses shared middleware test fixtures from ./test-helpers.
  *
- * Implements: Proposal 001 §End-to-End Turn Flow
+ * Implements: Epic 10 Story 10.1
  *
- * Status: skeleton (no implementation yet; see Epic 10)
+ * Status: active
  */
 
-import "../../runtime/middlewares/sugar-lang-context-middleware";
-import { describe, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createSugarLangContextMiddleware } from "../../runtime/middlewares/sugar-lang-context-middleware";
+import {
+  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
+  SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
+  SUGARLANG_PRESCRIPTION_ANNOTATION
+} from "../../runtime/middlewares/shared";
+import {
+  createServicesStub,
+  createTestExecution,
+  createTestLearnerProfile
+} from "./test-helpers";
 
-describe("TODO: Epic 10", () => {
-  it.todo("implement SugarLangContextMiddleware tests in Epic 10");
+describe("SugarLangContextMiddleware", () => {
+  it("writes the pre-placement opening dialog annotations without running the budgeter", async () => {
+    const learner = createTestLearnerProfile({
+      assessment: {
+        status: "unassessed",
+        evaluatedCefrBand: null,
+        cefrConfidence: 0.2,
+        evaluatedAtMs: null
+      }
+    });
+    const sceneEnsure = vi.fn();
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(learner)
+        },
+        learnerStateReducer: {
+          apply: vi.fn()
+        },
+        sceneLexiconStore: {
+          ensure: sceneEnsure
+        }
+      }),
+      findNpcDefinition: () => ({
+        definitionId: "npc-1",
+        displayName: "Marisol",
+        description: "Welcome to the placement check.\nTake a breath first."
+      })
+    });
+    const middleware = createSugarLangContextMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "free-form",
+        npcDefinitionId: "npc-1",
+        npcDisplayName: "Marisol",
+        interactionMode: "agent",
+        targetLanguage: "es",
+        supportLanguage: "en",
+        metadata: {
+          sugarlangRole: "placement"
+        }
+      }
+    });
+
+    await middleware.prepare?.(execution);
+
+    expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toEqual({
+      phase: "opening-dialog"
+    });
+    expect(execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION]).toMatchObject({
+      introduce: [],
+      reinforce: [],
+      avoid: []
+    });
+    expect(execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION]).toEqual({
+      text: "Welcome to the placement check.",
+      lang: "en",
+      lineId: "opening:marisol"
+    });
+    expect(sceneEnsure).not.toHaveBeenCalled();
+  });
 });

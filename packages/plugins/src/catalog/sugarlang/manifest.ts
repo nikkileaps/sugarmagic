@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/manifest.ts
  *
- * Purpose: Declares the discovered-plugin manifest and skeleton contribution ownership for sugarlang.
+ * Purpose: Declares the discovered-plugin manifest and runtime middleware ownership for sugarlang.
  *
  * Exports:
  *   - SUGARLANG_PLUGIN_ID
@@ -11,17 +11,20 @@
  *   - pluginDefinition
  *
  * Relationships:
- *   - Depends on ./config and ./ui/shell/contributions for the skeleton plugin surfaces.
+ *   - Depends on ./config, ./runtime/runtime-services, and ./ui/shell/contributions for plugin assembly.
  *   - Is re-exported by ./index as the canonical plugin definition for discovery.
  *
  * Implements: Proposal 001 §The Substrate (Untouched) / §End-to-End Turn Flow / §File Structure
  *
- * Status: skeleton (no implementation yet; see Epic 10 and Epic 12)
+ * Status: active
  */
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import type { RuntimePluginFactoryContext } from "../../runtime";
-import type { RuntimePluginInstance } from "@sugarmagic/runtime-core";
+import type {
+  ConversationMiddlewareContribution,
+  RuntimePluginInstance
+} from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig } from "./config";
 import {
   createSugarLangContextMiddleware
@@ -44,6 +47,11 @@ import {
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
+import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
+import {
+  createNoOpTelemetrySink,
+  SugarlangRuntimeServices
+} from "./runtime/runtime-services";
 import { sugarlangShellContributionDefinition } from "./ui/shell/contributions";
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
@@ -52,18 +60,65 @@ export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 export function createSugarlangPlugin(
   context: RuntimePluginFactoryContext
 ): RuntimePluginInstance {
-  normalizeSugarLangPluginConfig(context.configuration.config, context.environment);
+  const config = normalizeSugarLangPluginConfig(
+    context.configuration.config,
+    context.environment
+  );
+  const logger = config.debugLogging
+    ? {
+        debug(message: string, payload?: Record<string, unknown>) {
+          console.debug("[sugarlang]", message, payload ?? {});
+        },
+        info(message: string, payload?: Record<string, unknown>) {
+          console.info("[sugarlang]", message, payload ?? {});
+        },
+        warn(message: string, payload?: Record<string, unknown>) {
+          console.warn("[sugarlang]", message, payload ?? {});
+        },
+        error(message: string, payload?: Record<string, unknown>) {
+          console.error("[sugarlang]", message, payload ?? {});
+        }
+      }
+    : createNoOpSugarlangLogger();
+  const telemetry = createNoOpTelemetrySink();
+  const services = new SugarlangRuntimeServices({
+    environment: context.environment,
+    logger,
+    telemetry
+  });
+  const contributions: ConversationMiddlewareContribution[] =
+    SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+      const middleware = factory({ services, logger, telemetry });
+      return {
+        pluginId: context.configuration.pluginId,
+        contributionId: `sugarlang.middleware.${middleware.middlewareId}`,
+        kind: "conversation.middleware",
+        displayName: middleware.displayName,
+        priority: middleware.priority,
+        payload: {
+          middlewareId: middleware.middlewareId,
+          summary: `Sugarlang ${middleware.stage} middleware`,
+          stage: middleware.stage,
+          status: "ready",
+          middleware
+        }
+      };
+    });
 
   return {
     pluginId: context.configuration.pluginId,
     displayName: SUGARLANG_DISPLAY_NAME,
-    contributions: [],
+    contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
     async init(runtimeContext) {
+      services.bindRuntime(runtimeContext);
       const lexicons = extractSugarlangPreviewBootLexicons(
         runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
       );
       await seedSugarlangRuntimeCompileCache(lexicons);
+      services.seedPreviewLexicons(
+        runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
+      );
     },
     dispose() {
       return undefined;
@@ -84,8 +139,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     pluginId: SUGARLANG_PLUGIN_ID,
     displayName: SUGARLANG_DISPLAY_NAME,
     summary:
-      "Adaptive language-learning plugin skeleton for Sugarmagic conversations.",
-    capabilityIds: []
+      "Adaptive language-learning middleware pipeline for Sugarmagic conversations.",
+    capabilityIds: ["conversation.middleware"]
   },
   runtime: {
     createRuntimePlugin: createSugarlangPlugin

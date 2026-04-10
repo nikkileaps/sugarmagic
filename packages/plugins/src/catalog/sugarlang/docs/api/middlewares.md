@@ -1,31 +1,70 @@
 # Middleware API
 
-Status: Updated in Epic 2; expanded further in Epic 10
+Status: Updated in Epic 10
 
-This document describes the sugarlang middleware metadata seam that exists before
-the full middleware pipeline lands in Epic 10.
+Sugarlang contributes four `conversation.middleware` entries that run in a fixed
+order:
 
-## How Sugarlang Middlewares Read Authoring Metadata
+1. `sugarlang.context` at stage `context`, priority `10`
+2. `sugarlang.director` at stage `policy`, priority `30`
+3. `sugarlang.verify` at stage `analysis`, priority `20`
+4. `sugarlang.observe` at stage `analysis`, priority `90`
 
-Sugarlang middlewares do not need to look up NPC definitions directly. They read
-the authored metadata already propagated into the conversation execution
-context:
+## Runtime Ownership
 
-```ts
-function prepare(execution: ConversationExecutionContext) {
-  const role = execution.selection.metadata?.sugarlangRole;
-  if (role === "placement") {
-    // placement-specific behavior
-  }
-  return execution;
-}
-```
+The plugin owns one runtime service graph in
+`packages/plugins/src/catalog/sugarlang/runtime/runtime-services.ts`. The
+middlewares share that service graph rather than constructing their own copies
+of the atlas, classifier, budgeter, learner store, or director.
 
-The propagation path is:
+The authored placement tag still flows through:
 
 `NPCDefinition.metadata` -> `ConversationSelectionContext.metadata` ->
 `ConversationExecutionContext.selection.metadata`
 
-Reserved sugarlang annotation keys remain defined by Proposal 001's annotation
-namespace reference. This document only covers the authoring-metadata read path
-introduced in Epic 2.
+## Annotation Contract
+
+These middlewares write and read turn-scoped annotations using the shared keys
+declared in
+`packages/plugins/src/catalog/sugarlang/runtime/middlewares/shared.ts`.
+
+Important keys written during Epic 10:
+
+- `sugarlang.prescription`
+- `sugarlang.learnerSnapshot`
+- `sugarlang.pendingProvisionalLemmas`
+- `sugarlang.probeFloorState`
+- `sugarlang.forceComprehensionCheck`
+- `sugarlang.activeQuestEssentialLemmas`
+- `sugarlang.questEssentialLemmaIds`
+- `sugarlang.placementFlow`
+- `sugarlang.prePlacementOpeningLine`
+- `sugarlang.directive`
+- `sugarlang.constraint`
+- `sugarlang.comprehensionCheckInFlight`
+
+## Stage Responsibilities
+
+`sugarlang.context` loads learner state, placement state, and scene lexicon
+data, then writes the lexical prescription and prompt-facing learner snapshot.
+
+`sugarlang.director` merges the prescription with a pedagogical directive and
+produces the final `SugarlangConstraint` that SugarAgent reads.
+
+`sugarlang.verify` re-checks the generated text against the envelope classifier,
+attempts one repair call, and falls back to deterministic auto-simplification.
+
+`sugarlang.observe` turns completed turns plus player input into learner-state
+events and probe lifecycle updates.
+
+## SugarAgent Integration
+
+SugarAgent's `GenerateStage` reads
+`execution.annotations["sugarlang.constraint"]` before prompt assembly.
+
+Two behaviors are now live:
+
+- Normal turns append the Sugarlang constraint block to the system prompt.
+- Pre-placement opening dialog turns bypass prompt assembly entirely and return a
+  direct `ConversationTurnEnvelope`, which skips LLM generation, audit, and
+  repair.

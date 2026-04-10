@@ -1153,13 +1153,22 @@ export function createRuntimeGameplayAssembly(
   options: RuntimeGameplayAssemblyOptions
 ): RuntimeGameplayAssembly {
   const pluginManager = options.pluginManager ?? null;
+  const gameplaySession = createRuntimeGameplaySessionController(options);
 
   if (pluginManager) {
-    void pluginManager.init();
+    void pluginManager.init({
+      blackboard: gameplaySession.blackboard,
+      activeRegion: options.activeRegion,
+      playerDefinition: options.playerDefinition,
+      spellDefinitions: options.spellDefinitions,
+      itemDefinitions: options.itemDefinitions,
+      documentDefinitions: options.documentDefinitions,
+      npcDefinitions: options.npcDefinitions,
+      dialogueDefinitions: options.dialogueDefinitions,
+      questDefinitions: options.questDefinitions
+    });
     options.world.addSystem(new RuntimePluginSystem(pluginManager));
   }
-
-  const gameplaySession = createRuntimeGameplaySessionController(options);
 
   return {
     pluginManager,

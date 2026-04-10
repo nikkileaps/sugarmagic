@@ -10,7 +10,7 @@ from skeleton to implementation.
 | `director.md`                  | Director output contract, prompt boundary, schema parsing, and fallback policy seams.   | Epic 3, Epic 9          | Updated in Epic 3 |
 | `learner-state.md`             | Learner profile, reducer-owned state, persistence, and session signal surfaces.         | Epic 3, Epic 7          | Updated in Epic 3 |
 | `scene-lexicon-compilation.md` | Scene compiler, content hashing, cache ownership, and compile-profile contract.         | Epic 3, Epic 6          | Updated in Epic 3 |
-| `middlewares.md`               | Middleware ordering, annotation contracts, and SugarAgent integration seam.             | Epic 2, Epic 10         | Updated in Epic 2 |
+| `middlewares.md`               | Middleware ordering, annotation contracts, and SugarAgent integration seam.             | Epic 2, Epic 10         | Updated in Epic 10 |
 | `placement-contract.md`        | Placement capability boundary, questionnaire ownership, and quest signaling contract.   | Epic 2, Epic 3, Epic 11 | Updated in Epic 3 |
 | `editor-contributions.md`      | Studio-facing shell contribution surfaces and editor-only plugin UI.                    | Epic 1, Epic 12         | Stub              |
 | `telemetry.md`                 | Telemetry sink contract, rationale traces, and debug-panel-facing data surfaces.        | Epic 1, Epic 13         | Stub              |

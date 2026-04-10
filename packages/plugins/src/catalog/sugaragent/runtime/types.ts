@@ -219,6 +219,7 @@ export interface GenerateResult {
   usedLlm: boolean;
   llmBackend: "anthropic" | "deterministic";
   actionProposals: ConversationActionProposal[];
+  envelopeOverride?: ConversationTurnEnvelope;
 }
 
 export interface AuditResult {

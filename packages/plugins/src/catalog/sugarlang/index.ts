@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/index.ts
  *
- * Purpose: Defines the sugarlang plugin entry point and runtime-plugin factory stub.
+ * Purpose: Defines the sugarlang plugin entry point and runtime-plugin factory.
  *
  * Exports:
  *   - createSugarlangPlugin
@@ -12,12 +12,12 @@
  *   - normalizeSugarLangPluginConfig
  *
  * Relationships:
- *   - Depends on ./manifest and ./config for the skeleton plugin definition.
+ *   - Depends on ./manifest and ./config for the canonical plugin definition.
  *   - Is discovered by packages/plugins/src/builtin/index.ts through the catalog glob.
  *
  * Implements: Proposal 001 §The Substrate (Untouched) / §File Structure
  *
- * Status: skeleton (no implementation yet; see Epic 10)
+ * Status: active
  */
 
 import {
