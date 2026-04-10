@@ -50,7 +50,10 @@ import {
 import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
-import { sugarlangShellContributionDefinition } from "./ui/shell/contributions";
+import {
+  sugarlangShellContributionDefinition,
+  setSugarlangChunkExtractionEnabled
+} from "./ui/shell/contributions";
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
@@ -62,6 +65,9 @@ export function createSugarlangPlugin(
     context.configuration.config,
     context.environment
   );
+
+  // Wire the chunk extraction toggle so Studio shell components respect it.
+  setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
   const logger = config.debugLogging
     ? {
         debug(message: string, payload?: Record<string, unknown>) {

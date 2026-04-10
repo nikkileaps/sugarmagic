@@ -31,6 +31,10 @@ export interface ManualRebuildButtonProps {
   gameProject: GameProject | null;
   regions: RegionDocument[];
   targetLanguage: string;
+  /** When false, chunk extraction is skipped during rebuild (no Claude calls
+   *  for chunks). Cached chunks from prior runs are still used by the
+   *  classifier. Default: true. */
+  chunkExtractionEnabled?: boolean;
 }
 
 const EMPTY_STATUS: SugarlangCompileStatusSummary = {
@@ -86,7 +90,8 @@ export function ManualRebuildButton(
         props.regions,
         props.targetLanguage,
         workspaceId,
-        setProgress
+        setProgress,
+        { chunkExtractionEnabled: props.chunkExtractionEnabled ?? true }
       );
       setStatus(nextStatus);
       setLastRebuildAt(Date.now());

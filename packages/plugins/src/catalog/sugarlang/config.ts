@@ -27,9 +27,19 @@ export interface SugarLangPlacementConfig {
   closingDialogTurns: number;
 }
 
+export interface SugarLangChunkExtractionConfig {
+  /** When false, the tier-2 chunk extraction scheduler never fires and the
+   *  classifier runs lemma-only. Chunks already in the cache are still used —
+   *  this only prevents NEW extractions (and therefore new Claude calls).
+   *  Default: true. Set to false during heavy authoring iteration to keep
+   *  Claude costs at zero for chunks. */
+  enabled: boolean;
+}
+
 export interface SugarLangPluginConfig {
   debugLogging: boolean;
   placement: SugarLangPlacementConfig;
+  chunkExtraction: SugarLangChunkExtractionConfig;
 }
 
 export const SUGARLANG_TARGET_LANGUAGE_ENV =
@@ -74,12 +84,19 @@ export function normalizeSugarLangPluginConfig(
   _environment?: RuntimePluginEnvironment
 ): SugarLangPluginConfig {
   const placementConfig = isRecord(config?.placement) ? config.placement : null;
+  const chunkConfig = isRecord(config?.chunkExtraction) ? config.chunkExtraction : null;
 
   return {
     debugLogging: readEnvBoolean(
       _environment,
       "SUGARMAGIC_SUGARLANG_DEBUG_LOGGING"
     ),
+    chunkExtraction: {
+      enabled:
+        typeof chunkConfig?.enabled === "boolean"
+          ? chunkConfig.enabled
+          : true
+    },
     placement: {
       enabled:
         typeof placementConfig?.enabled === "boolean"

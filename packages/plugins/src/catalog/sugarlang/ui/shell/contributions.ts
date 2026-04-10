@@ -27,6 +27,22 @@ import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
+/**
+ * Module-level chunk-extraction toggle. Set by the plugin manifest at
+ * registration time from `SugarLangPluginConfig.chunkExtraction.enabled`.
+ * Default: true (chunk extraction fires on rebuild). Set to false during
+ * heavy dev iteration to avoid Claude calls for chunks.
+ */
+let sugarlangChunkExtractionEnabled = true;
+
+export function setSugarlangChunkExtractionEnabled(enabled: boolean): void {
+  sugarlangChunkExtractionEnabled = enabled;
+}
+
+export function isSugarlangChunkExtractionEnabled(): boolean {
+  return sugarlangChunkExtractionEnabled;
+}
+
 export const sugarlangShellContributionDefinition: PluginShellContributionDefinition =
   {
     projectSettings: [],
@@ -98,7 +114,8 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             gameProjectId: props.gameProjectId,
             gameProject: props.gameProject,
             regions: props.regions,
-            targetLanguage: props.targetLanguage
+            targetLanguage: props.targetLanguage,
+            chunkExtractionEnabled: sugarlangChunkExtractionEnabled
           })
       },
       {

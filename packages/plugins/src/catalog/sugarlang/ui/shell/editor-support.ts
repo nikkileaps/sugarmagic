@@ -315,7 +315,8 @@ export async function rebuildSugarlangCompileCache(
   regions: RegionDocument[],
   targetLanguage: string,
   workspaceId: string,
-  onProgress?: (progress: SugarlangRebuildProgress) => void
+  onProgress?: (progress: SugarlangRebuildProgress) => void,
+  options?: { chunkExtractionEnabled?: boolean }
 ): Promise<SugarlangCompileStatusSummary> {
   const scenes = createSugarlangSceneContexts(gameProject, regions, targetLanguage);
   const cache = new IndexedDBCompileCache({ workspaceId });
@@ -335,6 +336,14 @@ export async function rebuildSugarlangCompileCache(
     morphology,
     cache,
     debounceMs: 0,
+    // TODO: Wire chunkPipeline here once sugarlang has its own gateway
+    // provider. The config flag (options.chunkExtractionEnabled) gates
+    // whether chunk extraction fires — pass chunkPipeline: undefined
+    // when disabled, or the real pipeline when enabled AND the gateway
+    // provider is available. See the LLM gateway tech-debt note in
+    // runtime/telemetry/telemetry.ts and the sugarlang gateway provider
+    // task. Until then, tier-2 chunk extraction is structurally ready
+    // but not wired to an LLM backend.
     onLog(message, detail) {
       if (message !== "compiled-scene") {
         return;

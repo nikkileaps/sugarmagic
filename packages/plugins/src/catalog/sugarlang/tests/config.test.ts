@@ -22,6 +22,9 @@ describe("normalizeSugarLangPluginConfig", () => {
   it("fills missing placement fields with sensible defaults", () => {
     expect(normalizeSugarLangPluginConfig(undefined)).toEqual({
       debugLogging: false,
+      chunkExtraction: {
+        enabled: true
+      },
       placement: {
         enabled: true,
         minAnswersForValid: "use-bank-default",
@@ -50,6 +53,9 @@ describe("normalizeSugarLangPluginConfig", () => {
       )
     ).toEqual({
       debugLogging: true,
+      chunkExtraction: {
+        enabled: true
+      },
       placement: {
         enabled: false,
         minAnswersForValid: 4,
