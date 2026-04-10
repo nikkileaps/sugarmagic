@@ -113,6 +113,7 @@ export interface WebRuntimeStartState {
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   assetSources: Record<string, string>;
+  pluginBootPayloads?: Record<string, unknown>;
 }
 
 export interface WebRuntimeHost {
@@ -654,6 +655,7 @@ export function createWebRuntimeHost(
       state.installedPluginIds,
       state.pluginConfigurations,
       state.pluginRuntimeEnvironment ?? {},
+      state.pluginBootPayloads ?? {},
     );
     console.info("[web-runtime] plugin-bootstrap", {
       installedPluginIds: state.installedPluginIds,

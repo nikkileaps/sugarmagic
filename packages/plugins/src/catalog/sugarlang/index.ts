@@ -6,6 +6,7 @@
  * Exports:
  *   - createSugarlangPlugin
  *   - pluginDefinition
+ *   - buildSugarlangPreviewBootPayloadForSession
  *   - SUGARLANG_PLUGIN_ID
  *   - SUGARLANG_DISPLAY_NAME
  *   - normalizeSugarLangPluginConfig
@@ -25,9 +26,11 @@ import {
   SUGARLANG_DISPLAY_NAME,
   SUGARLANG_PLUGIN_ID
 } from "./manifest";
+import { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 
 export { createSugarlangPlugin } from "./manifest";
 export { normalizeSugarLangPluginConfig } from "./config";
+export { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 export {
   pluginDefinition,
   SUGARLANG_DISPLAY_NAME,

@@ -1,6 +1,6 @@
 # Epic 6: Scene Lexicon Compilation
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Scene Lexicon Compilation](../../proposals/001-adaptive-language-learning-architecture.md#scene-lexicon-compilation-one-compiler-three-profiles-preview-first)
 **Depends on:** Epic 1 (skeleton), Epic 3 (types), Epic 4 (CEFRLex + morphology loaders)

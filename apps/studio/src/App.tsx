@@ -31,6 +31,7 @@ import {
   createDefaultRegionLandscapeState
 } from "@sugarmagic/domain";
 import {
+  buildSugarlangPreviewBootPayloadForSession,
   collectPluginShellContributions,
   ensureDiscoveredPluginConfiguration,
   listDiscoveredPluginDefinitions,
@@ -344,7 +345,7 @@ function handleStartPreview(
   // Wait for preview ready, then send boot data
   const capturedSession = session;
   const capturedWindow = previewWindow;
-  function onMessage(event: MessageEvent) {
+  async function onMessage(event: MessageEvent) {
     if (event.data?.type === "PREVIEW_READY") {
       window.removeEventListener("message", onMessage);
       const regions = getAllRegions(capturedSession);
@@ -365,7 +366,16 @@ function handleStartPreview(
           npcDefinitions: capturedSession.gameProject.npcDefinitions,
           dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
           questDefinitions: capturedSession.gameProject.questDefinitions,
-          assetSources
+          assetSources,
+          pluginBootPayloads: {
+            sugarlang:
+              (await buildSugarlangPreviewBootPayloadForSession(
+                capturedSession,
+                snapshot.activeWorkspaceId ??
+                  capturedSession.gameProject.identity.id,
+                readStudioPluginRuntimeEnvironment()
+              )) ?? undefined
+          }
         },
         "*"
       );

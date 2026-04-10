@@ -101,10 +101,12 @@ export function createResolvedRuntimePluginManager(
   boot: RuntimeBootModel,
   installedPluginIds: string[],
   configurations: PluginConfigurationRecord[],
-  environment: RuntimePluginEnvironment = {}
+  environment: RuntimePluginEnvironment = {},
+  pluginBootPayloads: Record<string, unknown> = {}
 ): RuntimePluginManager {
   return createRuntimePluginManager({
     boot,
+    pluginBootPayloads,
     plugins: resolveInstalledRuntimePluginInstances(
       boot,
       installedPluginIds,

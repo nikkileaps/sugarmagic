@@ -35,6 +35,12 @@ import {
 import {
   createSugarLangVerifyMiddleware
 } from "./runtime/middlewares/sugar-lang-verify-middleware";
+import {
+  extractSugarlangPreviewBootLexicons
+} from "./runtime/compile/preview-boot";
+import {
+  seedSugarlangRuntimeCompileCache
+} from "./runtime/compile/runtime-cache-state";
 import { sugarlangShellContributionDefinition } from "./ui/shell/contributions";
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
@@ -49,11 +55,14 @@ export function createSugarlangPlugin(
     pluginId: context.configuration.pluginId,
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions: [],
-    init() {
-      throw new Error("TODO: Epic 10");
+    async init(runtimeContext) {
+      const lexicons = extractSugarlangPreviewBootLexicons(
+        runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
+      );
+      await seedSugarlangRuntimeCompileCache(lexicons);
     },
     dispose() {
-      throw new Error("TODO: Epic 10");
+      return undefined;
     },
     serializeState: () => ({ enabled: context.configuration.enabled })
   };

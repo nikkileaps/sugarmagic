@@ -5,6 +5,7 @@
  *
  * Exports:
  *   - SugarLangPluginConfig
+ *   - resolveSugarLangTargetLanguage
  *   - normalizeSugarLangPluginConfig
  *
  * Relationships:
@@ -21,6 +22,9 @@ import type { RuntimePluginEnvironment } from "../../runtime";
 export interface SugarLangPluginConfig {
   debugLogging: boolean;
 }
+
+export const SUGARLANG_TARGET_LANGUAGE_ENV =
+  "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE";
 
 function readEnvBoolean(
   environment: RuntimePluginEnvironment | undefined,
@@ -43,4 +47,15 @@ export function normalizeSugarLangPluginConfig(
       "SUGARMAGIC_SUGARLANG_DEBUG_LOGGING"
     )
   };
+}
+
+export function resolveSugarLangTargetLanguage(
+  environment: RuntimePluginEnvironment | undefined
+): string | null {
+  const value = environment?.[SUGARLANG_TARGET_LANGUAGE_ENV];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  return value.trim().toLowerCase();
 }

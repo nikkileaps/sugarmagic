@@ -89,6 +89,7 @@ export type RuntimePluginContribution =
 
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
+  pluginBootPayloads?: Record<string, unknown>;
 }
 
 export interface RuntimePluginInstance {
@@ -105,6 +106,7 @@ export interface RuntimePluginInstance {
 export interface RuntimePluginManagerOptions {
   boot: RuntimeBootModel;
   plugins: RuntimePluginInstance[];
+  pluginBootPayloads?: Record<string, unknown>;
 }
 
 export interface RuntimePluginManager {
@@ -134,7 +136,7 @@ function isContributionAllowedOnHost(
 export function createRuntimePluginManager(
   options: RuntimePluginManagerOptions
 ): RuntimePluginManager {
-  const { boot, plugins } = options;
+  const { boot, plugins, pluginBootPayloads } = options;
   let initialized = false;
 
   return {
@@ -142,7 +144,7 @@ export function createRuntimePluginManager(
     async init() {
       if (initialized) return;
       for (const plugin of plugins) {
-        await plugin.init?.({ boot });
+        await plugin.init?.({ boot, pluginBootPayloads });
       }
       initialized = true;
     },
