@@ -16,13 +16,30 @@
  */
 
 import type {
-  LexicalAtlasEntry,
+  AtlasLemmaEntry,
   LexicalAtlasProvider,
+  CEFRBand,
   LemmaRef
 } from "../../types";
 
 export class CefrLexAtlasProvider implements LexicalAtlasProvider {
-  getLemmaEntry(_lemmaRef: LemmaRef): LexicalAtlasEntry | null {
+  getLemma(_lemmaId: string, _lang: string): AtlasLemmaEntry | undefined {
+    throw new Error("TODO: Epic 4/5");
+  }
+
+  getBand(_lemmaId: string, _lang: string): CEFRBand | undefined {
+    throw new Error("TODO: Epic 4/5");
+  }
+
+  getFrequencyRank(_lemmaId: string, _lang: string): number | undefined {
+    throw new Error("TODO: Epic 4/5");
+  }
+
+  listLemmasAtBand(_band: CEFRBand, _lang: string): LemmaRef[] {
+    throw new Error("TODO: Epic 4/5");
+  }
+
+  getAtlasVersion(_lang: string): string {
     throw new Error("TODO: Epic 4/5");
   }
 }

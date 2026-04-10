@@ -16,17 +16,22 @@
  */
 
 import type {
+  CEFRBand,
+  CefrPosterior,
   LearnerPriorProvider,
-  LearnerProfile,
-  LemmaCard,
-  LemmaRef
+  LemmaCard
 } from "../../types";
 
 export class FsrsLearnerPriorProvider implements LearnerPriorProvider {
-  buildInitialCard(
-    _lemmaRef: LemmaRef,
-    _learner: LearnerProfile
+  getInitialLemmaCard(
+    _lemmaId: string,
+    _lang: string,
+    _learnerBand: CEFRBand
   ): LemmaCard {
+    throw new Error("TODO: Epic 7/8");
+  }
+
+  getCefrInitialPosterior(_selfReportedBand?: CEFRBand): CefrPosterior {
     throw new Error("TODO: Epic 7/8");
   }
 }

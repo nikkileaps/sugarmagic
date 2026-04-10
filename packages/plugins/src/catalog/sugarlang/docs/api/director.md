@@ -1,5 +1,33 @@
 # Director API
 
-Status: Stub
+Status: Updated in Epic 3; expanded further in Epic 9
 
-This document will describe the Director contract: prompt assembly inputs, structured directive output, schema validation, cache behavior, and fallback-policy ownership. Epic 1 creates the placeholder only; Epic 9 will populate the concrete API details.
+This document records the public contract surface the Director owns.
+
+## Output Contract
+
+- `SupportPosture`
+- `InteractionStyle`
+- `GlossingStrategy`
+- `SentenceComplexityCap`
+- `ProbeTriggerReason`
+- `ComprehensionCheckSpec`
+- `DirectiveLifetime`
+- `PedagogicalDirective`
+- `SugarlangConstraint`
+
+`PedagogicalDirective` is the Director's raw structured output. `SugarlangConstraint`
+is the merged payload the middleware pipeline passes to SugarAgent's Generator
+splice.
+
+## Important Channels
+
+- `comprehensionCheck`: load-bearing probe contract for Observer-latency handling.
+- `questEssentialLemmas`: separate mandatory channel for active-objective vocabulary.
+- `prePlacementOpeningLine`: explicit pipeline-bypass field for the opening dialog phase of placement.
+
+## Provider Boundary
+
+The Director is invoked through `DirectorPolicy.invoke(context)` from the ADR 010
+provider contract. Prompt-building, schema parsing, caching, and fallback
+behavior all sit behind that seam in later epics.

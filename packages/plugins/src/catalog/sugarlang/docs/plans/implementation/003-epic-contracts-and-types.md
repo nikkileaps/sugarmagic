@@ -1,6 +1,6 @@
 # Epic 3: Contracts and Types
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001](../../proposals/001-adaptive-language-learning-architecture.md)
 **Depends on:** Epic 1 (skeleton with type files stubbed)

@@ -21,12 +21,17 @@
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
  *
- * Status: skeleton (no implementation yet; see Epic 3 and Epic 11)
+ * Status: active
  */
 
 import type { CEFRBand } from "./learner-profile";
 import type { LemmaRef } from "./lexical-prescription";
 
+/**
+ * Top-level plugin-owned placement questionnaire shape for one target language.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface PlacementQuestionnaire {
   schemaVersion: 1;
   lang: string;
@@ -38,13 +43,23 @@ export interface PlacementQuestionnaire {
   minAnswersForValid: number;
 }
 
-interface PlacementQuestionKindBase {
+/**
+ * Shared fields for every questionnaire item kind.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
+export interface PlacementQuestionKindBase {
   questionId: string;
   targetBand: CEFRBand;
   promptText: string;
   supportText?: string;
 }
 
+/**
+ * Multiple-choice placement item.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface MultipleChoiceQuestion extends PlacementQuestionKindBase {
   kind: "multiple-choice";
   options: Array<{
@@ -54,6 +69,11 @@ export interface MultipleChoiceQuestion extends PlacementQuestionKindBase {
   }>;
 }
 
+/**
+ * Free-text placement item.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface FreeTextQuestion extends PlacementQuestionKindBase {
   kind: "free-text";
   expectedLemmas: string[];
@@ -61,6 +81,11 @@ export interface FreeTextQuestion extends PlacementQuestionKindBase {
   minExpectedLength?: number;
 }
 
+/**
+ * Yes/no placement item.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface YesNoQuestion extends PlacementQuestionKindBase {
   kind: "yes-no";
   correctAnswer: "yes" | "no";
@@ -68,6 +93,11 @@ export interface YesNoQuestion extends PlacementQuestionKindBase {
   noLabel: string;
 }
 
+/**
+ * Fill-in-the-blank placement item.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface FillInBlankQuestion extends PlacementQuestionKindBase {
   kind: "fill-in-blank";
   sentenceTemplate: string;
@@ -75,18 +105,33 @@ export interface FillInBlankQuestion extends PlacementQuestionKindBase {
   acceptableLemmas?: string[];
 }
 
+/**
+ * Discriminated union over all supported placement question kinds.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export type PlacementQuestionnaireQuestion =
   | MultipleChoiceQuestion
   | FreeTextQuestion
   | YesNoQuestion
   | FillInBlankQuestion;
 
+/**
+ * Player-submitted placement questionnaire response payload.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface PlacementQuestionnaireResponse {
   questionnaireId: string;
   submittedAtMs: number;
   answers: Record<string, PlacementAnswer>;
 }
 
+/**
+ * Discriminated union over all placement answer payloads.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export type PlacementAnswer =
   | { kind: "multiple-choice"; optionId: string }
   | { kind: "free-text"; text: string }
@@ -94,6 +139,11 @@ export type PlacementAnswer =
   | { kind: "fill-in-blank"; text: string }
   | { kind: "skipped" };
 
+/**
+ * Deterministic placement scoring output.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export interface PlacementScoreResult {
   cefrBand: CEFRBand;
   confidence: number;
@@ -105,6 +155,11 @@ export interface PlacementScoreResult {
   questionnaireVersion: string;
 }
 
+/**
+ * Placement sub-state machine phase for a placement-tagged NPC conversation.
+ *
+ * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
+ */
 export type SugarlangPlacementFlowPhase =
   | "opening-dialog"
   | "questionnaire"

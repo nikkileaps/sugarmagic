@@ -16,30 +16,63 @@
  *
  * Implements: Proposal 001 §1. Lexical Budgeter
  *
- * Status: skeleton (no implementation yet; see Epic 3)
+ * Status: active
  */
 
 import type { LearnerProfile } from "./learner-profile";
 import type { CompiledSceneLexicon } from "./scene-lexicon";
 
+/**
+ * Lightweight lemma reference passed between sugarlang subsystems.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
 export interface LemmaRef {
   lemmaId: string;
   surfaceForm?: string;
   lang: string;
 }
 
+/**
+ * Turn-level lexical budget allocated by the Budgeter.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
 export interface LexicalBudget {
   newItemsAllowed: number;
   turnSeconds?: number;
 }
 
-export interface LexicalRationale {
-  candidateSetSize: number;
-  envelopeSurvivorCount: number;
-  priorityScores: Record<string, number>;
+/**
+ * Scored rationale entry for a candidate lemma.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
+export interface LexicalPriorityScore {
+  lemmaRef: LemmaRef;
+  score: number;
   reasons: string[];
 }
 
+/**
+ * Transparent reasoning trail for a generated lexical prescription.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
+export interface LexicalRationale {
+  summary?: string;
+  candidateSetSize: number;
+  envelopeSurvivorCount: number;
+  priorityScores: LexicalPriorityScore[];
+  reasons: string[];
+  questEssentialExclusionLemmaIds?: string[];
+}
+
+/**
+ * Raw Budgeter output that the Director reshapes but does not replace.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
 export interface LexicalPrescription {
   introduce: LemmaRef[];
   reinforce: LemmaRef[];
@@ -49,6 +82,11 @@ export interface LexicalPrescription {
   rationale: LexicalRationale;
 }
 
+/**
+ * Input contract for the Budgeter's prescribe step.
+ *
+ * Implements: Proposal 001 §1. Lexical Budgeter
+ */
 export interface LexicalPrescriptionInput {
   learner: LearnerProfile;
   sceneLexicon: CompiledSceneLexicon;

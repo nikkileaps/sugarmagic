@@ -15,7 +15,7 @@
  * Status: skeleton (no implementation yet; see Epic 6)
  */
 
-import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core";
+import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import type { CompiledSceneLexicon, LexicalAtlasProvider } from "../types";
 
 export function compileSugarlangScene(

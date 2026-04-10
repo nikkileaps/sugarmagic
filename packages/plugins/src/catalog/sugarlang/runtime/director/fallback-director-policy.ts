@@ -22,7 +22,7 @@ import type {
 } from "../types";
 
 export class FallbackDirectorPolicy implements DirectorPolicy {
-  async buildDirective(
+  async invoke(
     _context: DirectorContext
   ): Promise<PedagogicalDirective> {
     throw new Error("TODO: Epic 9");

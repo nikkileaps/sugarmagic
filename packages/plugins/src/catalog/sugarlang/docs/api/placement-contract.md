@@ -46,3 +46,23 @@ such as:
 - `sugarlangPlacementQuestionOverrideId`
 
 Future plugins should follow the same convention with their own prefix.
+
+## Placement Questionnaire Types
+
+Epic 3 defines the plugin-owned questionnaire contract used by placement:
+
+- `PlacementQuestionnaire`
+- `PlacementQuestionnaireQuestion`
+- `MultipleChoiceQuestion`
+- `FreeTextQuestion`
+- `YesNoQuestion`
+- `FillInBlankQuestion`
+- `PlacementQuestionnaireResponse`
+- `PlacementAnswer`
+- `PlacementScoreResult`
+- `SugarlangPlacementFlowPhase`
+
+V1 discipline: the plugin owns the questionnaire bank. The types define the
+shape, but the actual question sets ship from
+`data/languages/<lang>/placement-questionnaire.json`. Projects do not customize
+that bank in v1.

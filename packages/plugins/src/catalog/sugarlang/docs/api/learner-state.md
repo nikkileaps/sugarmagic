@@ -1,5 +1,39 @@
 # Learner State API
 
-Status: Stub
+Status: Updated in Epic 3; expanded further in Epic 7
 
-This document will describe the learner profile surface, reducer ownership, persistence format, session signals, and the separation between receptive and productive learner state. Epic 1 creates the placeholder only; Epic 7 will expand it.
+This document records the public learner-state contract owned by sugarlang.
+
+## Core Types
+
+- `CEFRBand`
+- `LearnerId`
+- `CefrPosteriorBandWeight`
+- `CefrPosterior`
+- `LemmaCard`
+- `CurrentSessionSignals`
+- `SessionRecord`
+- `LearnerAssessment`
+- `LearnerProfile`
+
+## Receptive vs. Productive
+
+`LemmaCard` deliberately separates:
+
+- `stability`: receptive FSRS memory strength
+- `productiveStrength`: productive ability to actively produce the lemma
+
+It also carries provisional skim-past evidence via:
+
+- `provisionalEvidence`
+- `provisionalEvidenceFirstSeenTurn`
+
+Those fields exist so rapid-advance observations do not silently inflate FSRS
+stability before a comprehension probe confirms them. See Proposal 001 § Receptive vs. Productive Knowledge and § Observer Latency Bias.
+
+## Exported Constants
+
+- `INITIAL_PRODUCTIVE_STRENGTH`
+- `INITIAL_PROVISIONAL_EVIDENCE`
+- `PROVISIONAL_EVIDENCE_MAX`
+- `PROVISIONAL_EVIDENCE_DECAY_TURN_THRESHOLD`

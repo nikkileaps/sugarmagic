@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/types.ts
  *
- * Purpose: Provides the single re-export surface for sugarlang runtime contract types.
+ * Purpose: Provides the single re-export surface for all public sugarlang runtime contract types.
  *
  * Exports:
  *   - all public types from runtime/contracts/*
@@ -12,7 +12,7 @@
  *
  * Implements: Proposal 001 §File Structure
  *
- * Status: skeleton (no implementation yet; see Epic 3)
+ * Status: active
  */
 
 export * from "./contracts/pedagogy";

@@ -16,33 +16,56 @@
  *
  * Implements: Proposal 001 §2. Envelope Classifier
  *
- * Status: skeleton (no implementation yet; see Epic 3)
+ * Status: active
  */
 
-import type { LexicalPrescription } from "./lexical-prescription";
+import type { CEFRBand } from "./learner-profile";
+import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 
+/**
+ * Per-turn coverage statistics computed over a generated line.
+ *
+ * Implements: Proposal 001 §2. Envelope Classifier
+ */
 export interface CoverageProfile {
   totalTokens: number;
   knownTokens: number;
   inBandTokens: number;
   unknownTokens: number;
-  bandHistogram: Record<string, number>;
-  outOfEnvelopeLemmas: string[];
+  bandHistogram: Record<CEFRBand, number>;
+  outOfEnvelopeLemmas: LemmaRef[];
+  questEssentialLemmasMatched: string[];
   coverageRatio: number;
 }
 
+/**
+ * Per-lemma detail about why a generated line violated the learner envelope.
+ *
+ * Implements: Proposal 001 §2. Envelope Classifier
+ */
 export interface EnvelopeViolation {
-  lemmaId: string;
+  lemmaRef: LemmaRef;
   surfaceForm: string;
+  cefrBand: CEFRBand | "unknown";
   reason: string;
 }
 
+/**
+ * Options passed to the deterministic envelope rule.
+ *
+ * Implements: Proposal 001 §2. Envelope Classifier / §Quest-Essential Lemma Exemption
+ */
 export interface EnvelopeRuleOptions {
   prescription?: LexicalPrescription | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
 }
 
+/**
+ * Final classifier verdict for a generated line.
+ *
+ * Implements: Proposal 001 §2. Envelope Classifier
+ */
 export interface EnvelopeVerdict {
   withinEnvelope: boolean;
   profile: CoverageProfile;
@@ -52,6 +75,11 @@ export interface EnvelopeVerdict {
   exemptionsApplied: Array<"prescription-introduce" | "named-entity" | "quest-essential">;
 }
 
+/**
+ * Deterministic envelope rule contract.
+ *
+ * Implements: Proposal 001 §2. Envelope Classifier
+ */
 export type EnvelopeRule = (
   profile: CoverageProfile,
   options: EnvelopeRuleOptions

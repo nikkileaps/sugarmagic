@@ -20,18 +20,28 @@
  *
  * Implements: Proposal 001 §3. Director / §Observer Latency Bias and In-Character Comprehension Checks
  *
- * Status: skeleton (no implementation yet; see Epic 3)
+ * Status: active
  */
 
 import type { CEFRBand } from "./learner-profile";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 
+/**
+ * High-level support posture the Director chooses for a turn.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
 export type SupportPosture =
   | "anchored"
   | "supported"
   | "target-dominant"
   | "target-only";
 
+/**
+ * Conversational interaction style selected by the Director.
+ *
+ * Implements: Proposal 001 §3. Director / §Receptive vs. Productive Knowledge
+ */
 export type InteractionStyle =
   | "listening_first"
   | "guided_dialogue"
@@ -39,10 +49,25 @@ export type InteractionStyle =
   | "recast_mode"
   | "elicitation_mode";
 
+/**
+ * Glossing mode authorized for the Generator.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
 export type GlossingStrategy = "inline" | "parenthetical" | "hover-only" | "none";
 
+/**
+ * Sentence-complexity ceiling the Generator should honor for this turn.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
 export type SentenceComplexityCap = "single-clause" | "two-clause" | "free";
 
+/**
+ * Reason why a comprehension probe was triggered or forced.
+ *
+ * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
+ */
 export type ProbeTriggerReason =
   | "director-discretion"
   | "soft-floor"
@@ -50,6 +75,11 @@ export type ProbeTriggerReason =
   | "hard-floor-lemma-age"
   | "director-deferred-override";
 
+/**
+ * Full comprehension-check specification emitted by the Director.
+ *
+ * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
+ */
 export interface ComprehensionCheckSpec {
   trigger: boolean;
   probeStyle: "recall" | "recognition" | "production" | "none";
@@ -59,6 +89,11 @@ export interface ComprehensionCheckSpec {
   acceptableResponseForms?: "any" | "single-word" | "short-phrase" | "full-sentence";
 }
 
+/**
+ * Cache lifetime and invalidation triggers for a pedagogical directive.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
 export interface DirectiveLifetime {
   maxTurns: number;
   invalidateOn: Array<
@@ -69,6 +104,11 @@ export interface DirectiveLifetime {
   >;
 }
 
+/**
+ * Raw Director output prior to merging with the lexical prescription.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
 export interface PedagogicalDirective {
   targetVocab: {
     introduce: LemmaRef[];
@@ -88,6 +128,11 @@ export interface PedagogicalDirective {
   isFallbackDirective: boolean;
 }
 
+/**
+ * Final merged constraint written into `execution.annotations["sugarlang.constraint"]`.
+ *
+ * Implements: Proposal 001 §3. Director / §Pre-Placement Opening Dialog Policy / §Quest-Essential Lemma Exemption
+ */
 export interface SugarlangConstraint {
   targetVocab: {
     introduce: LemmaRef[];
