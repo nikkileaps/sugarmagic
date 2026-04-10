@@ -391,7 +391,8 @@ describe("sugarlang runtime contracts", () => {
       sourceObjectiveNodeId: "objective-1",
       sourceObjectiveDisplayName: "Ask for a ticket",
       sourceQuestId: "quest-1",
-      cefrBand: "B1"
+      cefrBand: "B1",
+      supportLanguageGloss: "ticket"
     };
     const probeFloorState: ProbeFloorState = {
       turnsSinceLastProbe: 16,
@@ -400,6 +401,7 @@ describe("sugarlang runtime contracts", () => {
       hardFloorReached: false
     };
     const directorContext: DirectorContext = {
+      conversationId: "conversation-1",
       learner,
       prescription,
       scene: lexicon,
@@ -746,6 +748,7 @@ const invalidActiveQuestLemma: ActiveQuestEssentialLemma = {
   lemmaRef: { lemmaId: "billete", lang: "es" },
   sourceObjectiveDisplayName: "Ask for a ticket",
   sourceQuestId: "quest-1",
+  supportLanguageGloss: "ticket",
   cefrBand: "B1"
 };
 void invalidActiveQuestLemma;

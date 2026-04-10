@@ -1,6 +1,6 @@
 # Placement Contract API
 
-Status: Updated in Epic 2; expanded further in Epic 11
+Status: Updated in Epic 2; cross-referenced in Epic 9; expanded further in Epic 11
 
 This document describes the authoring metadata seam that lets sugarlang identify
 the placement NPC before the full placement runtime lands in Epic 11.
@@ -93,3 +93,10 @@ malformed data and currently ships Spanish and Italian plugin-owned banks.
 Generic plugin questionnaires remain the fallback source of truth in v1. If a
 future project-level character-voiced override exists, it should override the
 generic bank explicitly rather than partially mutate it in place.
+
+## Director Boundary
+
+Placement is not Director-owned. Epic 9 keeps only a tiny post-placement
+calibration hint for low-confidence learners after placement completes. The
+questionnaire flow itself remains under `runtime/placement/` and the pre-placement
+opening dialog still bypasses the Director pipeline entirely.

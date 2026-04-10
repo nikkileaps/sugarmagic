@@ -83,6 +83,7 @@ export interface ActiveQuestEssentialLemma {
   sourceObjectiveDisplayName: string;
   sourceQuestId: string;
   cefrBand: CEFRBand;
+  supportLanguageGloss: string;
 }
 
 /**
@@ -125,6 +126,7 @@ export interface DirectorLanguageContext {
  * Implements: Proposal 001 §3. Director / §Observer Latency Bias / §Quest-Essential Lemma Exemption
  */
 export interface DirectorContext {
+  conversationId: string;
   learner: LearnerProfile;
   scene: CompiledSceneLexicon;
   prescription: LexicalPrescription;

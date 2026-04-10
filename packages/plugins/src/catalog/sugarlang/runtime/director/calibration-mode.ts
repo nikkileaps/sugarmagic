@@ -19,11 +19,16 @@
 import type { LearnerProfile } from "../types";
 
 export function isInPostPlacementCalibration(
-  _learner: LearnerProfile
+  learner: LearnerProfile
 ): boolean {
-  throw new Error("TODO: Epic 9");
+  if (learner.assessment.status !== "evaluated") {
+    return false;
+  }
+
+  const turns = learner.currentSession?.turns ?? 0;
+  return learner.assessment.cefrConfidence < 0.65 && turns < 10;
 }
 
 export function buildPostPlacementCalibrationHint(): string {
-  throw new Error("TODO: Epic 9");
+  return "NOTE: This learner just completed their placement assessment but has not yet built up session history. Lean slightly toward the cautious side - prefer supported posture over target-dominant, prefer inline glossing on any new word, keep sentences at one or two clauses. This is a brief settling-in window, not a permanent constraint.";
 }

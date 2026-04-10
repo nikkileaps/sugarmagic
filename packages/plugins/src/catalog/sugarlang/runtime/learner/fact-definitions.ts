@@ -62,6 +62,7 @@ export interface ActiveDirectiveFactValue {
   directive: PedagogicalDirective;
   issuedAtMs: number;
   lifetime: DirectiveLifetime;
+  turnsConsumed: number;
 }
 
 export const DEFAULT_SUGARLANG_PLACEMENT_STATUS: SugarlangPlacementStatus = {
