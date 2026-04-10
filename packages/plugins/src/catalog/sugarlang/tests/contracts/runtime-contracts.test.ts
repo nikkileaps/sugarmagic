@@ -369,6 +369,7 @@ describe("sugarlang runtime contracts", () => {
         C2: 0
       },
       outOfEnvelopeLemmas: [{ lemmaId: "ferrocarril", lang: "es" }],
+      ceilingExceededLemmas: [{ lemmaId: "ferrocarril", lang: "es" }],
       questEssentialLemmasMatched: ["billete"],
       coverageRatio: 0.9
     };
