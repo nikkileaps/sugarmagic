@@ -1,6 +1,6 @@
 # Epic 12: Editor UX Contributions
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2026-04-09
 **Derives from:** [Proposal 001 § Plugin Contribution Surface](../../proposals/001-adaptive-language-learning-architecture.md#plugin-contribution-surface), [Plan 001 § Required Editor / UX Affordances](../001-welcome-to-wordlark-hollow-station-manager-placement-experience.md#required-editor--ux-affordances)
 **Depends on:** Epic 2 (NPCDefinition.metadata), Epic 6 (compile cache + rebuild), Epic 11 (placement contract)
@@ -29,6 +29,14 @@ All contributions use the existing plugin contribution kinds (`design.workspace`
 - Quest node `eventName` field surfaces `sugarlang.placement.completed` as a hint when the target is a placement NPC
 - All contributions are discoverable via the plugin system
 - Each contribution has acceptance tests in the Studio test harness
+
+## Implementation Notes
+
+- The Studio host now mounts plugin-owned `design.section` renderers generically instead of hardcoding sugarlang into the editor shell.
+- The NPC inspector and quest inspector expose plugin extension seams for section-level contributions.
+- Build > Layout exposes a matching inspector extension seam for the scene density panel.
+- The Sugarlang plugin now contributes a dedicated `design.workspace` named `sugarlang` for compile status and the read-only placement bank viewer.
+- The quest `eventName` hint lands as a section-level panel, not a field-level autocomplete hook, because the current quest editor contribution seam is section-based.
 
 ## Stories
 

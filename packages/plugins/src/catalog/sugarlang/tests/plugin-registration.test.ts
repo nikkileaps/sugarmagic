@@ -20,6 +20,7 @@ import { createRuntimeBootModel } from "@sugarmagic/runtime-core";
 import { describe, expect, it } from "vitest";
 import {
   createSugarlangPlugin,
+  pluginDefinition,
   SUGARLANG_DISPLAY_NAME,
   SUGARLANG_PLUGIN_ID
 } from "../index";
@@ -48,5 +49,14 @@ describe("sugarlang plugin registration", () => {
     expect(instance.blackboardFactDefinitions).toHaveLength(4);
     expect(typeof instance.init).toBe("function");
     expect(typeof instance.dispose).toBe("function");
+  });
+
+  it("publishes its Epic 12 shell contribution surface for Studio discovery", () => {
+    expect(pluginDefinition.shell?.designWorkspaces).toEqual([
+      expect.objectContaining({
+        workspaceKind: SUGARLANG_PLUGIN_ID
+      })
+    ]);
+    expect(pluginDefinition.shell?.designSections).toHaveLength(5);
   });
 });

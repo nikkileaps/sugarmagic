@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import type { SemanticCommand, RegionDocument } from "@sugarmagic/domain";
@@ -36,6 +36,7 @@ import {
   ensureDiscoveredPluginConfiguration,
   listDiscoveredPluginDefinitions,
   planGameDeployment,
+  resolveSugarLangTargetLanguage,
   resolveInstalledPluginDefinitions
 } from "@sugarmagic/plugins";
 import {
@@ -70,6 +71,7 @@ import {
 import {
   ActionStripe,
   CreateRegionDialog,
+  Inspector,
   ModeBar,
   ProjectManagerDialog,
   ShellFrame,
@@ -113,6 +115,23 @@ async function createAssetSourceMap(
   }
 
   return nextSources;
+}
+
+function renderPluginSectionGroup(
+  sections: ReturnType<typeof collectPluginShellContributions>["designSections"],
+  props: Parameters<
+    ReturnType<typeof collectPluginShellContributions>["designSections"][number]["render"]
+  >[0]
+) {
+  if (sections.length === 0) {
+    return null;
+  }
+
+  return sections.map((section) => (
+    <Fragment key={`${section.pluginId}:${section.sectionId}`}>
+      {section.render(props)}
+    </Fragment>
+  ));
 }
 
 const shellStore = createShellStore("build");
@@ -569,6 +588,12 @@ export function App() {
     () => listStudioPluginWorkspaceDefinitions(),
     []
   );
+  const studioRuntimeEnvironment = useMemo(
+    () => readStudioPluginRuntimeEnvironment(),
+    []
+  );
+  const sugarlangTargetLanguage =
+    resolveSugarLangTargetLanguage(studioRuntimeEnvironment) ?? "es";
   const studioPluginWorkspaceKinds = useMemo(
     () =>
       new Set(
@@ -580,10 +605,24 @@ export function App() {
   );
   const renderablePluginWorkspaceItems = useMemo(
     () =>
-      pluginShellContributions.designWorkspaces.filter(
-        (workspace) => studioPluginWorkspaceKinds.has(workspace.workspaceKind)
-      ),
-    [pluginShellContributions.designWorkspaces, studioPluginWorkspaceKinds]
+      {
+        const sectionWorkspaceKinds = new Set(
+          pluginShellContributions.designSections.map(
+            (section) => section.workspaceKind
+          )
+        );
+
+        return pluginShellContributions.designWorkspaces.filter(
+          (workspace) =>
+            studioPluginWorkspaceKinds.has(workspace.workspaceKind) ||
+            sectionWorkspaceKinds.has(workspace.workspaceKind)
+        );
+      },
+    [
+      pluginShellContributions.designSections,
+      pluginShellContributions.designWorkspaces,
+      studioPluginWorkspaceKinds
+    ]
   );
   const npcInteractionOptions = useMemo(
     () => resolveNPCInteractionOptions(pluginShellContributions.npcInteractionOptions),
@@ -911,7 +950,23 @@ export function App() {
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
-    onRemoveAssetDefinition: handleRemoveAssetDefinition
+    onRemoveAssetDefinition: handleRemoveAssetDefinition,
+    renderLayoutInspectorSections: ({ activeRegion: layoutRegion }) =>
+      renderPluginSectionGroup(
+        pluginShellContributions.designSections.filter(
+          (section) => section.workspaceKind === "layout"
+        ),
+        {
+          workspaceKind: "layout",
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          regions: regionDocuments,
+          activeRegion: layoutRegion,
+          targetLanguage: sugarlangTargetLanguage,
+          onCommand: dispatchCommand
+        }
+      )
   });
 
   const designView = useDesignProductModeView({
@@ -939,7 +994,48 @@ export function App() {
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
-    onNavigateToTarget: handleWorkspaceNavigation
+    onNavigateToTarget: handleWorkspaceNavigation,
+    renderNPCInspectorSections: ({ selectedNPC, updateNPC }) =>
+      renderPluginSectionGroup(
+        pluginShellContributions.designSections.filter(
+          (section) => section.workspaceKind === "npcs"
+        ),
+        {
+          workspaceKind: "npcs",
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          regions: regionDocuments,
+          activeRegion,
+          targetLanguage: sugarlangTargetLanguage,
+          onCommand: dispatchCommand,
+          selectedNPC,
+          updateNPC
+        }
+      ),
+    renderQuestInspectorSections: ({
+      selectedQuest,
+      updateQuest,
+      selectedQuestNode
+    }) =>
+      renderPluginSectionGroup(
+        pluginShellContributions.designSections.filter(
+          (section) => section.workspaceKind === "quests"
+        ),
+        {
+          workspaceKind: "quests",
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          regions: regionDocuments,
+          activeRegion,
+          targetLanguage: sugarlangTargetLanguage,
+          onCommand: dispatchCommand,
+          selectedQuest,
+          updateQuest,
+          selectedQuestNode
+        }
+      )
   });
   const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
     activeDesignKind
@@ -958,8 +1054,77 @@ export function App() {
     session?.gameProject,
     session?.gameProject.identity.id
   ]);
+  const genericPluginView = useMemo(() => {
+    if (activePluginWorkspaceDefinition) {
+      return null;
+    }
 
-  const activeDesignPanels = activePluginView ?? designView;
+    const workspace = renderablePluginWorkspaceItems.find(
+      (entry) => entry.workspaceKind === activeDesignKind
+    );
+    if (!workspace) {
+      return null;
+    }
+
+    const sections = pluginShellContributions.designSections.filter(
+      (section) => section.workspaceKind === activeDesignKind
+    );
+    if (sections.length === 0) {
+      return null;
+    }
+
+    return {
+      leftPanel: null,
+      rightPanel: (
+        <Inspector selectionLabel={workspace.label}>
+          <Stack gap="sm">
+            <Text size="sm" c="var(--sm-color-subtext)">
+              Plugin-owned authoring surfaces render here through the shared shell contribution seam.
+            </Text>
+            <Text size="xs" c="var(--sm-color-overlay0)">
+              Target language: {sugarlangTargetLanguage}
+            </Text>
+          </Stack>
+        </Inspector>
+      ),
+      centerPanel: (
+        <Stack
+          gap="lg"
+          p="xl"
+          h="100%"
+          style={{
+            minHeight: 0,
+            overflowY: "auto"
+          }}
+        >
+          {renderPluginSectionGroup(sections, {
+            workspaceKind: activeDesignKind,
+            gameProjectId: session?.gameProject.identity.id ?? null,
+            gameProject: session?.gameProject ?? null,
+            pluginConfigurations,
+            regions: regionDocuments,
+            activeRegion,
+            targetLanguage: sugarlangTargetLanguage,
+            onCommand: dispatchCommand
+          })}
+        </Stack>
+      ),
+      viewportOverlay: null
+    };
+  }, [
+    activeDesignKind,
+    activePluginWorkspaceDefinition,
+    activeRegion,
+    pluginConfigurations,
+    pluginShellContributions.designSections,
+    regionDocuments,
+    renderablePluginWorkspaceItems,
+    session?.gameProject,
+    session?.gameProject.identity.id,
+    sugarlangTargetLanguage
+  ]);
+
+  const activeDesignPanels = activePluginView ?? genericPluginView ?? designView;
 
   const handleUndo = useCallback(() => {
     const { session: s } = projectStore.getState();

@@ -3,9 +3,10 @@
  *
  * Owns: gizmo lifecycle, input routing, scene explorer, inspector,
  * viewport toolbar. Plugs into the shell via WorkspaceViewContribution.
+ * Accepts plugin-owned inspector sections so build-side shell contributions can extend the region inspector without duplicating layout state.
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import * as THREE from "three";
 import {
   ActionIcon,
@@ -79,6 +80,9 @@ export interface LayoutWorkspaceViewProps {
   npcDefinitions: NPCDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
+  renderInspectorSections?: (context: {
+    activeRegion: RegionDocument | null;
+  }) => ReactNode;
 }
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
@@ -207,7 +211,8 @@ export function useLayoutWorkspaceView(
     documentDefinitions,
     npcDefinitions,
     onEditAssetDefinition,
-    onImportAsset
+    onImportAsset,
+    renderInspectorSections
   } = props;
 
   const [activeTool, setActiveTool] = useState<TransformTool>("move");
@@ -1426,6 +1431,7 @@ export function useLayoutWorkspaceView(
             Select a scene thing to inspect and position it.
           </Text>
         )}
+        {renderInspectorSections?.({ activeRegion: region }) ?? null}
       </Inspector>
     ) : null,
 

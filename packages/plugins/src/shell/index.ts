@@ -1,4 +1,32 @@
-import type { PluginConfigurationRecord } from "@sugarmagic/domain";
+/**
+ * packages/plugins/src/shell/index.ts
+ *
+ * Purpose: Defines the Studio-facing plugin shell contribution contract.
+ *
+ * Exports:
+ *   - Plugin shell contribution interfaces
+ *   - createEmptyPluginShellContributionSet
+ *   - collectPluginShellContributions
+ *
+ * Relationships:
+ *   - Is consumed by discovered plugin definitions and Studio shell assembly.
+ *   - Keeps plugin-owned editor surfaces declarative and host-rendered.
+ *
+ * Implements: Proposal 001 §Plugin contribution surface / Epic 12 generic section rendering seam
+ *
+ * Status: active
+ */
+
+import type {
+  GameProject,
+  NPCDefinition,
+  PluginConfigurationRecord,
+  QuestDefinition,
+  QuestNodeDefinition,
+  RegionDocument,
+  SemanticCommand
+} from "@sugarmagic/domain";
+import type { ReactNode } from "react";
 
 export interface PluginProjectSettingsContribution {
   pluginId: string;
@@ -21,6 +49,23 @@ export interface PluginDesignSectionContribution {
   sectionId: string;
   label: string;
   summary: string;
+  render: (props: PluginDesignSectionRenderProps) => ReactNode;
+}
+
+export interface PluginDesignSectionRenderProps {
+  workspaceKind: string;
+  gameProjectId: string | null;
+  gameProject: GameProject | null;
+  pluginConfigurations: PluginConfigurationRecord[];
+  regions: RegionDocument[];
+  activeRegion: RegionDocument | null;
+  targetLanguage: string;
+  onCommand: (command: SemanticCommand) => void;
+  selectedNPC?: NPCDefinition | null;
+  updateNPC?: (definition: NPCDefinition) => void;
+  selectedQuest?: QuestDefinition | null;
+  updateQuest?: (definition: QuestDefinition) => void;
+  selectedQuestNode?: QuestNodeDefinition | null;
 }
 
 export interface PluginNPCInteractionOptionContribution {

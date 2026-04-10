@@ -1,3 +1,22 @@
+/**
+ * packages/workspaces/src/design/index.tsx
+ *
+ * Purpose: Builds the Design product-mode workspace contribution set.
+ *
+ * Exports:
+ *   - DesignProductModeViewProps
+ *   - DesignProductModeViewResult
+ *   - useDesignProductModeView
+ *
+ * Relationships:
+ *   - Composes the player, NPC, spell, item, document, dialogue, and quest workspaces.
+ *   - Accepts plugin-owned inspector section renderers so Studio can mount shell contributions without hardcoding plugin behavior.
+ *
+ * Implements: Studio design workspace host / Epic 12 editor contribution seam
+ *
+ * Status: active
+ */
+
 import type { ReactNode } from "react";
 import type {
   AssetDefinition,
@@ -9,6 +28,7 @@ import type {
   NPCInteractionMode,
   PlayerDefinition,
   QuestDefinition,
+  QuestNodeDefinition,
   RegionDocument,
   SpellDefinition,
   SemanticCommand
@@ -73,6 +93,15 @@ export interface DesignProductModeViewProps {
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
+  renderNPCInspectorSections?: (context: {
+    selectedNPC: NPCDefinition | null;
+    updateNPC: (definition: NPCDefinition) => void;
+  }) => ReactNode;
+  renderQuestInspectorSections?: (context: {
+    selectedQuest: QuestDefinition | null;
+    updateQuest: (definition: QuestDefinition) => void;
+    selectedQuestNode: QuestNodeDefinition | null;
+  }) => ReactNode;
 }
 
 export interface DesignProductModeViewResult {
@@ -111,7 +140,9 @@ export function useDesignProductModeView(
     onCommand,
     navigationTarget,
     onConsumeNavigationTarget,
-    onNavigateToTarget
+    onNavigateToTarget,
+    renderNPCInspectorSections,
+    renderQuestInspectorSections
   } = props;
 
   const playerView = usePlayerWorkspaceView({
@@ -138,7 +169,8 @@ export function useDesignProductModeView(
     assetSources,
     getViewport: getNPCViewport,
     getViewportElement,
-    onCommand
+    onCommand,
+    renderInspectorSections: renderNPCInspectorSections
   });
 
   const itemView = useItemWorkspaceView({
@@ -192,7 +224,8 @@ export function useDesignProductModeView(
     onCommand,
     navigationTarget,
     onConsumeNavigationTarget,
-    onNavigateToTarget
+    onNavigateToTarget,
+    renderInspectorSections: renderQuestInspectorSections
   });
 
   const allWorkspaceKinds: BuildWorkspaceKindItem[] = [

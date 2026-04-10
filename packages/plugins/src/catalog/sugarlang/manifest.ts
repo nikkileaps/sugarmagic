@@ -141,7 +141,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     displayName: SUGARLANG_DISPLAY_NAME,
     summary:
       "Adaptive language-learning middleware pipeline for Sugarmagic conversations.",
-    capabilityIds: ["conversation.middleware"]
+    capabilityIds: ["conversation.middleware", "design.workspace"]
   },
   runtime: {
     createRuntimePlugin: createSugarlangPlugin

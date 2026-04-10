@@ -10,6 +10,7 @@
  *   - SUGARLANG_PLUGIN_ID
  *   - SUGARLANG_DISPLAY_NAME
  *   - normalizeSugarLangPluginConfig
+ *   - resolveSugarLangTargetLanguage
  *
  * Relationships:
  *   - Depends on ./manifest and ./config for the canonical plugin definition.
@@ -29,7 +30,10 @@ import {
 import { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 
 export { createSugarlangPlugin } from "./manifest";
-export { normalizeSugarLangPluginConfig } from "./config";
+export {
+  normalizeSugarLangPluginConfig,
+  resolveSugarLangTargetLanguage
+} from "./config";
 export { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 export {
   pluginDefinition,
