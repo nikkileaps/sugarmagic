@@ -92,11 +92,20 @@ export type ProjectSettingsContribution = RuntimePluginContributionBase<
   }
 >;
 
+export interface TermHoverEvent {
+  term: string;
+  /** Target language code. May be empty if the panel doesn't know the language;
+   *  the plugin handler is responsible for filling it in. */
+  lang: string;
+  dwellMs: number;
+}
+
 export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
   "dialogue.entryDecorator",
   {
     summary: string;
     decorate: (turn: ConversationTurnEnvelope) => ConversationTurnEnvelope;
+    onTermHover?: (event: TermHoverEvent) => void;
   }
 >;
 

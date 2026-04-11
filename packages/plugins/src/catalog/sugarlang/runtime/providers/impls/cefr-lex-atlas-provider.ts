@@ -145,16 +145,19 @@ function buildGlossReverseIndex(
     const glossString = entry.glosses?.[supportLang];
     if (!glossString) continue;
 
-    for (const raw of glossString.split(",")) {
-      const word = raw.trim().toLowerCase();
-      if (word.length === 0) continue;
+    // Only index the PRIMARY (first) gloss word for reverse lookup.
+    // Secondary glosses after the comma are for tooltip display, not for
+    // compiling English authored content to target-language lemmas.
+    // This prevents "claim" → afirmar when afirmar's gloss is "affirm, claim"
+    // (afirmar is a secondary meaning of "claim", not the primary one).
+    const primary = glossString.split(",")[0]?.trim().toLowerCase();
+    if (!primary || primary.length === 0) continue;
 
-      const existing = index.get(word);
-      if (existing) {
-        existing.push(entry.lemmaId);
-      } else {
-        index.set(word, [entry.lemmaId]);
-      }
+    const existing = index.get(primary);
+    if (existing) {
+      existing.push(entry.lemmaId);
+    } else {
+      index.set(primary, [entry.lemmaId]);
     }
   }
   return index;

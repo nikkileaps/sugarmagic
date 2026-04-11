@@ -19,10 +19,15 @@ export interface HighlightMatch {
   end: number;
   term: string;
   celebrate: boolean;
+  /** True if this term is newly introduced vocabulary; false means reinforce (review). */
+  introduce: boolean;
 }
 
 export interface DialogueHighlightAnnotation {
+  /** All highlighted terms (union of introduce and reinforce). */
   focusTerms: string[];
+  /** Subset of focusTerms that are new vocabulary being introduced this turn. */
+  introduceTerms: string[];
   celebrateTerms: string[];
   /** Optional term → gloss map for tooltip display (e.g. { "queso": "cheese" }). */
   glosses?: Record<string, string>;
@@ -37,13 +42,18 @@ function escapeRegExp(value: string): string {
 export function findTermMatches(
   text: string,
   focusTerms: string[],
-  celebrateTerms: string[]
+  celebrateTerms: string[],
+  introduceTerms?: string[]
 ): HighlightMatch[] {
   const celebrateSet = new Set(celebrateTerms.map((t) => t.toLowerCase()));
+  const introduceSet = new Set((introduceTerms ?? []).map((t) => t.toLowerCase()));
   const matches: HighlightMatch[] = [];
   const occupied = new Uint8Array(text.length);
 
-  const sorted = [...focusTerms].sort((a, b) => b.length - a.length);
+  const MIN_TERM_LENGTH = 3;
+  const sorted = [...focusTerms]
+    .filter((t) => t.length >= MIN_TERM_LENGTH)
+    .sort((a, b) => b.length - a.length);
 
   for (const term of sorted) {
     const pattern = new RegExp(
@@ -72,7 +82,8 @@ export function findTermMatches(
         start,
         end,
         term: match[0],
-        celebrate: celebrateSet.has(term.toLowerCase())
+        celebrate: celebrateSet.has(term.toLowerCase()),
+        introduce: introduceSet.has(term.toLowerCase())
       });
     }
   }
@@ -82,7 +93,7 @@ export function findTermMatches(
 
 /**
  * Reads the generic dialogueHighlight annotation from a turn's annotations.
- * Any plugin can write { focusTerms: string[], celebrateTerms: string[] }
+ * Any plugin can write { focusTerms: string[], introduceTerms: string[], celebrateTerms: string[] }
  * under the "dialogueHighlight" key.
  */
 export function readDialogueHighlight(
@@ -107,6 +118,11 @@ export function readDialogueHighlight(
     focusTerms: (record.focusTerms as string[]).filter(
       (t) => typeof t === "string"
     ),
+    introduceTerms: Array.isArray(record.introduceTerms)
+      ? (record.introduceTerms as string[]).filter(
+          (t) => typeof t === "string"
+        )
+      : [],
     celebrateTerms: Array.isArray(record.celebrateTerms)
       ? (record.celebrateTerms as string[]).filter(
           (t) => typeof t === "string"

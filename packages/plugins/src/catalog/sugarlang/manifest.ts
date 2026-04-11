@@ -49,7 +49,7 @@ import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
 import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
-import { createSugarlangEntryDecorator } from "./runtime/dialogue-entry-decorator";
+import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
 import {
@@ -93,6 +93,7 @@ export function createSugarlangPlugin(
     logger,
     telemetry
   });
+  const dialogueContribution = createSugarlangDialogueContribution();
   const decoratorContribution: DialogueEntryDecoratorContribution = {
     pluginId: context.configuration.pluginId,
     contributionId: "sugarlang.dialogue.entry-decorator",
@@ -100,8 +101,9 @@ export function createSugarlangPlugin(
     displayName: "Sugarlang Focus Term Highlighter",
     priority: 10,
     payload: {
-      summary: "Highlights focus vocabulary and celebrates player production.",
-      decorate: createSugarlangEntryDecorator()
+      summary: "Highlights focus vocabulary, celebrates player production, and tracks hover observations.",
+      decorate: dialogueContribution.decorate,
+      onTermHover: dialogueContribution.onTermHover
     }
   };
 

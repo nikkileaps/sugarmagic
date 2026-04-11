@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { drainPendingHover } from "../dialogue-entry-decorator";
 import {
   SUGARLANG_PLACEMENT_STATUS_FACT,
   SUGARLANG_PLACEMENT_WRITER,
@@ -37,6 +38,7 @@ import {
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
+  SUGARLANG_HOVER_LEMMA_ANNOTATION,
   SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PLACEMENT_PHASE_STATE,
@@ -394,6 +396,20 @@ export function createSugarLangContextMiddleware(
       });
 
       execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = prescription;
+
+      logger.debug("Budgeter prescription details.", {
+        introduce: prescription.introduce.map((l) => {
+          const info = sceneLexicon.lemmas[l.lemmaId];
+          return {
+            lemmaId: l.lemmaId,
+            freq: info?.frequencyRank ?? null,
+            sceneWeight: info?.sceneWeight ?? 0,
+            isAnchor: sceneLexicon.anchors.includes(l.lemmaId)
+          };
+        }),
+        anchor: prescription.anchor?.lemmaId ?? null,
+        candidateCount: Object.keys(sceneLexicon.lemmas).length
+      });
       execution.annotations[SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION] =
         buildLearnerSnapshot(refreshedLearner);
       execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] =
@@ -427,6 +443,17 @@ export function createSugarLangContextMiddleware(
         }),
         logger
       );
+
+      // Drain any pending hover observation from the UI layer so the
+      // observer middleware can process it during finalize.
+      const hover = drainPendingHover();
+      if (hover) {
+        execution.annotations[SUGARLANG_HOVER_LEMMA_ANNOTATION] = {
+          lemmaId: hover.lemmaId,
+          lang: hover.lang,
+          dwellMs: hover.dwellMs
+        };
+      }
 
       return execution;
     }

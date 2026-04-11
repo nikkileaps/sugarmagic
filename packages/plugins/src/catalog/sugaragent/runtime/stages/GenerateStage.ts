@@ -76,19 +76,9 @@ function buildSugarlangConstraintLines(
     );
   }
 
-  if (constraint.questEssentialLemmas?.length) {
-    lines.push(
-      "",
-      "QUEST-ESSENTIAL VOCABULARY - MANDATORY PARENTHETICAL GLOSSING:",
-      "",
-      ...constraint.questEssentialLemmas.map(
-        (entry) =>
-          `- ${entry.lemmaRef.lemmaId} -> "(${entry.supportLanguageGloss})"`
-      ),
-      "",
-      "If you use one of these words, add the parenthetical gloss immediately after its first use."
-    );
-  }
+  // Quest-essential vocabulary handling is owned by the sugarlang plugin's
+  // UI layer (hover tooltips and highlighting). SugarAgent does not need to
+  // know about specific vocabulary teaching targets.
 
   return lines;
 }

@@ -119,11 +119,20 @@ export type DialogueEntryDecorator = (
   turn: ConversationTurnEnvelope
 ) => ConversationTurnEnvelope;
 
+export type DialogueTermHoverCallback = (event: {
+  term: string;
+  dwellMs: number;
+}) => void;
+
 export function createRuntimeDialoguePanel(
   parentContainer: HTMLElement,
-  options?: { entryDecorators?: DialogueEntryDecorator[] }
+  options?: {
+    entryDecorators?: DialogueEntryDecorator[];
+    onTermHover?: DialogueTermHoverCallback;
+  }
 ): RuntimeDialoguePanel {
   const entryDecorators = options?.entryDecorators ?? [];
+  const onTermHover = options?.onTermHover ?? null;
   injectStyles();
 
   const container = document.createElement("div");
@@ -245,7 +254,8 @@ export function createRuntimeDialoguePanel(
       const matches = findTermMatches(
         turn.text,
         turnHighlight.focusTerms,
-        turnHighlight.celebrateTerms
+        turnHighlight.celebrateTerms,
+        turnHighlight.introduceTerms
       );
       if (matches.length > 0) {
         let cursor = 0;
@@ -256,9 +266,32 @@ export function createRuntimeDialoguePanel(
             );
           }
           const wrapper = document.createElement("span");
+          const vocabKind = match.introduce
+            ? "sm-dialogue-focus-term-introduce"
+            : "sm-dialogue-focus-term-reinforce";
           wrapper.className = match.celebrate
-            ? "sm-dialogue-focus-term sm-dialogue-focus-term-celebrate"
-            : "sm-dialogue-focus-term";
+            ? `sm-dialogue-focus-term ${vocabKind} sm-dialogue-focus-term-celebrate`
+            : `sm-dialogue-focus-term ${vocabKind}`;
+
+          if (onTermHover) {
+            let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+            let hoverStartMs = 0;
+            wrapper.addEventListener("mouseenter", () => {
+              hoverStartMs = Date.now();
+              hoverTimer = setTimeout(() => {
+                onTermHover({
+                  term: match.term.toLowerCase(),
+                  dwellMs: Date.now() - hoverStartMs
+                });
+              }, 300);
+            });
+            wrapper.addEventListener("mouseleave", () => {
+              if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+              }
+            });
+          }
 
           const termText = document.createElement("span");
           termText.className = "sm-dialogue-focus-term-text";
@@ -1047,14 +1080,24 @@ function injectStyles() {
       position: relative;
       display: inline-flex;
       align-items: baseline;
-      color: #f5c35b;
-      text-shadow: 0 0 10px rgba(245, 195, 91, 0.2);
       overflow: visible;
     }
 
-    .sm-dialogue-focus-term-text {
+    /* Introduce: gold with underline — "pay attention, this is new" */
+    .sm-dialogue-focus-term-introduce {
+      color: #f5c35b;
+      text-shadow: 0 0 10px rgba(245, 195, 91, 0.2);
+    }
+
+    .sm-dialogue-focus-term-introduce .sm-dialogue-focus-term-text {
       border-bottom: 1px solid rgba(245, 195, 91, 0.35);
       box-shadow: inset 0 -0.18em 0 rgba(245, 195, 91, 0.14);
+    }
+
+    /* Reinforce: blue, no underline — "you've seen this, try to remember" */
+    .sm-dialogue-focus-term-reinforce {
+      color: rgba(137, 180, 250, 0.85);
+      text-shadow: 0 0 8px rgba(137, 180, 250, 0.25);
     }
 
     .sm-dialogue-focus-term-celebrate .sm-dialogue-focus-term-text {

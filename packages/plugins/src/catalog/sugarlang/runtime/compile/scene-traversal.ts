@@ -82,12 +82,12 @@ export interface SceneAuthoringContext {
 
 const TEXT_BLOB_WEIGHTS: Record<TextBlobSourceKind, number> = {
   dialogue: 1,
-  "npc-bio": 0.8,
+  "npc-bio": 1,
   "quest-objective": 0.95,
   "quest-objective-display-name": 1,
   "item-label": 0.7,
-  "region-label": 0.9,
-  "lore-page": 0.5
+  "region-label": 0.4,
+  "lore-page": 1
 };
 
 function compareStrings(left: string, right: string): number {

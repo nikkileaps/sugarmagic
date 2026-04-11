@@ -314,7 +314,8 @@ describe("sugarlang runtime contracts", () => {
       cefrPriorBand: "A1",
       frequencyRank: 10,
       partsOfSpeech: ["interjection"],
-      isQuestCritical: false
+      isQuestCritical: false,
+      sceneWeight: 1
     };
     const questEssential: QuestEssentialLemma = {
       lemmaId: "billete",

@@ -131,7 +131,8 @@ function createSceneLemmaInfo(entry: AtlasLemmaEntry): SceneLemmaInfo {
     cefrPriorBand: entry.cefrPriorBand,
     frequencyRank: entry.frequencyRank ?? null,
     partsOfSpeech: [...entry.partsOfSpeech].sort(compareStrings),
-    isQuestCritical: false
+    isQuestCritical: false,
+    sceneWeight: 0
   };
 }
 
@@ -249,6 +250,10 @@ export function compileSugarlangScene(
         if (!lemmaMap.has(atlasEntry.lemmaId)) {
           lemmaMap.set(atlasEntry.lemmaId, createSceneLemmaInfo(atlasEntry));
         }
+        // Accumulate scene relevance: each occurrence in a text blob adds
+        // the blob's source-kind weight. Words mentioned many times in
+        // high-weight sources (dialogue, NPC lore, quest text) score higher.
+        lemmaMap.get(atlasEntry.lemmaId)!.sceneWeight += blob.weight;
 
         if (profile === "authoring-preview") {
           sourceMap.set(

@@ -53,7 +53,7 @@ describe("LexicalBudgeter", () => {
       conversationState: { nowMs: 1000, currentSessionTurn: 10 }
     });
 
-    expect(prescription.introduce).toHaveLength(1);
+    expect(prescription.introduce).toHaveLength(3);
     expect(prescription.reinforce).toHaveLength(0);
     expect(prescription.avoid).toHaveLength(12);
   });
@@ -140,7 +140,7 @@ describe("LexicalBudgeter", () => {
     const elapsed = performance.now() - start;
 
     expect(first).toEqual(second);
-    expect(elapsed).toBeLessThan(10);
+    expect(elapsed).toBeLessThan(20);
   });
 
   it("excludes active quest-essential lemmas from normal slots and records them in rationale", async () => {

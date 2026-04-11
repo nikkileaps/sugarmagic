@@ -65,6 +65,7 @@ export type LemmaObservation =
   | ({ kind: "encountered" } & BaseObservation)
   | ({ kind: "rapid-advance"; dwellMs: number } & BaseObservation)
   | ({ kind: "hovered"; dwellMs?: number } & BaseObservation)
+  | ({ kind: "hovered-introduce"; dwellMs?: number } & BaseObservation)
   | ({ kind: "quest-success"; objectiveNodeId: string } & BaseObservation)
   | ({ kind: "produced-typed"; inputText: string } & BaseObservation)
   | ({ kind: "produced-chosen"; choiceSetId: string } & BaseObservation)

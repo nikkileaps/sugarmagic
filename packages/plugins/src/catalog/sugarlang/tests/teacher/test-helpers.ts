@@ -42,28 +42,32 @@ export function createTeacherContext(
         cefrPriorBand: "A1",
         frequencyRank: 1,
         partsOfSpeech: ["interjection"],
-        isQuestCritical: false
+        isQuestCritical: false,
+        sceneWeight: 1
       },
       billete: {
         lemmaId: "billete",
         cefrPriorBand: "A2",
         frequencyRank: 15,
         partsOfSpeech: ["noun"],
-        isQuestCritical: true
+        isQuestCritical: true,
+        sceneWeight: 1
       },
       anden: {
         lemmaId: "anden",
         cefrPriorBand: "B1",
         frequencyRank: 42,
         partsOfSpeech: ["noun"],
-        isQuestCritical: true
+        isQuestCritical: true,
+        sceneWeight: 1
       },
       queso: {
         lemmaId: "queso",
         cefrPriorBand: "A2",
         frequencyRank: 90,
         partsOfSpeech: ["noun"],
-        isQuestCritical: false
+        isQuestCritical: false,
+        sceneWeight: 1
       }
     },
     properNouns: ["Orrin"],

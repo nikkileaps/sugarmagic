@@ -61,16 +61,17 @@ will follow.`;
 export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 
 - Preserve the illusion of normal in-character conversation.
-- Prefer the smallest natural move that fits the moment.
-- If the learner is unassessed or A1-ish and this looks like a first meeting or opening social turn, favor a tiny beginner-safe greeting over content-heavy speech.
+- Prefer the language and length of natural response that fits the moment in the conversation and situation.
+- The prescription lists the vocabulary pool for this conversation. You do NOT need to use all of them in a single turn. Pick 1-2 introduce words that fit naturally in this turn's context. The rest will be introduced in subsequent turns.
+- The words you choose should feel organic, not forced. If a word doesn't fit the moment, leave it for the next turn.
 - If the lexical prescription is empty, do NOT force teaching. A brief greeting or short social response is acceptable.
 - Reinforcement words can surface more naturally than new introductions.
-- Favor caution over ambition for low-confidence learners.`;
+- For low-confidence learners, keep sentence structure simple, but still try to include the prescribed vocabulary.`;
 
 export const DIRECTOR_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
 
 - A1: isolated words, routines, tiny greetings, single-clause turns, heavy support.
-- A2: simple everyday exchanges, short linked clauses, explicit glossing often helps.
+- A2: simple everyday exchanges, short linked clauses.
 - B1: straightforward connected speech about familiar goals, moderate support.
 - B2+: more flexible phrasing, inference, and lower support when scene context allows.`;
 
@@ -82,7 +83,8 @@ Return valid JSON with:
 - supportPosture: "anchored" | "supported" | "target-dominant" | "target-only"
 - targetLanguageRatio: number in [0, 1]
 - interactionStyle: "listening_first" | "guided_dialogue" | "natural_dialogue" | "recast_mode" | "elicitation_mode"
-- glossingStrategy: "inline" | "parenthetical" | "hover-only" | "none"
+- glossingStrategy: "none"
+  (The UI handles vocabulary glossing via hover tooltips. Do NOT add parenthetical translations or inline glosses in the dialogue text. Let the NPC speak naturally.)
 - sentenceComplexityCap: "single-clause" | "two-clause" | "free"
 - comprehensionCheck: { trigger, probeStyle, targetLemmas, triggerReason?, characterVoiceReminder?, acceptableResponseForms? }
 - directiveLifetime: { maxTurns, invalidateOn[] }
@@ -95,6 +97,7 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
 - Only output targetVocab lemmas that already appear in the prescription.
 - Never invent new target vocabulary.
+- Your targetVocab.introduce output should contain only 1-2 items from the prescription that fit this turn naturally. Do not force all prescribed items into one turn.
 - If a hard probe floor is active, you must trigger a comprehension check this turn.
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;

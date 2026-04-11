@@ -48,21 +48,24 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
       cefrPriorBand: "A1",
       frequencyRank: 10,
       partsOfSpeech: ["interjection"],
-      isQuestCritical: false
+      isQuestCritical: false,
+      sceneWeight: 1
     },
     trabajo: {
       lemmaId: "trabajo",
       cefrPriorBand: "A2",
       frequencyRank: 20,
       partsOfSpeech: ["noun"],
-      isQuestCritical: false
+      isQuestCritical: false,
+      sceneWeight: 1
     },
     aduana: {
       lemmaId: "aduana",
       cefrPriorBand: "B1",
       frequencyRank: 30,
       partsOfSpeech: ["noun"],
-      isQuestCritical: true
+      isQuestCritical: true,
+      sceneWeight: 1
     }
   },
   properNouns: [],

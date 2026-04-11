@@ -208,83 +208,17 @@ export function createSugarLangVerifyMiddleware(
         );
       }
 
-      const questUses = findQuestEssentialUses(normalizedTurn.text, constraint);
-      const missingGloss = questUses.find(
-        (entry) => textMentionsLemma(normalizedTurn.text, entry.lemmaId) && !entry.hasParentheticalGloss
-      );
-      const questObjectiveInFocus = isQuestObjectiveInFocus(
-        execution,
-        constraint.questEssentialLemmas ?? []
-      );
-      const missingRequiredQuestEssential =
-        (constraint.questEssentialLemmas?.length ?? 0) > 0 &&
-        questObjectiveInFocus &&
-        (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) > 0 &&
-        !constraint.questEssentialLemmas?.some((entry) =>
-          textMentionsLemma(normalizedTurn.text, entry.lemmaRef.lemmaId)
-        )
-          ? constraint.questEssentialLemmas?.[0] ?? null
-          : null;
-      if (missingGloss) {
-        const questEssential = constraint.questEssentialLemmas?.find(
-          (entry) => entry.lemmaRef.lemmaId === missingGloss.lemmaId
-        );
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("quest-essential.generator-missed-gloss", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: Date.now(),
-            sceneId,
-            lemmaRef:
-              questEssential?.lemmaRef ?? {
-                lemmaId: missingGloss.lemmaId,
-                lang: constraint.targetLanguage
-              },
-            expectedGloss: missingGloss.supportLanguageGloss,
-            generatedText: normalizedTurn.text,
-            sourceObjectiveDisplayName: questEssential?.sourceObjectiveDisplayName
-          }),
-          logger
-        );
-      }
-      if (missingRequiredQuestEssential) {
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("quest-essential.generator-missed-required", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: Date.now(),
-            sceneId,
-            expectedLemmas: [missingRequiredQuestEssential.lemmaRef],
-            generatedText: normalizedTurn.text,
-            sourceObjectiveDisplayName:
-              missingRequiredQuestEssential.sourceObjectiveDisplayName
-          }),
-          logger
-        );
-      }
+      // Parenthetical gloss enforcement removed — the UI handles vocabulary
+      // glossing via hover tooltips. The NPC speaks naturally.
 
-      if (verdict.withinEnvelope && !missingGloss && !missingRequiredQuestEssential) {
+      if (verdict.withinEnvelope) {
         return normalizedTurn;
       }
 
       const instructions = [
         ...verdict.violations.map(
           (violation) => `Remove or simplify "${violation.lemmaRef.lemmaId}".`
-        ),
-        ...(missingGloss
-          ? [
-              `You used "${missingGloss.lemmaId}" without the required parenthetical translation. Add "(${missingGloss.supportLanguageGloss})" immediately after "${missingGloss.lemmaId}".`
-            ]
-          : []),
-        ...(missingRequiredQuestEssential
-          ? [
-              `Mention the current quest objective using "${missingRequiredQuestEssential.lemmaRef.lemmaId}" with "(${missingRequiredQuestEssential.supportLanguageGloss})".`
-            ]
-          : [])
+        )
       ];
       if (instructions.length > 0) {
         const repairedText = await attemptRepair(
@@ -304,24 +238,7 @@ export function createSugarLangVerifyMiddleware(
             sessionId,
             turnId: traceTurnId
           });
-          const repairedQuestUses = findQuestEssentialUses(repairedText, constraint);
-          const repairedMissingGloss = repairedQuestUses.find(
-            (entry) =>
-              textMentionsLemma(repairedText, entry.lemmaId) &&
-              !entry.hasParentheticalGloss
-          );
-          const repairedMissingRequired =
-            (constraint.questEssentialLemmas?.length ?? 0) > 0 &&
-            questObjectiveInFocus &&
-            (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) > 0 &&
-            !constraint.questEssentialLemmas?.some((entry) =>
-              textMentionsLemma(repairedText, entry.lemmaRef.lemmaId)
-            );
-          if (
-            repairedVerdict.withinEnvelope &&
-            !repairedMissingGloss &&
-            !repairedMissingRequired
-          ) {
+          if (repairedVerdict.withinEnvelope) {
             normalizedTurn.text = repairedText;
             await emitTelemetry(
               telemetry,

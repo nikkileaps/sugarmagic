@@ -13,7 +13,7 @@
  * Status: active
  */
 
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 
 export interface LanguageConfigSectionProps {
   targetLanguage: string;
@@ -21,12 +21,15 @@ export interface LanguageConfigSectionProps {
   debugLogging: boolean;
   onChangeTargetLanguage: (lang: string) => void;
   onChangeDebugLogging: (enabled: boolean) => void;
+  onResetLearner?: () => Promise<void>;
 }
 
 export function LanguageConfigSection(
   props: LanguageConfigSectionProps
 ): ReactElement {
-  const { targetLanguage, supportLanguage, debugLogging, onChangeTargetLanguage, onChangeDebugLogging } = props;
+  const { targetLanguage, supportLanguage, debugLogging, onChangeTargetLanguage, onChangeDebugLogging, onResetLearner } = props;
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   return (
     <div style={{ display: "grid", gap: "0.75rem" }}>
@@ -116,6 +119,49 @@ export function LanguageConfigSection(
           — logs middleware pipeline, classifier, director, and observer traces to console
         </span>
       </label>
+
+      {onResetLearner ? (
+        <div
+          style={{
+            borderTop: "1px solid var(--sm-color-surface1, #444)",
+            paddingTop: "0.65rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem"
+          }}
+        >
+          <button
+            type="button"
+            disabled={resetting}
+            onClick={() => {
+              setResetting(true);
+              setResetDone(false);
+              onResetLearner().then(() => {
+                setResetting(false);
+                setResetDone(true);
+              });
+            }}
+            style={{
+              padding: "0.35rem 0.75rem",
+              borderRadius: "0.25rem",
+              border: "1px solid var(--sm-color-red, #c0392b)",
+              background: "transparent",
+              color: "var(--sm-color-red, #c0392b)",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              cursor: resetting ? "wait" : "pointer",
+              opacity: resetting ? 0.5 : 1
+            }}
+          >
+            {resetting ? "Resetting..." : "Reset Learner"}
+          </button>
+          <span style={{ fontSize: "0.7rem", color: "var(--sm-color-subtext)" }}>
+            {resetDone
+              ? "Done — reload Preview to start fresh."
+              : "Clears all FSRS cards, telemetry, and learner state."}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

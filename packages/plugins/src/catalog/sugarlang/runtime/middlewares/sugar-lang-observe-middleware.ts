@@ -369,53 +369,49 @@ export function createSugarLangObserveMiddleware(
           execution.input.text,
           learner.targetLanguage
         );
+        // Deduplicate: only one observation per lemma per turn.
+        const observedLemmaIds = new Set<string>();
+
         for (const candidate of lemmaCandidates) {
-          if (candidate.lemmaId) {
-            const lemmaRef: LemmaRef = {
-              lemmaId: candidate.lemmaId,
-              lang: learner.targetLanguage
-            };
-            const observationEvent = createObservationEvent({
-              execution,
-              lemma: lemmaRef,
-              observation: targetLemmaSet.has(candidate.lemmaId)
-                ? {
-                    kind: "produced-typed",
-                    inputText: candidate.surface,
-                    observedAtMs
-                  }
-                : {
-                    kind: "produced-unprompted",
-                    observedAtMs
-                  }
-            });
-            appliedObservations.push(observationEvent);
-            await services.learnerStateReducer.apply({
-              type: "observation",
-              observationEvent
-            });
-          } else if (
-            constraint.targetVocab.introduce[0] ||
-            constraint.targetVocab.reinforce[0]
-          ) {
-            const expectedLemma =
-              constraint.targetVocab.introduce[0] ?? constraint.targetVocab.reinforce[0];
-            const observationEvent = createObservationEvent({
-              execution,
-              lemma: expectedLemma,
-              observation: {
-                kind: "produced-incorrect",
-                attemptedForm: candidate.surface,
-                expectedForm: expectedLemma.lemmaId,
-                observedAtMs
-              }
-            });
-            appliedObservations.push(observationEvent);
-            await services.learnerStateReducer.apply({
-              type: "observation",
-              observationEvent
-            });
+          if (!candidate.lemmaId || observedLemmaIds.has(candidate.lemmaId)) {
+            continue;
           }
+
+          // Only observe target lemmas (introduce/reinforce) or lemmas the
+          // learner already has a card for. This avoids creating phantom
+          // observations from English words that coincidentally match the
+          // target-language morphology index.
+          const isTargetLemma = targetLemmaSet.has(candidate.lemmaId);
+          const hasExistingCard = candidate.lemmaId in learner.lemmaCards;
+
+          if (!isTargetLemma && !hasExistingCard) {
+            continue;
+          }
+
+          observedLemmaIds.add(candidate.lemmaId);
+          const lemmaRef: LemmaRef = {
+            lemmaId: candidate.lemmaId,
+            lang: learner.targetLanguage
+          };
+          const observationEvent = createObservationEvent({
+            execution,
+            lemma: lemmaRef,
+            observation: isTargetLemma
+              ? {
+                  kind: "produced-typed",
+                  inputText: candidate.surface,
+                  observedAtMs
+                }
+              : {
+                  kind: "produced-unprompted",
+                  observedAtMs
+                }
+          });
+          appliedObservations.push(observationEvent);
+          await services.learnerStateReducer.apply({
+            type: "observation",
+            observationEvent
+          });
         }
       }
 
@@ -444,11 +440,17 @@ export function createSugarLangObserveMiddleware(
 
       const hoverLemma = getHoverLemma(execution);
       if (hoverLemma) {
+        // Distinguish introduce hover (positive first exposure) from reinforce
+        // hover (needed help remembering). See observations.ts for the
+        // pedagogical rationale behind the different FSRS grades.
+        const isIntroduceHover = constraint.targetVocab.introduce.some(
+          (l) => l.lemmaId === hoverLemma.lemma.lemmaId
+        );
         const observationEvent = createObservationEvent({
           execution,
           lemma: hoverLemma.lemma,
           observation: {
-            kind: "hovered",
+            kind: isIntroduceHover ? "hovered-introduce" : "hovered",
             dwellMs: hoverLemma.dwellMs,
             observedAtMs
           }
@@ -514,6 +516,27 @@ export function createSugarLangObserveMiddleware(
       }
 
       if (appliedObservations.length > 0) {
+        const updatedProfile = await services.learnerStore.getCurrentProfile();
+        const observationSummary = appliedObservations.map((obs) => ({
+          lemma: obs.lemma.lemmaId,
+          kind: obs.observation.kind,
+          card: updatedProfile.lemmaCards[obs.lemma.lemmaId]
+            ? {
+                stability: updatedProfile.lemmaCards[obs.lemma.lemmaId].stability.toFixed(2),
+                difficulty: updatedProfile.lemmaCards[obs.lemma.lemmaId].difficulty.toFixed(2),
+                reviewCount: updatedProfile.lemmaCards[obs.lemma.lemmaId].reviewCount,
+                productiveStrength: updatedProfile.lemmaCards[obs.lemma.lemmaId].productiveStrength.toFixed(2)
+              }
+            : null
+        }));
+
+        logger.debug("Observer applied observations this turn.", {
+          turn: traceTurnId,
+          observations: observationSummary,
+          learnerBand: updatedProfile.estimatedCefrBand,
+          totalCards: Object.keys(updatedProfile.lemmaCards).length
+        });
+
         await emitTelemetry(
           telemetry,
           createTelemetryEvent("observe.observations-applied", {
@@ -578,27 +601,29 @@ export function createSugarLangObserveMiddleware(
       // Write focus-term highlighting annotation onto the NPC turn so the
       // dialogue renderer can highlight target vocabulary and fire the star
       // celebration animation when the player produces a target lemma.
-      const focusTerms = [
-        ...constraint.targetVocab.introduce.map((l) => l.lemmaId),
-        ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
-      ];
+      const supportLang = execution.selection.supportLanguage ?? "en";
+      const introduceTerms: string[] = [];
+      const reinforceTerms: string[] = [];
+      const glosses: Record<string, string> = {};
 
+      for (const lemma of constraint.targetVocab.introduce) {
+        const surface = lemma.lemmaId.replace(/_/g, " ");
+        introduceTerms.push(surface);
+        const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
+        if (gloss) glosses[surface] = gloss;
+      }
+      for (const lemma of constraint.targetVocab.reinforce) {
+        const surface = lemma.lemmaId.replace(/_/g, " ");
+        reinforceTerms.push(surface);
+        const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
+        if (gloss) glosses[surface] = gloss;
+      }
+
+      const focusTerms = [...introduceTerms, ...reinforceTerms];
       if (focusTerms.length > 0) {
-        const supportLang = execution.selection.supportLanguage ?? "en";
-        const glosses: Record<string, string> = {};
-        for (const term of focusTerms) {
-          const gloss = services.atlas.getGloss(
-            term,
-            learner.targetLanguage,
-            supportLang
-          );
-          if (gloss) {
-            glosses[term] = gloss;
-          }
-        }
-
         normalizedTurn.annotations!["dialogueHighlight"] = {
           focusTerms,
+          introduceTerms,
           celebrateTerms: [],
           glosses
         };

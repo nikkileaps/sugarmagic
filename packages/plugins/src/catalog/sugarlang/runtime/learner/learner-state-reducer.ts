@@ -403,7 +403,10 @@ export class LearnerStateReducer {
     }
     accumulator.lastObservedAtMs = observationEvent.observation.observedAtMs;
     accumulator.lemmasSeen += 1;
-    if (observationEvent.observation.kind === "hovered") {
+    if (
+      observationEvent.observation.kind === "hovered" ||
+      observationEvent.observation.kind === "hovered-introduce"
+    ) {
       accumulator.hoverCount += 1;
     }
     if (observationEvent.observation.kind === "produced-incorrect") {

@@ -264,12 +264,22 @@ export function createRuntimeGameplaySessionController(
     onSpellCastSuccess
   } = options;
 
-  const entryDecorators = (
+  const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
-  )
-    .sort((a, b) => a.priority - b.priority)
-    .map((c) => c.payload.decorate);
-  const dialoguePanel = createRuntimeDialoguePanel(root, { entryDecorators });
+  ).sort((a, b) => a.priority - b.priority);
+  const entryDecorators = decoratorContributions.map((c) => c.payload.decorate);
+  const hoverHandlers = decoratorContributions
+    .map((c) => c.payload.onTermHover)
+    .filter((h): h is NonNullable<typeof h> => h != null);
+  const dialoguePanel = createRuntimeDialoguePanel(root, {
+    entryDecorators,
+    onTermHover: hoverHandlers.length > 0
+      ? (event) => {
+          const hoverEvent = { term: event.term, lang: "", dwellMs: event.dwellMs };
+          for (const handler of hoverHandlers) handler(hoverEvent);
+        }
+      : undefined
+  });
   const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root);
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);

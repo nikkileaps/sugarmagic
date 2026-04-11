@@ -35,7 +35,12 @@ import {
 export const SCORING_WEIGHTS = {
   w_due: 1.0,
   w_new: 0.7,
-  w_anchor: 0.5,
+  w_anchor: 0.8,
+  w_freq: 0.4,
+  /** Scene relevance: how often/prominently the lemma appears in this scene's
+   *  authored content. A word mentioned 5 times in NPC lore outranks a word
+   *  that appears once in a ground layer label. */
+  w_scene: 0.6,
   w_prodgap: 0.6,
   w_lapse: 0.3
 } as const;
@@ -44,6 +49,11 @@ export interface LemmaScoreComponents {
   due: number;
   new: number;
   anchor: number;
+  /** Frequency bonus: higher-frequency words score higher, pushing common
+   *  everyday vocabulary ahead of obscure words for beginners. */
+  freq: number;
+  /** Scene relevance: normalized weight from authored content occurrences. */
+  scene: number;
   prodgap: number;
   lapse: number;
 }
@@ -89,6 +99,12 @@ function summarizeReasons(components: LemmaScoreComponents): string[] {
   if (components.anchor > 0) {
     reasons.push("scene-anchor");
   }
+  if (components.freq > 0) {
+    reasons.push("high-frequency");
+  }
+  if (components.scene > 0) {
+    reasons.push("scene-relevant");
+  }
   if (components.prodgap > 0) {
     reasons.push("productive-gap");
   }
@@ -108,10 +124,21 @@ export function scoreLemma(
     decayProductiveStrength(card, context.nowMs),
     context.currentSessionTurn
   );
+  // Frequency bonus: normalized to [0, 1] where rank 1 = 1.0 and rank 2000+ = ~0.
+  const freqRank = lemma.frequencyRank ?? 5000;
+  const freqBonus = Math.max(0, 1 - freqRank / 2000);
+
+  // Scene relevance: normalized to [0, 1]. A word mentioned 5+ times across
+  // dialogue/NPC lore/quest text saturates at 1.0. A single mention in a
+  // low-weight source scores ~0.15-0.2.
+  const sceneRelevance = Math.min(1, (lemma.sceneWeight ?? 0) / 5);
+
   const components: LemmaScoreComponents = {
     due: 1 - decayedCard.retrievability,
     new: decayedCard.reviewCount === 0 ? decayedCard.priorWeight : 0,
     anchor: sceneLexicon.anchors.includes(lemma.lemmaId) ? 1 : 0,
+    freq: freqBonus,
+    scene: sceneRelevance,
     prodgap: Math.max(0, decayedCard.stability - decayedCard.productiveStrength),
     lapse: decayedCard.lapseCount > 2 ? 1 : 0
   };
@@ -119,6 +146,8 @@ export function scoreLemma(
     SCORING_WEIGHTS.w_due * components.due +
     SCORING_WEIGHTS.w_new * components.new +
     SCORING_WEIGHTS.w_anchor * components.anchor +
+    SCORING_WEIGHTS.w_freq * components.freq +
+    SCORING_WEIGHTS.w_scene * components.scene +
     SCORING_WEIGHTS.w_prodgap * components.prodgap -
     SCORING_WEIGHTS.w_lapse * components.lapse;
 

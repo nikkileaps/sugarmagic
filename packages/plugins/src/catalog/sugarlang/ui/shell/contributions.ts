@@ -29,6 +29,33 @@ import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
 /**
+ * Deletes all sugarlang-owned IndexedDB databases: FSRS card store, telemetry,
+ * compile cache, and chunk cache. After calling this, the learner is a blank
+ * slate — reload Preview to start fresh.
+ */
+async function resetSugarlangLearnerData(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const databases = await indexedDB.databases();
+  const sugarlangDbs = databases.filter(
+    (db) =>
+      db.name?.startsWith("sugarlang-card-store") ||
+      db.name?.startsWith("sugarlang-telemetry")
+  );
+  await Promise.all(
+    sugarlangDbs.map(
+      (db) =>
+        new Promise<void>((resolve) => {
+          if (!db.name) { resolve(); return; }
+          const request = indexedDB.deleteDatabase(db.name);
+          request.onsuccess = () => resolve();
+          request.onerror = () => resolve();
+          request.onblocked = () => resolve();
+        })
+    )
+  );
+}
+
+/**
  * Module-level chunk-extraction toggle. Set by the plugin manifest at
  * registration time from `SugarLangPluginConfig.chunkExtraction.enabled`.
  * Default: true (chunk extraction fires on rebuild). Set to false during
@@ -147,7 +174,8 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             supportLanguage: "en",
             debugLogging: currentConfig?.debugLogging === true,
             onChangeTargetLanguage: (lang: string) => updateConfig({ targetLanguage: lang }),
-            onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled })
+            onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled }),
+            onResetLearner: () => resetSugarlangLearnerData()
           });
         }
       },

@@ -75,6 +75,10 @@ export interface SceneLemmaInfo {
   frequencyRank: number | null;
   partsOfSpeech: string[];
   isQuestCritical: boolean;
+  /** Accumulated scene relevance weight. Higher values mean the lemma appears
+   *  more often and/or in higher-weight sources (dialogue, quest objectives, NPC lore).
+   *  Used by the budgeter to prioritize contextually relevant vocabulary. */
+  sceneWeight: number;
 }
 
 /**
