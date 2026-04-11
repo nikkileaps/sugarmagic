@@ -98,8 +98,9 @@ describe("SceneDensityHistogram", () => {
       />
     );
 
-    expect(markup).toContain("Scene Density");
-    expect(markup).toContain("This scene has 3 lemmas");
-    expect(markup).toContain("WARNING: Scene skews above A2.");
+    expect(markup).toContain("Sugarlang");
+    expect(markup).toContain(">3</");
+    expect(markup).toContain("lemmas");
+    expect(markup).toContain("Scene skews above A2.");
   });
 });

@@ -1,7 +1,8 @@
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type {
   ConversationMiddleware,
-  ConversationProvider
+  ConversationProvider,
+  ConversationTurnEnvelope
 } from "../conversation";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
 import type {
@@ -19,6 +20,7 @@ import { System, type World } from "../ecs";
 export type RuntimePluginContributionKind =
   | "conversation.provider"
   | "conversation.middleware"
+  | "dialogue.entryDecorator"
   | "runtime.banner"
   | "design.workspace"
   | "design.section"
@@ -90,9 +92,18 @@ export type ProjectSettingsContribution = RuntimePluginContributionBase<
   }
 >;
 
+export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
+  "dialogue.entryDecorator",
+  {
+    summary: string;
+    decorate: (turn: ConversationTurnEnvelope) => ConversationTurnEnvelope;
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
+  | DialogueEntryDecoratorContribution
   | RuntimeBannerContribution
   | DesignWorkspaceContribution
   | DesignSectionContribution

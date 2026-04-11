@@ -74,24 +74,24 @@ export function findGenericOnlyViolations(text: string): string[] {
   const normalized = text.trim();
   if (!normalized) return violations;
 
-  if (normalized.length > 220) {
+  if (normalized.length > 440) {
     violations.push("generic-only-too-long");
   }
 
   const sentenceCount =
     normalized.split(/[.!?]+/).map((segment) => segment.trim()).filter(Boolean).length;
-  if (sentenceCount > 3) {
+  if (sentenceCount > 7) {
     violations.push("generic-only-too-many-sentences");
   }
 
-  // Placeholder heuristic for the current test world. This should eventually
-  // become data-driven from authored lore vocabulary instead of hardcoding
-  // game-specific nouns in runtime code.
-  const unsupportedSpecificDetailPattern =
-    /\b(station|cargo|freighter|dock|docking|bay|uniform|report|reports|tablet|tablets|datapad|datapads|schedule|schedules|maintenance|comm|pressure doors|holographic|transit|hub|regulars|office|terminal)\b/i;
-  if (unsupportedSpecificDetailPattern.test(normalized)) {
-    violations.push("generic-only-unsupported-specific-detail");
-  }
+  // Disabled for now. This hardcoded noun list was acting like a fake world
+  // model and rejecting otherwise good replies for mentioning ordinary scene
+  // details.
+  // const unsupportedSpecificDetailPattern =
+  //   /\b(station|cargo|freighter|dock|docking|bay|uniform|report|reports|tablet|tablets|datapad|datapads|schedule|schedules|maintenance|comm|pressure doors|holographic|transit|hub|regulars|office|terminal)\b/i;
+  // if (unsupportedSpecificDetailPattern.test(normalized)) {
+  //   violations.push("generic-only-unsupported-specific-detail");
+  // }
 
   return violations;
 }

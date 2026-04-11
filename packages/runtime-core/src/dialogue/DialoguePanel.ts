@@ -28,6 +28,7 @@ import type {
   ConversationPlayerInput,
   ConversationTurnEnvelope
 } from "../conversation";
+import { findTermMatches, readDialogueHighlight } from "./highlight";
 
 interface PlacementQuestionnaireView {
   schemaVersion: number;
@@ -114,9 +115,15 @@ export interface RuntimeDialoguePanel extends DialoguePresenter {
   getElement: () => HTMLElement;
 }
 
+export type DialogueEntryDecorator = (
+  turn: ConversationTurnEnvelope
+) => ConversationTurnEnvelope;
+
 export function createRuntimeDialoguePanel(
-  parentContainer: HTMLElement
+  parentContainer: HTMLElement,
+  options?: { entryDecorators?: DialogueEntryDecorator[] }
 ): RuntimeDialoguePanel {
+  const entryDecorators = options?.entryDecorators ?? [];
   injectStyles();
 
   const container = document.createElement("div");
@@ -209,6 +216,10 @@ export function createRuntimeDialoguePanel(
   }
 
   function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
+    for (const decorator of entryDecorators) {
+      turn = decorator(turn);
+    }
+
     const entry = document.createElement("div");
     entry.className = "sm-dialogue-entry";
     entry.classList.add(entryCount % 2 === 0 ? "align-left" : "align-right");
@@ -228,7 +239,60 @@ export function createRuntimeDialoguePanel(
 
     const textElement = document.createElement("div");
     textElement.className = "sm-dialogue-entry-text";
-    textElement.textContent = turn.text;
+
+    const turnHighlight = readDialogueHighlight(turn.annotations);
+    if (turnHighlight && turnHighlight.focusTerms.length > 0) {
+      const matches = findTermMatches(
+        turn.text,
+        turnHighlight.focusTerms,
+        turnHighlight.celebrateTerms
+      );
+      if (matches.length > 0) {
+        let cursor = 0;
+        for (const match of matches) {
+          if (match.start > cursor) {
+            textElement.appendChild(
+              document.createTextNode(turn.text.slice(cursor, match.start))
+            );
+          }
+          const wrapper = document.createElement("span");
+          wrapper.className = match.celebrate
+            ? "sm-dialogue-focus-term sm-dialogue-focus-term-celebrate"
+            : "sm-dialogue-focus-term";
+
+          const termText = document.createElement("span");
+          termText.className = "sm-dialogue-focus-term-text";
+          termText.textContent = match.term;
+          wrapper.appendChild(termText);
+
+          if (match.celebrate) {
+            const burst = document.createElement("span");
+            burst.className = "sm-dialogue-focus-burst";
+            const halo = document.createElement("span");
+            halo.className = "sm-dialogue-focus-burst-halo";
+            const star = document.createElement("span");
+            star.className = "sm-dialogue-focus-burst-star";
+            star.textContent = "\u2605";
+            burst.appendChild(halo);
+            burst.appendChild(star);
+            wrapper.appendChild(burst);
+          }
+
+          textElement.appendChild(wrapper);
+          cursor = match.end;
+        }
+        if (cursor < turn.text.length) {
+          textElement.appendChild(
+            document.createTextNode(turn.text.slice(cursor))
+          );
+        }
+      } else {
+        textElement.textContent = turn.text;
+      }
+    } else {
+      textElement.textContent = turn.text;
+    }
+
     entry.appendChild(textElement);
     return entry;
   }
@@ -966,6 +1030,86 @@ function injectStyles() {
       cursor: pointer;
       font: inherit;
       font-weight: 600;
+    }
+
+    /* ── Sugarlang focus-term highlighting ── */
+
+    .sm-dialogue-focus-term {
+      position: relative;
+      display: inline-flex;
+      align-items: baseline;
+      color: #f5c35b;
+      text-shadow: 0 0 10px rgba(245, 195, 91, 0.2);
+      overflow: visible;
+    }
+
+    .sm-dialogue-focus-term-text {
+      border-bottom: 1px solid rgba(245, 195, 91, 0.35);
+      box-shadow: inset 0 -0.18em 0 rgba(245, 195, 91, 0.14);
+    }
+
+    .sm-dialogue-focus-term-celebrate .sm-dialogue-focus-term-text {
+      border-bottom-color: rgba(255, 224, 130, 0.75);
+      box-shadow: inset 0 -0.2em 0 rgba(255, 224, 130, 0.2);
+      animation: sm-dialogue-focus-term-pop 1.05s ease-out;
+    }
+
+    .sm-dialogue-focus-burst {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% - 1px);
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 2;
+    }
+
+    .sm-dialogue-focus-burst-halo {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 220, 116, 0.68);
+      opacity: 0;
+      transform: translate(-50%, -48%) scale(0.3);
+      animation: sm-dialogue-focus-halo 1100ms ease-out forwards;
+      box-shadow: 0 0 20px rgba(255, 216, 107, 0.3);
+    }
+
+    .sm-dialogue-focus-burst-star {
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: #ffd86b;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+      opacity: 0;
+      transform: translate(-50%, -6px) scale(0.45);
+      animation: sm-dialogue-focus-burst 1320ms cubic-bezier(0.16, 0.84, 0.22, 1) forwards;
+      text-shadow: 0 0 16px rgba(255, 216, 107, 0.72);
+    }
+
+    @keyframes sm-dialogue-focus-term-pop {
+      0% { transform: scale(1); text-shadow: 0 0 0 rgba(255, 216, 107, 0); }
+      18% { transform: scale(1.08); text-shadow: 0 0 16px rgba(255, 216, 107, 0.55); }
+      100% { transform: scale(1); text-shadow: 0 0 0 rgba(255, 216, 107, 0); }
+    }
+
+    @keyframes sm-dialogue-focus-halo {
+      0% { opacity: 0; transform: translate(-50%, -46%) scale(0.3); }
+      24% { opacity: 0.9; }
+      100% { opacity: 0; transform: translate(-50%, -74%) scale(1.5); }
+    }
+
+    @keyframes sm-dialogue-focus-burst {
+      0% { opacity: 0; transform: translate(-50%, -4px) scale(0.45); }
+      15% { opacity: 1; transform: translate(-50%, -12px) scale(1); }
+      58% { opacity: 1; transform: translate(-50%, -34px) scale(1.02); }
+      100% { opacity: 0; transform: translate(-50%, -54px) scale(0.88); }
     }
   `;
   document.head.appendChild(style);

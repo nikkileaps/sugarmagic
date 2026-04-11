@@ -575,6 +575,21 @@ export function createSugarLangObserveMiddleware(
         setTurnsSinceLastProbe(execution, getTurnsSinceLastProbe(execution) + 1);
       }
 
+      // Write focus-term highlighting annotation onto the NPC turn so the
+      // dialogue renderer can highlight target vocabulary and fire the star
+      // celebration animation when the player produces a target lemma.
+      const focusTerms = [
+        ...constraint.targetVocab.introduce.map((l) => l.lemmaId),
+        ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
+      ];
+
+      if (focusTerms.length > 0) {
+        normalizedTurn.annotations!["dialogueHighlight"] = {
+          focusTerms,
+          celebrateTerms: []
+        };
+      }
+
       return normalizedTurn;
     }
   };

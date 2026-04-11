@@ -39,8 +39,9 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toHaveLength(4);
+    expect(instance.contributions).toHaveLength(5);
     expect(instance.contributions.map((entry) => entry.kind)).toEqual([
+      "dialogue.entryDecorator",
       "conversation.middleware",
       "conversation.middleware",
       "conversation.middleware",

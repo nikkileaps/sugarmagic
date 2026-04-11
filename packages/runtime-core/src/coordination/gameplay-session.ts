@@ -264,7 +264,12 @@ export function createRuntimeGameplaySessionController(
     onSpellCastSuccess
   } = options;
 
-  const dialoguePanel = createRuntimeDialoguePanel(root);
+  const entryDecorators = (
+    pluginManager?.getContributions("dialogue.entryDecorator") ?? []
+  )
+    .sort((a, b) => a.priority - b.priority)
+    .map((c) => c.payload.decorate);
+  const dialoguePanel = createRuntimeDialoguePanel(root, { entryDecorators });
   const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root);
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);

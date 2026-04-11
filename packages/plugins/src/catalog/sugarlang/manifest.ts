@@ -23,6 +23,7 @@ import type { DiscoveredPluginDefinition } from "../../sdk";
 import type { RuntimePluginFactoryContext } from "../../runtime";
 import type {
   ConversationMiddlewareContribution,
+  DialogueEntryDecoratorContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig } from "./config";
@@ -48,6 +49,7 @@ import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
 import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
+import { createSugarlangEntryDecorator } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
 import {
@@ -91,8 +93,20 @@ export function createSugarlangPlugin(
     logger,
     telemetry
   });
-  const contributions: ConversationMiddlewareContribution[] =
-    SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+  const decoratorContribution: DialogueEntryDecoratorContribution = {
+    pluginId: context.configuration.pluginId,
+    contributionId: "sugarlang.dialogue.entry-decorator",
+    kind: "dialogue.entryDecorator",
+    displayName: "Sugarlang Focus Term Highlighter",
+    priority: 10,
+    payload: {
+      summary: "Highlights focus vocabulary and celebrates player production.",
+      decorate: createSugarlangEntryDecorator()
+    }
+  };
+
+  const contributions: (ConversationMiddlewareContribution | DialogueEntryDecoratorContribution)[] =
+    [decoratorContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,
@@ -107,8 +121,8 @@ export function createSugarlangPlugin(
           status: "ready",
           middleware
         }
-      };
-    });
+      } as ConversationMiddlewareContribution;
+    })];
 
   return {
     pluginId: context.configuration.pluginId,
@@ -145,7 +159,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     displayName: SUGARLANG_DISPLAY_NAME,
     summary:
       "Adaptive language-learning middleware pipeline for Sugarmagic conversations.",
-    capabilityIds: ["conversation.middleware", "design.workspace"]
+    capabilityIds: ["conversation.middleware", "dialogue.entryDecorator", "design.workspace"]
   },
   runtime: {
     createRuntimePlugin: createSugarlangPlugin
