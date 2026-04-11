@@ -183,6 +183,8 @@ describe("sugarlang runtime contracts", () => {
     };
 
     const constraint: SugarlangConstraint = {
+      generatorPromptOverlay: "",
+      minimalGreetingMode: false,
       targetVocab: directive.targetVocab,
       supportPosture: directive.supportPosture,
       targetLanguageRatio: directive.targetLanguageRatio,
@@ -625,6 +627,8 @@ void invalidDirective;
 
 // Optional comprehensionCheckInFlight can be omitted.
 const noProbeConstraint: SugarlangConstraint = {
+  generatorPromptOverlay: "",
+  minimalGreetingMode: false,
   targetVocab: { introduce: [], reinforce: [], avoid: [] },
   supportPosture: "supported",
   targetLanguageRatio: 0.5,

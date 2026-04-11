@@ -82,11 +82,10 @@ export function createSugarlangDialogueContribution(): {
         const introduceSet = new Set(
           currentIntroduceTerms.map((t) => t.toLowerCase())
         );
-        // Only celebrate reinforce terms — producing an introduce word the
-        // player just saw with a gloss isn't strong retention evidence.
-        const celebrateTerms = matchedTerms.filter(
-          (t) => !introduceSet.has(t)
-        );
+        // Celebrate ALL player-produced focus terms. The star animation is the
+        // core reward loop — withholding it from new learners (who only have
+        // introduce words) kills engagement right when they need it most.
+        const celebrateTerms = matchedTerms;
         if (!turn.annotations) turn.annotations = {};
         turn.annotations["dialogueHighlight"] = {
           focusTerms: matchedTerms,

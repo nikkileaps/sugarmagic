@@ -2,7 +2,35 @@ import type {
   ConversationExecutionContext,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
-import type { SugarlangConstraint } from "../../../sugarlang/runtime/types";
+/**
+ * Opaque constraint shape read from execution annotations. SugarAgent does
+ * not interpret the pedagogical fields — it reads `generatorPromptOverlay`
+ * and `minimalGreetingMode` as pre-formatted values from the sugarlang plugin.
+ */
+interface LanguageLearningConstraint {
+  generatorPromptOverlay: string;
+  minimalGreetingMode: boolean;
+  prePlacementOpeningLine?: { text: string; lang: string; lineId: string };
+  glossingStrategy: string;
+  supportPosture: string;
+  targetLanguageRatio: number;
+  interactionStyle: string;
+  sentenceComplexityCap: string;
+  targetLanguage: string;
+  learnerCefr: string;
+  targetVocab: {
+    introduce: Array<{ lemmaId: string }>;
+    reinforce: Array<{ lemmaId: string }>;
+    avoid: Array<{ lemmaId: string }>;
+  };
+  questEssentialLemmas?: Array<{ lemmaRef: { lemmaId: string } }>;
+  comprehensionCheckInFlight?: {
+    targetLemmas: Array<{ lemmaId: string }>;
+  };
+}
+// TODO: Move placement questionnaire loading to sugarlang plugin — it should
+// provide the questionnaire envelope via an annotation, not require SugarAgent
+// to import from sugarlang directly.
 import { loadPlacementQuestionnaire } from "../../../sugarlang/runtime/placement/placement-questionnaire-loader";
 import type { LLMProvider } from "../clients";
 import { createDiagnostics } from "./diagnostics";
@@ -26,67 +54,23 @@ import type {
 
 const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
 
-function listLemmaIds(lemmas: Array<{ lemmaId: string }>): string {
-  return lemmas.map((lemma) => lemma.lemmaId).join(", ");
-}
-
-function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
-  const ratioPercent = Math.round(constraint.targetLanguageRatio * 100);
-
-  switch (constraint.supportPosture) {
-    case "anchored":
-      return `Language constraint: Do not reply primarily in ${constraint.targetLanguage}. Keep most of the reply in the support language, and include only a tiny amount of ${constraint.targetLanguage} (about ${ratioPercent}% of the words, at most one very short phrase or sentence).`;
-    case "supported":
-      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${constraint.targetLanguage} and the rest in the support language so meaning stays easy to follow.`;
-    case "target-dominant":
-      return `Language constraint: Reply mostly in ${constraint.targetLanguage}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${constraint.targetLanguage}.`;
-    case "target-only":
-      return `Language constraint: Reply entirely in ${constraint.targetLanguage}.`;
-  }
-}
-
-function buildSugarlangConstraintLines(
-  constraint: SugarlangConstraint
+/**
+ * Returns the prompt overlay from the language-learning constraint.
+ * SugarAgent does not build or interpret this — the sugarlang plugin
+ * provides it pre-formatted via `generatorPromptOverlay`.
+ */
+function getConstraintPromptOverlay(
+  constraint: LanguageLearningConstraint
 ): string[] {
-  const lines = [
-    formatTargetLanguageGuidance(constraint),
-    `Must-use vocabulary (weave naturally into your reply): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
-    `New vocabulary to introduce this turn (use each exactly once, clearly in context): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}.`,
-    `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
-    `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
-    `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`
-  ];
-
-  if (constraint.comprehensionCheckInFlight) {
-    lines.push(
-      "",
-      "COMPREHENSION CHECK - THIS TURN MUST INCLUDE A PROBE:",
-      "",
-      "After speaking naturally in character, include a short in-character question that elicits a response demonstrating comprehension of one or more of these lemmas:",
-      `  ${listLemmaIds(constraint.comprehensionCheckInFlight.targetLemmas)}`,
-      "",
-      `Probe style: ${constraint.comprehensionCheckInFlight.probeStyle}`,
-      `Character voice reminder: ${constraint.comprehensionCheckInFlight.characterVoiceReminder}`,
-      "",
-      "IMPORTANT:",
-      "- Stay in character.",
-      "- The probe can be a natural non-sequitur if needed.",
-      "- The probe should be the LAST thing in your reply.",
-      "Reply length constraint: keep the reply to 2-3 sentences including the probe question."
-    );
-  }
-
-  // Quest-essential vocabulary handling is owned by the sugarlang plugin's
-  // UI layer (hover tooltips and highlighting). SugarAgent does not need to
-  // know about specific vocabulary teaching targets.
-
-  return lines;
+  return constraint.generatorPromptOverlay
+    ? [constraint.generatorPromptOverlay]
+    : [];
 }
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
   context: TurnStageContext,
-  constraint: SugarlangConstraint
+  constraint: LanguageLearningConstraint
 ): ConversationTurnEnvelope {
   return {
     turnId: context.turnId,
@@ -111,33 +95,10 @@ function buildPrePlacementEnvelope(
   };
 }
 
-function hasEmptySugarlangVocabulary(constraint: SugarlangConstraint): boolean {
-  return (
-    constraint.targetVocab.introduce.length === 0 &&
-    constraint.targetVocab.reinforce.length === 0 &&
-    constraint.targetVocab.avoid.length === 0
-  );
-}
-
-function isMinimalSugarlangGreetingMode(
-  input: GenerateStageInput,
-  constraint: SugarlangConstraint | undefined
+function isMinimalGreetingMode(
+  constraint: LanguageLearningConstraint | undefined
 ): boolean {
-  if (!constraint) {
-    return false;
-  }
-
-  return (
-    input.plan.responseIntent === "greet" &&
-    input.plan.responseSpecificity === "generic-only" &&
-    input.interpret.userText === null &&
-    constraint.supportPosture === "anchored" &&
-    constraint.interactionStyle === "listening_first" &&
-    constraint.sentenceComplexityCap === "single-clause" &&
-    !constraint.comprehensionCheckInFlight &&
-    hasEmptySugarlangVocabulary(constraint) &&
-    (constraint.questEssentialLemmas?.length ?? 0) === 0
-  );
+  return constraint?.minimalGreetingMode ?? false;
 }
 
 function buildPlacementQuestionnaireEnvelope(
@@ -238,7 +199,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     const startedAt = Date.now();
     const constraint = input.execution.annotations[
       "sugarlang.constraint"
-    ] as SugarlangConstraint | undefined;
+    ] as LanguageLearningConstraint | undefined;
     const placementFlow = input.execution.annotations["sugarlang.placementFlow"] as
       | { phase?: string; minAnswersForValid?: unknown }
       | undefined;
@@ -276,8 +237,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let retryCount = 0;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
-    const minimalSugarlangGreetingMode = isMinimalSugarlangGreetingMode(
-      input,
+    const minimalSugarlangGreetingMode = isMinimalGreetingMode(
       constraint
     );
 
@@ -431,7 +391,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         minimalSugarlangGreetingMode
           ? "This is a first-meeting beginner greeting turn. Keep it tiny, warm, and low-specificity. Do not volunteer task details, quest details, location trivia, or backstory unless the player asks."
           : null,
-        ...(constraint ? buildSugarlangConstraintLines(constraint) : [])
+        ...(constraint ? getConstraintPromptOverlay(constraint) : [])
       ]
         .filter(Boolean)
         .join("\n");

@@ -147,6 +147,8 @@ describe("GenerateStage", () => {
     const stage = new GenerateStage(null);
     const input = createStageInput();
     input.execution.annotations["sugarlang.constraint"] = {
+      generatorPromptOverlay: "",
+      minimalGreetingMode: true,
       targetVocab: { introduce: [], reinforce: [], avoid: [] },
       supportPosture: "anchored",
       targetLanguageRatio: 0,
@@ -187,6 +189,8 @@ describe("GenerateStage", () => {
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput();
     input.execution.annotations["sugarlang.constraint"] = {
+      generatorPromptOverlay: "Language constraint: Use a mixed reply. Keep roughly 65% of the reply in es and the rest in the support language so meaning stays easy to follow.\nMust-use vocabulary (weave naturally into your reply): hola.\nNew vocabulary to introduce this turn (use each exactly once, clearly in context): llave.\nForbidden vocabulary (use simpler synonyms): complicado.\nCEFR envelope: learner is A2; keep >=95% of lemmas at or below A2+1 band.\nSupport posture: supported. Target-language ratio: 0.65. Sentence complexity: two-clause.\nDo NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.",
+      minimalGreetingMode: false,
       targetVocab: {
         introduce: [{ lemmaId: "llave", lang: "es" }],
         reinforce: [{ lemmaId: "hola", lang: "es" }],
@@ -328,6 +332,8 @@ describe("GenerateStage", () => {
       }
     };
     input.execution.annotations["sugarlang.constraint"] = {
+      generatorPromptOverlay: "",
+      minimalGreetingMode: true,
       targetVocab: {
         introduce: [],
         reinforce: [],
@@ -384,6 +390,8 @@ describe("GenerateStage", () => {
       responseGoal: "Open the conversation naturally while staying in character."
     };
     input.execution.annotations["sugarlang.constraint"] = {
+      generatorPromptOverlay: "",
+      minimalGreetingMode: true,
       targetVocab: {
         introduce: [],
         reinforce: [],

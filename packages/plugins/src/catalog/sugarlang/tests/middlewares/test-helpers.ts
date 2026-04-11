@@ -93,6 +93,8 @@ export function createBaseConstraint(
   overrides: Partial<SugarlangConstraint> = {}
 ): SugarlangConstraint {
   return {
+    generatorPromptOverlay: "",
+    minimalGreetingMode: false,
     targetVocab: {
       introduce: [],
       reinforce: [],

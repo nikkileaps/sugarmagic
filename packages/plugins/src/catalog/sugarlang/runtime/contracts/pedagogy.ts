@@ -166,4 +166,16 @@ export interface SugarlangConstraint {
     lineId: string;
   };
   rawPrescription: LexicalPrescription;
+  /**
+   * Pre-formatted prompt overlay for the NPC generator. Sugarlang builds this
+   * string; the generator splices it into the system prompt without
+   * interpreting the fields. This keeps sugarlang and sugaragent composable
+   * but independent.
+   */
+  generatorPromptOverlay: string;
+  /**
+   * When true, the generator should use a minimal first-meeting greeting mode:
+   * very short reply, no volunteered details.
+   */
+  minimalGreetingMode: boolean;
 }

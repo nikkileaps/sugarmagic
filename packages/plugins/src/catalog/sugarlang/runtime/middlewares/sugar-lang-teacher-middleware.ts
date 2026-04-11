@@ -17,6 +17,10 @@
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
+  buildGeneratorPromptOverlay,
+  computeMinimalGreetingMode
+} from "./generator-prompt-overlay";
+import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
   emitTelemetry,
@@ -241,6 +245,8 @@ export function createSugarLangTeacherMiddleware(
       }
 
       const constraint: SugarlangConstraint = {
+        generatorPromptOverlay: "",
+        minimalGreetingMode: false,
         targetVocab: directive.targetVocab,
         supportPosture: directive.supportPosture,
         targetLanguageRatio: directive.targetLanguageRatio,
@@ -328,6 +334,12 @@ export function createSugarLangTeacherMiddleware(
           : {}),
         ...(prePlacementOpeningLine ? { prePlacementOpeningLine } : {})
       };
+
+      constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(constraint);
+      constraint.minimalGreetingMode = computeMinimalGreetingMode(
+        constraint,
+        execution.input?.kind === "free_text"
+      );
 
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
