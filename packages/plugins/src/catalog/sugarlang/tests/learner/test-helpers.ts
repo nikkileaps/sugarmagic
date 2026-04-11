@@ -125,6 +125,12 @@ export function createAtlasProvider(
         .filter((entry) => entry.lang === lang && entry.cefrPriorBand === band)
         .map((entry) => ({ lemmaId: entry.lemmaId, lang: entry.lang }));
     },
+    getGloss(lemmaId, lang, supportLang) {
+      return map.get(`${lang}:${lemmaId}`)?.glosses?.[supportLang];
+    },
+    resolveFromGloss() {
+      return [];
+    },
     getAtlasVersion() {
       return "test-atlas-v1";
     }

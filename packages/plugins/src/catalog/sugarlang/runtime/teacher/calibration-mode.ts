@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/calibration-mode.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/calibration-mode.ts
  *
  * Purpose: Reserves the minimal post-placement calibration hint surface for the Director.
  *
@@ -9,7 +9,7 @@
  *
  * Relationships:
  *   - Depends on learner-profile types.
- *   - Will be consumed by the Director once Epic 9 lands.
+ *   - Will be consumed by the Teacher'sonce Epic 9 lands.
  *
  * Implements: Proposal 001 §Cold Start Sequence
  *

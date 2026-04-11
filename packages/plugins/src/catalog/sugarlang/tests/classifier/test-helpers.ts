@@ -104,7 +104,7 @@ export function createLexicalAtlasProvider(
       cefrPriorBand: entry.cefrPriorBand,
       frequencyRank: entry.frequencyRank ?? 1,
       partsOfSpeech: ["test"],
-      gloss: entry.gloss
+      glosses: entry.gloss ? { en: entry.gloss } : undefined
     });
   }
 
@@ -125,6 +125,12 @@ export function createLexicalAtlasProvider(
           lemmaId: entry.lemmaId,
           lang: entry.lang
         }));
+    },
+    getGloss(lemmaId: string, _lookupLang: string, supportLang: string): string | undefined {
+      return lemmaMap.get(lemmaId)?.glosses?.[supportLang];
+    },
+    resolveFromGloss(): AtlasLemmaEntry[] {
+      return [];
     },
     getAtlasVersion(_lookupLang: string): string {
       return "test-atlas-v1";

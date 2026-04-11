@@ -25,10 +25,14 @@ import { MorphologyLoader } from "./runtime/classifier/morphology-loader";
 import { IndexedDBCompileCache } from "./runtime/compile/cache-indexeddb";
 import { compileSugarlangScene } from "./runtime/compile/compile-sugarlang-scene";
 import {
+  resolveSceneAuthoringContexts,
+  resolveSugarlangGatewayBaseUrl,
+  SugarlangGatewayLoreClient
+} from "./runtime/compile/lore-resolution";
+import {
   buildSugarlangPreviewBootPayload,
   type SugarlangPreviewBootPayload
 } from "./runtime/compile/preview-boot";
-import { createSceneAuthoringContext } from "./runtime/compile/scene-traversal";
 import { CefrLexAtlasProvider } from "./runtime/providers/impls/cefr-lex-atlas-provider";
 
 export async function buildSugarlangPreviewBootPayloadForSession(
@@ -44,8 +48,12 @@ export async function buildSugarlangPreviewBootPayloadForSession(
   const atlas = new CefrLexAtlasProvider();
   const morphology = new MorphologyLoader();
   const cache = new IndexedDBCompileCache({ workspaceId });
-  const scenes = getAllRegions(session).map((region) =>
-    createSceneAuthoringContext({
+  const proxyBaseUrl = resolveSugarlangGatewayBaseUrl(environment);
+  const loreClient = proxyBaseUrl
+    ? new SugarlangGatewayLoreClient(proxyBaseUrl)
+    : null;
+  const scenes = await resolveSceneAuthoringContexts(
+    getAllRegions(session).map((region) => ({
       region,
       targetLanguage,
       npcDefinitions: session.gameProject.npcDefinitions,
@@ -53,7 +61,8 @@ export async function buildSugarlangPreviewBootPayloadForSession(
       questDefinitions: session.gameProject.questDefinitions,
       itemDefinitions: session.gameProject.itemDefinitions,
       documentDefinitions: session.gameProject.documentDefinitions
-    })
+    })),
+    loreClient
   );
 
   for (const scene of scenes) {

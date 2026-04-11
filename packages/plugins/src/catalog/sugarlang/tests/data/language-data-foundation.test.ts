@@ -94,7 +94,7 @@ describe("Epic 4 language-data schemas", () => {
             cefrPriorBand: "A1",
             frequencyRank: 1,
             partsOfSpeech: ["interjection"],
-            gloss: "hello",
+            glosses: { en: "hello" },
             cefrPriorSource: "cefrlex"
           }
         }
@@ -406,7 +406,7 @@ describe("Epic 4 runtime language-data loaders", () => {
             cefrPriorBand: "A1",
             frequencyRank: 0,
             partsOfSpeech: [],
-            gloss: "hello",
+            glosses: { en: "hello" },
             cefrPriorSource: "cefrlex"
           }
         }

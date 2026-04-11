@@ -30,11 +30,26 @@ function listLemmaIds(lemmas: Array<{ lemmaId: string }>): string {
   return lemmas.map((lemma) => lemma.lemmaId).join(", ");
 }
 
+function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
+  const ratioPercent = Math.round(constraint.targetLanguageRatio * 100);
+
+  switch (constraint.supportPosture) {
+    case "anchored":
+      return `Language constraint: Do not reply primarily in ${constraint.targetLanguage}. Keep most of the reply in the support language, and include only a tiny amount of ${constraint.targetLanguage} (about ${ratioPercent}% of the words, at most one very short phrase or sentence).`;
+    case "supported":
+      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${constraint.targetLanguage} and the rest in the support language so meaning stays easy to follow.`;
+    case "target-dominant":
+      return `Language constraint: Reply mostly in ${constraint.targetLanguage}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${constraint.targetLanguage}.`;
+    case "target-only":
+      return `Language constraint: Reply entirely in ${constraint.targetLanguage}.`;
+  }
+}
+
 function buildSugarlangConstraintLines(
   constraint: SugarlangConstraint
 ): string[] {
   const lines = [
-    `Language constraint: Reply primarily in ${constraint.targetLanguage}.`,
+    formatTargetLanguageGuidance(constraint),
     `Must-use vocabulary (weave naturally into your reply): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
     `New vocabulary to introduce this turn (use each exactly once, clearly in context): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}.`,
     `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
@@ -104,6 +119,35 @@ function buildPrePlacementEnvelope(
       llmCallsMade: 0
     }
   };
+}
+
+function hasEmptySugarlangVocabulary(constraint: SugarlangConstraint): boolean {
+  return (
+    constraint.targetVocab.introduce.length === 0 &&
+    constraint.targetVocab.reinforce.length === 0 &&
+    constraint.targetVocab.avoid.length === 0
+  );
+}
+
+function isMinimalSugarlangGreetingMode(
+  input: GenerateStageInput,
+  constraint: SugarlangConstraint | undefined
+): boolean {
+  if (!constraint) {
+    return false;
+  }
+
+  return (
+    input.plan.responseIntent === "greet" &&
+    input.plan.responseSpecificity === "generic-only" &&
+    input.interpret.userText === null &&
+    constraint.supportPosture === "anchored" &&
+    constraint.interactionStyle === "listening_first" &&
+    constraint.sentenceComplexityCap === "single-clause" &&
+    !constraint.comprehensionCheckInFlight &&
+    hasEmptySugarlangVocabulary(constraint) &&
+    (constraint.questEssentialLemmas?.length ?? 0) === 0
+  );
 }
 
 function buildPlacementQuestionnaireEnvelope(
@@ -237,9 +281,15 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let status: TurnStageResult<GenerateResult>["status"] = "ok";
     let fallbackReason: string | null = null;
     let systemPromptPreview = "";
+    let systemPrompt = "";
+    let userPrompt = "";
     let retryCount = 0;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
+    const minimalSugarlangGreetingMode = isMinimalSugarlangGreetingMode(
+      input,
+      constraint
+    );
 
     if (constraint?.prePlacementOpeningLine) {
       const output: GenerateResult = {
@@ -296,6 +346,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     }
 
     if (
+      !constraint &&
       input.plan.responseSpecificity === "generic-only" &&
       (
         input.plan.responseIntent === "greet" ||
@@ -350,7 +401,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       this.llmProvider &&
       (context.config.anthropicModel.trim() || canUseProxyDefaults)
     ) {
-      const systemPrompt = [
+      systemPrompt = [
         `Speak as ${npcDisplayName}.`,
         `Return only the NPC's spoken words.`,
         `Do not include stage directions, action narration, scene description, asterisks, bracketed cues, or quoted dialogue wrappers.`,
@@ -360,32 +411,35 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         `Do not use deictic spatial claims like "here", "inside", "outside", "at my shop", or "in this room" unless grounded runtime location supports them.`,
         `If the NPC is associated with another place but is not currently there, describe that place as elsewhere or nearby rather than as the current location.`,
         `Interaction mode: ${input.execution.selection.interactionMode ?? "agent"}.`,
-        activeQuestDisplayName
+        !minimalSugarlangGreetingMode && activeQuestDisplayName
           ? `Active quest: ${activeQuestDisplayName} / ${activeQuestStageDisplayName ?? "current stage"}`
           : null,
         currentLocationDisplayName
           ? `Current location: ${currentLocationDisplayName}.`
           : null,
-        currentParentAreaDisplayName
+        !minimalSugarlangGreetingMode && currentParentAreaDisplayName
           ? `Containing area: ${currentParentAreaDisplayName}.`
           : null,
         npcPlayerRelation
           ? `Player proximity: ${npcPlayerRelation.proximityBand}. Same area: ${npcPlayerRelation.sameArea ? "yes" : "no"}.`
           : null,
-        npcCurrentTask?.displayName
+        !minimalSugarlangGreetingMode && npcCurrentTask?.displayName
           ? `Current task: ${npcCurrentTask.displayName}.`
           : null,
-        npcCurrentTask?.description
+        !minimalSugarlangGreetingMode && npcCurrentTask?.description
           ? `Task context: ${npcCurrentTask.description}.`
           : null,
-        npcCurrentActivity?.activity
+        !minimalSugarlangGreetingMode && npcCurrentActivity?.activity
           ? `Current activity: ${npcCurrentActivity.activity}.`
           : null,
-        npcCurrentGoal?.goal
+        !minimalSugarlangGreetingMode && npcCurrentGoal?.goal
           ? `Current goal: ${npcCurrentGoal.goal}.`
           : null,
-        npcMovement?.status
+        !minimalSugarlangGreetingMode && npcMovement?.status
           ? `Movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
+          : null,
+        minimalSugarlangGreetingMode
+          ? "This is a first-meeting beginner greeting turn. Keep it tiny, warm, and low-specificity. Do not volunteer task details, quest details, location trivia, or backstory unless the player asks."
           : null,
         ...(constraint ? buildSugarlangConstraintLines(constraint) : [])
       ]
@@ -393,8 +447,10 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         .join("\n");
       systemPromptPreview = systemPrompt.slice(0, 220);
 
-      const userPrompt = [
-        `Respond to the player in 1-3 short paragraphs.`,
+      userPrompt = [
+        minimalSugarlangGreetingMode
+          ? `Reply in exactly 1 short sentence. Use at most 2 very short sentences only if absolutely necessary.`
+          : `Respond to the player naturally, matching the tone and length to the conversation.`,
         `Intent: ${input.plan.responseIntent}.`,
         `Turn path: ${input.plan.turnPath}.`,
         `Interpret intent: ${input.interpret.interpretation.intent}.`,
@@ -402,6 +458,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         input.interpret.userText
           ? `Player said: ${input.interpret.userText}`
           : `This is the opening turn. Start the conversation naturally.`,
+        minimalSugarlangGreetingMode
+          ? `This is a first-meeting greeting for a beginner learner. Keep it brief, warm, and generic. Do not volunteer what the NPC is doing unless asked.`
+          : null,
         input.plan.responseIntent === "clarify"
           ? "Ask one concise clarifying question. Do not answer beyond what is grounded."
           : null,
@@ -417,25 +476,25 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         currentLocationDisplayName
           ? `Current runtime location: ${currentLocationDisplayName}.`
           : null,
-        currentParentAreaDisplayName
+        !minimalSugarlangGreetingMode && currentParentAreaDisplayName
           ? `Current containing area: ${currentParentAreaDisplayName}.`
           : null,
         npcPlayerRelation
           ? `Player/NPC proximity band: ${npcPlayerRelation.proximityBand}.`
           : null,
-        npcCurrentTask?.displayName
+        !minimalSugarlangGreetingMode && npcCurrentTask?.displayName
           ? `NPC current task: ${npcCurrentTask.displayName}.`
           : null,
-        npcCurrentTask?.description
+        !minimalSugarlangGreetingMode && npcCurrentTask?.description
           ? `NPC task context: ${npcCurrentTask.description}.`
           : null,
-        npcCurrentActivity?.activity
+        !minimalSugarlangGreetingMode && npcCurrentActivity?.activity
           ? `NPC current activity: ${npcCurrentActivity.activity}.`
           : null,
-        npcCurrentGoal?.goal
+        !minimalSugarlangGreetingMode && npcCurrentGoal?.goal
           ? `NPC current goal: ${npcCurrentGoal.goal}.`
           : null,
-        npcMovement?.status
+        !minimalSugarlangGreetingMode && npcMovement?.status
           ? `NPC movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
           : null,
         evidenceSummary.length > 0
@@ -545,6 +604,31 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
           systemPromptPreview,
+          systemPrompt,
+          userPrompt,
+          minimalSugarlangGreetingMode,
+          sugarlangConstraintSummary: constraint
+            ? {
+                supportPosture: constraint.supportPosture,
+                targetLanguageRatio: constraint.targetLanguageRatio,
+                interactionStyle: constraint.interactionStyle,
+                glossingStrategy: constraint.glossingStrategy,
+                sentenceComplexityCap: constraint.sentenceComplexityCap,
+                targetLanguage: constraint.targetLanguage,
+                learnerCefr: constraint.learnerCefr,
+                introduce: constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId),
+                reinforce: constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId),
+                avoid: constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId),
+                questEssentialLemmas:
+                  constraint.questEssentialLemmas?.map(
+                    (entry) => entry.lemmaRef.lemmaId
+                  ) ?? [],
+                comprehensionCheckTargetLemmas:
+                  constraint.comprehensionCheckInFlight?.targetLemmas.map(
+                    (lemma) => lemma.lemmaId
+                  ) ?? []
+              }
+            : null,
           textPreview: text.slice(0, 180),
           proposedActions: output.actionProposals.map((proposal) => proposal.kind)
         },

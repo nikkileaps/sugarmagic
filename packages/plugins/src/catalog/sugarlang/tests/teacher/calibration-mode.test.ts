@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/director/calibration-mode.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/teacher/calibration-mode.test.ts
  *
  * Purpose: Verifies the tiny post-placement calibration hint utility surface.
  *
@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/director/calibration-mode directly.
+ *   - Exercises ../../runtime/teacher/calibration-mode directly.
  *   - Guards against reviving the old Director-owned placement flow by accident.
  *
  * Implements: Epic 9 Story 9.6
@@ -19,12 +19,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildPostPlacementCalibrationHint,
   isInPostPlacementCalibration
-} from "../../runtime/director/calibration-mode";
-import { createDirectorContext } from "./test-helpers";
+} from "../../runtime/teacher/calibration-mode";
+import { createTeacherContext } from "./test-helpers";
 
 describe("calibration-mode", () => {
   it("returns true for a low-confidence evaluated learner early in session", () => {
-    const learner = createDirectorContext().learner;
+    const learner = createTeacherContext().learner;
     learner.assessment.cefrConfidence = 0.4;
     learner.currentSession!.turns = 4;
 
@@ -32,21 +32,21 @@ describe("calibration-mode", () => {
   });
 
   it("returns false for a high-confidence learner", () => {
-    const learner = createDirectorContext().learner;
+    const learner = createTeacherContext().learner;
     learner.assessment.cefrConfidence = 0.9;
 
     expect(isInPostPlacementCalibration(learner)).toBe(false);
   });
 
   it("returns false once the session warm-up window closes", () => {
-    const learner = createDirectorContext().learner;
+    const learner = createTeacherContext().learner;
     learner.currentSession!.turns = 12;
 
     expect(isInPostPlacementCalibration(learner)).toBe(false);
   });
 
   it("returns false before placement completes", () => {
-    const learner = createDirectorContext().learner;
+    const learner = createTeacherContext().learner;
     learner.assessment.status = "unassessed";
 
     expect(isInPostPlacementCalibration(learner)).toBe(false);

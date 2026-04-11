@@ -15,6 +15,7 @@
  * Status: active
  */
 
+import { PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
 import { describe, expect, it, vi } from "vitest";
 import { createSugarLangObserveMiddleware } from "../../runtime/middlewares/sugar-lang-observe-middleware";
 import {
@@ -31,6 +32,42 @@ import {
 } from "./test-helpers";
 
 describe("SugarLangObserveMiddleware", () => {
+  it("bypasses observation for player voice-over turns", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const middleware = createSugarLangObserveMiddleware({
+      services: createServicesStub({
+        getPlayerDefinitionId: () => "player-1",
+        resolveForExecution: () => ({
+          learnerStore: {
+            getCurrentProfile: vi
+              .fn()
+              .mockResolvedValue(createTestLearnerProfile())
+          },
+          learnerStateReducer: {
+            apply
+          }
+        })
+      }) as never
+    });
+    const execution = createTestExecution({
+      input: {
+        kind: "free_text",
+        text: "carta"
+      }
+    });
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+    const turn = {
+      ...createTestTurn("I can't believe I'm here."),
+      speakerId: PLAYER_VO_SPEAKER.speakerId,
+      speakerLabel: PLAYER_VO_SPEAKER.displayName
+    };
+
+    const result = await middleware.finalize?.(execution, turn);
+
+    expect(result).toEqual(turn);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
   it("commits provisional evidence when the player answers a stored probe with the target lemma", async () => {
     const apply = vi.fn().mockResolvedValue(undefined);
     const services = createServicesStub({

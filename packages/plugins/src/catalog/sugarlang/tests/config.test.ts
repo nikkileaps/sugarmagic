@@ -21,7 +21,10 @@ import { normalizeSugarLangPluginConfig } from "../config";
 describe("normalizeSugarLangPluginConfig", () => {
   it("fills missing placement fields with sensible defaults", () => {
     expect(normalizeSugarLangPluginConfig(undefined)).toEqual({
+      targetLanguage: "",
+      supportLanguage: "en",
       debugLogging: false,
+      verifyEnabled: false,
       chunkExtraction: {
         enabled: true
       },
@@ -52,7 +55,10 @@ describe("normalizeSugarLangPluginConfig", () => {
         }
       )
     ).toEqual({
+      targetLanguage: "",
+      supportLanguage: "en",
       debugLogging: true,
+      verifyEnabled: false,
       chunkExtraction: {
         enabled: true
       },
@@ -64,5 +70,17 @@ describe("normalizeSugarLangPluginConfig", () => {
         closingDialogTurns: 1
       }
     });
+  });
+
+  it("keeps verify disabled by default but allows an environment opt-in", () => {
+    expect(
+      normalizeSugarLangPluginConfig(undefined, {
+        SUGARMAGIC_SUGARLANG_VERIFY_ENABLED: "true"
+      })
+    ).toEqual(
+      expect.objectContaining({
+        verifyEnabled: true
+      })
+    );
   });
 });

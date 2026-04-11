@@ -63,7 +63,7 @@ export function createTestAtlasProvider(
       cefrPriorBand: entry.cefrPriorBand,
       frequencyRank: entry.frequencyRank ?? 1,
       partsOfSpeech: entry.partsOfSpeech ?? ["noun"],
-      gloss: entry.gloss,
+      glosses: entry.gloss ? { en: entry.gloss } : undefined,
       cefrPriorSource: entry.cefrPriorSource
     });
   }
@@ -82,6 +82,12 @@ export function createTestAtlasProvider(
       return [...byLemma.values()]
         .filter((entry) => entry.cefrPriorBand === band)
         .map((entry) => ({ lemmaId: entry.lemmaId, lang: entry.lang }));
+    },
+    getGloss(lemmaId: string, _lang: string, supportLang: string): string | undefined {
+      return byLemma.get(lemmaId)?.glosses?.[supportLang];
+    },
+    resolveFromGloss(): AtlasLemmaEntry[] {
+      return [];
     },
     getAtlasVersion(): string {
       return "test-atlas-v1";
@@ -144,6 +150,63 @@ export function createTestRegion(): RegionDocument {
     markers: [],
     gameplayPlacements: []
   };
+}
+
+export function createTestDocumentDefinitions(): DocumentDefinition[] {
+  return [
+    {
+      definitionId: "doc-region",
+      displayName: "Station Guide",
+      template: "book",
+      body: "Wordlark Hollow welcomes travelers.",
+      author: "Guild Clerk",
+      locationLine: "Station Hall",
+      dateLine: "Spring",
+      footer: "",
+      backBody: "",
+      pages: ["Welcome to Wordlark Hollow."],
+      sections: [{ heading: "Entry", body: "Speak to Orrin." }]
+    },
+    {
+      definitionId: "doc-platform",
+      displayName: "North Platform Notice",
+      template: "sign",
+      body: "Boarding at dawn.",
+      author: "",
+      locationLine: "",
+      dateLine: "",
+      footer: "",
+      backBody: "",
+      pages: [""],
+      sections: [{ heading: "", body: "" }]
+    },
+    {
+      definitionId: "doc-npc",
+      displayName: "Orrin Notes",
+      template: "book",
+      body: "Orrin keeps the station calm.",
+      author: "",
+      locationLine: "",
+      dateLine: "",
+      footer: "",
+      backBody: "",
+      pages: [""],
+      sections: [{ heading: "", body: "" }]
+    },
+    {
+      definitionId: "doc-ticket",
+      displayName: "Ticket Copy",
+      template: "letter",
+      body: "Platform 1 only.",
+      author: "",
+      locationLine: "",
+      dateLine: "",
+      footer: "",
+      backBody: "",
+      pages: [""],
+      sections: [{ heading: "", body: "" }]
+    }
+  ];
 }
 
 export function createTestSceneAuthoringContext(
@@ -258,61 +321,7 @@ export function createTestSceneAuthoringContext(
       }
     ];
   const documentDefinitions =
-    overrides.documentDefinitions ??
-    [
-      {
-        definitionId: "doc-region",
-        displayName: "Station Guide",
-        template: "book",
-        body: "Wordlark Hollow welcomes travelers.",
-        author: "Guild Clerk",
-        locationLine: "Station Hall",
-        dateLine: "Spring",
-        footer: "",
-        backBody: "",
-        pages: ["Welcome to Wordlark Hollow."],
-        sections: [{ heading: "Entry", body: "Speak to Orrin." }]
-      },
-      {
-        definitionId: "doc-platform",
-        displayName: "North Platform Notice",
-        template: "sign",
-        body: "Boarding at dawn.",
-        author: "",
-        locationLine: "",
-        dateLine: "",
-        footer: "",
-        backBody: "",
-        pages: [""],
-        sections: [{ heading: "", body: "" }]
-      },
-      {
-        definitionId: "doc-npc",
-        displayName: "Orrin Notes",
-        template: "book",
-        body: "Orrin keeps the station calm.",
-        author: "",
-        locationLine: "",
-        dateLine: "",
-        footer: "",
-        backBody: "",
-        pages: [""],
-        sections: [{ heading: "", body: "" }]
-      },
-      {
-        definitionId: "doc-ticket",
-        displayName: "Ticket Copy",
-        template: "letter",
-        body: "Platform 1 only.",
-        author: "",
-        locationLine: "",
-        dateLine: "",
-        footer: "",
-        backBody: "",
-        pages: [""],
-        sections: [{ heading: "", body: "" }]
-      }
-    ];
+    overrides.documentDefinitions ?? createTestDocumentDefinitions();
 
   return createSceneAuthoringContext({
     region,

@@ -57,7 +57,7 @@ The phase is exposed per turn through
 Opening-dialog turns bypass the normal adaptive language pipeline.
 
 - No Budgeter work
-- No Director call
+- No Teacher'scall
 - No LLM call
 - No learner observation extraction
 
@@ -168,7 +168,7 @@ becomes inert:
 
 - `sugarlang.placementFlow` is not activated again
 - No questionnaire UI is shown
-- The normal Budgeter -> Director -> Verify -> Observe path runs
+- The normal Budgeter -> Teacher's-> Verify -> Observe path runs
 - The NPC behaves like a normal Sugarlang conversational NPC
 
 ## Configuration
@@ -200,11 +200,11 @@ Behavior:
 - `confidenceFloor` does not reject results; it is a warning threshold
 - `openingDialogTurns` and `closingDialogTurns` tune the wrapper pacing
 
-## Director Boundary
+## Teacher'sBoundary
 
 Placement is not Director-owned.
 
-The Director is bypassed during `opening-dialog` and skipped entirely during the
+The Teacher'sis bypassed during `opening-dialog` and skipped entirely during the
 `questionnaire` phase. It only re-enters for normal closing-dialog turns after a
 known CEFR estimate exists.
 

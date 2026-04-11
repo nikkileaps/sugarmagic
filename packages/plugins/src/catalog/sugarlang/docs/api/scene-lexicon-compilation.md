@@ -19,6 +19,9 @@ sugarlang scene lexicons.
 - `createSceneAuthoringContext(...)`
   - Filters the authored project down to the content reachable from one scene
   - Keeps traversal deterministic by sorting every collected slice
+- `resolveSceneAuthoringContexts(...)`
+  - Resolves canonical region/area/NPC `lorePageId` references through the SugarDeploy gateway lore wiki path before assembling scene contexts
+  - Leaves item-readable `documentDefinitionId` references on the project `documentDefinitions` path
 
 ## Traversal Output
 

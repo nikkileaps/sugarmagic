@@ -213,15 +213,206 @@ describe("GenerateStage", () => {
       }
     };
 
-    await stage.execute(input as never, createStageContext() as never);
+    const result = await stage.execute(input as never, createStageContext() as never);
 
     expect(llmProvider.generateStructuredTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         systemPrompt: expect.stringContaining(
-          "Language constraint: Reply primarily in es."
+          "Language constraint: Use a mixed reply."
         )
       })
     );
+    expect(resultDiagnosticsSystemPrompt(result)).toContain(
+      "Language constraint: Use a mixed reply."
+    );
+  });
+
+  it("skips the generic-only fast path when a Sugarlang constraint is present", async () => {
+    const llmProvider = {
+      generateStructuredTurn: vi.fn().mockResolvedValue("Hola. Estoy bien.")
+    };
+    const stage = new GenerateStage(llmProvider);
+    const input = createStageInput() as any;
+    input.plan = {
+      ...input.plan,
+      responseIntent: "greet" as const,
+      responseSpecificity: "generic-only" as const
+    };
+    input.execution.annotations["sugarlang.constraint"] = {
+      targetVocab: {
+        introduce: [],
+        reinforce: [{ lemmaId: "hola", lang: "es" }],
+        avoid: []
+      },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.3,
+      interactionStyle: "listening_first",
+      glossingStrategy: "inline",
+      sentenceComplexityCap: "single-clause",
+      targetLanguage: "es",
+      learnerCefr: "A1",
+      rawPrescription: {
+        introduce: [],
+        reinforce: [],
+        avoid: [],
+        budget: { newItemsAllowed: 0 },
+        rationale: {
+          candidateSetSize: 0,
+          envelopeSurvivorCount: 0,
+          priorityScores: [],
+          reasons: []
+        }
+      }
+    };
+
+    const result = await stage.execute(input as never, createStageContext() as never);
+
+    expect(llmProvider.generateStructuredTurn).toHaveBeenCalledTimes(1);
+    expect(result.output.text).toBe("Hola. Estoy bien.");
+  });
+
+  it("uses tiny-turn prompt shaping for anchored first-meeting Sugarlang greetings", async () => {
+    const llmProvider = {
+      generateStructuredTurn: vi.fn().mockResolvedValue("Hola.")
+    };
+    const stage = new GenerateStage(llmProvider);
+    const input = createStageInput() as any;
+    input.plan = {
+      ...input.plan,
+      responseIntent: "greet" as const,
+      responseSpecificity: "generic-only" as const,
+      responseGoal: "Open the conversation naturally while staying in character."
+    };
+    input.execution.runtimeContext = {
+      ...input.execution.runtimeContext,
+      here: {
+        regionId: "region-1",
+        regionDisplayName: "Region",
+        regionLorePageId: null,
+        sceneId: "scene-1",
+        sceneDisplayName: "Station Courtyard",
+        area: {
+          areaId: "area-1",
+          displayName: "Station Courtyard",
+          kind: "zone"
+        },
+        parentArea: null
+      },
+      npcPlayerRelation: {
+        sameArea: true,
+        proximityBand: "immediate"
+      },
+      npcBehavior: {
+        task: {
+          displayName: "Wait for Delivery",
+          description: "Wait for cheese order."
+        },
+        activity: {
+          activity: "waiting"
+        },
+        goal: {
+          goal: "wait_for_delivery"
+        },
+        movement: {
+          status: "idle"
+        }
+      },
+      trackedQuest: {
+        questId: "quest-1",
+        displayName: "Find Suitcase"
+      },
+      activeQuestStage: {
+        questId: "quest-1",
+        stageId: "stage-1",
+        stageDisplayName: "Start"
+      }
+    };
+    input.execution.annotations["sugarlang.constraint"] = {
+      targetVocab: {
+        introduce: [],
+        reinforce: [],
+        avoid: []
+      },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.2,
+      interactionStyle: "listening_first",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "single-clause",
+      targetLanguage: "es",
+      learnerCefr: "A1",
+      rawPrescription: {
+        introduce: [],
+        reinforce: [],
+        avoid: [],
+        budget: { newItemsAllowed: 0 },
+        rationale: {
+          candidateSetSize: 0,
+          envelopeSurvivorCount: 0,
+          priorityScores: [],
+          reasons: []
+        }
+      }
+    };
+
+    const result = await stage.execute(input as never, createStageContext() as never);
+
+    expect(result.diagnostics.payload.minimalSugarlangGreetingMode).toBe(true);
+    expect(resultDiagnosticsSystemPrompt(result)).toContain(
+      "This is a first-meeting beginner greeting turn."
+    );
+    expect(resultDiagnosticsSystemPrompt(result)).not.toContain("Current task:");
+    expect(resultDiagnosticsSystemPrompt(result)).not.toContain("Active quest:");
+    expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
+      "Reply in exactly 1 short sentence."
+    );
+  });
+
+  it("does not disable tiny-turn prompt shaping just because prior history exists", async () => {
+    const llmProvider = {
+      generateStructuredTurn: vi.fn().mockResolvedValue("Hola.")
+    };
+    const stage = new GenerateStage(llmProvider);
+    const input = createStageInput() as any;
+    input.state.history = [
+      { role: "assistant", text: "Older conversation line." },
+      { role: "user", text: "Older player reply." }
+    ];
+    input.plan = {
+      ...input.plan,
+      responseIntent: "greet" as const,
+      responseSpecificity: "generic-only" as const,
+      responseGoal: "Open the conversation naturally while staying in character."
+    };
+    input.execution.annotations["sugarlang.constraint"] = {
+      targetVocab: {
+        introduce: [],
+        reinforce: [],
+        avoid: []
+      },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.2,
+      interactionStyle: "listening_first",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "single-clause",
+      targetLanguage: "es",
+      learnerCefr: "A1",
+      rawPrescription: {
+        introduce: [],
+        reinforce: [],
+        avoid: [],
+        budget: { newItemsAllowed: 0 },
+        rationale: {
+          candidateSetSize: 0,
+          envelopeSurvivorCount: 0,
+          priorityScores: [],
+          reasons: []
+        }
+      }
+    };
+
+    const result = await stage.execute(input as never, createStageContext() as never);
+
+    expect(result.diagnostics.payload.minimalSugarlangGreetingMode).toBe(true);
   });
 
   it("returns the placement questionnaire envelope without using the llm", async () => {
@@ -245,3 +436,9 @@ describe("GenerateStage", () => {
     });
   });
 });
+
+function resultDiagnosticsSystemPrompt(
+  result: Awaited<ReturnType<GenerateStage["execute"]>>
+): string {
+  return String(result.diagnostics.payload.systemPrompt ?? "");
+}

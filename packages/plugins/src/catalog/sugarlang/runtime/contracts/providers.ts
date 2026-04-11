@@ -1,25 +1,25 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/contracts/providers.ts
  *
- * Purpose: Declares the ADR 010 provider interfaces and Director context types used across sugarlang.
+ * Purpose: Declares the ADR 010 provider interfaces and teacher context types used across sugarlang.
  *
  * Exports:
  *   - AtlasLemmaEntry
  *   - PendingProvisional
  *   - ProbeFloorState
  *   - ActiveQuestEssentialLemma
- *   - DirectorNpcContext
- *   - DirectorRecentTurn
- *   - DirectorLanguageContext
- *   - DirectorContext
+ *   - TeacherNpcContext
+ *   - TeacherRecentTurn
+ *   - TeacherLanguageContext
+ *   - TeacherContext
  *   - LexicalAtlasProvider
  *   - LearnerPriorProvider
- *   - DirectorPolicy
+ *   - TeacherPolicy
  *
  * Relationships:
  *   - Depends on the core contract types for learner state, compiled scene lexicons, prescriptions, and directives.
- *   - Is consumed by provider implementations and the Director, compiler, and budgeter stubs.
- *   - Preserves ADR 010 one-way boundaries: atlas does not import priors or director logic; priors do not import director logic; director may depend on both but never writes back into them.
+ *   - Is consumed by provider implementations and the teacher, compiler, and budgeter stubs.
+ *   - Preserves ADR 010 one-way boundaries: atlas does not import priors or teacher logic; priors do not import teacher logic; teacher may depend on both but never writes back into them.
  *
  * Implements: Proposal 001 §Relationship to Existing Proposals and ADRs / ADR 010 provider boundaries
  *
@@ -43,7 +43,7 @@ export interface AtlasLemmaEntry {
   cefrPriorBand: CEFRBand;
   frequencyRank: number | null;
   partsOfSpeech: string[];
-  gloss?: string;
+  glosses?: Record<string, string>;
   examples?: string[];
   cefrPriorSource?: string;
 }
@@ -87,11 +87,11 @@ export interface ActiveQuestEssentialLemma {
 }
 
 /**
- * NPC slice passed into the Director prompt builder and policy.
+ * NPC slice passed into the teacher prompt builder and policy.
  *
  * Implements: Proposal 001 §3. Director
  */
-export interface DirectorNpcContext {
+export interface TeacherNpcContext {
   npcDefinitionId: string | null;
   displayName: string | null;
   lorePageId: string | null;
@@ -99,11 +99,11 @@ export interface DirectorNpcContext {
 }
 
 /**
- * Recent turn summary passed into the Director for conversational continuity.
+ * Recent turn summary passed into the teacher for conversational continuity.
  *
  * Implements: Proposal 001 §3. Director
  */
-export interface DirectorRecentTurn {
+export interface TeacherRecentTurn {
   turnId: string;
   speaker: "player" | "npc";
   text: string;
@@ -111,21 +111,21 @@ export interface DirectorRecentTurn {
 }
 
 /**
- * Language configuration passed into the Director.
+ * Language configuration passed into the teacher.
  *
  * Implements: Proposal 001 §3. Director
  */
-export interface DirectorLanguageContext {
+export interface TeacherLanguageContext {
   targetLanguage: string;
   supportLanguage: string;
 }
 
 /**
- * Full Director invocation context owned by middleware assembly.
+ * Full teacher invocation context owned by middleware assembly.
  *
  * Implements: Proposal 001 §3. Director / §Observer Latency Bias / §Quest-Essential Lemma Exemption
  */
-export interface DirectorContext {
+export interface TeacherContext {
   conversationId: string;
   telemetryContext?: {
     turnId: string;
@@ -134,9 +134,9 @@ export interface DirectorContext {
   learner: LearnerProfile;
   scene: CompiledSceneLexicon;
   prescription: LexicalPrescription;
-  npc: DirectorNpcContext;
-  recentTurns: DirectorRecentTurn[];
-  lang: DirectorLanguageContext;
+  npc: TeacherNpcContext;
+  recentTurns: TeacherRecentTurn[];
+  lang: TeacherLanguageContext;
   calibrationActive: boolean;
   pendingProvisionalLemmas: PendingProvisional[];
   probeFloorState: ProbeFloorState;
@@ -153,6 +153,8 @@ export interface LexicalAtlasProvider {
   getLemma: (lemmaId: string, lang: string) => AtlasLemmaEntry | undefined;
   getBand: (lemmaId: string, lang: string) => CEFRBand | undefined;
   getFrequencyRank: (lemmaId: string, lang: string) => number | undefined;
+  getGloss: (lemmaId: string, lang: string, supportLang: string) => string | undefined;
+  resolveFromGloss: (glossWord: string, lang: string, supportLang: string) => AtlasLemmaEntry[];
   listLemmasAtBand: (band: CEFRBand, lang: string) => LemmaRef[];
   getAtlasVersion: (lang: string) => string;
 }
@@ -172,10 +174,10 @@ export interface LearnerPriorProvider {
 }
 
 /**
- * ADR 010 seam for the LLM-backed director policy.
+ * ADR 010 seam for the LLM-backed teacher policy.
  *
  * Implements: ADR 010 provider boundaries / Proposal 001 §3. Director
  */
-export interface DirectorPolicy {
-  invoke: (context: DirectorContext) => Promise<PedagogicalDirective>;
+export interface TeacherPolicy {
+  invoke: (context: TeacherContext) => Promise<PedagogicalDirective>;
 }

@@ -1,26 +1,25 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/sugar-lang-director.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/sugar-lang-teacher.ts
  *
- * Purpose: Implements the facade over Claude invocation, fallback handling, calibration, and directive caching.
+ * Purpose: Implements the facade over teacher-policy invocation, fallback handling, calibration, and directive caching.
  *
  * Exports:
- *   - SugarLangDirector
+ *   - SugarLangTeacher
  *
  * Relationships:
- *   - Depends on the DirectorPolicy provider boundary and directive contract types.
- *   - Will be consumed by the director middleware once Epic 9 lands.
+ *   - Depends on the TeacherPolicy provider boundary and directive contract types.
+ *   - Will be consumed by the teacher middleware once Epic 9 lands.
  *
- * Implements: Proposal 001 §3. Director
- *
+ * Implements: Proposal 001 §3. Teacher's *
  * Status: active
  */
 
 import { isInPostPlacementCalibration } from "./calibration-mode";
 import { DirectiveCache } from "./directive-cache";
-import { FallbackDirectorPolicy } from "./fallback-director-policy";
+import { FallbackTeacherPolicy } from "./policies/fallback-teacher-policy";
 import type {
-  DirectorContext,
-  DirectorPolicy,
+  TeacherContext,
+  TeacherPolicy,
   PedagogicalDirective
 } from "../types";
 import {
@@ -29,32 +28,32 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
-import { DirectorInvocationError } from "./claude-director-policy";
+import { TeacherInvocationError } from "./policies/llm-teacher-policy";
 
-export interface SugarLangDirectorOptions {
-  claudePolicy: DirectorPolicy;
-  fallbackPolicy: FallbackDirectorPolicy;
+export interface SugarLangTeacherOptions {
+  llmPolicy: TeacherPolicy;
+  fallbackPolicy: FallbackTeacherPolicy;
   cache: DirectiveCache;
   telemetry?: TelemetrySink;
 }
 
-export class SugarLangDirector {
-  private readonly claudePolicy: DirectorPolicy;
-  private readonly fallbackPolicy: FallbackDirectorPolicy;
+export class SugarLangTeacher {
+  private readonly llmPolicy: TeacherPolicy;
+  private readonly fallbackPolicy: FallbackTeacherPolicy;
   private readonly cache: DirectiveCache;
   private readonly telemetry: TelemetrySink;
 
-  constructor(options: SugarLangDirectorOptions) {
-    this.claudePolicy = options.claudePolicy;
+  constructor(options: SugarLangTeacherOptions) {
+    this.llmPolicy = options.llmPolicy;
     this.fallbackPolicy = options.fallbackPolicy;
     this.cache = options.cache;
     this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
   }
 
-  async invoke(context: DirectorContext): Promise<PedagogicalDirective> {
+  async invoke(context: TeacherContext): Promise<PedagogicalDirective> {
     const calibrationActive =
       context.calibrationActive || isInPostPlacementCalibration(context.learner);
-    const effectiveContext: DirectorContext = {
+    const effectiveContext: TeacherContext = {
       ...context,
       calibrationActive
     };
@@ -94,12 +93,12 @@ export class SugarLangDirector {
     }
 
     let directive: PedagogicalDirective;
-    let outcome: "claude" | "fallback" = "claude";
+    let outcome: "llm" | "fallback" = "llm";
 
     try {
-      directive = await this.claudePolicy.invoke(effectiveContext);
+      directive = await this.llmPolicy.invoke(effectiveContext);
     } catch (error) {
-      if (!(error instanceof DirectorInvocationError)) {
+      if (!(error instanceof TeacherInvocationError)) {
         throw error;
       }
       outcome = "fallback";

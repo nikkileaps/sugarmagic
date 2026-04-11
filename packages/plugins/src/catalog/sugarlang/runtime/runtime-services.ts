@@ -42,10 +42,14 @@ import { RuntimeCompileScheduler } from "./compile/compile-scheduler";
 import { getSugarlangRuntimeCompileCache } from "./compile/runtime-cache-state";
 import { DefaultSugarlangSceneLexiconStore } from "./compile/scene-lexicon-store";
 import { createSceneAuthoringContext } from "./compile/scene-traversal";
-import { ClaudeDirectorPolicy, createGatewayDirectorClient } from "./director/claude-director-policy";
-import { DirectiveCache } from "./director/directive-cache";
-import { FallbackDirectorPolicy } from "./director/fallback-director-policy";
-import { SugarLangDirector } from "./director/sugar-lang-director";
+import {
+  ClaudeTeacherPolicy,
+  TeacherInvocationError,
+  createGatewayTeacherClient
+} from "./teacher/policies/llm-teacher-policy";
+import { DirectiveCache } from "./teacher/directive-cache";
+import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
+import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
 import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
 import { LearnerStateReducer } from "./learner/learner-state-reducer";
 import {
@@ -77,7 +81,7 @@ export interface SugarlangExecutionServices {
   learnerStore: BlackboardLearnerStore;
   learnerStateReducer: LearnerStateReducer;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
-  director: SugarLangDirector;
+  teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
 }
 
@@ -167,9 +171,13 @@ export class SugarlangRuntimeServices {
     this.llmModel =
       this.environment?.SUGARMAGIC_ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-6";
 
-    // All sugarlang LLM calls go through the gateway. No direct vendor API calls.
+    // All sugarlang LLM calls go through the shared SugarDeploy gateway.
+    // The /api/sugaragent/generate handler is a generic Claude proxy — not
+    // sugaragent-specific — so both plugins share it.
     const proxyBaseUrl =
-      this.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ?? "";
+      this.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
+      this.environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
+      "";
     this.gatewayClient = proxyBaseUrl
       ? new SugarlangGatewayClient(proxyBaseUrl)
       : null;
@@ -216,6 +224,14 @@ export class SugarlangRuntimeServices {
 
   getConfig(): SugarLangPluginConfig {
     return this.config;
+  }
+
+  getTargetLanguage(): string | null {
+    return this.config.targetLanguage || null;
+  }
+
+  getPlayerDefinitionId(): string | null {
+    return this.boundContext?.playerDefinition.definitionId ?? null;
   }
 
   findNpcDefinition(npcDefinitionId: string | undefined): NPCDefinition | null {
@@ -280,24 +296,30 @@ export class SugarlangRuntimeServices {
     const directiveCache = new DirectiveCache({
       blackboard: this.boundContext.blackboard
     });
-    const fallbackPolicy = new FallbackDirectorPolicy();
-    const claudePolicy =
+    const fallbackPolicy = new FallbackTeacherPolicy();
+    const llmPolicy =
       this.gatewayClient
-        ? new ClaudeDirectorPolicy({
-            client: createGatewayDirectorClient(this.gatewayClient),
+        ? new ClaudeTeacherPolicy({
+            client: createGatewayTeacherClient(this.gatewayClient),
             telemetry: this.telemetry,
+            logger: this.logger,
             model: this.llmModel
           })
         : {
+            // Gateway not configured — every invoke triggers the fallback policy.
+            // This is the "deterministic-only" degraded mode: the teacher always
+            // falls back, NPC speech still generates via SugarAgent's own gateway,
+            // and the pipeline completes without sugarlang-side LLM calls.
             async invoke() {
-              throw new Error(
+              throw new TeacherInvocationError(
                 "Sugarlang LLM gateway is not configured. " +
-                "Set SUGARMAGIC_SUGARLANG_PROXY_BASE_URL in your environment."
+                "Set SUGARMAGIC_SUGARLANG_PROXY_BASE_URL in your environment or " +
+                "configure it through the deploy plugin. Running in fallback-only mode."
               );
             }
           };
-    const director = new SugarLangDirector({
-      claudePolicy,
+    const teacher = new SugarLangTeacher({
+      llmPolicy,
       fallbackPolicy,
       cache: directiveCache,
       telemetry: this.telemetry
@@ -307,7 +329,7 @@ export class SugarlangRuntimeServices {
       ...languageBundle,
       learnerStore,
       learnerStateReducer,
-      director,
+      teacher,
       llmClient: this.gatewayClient
     };
     this.executionServices.set(key, services);

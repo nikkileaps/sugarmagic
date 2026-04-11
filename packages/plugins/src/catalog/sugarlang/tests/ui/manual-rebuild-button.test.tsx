@@ -19,7 +19,10 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import type { GameProject } from "@sugarmagic/domain";
 import { createDefaultDeploymentSettings } from "@sugarmagic/domain";
-import { createTestSceneAuthoringContext } from "../compile/test-helpers";
+import {
+  createTestDocumentDefinitions,
+  createTestSceneAuthoringContext
+} from "../compile/test-helpers";
 import {
   readSugarlangCompileStatus,
   rebuildSugarlangCompileCache,
@@ -58,7 +61,7 @@ function createGameProjectFixture(): { gameProject: GameProject; region: ReturnT
       },
       spellDefinitions: [],
       itemDefinitions: scene.items,
-      documentDefinitions: scene.lorePages,
+      documentDefinitions: createTestDocumentDefinitions(),
       npcDefinitions: scene.npcs,
       dialogueDefinitions: scene.dialogues,
       questDefinitions: scene.quests

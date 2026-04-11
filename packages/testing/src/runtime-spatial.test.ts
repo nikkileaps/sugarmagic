@@ -154,6 +154,8 @@ describe("runtime spatial resolution", () => {
     expect(location).toMatchObject({
       regionId: "wordlark-hollow",
       regionDisplayName: "Wordlark Hollow Station",
+      sceneId: "wordlark-hollow",
+      sceneDisplayName: "Wordlark Hollow Station",
       area: {
         areaId: "cheese-kiosk",
         displayName: "Cheese Kiosk"

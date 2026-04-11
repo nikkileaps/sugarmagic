@@ -1,38 +1,37 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/claude-director-policy.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/policies/llm-teacher-policy.ts
  *
- * Purpose: Implements the Claude-backed structured-output Director policy.
+ * Purpose: Implements the Claude-backed structured-output Teacher'spolicy.
  *
  * Exports:
- *   - ClaudeDirectorPolicy
+ *   - ClaudeTeacherPolicy
  *
  * Relationships:
- *   - Implements the DirectorPolicy contract from runtime/contracts/providers.ts.
- *   - Will be consumed by SugarLangDirector once Epic 9 lands.
+ *   - Implements the TeacherPolicy contract from runtime/contracts/providers.ts.
+ *   - Will be consumed by SugarLangTeacher once Epic 9 lands.
  *
- * Implements: Proposal 001 §3. Director
- *
+ * Implements: Proposal 001 §3. Teacher's *
  * Status: active
  */
 
-import type { SugarlangLLMClient } from "../llm/types";
-import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "./calibration-mode";
+import type { SugarlangLLMClient } from "../../llm/types";
+import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
 import {
-  buildDirectorPrompt,
+  buildTeacherPrompt,
   estimatePromptTokens
-} from "./prompt-builder";
-import { parseDirective, repairDirective } from "./schema-parser";
+} from "../prompt-builder";
+import { parseDirective, repairDirective } from "../schema-parser";
 import type {
-  DirectorContext,
-  DirectorPolicy,
+  TeacherContext,
+  TeacherPolicy,
   PedagogicalDirective
-} from "../types";
+} from "../../types";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
   emitTelemetry,
   type TelemetrySink
-} from "../telemetry/telemetry";
+} from "../../telemetry/telemetry";
 
 const DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 900;
@@ -60,15 +59,30 @@ export interface DirectorClaudeClient {
   ) => Promise<DirectorClaudeClientResult>;
 }
 
-export interface ClaudeDirectorPolicyOptions {
+export interface ClaudeTeacherPolicyOptions {
   client: DirectorClaudeClient;
   telemetry?: TelemetrySink;
+  logger?: TeacherPolicyLogger;
   model?: string;
   maxTokens?: number;
   now?: () => number;
 }
 
-export class DirectorInvocationError extends Error {
+export interface TeacherPolicyLogger {
+  info: (message: string, payload?: Record<string, unknown>) => void;
+  warn: (message: string, payload?: Record<string, unknown>) => void;
+}
+
+const NO_OP_LOGGER: TeacherPolicyLogger = {
+  info() {
+    return undefined;
+  },
+  warn() {
+    return undefined;
+  }
+};
+
+export class TeacherInvocationError extends Error {
   constructor(
     message: string,
     public readonly fallbackTriggerReason?:
@@ -77,7 +91,7 @@ export class DirectorInvocationError extends Error {
     public readonly causeData?: unknown
   ) {
     super(message);
-    this.name = "DirectorInvocationError";
+    this.name = "TeacherInvocationError";
   }
 }
 
@@ -85,7 +99,7 @@ export class DirectorInvocationError extends Error {
  * Creates a DirectorClaudeClient backed by sugarlang's own gateway.
  * No dependency on sugaragent — all calls go through the gateway proxy.
  */
-export function createGatewayDirectorClient(
+export function createGatewayTeacherClient(
   gateway: SugarlangLLMClient
 ): DirectorClaudeClient {
   return {
@@ -105,31 +119,45 @@ export function createGatewayDirectorClient(
   };
 }
 
-export class ClaudeDirectorPolicy implements DirectorPolicy {
+export class ClaudeTeacherPolicy implements TeacherPolicy {
   private readonly client: DirectorClaudeClient;
   private readonly telemetry: TelemetrySink;
+  private readonly logger: TeacherPolicyLogger;
   private readonly model: string;
   private readonly maxTokens: number;
   private readonly now: () => number;
 
-  constructor(options: ClaudeDirectorPolicyOptions) {
+  constructor(options: ClaudeTeacherPolicyOptions) {
     this.client = options.client;
     this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
+    this.logger = options.logger ?? NO_OP_LOGGER;
     this.model = options.model ?? DEFAULT_DIRECTOR_MODEL;
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
     this.now = options.now ?? (() => Date.now());
   }
 
   async invoke(
-    context: DirectorContext
+    context: TeacherContext
   ): Promise<PedagogicalDirective> {
-    const prompt = buildDirectorPrompt(context);
+    const prompt = buildTeacherPrompt(context);
     const shouldAppendCalibrationHint =
       context.calibrationActive || isInPostPlacementCalibration(context.learner);
     const userPrompt = shouldAppendCalibrationHint
       ? `${prompt.user}\n\n${buildPostPlacementCalibrationHint()}`
       : prompt.user;
     const startedAt = this.now();
+
+    this.logger.info("Teacher prompt constructed.", {
+      conversationId: context.conversationId,
+      sceneId: context.scene.sceneId,
+      npcDefinitionId: context.npc.npcDefinitionId ?? null,
+      npcDisplayName: context.npc.displayName ?? null,
+      learnerBand: context.learner.estimatedCefrBand,
+      calibrationActive: shouldAppendCalibrationHint,
+      model: this.model,
+      systemPrompt: prompt.system,
+      userPrompt
+    });
 
     await emitTelemetry(
       this.telemetry,
@@ -165,6 +193,14 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
         cacheMarkers: prompt.cacheMarkers
       });
     } catch (error) {
+      this.logger.warn("Teacher invocation failed.", {
+        conversationId: context.conversationId,
+        sceneId: context.scene.sceneId,
+        npcDefinitionId: context.npc.npcDefinitionId ?? null,
+        npcDisplayName: context.npc.displayName ?? null,
+        model: this.model,
+        reason: error instanceof Error ? error.message : "Claude request failed"
+      });
       await emitTelemetry(
         this.telemetry,
         createTelemetryEvent("director.invocation-failed", {
@@ -180,7 +216,7 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
           reason: error instanceof Error ? error.message : "Claude request failed"
         })
       );
-      throw new DirectorInvocationError(
+      throw new TeacherInvocationError(
         error instanceof Error ? error.message : "Claude request failed",
         undefined,
         error
@@ -202,12 +238,39 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
       parseResult.error.code === "schema_validation_failed" &&
       parseResult.error.partial !== null
     ) {
+      this.logger.warn("Teacher response failed schema validation; applying repair.", {
+        conversationId: context.conversationId,
+        sceneId: context.scene.sceneId,
+        npcDefinitionId: context.npc.npcDefinitionId ?? null,
+        npcDisplayName: context.npc.displayName ?? null,
+        model: this.model,
+        requestId: response.requestId ?? null,
+        errorCode: parseResult.error.code,
+        errorMessage: parseResult.error.message,
+        errorDetails: parseResult.error.details,
+        partialResponse: parseResult.error.partial,
+        rawResponseText: response.text
+      });
       directive = repairDirective(parseResult.error.partial, context.prescription, context, {
         telemetry: this.telemetry
       });
       parseMode = "repaired";
     } else {
-      throw new DirectorInvocationError(
+      this.logger.warn("Teacher response rejected before repair; falling back.", {
+        conversationId: context.conversationId,
+        sceneId: context.scene.sceneId,
+        npcDefinitionId: context.npc.npcDefinitionId ?? null,
+        npcDisplayName: context.npc.displayName ?? null,
+        model: this.model,
+        requestId: response.requestId ?? null,
+        errorCode: parseResult.error.code,
+        errorMessage: parseResult.error.message,
+        errorDetails: parseResult.error.details,
+        partialResponse: parseResult.error.partial,
+        rawResponseText: response.text,
+        activeQuestEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+      });
+      throw new TeacherInvocationError(
         parseResult.error.message,
         parseResult.error.code === "hard_floor_violated"
           ? "director-deferred-override"
@@ -215,6 +278,18 @@ export class ClaudeDirectorPolicy implements DirectorPolicy {
         parseResult.error
       );
     }
+
+    this.logger.info("Teacher response received.", {
+      conversationId: context.conversationId,
+      sceneId: context.scene.sceneId,
+      npcDefinitionId: context.npc.npcDefinitionId ?? null,
+      npcDisplayName: context.npc.displayName ?? null,
+      model: this.model,
+      requestId: response.requestId ?? null,
+      rawResponseText: response.text,
+      parseMode,
+      directive
+    });
 
     const endedAt = this.now();
     await emitTelemetry(

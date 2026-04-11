@@ -6,18 +6,18 @@ This document records the ADR 010 provider boundaries:
 
 - `LexicalAtlasProvider`
 - `LearnerPriorProvider`
-- `DirectorPolicy`
+- `TeacherPolicy`
 
 ## One-Way Dependency Rules
 
-- `LexicalAtlasProvider` never imports from learner-prior or director implementations.
-- `LearnerPriorProvider` never imports from director implementations.
-- `DirectorPolicy` may depend on atlas and learner contracts, but never writes back into them.
+- `LexicalAtlasProvider` never imports from learner-prior or teacher implementations.
+- `LearnerPriorProvider` never imports from teacher implementations.
+- `TeacherPolicy` may depend on atlas and learner contracts, but never writes back into them.
 
 Epic 3 also wires an architectural test that checks:
 
-- `runtime/contracts/providers.ts` does not import from `runtime/director/`, `runtime/budgeter/`, or `runtime/learner/`
-- files under `runtime/providers/impls/` do not import from `runtime/director/` or `runtime/middlewares/`
+- `runtime/contracts/providers.ts` does not import from `runtime/teacher/`, `runtime/budgeter/`, or `runtime/learner/`
+- files under `runtime/providers/impls/` do not import from `runtime/teacher/` or `runtime/middlewares/`
 
 ## Public Types
 
@@ -25,10 +25,10 @@ Epic 3 also wires an architectural test that checks:
 - `PendingProvisional`
 - `ProbeFloorState`
 - `ActiveQuestEssentialLemma`
-- `DirectorNpcContext`
-- `DirectorRecentTurn`
-- `DirectorLanguageContext`
-- `DirectorContext`
+- `TeacherNpcContext`
+- `TeacherRecentTurn`
+- `TeacherLanguageContext`
+- `TeacherContext`
 
 These types define the full shape of data crossing the provider seams before any
 later implementation logic lands.

@@ -1,13 +1,13 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/director/fallback-director-policy.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/teacher/fallback-teacher-policy.test.ts
  *
- * Purpose: Verifies the deterministic fallback Director policy under common failure modes.
+ * Purpose: Verifies the deterministic fallback Teacher'spolicy under common failure modes.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/director/fallback-director-policy directly.
+ *   - Exercises ../../runtime/teacher/policies/fallback-teacher-policy directly.
  *   - Confirms the fallback remains safe, deterministic, and clearly flagged.
  *
  * Implements: Epic 9 Story 9.4
@@ -16,21 +16,21 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { FallbackDirectorPolicy } from "../../runtime/director/fallback-director-policy";
-import { createDirectorContext } from "./test-helpers";
+import { FallbackTeacherPolicy } from "../../runtime/teacher/policies/fallback-teacher-policy";
+import { createTeacherContext } from "./test-helpers";
 
-describe("FallbackDirectorPolicy", () => {
-  const policy = new FallbackDirectorPolicy();
+describe("FallbackTeacherPolicy", () => {
+  const policy = new FallbackTeacherPolicy();
 
   it("always produces a valid fallback directive", async () => {
-    const directive = await policy.invoke(createDirectorContext());
+    const directive = await policy.invoke(createTeacherContext());
     expect(directive.targetVocab.reinforce).toHaveLength(1);
     expect(directive.directiveLifetime.maxTurns).toBe(3);
     expect(directive.isFallbackDirective).toBe(true);
   });
 
   it("produces anchored posture with inline glossing at cold start", async () => {
-    const context = createDirectorContext({
+    const context = createTeacherContext({
       activeQuestEssentialLemmas: []
     });
     context.learner.assessment.status = "unassessed";
@@ -42,9 +42,9 @@ describe("FallbackDirectorPolicy", () => {
   });
 
   it("produces target-dominant posture at high confidence", async () => {
-    const context = createDirectorContext({
-      learner: createDirectorContext({
-        learner: createDirectorContext().learner
+    const context = createTeacherContext({
+      learner: createTeacherContext({
+        learner: createTeacherContext().learner
       }).learner
     });
     context.learner.assessment.cefrConfidence = 0.9;
@@ -55,13 +55,13 @@ describe("FallbackDirectorPolicy", () => {
   });
 
   it("flags every output as a fallback directive", async () => {
-    const directive = await policy.invoke(createDirectorContext());
+    const directive = await policy.invoke(createTeacherContext());
     expect(directive.isFallbackDirective).toBe(true);
   });
 
   it("honors the hard floor with the oldest pending lemmas", async () => {
     const directive = await policy.invoke(
-      createDirectorContext({
+      createTeacherContext({
         probeFloorState: {
           turnsSinceLastProbe: 30,
           totalPendingLemmas: 5,
@@ -89,7 +89,7 @@ describe("FallbackDirectorPolicy", () => {
   });
 
   it("triggers a soft-floor probe for confident learners", async () => {
-    const context = createDirectorContext();
+    const context = createTeacherContext();
     context.learner.assessment.cefrConfidence = 0.8;
     const directive = await policy.invoke({
       ...context,
@@ -107,7 +107,7 @@ describe("FallbackDirectorPolicy", () => {
 
   it("does not trigger a probe when no floor is active", async () => {
     const directive = await policy.invoke(
-      createDirectorContext({
+      createTeacherContext({
         probeFloorState: {
           turnsSinceLastProbe: 2,
           totalPendingLemmas: 0,

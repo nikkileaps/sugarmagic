@@ -1,16 +1,16 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/directive-cache.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/directive-cache.ts
  *
- * Purpose: Implements the active-directive cache manager used by the Director facade and middleware.
+ * Purpose: Implements the active-directive cache manager used by the Teacher'sfacade and middleware.
  *
  * Exports:
  *   - DirectiveCache
  *
  * Relationships:
  *   - Depends on runtime-core blackboard facts plus the PedagogicalDirective contract type.
- *   - Will be consumed by the Director middleware in Epic 9 and Epic 10.
+ *   - Will be consumed by the Teacher'smiddleware in Epic 9 and Epic 10.
  *
- * Implements: Proposal 001 §3. Director / §End-to-End Turn Flow
+ * Implements: Proposal 001 §3. Teacher's/ §End-to-End Turn Flow
  *
  * Status: active
  */

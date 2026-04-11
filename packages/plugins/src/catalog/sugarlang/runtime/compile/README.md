@@ -5,6 +5,7 @@ This module owns Sugarlang's scene-lexicon build pipeline.
 It is the single source of truth for:
 
 - scene traversal into stable `TextBlob[]`
+- canonical lore wiki page resolution for `lorePageId`-backed scene inputs
 - content-hash computation
 - lemma-level lexicon compilation
 - preview/runtime compile caches

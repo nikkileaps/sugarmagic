@@ -31,15 +31,18 @@ import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
 import { extractChunks } from "../../runtime/compile/extract-chunks";
 import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
-import { SUGARLANG_PROXY_BASE_URL_ENV } from "../../config";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
   collectSceneText,
-  createSceneAuthoringContext,
   type SceneAuthoringContext
 } from "../../runtime/compile/scene-traversal";
+import {
+  resolveSceneAuthoringContexts,
+  resolveSugarlangGatewayBaseUrl,
+  SugarlangGatewayLoreClient
+} from "../../runtime/compile/lore-resolution";
 import { getQuestionnaire } from "../../runtime/placement/placement-questionnaire-loader";
 import { SUGARLANG_PLACEMENT_COMPLETED_EVENT } from "../../runtime/quest-integration/placement-completion";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
@@ -160,14 +163,18 @@ export function createSugarlangSceneContexts(
   gameProject: GameProject | null,
   regions: RegionDocument[],
   targetLanguage: string
-): SceneAuthoringContext[] {
+): Promise<SceneAuthoringContext[]> {
   if (!gameProject) {
-    return [];
+    return Promise.resolve([]);
   }
 
-  return [...regions]
-    .map((region) =>
-      createSceneAuthoringContext({
+  const proxyBaseUrl = resolveSugarlangGatewayBaseUrl();
+  const loreClient = proxyBaseUrl
+    ? new SugarlangGatewayLoreClient(proxyBaseUrl)
+    : null;
+
+  return resolveSceneAuthoringContexts(
+    [...regions].map((region) => ({
         region,
         targetLanguage,
         npcDefinitions: gameProject.npcDefinitions,
@@ -175,22 +182,26 @@ export function createSugarlangSceneContexts(
         questDefinitions: gameProject.questDefinitions,
         itemDefinitions: gameProject.itemDefinitions,
         documentDefinitions: gameProject.documentDefinitions
-      })
-    )
-    .sort((left, right) => left.sceneId.localeCompare(right.sceneId));
+      })),
+    loreClient
+  );
 }
 
-export function compileAuthoringSceneLexicon(
+export async function compileAuthoringSceneLexicon(
   gameProject: GameProject | null,
   activeRegion: RegionDocument | null,
   regions: RegionDocument[],
   targetLanguage: string
-): CompiledSceneLexicon | null {
+) : Promise<CompiledSceneLexicon | null> {
   if (!gameProject || !activeRegion) {
     return null;
   }
 
-  const context = createSugarlangSceneContexts(gameProject, regions, targetLanguage).find(
+  const context = (await createSugarlangSceneContexts(
+    gameProject,
+    regions,
+    targetLanguage
+  )).find(
     (scene) => scene.sceneId === activeRegion.identity.id
   );
   if (!context) {
@@ -277,7 +288,11 @@ export async function readSugarlangCompileStatus(
   targetLanguage: string,
   workspaceId: string
 ): Promise<SugarlangCompileStatusSummary> {
-  const scenes = createSugarlangSceneContexts(gameProject, regions, targetLanguage);
+  const scenes = await createSugarlangSceneContexts(
+    gameProject,
+    regions,
+    targetLanguage
+  );
   const currentHashes = computeCurrentSceneHashes(scenes);
   const entries = await collectAuthoringCacheEntries(workspaceId);
   const chunkEntries = await collectChunkCacheEntries(workspaceId);
@@ -322,7 +337,11 @@ export async function rebuildSugarlangCompileCache(
   onProgress?: (progress: SugarlangRebuildProgress) => void,
   options?: { chunkExtractionEnabled?: boolean }
 ): Promise<SugarlangCompileStatusSummary> {
-  const scenes = createSugarlangSceneContexts(gameProject, regions, targetLanguage);
+  const scenes = await createSugarlangSceneContexts(
+    gameProject,
+    regions,
+    targetLanguage
+  );
   const cache = new IndexedDBCompileCache({ workspaceId });
   let completedScenes = 0;
 
@@ -335,11 +354,7 @@ export async function rebuildSugarlangCompileCache(
   await cache.invalidate();
 
   const chunkExtractionEnabled = options?.chunkExtractionEnabled ?? true;
-  const proxyBaseUrl =
-    typeof globalThis !== "undefined" &&
-    typeof (globalThis as Record<string, unknown>)[SUGARLANG_PROXY_BASE_URL_ENV] === "string"
-      ? ((globalThis as Record<string, unknown>)[SUGARLANG_PROXY_BASE_URL_ENV] as string)
-      : "";
+  const proxyBaseUrl = resolveSugarlangGatewayBaseUrl();
   const gatewayAvailable = proxyBaseUrl.trim().length > 0;
   const gatewayClient = gatewayAvailable
     ? new SugarlangGatewayClient(proxyBaseUrl)

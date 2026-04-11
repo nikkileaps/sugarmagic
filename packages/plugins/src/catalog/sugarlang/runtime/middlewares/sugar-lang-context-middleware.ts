@@ -55,6 +55,7 @@ import {
   getSugarAgentSessionId,
   getSceneId,
   getTurnsSinceLastProbe,
+  shouldRunSugarlangForExecution,
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
@@ -152,9 +153,22 @@ export function createSugarLangContextMiddleware(
     priority: 10,
     stage: "context",
     async prepare(execution) {
-      if (!execution.selection.targetLanguage) {
+      if (!shouldRunSugarlangForExecution(execution)) {
         return execution;
       }
+
+      // The target language can come from the conversation selection (if the
+      // conversation host sets it) or from the plugin's configured target
+      // language. The plugin config is the primary source in practice because
+      // the gameplay session doesn't set targetLanguage on the selection.
+      const targetLanguage =
+        execution.selection.targetLanguage ||
+        deps.services.getTargetLanguage();
+      if (!targetLanguage) {
+        return execution;
+      }
+      // Ensure the selection carries targetLanguage for downstream readers.
+      execution.selection.targetLanguage = targetLanguage;
 
       const services = deps.services.resolveForExecution(execution);
       if (!services) {
@@ -354,10 +368,11 @@ export function createSugarLangContextMiddleware(
           sourceQuestId: lemma.sourceQuestId,
           cefrBand: lemma.cefrBand,
           supportLanguageGloss:
-            services.atlas.getLemma(
+            services.atlas.getGloss(
               lemma.lemmaId,
-              execution.selection.supportLanguage ?? refreshedLearner.supportLanguage
-            )?.gloss ??
+              lemma.lang,
+              execution.selection.supportLanguage ?? "en"
+            ) ??
             lemma.sourceObjectiveDisplayName
         }));
       const prescription = await services.budgeter.prescribe({

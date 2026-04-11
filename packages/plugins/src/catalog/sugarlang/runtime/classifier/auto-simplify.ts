@@ -67,7 +67,7 @@ function resolveReplacement(
     (entry): entry is SimplificationEntry & { gloss: string } =>
       entry.kind === "gloss-fallback" && typeof entry.gloss === "string"
   );
-  const atlasGloss = defaultAtlas.getLemma(lemmaId, lang)?.gloss;
+  const atlasGloss = defaultAtlas.getGloss(lemmaId, lang, "en");
 
   return {
     replacementText: `*${(glossEntry?.gloss ?? atlasGloss ?? lemmaId).trim()}*`,

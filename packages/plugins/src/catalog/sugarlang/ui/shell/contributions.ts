@@ -18,6 +18,7 @@
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
+import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
 import { NpcInspectorRoleDropdown } from "./npc-inspector-role-dropdown";
 import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
@@ -102,6 +103,53 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
                 updateQuest: props.updateQuest
               })
             : null
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "language-config",
+        label: "Language",
+        summary: "Target and support language configuration for the learning pipeline.",
+        render: (props) => {
+          const configuration = props.pluginConfigurations.find(
+            (entry) => entry.pluginId === SUGARLANG_SHELL_PLUGIN_ID
+          );
+          const currentConfig = configuration?.config as Record<string, unknown> | undefined;
+          const updateConfig = (patch: Record<string, unknown>) => {
+              if (!configuration) return;
+              props.onCommand({
+                kind: "UpdatePluginConfiguration",
+                target: {
+                  aggregateKind: "plugin-config",
+                  aggregateId: configuration.identity.id
+                },
+                subject: {
+                  subjectKind: "plugin-configuration",
+                  subjectId: configuration.identity.id
+                },
+                payload: {
+                  configuration: {
+                    ...configuration,
+                    enabled: true,
+                    config: {
+                      ...(currentConfig ?? {}),
+                      ...patch
+                    }
+                  }
+                }
+              });
+            };
+          return createElement(LanguageConfigSection, {
+            targetLanguage:
+              typeof currentConfig?.targetLanguage === "string"
+                ? currentConfig.targetLanguage
+                : "",
+            supportLanguage: "en",
+            debugLogging: currentConfig?.debugLogging === true,
+            onChangeTargetLanguage: (lang: string) => updateConfig({ targetLanguage: lang }),
+            onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled })
+          });
+        }
       },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,

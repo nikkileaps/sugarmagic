@@ -1,7 +1,7 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/schema-parser.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/schema-parser.ts
  *
- * Purpose: Parses, validates, repairs, and enforces hard Director output constraints.
+ * Purpose: Parses, validates, repairs, and enforces hard Teacher'soutput constraints.
  *
  * Exports:
  *   - DirectiveParseError
@@ -12,10 +12,9 @@
  *
  * Relationships:
  *   - Depends on the PedagogicalDirective contract type.
- *   - Will be consumed by ClaudeDirectorPolicy and fallback handling in Epic 9.
+ *   - Will be consumed by ClaudeTeacherPolicy and fallback handling in Epic 9.
  *
- * Implements: Proposal 001 §3. Director
- *
+ * Implements: Proposal 001 §3. Teacher's *
  * Status: active
  */
 
@@ -23,7 +22,7 @@ import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
 import type {
   DirectiveLifetime,
-  DirectorContext,
+  TeacherContext,
   GlossingStrategy,
   LemmaRef,
   LexicalPrescription,
@@ -191,7 +190,7 @@ export type ParseResult =
   | { error: DirectiveParseError };
 
 export interface ParseDirectiveOptions {
-  context?: DirectorContext;
+  context?: TeacherContext;
   telemetry?: TelemetrySink;
 }
 
@@ -208,6 +207,147 @@ function toFieldErrors(errors: ErrorObject[] | null | undefined): DirectiveField
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stripMarkdownCodeFences(text: string): string {
+  const trimmed = text.trim();
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenceMatch ? fenceMatch[1].trim() : trimmed;
+}
+
+function extractJsonObjectCandidate(text: string): string {
+  const stripped = stripMarkdownCodeFences(text);
+  const firstBrace = stripped.indexOf("{");
+  const lastBrace = stripped.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    return stripped;
+  }
+  return stripped.slice(firstBrace, lastBrace + 1).trim();
+}
+
+function normalizeProbeTriggerReason(
+  value: unknown
+): PedagogicalDirective["comprehensionCheck"]["triggerReason"] | undefined {
+  if (!isOneOf(value, PROBE_REASONS)) {
+    return undefined;
+  }
+  return value;
+}
+
+function normalizeAcceptableResponseForms(
+  value: unknown
+): PedagogicalDirective["comprehensionCheck"]["acceptableResponseForms"] | undefined {
+  if (isOneOf(value, ACCEPTABLE_RESPONSE_FORMS)) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const normalized = value.find((entry) => isOneOf(entry, ACCEPTABLE_RESPONSE_FORMS));
+    return normalized as
+      | PedagogicalDirective["comprehensionCheck"]["acceptableResponseForms"]
+      | undefined;
+  }
+  return undefined;
+}
+
+function normalizeInvalidationTrigger(value: unknown): DirectiveLifetime["invalidateOn"][number] | null {
+  if (isOneOf(value, INVALIDATION_TRIGGERS)) {
+    return value;
+  }
+
+  if (value === "scene_change") {
+    return "location_change";
+  }
+
+  return null;
+}
+
+function coerceLemmaArrayEntries(
+  value: unknown,
+  targetLanguage: string
+): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((entry) => {
+    if (typeof entry === "string" && entry.trim().length > 0) {
+      return { lemmaId: entry.trim(), lang: targetLanguage };
+    }
+    return entry;
+  });
+}
+
+function normalizeDirectiveShape(
+  value: unknown,
+  targetLanguage?: string
+): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const normalized: Record<string, unknown> = { ...value };
+
+  if (targetLanguage && isRecord(normalized.targetVocab)) {
+    const vocab: Record<string, unknown> = { ...normalized.targetVocab };
+    for (const key of ["introduce", "reinforce", "avoid"] as const) {
+      const coerced = coerceLemmaArrayEntries(vocab[key], targetLanguage);
+      if (coerced) vocab[key] = coerced;
+    }
+    normalized.targetVocab = vocab;
+  }
+
+  if (isRecord(normalized.comprehensionCheck)) {
+    const comprehensionCheck: Record<string, unknown> = {
+      ...normalized.comprehensionCheck
+    };
+    const trigger =
+      typeof comprehensionCheck.trigger === "boolean"
+        ? comprehensionCheck.trigger
+        : false;
+    comprehensionCheck.trigger = trigger;
+
+    if (!trigger) {
+      comprehensionCheck.probeStyle = "none";
+      if (!Array.isArray(comprehensionCheck.targetLemmas)) {
+        comprehensionCheck.targetLemmas = [];
+      }
+    } else if (!isOneOf(comprehensionCheck.probeStyle, PROBE_STYLES)) {
+      comprehensionCheck.probeStyle = "recognition";
+    }
+
+    const triggerReason = normalizeProbeTriggerReason(comprehensionCheck.triggerReason);
+    if (trigger && triggerReason) {
+      comprehensionCheck.triggerReason = triggerReason;
+    } else {
+      delete comprehensionCheck.triggerReason;
+    }
+
+    if (typeof comprehensionCheck.characterVoiceReminder !== "string") {
+      delete comprehensionCheck.characterVoiceReminder;
+    }
+
+    const acceptableResponseForms = normalizeAcceptableResponseForms(
+      comprehensionCheck.acceptableResponseForms
+    );
+    if (trigger && acceptableResponseForms) {
+      comprehensionCheck.acceptableResponseForms = acceptableResponseForms;
+    } else {
+      delete comprehensionCheck.acceptableResponseForms;
+    }
+
+    normalized.comprehensionCheck = comprehensionCheck;
+  }
+
+  if (isRecord(normalized.directiveLifetime)) {
+    const directiveLifetime: Record<string, unknown> = {
+      ...normalized.directiveLifetime
+    };
+    if (Array.isArray(directiveLifetime.invalidateOn)) {
+      directiveLifetime.invalidateOn = directiveLifetime.invalidateOn
+        .map((entry) => normalizeInvalidationTrigger(entry))
+        .filter((entry): entry is DirectiveLifetime["invalidateOn"][number] => entry !== null);
+    }
+    normalized.directiveLifetime = directiveLifetime;
+  }
+
+  return normalized;
 }
 
 function sanitizeLemmaRef(value: unknown): LemmaRef | null {
@@ -237,7 +377,7 @@ function getPrescriptionSet(lemmas: LemmaRef[]): Set<string> {
   return new Set(lemmas.map((lemma) => `${lemma.lang}:${lemma.lemmaId}`));
 }
 
-function buildQuestEssentialSet(context: DirectorContext): Set<string> {
+function buildQuestEssentialSet(context: TeacherContext): Set<string> {
   return new Set(
     context.activeQuestEssentialLemmas.map(
       (lemma) => `${lemma.lemmaRef.lang}:${lemma.lemmaRef.lemmaId}`
@@ -271,7 +411,7 @@ function filterLemmaArray(
   return result;
 }
 
-function filterPendingTargets(value: unknown, context: DirectorContext): LemmaRef[] {
+function filterPendingTargets(value: unknown, context: TeacherContext): LemmaRef[] {
   const allowed = new Set(
     context.pendingProvisionalLemmas.map(
       (pending) => `${pending.lemmaRef.lang}:${pending.lemmaRef.lemmaId}`
@@ -280,7 +420,7 @@ function filterPendingTargets(value: unknown, context: DirectorContext): LemmaRe
   return filterLemmaArray(value, allowed, new Set<string>());
 }
 
-function takeOldestPendingTargets(context: DirectorContext): LemmaRef[] {
+function takeOldestPendingTargets(context: TeacherContext): LemmaRef[] {
   return [...context.pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
@@ -306,7 +446,7 @@ function isOneOf<T extends readonly string[]>(
   return typeof value === "string" && allowed.includes(value);
 }
 
-function getDefaultSupportPosture(context: DirectorContext): PedagogicalDirective["supportPosture"] {
+function getDefaultSupportPosture(context: TeacherContext): PedagogicalDirective["supportPosture"] {
   const confidence = context.learner.assessment.cefrConfidence;
   if (confidence < 0.3) {
     return "anchored";
@@ -333,7 +473,7 @@ function getDefaultTargetLanguageRatio(
 }
 
 function getDefaultInteractionStyle(
-  context: DirectorContext
+  context: TeacherContext
 ): PedagogicalDirective["interactionStyle"] {
   if (context.learner.assessment.status !== "evaluated") {
     return "listening_first";
@@ -345,7 +485,7 @@ function getDefaultInteractionStyle(
 }
 
 function getDefaultGlossingStrategy(
-  context: DirectorContext,
+  context: TeacherContext,
   introduce: LemmaRef[]
 ): GlossingStrategy {
   if (context.activeQuestEssentialLemmas.length > 0) {
@@ -358,7 +498,7 @@ function getDefaultGlossingStrategy(
 }
 
 function getDefaultSentenceComplexityCap(
-  context: DirectorContext
+  context: TeacherContext
 ): PedagogicalDirective["sentenceComplexityCap"] {
   switch (context.learner.estimatedCefrBand) {
     case "A1":
@@ -386,7 +526,7 @@ function maybeEmit(event: TelemetryEvent, telemetry: TelemetrySink): void {
 
 function enforceDirectiveRequirements(
   directive: PedagogicalDirective,
-  context: DirectorContext,
+  context: TeacherContext,
   telemetry: TelemetrySink
 ): DirectiveParseError | null {
   if (
@@ -436,7 +576,7 @@ function enforceDirectiveRequirements(
     return {
       code: "hard_floor_violated",
       message:
-        "The Director ignored a hard-floor comprehension-check requirement and was rejected.",
+        "The Teacher'signored a hard-floor comprehension-check requirement and was rejected.",
       details: [
         {
           path: "/comprehensionCheck/trigger",
@@ -456,8 +596,9 @@ export function parseDirective(
 ): ParseResult {
   const telemetry = options.telemetry ?? createNoOpTelemetrySink();
   let parsed: unknown;
+  const jsonCandidate = extractJsonObjectCandidate(json);
   try {
-    parsed = JSON.parse(json);
+    parsed = JSON.parse(jsonCandidate);
   } catch (error) {
     return {
       error: {
@@ -474,11 +615,16 @@ export function parseDirective(
     };
   }
 
+  parsed = normalizeDirectiveShape(
+    parsed,
+    options.context?.lang.targetLanguage
+  );
+
   if (!validateDirective(parsed)) {
     return {
       error: {
         code: "schema_validation_failed",
-        message: "Director output failed schema validation.",
+        message: "Teacher'soutput failed schema validation.",
         details: toFieldErrors(validateDirective.errors),
         partial: parsed
       }
@@ -503,7 +649,7 @@ export function parseDirective(
 export function repairDirective(
   partial: unknown,
   prescription: LexicalPrescription,
-  context: DirectorContext,
+  context: TeacherContext,
   options: RepairDirectiveOptions = {}
 ): PedagogicalDirective {
   const telemetry = options.telemetry ?? createNoOpTelemetrySink();
@@ -677,7 +823,7 @@ export function repairDirective(
     rationale:
       typeof record.rationale === "string" && record.rationale.trim()
         ? record.rationale.trim()
-        : "Schema repair - defaulted invalid Director fields to prescription-safe values.",
+        : "Schema repair - defaulted invalid Teacher'sfields to prescription-safe values.",
     confidenceBand: isOneOf(record.confidenceBand, CONFIDENCE_BANDS)
       ? record.confidenceBand
       : "medium",

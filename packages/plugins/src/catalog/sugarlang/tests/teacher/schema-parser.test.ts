@@ -1,13 +1,13 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/director/schema-parser.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/teacher/schema-parser.test.ts
  *
- * Purpose: Verifies strict Director JSON parsing, repair logic, and hard-rule enforcement.
+ * Purpose: Verifies strict Teacher'sJSON parsing, repair logic, and hard-rule enforcement.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/director/schema-parser with prescription-safe fixtures.
+ *   - Exercises ../../runtime/teacher/schema-parser with prescription-safe fixtures.
  *   - Protects the no-invention and hard-floor enforcement rules from silent drift.
  *
  * Implements: Epic 9 Story 9.2
@@ -19,14 +19,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   parseDirective,
   repairDirective
-} from "../../runtime/director/schema-parser";
-import { createDirectiveFixture, createDirectorContext } from "./test-helpers";
+} from "../../runtime/teacher/schema-parser";
+import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 
 describe("parseDirective", () => {
   it("parses valid JSON into a directive", () => {
     const json = JSON.stringify(createDirectiveFixture());
     const result = parseDirective(json, {
-      context: createDirectorContext()
+      context: createTeacherContext()
     });
 
     expect("directive" in result).toBe(true);
@@ -36,7 +36,7 @@ describe("parseDirective", () => {
   });
 
   it("repairs missing required fields from prescription defaults", () => {
-    const context = createDirectorContext();
+    const context = createTeacherContext();
     const partial = {
       supportPosture: "supported",
       targetLanguageRatio: 0.5
@@ -49,7 +49,7 @@ describe("parseDirective", () => {
   });
 
   it("drops invented introduce lemmas during repair", () => {
-    const context = createDirectorContext({
+    const context = createTeacherContext({
       activeQuestEssentialLemmas: []
     });
     const repaired = repairDirective(
@@ -72,7 +72,7 @@ describe("parseDirective", () => {
 
   it("returns a structured error for malformed JSON", () => {
     const result = parseDirective("{ invalid json", {
-      context: createDirectorContext()
+      context: createTeacherContext()
     });
 
     expect("error" in result).toBe(true);
@@ -81,8 +81,116 @@ describe("parseDirective", () => {
     }
   });
 
+  it("parses Claude-style fenced JSON and normalizes common schema drift", () => {
+    const context = createTeacherContext({
+      activeQuestEssentialLemmas: []
+    });
+    const result = parseDirective(
+      `\`\`\`json
+{
+  "targetVocab": {
+    "introduce": [],
+    "reinforce": [],
+    "avoid": []
+  },
+  "supportPosture": "anchored",
+  "targetLanguageRatio": 0.2,
+  "interactionStyle": "listening_first",
+  "glossingStrategy": "none",
+  "sentenceComplexityCap": "single-clause",
+  "comprehensionCheck": {
+    "trigger": false,
+    "probeStyle": "none",
+    "targetLemmas": [],
+    "triggerReason": "No pending provisional evidence; hard floor not reached.",
+    "characterVoiceReminder": null,
+    "acceptableResponseForms": []
+  },
+  "directiveLifetime": {
+    "maxTurns": 1,
+    "invalidateOn": ["learner_produces_target", "scene_change"]
+  },
+  "citedSignals": [
+    "session_turns=0",
+    "probable_first_meeting=true"
+  ],
+  "rationale": "Tiny greeting is enough.",
+  "confidenceBand": "high",
+  "isFallbackDirective": false
+}
+\`\`\``,
+      {
+        context
+      }
+    );
+
+    expect("directive" in result).toBe(true);
+    if ("directive" in result) {
+      expect(result.directive.glossingStrategy).toBe("none");
+      expect(result.directive.comprehensionCheck).toEqual({
+        trigger: false,
+        probeStyle: "none",
+        targetLemmas: []
+      });
+      expect(result.directive.directiveLifetime).toEqual({
+        maxTurns: 1,
+        invalidateOn: ["location_change"]
+      });
+    }
+  });
+
+  it("normalizes a null probeStyle to none when comprehensionCheck.trigger is false", () => {
+    const context = createTeacherContext({
+      activeQuestEssentialLemmas: []
+    });
+    const result = parseDirective(
+      `\`\`\`json
+{
+  "targetVocab": {
+    "introduce": [],
+    "reinforce": [],
+    "avoid": []
+  },
+  "supportPosture": "anchored",
+  "targetLanguageRatio": 0.2,
+  "interactionStyle": "listening_first",
+  "glossingStrategy": "none",
+  "sentenceComplexityCap": "single-clause",
+  "comprehensionCheck": {
+    "trigger": false,
+    "probeStyle": null,
+    "targetLemmas": [],
+    "triggerReason": null,
+    "characterVoiceReminder": null,
+    "acceptableResponseForms": null
+  },
+  "directiveLifetime": {
+    "maxTurns": 1,
+    "invalidateOn": ["learner_produces_output", "scene_change"]
+  },
+  "citedSignals": ["session_turns=0"],
+  "rationale": "Tiny greeting is enough.",
+  "confidenceBand": "high",
+  "isFallbackDirective": false
+}
+\`\`\``,
+      {
+        context
+      }
+    );
+
+    expect("directive" in result).toBe(true);
+    if ("directive" in result) {
+      expect(result.directive.comprehensionCheck).toEqual({
+        trigger: false,
+        probeStyle: "none",
+        targetLemmas: []
+      });
+    }
+  });
+
   it("clamps out-of-range targetLanguageRatio during repair", () => {
-    const context = createDirectorContext();
+    const context = createTeacherContext();
     const repaired = repairDirective(
       {
         targetLanguageRatio: 1.5
@@ -95,7 +203,7 @@ describe("parseDirective", () => {
   });
 
   it("rejects a directive that ignores the hard floor requirement", () => {
-    const context = createDirectorContext({
+    const context = createTeacherContext({
       probeFloorState: {
         turnsSinceLastProbe: 26,
         totalPendingLemmas: 3,
@@ -126,7 +234,7 @@ describe("parseDirective", () => {
   });
 
   it("rejects weak glossing when quest-essential lemmas are present", () => {
-    const context = createDirectorContext();
+    const context = createTeacherContext();
     const telemetry = {
       emit: vi.fn()
     };

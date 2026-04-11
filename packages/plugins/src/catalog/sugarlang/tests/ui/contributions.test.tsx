@@ -34,6 +34,7 @@ describe("sugarlang shell contributions", () => {
       "sugarlang-role",
       "scene-density",
       "placement-event-hint",
+      "language-config",
       "compile-status",
       "placement-question-bank",
       "turn-inspector",

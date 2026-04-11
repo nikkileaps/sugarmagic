@@ -73,9 +73,17 @@
             "minLength": 1
           }
         },
-        "gloss": {
-          "type": "string",
-          "minLength": 1
+        "glosses": {
+          "type": "object",
+          "description": "Translations keyed by support-language code (e.g. { \"en\": \"job, work\" }).",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 2
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "examples": {
           "type": "array",

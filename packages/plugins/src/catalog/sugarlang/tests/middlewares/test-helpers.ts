@@ -179,8 +179,15 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
   return {
     resolveForExecution: () => null,
     getBlackboard: () => null,
+    getPlayerDefinitionId: () => null,
     getConfig: () => ({
+      targetLanguage: "es",
+      supportLanguage: "en" as const,
       debugLogging: false,
+      verifyEnabled: true,
+      chunkExtraction: {
+        enabled: true
+      },
       placement: {
         enabled: true,
         minAnswersForValid: "use-bank-default" as const,

@@ -17,8 +17,9 @@
 
 import type { GameProject, RegionDocument } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
-import type { ReactElement } from "react";
-import type { CompiledSceneLexicon } from "../../runtime/types";
+import { useEffect, useState, type ReactElement } from "react";
+import type { CEFRBand } from "../../runtime/types";
+import type { CompiledSceneLexicon, SceneLemmaInfo } from "../../runtime/types";
 import {
   compileAuthoringSceneLexicon,
   summarizeSceneDensity
@@ -39,16 +40,52 @@ function formatPercent(value: number): string {
 export function SceneDensityHistogram(
   props: SceneDensityHistogramProps
 ): ReactElement {
-  const lexicon =
-    props.lexicon ??
-    compileAuthoringSceneLexicon(
+  const [computedLexicon, setComputedLexicon] = useState<CompiledSceneLexicon | null>(
+    props.lexicon ?? null
+  );
+
+  useEffect(() => {
+    if (props.lexicon) {
+      setComputedLexicon(props.lexicon);
+      return;
+    }
+
+    let cancelled = false;
+    setComputedLexicon(null);
+    void compileAuthoringSceneLexicon(
       props.gameProject,
       props.activeRegion,
       props.regions,
       props.targetLanguage
-    );
+    ).then((nextLexicon) => {
+      if (!cancelled) {
+        setComputedLexicon(nextLexicon);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    props.activeRegion,
+    props.gameProject,
+    props.lexicon,
+    props.regions,
+    props.targetLanguage
+  ]);
+
+  const [hoveredBand, setHoveredBand] = useState<CEFRBand | null>(null);
+
+  const lexicon = props.lexicon ?? computedLexicon;
   const density = summarizeSceneDensity(lexicon);
   const maxCount = Math.max(1, ...density.bandCounts.map((entry) => entry.count));
+
+  function lemmasForBand(band: CEFRBand): SceneLemmaInfo[] {
+    if (!lexicon) return [];
+    return Object.values(lexicon.lemmas)
+      .filter((lemma) => lemma.cefrPriorBand === band)
+      .sort((a, b) => (a.frequencyRank ?? Infinity) - (b.frequencyRank ?? Infinity));
+  }
 
   return (
     <PanelSection title="Scene Density" icon="📊">
@@ -67,51 +104,124 @@ export function SceneDensityHistogram(
 
         {props.activeRegion && density.totalLemmas > 0 ? (
           <div style={{ display: "grid", gap: "0.65rem" }}>
-            {density.bandCounts.map((entry) => (
-              <div
-                key={entry.band}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "52px 1fr 84px",
-                  gap: "0.65rem",
-                  alignItems: "center"
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-flex",
-                    justifyContent: "center",
-                    borderRadius: 999,
-                    background: "rgba(137, 180, 250, 0.18)",
-                    padding: "0.15rem 0.45rem",
-                    fontSize: "0.75rem",
-                    fontWeight: 600
-                  }}
-                >
-                  {entry.band}
-                </span>
+            {density.bandCounts.map((entry) => {
+              const isHovered = hoveredBand === entry.band;
+              const bandLemmas = isHovered ? lemmasForBand(entry.band) : [];
+              return (
                 <div
-                  style={{
-                    height: 12,
-                    borderRadius: 999,
-                    background: "rgba(137, 180, 250, 0.14)",
-                    overflow: "hidden"
+                  key={entry.band}
+                  style={{ position: "relative" }}
+                  onMouseEnter={() => {
+                    if (entry.count > 0) setHoveredBand(entry.band);
                   }}
+                  onMouseLeave={() => setHoveredBand(null)}
                 >
                   <div
                     style={{
-                      width: `${(entry.count / maxCount) * 100}%`,
-                      height: "100%",
-                      background:
-                        "linear-gradient(90deg, rgba(137,180,250,0.85), rgba(249,226,175,0.9))"
+                      display: "grid",
+                      gridTemplateColumns: "52px 1fr 84px",
+                      gap: "0.65rem",
+                      alignItems: "center",
+                      cursor: entry.count > 0 ? "default" : "default",
+                      borderRadius: "0.25rem",
+                      padding: "0.15rem 0"
                     }}
-                  />
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        justifyContent: "center",
+                        borderRadius: 999,
+                        background: "rgba(137, 180, 250, 0.18)",
+                        padding: "0.15rem 0.45rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      {entry.band}
+                    </span>
+                    <div
+                      style={{
+                        height: 12,
+                        borderRadius: 999,
+                        background: "rgba(137, 180, 250, 0.14)",
+                        overflow: "hidden"
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${(entry.count / maxCount) * 100}%`,
+                          height: "100%",
+                          background:
+                            "linear-gradient(90deg, rgba(137,180,250,0.85), rgba(249,226,175,0.9))"
+                        }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--sm-color-overlay0)"
+                      }}
+                    >
+                      {entry.count} · {formatPercent(entry.percent)}
+                    </span>
+                  </div>
+                  {isHovered && bandLemmas.length > 0 ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: "100%",
+                        zIndex: 10,
+                        width: "100%",
+                        maxHeight: 200,
+                        overflowY: "auto",
+                        padding: "0.5rem 0.65rem",
+                        background: "var(--sm-color-surface0, #313244)",
+                        border: "1px solid var(--sm-color-surface1, #444)",
+                        borderRadius: "0.35rem",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.35rem"
+                      }}
+                    >
+                      {bandLemmas.map((lemma) => (
+                        <span
+                          key={lemma.lemmaId}
+                          title={[
+                            lemma.partsOfSpeech.length > 0
+                              ? lemma.partsOfSpeech.join(", ")
+                              : null,
+                            lemma.frequencyRank != null
+                              ? `freq #${lemma.frequencyRank}`
+                              : null,
+                            lemma.isQuestCritical ? "quest-critical" : null
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                          style={{
+                            display: "inline-block",
+                            padding: "0.15rem 0.45rem",
+                            borderRadius: "0.2rem",
+                            fontSize: "0.75rem",
+                            background: lemma.isQuestCritical
+                              ? "rgba(249, 226, 175, 0.22)"
+                              : "rgba(137, 180, 250, 0.14)",
+                            border: lemma.isQuestCritical
+                              ? "1px solid rgba(249, 226, 175, 0.4)"
+                              : "1px solid transparent",
+                            color: "var(--sm-color-text, #cdd6f4)"
+                          }}
+                        >
+                          {lemma.lemmaId}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                <span style={{ fontSize: "0.75rem", color: "var(--sm-color-overlay0)" }}>
-                  {entry.count} · {formatPercent(entry.percent)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 

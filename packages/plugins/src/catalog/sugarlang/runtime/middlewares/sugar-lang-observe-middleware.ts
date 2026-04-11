@@ -44,9 +44,11 @@ import {
   getSugarAgentSessionId,
   getSugarAgentTurnCount,
   getTurnsSinceLastProbe,
+  isPlayerSpokenTurn,
   normalizeTurn,
   setStoredComprehensionCheck,
   setTurnsSinceLastProbe,
+  shouldRunSugarlangForExecution,
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
@@ -106,6 +108,17 @@ export function createSugarLangObserveMiddleware(
     stage: "analysis",
     async finalize(execution, turn) {
       const normalizedTurn = normalizeTurn(turn);
+      if (!shouldRunSugarlangForExecution(execution)) {
+        return normalizedTurn ?? turn;
+      }
+
+      if (
+        normalizedTurn &&
+        isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId())
+      ) {
+        return normalizedTurn;
+      }
+
       const services = deps.services.resolveForExecution(execution);
       if (!services) {
         return turn;

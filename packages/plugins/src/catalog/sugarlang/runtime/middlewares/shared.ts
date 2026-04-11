@@ -7,6 +7,7 @@
  *   - annotation/session key constants
  *   - no-op logger helpers
  *   - placement/probe/observation helper functions
+ *   - Sugarlang conversation eligibility guard
  *
  * Relationships:
  *   - Depends on runtime-core execution and turn contracts plus sugarlang runtime types.
@@ -23,9 +24,10 @@ import type {
   ConversationPlayerInput,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
+import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
 import type {
   ActiveQuestEssentialLemma,
-  DirectorContext,
+  TeacherContext,
   LearnerProfile,
   LemmaObservation,
   LemmaRef,
@@ -124,6 +126,28 @@ export function createNoOpSugarlangLogger(): SugarlangLoggerLike {
 
 export function getSceneId(execution: ConversationExecutionContext): string | null {
   return execution.runtimeContext?.here?.sceneId ?? null;
+}
+
+export function shouldRunSugarlangForExecution(
+  execution: ConversationExecutionContext
+): boolean {
+  return execution.selection.interactionMode === "agent";
+}
+
+export function isPlayerSpokenTurn(
+  turn: ConversationTurnEnvelope,
+  playerDefinitionId: string | null
+): boolean {
+  const speakerId = turn.speakerId ?? null;
+  if (!speakerId) {
+    return false;
+  }
+
+  return (
+    speakerId === playerDefinitionId ||
+    speakerId === PLAYER_SPEAKER.speakerId ||
+    speakerId === PLAYER_VO_SPEAKER.speakerId
+  );
 }
 
 export function buildLearnerSnapshot(profile: LearnerProfile): LearnerSnapshot {
@@ -242,7 +266,7 @@ export function setStoredComprehensionCheck(
 }
 
 export function extractCharacterVoiceReminder(
-  context: DirectorContext
+  context: TeacherContext
 ): string {
   if (typeof context.npc.metadata?.voice === "string" && context.npc.metadata.voice.trim()) {
     return context.npc.metadata.voice.trim();
@@ -275,6 +299,55 @@ export function findQuestEssentialUses(
       hasParentheticalGloss: pattern.test(normalized)
     };
   });
+}
+
+function normalizeQuestFocusText(text: string): string {
+  return text.normalize("NFC").toLocaleLowerCase();
+}
+
+type QuestFocusEntry = {
+  lemmaRef: LemmaRef;
+  supportLanguageGloss: string;
+  sourceObjectiveDisplayName: string;
+};
+
+export function isQuestObjectiveInFocus(
+  execution: ConversationExecutionContext,
+  questEssentials: QuestFocusEntry[]
+): boolean {
+  if (
+    questEssentials.length === 0 ||
+    (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) === 0
+  ) {
+    return false;
+  }
+
+  if (execution.input?.kind !== "free_text" || typeof execution.input.text !== "string") {
+    return false;
+  }
+
+  const haystack = normalizeQuestFocusText(execution.input.text);
+  if (!haystack) {
+    return false;
+  }
+
+  const candidates = new Set<string>();
+  for (const entry of questEssentials) {
+    candidates.add(normalizeQuestFocusText(entry.lemmaRef.lemmaId));
+    candidates.add(normalizeQuestFocusText(entry.supportLanguageGloss));
+    candidates.add(normalizeQuestFocusText(entry.sourceObjectiveDisplayName));
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate || candidate.length < 3) {
+      continue;
+    }
+    if (haystack.includes(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function textMentionsLemma(text: string, lemmaId: string): boolean {

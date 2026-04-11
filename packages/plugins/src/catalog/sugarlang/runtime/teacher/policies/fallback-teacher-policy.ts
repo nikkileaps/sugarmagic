@@ -1,29 +1,28 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/director/fallback-director-policy.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/teacher/policies/fallback-teacher-policy.ts
  *
- * Purpose: Implements the deterministic fallback Director policy used when Claude is unavailable or rejected.
+ * Purpose: Implements the deterministic fallback Teacher'spolicy used when Claude is unavailable or rejected.
  *
  * Exports:
- *   - FallbackDirectorPolicy
+ *   - FallbackTeacherPolicy
  *
  * Relationships:
- *   - Implements the DirectorPolicy contract from runtime/contracts/providers.ts.
+ *   - Implements the TeacherPolicy contract from runtime/contracts/providers.ts.
  *   - Will be consumed when Claude output is unavailable or invalid in Epic 9.
  *
- * Implements: Proposal 001 §3. Director
- *
+ * Implements: Proposal 001 §3. Teacher's *
  * Status: active
  */
 
 import type {
   CEFRBand,
-  DirectorContext,
-  DirectorPolicy,
+  TeacherContext,
+  TeacherPolicy,
   LemmaRef,
   PedagogicalDirective
-} from "../types";
+} from "../../types";
 
-export interface FallbackDirectorPolicyOptions {
+export interface FallbackTeacherPolicyOptions {
   triggerReasonOverride?: PedagogicalDirective["comprehensionCheck"]["triggerReason"];
 }
 
@@ -79,7 +78,7 @@ function pickFallbackPosture(
 }
 
 function pickInteractionStyle(
-  context: DirectorContext,
+  context: TeacherContext,
   confidence: number
 ): PedagogicalDirective["interactionStyle"] {
   if (context.learner.assessment.status !== "evaluated") {
@@ -92,7 +91,7 @@ function pickInteractionStyle(
 }
 
 function pickGlossingStrategy(
-  context: DirectorContext,
+  context: TeacherContext,
   introduce: LemmaRef[]
 ): PedagogicalDirective["glossingStrategy"] {
   if (context.activeQuestEssentialLemmas.length > 0) {
@@ -104,7 +103,7 @@ function pickGlossingStrategy(
   return "hover-only";
 }
 
-function takeOldestPending(context: DirectorContext): LemmaRef[] {
+function takeOldestPending(context: TeacherContext): LemmaRef[] {
   return [...context.pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
@@ -117,8 +116,8 @@ function takeOldestPending(context: DirectorContext): LemmaRef[] {
 }
 
 function pickTriggerReason(
-  context: DirectorContext,
-  options: FallbackDirectorPolicyOptions | undefined
+  context: TeacherContext,
+  options: FallbackTeacherPolicyOptions | undefined
 ): PedagogicalDirective["comprehensionCheck"]["triggerReason"] {
   if (options?.triggerReasonOverride) {
     return options.triggerReasonOverride;
@@ -134,10 +133,10 @@ function pickTriggerReason(
   return undefined;
 }
 
-export class FallbackDirectorPolicy implements DirectorPolicy {
+export class FallbackTeacherPolicy implements TeacherPolicy {
   async invoke(
-    context: DirectorContext,
-    options?: FallbackDirectorPolicyOptions
+    context: TeacherContext,
+    options?: FallbackTeacherPolicyOptions
   ): Promise<PedagogicalDirective> {
     const confidence = context.learner.assessment.cefrConfidence;
     const supportPosture = pickFallbackPosture(confidence);
@@ -196,8 +195,8 @@ export class FallbackDirectorPolicy implements DirectorPolicy {
       citedSignals: fallbackSignals,
       rationale:
         options?.triggerReasonOverride === "director-deferred-override"
-          ? "Deterministic fallback - Director LLM ignored a required comprehension probe."
-          : "Deterministic fallback - Director LLM unavailable.",
+          ? "Deterministic fallback - Teacher'sLLM ignored a required comprehension probe."
+          : "Deterministic fallback - Teacher'sLLM unavailable.",
       confidenceBand:
         confidence >= 0.7 ? "high" : confidence >= 0.3 ? "medium" : "low",
       isFallbackDirective: true

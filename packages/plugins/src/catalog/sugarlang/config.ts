@@ -36,8 +36,20 @@ export interface SugarLangChunkExtractionConfig {
   enabled: boolean;
 }
 
+export type SugarlangTargetLanguage = "es" | "it" | "";
+export type SugarlangSupportLanguage = "en";
+
 export interface SugarLangPluginConfig {
+  /** The target language the player is learning. Required — if empty and the
+   *  plugin is enabled, an error is surfaced at init. */
+  targetLanguage: SugarlangTargetLanguage;
+  /** The player's native / support language. Defaults to "en". */
+  supportLanguage: SugarlangSupportLanguage;
   debugLogging: boolean;
+  /** Temporary debugging escape hatch: when false, Sugarlang verify is fully
+   *  bypassed so we can inspect raw Director + Generate behavior without the
+   *  post-generation watchdog mutating turns. */
+  verifyEnabled: boolean;
   placement: SugarLangPlacementConfig;
   chunkExtraction: SugarLangChunkExtractionConfig;
 }
@@ -47,6 +59,9 @@ export const SUGARLANG_TARGET_LANGUAGE_ENV =
 
 export const SUGARLANG_PROXY_BASE_URL_ENV =
   "SUGARMAGIC_SUGARLANG_PROXY_BASE_URL";
+
+export const SUGARLANG_VERIFY_ENABLED_ENV =
+  "SUGARMAGIC_SUGARLANG_VERIFY_ENABLED";
 
 function readEnvBoolean(
   environment: RuntimePluginEnvironment | undefined,
@@ -82,6 +97,15 @@ function normalizeConfidenceFloor(value: unknown, fallback: number): number {
   return Math.min(0.95, Math.max(0.05, value));
 }
 
+const VALID_TARGET_LANGUAGES = new Set<SugarlangTargetLanguage>(["es", "it"]);
+
+function normalizeTargetLanguage(value: unknown): SugarlangTargetLanguage {
+  if (typeof value === "string" && VALID_TARGET_LANGUAGES.has(value as SugarlangTargetLanguage)) {
+    return value as SugarlangTargetLanguage;
+  }
+  return "";
+}
+
 export function normalizeSugarLangPluginConfig(
   config: Record<string, unknown> | null | undefined,
   _environment?: RuntimePluginEnvironment
@@ -90,10 +114,14 @@ export function normalizeSugarLangPluginConfig(
   const chunkConfig = isRecord(config?.chunkExtraction) ? config.chunkExtraction : null;
 
   return {
-    debugLogging: readEnvBoolean(
-      _environment,
-      "SUGARMAGIC_SUGARLANG_DEBUG_LOGGING"
-    ),
+    targetLanguage: normalizeTargetLanguage(config?.targetLanguage),
+    supportLanguage: "en",
+    debugLogging:
+      config?.debugLogging === true ||
+      readEnvBoolean(_environment, "SUGARMAGIC_SUGARLANG_DEBUG_LOGGING"),
+    verifyEnabled:
+      config?.verifyEnabled === true ||
+      readEnvBoolean(_environment, SUGARLANG_VERIFY_ENABLED_ENV),
     chunkExtraction: {
       enabled:
         typeof chunkConfig?.enabled === "boolean"

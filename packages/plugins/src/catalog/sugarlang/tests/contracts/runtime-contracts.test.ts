@@ -28,8 +28,8 @@ import {
   type CompiledSceneLexicon,
   type ComprehensionCheckSpec,
   type CoverageProfile,
-  type DirectorContext,
-  type DirectorPolicy,
+  type TeacherContext,
+  type TeacherPolicy,
   type EnvelopeVerdict,
   type FSRSGrade,
   type LearnerPriorProvider,
@@ -412,7 +412,7 @@ describe("sugarlang runtime contracts", () => {
       softFloorReached: true,
       hardFloorReached: false
     };
-    const directorContext: DirectorContext = {
+    const teacherContext: TeacherContext = {
       conversationId: "conversation-1",
       learner,
       prescription,
@@ -458,6 +458,8 @@ describe("sugarlang runtime contracts", () => {
         }) satisfies AtlasLemmaEntry,
       getBand: () => "A1",
       getFrequencyRank: () => 10,
+      getGloss: () => undefined,
+      resolveFromGloss: () => [],
       listLemmasAtBand: () => [{ lemmaId: "hola", lang: "es" }],
       getAtlasVersion: () => "atlas-1"
     };
@@ -465,7 +467,7 @@ describe("sugarlang runtime contracts", () => {
       getInitialLemmaCard: () => card,
       getCefrInitialPosterior: () => posterior
     };
-    const directorPolicy: DirectorPolicy = {
+    const teacherPolicy: TeacherPolicy = {
       invoke: async () => ({
         targetVocab: prescription,
         supportPosture: "supported",
@@ -564,10 +566,10 @@ describe("sugarlang runtime contracts", () => {
     };
 
     expect(verdict.withinEnvelope).toBe(false);
-    expect(directorContext.probeFloorState.softFloorReached).toBe(true);
+    expect(teacherContext.probeFloorState.softFloorReached).toBe(true);
     expect(atlas.getAtlasVersion("es")).toBe("atlas-1");
     expect(priorProvider.getCefrInitialPosterior("A2").A2.alpha).toBe(1);
-    expectTypeOf(directorPolicy.invoke(directorContext)).toEqualTypeOf<
+    expectTypeOf(teacherPolicy.invoke(teacherContext)).toEqualTypeOf<
       Promise<PedagogicalDirective>
     >();
     expectTypeOf(lexicon.profile).toEqualTypeOf<RuntimeCompileProfile>();
@@ -647,7 +649,7 @@ void noProbeConstraint;
 
 // Pending provisional fields must remain required.
 // @ts-expect-error missing evidenceAmount
-const invalidPendingProvisional: DirectorContext["pendingProvisionalLemmas"][number] = {
+const invalidPendingProvisional: TeacherContext["pendingProvisionalLemmas"][number] = {
   lemmaRef: { lemmaId: "hola", lang: "es" },
   turnsPending: 1
 };

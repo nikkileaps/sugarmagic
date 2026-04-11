@@ -36,7 +36,10 @@ import {
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
   getSceneId,
+  isPlayerSpokenTurn,
+  isQuestObjectiveInFocus,
   normalizeTurn,
+  shouldRunSugarlangForExecution,
   textMentionsLemma,
   type SugarlangLoggerLike
 } from "./shared";
@@ -90,10 +93,30 @@ export function createSugarLangVerifyMiddleware(
         return turn;
       }
 
+      if (!shouldRunSugarlangForExecution(execution)) {
+        return normalizedTurn;
+      }
+
+      if (isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId())) {
+        return normalizedTurn;
+      }
+
       const constraint = execution.annotations[
         SUGARLANG_CONSTRAINT_ANNOTATION
       ] as SugarlangConstraint | undefined;
       if (!constraint) {
+        return normalizedTurn;
+      }
+
+      if (deps.services.getConfig().verifyEnabled === false) {
+        logger.info(
+          "Sugarlang verify temporarily bypassed; returning generated turn unchanged.",
+          {
+            speakerId: normalizedTurn.speakerId ?? null,
+            speakerLabel: normalizedTurn.speakerLabel ?? null,
+            textPreview: normalizedTurn.text.slice(0, 200)
+          }
+        );
         return normalizedTurn;
       }
 
@@ -189,8 +212,13 @@ export function createSugarLangVerifyMiddleware(
       const missingGloss = questUses.find(
         (entry) => textMentionsLemma(normalizedTurn.text, entry.lemmaId) && !entry.hasParentheticalGloss
       );
+      const questObjectiveInFocus = isQuestObjectiveInFocus(
+        execution,
+        constraint.questEssentialLemmas ?? []
+      );
       const missingRequiredQuestEssential =
         (constraint.questEssentialLemmas?.length ?? 0) > 0 &&
+        questObjectiveInFocus &&
         (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) > 0 &&
         !constraint.questEssentialLemmas?.some((entry) =>
           textMentionsLemma(normalizedTurn.text, entry.lemmaRef.lemmaId)
@@ -258,88 +286,93 @@ export function createSugarLangVerifyMiddleware(
             ]
           : [])
       ];
-      const repairedText = await attemptRepair(
-        normalizedTurn.text,
-        instructions,
-        services.llmClient,
-        constraint
-      );
-      if (repairedText) {
-        const repairedVerdict = services.classifier.check(repairedText, learner, {
-          prescription: constraint.rawPrescription,
-          knownEntities: new Set(scene.properNouns),
-          questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
-          lang: constraint.targetLanguage,
-          sceneLexicon: scene,
-          conversationId,
-          sessionId,
-          turnId: traceTurnId
-        });
-        const repairedQuestUses = findQuestEssentialUses(repairedText, constraint);
-        const repairedMissingGloss = repairedQuestUses.find(
-          (entry) =>
-            textMentionsLemma(repairedText, entry.lemmaId) &&
-            !entry.hasParentheticalGloss
-        );
-        const repairedMissingRequired =
-          (constraint.questEssentialLemmas?.length ?? 0) > 0 &&
-          (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) > 0 &&
-          !constraint.questEssentialLemmas?.some((entry) =>
-            textMentionsLemma(repairedText, entry.lemmaRef.lemmaId)
-          );
-        if (
-          repairedVerdict.withinEnvelope &&
-          !repairedMissingGloss &&
-          !repairedMissingRequired
-        ) {
-          normalizedTurn.text = repairedText;
-          await emitTelemetry(
-            telemetry,
-            createTelemetryEvent("verify.repair-triggered", {
-              conversationId,
-              sessionId,
-              turnId: traceTurnId,
-              timestamp: Date.now(),
-              sceneId,
-              originalText: originalTurnText,
-              repairedText,
-              violations: instructions,
-              repairPrompt: instructions
-            }),
-            logger
-          );
-          return normalizedTurn;
-        }
-      }
-
-      try {
-        const simplified = autoSimplify(
+      if (instructions.length > 0) {
+        const repairedText = await attemptRepair(
           normalizedTurn.text,
-          verdict.violations.map((violation) => violation.lemmaRef),
-          learner
+          instructions,
+          services.llmClient,
+          constraint
         );
-        const originalText = normalizedTurn.text;
-        normalizedTurn.text = simplified.text;
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("verify.auto-simplify-triggered", {
+        if (repairedText) {
+          const repairedVerdict = services.classifier.check(repairedText, learner, {
+            prescription: constraint.rawPrescription,
+            knownEntities: new Set(scene.properNouns),
+            questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
+            lang: constraint.targetLanguage,
+            sceneLexicon: scene,
             conversationId,
             sessionId,
-            turnId: traceTurnId,
-            timestamp: Date.now(),
-            sceneId,
-            originalText,
-            simplifiedText: simplified.text,
-            substitutions: verdict.violations.map(
-              (violation) => violation.lemmaRef.lemmaId
-            )
-          }),
-          logger
-        );
-      } catch (error) {
-        logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
-          reason: error instanceof Error ? error.message : String(error)
-        });
+            turnId: traceTurnId
+          });
+          const repairedQuestUses = findQuestEssentialUses(repairedText, constraint);
+          const repairedMissingGloss = repairedQuestUses.find(
+            (entry) =>
+              textMentionsLemma(repairedText, entry.lemmaId) &&
+              !entry.hasParentheticalGloss
+          );
+          const repairedMissingRequired =
+            (constraint.questEssentialLemmas?.length ?? 0) > 0 &&
+            questObjectiveInFocus &&
+            (execution.runtimeContext?.activeQuestObjectives?.objectives.length ?? 0) > 0 &&
+            !constraint.questEssentialLemmas?.some((entry) =>
+              textMentionsLemma(repairedText, entry.lemmaRef.lemmaId)
+            );
+          if (
+            repairedVerdict.withinEnvelope &&
+            !repairedMissingGloss &&
+            !repairedMissingRequired
+          ) {
+            normalizedTurn.text = repairedText;
+            await emitTelemetry(
+              telemetry,
+              createTelemetryEvent("verify.repair-triggered", {
+                conversationId,
+                sessionId,
+                turnId: traceTurnId,
+                timestamp: Date.now(),
+                sceneId,
+                originalText: originalTurnText,
+                repairedText,
+                violations: instructions,
+                repairPrompt: instructions
+              }),
+              logger
+            );
+            return normalizedTurn;
+          }
+        }
+
+        if (verdict.violations.length > 0) {
+          try {
+            const simplified = autoSimplify(
+              normalizedTurn.text,
+              verdict.violations.map((violation) => violation.lemmaRef),
+              learner
+            );
+            const originalText = normalizedTurn.text;
+            normalizedTurn.text = simplified.text;
+            await emitTelemetry(
+              telemetry,
+              createTelemetryEvent("verify.auto-simplify-triggered", {
+                conversationId,
+                sessionId,
+                turnId: traceTurnId,
+                timestamp: Date.now(),
+                sceneId,
+                originalText,
+                simplifiedText: simplified.text,
+                substitutions: verdict.violations.map(
+                  (violation) => violation.lemmaRef.lemmaId
+                )
+              }),
+              logger
+            );
+          } catch (error) {
+            logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
       }
 
       return normalizedTurn;

@@ -30,8 +30,8 @@ import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
 import {
-  createSugarLangDirectorMiddleware
-} from "./runtime/middlewares/sugar-lang-director-middleware";
+  createSugarLangTeacherMiddleware
+} from "./runtime/middlewares/sugar-lang-teacher-middleware";
 import {
   createSugarLangObserveMiddleware
 } from "./runtime/middlewares/sugar-lang-observe-middleware";
@@ -134,7 +134,7 @@ export function createSugarlangPlugin(
 
 export const SUGARLANG_MIDDLEWARE_FACTORIES = [
   createSugarLangContextMiddleware,
-  createSugarLangDirectorMiddleware,
+  createSugarLangTeacherMiddleware,
   createSugarLangVerifyMiddleware,
   createSugarLangObserveMiddleware
 ] as const;

@@ -35,6 +35,32 @@ import {
 import { createLearnerBlackboard } from "../learner/test-helpers";
 
 describe("SugarLangContextMiddleware", () => {
+  it("skips scripted NPC conversations entirely", async () => {
+    const resolveForExecution = vi.fn();
+    const middleware = createSugarLangContextMiddleware({
+      services: createServicesStub({
+        resolveForExecution
+      }) as never
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "scripted-dialogue",
+        npcDefinitionId: "npc-1",
+        npcDisplayName: "Marisol",
+        interactionMode: "scripted",
+        targetLanguage: "es",
+        supportLanguage: "en",
+        metadata: {}
+      }
+    });
+
+    const result = await middleware.prepare?.(execution);
+
+    expect(result).toBe(execution);
+    expect(resolveForExecution).not.toHaveBeenCalled();
+    expect(execution.annotations).toEqual({});
+  });
+
   it("writes the pre-placement opening dialog annotations without running the budgeter", async () => {
     const learner = createTestLearnerProfile({
       assessment: {

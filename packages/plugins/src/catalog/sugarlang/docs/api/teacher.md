@@ -1,21 +1,21 @@
-# Director API
+# Teacher API
 
 Status: Completed in Epic 9
 
-This document records the public runtime surface the Sugarlang Director owns.
+This document records the public runtime surface the Sugarlang Teacher owns.
 
 ## Entry Point
 
-`SugarLangDirector` is the canonical facade other epics should call.
+`SugarLangTeacher` is the canonical facade other epics should call.
 
 It owns:
 
 - cache lookup via `DirectiveCache`
-- Claude invocation via `ClaudeDirectorPolicy`
-- deterministic fallback via `FallbackDirectorPolicy`
+- LLM invocation via `ClaudeTeacherPolicy`
+- deterministic fallback via `FallbackTeacherPolicy`
 - post-placement calibration flagging
 
-Downstream runtime code should not assemble prompt strings or call the Claude
+Downstream runtime code should not assemble prompt strings or call the LLM
 policy directly.
 
 ## Output Contract
@@ -30,13 +30,13 @@ policy directly.
 - `PedagogicalDirective`
 - `SugarlangConstraint`
 
-`PedagogicalDirective` is the Director's raw structured output. `SugarlangConstraint`
+`PedagogicalDirective` is the teacher's raw structured output. `SugarlangConstraint`
 is the merged payload the middleware pipeline passes to SugarAgent's Generator
 splice.
 
 ## Prompt Structure
 
-`buildDirectorPrompt(context)` returns:
+`buildTeacherPrompt(context)` returns:
 
 ```ts
 {
@@ -49,11 +49,12 @@ splice.
 Budget split:
 
 - cacheable system prompt: role, pedagogical rubric, CEFR descriptors, output schema, hard constraints, comprehension guidance
-- dynamic user prompt: learner summary, lemma summary, scene index, NPC context, moment metadata, recent turns, prescription, pending provisional state, optional quest-essential section
+- dynamic user prompt: learner state, relationship state, scene snapshot, NPC context, moment metadata, recent turns, prescription, pending provisional state, and turn-shaping hints
 
-The builder keeps the static comprehension-check guidance in the system prompt
-and reserves the dynamic probe-floor / pending-provisional sections for the user
-prompt so prompt caching can stay effective.
+The builder now renders a canonical template from `prompt-template.ts` so the
+prompt wording has one editable source of truth. The current Teacher prompt
+path intentionally omits quest-essential guidance while first-contact behavior
+is being debugged.
 
 ## Schema Parsing And Repair
 
@@ -74,9 +75,9 @@ Hard rejections that force fallback instead of repair:
 - hard-floor probe required but `comprehensionCheck.trigger === false`
 - quest-essential lemmas present with `glossingStrategy: "hover-only"` or `"none"`
 
-## Claude Implementation
+## LLM Implementation
 
-`ClaudeDirectorPolicy` takes an injected Claude client boundary and emits
+`ClaudeTeacherPolicy` takes an injected gateway-backed LLM client boundary and emits
 telemetry for:
 
 - model id
@@ -90,7 +91,7 @@ override for cheaper runs such as Haiku.
 
 ## Fallback Policy
 
-`FallbackDirectorPolicy` is deterministic and never calls an LLM.
+`FallbackTeacherPolicy` is deterministic and never calls an LLM.
 
 Rule summary:
 
@@ -116,7 +117,7 @@ Current validity rules:
 
 ## Post-Placement Calibration Hint
 
-The old Director-owned placement flow is gone. The only remaining calibration
+The old director-owned placement flow is gone. The only remaining calibration
 concept is a small post-placement warm-up hint:
 
 - `isInPostPlacementCalibration(learner)` returns true for recently evaluated,
@@ -124,7 +125,7 @@ concept is a small post-placement warm-up hint:
 - `buildPostPlacementCalibrationHint()` appends a short cautionary addendum to
   the normal user prompt
 
-This is a soft hint only. It does not create a second Director prompt pathway.
+This is a soft hint only. It does not create a second Teacher prompt pathway.
 
 ## Important Channels
 
@@ -134,13 +135,13 @@ This is a soft hint only. It does not create a second Director prompt pathway.
 
 ## Provider Boundary
 
-The Director is invoked through `DirectorPolicy.invoke(context)` from the ADR 010
-provider contract. The Director consumes middleware-assembled context and does
+The teacher is invoked through `TeacherPolicy.invoke(context)` from the ADR 010
+provider contract. The teacher consumes middleware-assembled context and does
 not reach back into domain or editor-only systems.
 
 ## Language Data Boundary
 
-The Director does not load plugin language files directly. It consumes Budgeter
+The teacher does not load plugin language files directly. It consumes Budgeter
 prescriptions and middleware-assembled context that were already shaped by the
-lexical atlas and learner state. Placement banks remain outside the Director:
+lexical atlas and learner state. Placement banks remain outside the teacher:
 the plugin-owned questionnaire flow lives under `runtime/placement/`.

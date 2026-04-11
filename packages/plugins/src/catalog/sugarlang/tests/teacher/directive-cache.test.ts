@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/director/directive-cache.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/teacher/directive-cache.test.ts
  *
  * Purpose: Verifies blackboard-backed directive caching and invalidation behavior.
  *
@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/director/directive-cache with a real runtime blackboard.
+ *   - Exercises ../../runtime/teacher/directive-cache with a real runtime blackboard.
  *   - Depends on sugarlang learner fact definitions plus runtime-core invalidation facts.
  *
  * Implements: Epic 9 Story 9.5
@@ -23,7 +23,7 @@ import {
   createRuntimeBlackboard
 } from "@sugarmagic/runtime-core";
 import { describe, expect, it } from "vitest";
-import { DirectiveCache } from "../../runtime/director/directive-cache";
+import { DirectiveCache } from "../../runtime/teacher/directive-cache";
 import { SUGARLANG_BLACKBOARD_FACT_DEFINITIONS } from "../../runtime/learner/fact-definitions";
 import { createDirectiveFixture } from "./test-helpers";
 

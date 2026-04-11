@@ -38,6 +38,7 @@ export interface CefrLexDataFile {
     string,
     AtlasLemmaEntry & {
       cefrPriorSource: AtlasPriorSource;
+      glosses?: Record<string, string>;
     }
   >;
 }
@@ -129,8 +130,39 @@ const DEFAULT_ATLAS_DATA: Record<string, CefrLexDataFile> = {
   it: itAtlasData as CefrLexDataFile
 };
 
+/**
+ * Reverse gloss index key: `${targetLang}:${supportLang}`.
+ * Value: map from lowercase gloss word → array of target-language lemma IDs.
+ */
+type GlossReverseIndex = Map<string, Map<string, string[]>>;
+
+function buildGlossReverseIndex(
+  data: CefrLexDataFile,
+  supportLang: string
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const entry of Object.values(data.lemmas)) {
+    const glossString = entry.glosses?.[supportLang];
+    if (!glossString) continue;
+
+    for (const raw of glossString.split(",")) {
+      const word = raw.trim().toLowerCase();
+      if (word.length === 0) continue;
+
+      const existing = index.get(word);
+      if (existing) {
+        existing.push(entry.lemmaId);
+      } else {
+        index.set(word, [entry.lemmaId]);
+      }
+    }
+  }
+  return index;
+}
+
 export class CefrLexAtlasProvider implements LexicalAtlasProvider {
   private readonly cache = new Map<string, CefrLexDataFile>();
+  private readonly glossIndexCache: GlossReverseIndex = new Map();
 
   constructor(
     private readonly dataByLang: Partial<
@@ -154,21 +186,36 @@ export class CefrLexAtlasProvider implements LexicalAtlasProvider {
     return data;
   }
 
-  getLemma(_lemmaId: string, _lang: string): AtlasLemmaEntry | undefined {
-    return this.load(_lang).lemmas[_lemmaId];
+  getLemma(lemmaId: string, lang: string): AtlasLemmaEntry | undefined {
+    return this.load(lang).lemmas[lemmaId];
   }
 
-  getBand(_lemmaId: string, _lang: string): CEFRBand | undefined {
-    return this.getLemma(_lemmaId, _lang)?.cefrPriorBand;
+  getBand(lemmaId: string, lang: string): CEFRBand | undefined {
+    return this.getLemma(lemmaId, lang)?.cefrPriorBand;
   }
 
-  getFrequencyRank(_lemmaId: string, _lang: string): number | undefined {
-    return this.getLemma(_lemmaId, _lang)?.frequencyRank ?? undefined;
+  getFrequencyRank(lemmaId: string, lang: string): number | undefined {
+    return this.getLemma(lemmaId, lang)?.frequencyRank ?? undefined;
   }
 
-  listLemmasAtBand(_band: CEFRBand, _lang: string): LemmaRef[] {
-    return Object.values(this.load(_lang).lemmas)
-      .filter((entry) => entry.cefrPriorBand === _band)
+  getGloss(lemmaId: string, lang: string, supportLang: string): string | undefined {
+    return this.getLemma(lemmaId, lang)?.glosses?.[supportLang];
+  }
+
+  resolveFromGloss(glossWord: string, lang: string, supportLang: string): AtlasLemmaEntry[] {
+    const index = this.getGlossIndex(lang, supportLang);
+    const lemmaIds = index.get(glossWord.trim().toLowerCase());
+    if (!lemmaIds) return [];
+
+    const data = this.load(lang);
+    return lemmaIds
+      .map((id) => data.lemmas[id])
+      .filter((entry) => entry !== undefined);
+  }
+
+  listLemmasAtBand(band: CEFRBand, lang: string): LemmaRef[] {
+    return Object.values(this.load(lang).lemmas)
+      .filter((entry) => entry.cefrPriorBand === band)
       .sort(
         (left, right) => (left.frequencyRank ?? 0) - (right.frequencyRank ?? 0)
       )
@@ -178,7 +225,18 @@ export class CefrLexAtlasProvider implements LexicalAtlasProvider {
       }));
   }
 
-  getAtlasVersion(_lang: string): string {
-    return this.load(_lang).atlasVersion;
+  getAtlasVersion(lang: string): string {
+    return this.load(lang).atlasVersion;
+  }
+
+  private getGlossIndex(lang: string, supportLang: string): Map<string, string[]> {
+    const key = `${lang}:${supportLang}`;
+    const cached = this.glossIndexCache.get(key);
+    if (cached) return cached;
+
+    const data = this.load(lang);
+    const index = buildGlossReverseIndex(data, supportLang);
+    this.glossIndexCache.set(key, index);
+    return index;
   }
 }

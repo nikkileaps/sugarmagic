@@ -8,7 +8,8 @@
  *
  * Relationships:
  *   - Implements SugarlangLLMClient from ./types.
- *   - Calls the SugarDeploy-managed proxy at /api/sugarlang/generate.
+ *   - Calls the SugarDeploy-managed proxy at /api/sugaragent/generate (shared
+ *     generation route — the handler is a generic Claude proxy, not sugaragent-specific).
  *   - No dependency on sugaragent or any vendor SDK.
  *
  * Implements: Sugarlang gateway LLM provider
@@ -36,7 +37,7 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
   }
 
   async generate(request: SugarlangLLMRequest): Promise<SugarlangLLMResult> {
-    const response = await fetch(`${this.baseUrl}/api/sugarlang/generate`, {
+    const response = await fetch(`${this.baseUrl}/api/sugaragent/generate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

@@ -7,7 +7,7 @@ from skeleton to implementation.
 | ------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- | ----------------- |
 | `budgeter.md`                  | Public Budgeter inputs, outputs, scoring hooks, and rationale surfaces.                 | Epic 3, Epic 8          | Updated in Epic 3 |
 | `classifier.md`                | Public Envelope Classifier interfaces, deterministic pipeline, and repair entry points. | Epic 3, Epic 5          | Updated in Epic 3 |
-| `director.md`                  | Director output contract, prompt boundary, schema parsing, and fallback policy seams.   | Epic 3, Epic 9          | Updated in Epic 3 |
+| `teacher.md`                   | Teacher output contract, prompt boundary, schema parsing, and fallback policy seams.    | Epic 3, Epic 9          | Updated in Epic 3 |
 | `learner-state.md`             | Learner profile, reducer-owned state, persistence, session signals, and placement seeding. | Epic 3, Epic 7, Epic 11 | Updated in Epic 11 |
 | `scene-lexicon-compilation.md` | Scene compiler, content hashing, cache ownership, and compile-profile contract.         | Epic 3, Epic 6          | Updated in Epic 3 |
 | `middlewares.md`               | Middleware ordering, annotation contracts, SugarAgent integration, and placement flow ownership. | Epic 2, Epic 10, Epic 11 | Updated in Epic 11 |

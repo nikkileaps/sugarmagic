@@ -57,6 +57,6 @@ describe("sugarlang plugin registration", () => {
         workspaceKind: SUGARLANG_PLUGIN_ID
       })
     ]);
-    expect(pluginDefinition.shell?.designSections).toHaveLength(7);
+    expect(pluginDefinition.shell?.designSections).toHaveLength(8);
   });
 });

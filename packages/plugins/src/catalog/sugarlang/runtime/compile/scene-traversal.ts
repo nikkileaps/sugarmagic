@@ -49,15 +49,35 @@ export interface TextBlob {
   objectiveDisplayName?: string;
 }
 
+export interface SceneLorePageSection {
+  heading: string;
+  body: string;
+}
+
+export interface SceneLorePage {
+  lorePageId: string;
+  displayName: string;
+  subtitle?: string;
+  body?: string;
+  author?: string;
+  locationLine?: string;
+  dateLine?: string;
+  footer?: string;
+  backBody?: string;
+  pages: string[];
+  sections: SceneLorePageSection[];
+}
+
 export interface SceneAuthoringContext {
   sceneId: string;
   targetLanguage: string;
+  supportLanguage: string;
   region: RegionDocument;
   npcs: NPCDefinition[];
   dialogues: DialogueDefinition[];
   quests: QuestDefinition[];
   items: ItemDefinition[];
-  lorePages: DocumentDefinition[];
+  lorePages: SceneLorePage[];
 }
 
 const TEXT_BLOB_WEIGHTS: Record<TextBlobSourceKind, number> = {
@@ -264,20 +284,20 @@ function collectItemBlobs(context: SceneAuthoringContext): TextBlob[] {
 
 function collectLorePageBlobs(context: SceneAuthoringContext): TextBlob[] {
   const blobs: TextBlob[] = [];
-  for (const document of [...context.lorePages].sort((left, right) =>
-    compareStrings(left.definitionId, right.definitionId)
+  for (const page of [...context.lorePages].sort((left, right) =>
+    compareStrings(left.lorePageId, right.lorePageId)
   )) {
     const parts = [
-      trimText(document.displayName),
-      trimText(document.subtitle),
-      trimText(document.body),
-      trimText(document.author),
-      trimText(document.locationLine),
-      trimText(document.dateLine),
-      trimText(document.footer),
-      trimText(document.backBody),
-      ...document.pages.map((page) => trimText(page)),
-      ...document.sections.flatMap((section) => [
+      trimText(page.displayName),
+      trimText(page.subtitle),
+      trimText(page.body),
+      trimText(page.author),
+      trimText(page.locationLine),
+      trimText(page.dateLine),
+      trimText(page.footer),
+      trimText(page.backBody),
+      ...page.pages.map((entry) => trimText(entry)),
+      ...page.sections.flatMap((section) => [
         trimText(section.heading),
         trimText(section.body)
       ])
@@ -288,9 +308,9 @@ function collectLorePageBlobs(context: SceneAuthoringContext): TextBlob[] {
 
     blobs.push({
       sourceKind: "lore-page",
-      sourceId: document.definitionId,
+      sourceId: page.lorePageId,
       sourceLocation: buildSourceLocation(
-        `lore:${document.definitionId}`,
+        `lore:${page.lorePageId}`,
         parts[0]!
       ),
       text: parts.join("\n"),
@@ -327,13 +347,15 @@ function collectReferencedLorePages(
   region: RegionDocument,
   npcs: NPCDefinition[],
   items: ItemDefinition[],
-  documents: DocumentDefinition[]
-): DocumentDefinition[] {
-  const referencedIds = new Set<string>();
+  documents: DocumentDefinition[],
+  resolvedLorePages: SceneLorePage[]
+): SceneLorePage[] {
+  const lorePageIds = new Set<string>();
+  const itemDocumentIds = new Set<string>();
 
   const pushMaybe = (value: string | null | undefined) => {
     if (typeof value === "string" && value.trim().length > 0) {
-      referencedIds.add(value.trim());
+      lorePageIds.add(value.trim());
     }
   };
 
@@ -345,20 +367,70 @@ function collectReferencedLorePages(
     pushMaybe(npc.lorePageId);
   }
   for (const item of items) {
-    pushMaybe(item.interactionView.documentDefinitionId);
+    const documentDefinitionId = item.interactionView.documentDefinitionId;
+    if (
+      typeof documentDefinitionId === "string" &&
+      documentDefinitionId.trim().length > 0
+    ) {
+      itemDocumentIds.add(documentDefinitionId.trim());
+    }
   }
 
-  return documents.filter((document) => referencedIds.has(document.definitionId));
+  const pagesById = new Map<string, SceneLorePage>();
+
+  for (const page of resolvedLorePages) {
+    if (lorePageIds.has(page.lorePageId)) {
+      pagesById.set(page.lorePageId, page);
+    }
+  }
+
+  for (const document of documents) {
+    const documentId = document.definitionId.trim();
+    if (!itemDocumentIds.has(documentId) && pagesById.has(documentId)) {
+      continue;
+    }
+    if (!lorePageIds.has(documentId) && !itemDocumentIds.has(documentId)) {
+      continue;
+    }
+    pagesById.set(documentId, sceneLorePageFromDocumentDefinition(document));
+  }
+
+  return [...pagesById.values()].sort((left, right) =>
+    compareStrings(left.lorePageId, right.lorePageId)
+  );
 }
 
 export interface CreateSceneAuthoringContextInput {
   region: RegionDocument;
   targetLanguage: string;
+  supportLanguage?: string;
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
+  resolvedLorePages?: SceneLorePage[];
+}
+
+export function sceneLorePageFromDocumentDefinition(
+  document: DocumentDefinition
+): SceneLorePage {
+  return {
+    lorePageId: document.definitionId,
+    displayName: document.displayName,
+    subtitle: document.subtitle,
+    body: document.body,
+    author: document.author,
+    locationLine: document.locationLine,
+    dateLine: document.dateLine,
+    footer: document.footer,
+    backBody: document.backBody,
+    pages: [...document.pages],
+    sections: document.sections.map((section) => ({
+      heading: section.heading,
+      body: section.body
+    }))
+  };
 }
 
 export function createSceneAuthoringContext(
@@ -382,6 +454,7 @@ export function createSceneAuthoringContext(
   const provisionalContext: SceneAuthoringContext = {
     sceneId: input.region.identity.id,
     targetLanguage: input.targetLanguage,
+    supportLanguage: input.supportLanguage ?? "en",
     region: input.region,
     npcs,
     dialogues,
@@ -396,7 +469,8 @@ export function createSceneAuthoringContext(
     input.region,
     npcs,
     items,
-    input.documentDefinitions
+    input.documentDefinitions,
+    input.resolvedLorePages ?? []
   );
 
   return {

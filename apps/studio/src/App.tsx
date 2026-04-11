@@ -592,6 +592,12 @@ export function App() {
     () => readStudioPluginRuntimeEnvironment(),
     []
   );
+  useEffect(() => {
+    (globalThis as Record<string, unknown>).SUGARMAGIC_SUGARLANG_PROXY_BASE_URL =
+      studioRuntimeEnvironment.SUGARMAGIC_SUGARLANG_PROXY_BASE_URL ?? "";
+    (globalThis as Record<string, unknown>).SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL =
+      studioRuntimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL ?? "";
+  }, [studioRuntimeEnvironment]);
   const sugarlangTargetLanguage =
     resolveSugarLangTargetLanguage(studioRuntimeEnvironment) ?? "es";
   const studioPluginWorkspaceKinds = useMemo(

@@ -6,7 +6,7 @@ Sugarlang contributes four `conversation.middleware` entries that run in a fixed
 order:
 
 1. `sugarlang.context` at stage `context`, priority `10`
-2. `sugarlang.director` at stage `policy`, priority `30`
+2. `sugarlang.teacher` at stage `policy`, priority `30`
 3. `sugarlang.verify` at stage `analysis`, priority `20`
 4. `sugarlang.observe` at stage `analysis`, priority `90`
 
@@ -48,7 +48,7 @@ Important keys written during Epic 10:
 `sugarlang.context` loads learner state, placement state, and scene lexicon
 data, then writes the lexical prescription and prompt-facing learner snapshot.
 
-`sugarlang.director` merges the prescription with a pedagogical directive and
+`sugarlang.teacher` merges the prescription with a pedagogical directive and
 produces the final `SugarlangConstraint` that SugarAgent reads.
 
 `sugarlang.verify` re-checks the generated text against the envelope classifier,
@@ -79,7 +79,7 @@ Epic 11 tightens the phase split:
 
 - `sugarlang.context` computes and annotates the placement phase, stages the
   questionnaire metadata, and keeps replay inertness authoritative.
-- `sugarlang.director` skips work during the questionnaire phase.
+- `sugarlang.teacher` skips work during the questionnaire phase.
 - `sugarlang.observe` bypasses opening-dialog and questionnaire display turns,
   then applies placement completion plus quest proposals on the questionnaire
   submission turn.

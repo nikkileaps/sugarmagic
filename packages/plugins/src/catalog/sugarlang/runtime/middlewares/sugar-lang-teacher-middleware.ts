@@ -1,10 +1,10 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-director-middleware.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-teacher-middleware.ts
  *
- * Purpose: Implements the policy-stage middleware that invokes the Director and writes the final Sugarlang constraint.
+ * Purpose: Implements the policy-stage middleware that invokes the teacher and writes the final Sugarlang constraint.
  *
  * Exports:
- *   - createSugarLangDirectorMiddleware
+ *   - createSugarLangTeacherMiddleware
  *
  * Relationships:
  *   - Depends on the Sugarlang runtime service graph and ConversationMiddleware interface.
@@ -25,7 +25,7 @@ import {
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type {
   ActiveQuestEssentialLemma,
-  DirectorRecentTurn,
+  TeacherRecentTurn,
   PedagogicalDirective,
   ProbeFloorState,
   SugarlangConstraint
@@ -48,10 +48,12 @@ import {
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
   getSceneId,
+  isQuestObjectiveInFocus,
+  shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
 
-export interface SugarLangDirectorMiddlewareDeps {
+export interface SugarLangTeacherMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
   telemetry?: TelemetrySink;
@@ -85,7 +87,7 @@ function createPrePlacementDirective(): PedagogicalDirective {
   };
 }
 
-function buildRecentTurns(state: Record<string, unknown>): DirectorRecentTurn[] {
+function buildRecentTurns(state: Record<string, unknown>): TeacherRecentTurn[] {
   const sessionState = state["sugaragent.session"];
   if (
     typeof sessionState !== "object" ||
@@ -116,18 +118,22 @@ function buildRecentTurns(state: Record<string, unknown>): DirectorRecentTurn[] 
     });
 }
 
-export function createSugarLangDirectorMiddleware(
-  deps: SugarLangDirectorMiddlewareDeps
+export function createSugarLangTeacherMiddleware(
+  deps: SugarLangTeacherMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createNoOpSugarlangLogger();
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
-    middlewareId: "sugarlang.director",
-    displayName: "Sugarlang Director Middleware",
+    middlewareId: "sugarlang.teacher",
+    displayName: "Sugarlang Teacher Middleware",
     priority: 30,
     stage: "policy",
     async prepare(execution) {
+      if (!shouldRunSugarlangForExecution(execution)) {
+        return execution;
+      }
+
       const prescription = execution.annotations[
         SUGARLANG_PRESCRIPTION_ANNOTATION
       ] as SugarlangConstraint["rawPrescription"] | undefined;
@@ -160,6 +166,17 @@ export function createSugarLangDirectorMiddleware(
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "prepare");
       const currentSceneId = getSceneId(execution);
+      const annotatedQuestEssentialLemmas =
+        (execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] as
+          | ActiveQuestEssentialLemma[]
+          | undefined) ?? [];
+      const questObjectiveInFocus = isQuestObjectiveInFocus(
+        execution,
+        annotatedQuestEssentialLemmas
+      );
+      const teacherQuestEssentialLemmas = questObjectiveInFocus
+        ? annotatedQuestEssentialLemmas
+        : [];
 
       if (prePlacementOpeningLine) {
         directive = createPrePlacementDirective();
@@ -177,10 +194,10 @@ export function createSugarLangDirectorMiddleware(
         );
       } else {
         if (!scene) {
-          logger.warn("Skipping Sugarlang director middleware - no scene id.");
+          logger.warn("Skipping Sugarlang teacher middleware - no scene id.");
           return execution;
         }
-        directive = await services.director.invoke({
+        directive = await services.teacher.invoke({
           conversationId,
           telemetryContext: {
             turnId: traceTurnId,
@@ -218,10 +235,7 @@ export function createSugarLangDirectorMiddleware(
               softFloorReached: false,
               hardFloorReached: false
             },
-          activeQuestEssentialLemmas:
-            (execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] as
-              | ActiveQuestEssentialLemma[]
-              | undefined) ?? [],
+          activeQuestEssentialLemmas: teacherQuestEssentialLemmas,
           selectionMetadata: execution.selection.metadata
         });
       }
@@ -297,23 +311,19 @@ export function createSugarLangDirectorMiddleware(
               }
             }
           : {}),
-        ...((execution.annotations[
-          SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION
-        ] as SugarlangConstraint["questEssentialLemmas"])?.length
+        ...(teacherQuestEssentialLemmas.length
           ? {
-              questEssentialLemmas: (
-                execution.annotations[
-                  SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION
-                ] as Array<{
+              questEssentialLemmas: teacherQuestEssentialLemmas.map(
+                (entry: {
                   lemmaRef: SugarlangConstraint["targetVocab"]["introduce"][number];
                   sourceObjectiveDisplayName: string;
                   supportLanguageGloss: string;
-                }>
-              ).map((entry) => ({
-                lemmaRef: entry.lemmaRef,
-                sourceObjectiveDisplayName: entry.sourceObjectiveDisplayName,
-                supportLanguageGloss: entry.supportLanguageGloss
-              }))
+                }) => ({
+                  lemmaRef: entry.lemmaRef,
+                  sourceObjectiveDisplayName: entry.sourceObjectiveDisplayName,
+                  supportLanguageGloss: entry.supportLanguageGloss
+                })
+              )
             }
           : {}),
         ...(prePlacementOpeningLine ? { prePlacementOpeningLine } : {})
@@ -321,6 +331,28 @@ export function createSugarLangDirectorMiddleware(
 
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+      logger.info("Teacher finalized Sugarlang guidance and constraint.", {
+        conversationId,
+        sessionId,
+        turnId: traceTurnId,
+        sceneId: currentSceneId,
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+        npcDisplayName: execution.selection.npcDisplayName ?? null,
+        directive,
+        constraintSummary: {
+          supportPosture: constraint.supportPosture,
+          targetLanguageRatio: constraint.targetLanguageRatio,
+          interactionStyle: constraint.interactionStyle,
+          glossingStrategy: constraint.glossingStrategy,
+          sentenceComplexityCap: constraint.sentenceComplexityCap,
+          introduce: constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId),
+          reinforce: constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId),
+          avoid: constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId),
+          comprehensionCheckActive:
+            constraint.comprehensionCheckInFlight?.active ?? false,
+          prePlacementOpeningLine: constraint.prePlacementOpeningLine ?? null
+        }
+      });
       if (constraint.comprehensionCheckInFlight) {
         const probeId = `${traceTurnId}:probe:${constraint.comprehensionCheckInFlight.targetLemmas
           .map((lemma) => lemma.lemmaId)

@@ -42,6 +42,7 @@ import {
 } from "./scene-traversal";
 
 const QUEST_ESSENTIAL_STOPWORDS: Record<string, Set<string>> = {
+  en: new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "at", "for", "with", "by", "from", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "shall", "it", "its", "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them", "my", "your", "his", "our", "their", "not", "no", "but", "if", "so", "as", "up"]),
   es: new Set(["el", "la", "los", "las", "un", "una", "y", "o", "de", "del", "a", "al", "en", "con", "por", "para", "que"]),
   it: new Set(["il", "lo", "la", "gli", "le", "un", "una", "e", "o", "di", "a", "al", "nel", "con", "per", "che"])
 };
@@ -216,50 +217,68 @@ export function compileSugarlangScene(
 
       totalWordTokens += 1;
 
+      // Strategy 1: Direct target-language lemmatization (works when the
+      // authored text is already in the target language, e.g. inline Spanish).
+      let resolvedEntries: AtlasLemmaEntry[] = [];
       const lemma = lemmatize(token, scene.targetLanguage, morphology);
-      if (!lemma) {
-        unclassifiedWordTokens += 1;
-        continue;
+      if (lemma) {
+        const atlasEntry = atlas.getLemma(lemma.lemmaId, lemma.lang);
+        if (atlasEntry) {
+          resolvedEntries = [atlasEntry];
+        }
       }
 
-      const atlasEntry = atlas.getLemma(lemma.lemmaId, lemma.lang);
-      if (!atlasEntry) {
-        unclassifiedWordTokens += 1;
-        continue;
-      }
-
-      if (!lemmaMap.has(lemma.lemmaId)) {
-        lemmaMap.set(lemma.lemmaId, createSceneLemmaInfo(atlasEntry));
-      }
-
-      if (profile === "authoring-preview") {
-        sourceMap.set(
-          lemma.lemmaId,
-          summarizeLocations(sourceMap.get(lemma.lemmaId), blob.sourceLocation)
+      // Strategy 2: Gloss reverse lookup. Authored text is in the support
+      // language (e.g. English); resolve to target-language lemmas via the
+      // atlas glosses. A single English word like "job" may resolve to
+      // multiple target lemmas ("trabajo", "empleo").
+      if (resolvedEntries.length === 0) {
+        resolvedEntries = atlas.resolveFromGloss(
+          token.surface,
+          scene.targetLanguage,
+          scene.supportLanguage
         );
       }
 
-      if (ANCHOR_SOURCE_KINDS.has(blob.sourceKind)) {
-        anchorLemmaIds.add(lemma.lemmaId);
+      if (resolvedEntries.length === 0) {
+        unclassifiedWordTokens += 1;
+        continue;
       }
 
-      if (
-        (blob.sourceKind === "quest-objective" ||
-          blob.sourceKind === "quest-objective-display-name") &&
-        blob.objectiveNodeId &&
-        blob.questDefinitionId &&
-        isQuestEssentialContentLemma(lemma.lemmaId, atlasEntry, scene.targetLanguage)
-      ) {
-        const key = `${blob.objectiveNodeId}:${lemma.lemmaId}`;
-        if (!questEssentialMap.has(key)) {
-          questEssentialMap.set(
-            key,
-            createQuestEssentialLemma(lemma.lemmaId, atlasEntry, blob)
+      for (const atlasEntry of resolvedEntries) {
+        if (!lemmaMap.has(atlasEntry.lemmaId)) {
+          lemmaMap.set(atlasEntry.lemmaId, createSceneLemmaInfo(atlasEntry));
+        }
+
+        if (profile === "authoring-preview") {
+          sourceMap.set(
+            atlasEntry.lemmaId,
+            summarizeLocations(sourceMap.get(atlasEntry.lemmaId), blob.sourceLocation)
           );
         }
-        const existingLemma = lemmaMap.get(lemma.lemmaId);
-        if (existingLemma) {
-          existingLemma.isQuestCritical = true;
+
+        if (ANCHOR_SOURCE_KINDS.has(blob.sourceKind)) {
+          anchorLemmaIds.add(atlasEntry.lemmaId);
+        }
+
+        if (
+          (blob.sourceKind === "quest-objective" ||
+            blob.sourceKind === "quest-objective-display-name") &&
+          blob.objectiveNodeId &&
+          blob.questDefinitionId &&
+          isQuestEssentialContentLemma(atlasEntry.lemmaId, atlasEntry, scene.targetLanguage)
+        ) {
+          const key = `${blob.objectiveNodeId}:${atlasEntry.lemmaId}`;
+          if (!questEssentialMap.has(key)) {
+            questEssentialMap.set(
+              key,
+              createQuestEssentialLemma(atlasEntry.lemmaId, atlasEntry, blob)
+            );
+          }
+          const existingLemma = lemmaMap.get(atlasEntry.lemmaId);
+          if (existingLemma) {
+            existingLemma.isQuestCritical = true;
+          }
         }
       }
     }

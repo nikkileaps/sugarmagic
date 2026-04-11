@@ -1,15 +1,15 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/director/test-helpers.ts
+ * packages/plugins/src/catalog/sugarlang/tests/teacher/test-helpers.ts
  *
- * Purpose: Shares compact fixtures for Epic 9 Director tests.
+ * Purpose: Shares compact fixtures for Epic 9 Teacher'stests.
  *
  * Exports:
- *   - createDirectorContext
+ *   - createTeacherContext
  *   - createDirectiveFixture
  *
  * Relationships:
  *   - Builds on learner test helpers and runtime contract types.
- *   - Is consumed by the Director prompt, parser, policy, cache, and facade tests.
+ *   - Is consumed by the Teacher prompt, parser, policy, cache, and facade tests.
  *
  * Implements: Epic 9 director test support
  *
@@ -18,7 +18,7 @@
 
 import type {
   CompiledSceneLexicon,
-  DirectorContext,
+  TeacherContext,
   LexicalPrescription,
   PedagogicalDirective
 } from "../../runtime/types";
@@ -27,9 +27,9 @@ import {
   createLearnerProfile
 } from "../learner/test-helpers";
 
-export function createDirectorContext(
-  overrides: Partial<DirectorContext> = {}
-): DirectorContext {
+export function createTeacherContext(
+  overrides: Partial<TeacherContext> = {}
+): TeacherContext {
   const scene: CompiledSceneLexicon = {
     sceneId: "scene-station",
     contentHash: "scene-hash",
