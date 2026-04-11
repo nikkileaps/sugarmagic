@@ -265,6 +265,15 @@ export function createRuntimeDialoguePanel(
           termText.textContent = match.term;
           wrapper.appendChild(termText);
 
+          const gloss = turnHighlight.glosses?.[match.term.toLowerCase()];
+          if (gloss) {
+            const tooltip = document.createElement("span");
+            tooltip.className = "sm-dialogue-focus-tooltip";
+            tooltip.textContent = gloss;
+            tooltip.setAttribute("aria-hidden", "true");
+            wrapper.appendChild(tooltip);
+          }
+
           if (match.celebrate) {
             const burst = document.createElement("span");
             burst.className = "sm-dialogue-focus-burst";
@@ -1052,6 +1061,42 @@ function injectStyles() {
       border-bottom-color: rgba(255, 224, 130, 0.75);
       box-shadow: inset 0 -0.2em 0 rgba(255, 224, 130, 0.2);
       animation: sm-dialogue-focus-term-pop 1.05s ease-out;
+    }
+
+    .sm-dialogue-focus-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) scale(0.92);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(30, 30, 46, 0.95);
+      border: 1px solid rgba(245, 195, 91, 0.3);
+      color: #f0e8df;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .sm-dialogue-focus-tooltip::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: rgba(30, 30, 46, 0.95);
+    }
+
+    .sm-dialogue-focus-term:hover .sm-dialogue-focus-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
     }
 
     .sm-dialogue-focus-burst {

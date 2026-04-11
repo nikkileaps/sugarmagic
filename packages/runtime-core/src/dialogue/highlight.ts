@@ -24,6 +24,8 @@ export interface HighlightMatch {
 export interface DialogueHighlightAnnotation {
   focusTerms: string[];
   celebrateTerms: string[];
+  /** Optional term → gloss map for tooltip display (e.g. { "queso": "cheese" }). */
+  glosses?: Record<string, string>;
 }
 
 const DIALOGUE_HIGHLIGHT_KEY = "dialogueHighlight";
@@ -96,6 +98,11 @@ export function readDialogueHighlight(
     return null;
   }
   const record = highlight as Record<string, unknown>;
+  const glosses =
+    typeof record.glosses === "object" && record.glosses !== null
+      ? (record.glosses as Record<string, string>)
+      : undefined;
+
   return {
     focusTerms: (record.focusTerms as string[]).filter(
       (t) => typeof t === "string"
@@ -104,6 +111,7 @@ export function readDialogueHighlight(
       ? (record.celebrateTerms as string[]).filter(
           (t) => typeof t === "string"
         )
-      : []
+      : [],
+    glosses
   };
 }

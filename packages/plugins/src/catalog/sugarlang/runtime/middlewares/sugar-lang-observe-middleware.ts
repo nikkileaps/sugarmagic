@@ -584,9 +584,23 @@ export function createSugarLangObserveMiddleware(
       ];
 
       if (focusTerms.length > 0) {
+        const supportLang = execution.selection.supportLanguage ?? "en";
+        const glosses: Record<string, string> = {};
+        for (const term of focusTerms) {
+          const gloss = services.atlas.getGloss(
+            term,
+            learner.targetLanguage,
+            supportLang
+          );
+          if (gloss) {
+            glosses[term] = gloss;
+          }
+        }
+
         normalizedTurn.annotations!["dialogueHighlight"] = {
           focusTerms,
-          celebrateTerms: []
+          celebrateTerms: [],
+          glosses
         };
       }
 

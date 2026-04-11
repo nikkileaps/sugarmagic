@@ -25,11 +25,13 @@ export function createSugarlangEntryDecorator(): (
   turn: ConversationTurnEnvelope
 ) => ConversationTurnEnvelope {
   let currentFocusTerms: string[] = [];
+  let currentGlosses: Record<string, string> = {};
 
   return (turn) => {
     const highlight = readDialogueHighlight(turn.annotations);
     if (highlight && highlight.focusTerms.length > 0) {
       currentFocusTerms = highlight.focusTerms;
+      currentGlosses = highlight.glosses ?? {};
     }
 
     const isPlayer =
@@ -43,7 +45,8 @@ export function createSugarlangEntryDecorator(): (
         if (!turn.annotations) turn.annotations = {};
         turn.annotations["dialogueHighlight"] = {
           focusTerms: matchedTerms,
-          celebrateTerms: matchedTerms
+          celebrateTerms: matchedTerms,
+          glosses: currentGlosses
         };
       }
     }
