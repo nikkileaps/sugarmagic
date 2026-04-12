@@ -1,3 +1,21 @@
+/**
+ * packages/runtime-core/src/plugins/index.ts
+ *
+ * Purpose: Defines the runtime plugin contribution surface and plugin manager contract.
+ *
+ * Exports:
+ *   - Runtime plugin contribution kinds and payload types
+ *   - Runtime plugin manager and instance contracts
+ *   - createRuntimePluginManager
+ *   - RuntimePluginSystem
+ *
+ * Relationships:
+ *   - Depends on shared runtime domain contracts only.
+ *   - Is the single contribution type source of truth for runtime plugin integration.
+ *
+ * Status: active
+ */
+
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type {
   ConversationMiddleware,
@@ -15,12 +33,14 @@ import type {
   RegionDocument,
   SpellDefinition
 } from "@sugarmagic/domain";
-import { System, type World } from "../ecs";
+import { System, type Entity, type World } from "../ecs";
 
 export type RuntimePluginContributionKind =
   | "conversation.provider"
   | "conversation.middleware"
   | "dialogue.entryDecorator"
+  | "debug.hudCard"
+  | "debug.entityBillboard"
   | "runtime.banner"
   | "design.workspace"
   | "design.section"
@@ -109,10 +129,68 @@ export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
   }
 >;
 
+export interface DebugHudRendererStats {
+  fps: number;
+  frameTimeMs: number;
+  drawCalls: number;
+  triangles: number;
+  textures: number;
+  geometries: number;
+}
+
+export interface DebugHudGameplaySessionSnapshot {
+  activeEntityCount: number;
+  activeSystemCount: number;
+  activeNpcCount: number;
+  activeQuestCount: number;
+  currentSceneId: string | null;
+  currentAreaDisplayName: string | null;
+  playerPosition: { x: number; y: number; z: number } | null;
+  dialogueActive: boolean;
+}
+
+export interface DebugHudCardContext {
+  readonly world: World;
+  readonly boot: RuntimeBootModel;
+  readonly blackboard: RuntimeBlackboard;
+  readonly rendererStats: DebugHudRendererStats;
+  readonly gameplaySession: DebugHudGameplaySessionSnapshot;
+}
+
+export type DebugHudCardContribution = RuntimePluginContributionBase<
+  "debug.hudCard",
+  {
+    cardId: string;
+    renderCard: (container: HTMLElement, context: DebugHudCardContext) => void;
+    updateCard?: (context: DebugHudCardContext) => void;
+    disposeCard?: () => void;
+  }
+>;
+
+export type DebugEntityBillboardKind = "player" | "npc" | "item";
+
+export interface EntityBillboardContext {
+  readonly entityId: Entity;
+  readonly entityKind: DebugEntityBillboardKind;
+  readonly definitionId: string | null;
+  readonly displayName: string;
+  readonly sceneId: string | null;
+  readonly blackboard: RuntimeBlackboard;
+}
+
+export type DebugEntityBillboardContribution = RuntimePluginContributionBase<
+  "debug.entityBillboard",
+  {
+    getLines: (context: EntityBillboardContext) => string[];
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
   | DialogueEntryDecoratorContribution
+  | DebugHudCardContribution
+  | DebugEntityBillboardContribution
   | RuntimeBannerContribution
   | DesignWorkspaceContribution
   | DesignSectionContribution

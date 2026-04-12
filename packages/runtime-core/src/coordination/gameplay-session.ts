@@ -72,7 +72,14 @@ import {
   QuestSystem
 } from "../quest";
 import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
-import type { RuntimePluginManager } from "../plugins";
+import type {
+  DebugEntityBillboardContribution,
+  DebugEntityBillboardKind,
+  DebugHudCardContribution,
+  DebugHudGameplaySessionSnapshot,
+  EntityBillboardContext,
+  RuntimePluginManager
+} from "../plugins";
 import { RuntimePluginSystem } from "../plugins";
 import {
   createRuntimeNpcBehaviorSystem,
@@ -164,6 +171,11 @@ export interface RuntimeGameplaySessionController {
     npcDefinitionId: string;
     position: [number, number, number];
   }>;
+  initializeDebugBillboards: () => void;
+  refreshDebugBillboards: () => void;
+  setDebugBillboardsEnabled: (enabled: boolean) => void;
+  getDebugHudCardContributions: () => DebugHudCardContribution[];
+  getDebugHudSnapshot: () => DebugHudGameplaySessionSnapshot;
   dispose: () => void;
 }
 
@@ -188,6 +200,21 @@ const SPELL_MENU_LOCK_ID = "runtime-spell-menu";
 // Three frames is enough to smooth threshold jitter in preview movement without
 // making normal walking feel sticky when crossing authored boundaries.
 const SPATIAL_AREA_CONFIRMATION_FRAMES = 3;
+const DEBUG_BILLBOARD_STYLE = {
+  fontSize: 11,
+  color: "#eef6ff",
+  backgroundColor: "rgba(17, 17, 27, 0.78)",
+  padding: "5px 8px",
+  maxWidth: 260
+} as const;
+
+interface DebugBillboardBinding {
+  entity: Entity;
+  entityKind: DebugEntityBillboardKind;
+  definitionId: string | null;
+  displayName: string;
+  sceneId: string | null;
+}
 
 function cloneSelectionMetadata(options: {
   selectionMetadata?: Record<string, unknown>;
@@ -290,6 +317,9 @@ export function createRuntimeGameplaySessionController(
   const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
   ).sort((a, b) => a.priority - b.priority);
+  const debugHudCardContributions = pluginManager?.getContributions("debug.hudCard") ?? [];
+  const debugEntityBillboardContributions =
+    pluginManager?.getContributions("debug.entityBillboard") ?? [];
   const entryDecorators = decoratorContributions.map((c) => c.payload.decorate);
   const hoverHandlers = decoratorContributions
     .map((c) => c.payload.onTermHover)
@@ -353,6 +383,10 @@ export function createRuntimeGameplaySessionController(
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
   const billboardSystem = new BillboardSystem();
   const billboardOnlyEntities = new Set<Entity>();
+  const debugBillboardBindings = new Map<Entity, DebugBillboardBinding>();
+  const debugBillboardWarningKeys = new Set<string>();
+  let debugBillboardsInitialized = false;
+  let debugBillboardsEnabled = false;
   const spatialResolverSystem =
     activeRegion
       ? createRuntimeSpatialResolverSystem({
@@ -371,6 +405,17 @@ export function createRuntimeGameplaySessionController(
     payload?: Record<string, unknown>
   ) {
     console.info(`[runtime-core] ${event}`, payload ?? {});
+  }
+
+  function warnDebugBillboardOnce(
+    key: string,
+    payload: Record<string, unknown>
+  ) {
+    if (debugBillboardWarningKeys.has(key)) {
+      return;
+    }
+    debugBillboardWarningKeys.add(key);
+    console.warn("[runtime-core] debug-billboard-warning", payload);
   }
 
   function buildActiveRegionLocationReference() {
@@ -398,6 +443,29 @@ export function createRuntimeGameplaySessionController(
 
   function resolvePlayerEntity(): Entity | null {
     return world.query(PlayerControlled, Position)[0] ?? null;
+  }
+
+  function getDebugHudSnapshot(): DebugHudGameplaySessionSnapshot {
+    const playerPosition = getEntityPosition(blackboard, playerDefinition.definitionId);
+    const playerArea = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
+
+    return {
+      activeEntityCount: world.getEntities().size,
+      activeSystemCount: world.getSystemCount(),
+      activeNpcCount: npcInteractableEntities.size,
+      activeQuestCount: questManager.getJournalData().active.length,
+      currentSceneId: activeRegion?.identity.id ?? null,
+      currentAreaDisplayName: playerArea?.area?.displayName ?? null,
+      playerPosition:
+        playerPosition
+          ? {
+              x: playerPosition.x,
+              y: playerPosition.y,
+              z: playerPosition.z
+            }
+          : null,
+      dialogueActive: dialogueManager.isDialogueActive()
+    };
   }
 
   function syncBlackboardSpatialFacts() {
@@ -852,6 +920,7 @@ export function createRuntimeGameplaySessionController(
       existingBillboard.size = next.size;
       existingBillboard.offset = next.offset;
       existingBillboard.lodThresholds = next.lodThresholds;
+      existingBillboard.enabled = next.enabled;
       existingBillboard.visible = next.visible;
       existingBillboard.lodState = next.lodState;
     } else {
@@ -876,6 +945,202 @@ export function createRuntimeGameplaySessionController(
     }
 
     world.removeComponent(entity, BillboardComponent);
+  }
+
+  function buildEntityBillboardContext(
+    binding: DebugBillboardBinding
+  ): EntityBillboardContext {
+    return {
+      entityId: binding.entity,
+      entityKind: binding.entityKind,
+      definitionId: binding.definitionId,
+      displayName: binding.displayName,
+      sceneId: binding.sceneId,
+      blackboard
+    };
+  }
+
+  function buildCoreDebugBillboardLines(binding: DebugBillboardBinding): string[] {
+    const lines = [binding.displayName];
+
+    if (binding.entityKind === "npc" && binding.definitionId) {
+      const currentTask = npcBehaviorSystem?.getCurrentTask(binding.definitionId) ?? null;
+      const activity = getEntityCurrentActivity(blackboard, binding.definitionId);
+      const area = getEntityCurrentArea(blackboard, binding.definitionId);
+      const relation = getEntityPlayerSpatialRelation(blackboard, binding.definitionId);
+
+      if (currentTask?.displayName) {
+        lines.push(`task: ${currentTask.displayName}`);
+      }
+      if (activity?.activity) {
+        lines.push(`activity: ${activity.activity}`);
+      }
+      if (area?.area?.displayName) {
+        lines.push(`area: ${area.area.displayName}`);
+      }
+      if (relation?.proximityBand) {
+        lines.push(`proximity: ${relation.proximityBand}`);
+      }
+      return lines;
+    }
+
+    if (binding.entityKind === "player") {
+      const area = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
+      const position = getEntityPosition(blackboard, playerDefinition.definitionId);
+      if (area?.area?.displayName) {
+        lines.push(`area: ${area.area.displayName}`);
+      }
+      if (position) {
+        lines.push(
+          `pos: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`
+        );
+      }
+    }
+
+    return lines;
+  }
+
+  function buildPluginDebugBillboardLines(binding: DebugBillboardBinding): string[] {
+    const context = buildEntityBillboardContext(binding);
+    const groupedLines: string[][] = [];
+
+    for (const contribution of debugEntityBillboardContributions) {
+      const lines = contribution.payload
+        .getLines(context)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      if (lines.length > 0) {
+        groupedLines.push(lines);
+      }
+    }
+
+    if (groupedLines.length === 0) {
+      return [];
+    }
+
+    const merged: string[] = [];
+    groupedLines.forEach((group, index) => {
+      if (index > 0) {
+        merged.push("···");
+      }
+      merged.push(...group);
+    });
+    return merged;
+  }
+
+  function applyDebugBillboardEnabledState() {
+    for (const binding of debugBillboardBindings.values()) {
+      const billboard = world.getComponent(binding.entity, BillboardComponent);
+      if (!billboard) {
+        continue;
+      }
+      billboard.enabled = debugBillboardsEnabled;
+    }
+  }
+
+  function initializeDebugBillboards() {
+    if (debugBillboardsInitialized) {
+      return;
+    }
+
+    const playerEntity = resolvePlayerEntity();
+    if (playerEntity !== null) {
+      debugBillboardBindings.set(playerEntity, {
+        entity: playerEntity,
+        entityKind: "player",
+        definitionId: playerDefinition.definitionId,
+        displayName: playerDefinition.displayName,
+        sceneId: activeRegion?.identity.id ?? null
+      });
+      createBillboard({
+        entity: playerEntity,
+        descriptor: { kind: "text", content: playerDefinition.displayName, style: DEBUG_BILLBOARD_STYLE },
+        component: {
+          orientation: "spherical",
+          displayMode: "overlay",
+          size: { width: 1.4, height: 0.4 },
+          offset: { x: 0, y: 2.1, z: 0 },
+          enabled: false
+        }
+      });
+    }
+
+    for (const entry of npcInteractableEntities.values()) {
+      const npcDefinition =
+        npcDefinitions.find((candidate) => candidate.definitionId === entry.npcDefinitionId) ??
+        null;
+      debugBillboardBindings.set(entry.entity, {
+        entity: entry.entity,
+        entityKind: "npc",
+        definitionId: entry.npcDefinitionId,
+        displayName: npcDefinition?.displayName ?? "NPC",
+        sceneId: activeRegion?.identity.id ?? null
+      });
+      createBillboard({
+        entity: entry.entity,
+        descriptor: {
+          kind: "text",
+          content: npcDefinition?.displayName ?? "NPC",
+          style: DEBUG_BILLBOARD_STYLE
+        },
+        component: {
+          orientation: "spherical",
+          displayMode: "overlay",
+          size: { width: 1.6, height: 0.5 },
+          offset: { x: 0, y: 2.2, z: 0 },
+          enabled: false
+        }
+      });
+    }
+
+    debugBillboardsInitialized = true;
+    applyDebugBillboardEnabledState();
+    refreshDebugBillboards();
+  }
+
+  function refreshDebugBillboards() {
+    if (!debugBillboardsInitialized) {
+      return;
+    }
+
+    for (const binding of debugBillboardBindings.values()) {
+      const billboard = world.getComponent(binding.entity, BillboardComponent);
+      if (!billboard) {
+        warnDebugBillboardOnce(`missing:${binding.entity}`, {
+          entity: binding.entity,
+          definitionId: binding.definitionId,
+          displayName: binding.displayName,
+          reason: "missing-billboard-component"
+        });
+        continue;
+      }
+      if (billboard.descriptor.kind !== "text") {
+        warnDebugBillboardOnce(`non-text:${binding.entity}`, {
+          entity: binding.entity,
+          definitionId: binding.definitionId,
+          displayName: binding.displayName,
+          descriptorKind: billboard.descriptor.kind,
+          reason: "expected-text-billboard"
+        });
+        continue;
+      }
+
+      const lines = buildCoreDebugBillboardLines(binding);
+      lines.push(...buildPluginDebugBillboardLines(binding));
+      billboard.descriptor = {
+        ...billboard.descriptor,
+        content: lines.join("\n"),
+        style: DEBUG_BILLBOARD_STYLE
+      };
+    }
+  }
+
+  function setDebugBillboardsEnabled(enabled: boolean) {
+    debugBillboardsEnabled = enabled;
+    applyDebugBillboardEnabledState();
+    if (enabled) {
+      refreshDebugBillboards();
+    }
   }
 
   dialogueManager.registerDefinitions(dialogueDefinitions);
@@ -1269,9 +1534,21 @@ export function createRuntimeGameplaySessionController(
         }];
       });
     },
+    initializeDebugBillboards,
+    refreshDebugBillboards,
+    setDebugBillboardsEnabled,
+    getDebugHudCardContributions() {
+      return debugHudCardContributions;
+    },
+    getDebugHudSnapshot,
     dispose() {
       npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
+      debugBillboardWarningKeys.clear();
+      for (const entity of debugBillboardBindings.keys()) {
+        world.removeComponent(entity, BillboardComponent);
+      }
+      debugBillboardBindings.clear();
       for (const entity of billboardOnlyEntities) {
         world.destroyEntity(entity);
       }

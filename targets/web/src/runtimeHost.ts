@@ -62,6 +62,7 @@ import {
   computeCameraPosition,
   createRuntimeInputManager,
   createRuntimeBootModel,
+  createRuntimeDebugHud,
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
@@ -180,6 +181,14 @@ function applyBillboardLodEnforcement(input: {
       continue;
     }
 
+    // Billboards without LOD thresholds (e.g. debug text labels) coexist
+    // with the mesh — they don't replace it. Only enforce LOD switching
+    // when thresholds are configured.
+    if (!billboard.lodThresholds) {
+      root.visible = true;
+      continue;
+    }
+
     if (billboard.lodState === "full-mesh") {
       root.visible = billboard.visible;
       continue;
@@ -271,6 +280,20 @@ interface SpellCastFeedbackHost {
 interface RuntimePluginBannerHost {
   apply: (banners: RuntimeBannerContribution[]) => void;
   dispose: () => void;
+}
+
+function readRendererDebugStats(renderer: WebGPURenderer): {
+  drawCalls: number;
+  triangles: number;
+  textures: number;
+  geometries: number;
+} {
+  return {
+    drawCalls: renderer.info.render.drawCalls,
+    triangles: renderer.info.render.triangles,
+    textures: renderer.info.memory.textures,
+    geometries: renderer.info.memory.geometries
+  };
 }
 
 function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost {
@@ -468,6 +491,7 @@ export function createWebRuntimeHost(
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
+  let debugHud: ReturnType<typeof createRuntimeDebugHud> | null = null;
   let gameplayAssembly:
     | ReturnType<typeof createRuntimeGameplayAssembly>
     | null = null;
@@ -494,6 +518,8 @@ export function createWebRuntimeHost(
 
     playerVisualController?.dispose();
     playerVisualController = null;
+    debugHud?.dispose();
+    debugHud = null;
     void gameplayAssembly?.dispose();
     gameplayAssembly = null;
     gameplaySession = null;
@@ -646,11 +672,9 @@ export function createWebRuntimeHost(
     });
 
     renderPipeline?.setCamera(camera);
-    if (renderPipeline) {
-      renderPipeline.render();
-    } else {
-      renderer.render(scene, camera);
-    }
+    renderPipeline?.render();
+
+    debugHud?.update(delta);
 
     inputManager.endFrame();
 
@@ -839,6 +863,38 @@ export function createWebRuntimeHost(
       }
     });
     gameplaySession = gameplayAssembly.gameplaySession;
+    if (adapter.boot.hostKind === "studio") {
+      const activeRenderer = renderer;
+      if (!activeRenderer) {
+        throw new Error("Preview debug HUD requires an active renderer.");
+      }
+      gameplaySession.initializeDebugBillboards();
+      debugHud = createRuntimeDebugHud({
+        parent: root,
+        ownerWindow,
+        boot: adapter.boot,
+        world,
+        blackboard: gameplaySession.blackboard,
+        pluginCards: gameplaySession.getDebugHudCardContributions(),
+        getRendererStats: () => readRendererDebugStats(activeRenderer),
+        getGameplaySessionSnapshot: () => gameplaySession?.getDebugHudSnapshot() ?? {
+          activeEntityCount: 0,
+          activeSystemCount: 0,
+          activeNpcCount: 0,
+          activeQuestCount: 0,
+          currentSceneId: null,
+          currentAreaDisplayName: null,
+          playerPosition: null,
+          dialogueActive: false
+        },
+        setDebugBillboardsEnabled: (enabled) => {
+          gameplaySession?.setDebugBillboardsEnabled(enabled);
+        },
+        refreshDebugBillboards: () => {
+          gameplaySession?.refreshDebugBillboards();
+        }
+      });
+    }
 
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;

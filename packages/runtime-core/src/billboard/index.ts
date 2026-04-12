@@ -61,6 +61,7 @@ export interface BillboardComponentOptions {
   size?: BillboardSize;
   offset?: BillboardOffset;
   lodThresholds?: BillboardLodThresholds;
+  enabled?: boolean;
   visible?: boolean;
   lodState?: BillboardLodState;
 }
@@ -97,6 +98,7 @@ export class BillboardComponent implements Component {
   size: BillboardSize;
   offset: BillboardOffset;
   lodThresholds?: BillboardLodThresholds;
+  enabled: boolean;
   visible: boolean;
   lodState: BillboardLodState;
 
@@ -110,6 +112,7 @@ export class BillboardComponent implements Component {
     this.size = options.size ?? { width: 1, height: 1 };
     this.offset = options.offset ?? { x: 0, y: 0, z: 0 };
     this.lodThresholds = options.lodThresholds;
+    this.enabled = options.enabled ?? true;
     this.visible = options.visible ?? true;
     this.lodState = options.lodState ?? (options.lodThresholds ? "full-mesh" : "billboard");
   }
@@ -192,6 +195,11 @@ export class BillboardSystem extends System {
       const position = world.getComponent(entity, Position);
       const billboard = world.getComponent(entity, BillboardComponent);
       if (!position || !billboard) {
+        continue;
+      }
+
+      if (!billboard.enabled) {
+        billboard.visible = false;
         continue;
       }
 
