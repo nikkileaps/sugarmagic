@@ -45,6 +45,14 @@ export class World {
     store.set(entity, component);
   }
 
+  removeComponent<T extends Component>(
+    entity: Entity,
+    cls: ComponentClass<T>
+  ): boolean {
+    const store = this.stores.get(cls.type);
+    return store?.delete(entity) ?? false;
+  }
+
   getComponent<T extends Component>(
     entity: Entity,
     cls: ComponentClass<T>

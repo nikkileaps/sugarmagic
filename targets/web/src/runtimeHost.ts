@@ -47,6 +47,8 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
+  BillboardComponent,
+  type CameraSnapshot,
   World,
   MovementSystem,
   PlayerControlled,
@@ -77,6 +79,9 @@ import {
   type RuntimeEnvironmentState,
   type RuntimeHostKind
 } from "@sugarmagic/runtime-core";
+import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
+import { BillboardRenderer } from "./billboard/BillboardRenderer";
+import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -129,6 +134,59 @@ const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
+}
+
+function createCameraSnapshot(
+  camera: THREE.PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number
+): CameraSnapshot {
+  const position = new THREE.Vector3();
+  const forward = new THREE.Vector3();
+  const frustum = new THREE.Frustum();
+  const projectionView = new THREE.Matrix4().multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse
+  );
+  camera.getWorldPosition(position);
+  camera.getWorldDirection(forward);
+  frustum.setFromProjectionMatrix(projectionView);
+
+  return {
+    position: { x: position.x, y: position.y, z: position.z },
+    forward: { x: forward.x, y: forward.y, z: forward.z },
+    frustumPlanes: frustum.planes.map((plane) => ({
+      nx: plane.normal.x,
+      ny: plane.normal.y,
+      nz: plane.normal.z,
+      d: plane.constant
+    })),
+    viewport: {
+      width: Math.max(1, Math.round(viewportWidth)),
+      height: Math.max(1, Math.round(viewportHeight))
+    },
+    fov: THREE.MathUtils.degToRad(camera.fov)
+  };
+}
+
+function applyBillboardLodEnforcement(input: {
+  world: World;
+  renderBindings: Map<number, THREE.Object3D>;
+}) {
+  for (const [entity, root] of input.renderBindings) {
+    const billboard = input.world.getComponent(entity, BillboardComponent);
+    if (!billboard) {
+      root.visible = true;
+      continue;
+    }
+
+    if (billboard.lodState === "full-mesh") {
+      root.visible = billboard.visible;
+      continue;
+    }
+
+    root.visible = false;
+  }
 }
 
 interface LandscapeGridSpec {
@@ -407,6 +465,9 @@ export function createWebRuntimeHost(
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
+  let billboardAssetRegistry: BillboardAssetRegistry | null = null;
+  let billboardRenderer: BillboardRenderer | null = null;
+  let textBillboardRenderer: TextBillboardRenderer | null = null;
   let gameplayAssembly:
     | ReturnType<typeof createRuntimeGameplayAssembly>
     | null = null;
@@ -436,6 +497,12 @@ export function createWebRuntimeHost(
     void gameplayAssembly?.dispose();
     gameplayAssembly = null;
     gameplaySession = null;
+    billboardRenderer?.dispose();
+    billboardRenderer = null;
+    textBillboardRenderer?.dispose();
+    textBillboardRenderer = null;
+    billboardAssetRegistry?.dispose();
+    billboardAssetRegistry = null;
     spellCastFeedbackHost?.dispose();
     spellCastFeedbackHost = null;
     pluginBannerHost?.dispose();
@@ -544,6 +611,40 @@ export function createWebRuntimeHost(
     const camPos = computeCameraPosition(cameraState);
     camera.position.set(camPos.x, camPos.y, camPos.z);
     camera.lookAt(camPos.lookAtX, camPos.lookAtY, camPos.lookAtZ);
+
+    const cameraSnapshot = createCameraSnapshot(
+      camera,
+      root.clientWidth || 1,
+      root.clientHeight || 1
+    );
+    gameplaySession?.syncBillboards(cameraSnapshot, delta);
+    const renderBindings = new Map<number, THREE.Object3D>();
+    for (const binding of gameplaySession?.getBillboardBindings() ?? []) {
+      if (binding.kind === "player") {
+        if (playerVisualController) {
+          renderBindings.set(binding.entity, playerVisualController.root);
+        }
+        continue;
+      }
+
+      if (!binding.sceneInstanceId) {
+        continue;
+      }
+
+      const entry = sceneObjectEntries.get(binding.sceneInstanceId);
+      if (entry) {
+        renderBindings.set(binding.entity, entry.root);
+      }
+    }
+    applyBillboardLodEnforcement({ world, renderBindings });
+    billboardRenderer?.update({ world, camera });
+    textBillboardRenderer?.update({
+      world,
+      camera,
+      viewportWidth: root.clientWidth || 1,
+      viewportHeight: root.clientHeight || 1
+    });
+
     renderPipeline?.setCamera(camera);
     if (renderPipeline) {
       renderPipeline.render();
@@ -566,8 +667,24 @@ export function createWebRuntimeHost(
     disposeRuntime();
 
     scene = new THREE.Scene();
+    if (ownerWindow.getComputedStyle(root).position === "static") {
+      root.style.position = "relative";
+    }
     environmentController = createEnvironmentSceneController(scene);
     landscapeController = createLandscapeSceneController(scene);
+    billboardAssetRegistry = new BillboardAssetRegistry({
+      ownerWindow,
+      logger: {
+        warn(message, payload) {
+          console.warn("[web-runtime] billboard-asset", { message, ...(payload ?? {}) });
+        }
+      }
+    });
+    billboardRenderer = new BillboardRenderer({
+      scene,
+      registry: billboardAssetRegistry
+    });
+    textBillboardRenderer = new TextBillboardRenderer({ parent: root });
 
     camera = new THREE.PerspectiveCamera(
       DEFAULT_CAMERA_CONFIG.fov,

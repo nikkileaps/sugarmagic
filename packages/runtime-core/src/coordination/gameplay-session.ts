@@ -33,7 +33,14 @@ import {
   CasterSystem,
   createRuntimeSpellMenuUI
 } from "../caster";
-import { type World, Position } from "../ecs";
+import { type World, type Entity, Position } from "../ecs";
+import {
+  BillboardComponent,
+  BillboardSystem,
+  type BillboardComponentOptions,
+  type BillboardDescriptor,
+  type CameraSnapshot
+} from "../billboard";
 import {
   type ConversationActionProposal,
   type ConversationMiddleware,
@@ -136,6 +143,22 @@ export interface RuntimeGameplaySessionController {
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
   update: (deltaSeconds?: number) => void;
+  syncBillboards: (
+    cameraSnapshot: CameraSnapshot,
+    deltaSeconds?: number
+  ) => void;
+  createBillboard: (options: {
+    entity?: Entity;
+    position?: { x: number; y: number; z: number };
+    descriptor: BillboardDescriptor;
+    component?: BillboardComponentOptions;
+  }) => Entity;
+  destroyBillboard: (entity: Entity) => void;
+  getBillboardBindings: () => Array<{
+    entity: Entity;
+    sceneInstanceId: string | null;
+    kind: "player" | "npc" | "item" | "inspectable";
+  }>;
   getNpcRuntimeSnapshots: () => Array<{
     presenceId: string;
     npcDefinitionId: string;
@@ -328,6 +351,8 @@ export function createRuntimeGameplaySessionController(
   let pendingScriptedFollowupDialogueId: string | null = null;
   let lastTrackedQuestDefinitionId: string | null = null;
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
+  const billboardSystem = new BillboardSystem();
+  const billboardOnlyEntities = new Set<Entity>();
   const spatialResolverSystem =
     activeRegion
       ? createRuntimeSpatialResolverSystem({
@@ -369,6 +394,10 @@ export function createRuntimeGameplaySessionController(
     }
 
     return activeRegion?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+  }
+
+  function resolvePlayerEntity(): Entity | null {
+    return world.query(PlayerControlled, Position)[0] ?? null;
   }
 
   function syncBlackboardSpatialFacts() {
@@ -788,6 +817,67 @@ export function createRuntimeGameplaySessionController(
     syncInteractionPrompt();
   }
 
+  function createBillboard(options: {
+    entity?: Entity;
+    position?: { x: number; y: number; z: number };
+    descriptor: BillboardDescriptor;
+    component?: BillboardComponentOptions;
+  }): Entity {
+    const targetEntity = options.entity ?? world.createEntity();
+    const existingPosition = world.getComponent(targetEntity, Position);
+
+    if (options.position) {
+      if (existingPosition) {
+        existingPosition.x = options.position.x;
+        existingPosition.y = options.position.y;
+        existingPosition.z = options.position.z;
+      } else {
+        world.addComponent(
+          targetEntity,
+          new Position(options.position.x, options.position.y, options.position.z)
+        );
+      }
+    } else if (!existingPosition) {
+      throw new Error(
+        "Billboards require a Position component. Provide an entity with Position or pass options.position."
+      );
+    }
+
+    const existingBillboard = world.getComponent(targetEntity, BillboardComponent);
+    if (existingBillboard) {
+      const next = new BillboardComponent(options.descriptor, options.component);
+      existingBillboard.descriptor = next.descriptor;
+      existingBillboard.orientation = next.orientation;
+      existingBillboard.displayMode = next.displayMode;
+      existingBillboard.size = next.size;
+      existingBillboard.offset = next.offset;
+      existingBillboard.lodThresholds = next.lodThresholds;
+      existingBillboard.visible = next.visible;
+      existingBillboard.lodState = next.lodState;
+    } else {
+      world.addComponent(
+        targetEntity,
+        new BillboardComponent(options.descriptor, options.component)
+      );
+    }
+
+    if (options.entity == null) {
+      billboardOnlyEntities.add(targetEntity);
+    }
+
+    return targetEntity;
+  }
+
+  function destroyBillboard(entity: Entity) {
+    if (billboardOnlyEntities.has(entity)) {
+      billboardOnlyEntities.delete(entity);
+      world.destroyEntity(entity);
+      return;
+    }
+
+    world.removeComponent(entity, BillboardComponent);
+  }
+
   dialogueManager.registerDefinitions(dialogueDefinitions);
   dialogueManager.setSpeakerNameResolver(resolveSpeakerName);
   dialogueManager.setConversationProviders(conversationProviders);
@@ -1124,6 +1214,48 @@ export function createRuntimeGameplaySessionController(
       syncBlackboardQuestFacts();
       spellMenuUi.update();
     },
+    syncBillboards(cameraSnapshot, deltaSeconds = 1 / 60) {
+      billboardSystem.update(world, deltaSeconds, cameraSnapshot);
+    },
+    createBillboard,
+    destroyBillboard,
+    getBillboardBindings() {
+      const bindings: Array<{
+        entity: Entity;
+        sceneInstanceId: string | null;
+        kind: "player" | "npc" | "item" | "inspectable";
+      }> = [];
+      const playerEntity = resolvePlayerEntity();
+      if (playerEntity !== null) {
+        bindings.push({
+          entity: playerEntity,
+          sceneInstanceId: null,
+          kind: "player"
+        });
+      }
+      for (const [presenceId, entry] of npcInteractableEntities.entries()) {
+        bindings.push({
+          entity: entry.entity,
+          sceneInstanceId: presenceId,
+          kind: "npc"
+        });
+      }
+      for (const [presenceId, entry] of itemInteractableEntities.entries()) {
+        bindings.push({
+          entity: entry.entity,
+          sceneInstanceId: presenceId,
+          kind: "item"
+        });
+      }
+      for (const [instanceId, entry] of inspectableInteractableEntities.entries()) {
+        bindings.push({
+          entity: entry.entity,
+          sceneInstanceId: instanceId,
+          kind: "inspectable"
+        });
+      }
+      return bindings;
+    },
     getNpcRuntimeSnapshots() {
       return Array.from(npcInteractableEntities.entries()).flatMap(([presenceId, entry]) => {
         const position = world.getComponent(entry.entity, Position);
@@ -1140,6 +1272,10 @@ export function createRuntimeGameplaySessionController(
     dispose() {
       npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
+      for (const entity of billboardOnlyEntities) {
+        world.destroyEntity(entity);
+      }
+      billboardOnlyEntities.clear();
       for (const { entity } of npcInteractableEntities.values()) {
         world.destroyEntity(entity);
       }
