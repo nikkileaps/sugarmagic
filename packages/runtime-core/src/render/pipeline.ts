@@ -19,8 +19,6 @@ export function createRuntimeRenderPipeline(options: {
   width: number;
   height: number;
 }): RuntimeRenderPipeline {
-  const { renderer, scene } = options;
-  let camera = options.camera;
   const graph = createRuntimeRenderGraph(options);
 
   return {
@@ -28,17 +26,17 @@ export function createRuntimeRenderPipeline(options: {
       return graph.applyEnvironment(definition);
     },
     render() {
-      if (graph.pipeline) {
-        graph.pipeline.render();
-        return;
+      if (!graph.pipeline) {
+        throw new Error(
+          "WebGPU render pipeline is not available. Sugarmagic requires WebGPU support."
+        );
       }
-      renderer.render(scene, camera);
+      graph.pipeline.render();
     },
     resize(width, height) {
       graph.resize(width, height);
     },
     setCamera(nextCamera) {
-      camera = nextCamera;
       graph.setCamera(nextCamera);
     },
     dispose() {

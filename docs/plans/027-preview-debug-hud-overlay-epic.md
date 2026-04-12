@@ -106,24 +106,49 @@ Debugging the Preview currently requires reading console logs, opening browser D
 **Tasks:**
 
 1. Add a new runtime plugin contribution kind: `"debug.hudCard"`.
-2. Contribution shape:
+2. Define a `DebugHudCardContext` that the HUD passes to every card callback:
+   ```typescript
+   interface DebugHudCardContext {
+     readonly world: World;
+     readonly boot: RuntimeBootModel;
+     readonly blackboard: RuntimeBlackboard;
+     readonly rendererStats: {
+       fps: number;
+       frameTimeMs: number;
+       drawCalls: number;
+       triangles: number;
+       textures: number;
+       geometries: number;
+     };
+     readonly gameplaySession: {
+       activeNpcCount: number;
+       activeQuestCount: number;
+       currentSceneId: string | null;
+       currentAreaDisplayName: string | null;
+       playerPosition: { x: number; y: number; z: number } | null;
+     };
+   }
+   ```
+   The HUD owns creating and refreshing this context each update cycle. Plugins read from it — they never write to it.
+3. Contribution shape:
    ```typescript
    {
      cardId: string;
      displayName: string;
-     renderCard: (container: HTMLElement) => void;
-     updateCard?: () => void;
+     renderCard: (container: HTMLElement, context: DebugHudCardContext) => void;
+     updateCard?: (context: DebugHudCardContext) => void;
      disposeCard?: () => void;
    }
    ```
-3. `gameplay-session.ts` collects `debug.hudCard` contributions and passes them to the `DebugHud`.
-4. The HUD registers each plugin card as an additional tab after the core cards.
-5. `updateCard` is called once per second for the active card only (not for hidden cards).
-6. `disposeCard` is called when the HUD is destroyed.
+4. `gameplay-session.ts` collects `debug.hudCard` contributions and passes them to the `DebugHud`.
+5. The HUD registers each plugin card as an additional tab after the core cards.
+6. `updateCard` is called once per second for the active card only (not for hidden cards), with a fresh `DebugHudCardContext`.
+7. `disposeCard` is called when the HUD is destroyed. No context is needed for cleanup.
 
 **Acceptance:**
 
 - A plugin can contribute a debug card and it appears in the HUD tabs.
+- Plugin cards receive a `DebugHudCardContext` with live world, blackboard, renderer stats, and session data.
 - Only the active card's `updateCard` is called.
 - Cards render correctly when switching tabs.
 - Plugin cards do not pollute each other or the core HUD cards.
@@ -142,9 +167,42 @@ Debugging the Preview currently requires reading console logs, opening browser D
    - No `lodThresholds` — debug billboards are always active when enabled
 2. The text content is updated once per second (not per frame) with: entity display name, current task (if any), current activity, current area, and proximity band to the player.
 3. Debug billboard `BillboardTextStyle` uses a distinct visual style: monospace font, small size, semi-transparent dark background with a subtle border — visually distinct from any future gameplay billboards.
-4. The HUD controls billboard visibility: when the HUD is collapsed or the billboard toggle is off, remove (or set `visible: false` on) the debug `BillboardComponent` instances. When toggled on, re-add them. The billboard system handles all rendering, positioning, and cleanup.
+4. Debug billboard `BillboardComponent` instances are created once when the gameplay session starts (for the player and each NPC) and destroyed once when the session ends. They are NOT created/destroyed on toggle — that would cause unnecessary churn in the ECS and billboard renderer pools.
+5. Visibility is controlled by a single `debugBillboardsEnabled: boolean` on a `DebugHudController` owned by the HUD. The controller sets `enabled = false` on all debug billboard components when the HUD is collapsed OR the billboard toggle is off, and `enabled = true` when both are on. This is one state check, one loop, one authority — no ambiguity.
+6. The billboard system's existing visibility handling (Plan 026) treats `enabled` as the manual gate and computes `visible` from frustum/LOD state. No special-casing needed.
 5. This subsumes the "spatial debug overlay" requirement from Plan 024.
-6. Plugin contribution: plugins can contribute additional debug billboard lines via a `debug.entityBillboard` contribution that receives the entity ID and returns extra text lines to append. The HUD concatenates core lines + plugin lines into the billboard's `content` string.
+6. Add a new runtime plugin contribution kind: `"debug.entityBillboard"`.
+7. Define the contribution contract:
+   ```typescript
+   interface EntityBillboardContext {
+     /** ECS entity ID. */
+     readonly entityId: number;
+     /** The entity kind: "player", "npc", or "item". */
+     readonly entityKind: "player" | "npc" | "item";
+     /** NPC or player definition ID from the domain model, if available. */
+     readonly definitionId: string | null;
+     /** Display name of the entity. */
+     readonly displayName: string;
+     /** Current scene ID. */
+     readonly sceneId: string | null;
+     /** Read-only blackboard access for looking up entity facts. */
+     readonly blackboard: RuntimeBlackboard;
+   }
+
+   // Contribution payload:
+   {
+     contributionId: string;
+     displayName: string;
+     /**
+      * Called once per second for each entity that has a debug billboard.
+      * Returns additional lines to append below the core debug lines,
+      * or an empty array to add nothing for this entity.
+      */
+     getLines: (context: EntityBillboardContext) => string[];
+   }
+   ```
+8. The HUD calls each `debug.entityBillboard` contribution's `getLines()` once per second per visible entity, concatenates core lines + all plugin lines, and sets the result as the billboard's `content` string. Order: core lines first, then plugin lines grouped by contribution (with a subtle separator if multiple plugins contribute).
+9. Example: sugarlang could contribute `getLines()` that returns `["CEFR: A1 (0.17)", "cards: 5"]` for the player entity and `[]` for NPCs.
 
 **Acceptance:**
 
@@ -152,6 +210,9 @@ Debugging the Preview currently requires reading console logs, opening browser D
 - Labels track entity positions smoothly (handled by Plan 026's text billboard renderer).
 - Labels disappear when HUD is collapsed or billboard toggle is off.
 - Spatial truth (area, proximity) is visible without opening DevTools.
+- Plugin-contributed lines appear below the core debug lines on the billboard.
+- `getLines()` receives a typed `EntityBillboardContext` with entity ID, kind, definition ID, display name, scene ID, and blackboard access.
+- Plugins that return `[]` add no visual noise to the billboard.
 - No custom world-to-screen projection code in this epic — all positioning is delegated to the billboard system.
 
 ---
@@ -163,14 +224,21 @@ Debugging the Preview currently requires reading console logs, opening browser D
 1. Add a subtle fade/slide animation when the HUD opens/closes.
 2. Add keyboard shortcut to toggle HUD (e.g. backtick `` ` `` or `F3`).
 3. Ensure the HUD respects the game's dark theme — use `sm-` CSS variables.
-4. Ensure the HUD is not interactive during dialogue (does not capture mouse/keyboard events that should go to the dialogue panel).
+4. Dialogue interaction rule — when a dialogue panel is open:
+   - The HUD toggle button remains visible but `pointer-events: none` — clicking it does nothing. The player cannot open/close the HUD while dialogue is active.
+   - The keyboard shortcut (e.g. `F3`) is ignored while dialogue is active. The dialogue system owns keyboard input during dialogue.
+   - If the HUD was already open when dialogue starts, the card area stays visible (read-only observation is useful during dialogue) but `pointer-events: none` on the entire HUD container — no tab switching, no billboard toggle, no interaction.
+   - When dialogue closes, `pointer-events` are restored to normal.
+   - Implementation: the HUD reads a `dialogueActive: boolean` flag from the gameplay session (or the dialogue presenter). One CSS class toggle (`sm-debug-hud--dialogue-active` → `pointer-events: none`) on the HUD container. The keyboard shortcut handler checks the same flag before toggling.
 5. Remember the last-selected card tab across open/close toggles (not across page reloads).
 
 **Acceptance:**
 
 - HUD opens/closes smoothly.
-- Keyboard shortcut works.
-- HUD does not steal focus from dialogue input.
+- Keyboard shortcut works when dialogue is not active.
+- Keyboard shortcut is ignored during dialogue — does not interfere with dialogue text input.
+- HUD stays visible but non-interactive during dialogue (pointer-events disabled on the entire container).
+- Interaction is restored immediately when dialogue closes.
 
 ---
 

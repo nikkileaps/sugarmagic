@@ -18,5 +18,6 @@ presentation lives in `targets/web/src/billboard/`.
 Single source of truth:
 
 - `BillboardComponent` is the only runtime-owned billboard state.
+- `BillboardComponent.enabled` is the single manual on/off gate for billboard presentation.
 - `BillboardSystem` is the only runtime-owned LOD/visibility decision maker.
 - Presentation targets may only read that state; they must not recompute LOD.

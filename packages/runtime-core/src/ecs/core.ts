@@ -89,4 +89,8 @@ export class World {
   getEntities(): ReadonlySet<Entity> {
     return this.entities;
   }
+
+  getSystemCount(): number {
+    return this.systems.length;
+  }
 }

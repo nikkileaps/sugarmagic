@@ -88,4 +88,23 @@ describe("billboard runtime", () => {
     const billboard = world.getComponent(entity, BillboardComponent)!;
     expect(billboard.visible).toBe(false);
   });
+
+  it("respects the component enabled flag as the single manual visibility gate", () => {
+    const world = new World();
+    const system = new BillboardSystem();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, -4));
+    world.addComponent(
+      entity,
+      new BillboardComponent(
+        { kind: "text", content: "disabled" },
+        { enabled: false }
+      )
+    );
+
+    system.update(world, 1 / 60, createCameraSnapshot());
+
+    const billboard = world.getComponent(entity, BillboardComponent)!;
+    expect(billboard.visible).toBe(false);
+  });
 });

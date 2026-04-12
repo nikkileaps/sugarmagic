@@ -149,11 +149,13 @@ export class TextBillboardRenderer {
       position: "absolute",
       left: "0",
       top: "0",
-      borderRadius: "999px",
+      borderRadius: "10px",
+      border: "1px solid rgba(255, 255, 255, 0.12)",
       fontFamily: "\"IBM Plex Mono\", monospace",
       fontWeight: "500",
       lineHeight: "1.3",
-      whiteSpace: "nowrap",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
       boxShadow: "0 10px 24px rgba(0, 0, 0, 0.22)"
     });
     this.container.appendChild(element);
