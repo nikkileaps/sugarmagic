@@ -131,7 +131,8 @@ function createStageContext() {
       openAiEmbeddingModel: "",
       openAiVectorStoreId: "",
       maxEvidenceResults: 4,
-      debugLogging: false
+      debugLogging: false,
+      tone: ""
     },
     logStageStart() {
       return undefined;

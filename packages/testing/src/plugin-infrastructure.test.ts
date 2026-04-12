@@ -659,7 +659,8 @@ describe("plugin infrastructure", () => {
       openAiEmbeddingModel: "text-embedding-3-small",
       openAiVectorStoreId: "",
       maxEvidenceResults: 8,
-      debugLogging: true
+      debugLogging: true,
+      tone: ""
     });
   });
 
@@ -683,7 +684,8 @@ describe("plugin infrastructure", () => {
       openAiEmbeddingModel: "text-embedding-3-small",
       openAiVectorStoreId: "",
       maxEvidenceResults: 4,
-      debugLogging: false
+      debugLogging: false,
+      tone: ""
     });
   });
 

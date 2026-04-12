@@ -384,6 +384,14 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
             updateConfig({ debugLogging: event.currentTarget.checked })
           }
         />
+        <TextInput
+          label="Tone"
+          description="Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
+          value={sugarAgent.tone ?? ""}
+          onChange={(event) =>
+            updateConfig({ tone: event.currentTarget.value })
+          }
+        />
       </Stack>
 
       <Stack gap="xs">

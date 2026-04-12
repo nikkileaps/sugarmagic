@@ -53,6 +53,8 @@ export interface SugarAgentPluginConfig {
   openAiVectorStoreId: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
+  /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
+  tone: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
