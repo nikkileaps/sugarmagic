@@ -15,6 +15,7 @@ import {
   resolveDeploymentAction,
   SUGARAGENT_PLUGIN_ID,
   SUGARDEPLOY_PLUGIN_ID,
+  SUGARLANG_PLUGIN_ID,
   getDiscoveredPluginDefinition,
   listDiscoveredPluginDefinitions,
   listDeploymentTargets,
@@ -220,7 +221,8 @@ describe("plugin infrastructure", () => {
     expect(listDiscoveredPluginDefinitions().map((plugin) => plugin.manifest.pluginId)).toEqual([
       HELLO_PLUGIN_ID,
       SUGARAGENT_PLUGIN_ID,
-      SUGARDEPLOY_PLUGIN_ID
+      SUGARDEPLOY_PLUGIN_ID,
+      SUGARLANG_PLUGIN_ID
     ]);
   });
 
@@ -657,7 +659,8 @@ describe("plugin infrastructure", () => {
       openAiEmbeddingModel: "text-embedding-3-small",
       openAiVectorStoreId: "",
       maxEvidenceResults: 8,
-      debugLogging: true
+      debugLogging: true,
+      tone: ""
     });
   });
 
@@ -681,7 +684,8 @@ describe("plugin infrastructure", () => {
       openAiEmbeddingModel: "text-embedding-3-small",
       openAiVectorStoreId: "",
       maxEvidenceResults: 4,
-      debugLogging: false
+      debugLogging: false,
+      tone: ""
     });
   });
 

@@ -1,3 +1,22 @@
+/**
+ * packages/runtime-core/src/coordination/gameplay-session.ts
+ *
+ * Purpose: Assembles the runtime gameplay session and bridges authored content into runtime systems.
+ *
+ * Exports:
+ *   - createRuntimeGameplaySessionController
+ *   - createRuntimeGameplayAssembly
+ *   - createConversationSelectionFromNpc
+ *
+ * Relationships:
+ *   - Depends on domain-authored definitions as the single source of truth.
+ *   - Bridges NPC metadata into conversation selection so middlewares can read authored tags.
+ *
+ * Implements: Epic 2 runtime-core prerequisite for NPC metadata propagation
+ *
+ * Status: active
+ */
+
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
   type DocumentDefinition,
@@ -41,6 +60,7 @@ import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
   createRuntimeQuestTracker,
+  type QuestTrackerView,
   QuestManager,
   QuestSystem
 } from "../quest";
@@ -66,6 +86,7 @@ import {
   getEntityPlayerSpatialRelation,
   getEntityPosition,
   getTrackedQuest as getTrackedQuestFact,
+  RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   setActiveQuestObjectives,
   setActiveQuestStage,
   setTrackedQuest,
@@ -145,6 +166,84 @@ const SPELL_MENU_LOCK_ID = "runtime-spell-menu";
 // making normal walking feel sticky when crossing authored boundaries.
 const SPATIAL_AREA_CONFIRMATION_FRAMES = 3;
 
+function cloneSelectionMetadata(options: {
+  selectionMetadata?: Record<string, unknown>;
+  npcMetadata?: Record<string, unknown>;
+}): Record<string, unknown> | undefined {
+  const { selectionMetadata, npcMetadata } = options;
+  if (!selectionMetadata && !npcMetadata) {
+    return undefined;
+  }
+
+  return {
+    ...(selectionMetadata ? { ...selectionMetadata } : {}),
+    ...(npcMetadata ? { ...npcMetadata } : {})
+  };
+}
+
+function toActiveQuestContext(
+  trackedQuest: QuestTrackerView | null | undefined
+): ConversationSelectionContext["activeQuest"] {
+  if (!trackedQuest) {
+    return null;
+  }
+
+  return {
+    questDefinitionId: trackedQuest.questDefinitionId,
+    displayName: trackedQuest.displayName,
+    stageDisplayName: trackedQuest.stageDisplayName,
+    objectives: trackedQuest.objectives.map((objective) => ({
+      nodeId: objective.nodeId,
+      displayName: objective.displayName,
+      description: objective.description
+    }))
+  };
+}
+
+export function createConversationSelectionFromNpc(options: {
+  npcDefinition: NPCDefinition;
+  dialogueDefinitionId?: string | null;
+  trackedQuest?: QuestTrackerView | null;
+  metadata?: Record<string, unknown>;
+}): ConversationSelectionContext | null {
+  const {
+    npcDefinition,
+    dialogueDefinitionId = null,
+    trackedQuest = null,
+    metadata
+  } = options;
+  const selectionMetadata = cloneSelectionMetadata({
+    selectionMetadata: metadata,
+    npcMetadata: npcDefinition.metadata
+  });
+
+  if (npcDefinition.interactionMode === "scripted") {
+    if (!dialogueDefinitionId) {
+      return null;
+    }
+
+    return {
+      conversationKind: "scripted-dialogue",
+      dialogueDefinitionId,
+      npcDefinitionId: npcDefinition.definitionId,
+      npcDisplayName: npcDefinition.displayName,
+      interactionMode: "scripted",
+      ...(selectionMetadata ? { metadata: selectionMetadata } : {})
+    };
+  }
+
+  return {
+    conversationKind: "free-form",
+    npcDefinitionId: npcDefinition.definitionId,
+    npcDisplayName: npcDefinition.displayName,
+    interactionMode: npcDefinition.interactionMode,
+    lorePageId: npcDefinition.lorePageId,
+    activeQuest: toActiveQuestContext(trackedQuest),
+    scriptedFollowupDialogueDefinitionId: dialogueDefinitionId,
+    ...(selectionMetadata ? { metadata: selectionMetadata } : {})
+  };
+}
+
 export function createRuntimeGameplaySessionController(
   options: RuntimeGameplaySessionControllerOptions
 ): RuntimeGameplaySessionController {
@@ -165,7 +264,22 @@ export function createRuntimeGameplaySessionController(
     onSpellCastSuccess
   } = options;
 
-  const dialoguePanel = createRuntimeDialoguePanel(root);
+  const decoratorContributions = (
+    pluginManager?.getContributions("dialogue.entryDecorator") ?? []
+  ).sort((a, b) => a.priority - b.priority);
+  const entryDecorators = decoratorContributions.map((c) => c.payload.decorate);
+  const hoverHandlers = decoratorContributions
+    .map((c) => c.payload.onTermHover)
+    .filter((h): h is NonNullable<typeof h> => h != null);
+  const dialoguePanel = createRuntimeDialoguePanel(root, {
+    entryDecorators,
+    onTermHover: hoverHandlers.length > 0
+      ? (event) => {
+          const hoverEvent = { term: event.term, lang: "", dwellMs: event.dwellMs };
+          for (const handler of hoverHandlers) handler(hoverEvent);
+        }
+      : undefined
+  });
   const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root);
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);
@@ -182,7 +296,14 @@ export function createRuntimeGameplaySessionController(
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
-  const blackboard = createRuntimeBlackboard();
+  const blackboard = createRuntimeBlackboard({
+    definitions: [
+      ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
+      ...(pluginManager?.getPlugins().flatMap(
+        (plugin) => plugin.blackboardFactDefinitions ?? []
+      ) ?? [])
+    ]
+  });
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
     pluginManager?.getContributions("conversation.provider").map(
@@ -462,13 +583,13 @@ export function createRuntimeGameplaySessionController(
         });
         return null;
       }
-      const selection: ConversationSelectionContext = {
-        conversationKind: "scripted-dialogue",
-        dialogueDefinitionId,
-        npcDefinitionId,
-        npcDisplayName: npcDefinition.displayName,
-        interactionMode: "scripted"
-      };
+      const selection = createConversationSelectionFromNpc({
+        npcDefinition,
+        dialogueDefinitionId
+      });
+      if (!selection) {
+        return null;
+      }
       logConversationDebug("conversation-selection-resolved", {
         npcDefinitionId,
         npcDisplayName: npcDefinition.displayName,
@@ -483,26 +604,14 @@ export function createRuntimeGameplaySessionController(
     const dialogueDefinitionId =
       questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
 
-    const selection: ConversationSelectionContext = {
-      conversationKind: "free-form",
-      npcDefinitionId,
-      npcDisplayName: npcDefinition.displayName,
-      interactionMode: npcDefinition.interactionMode,
-      lorePageId: npcDefinition.lorePageId,
-      activeQuest: trackedQuest
-        ? {
-            questDefinitionId: trackedQuest.questDefinitionId,
-            displayName: trackedQuest.displayName,
-            stageDisplayName: trackedQuest.stageDisplayName,
-            objectives: trackedQuest.objectives.map((objective) => ({
-              nodeId: objective.nodeId,
-              displayName: objective.displayName,
-              description: objective.description
-            }))
-          }
-        : null,
-      scriptedFollowupDialogueDefinitionId: dialogueDefinitionId
-    };
+    const selection = createConversationSelectionFromNpc({
+      npcDefinition,
+      dialogueDefinitionId,
+      trackedQuest
+    });
+    if (!selection) {
+      return null;
+    }
     logConversationDebug("conversation-selection-resolved", {
       npcDefinitionId,
       npcDisplayName: npcDefinition.displayName,
@@ -521,6 +630,9 @@ export function createRuntimeGameplaySessionController(
     switch (proposal.kind) {
       case "set-conversation-flag":
         questManager.setFlag(proposal.key, proposal.value);
+        return;
+      case "notify-quest-event":
+        questManager.notifyEvent(proposal.eventName);
         return;
       case "surface-beat-evidence":
         console.debug("[runtime-core] conversation beat evidence", proposal);
@@ -1059,13 +1171,22 @@ export function createRuntimeGameplayAssembly(
   options: RuntimeGameplayAssemblyOptions
 ): RuntimeGameplayAssembly {
   const pluginManager = options.pluginManager ?? null;
+  const gameplaySession = createRuntimeGameplaySessionController(options);
 
   if (pluginManager) {
-    void pluginManager.init();
+    void pluginManager.init({
+      blackboard: gameplaySession.blackboard,
+      activeRegion: options.activeRegion,
+      playerDefinition: options.playerDefinition,
+      spellDefinitions: options.spellDefinitions,
+      itemDefinitions: options.itemDefinitions,
+      documentDefinitions: options.documentDefinitions,
+      npcDefinitions: options.npcDefinitions,
+      dialogueDefinitions: options.dialogueDefinitions,
+      questDefinitions: options.questDefinitions
+    });
     options.world.addSystem(new RuntimePluginSystem(pluginManager));
   }
-
-  const gameplaySession = createRuntimeGameplaySessionController(options);
 
   return {
     pluginManager,

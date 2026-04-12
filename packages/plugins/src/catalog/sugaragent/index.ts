@@ -171,7 +171,8 @@ export function normalizeSugarAgentPluginConfig(
       Number.isFinite(config.maxEvidenceResults)
         ? Math.max(1, Math.min(8, Math.floor(config.maxEvidenceResults)))
         : 4,
-    debugLogging: config?.debugLogging === true
+    debugLogging: config?.debugLogging === true,
+    tone: typeof config?.tone === "string" ? config.tone.trim() : ""
   };
 }
 
@@ -189,7 +190,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     loreRepositoryUrl: "",
     loreRepositoryRef: "main",
     maxEvidenceResults: 4,
-    debugLogging: false
+    debugLogging: false,
+    tone: ""
   },
   runtime: {
     createRuntimePlugin: ({ configuration, environment }) => {

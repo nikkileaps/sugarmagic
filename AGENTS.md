@@ -146,6 +146,9 @@ If a change creates permanent ambiguity, it is probably wrong.
 - New permanent subsystem boundaries should get an ADR or short design note.
 - Update docs when implementation changes the intended shape.
 - Migration work should document what legacy path becomes obsolete.
+- Every file should have a comment block at the top explaining what that file does and how it relates to the rest of the program
+- Every module should have a short README explaining what that module or package does and how it relates to the rest of the program
+- Comments and READMES should be updated with every change to reflect current code
 
 ## Expected Change Discipline
 

@@ -1,13 +1,46 @@
-import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
-import type { LLMProvider } from "../clients";
-import { createDiagnostics } from "./diagnostics";
+import type {
+  ConversationExecutionContext,
+  ConversationTurnEnvelope
+} from "@sugarmagic/runtime-core";
+/**
+ * Opaque constraint shape read from execution annotations. SugarAgent does
+ * not interpret the pedagogical fields — it reads `generatorPromptOverlay`
+ * and `minimalGreetingMode` as pre-formatted values from the sugarlang plugin.
+ */
+interface LanguageLearningConstraint {
+  generatorPromptOverlay: string;
+  minimalGreetingMode: boolean;
+  prePlacementOpeningLine?: { text: string; lang: string; lineId: string };
+  glossingStrategy: string;
+  supportPosture: string;
+  targetLanguageRatio: number;
+  interactionStyle: string;
+  sentenceComplexityCap: string;
+  targetLanguage: string;
+  learnerCefr: string;
+  targetVocab: {
+    introduce: Array<{ lemmaId: string }>;
+    reinforce: Array<{ lemmaId: string }>;
+    avoid: Array<{ lemmaId: string }>;
+  };
+  questEssentialLemmas?: Array<{ lemmaRef: { lemmaId: string } }>;
+  comprehensionCheckInFlight?: {
+    targetLemmas: Array<{ lemmaId: string }>;
+  };
+}
+// TODO: Move placement questionnaire loading to sugarlang plugin — it should
+// provide the questionnaire envelope via an annotation, not require SugarAgent
+// to import from sugarlang directly.
+import { loadPlacementQuestionnaire } from "../../../../sugarlang/runtime/placement/placement-questionnaire-loader";
+import type { LLMProvider } from "../../clients";
+import { createDiagnostics } from "../diagnostics";
 import {
   buildFallbackReply,
   buildGenericOnlyReply,
   buildTransientUpstreamExitReply,
   normalizeNpcSpeech,
   summarizeEvidence
-} from "./helpers";
+} from "../helpers";
 import type {
   GenerateResult,
   InterpretResult,
@@ -17,9 +50,87 @@ import type {
   TurnStage,
   TurnStageContext,
   TurnStageResult
-} from "../types";
+} from "../../types";
 
 const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
+
+import type { GeneratePromptContext } from "./prompt/context";
+import { buildGeneratePrompt } from "./prompt/builder";
+
+function buildPrePlacementEnvelope(
+  input: GenerateStageInput,
+  context: TurnStageContext,
+  constraint: LanguageLearningConstraint
+): ConversationTurnEnvelope {
+  return {
+    turnId: context.turnId,
+    providerId: "sugaragent.provider",
+    conversationKind: input.execution.selection.conversationKind,
+    speakerId: input.execution.selection.npcDefinitionId,
+    speakerLabel: input.execution.selection.npcDisplayName,
+    displayName: input.execution.selection.npcDisplayName,
+    text: constraint.prePlacementOpeningLine?.text ?? "",
+    choices: [],
+    inputMode: "advance",
+    proposedActions: [],
+    metadata: {
+      "sugarlang.prePlacementOpeningLine.lineId":
+        constraint.prePlacementOpeningLine?.lineId ?? ""
+    },
+    annotations: input.execution.annotations,
+    diagnostics: {
+      prePlacementBypass: true,
+      llmCallsMade: 0
+    }
+  };
+}
+
+function isMinimalGreetingMode(
+  constraint: LanguageLearningConstraint | undefined
+): boolean {
+  return constraint?.minimalGreetingMode ?? false;
+}
+
+function buildPlacementQuestionnaireEnvelope(
+  input: GenerateStageInput,
+  context: TurnStageContext,
+  placementFlow: { minAnswersForValid?: unknown } | undefined
+): ConversationTurnEnvelope | null {
+  const targetLanguage = input.execution.selection.targetLanguage?.trim().toLowerCase();
+  if (!targetLanguage) {
+    return null;
+  }
+
+  const questionnaire = loadPlacementQuestionnaire(targetLanguage);
+  const effectiveQuestionnaire =
+    typeof placementFlow?.minAnswersForValid === "number"
+      ? {
+          ...questionnaire,
+          minAnswersForValid: placementFlow.minAnswersForValid
+        }
+      : questionnaire;
+  return {
+    turnId: context.turnId,
+    providerId: "sugaragent.provider",
+    conversationKind: input.execution.selection.conversationKind,
+    speakerId: input.execution.selection.npcDefinitionId,
+    speakerLabel: input.execution.selection.npcDisplayName,
+    displayName: input.execution.selection.npcDisplayName,
+    text: effectiveQuestionnaire.formIntro,
+    choices: [],
+    inputMode: "placement_questionnaire",
+    proposedActions: [],
+    metadata: {
+      "sugarlang.placementQuestionnaire": effectiveQuestionnaire,
+      "sugarlang.placementQuestionnaireVersion": `${effectiveQuestionnaire.lang}-placement-v${effectiveQuestionnaire.schemaVersion}`
+    },
+    annotations: input.execution.annotations,
+    diagnostics: {
+      placementQuestionnaire: true,
+      llmCallsMade: 0
+    }
+  };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -76,6 +187,12 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     context: TurnStageContext
   ): Promise<TurnStageResult<GenerateResult>> {
     const startedAt = Date.now();
+    const constraint = input.execution.annotations[
+      "sugarlang.constraint"
+    ] as LanguageLearningConstraint | undefined;
+    const placementFlow = input.execution.annotations["sugarlang.placementFlow"] as
+      | { phase?: string; minAnswersForValid?: unknown }
+      | undefined;
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
@@ -105,11 +222,71 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let status: TurnStageResult<GenerateResult>["status"] = "ok";
     let fallbackReason: string | null = null;
     let systemPromptPreview = "";
+    let systemPrompt = "";
+    let userPrompt = "";
     let retryCount = 0;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
+    const minimalSugarlangGreetingMode = isMinimalGreetingMode(
+      constraint
+    );
+
+    if (constraint?.prePlacementOpeningLine) {
+      const output: GenerateResult = {
+        text: constraint.prePlacementOpeningLine.text,
+        usedLlm: false,
+        llmBackend: "deterministic",
+        actionProposals: [],
+        envelopeOverride: buildPrePlacementEnvelope(input, context, constraint)
+      };
+
+      return {
+        output,
+        diagnostics: createDiagnostics(
+          this.stageId,
+          startedAt,
+          "ok",
+          {
+            prePlacementBypass: true,
+            lineId: constraint.prePlacementOpeningLine.lineId,
+            usedLlm: false
+          }
+        ),
+        status: "ok"
+      };
+    }
+
+    if (placementFlow?.phase === "questionnaire") {
+      const envelopeOverride = buildPlacementQuestionnaireEnvelope(
+        input,
+        context,
+        placementFlow
+      );
+      if (envelopeOverride) {
+        return {
+          output: {
+            text: envelopeOverride.text,
+            usedLlm: false,
+            llmBackend: "deterministic",
+            actionProposals: [],
+            envelopeOverride
+          },
+          diagnostics: createDiagnostics(
+            this.stageId,
+            startedAt,
+            "ok",
+            {
+              placementQuestionnaire: true,
+              usedLlm: false
+            }
+          ),
+          status: "ok"
+        };
+      }
+    }
 
     if (
+      !constraint &&
       input.plan.responseSpecificity === "generic-only" &&
       (
         input.plan.responseIntent === "greet" ||
@@ -164,103 +341,39 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       this.llmProvider &&
       (context.config.anthropicModel.trim() || canUseProxyDefaults)
     ) {
-      const systemPrompt = [
-        `Speak as ${npcDisplayName}.`,
-        `Return only the NPC's spoken words.`,
-        `Do not include stage directions, action narration, scene description, asterisks, bracketed cues, or quoted dialogue wrappers.`,
-        `Use only the provided evidence, quest context, NPC profile, and recent history as grounded context for this turn.`,
-        `Do not introduce institutions, locations, factions, setting names, or world facts that are not supported by that grounded context.`,
-        `If grounded context is insufficient, ask a clarifying question or say you do not know enough yet.`,
-        `Do not use deictic spatial claims like "here", "inside", "outside", "at my shop", or "in this room" unless grounded runtime location supports them.`,
-        `If the NPC is associated with another place but is not currently there, describe that place as elsewhere or nearby rather than as the current location.`,
-        `Interaction mode: ${input.execution.selection.interactionMode ?? "agent"}.`,
-        activeQuestDisplayName
-          ? `Active quest: ${activeQuestDisplayName} / ${activeQuestStageDisplayName ?? "current stage"}`
+      const promptContext: GeneratePromptContext = {
+        mode: "agent",
+        npcDisplayName,
+        tone: context.config.tone || null,
+        responseIntent: input.plan.responseIntent,
+        responseSpecificity: input.plan.responseSpecificity,
+        turnPath: input.plan.turnPath,
+        responseGoal: input.plan.responseGoal,
+        interpretIntent: input.interpret.interpretation.intent,
+        playerText: input.interpret.userText,
+        minimalGreetingMode: minimalSugarlangGreetingMode,
+        activeQuestDisplayName,
+        activeQuestStageDisplayName,
+        currentLocationDisplayName,
+        currentParentAreaDisplayName,
+        npcPlayerRelation,
+        npcCurrentTask: npcCurrentTask?.displayName
+          ? { displayName: npcCurrentTask.displayName, description: npcCurrentTask.description ?? "" }
           : null,
-        currentLocationDisplayName
-          ? `Current location: ${currentLocationDisplayName}.`
+        npcCurrentActivity: npcCurrentActivity?.activity ?? null,
+        npcCurrentGoal: npcCurrentGoal?.goal ?? null,
+        npcMovement: npcMovement?.status
+          ? { status: npcMovement.status, targetAreaDisplayName: npcMovement.targetAreaDisplayName }
           : null,
-        currentParentAreaDisplayName
-          ? `Containing area: ${currentParentAreaDisplayName}.`
-          : null,
-        npcPlayerRelation
-          ? `Player proximity: ${npcPlayerRelation.proximityBand}. Same area: ${npcPlayerRelation.sameArea ? "yes" : "no"}.`
-          : null,
-        npcCurrentTask?.displayName
-          ? `Current task: ${npcCurrentTask.displayName}.`
-          : null,
-        npcCurrentTask?.description
-          ? `Task context: ${npcCurrentTask.description}.`
-          : null,
-        npcCurrentActivity?.activity
-          ? `Current activity: ${npcCurrentActivity.activity}.`
-          : null,
-        npcCurrentGoal?.goal
-          ? `Current goal: ${npcCurrentGoal.goal}.`
-          : null,
-        npcMovement?.status
-          ? `Movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
-          : null
-      ]
-        .filter(Boolean)
-        .join("\n");
-      systemPromptPreview = systemPrompt.slice(0, 220);
+        evidenceSummary,
+        recentHistory: input.state.history.slice(-4),
+        languageLearningOverlay: constraint?.generatorPromptOverlay || null
+      };
 
-      const userPrompt = [
-        `Respond to the player in 1-3 short paragraphs.`,
-        `Intent: ${input.plan.responseIntent}.`,
-        `Turn path: ${input.plan.turnPath}.`,
-        `Interpret intent: ${input.interpret.interpretation.intent}.`,
-        `Goal: ${input.plan.responseGoal}`,
-        input.interpret.userText
-          ? `Player said: ${input.interpret.userText}`
-          : `This is the opening turn. Start the conversation naturally.`,
-        input.plan.responseIntent === "clarify"
-          ? "Ask one concise clarifying question. Do not answer beyond what is grounded."
-          : null,
-        input.plan.responseIntent === "abstain"
-          ? "State clearly that you do not know enough grounded information to answer yet. Invite the player to provide more context. Do not fabricate."
-          : null,
-        input.plan.responseIntent === "chat"
-          ? "Respond as natural in-character social speech. Warmth is allowed. Do not turn a social reply into a factual worldbuilding answer."
-          : null,
-        input.plan.responseSpecificity === "grounded"
-          ? "Use grounded evidence when present, but do not add unsupported specifics."
-          : "Keep the reply generic, in-character, and low-specificity.",
-        currentLocationDisplayName
-          ? `Current runtime location: ${currentLocationDisplayName}.`
-          : null,
-        currentParentAreaDisplayName
-          ? `Current containing area: ${currentParentAreaDisplayName}.`
-          : null,
-        npcPlayerRelation
-          ? `Player/NPC proximity band: ${npcPlayerRelation.proximityBand}.`
-          : null,
-        npcCurrentTask?.displayName
-          ? `NPC current task: ${npcCurrentTask.displayName}.`
-          : null,
-        npcCurrentTask?.description
-          ? `NPC task context: ${npcCurrentTask.description}.`
-          : null,
-        npcCurrentActivity?.activity
-          ? `NPC current activity: ${npcCurrentActivity.activity}.`
-          : null,
-        npcCurrentGoal?.goal
-          ? `NPC current goal: ${npcCurrentGoal.goal}.`
-          : null,
-        npcMovement?.status
-          ? `NPC movement status: ${npcMovement.status}${npcMovement.targetAreaDisplayName ? ` toward ${npcMovement.targetAreaDisplayName}` : ""}.`
-          : null,
-        evidenceSummary.length > 0
-          ? `Evidence:\n- ${evidenceSummary.join("\n- ")}`
-          : "Evidence: none retrieved.",
-        input.state.history.length > 0
-          ? `Recent history:\n${input.state.history
-              .slice(-4)
-              .map((entry) => `${entry.role}: ${entry.text}`)
-              .join("\n")}`
-          : "Recent history: none."
-        ].join("\n\n");
+      const prompts = buildGeneratePrompt(promptContext);
+      systemPrompt = prompts.systemPrompt;
+      userPrompt = prompts.userPrompt;
+      systemPromptPreview = systemPrompt.slice(0, 220);
 
       try {
         let generatedText = "";
@@ -358,6 +471,31 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
           systemPromptPreview,
+          systemPrompt,
+          userPrompt,
+          minimalSugarlangGreetingMode,
+          sugarlangConstraintSummary: constraint
+            ? {
+                supportPosture: constraint.supportPosture,
+                targetLanguageRatio: constraint.targetLanguageRatio,
+                interactionStyle: constraint.interactionStyle,
+                glossingStrategy: constraint.glossingStrategy,
+                sentenceComplexityCap: constraint.sentenceComplexityCap,
+                targetLanguage: constraint.targetLanguage,
+                learnerCefr: constraint.learnerCefr,
+                introduce: constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId),
+                reinforce: constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId),
+                avoid: constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId),
+                questEssentialLemmas:
+                  constraint.questEssentialLemmas?.map(
+                    (entry) => entry.lemmaRef.lemmaId
+                  ) ?? [],
+                comprehensionCheckTargetLemmas:
+                  constraint.comprehensionCheckInFlight?.targetLemmas.map(
+                    (lemma) => lemma.lemmaId
+                  ) ?? []
+              }
+            : null,
           textPreview: text.slice(0, 180),
           proposedActions: output.actionProposals.map((proposal) => proposal.kind)
         },

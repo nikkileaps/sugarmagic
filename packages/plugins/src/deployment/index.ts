@@ -99,6 +99,24 @@ interface SugarAgentLoreSourceSettings {
   repositoryRef: string;
 }
 
+interface SugarAgentLorePageSummary {
+  pageId: string;
+  title: string;
+  relativePath: string;
+  sectionCount: number;
+}
+
+interface SugarAgentResolvedLoreSection {
+  heading: string;
+  slug: string;
+  content: string;
+}
+
+interface SugarAgentResolvedLorePage extends SugarAgentLorePageSummary {
+  body: string;
+  sections: SugarAgentResolvedLoreSection[];
+}
+
 function asTextFile(relativePath: string, content: string): ManagedProjectFile {
   return {
     relativePath,
@@ -641,7 +659,9 @@ function readLorePages() {
       pageId,
       title,
       relativePath,
-      sectionCount: sections.length
+      sectionCount: sections.length,
+      body,
+      sections
     });
 
     for (const section of sections) {
@@ -1045,7 +1065,67 @@ async function handleSugarAgentLorePages(req, res) {
   const lore = readLorePages();
   sendJson(res, 200, {
     ok: true,
-    pages: lore.pages,
+    pages: lore.pages.map((page) => ({
+      pageId: page.pageId,
+      title: page.title,
+      relativePath: page.relativePath,
+      sectionCount: page.sectionCount
+    })),
+    warnings: lore.warnings
+  });
+}
+
+async function handleSugarAgentLoreResolve(req, res) {
+  if (req.method !== "POST") {
+    sendMethodNotAllowed(res, ["POST", "OPTIONS"]);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const rawPageIds = Array.isArray(body?.pageIds) ? body.pageIds : [];
+  const pageIds = [...new Set(
+    rawPageIds
+      .filter((value) => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  )].sort((left, right) => left.localeCompare(right));
+
+  if (pageIds.length === 0) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "InvalidRequest",
+      message: "pageIds must contain at least one non-empty lore page id."
+    });
+    return;
+  }
+
+  const lore = readLorePages();
+  const pagesById = new Map(
+    lore.pages.map((page) => [page.pageId, page])
+  );
+  const resolvedPages = [];
+  const missingPageIds = [];
+
+  for (const pageId of pageIds) {
+    const page = pagesById.get(pageId);
+    if (!page) {
+      missingPageIds.push(pageId);
+      continue;
+    }
+    resolvedPages.push({
+      pageId: page.pageId,
+      title: page.title,
+      relativePath: page.relativePath,
+      sectionCount: page.sectionCount,
+      body: page.body,
+      sections: page.sections
+    });
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    pages: resolvedPages,
+    missingPageIds,
     warnings: lore.warnings
   });
 }
@@ -1248,6 +1328,15 @@ const server = createServer(async (req, res) => {
         path
       });
       await handleSugarAgentLorePages(req, res);
+      return;
+    }
+
+    if (match.routeId === "sugaragent-lore" && path === match.path + "/resolve") {
+      logInfo("gateway:dispatch", {
+        routeId: match.routeId,
+        path
+      });
+      await handleSugarAgentLoreResolve(req, res);
       return;
     }
 

@@ -1,13 +1,26 @@
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type {
   ConversationMiddleware,
-  ConversationProvider
+  ConversationProvider,
+  ConversationTurnEnvelope
 } from "../conversation";
+import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
+import type {
+  DocumentDefinition,
+  DialogueDefinition,
+  ItemDefinition,
+  NPCDefinition,
+  PlayerDefinition,
+  QuestDefinition,
+  RegionDocument,
+  SpellDefinition
+} from "@sugarmagic/domain";
 import { System, type World } from "../ecs";
 
 export type RuntimePluginContributionKind =
   | "conversation.provider"
   | "conversation.middleware"
+  | "dialogue.entryDecorator"
   | "runtime.banner"
   | "design.workspace"
   | "design.section"
@@ -79,9 +92,27 @@ export type ProjectSettingsContribution = RuntimePluginContributionBase<
   }
 >;
 
+export interface TermHoverEvent {
+  term: string;
+  /** Target language code. May be empty if the panel doesn't know the language;
+   *  the plugin handler is responsible for filling it in. */
+  lang: string;
+  dwellMs: number;
+}
+
+export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
+  "dialogue.entryDecorator",
+  {
+    summary: string;
+    decorate: (turn: ConversationTurnEnvelope) => ConversationTurnEnvelope;
+    onTermHover?: (event: TermHoverEvent) => void;
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
+  | DialogueEntryDecoratorContribution
   | RuntimeBannerContribution
   | DesignWorkspaceContribution
   | DesignSectionContribution
@@ -89,12 +120,23 @@ export type RuntimePluginContribution =
 
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
+  pluginBootPayloads?: Record<string, unknown>;
+  blackboard?: RuntimeBlackboard;
+  activeRegion?: RegionDocument | null;
+  playerDefinition?: PlayerDefinition;
+  spellDefinitions?: SpellDefinition[];
+  itemDefinitions?: ItemDefinition[];
+  documentDefinitions?: DocumentDefinition[];
+  npcDefinitions?: NPCDefinition[];
+  dialogueDefinitions?: DialogueDefinition[];
+  questDefinitions?: QuestDefinition[];
 }
 
 export interface RuntimePluginInstance {
   pluginId: string;
   displayName: string;
   contributions: RuntimePluginContribution[];
+  blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
   serializeState?: () => unknown;
@@ -105,11 +147,12 @@ export interface RuntimePluginInstance {
 export interface RuntimePluginManagerOptions {
   boot: RuntimeBootModel;
   plugins: RuntimePluginInstance[];
+  pluginBootPayloads?: Record<string, unknown>;
 }
 
 export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
-  init: () => Promise<void>;
+  init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
@@ -134,15 +177,19 @@ function isContributionAllowedOnHost(
 export function createRuntimePluginManager(
   options: RuntimePluginManagerOptions
 ): RuntimePluginManager {
-  const { boot, plugins } = options;
+  const { boot, plugins, pluginBootPayloads } = options;
   let initialized = false;
 
   return {
     boot,
-    async init() {
+    async init(context = {}) {
       if (initialized) return;
       for (const plugin of plugins) {
-        await plugin.init?.({ boot });
+        await plugin.init?.({
+          boot,
+          pluginBootPayloads,
+          ...context
+        });
       }
       initialized = true;
     },

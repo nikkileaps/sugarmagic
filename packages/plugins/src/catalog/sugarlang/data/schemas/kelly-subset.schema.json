@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/kelly-subset.schema.json",
+  "title": "Sugarlang Kelly Subset",
+  "description": "Auxiliary CEFR-seeded Italian Kelly subset used by the derived atlas pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lang", "sourceVersion", "lemmas"],
+  "properties": {
+    "lang": {
+      "type": "string",
+      "minLength": 2
+    },
+    "sourceVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lemmas": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lemmaId", "lang", "cefrBand"],
+        "properties": {
+          "lemmaId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lang": {
+            "type": "string",
+            "minLength": 2
+          },
+          "cefrBand": {
+            "type": "string",
+            "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+          }
+        }
+      }
+    }
+  }
+}

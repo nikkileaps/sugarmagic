@@ -31,6 +31,7 @@ interface PreviewBootMessage {
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   assetSources: Record<string, string>;
+  pluginBootPayloads?: Record<string, unknown>;
 }
 
 interface PreviewReadyMessage {
@@ -72,7 +73,8 @@ window.addEventListener("message", (event) => {
       npcDefinitions: data.npcDefinitions,
       dialogueDefinitions: data.dialogueDefinitions,
       questDefinitions: data.questDefinitions,
-      assetSources: data.assetSources
+      assetSources: data.assetSources,
+      pluginBootPayloads: data.pluginBootPayloads
     });
   }
 });

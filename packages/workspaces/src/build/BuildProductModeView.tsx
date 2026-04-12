@@ -4,9 +4,10 @@
  * Owns: Build sub-nav, workspace kind dispatch.
  * Delegates to: LayoutWorkspaceView, EnvironmentWorkspaceView, AssetsWorkspaceView.
  * Does NOT redefine the shell — returns panel contributions.
+ * Accepts plugin-owned inspector sections so build-side affordances stay plugin-owned.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Stack, Text } from "@mantine/core";
 import type {
   SemanticCommand,
@@ -14,7 +15,8 @@ import type {
   DocumentDefinition,
   EnvironmentDefinition,
   NPCDefinition,
-  QuestDefinition
+  QuestDefinition,
+  RegionDocument
 } from "@sugarmagic/domain";
 import {
   getActiveRegion,
@@ -77,6 +79,9 @@ export interface BuildProductModeViewProps {
   onImportAsset: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
+  renderLayoutInspectorSections?: (context: {
+    activeRegion: RegionDocument | null;
+  }) => ReactNode;
 }
 
 export interface BuildProductModeViewResult {
@@ -118,7 +123,8 @@ export function useBuildProductModeView(
     onNavigateToTarget,
     onImportAsset,
     onUpdateAssetDefinition,
-    onRemoveAssetDefinition
+    onRemoveAssetDefinition,
+    renderLayoutInspectorSections
   } = props;
 
   const activeRegion = session ? getActiveRegion(session) : null;
@@ -156,6 +162,7 @@ export function useBuildProductModeView(
     documentDefinitions,
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     onImportAsset,
+    renderInspectorSections: renderLayoutInspectorSections,
     onEditAssetDefinition: (definitionId) => {
       setSelectedAssetDefinitionId(definitionId);
       onSelectKind("assets");

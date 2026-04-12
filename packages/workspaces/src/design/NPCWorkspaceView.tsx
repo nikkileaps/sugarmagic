@@ -1,4 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * packages/workspaces/src/design/NPCWorkspaceView.tsx
+ *
+ * Purpose: Renders the Design > NPCs workspace, including the NPC inspector.
+ *
+ * Exports:
+ *   - NPCWorkspaceViewProps
+ *   - useNPCWorkspaceView
+ *
+ * Relationships:
+ *   - Owns canonical NPC authoring controls and viewport binding.
+ *   - Accepts plugin-owned inspector sections that extend the NPC inspector without duplicating NPC state ownership.
+ *
+ * Implements: NPC authoring workspace / Epic 12 plugin inspector section seam
+ *
+ * Status: active
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActionIcon,
   Box,
@@ -44,6 +62,10 @@ export interface NPCWorkspaceViewProps {
   getViewport: () => NPCWorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
   onCommand: (command: SemanticCommand) => void;
+  renderInspectorSections?: (context: {
+    selectedNPC: NPCDefinition | null;
+    updateNPC: (definition: NPCDefinition) => void;
+  }) => ReactNode;
 }
 
 function toAssetOptions(assetDefinitions: AssetDefinition[]) {
@@ -86,7 +108,8 @@ export function useNPCWorkspaceView(
     assetSources,
     getViewport,
     getViewportElement,
-    onCommand
+    onCommand,
+    renderInspectorSections
   } = props;
 
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(
@@ -621,6 +644,11 @@ export function useNPCWorkspaceView(
                 />
               ))}
             </Stack>
+
+            {renderInspectorSections?.({
+              selectedNPC,
+              updateNPC
+            }) ?? null}
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">

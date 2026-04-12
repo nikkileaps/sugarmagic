@@ -53,6 +53,8 @@ export interface SugarAgentPluginConfig {
   openAiVectorStoreId: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
+  /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
+  tone: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
@@ -219,6 +221,7 @@ export interface GenerateResult {
   usedLlm: boolean;
   llmBackend: "anthropic" | "deterministic";
   actionProposals: ConversationActionProposal[];
+  envelopeOverride?: ConversationTurnEnvelope;
 }
 
 export interface AuditResult {

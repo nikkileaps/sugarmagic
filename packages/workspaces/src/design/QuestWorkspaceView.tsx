@@ -1,4 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * packages/workspaces/src/design/QuestWorkspaceView.tsx
+ *
+ * Purpose: Renders the Design > Quests workspace, including the quest graph and inspector.
+ *
+ * Exports:
+ *   - QuestWorkspaceViewProps
+ *   - useQuestWorkspaceView
+ *
+ * Relationships:
+ *   - Owns canonical quest authoring controls and graph editing.
+ *   - Accepts plugin-owned inspector sections so quest-side hints can mount without forking the quest editor.
+ *
+ * Implements: Quest authoring workspace / Epic 12 plugin inspector section seam
+ *
+ * Status: active
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
@@ -74,6 +92,11 @@ export interface QuestWorkspaceViewProps {
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
+  renderInspectorSections?: (context: {
+    selectedQuest: QuestDefinition | null;
+    updateQuest: (definition: QuestDefinition) => void;
+    selectedQuestNode: QuestNodeDefinition | null;
+  }) => ReactNode;
 }
 
 function validateQuest(quest: QuestDefinition): string[] {
@@ -538,7 +561,8 @@ export function useQuestWorkspaceView({
   onCommand,
   navigationTarget = null,
   onConsumeNavigationTarget,
-  onNavigateToTarget
+  onNavigateToTarget,
+  renderInspectorSections
 }: QuestWorkspaceViewProps): WorkspaceViewContribution {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(
@@ -1446,6 +1470,12 @@ export function useQuestWorkspaceView({
           </Button>
         </Stack>
       )}
+
+      {renderInspectorSections?.({
+        selectedQuest,
+        updateQuest: commitQuest,
+        selectedQuestNode: selectedNode
+      }) ?? null}
     </Inspector>
   );
 

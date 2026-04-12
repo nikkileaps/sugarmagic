@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/frequency.schema.json",
+  "title": "Sugarlang Derived Frequency Data",
+  "description": "Auxiliary frequency-rank data used by the Italian derived atlas pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lang", "generatedAt", "lemmas"],
+  "properties": {
+    "lang": {
+      "type": "string",
+      "minLength": 2
+    },
+    "generatedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lemmas": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lemmaId", "lang", "rank", "corpusFrequency"],
+        "properties": {
+          "lemmaId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lang": {
+            "type": "string",
+            "minLength": 2
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "corpusFrequency": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

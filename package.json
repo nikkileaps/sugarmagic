@@ -13,8 +13,9 @@
     "dev:web": "pnpm --dir targets/web dev",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
-    "lint": "eslint . && pnpm lint:boundaries && pnpm lint:shell-tokens",
+    "lint": "eslint . && pnpm lint:boundaries && pnpm lint:shell-tokens && pnpm lint:filenames",
     "lint:boundaries": "node tooling/check-package-boundaries.mjs",
+    "lint:filenames": "node tooling/check-filename-conventions.mjs",
     "lint:shell-tokens": "node tooling/check-shell-tokens.mjs",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -27,14 +28,23 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "ajv": "^8.18.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.4.0",
     "prettier": "^3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.0",
     "vite": "^8.0.3",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "ts-fsrs": "^5.3.2"
   }
 }
