@@ -106,4 +106,6 @@ export interface LexicalPrescriptionInput {
   sceneLexicon: CompiledSceneLexicon;
   conversationState: Record<string, unknown>;
   activeQuestEssentialLemmas?: QuestEssentialLemma[];
+  /** The NPC the player is currently talking to, for NPC-specific scoring. */
+  npcDefinitionId?: string | null;
 }

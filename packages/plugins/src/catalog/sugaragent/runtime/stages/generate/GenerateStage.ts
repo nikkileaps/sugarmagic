@@ -342,9 +342,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       (context.config.anthropicModel.trim() || canUseProxyDefaults)
     ) {
       const promptContext: GeneratePromptContext = {
+        mode: "agent",
         npcDisplayName,
         tone: context.config.tone || null,
-        interactionMode: input.execution.selection.interactionMode ?? "agent",
         responseIntent: input.plan.responseIntent,
         responseSpecificity: input.plan.responseSpecificity,
         turnPath: input.plan.turnPath,

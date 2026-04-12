@@ -392,11 +392,14 @@ export function createSugarLangContextMiddleware(
           sourceQuestId: entry.sourceQuestId,
           sourceObjectiveNodeId: entry.sourceObjectiveNodeId,
           sourceObjectiveDisplayName: entry.sourceObjectiveDisplayName
-        }))
+        })),
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null
       });
 
       execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = prescription;
 
+      // Log the top candidates and specifically check for queso to debug scoring
+      const quesoInfo = sceneLexicon.lemmas["queso"];
       logger.debug("Budgeter prescription details.", {
         introduce: prescription.introduce.map((l) => {
           const info = sceneLexicon.lemmas[l.lemmaId];
@@ -408,7 +411,15 @@ export function createSugarLangContextMiddleware(
           };
         }),
         anchor: prescription.anchor?.lemmaId ?? null,
-        candidateCount: Object.keys(sceneLexicon.lemmas).length
+        candidateCount: Object.keys(sceneLexicon.lemmas).length,
+        quesoStatus: quesoInfo
+          ? {
+              freq: quesoInfo.frequencyRank,
+              sceneWeight: quesoInfo.sceneWeight,
+              isAnchor: sceneLexicon.anchors.includes("queso"),
+              inLearnerCards: "queso" in refreshedLearner.lemmaCards
+            }
+          : "NOT IN LEXICON"
       });
       execution.annotations[SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION] =
         buildLearnerSnapshot(refreshedLearner);

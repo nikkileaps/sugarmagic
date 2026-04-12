@@ -47,6 +47,8 @@ export interface TextBlob {
   objectiveNodeId?: string;
   questDefinitionId?: string;
   objectiveDisplayName?: string;
+  /** NPC definition ID that this blob is associated with, if any. */
+  npcDefinitionId?: string;
 }
 
 export interface SceneLorePageSection {
@@ -168,7 +170,8 @@ function collectNpcBlobs(context: SceneAuthoringContext): TextBlob[] {
       sourceId: npc.definitionId,
       sourceLocation: buildSourceLocation(`npc:${npc.definitionId}`, pieces[0]!),
       text: pieces.join("\n"),
-      weight: TEXT_BLOB_WEIGHTS["npc-bio"]
+      weight: TEXT_BLOB_WEIGHTS["npc-bio"],
+      npcDefinitionId: npc.definitionId
     });
   }
 
@@ -481,13 +484,27 @@ export function createSceneAuthoringContext(
 }
 
 export function collectSceneText(context: SceneAuthoringContext): TextBlob[] {
+  // Build lorePageId → npcDefinitionId reverse map so lore page blobs
+  // can be tagged with the NPC they belong to.
+  const lorePageToNpc = new Map<string, string>();
+  for (const npc of context.npcs) {
+    if (npc.lorePageId) {
+      lorePageToNpc.set(npc.lorePageId, npc.definitionId);
+    }
+  }
+
+  const loreBlobs = collectLorePageBlobs(context).map((blob) => {
+    const npcId = lorePageToNpc.get(blob.sourceId);
+    return npcId ? { ...blob, npcDefinitionId: npcId } : blob;
+  });
+
   const blobs = [
     ...collectRegionLabelBlobs(context),
     ...collectNpcBlobs(context),
     ...collectDialogueBlobs(context),
     ...collectQuestBlobs(context),
     ...collectItemBlobs(context),
-    ...collectLorePageBlobs(context)
+    ...loreBlobs
   ];
 
   return blobs

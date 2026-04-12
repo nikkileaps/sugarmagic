@@ -79,6 +79,10 @@ export interface SceneLemmaInfo {
    *  more often and/or in higher-weight sources (dialogue, quest objectives, NPC lore).
    *  Used by the budgeter to prioritize contextually relevant vocabulary. */
   sceneWeight: number;
+  /** NPC definition IDs whose lore/bio contributed to this lemma's scene weight.
+   *  Used by the budgeter to boost words from the NPC the player is currently
+   *  talking to over words from other NPCs in the scene. */
+  npcSourceIds: string[];
 }
 
 /**

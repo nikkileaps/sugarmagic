@@ -47,6 +47,7 @@ describe("budgeter rationale", () => {
             anchor: 1,
             freq: 0.5,
             scene: 0.4,
+            npc: 0,
             prodgap: 0.3,
             lapse: 0
           },

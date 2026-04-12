@@ -131,7 +131,16 @@ export function getSceneId(execution: ConversationExecutionContext): string | nu
 export function shouldRunSugarlangForExecution(
   execution: ConversationExecutionContext
 ): boolean {
-  return execution.selection.interactionMode === "agent";
+  return (
+    execution.selection.interactionMode === "agent" ||
+    execution.selection.interactionMode === "scripted"
+  );
+}
+
+export function isScriptedMode(
+  execution: ConversationExecutionContext
+): boolean {
+  return execution.selection.interactionMode === "scripted";
 }
 
 export function isPlayerSpokenTurn(

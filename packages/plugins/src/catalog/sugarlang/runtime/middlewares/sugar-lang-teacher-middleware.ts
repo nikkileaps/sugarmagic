@@ -18,6 +18,7 @@
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
   buildGeneratorPromptOverlay,
+  buildScriptedGeneratorPromptOverlay,
   computeMinimalGreetingMode
 } from "./generator-prompt-overlay";
 import {
@@ -53,6 +54,7 @@ import {
   getSugarAgentSessionId,
   getSceneId,
   isQuestObjectiveInFocus,
+  isScriptedMode,
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
@@ -157,6 +159,52 @@ export function createSugarLangTeacherMiddleware(
       }
 
       const learner = await services.learnerStore.getCurrentProfile();
+
+      // Scripted mode: skip the teacher LLM call. Build a lightweight
+      // constraint with posture/ratio based on the learner's level.
+      // The authored text IS the curriculum — we only control language mix.
+      if (isScriptedMode(execution)) {
+        const targetLanguage =
+          execution.selection.targetLanguage ?? learner.targetLanguage;
+        const posture =
+          learner.estimatedCefrBand === "A1" ? "anchored" as const
+            : learner.estimatedCefrBand === "A2" ? "supported" as const
+            : "target-dominant" as const;
+        const ratio =
+          posture === "anchored" ? 0.2
+            : posture === "supported" ? 0.5
+            : 0.8;
+        const overlay = buildScriptedGeneratorPromptOverlay(
+          learner.estimatedCefrBand,
+          posture,
+          ratio,
+          targetLanguage
+        );
+        const constraint: SugarlangConstraint = {
+          generatorPromptOverlay: overlay,
+          minimalGreetingMode: false,
+          targetVocab: {
+            introduce: prescription.introduce,
+            reinforce: prescription.reinforce,
+            avoid: prescription.avoid
+          },
+          supportPosture: posture,
+          targetLanguageRatio: ratio,
+          interactionStyle: "natural_dialogue",
+          glossingStrategy: "none",
+          sentenceComplexityCap: "free",
+          targetLanguage,
+          learnerCefr: learner.estimatedCefrBand,
+          rawPrescription: prescription
+        };
+        execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+        logger.debug("Scripted mode: lightweight constraint built.", {
+          learnerCefr: learner.estimatedCefrBand,
+          posture,
+          ratio
+        });
+        return execution;
+      }
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;

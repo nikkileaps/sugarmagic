@@ -50,6 +50,8 @@ export interface SugarLangPluginConfig {
    *  bypassed so we can inspect raw Director + Generate behavior without the
    *  post-generation watchdog mutating turns. */
   verifyEnabled: boolean;
+  /** Model to use for scripted dialogue adaptation. Defaults to Haiku for speed/cost. */
+  scriptedAdaptationModel: string;
   placement: SugarLangPlacementConfig;
   chunkExtraction: SugarLangChunkExtractionConfig;
 }
@@ -122,6 +124,10 @@ export function normalizeSugarLangPluginConfig(
     verifyEnabled:
       config?.verifyEnabled === true ||
       readEnvBoolean(_environment, SUGARLANG_VERIFY_ENABLED_ENV),
+    scriptedAdaptationModel:
+      typeof config?.scriptedAdaptationModel === "string" && config.scriptedAdaptationModel.trim()
+        ? config.scriptedAdaptationModel.trim()
+        : "claude-haiku-4-5-20251001",
     chunkExtraction: {
       enabled:
         typeof chunkConfig?.enabled === "boolean"

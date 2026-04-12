@@ -45,6 +45,7 @@ import {
   getSugarAgentTurnCount,
   getTurnsSinceLastProbe,
   isPlayerSpokenTurn,
+  isScriptedMode,
   normalizeTurn,
   setStoredComprehensionCheck,
   setTurnsSinceLastProbe,
@@ -112,7 +113,11 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn ?? turn;
       }
 
+      // In agent mode, skip player-typed turns (observations are handled
+      // differently for free-text input). In scripted mode, player lines are
+      // authored content that should still get highlights and observations.
       if (
+        !isScriptedMode(execution) &&
         normalizedTurn &&
         isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId())
       ) {

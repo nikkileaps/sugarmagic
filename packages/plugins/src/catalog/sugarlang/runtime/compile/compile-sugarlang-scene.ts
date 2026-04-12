@@ -132,7 +132,8 @@ function createSceneLemmaInfo(entry: AtlasLemmaEntry): SceneLemmaInfo {
     frequencyRank: entry.frequencyRank ?? null,
     partsOfSpeech: [...entry.partsOfSpeech].sort(compareStrings),
     isQuestCritical: false,
-    sceneWeight: 0
+    sceneWeight: 0,
+    npcSourceIds: []
   };
 }
 
@@ -253,7 +254,14 @@ export function compileSugarlangScene(
         // Accumulate scene relevance: each occurrence in a text blob adds
         // the blob's source-kind weight. Words mentioned many times in
         // high-weight sources (dialogue, NPC lore, quest text) score higher.
-        lemmaMap.get(atlasEntry.lemmaId)!.sceneWeight += blob.weight;
+        const lemmaInfo = lemmaMap.get(atlasEntry.lemmaId)!;
+        lemmaInfo.sceneWeight += blob.weight;
+
+        // Track which NPCs contributed this lemma so the budgeter can boost
+        // words from the NPC the player is currently talking to.
+        if (blob.npcDefinitionId && !lemmaInfo.npcSourceIds.includes(blob.npcDefinitionId)) {
+          lemmaInfo.npcSourceIds.push(blob.npcDefinitionId);
+        }
 
         if (profile === "authoring-preview") {
           sourceMap.set(

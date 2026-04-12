@@ -317,7 +317,8 @@ describe("sugarlang runtime contracts", () => {
       frequencyRank: 10,
       partsOfSpeech: ["interjection"],
       isQuestCritical: false,
-      sceneWeight: 1
+      sceneWeight: 1,
+      npcSourceIds: []
     };
     const questEssential: QuestEssentialLemma = {
       lemmaId: "billete",

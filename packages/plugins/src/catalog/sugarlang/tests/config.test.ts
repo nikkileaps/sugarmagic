@@ -25,6 +25,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       supportLanguage: "en",
       debugLogging: false,
       verifyEnabled: false,
+      scriptedAdaptationModel: "claude-haiku-4-5-20251001",
       chunkExtraction: {
         enabled: true
       },
@@ -59,6 +60,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       supportLanguage: "en",
       debugLogging: true,
       verifyEnabled: false,
+      scriptedAdaptationModel: "claude-haiku-4-5-20251001",
       chunkExtraction: {
         enabled: true
       },

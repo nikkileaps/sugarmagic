@@ -43,8 +43,8 @@ export function buildGeneratorPromptOverlay(
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
-    `Must-use vocabulary (weave naturally into your reply): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
-    `New vocabulary to introduce this turn (use each exactly once, clearly in context): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}.`,
+    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
+    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
     `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
@@ -74,10 +74,31 @@ export function buildGeneratorPromptOverlay(
 }
 
 /**
- * Determines whether the generator should use minimal greeting mode:
- * very short reply, no volunteered details. This is for cold-start
- * first-meeting turns with no vocabulary to teach.
+ * Builds a lightweight overlay for scripted dialogue adaptation.
+ * The authored text IS the curriculum — we don't select vocabulary.
+ * We only tell the generator what language mix to use based on learner level.
  */
+export function buildScriptedGeneratorPromptOverlay(
+  learnerCefr: string,
+  supportPosture: string,
+  targetLanguageRatio: number,
+  targetLanguage: string
+): string {
+  const ratioPercent = Math.round(targetLanguageRatio * 100);
+  const lines = [
+    `Learner CEFR level: ${learnerCefr}.`,
+    `Target language: ${targetLanguage}.`,
+    `Support posture: ${supportPosture}. Target-language ratio: ~${ratioPercent}%.`,
+    `Adapt the authored line to use roughly ${ratioPercent}% ${targetLanguage} and the rest in English.`,
+    `For A1 learners: mostly English with a few key ${targetLanguage} words.`,
+    `For B2+ learners: mostly ${targetLanguage} with English only for complex concepts.`,
+    `Do NOT add parenthetical translations — the UI handles glossing via hover tooltips.`,
+    `Preserve the EXACT narrative meaning and all quest-critical information.`
+  ];
+  return lines.join("\n");
+}
+
+/**
 /**
  * Determines whether the generator should use minimal greeting mode.
  * This fires when: the learner hasn't typed anything yet, the teacher

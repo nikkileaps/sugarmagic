@@ -36,11 +36,17 @@ export const SCORING_WEIGHTS = {
   w_due: 1.0,
   w_new: 0.7,
   w_anchor: 0.8,
-  w_freq: 0.4,
-  /** Scene relevance: how often/prominently the lemma appears in this scene's
-   *  authored content. A word mentioned 5 times in NPC lore outranks a word
-   *  that appears once in a ground layer label. */
-  w_scene: 0.6,
+  /** Frequency is a tiebreaker, not a driver. Context relevance (scene weight)
+   *  is what makes immersive learning work — any flashcard app can do frequency. */
+  w_freq: 0.2,
+  /** Scene relevance: the core signal. Words that appear in this NPC's lore,
+   *  quest objectives, and dialogue are what the learner will encounter
+   *  repeatedly in context. This is the selling point of immersive SLA. */
+  w_scene: 0.9,
+  /** NPC relevance: bonus for words from the NPC the player is currently
+   *  talking to. "queso" from Rick Roll's lore should outrank "maleta"
+   *  from the Station Manager's quest when talking to Rick. */
+  w_npc: 0.7,
   w_prodgap: 0.6,
   w_lapse: 0.3
 } as const;
@@ -54,6 +60,8 @@ export interface LemmaScoreComponents {
   freq: number;
   /** Scene relevance: normalized weight from authored content occurrences. */
   scene: number;
+  /** NPC relevance: 1 if this word comes from the current NPC's lore/bio, 0 otherwise. */
+  npc: number;
   prodgap: number;
   lapse: number;
 }
@@ -68,6 +76,8 @@ export interface LemmaScore {
 export interface ScoringContext {
   nowMs: number;
   currentSessionTurn: number;
+  /** The NPC definition ID the player is currently talking to, if known. */
+  currentNpcDefinitionId?: string | null;
 }
 
 function createFallbackCard(lemma: SceneLemmaInfo): LemmaCard {
@@ -105,6 +115,9 @@ function summarizeReasons(components: LemmaScoreComponents): string[] {
   if (components.scene > 0) {
     reasons.push("scene-relevant");
   }
+  if (components.npc > 0) {
+    reasons.push("current-npc-lore");
+  }
   if (components.prodgap > 0) {
     reasons.push("productive-gap");
   }
@@ -128,10 +141,17 @@ export function scoreLemma(
   const freqRank = lemma.frequencyRank ?? 5000;
   const freqBonus = Math.max(0, 1 - freqRank / 2000);
 
-  // Scene relevance: normalized to [0, 1]. A word mentioned 5+ times across
-  // dialogue/NPC lore/quest text saturates at 1.0. A single mention in a
-  // low-weight source scores ~0.15-0.2.
-  const sceneRelevance = Math.min(1, (lemma.sceneWeight ?? 0) / 5);
+  // Scene relevance: normalized to [0, 1]. Saturates at 2.0 accumulated weight
+  // so that even 2 mentions in NPC lore (weight 1.0 each) reach maximum.
+  // This ensures NPC-relevant vocabulary outranks generic high-frequency words.
+  const sceneRelevance = Math.min(1, (lemma.sceneWeight ?? 0) / 2);
+
+  // NPC relevance: 1 if this lemma came from the current NPC's lore/bio.
+  const npcRelevance =
+    context.currentNpcDefinitionId &&
+    lemma.npcSourceIds?.includes(context.currentNpcDefinitionId)
+      ? 1
+      : 0;
 
   const components: LemmaScoreComponents = {
     due: 1 - decayedCard.retrievability,
@@ -139,6 +159,7 @@ export function scoreLemma(
     anchor: sceneLexicon.anchors.includes(lemma.lemmaId) ? 1 : 0,
     freq: freqBonus,
     scene: sceneRelevance,
+    npc: npcRelevance,
     prodgap: Math.max(0, decayedCard.stability - decayedCard.productiveStrength),
     lapse: decayedCard.lapseCount > 2 ? 1 : 0
   };
@@ -148,6 +169,7 @@ export function scoreLemma(
     SCORING_WEIGHTS.w_anchor * components.anchor +
     SCORING_WEIGHTS.w_freq * components.freq +
     SCORING_WEIGHTS.w_scene * components.scene +
+    SCORING_WEIGHTS.w_npc * components.npc +
     SCORING_WEIGHTS.w_prodgap * components.prodgap -
     SCORING_WEIGHTS.w_lapse * components.lapse;
 

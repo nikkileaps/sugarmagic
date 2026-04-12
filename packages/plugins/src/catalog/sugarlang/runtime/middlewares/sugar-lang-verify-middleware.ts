@@ -39,6 +39,7 @@ import {
   isPlayerSpokenTurn,
   isQuestObjectiveInFocus,
   normalizeTurn,
+  isScriptedMode,
   shouldRunSugarlangForExecution,
   textMentionsLemma,
   type SugarlangLoggerLike
@@ -94,6 +95,12 @@ export function createSugarLangVerifyMiddleware(
       }
 
       if (!shouldRunSugarlangForExecution(execution)) {
+        return normalizedTurn;
+      }
+
+      // Skip verification for scripted dialogue — the adaptation is handled
+      // by the scripted middleware, not the verify/repair pipeline.
+      if (isScriptedMode(execution)) {
         return normalizedTurn;
       }
 

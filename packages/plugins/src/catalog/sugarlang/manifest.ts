@@ -40,6 +40,9 @@ import {
   createSugarLangVerifyMiddleware
 } from "./runtime/middlewares/sugar-lang-verify-middleware";
 import {
+  createSugarLangScriptedMiddleware
+} from "./runtime/middlewares/sugar-lang-scripted-middleware";
+import {
   extractSugarlangPreviewBootLexicons
 } from "./runtime/compile/preview-boot";
 import {
@@ -152,6 +155,7 @@ export const SUGARLANG_MIDDLEWARE_FACTORIES = [
   createSugarLangContextMiddleware,
   createSugarLangTeacherMiddleware,
   createSugarLangVerifyMiddleware,
+  createSugarLangScriptedMiddleware,
   createSugarLangObserveMiddleware
 ] as const;
 

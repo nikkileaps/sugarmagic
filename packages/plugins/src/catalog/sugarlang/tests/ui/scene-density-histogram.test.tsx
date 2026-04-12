@@ -49,7 +49,8 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
       frequencyRank: 10,
       partsOfSpeech: ["interjection"],
       isQuestCritical: false,
-      sceneWeight: 1
+      sceneWeight: 1,
+      npcSourceIds: []
     },
     trabajo: {
       lemmaId: "trabajo",
@@ -57,7 +58,8 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
       frequencyRank: 20,
       partsOfSpeech: ["noun"],
       isQuestCritical: false,
-      sceneWeight: 1
+      sceneWeight: 1,
+      npcSourceIds: []
     },
     aduana: {
       lemmaId: "aduana",
@@ -65,7 +67,8 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
       frequencyRank: 30,
       partsOfSpeech: ["noun"],
       isQuestCritical: true,
-      sceneWeight: 1
+      sceneWeight: 1,
+      npcSourceIds: []
     }
   },
   properNouns: [],

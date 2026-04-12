@@ -105,7 +105,8 @@ export function createBudgeterSceneLexicon(options: {
       frequencyRank: entry.frequencyRank ?? 1,
       partsOfSpeech: ["noun"],
       isQuestCritical: entry.isQuestCritical ?? false,
-      sceneWeight: 1
+      sceneWeight: 1,
+      npcSourceIds: []
     };
     if (entry.anchor) {
       anchors.push(entry.lemmaId);

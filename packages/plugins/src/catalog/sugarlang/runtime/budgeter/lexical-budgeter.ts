@@ -160,14 +160,15 @@ export class LexicalBudgeter {
       ({ lemma }) => getBandIndex(lemma.cefrPriorBand) > learnerBandIndex + 1
     );
 
-    const survivorScores = scoreBatch(survivors, input.sceneLexicon, {
+    const scoringContext = {
       nowMs,
-      currentSessionTurn
-    }).sort(compareScoresDescending);
-    const rejectScores = scoreBatch(rejects, input.sceneLexicon, {
-      nowMs,
-      currentSessionTurn
-    }).sort(compareScoresAscending);
+      currentSessionTurn,
+      currentNpcDefinitionId: input.npcDefinitionId ?? null
+    };
+    const survivorScores = scoreBatch(survivors, input.sceneLexicon, scoringContext)
+      .sort(compareScoresDescending);
+    const rejectScores = scoreBatch(rejects, input.sceneLexicon, scoringContext)
+      .sort(compareScoresAscending);
 
     const survivorCardsByLemmaId = new Map(
       survivors.map(({ card }) => [card.lemmaId, card] as const)

@@ -35,11 +35,12 @@ import {
 import { createLearnerBlackboard } from "../learner/test-helpers";
 
 describe("SugarLangContextMiddleware", () => {
-  it("skips scripted NPC conversations entirely", async () => {
-    const resolveForExecution = vi.fn();
+  it("runs sugarlang context for scripted NPC conversations", async () => {
+    const resolveForExecution = vi.fn().mockReturnValue(null);
     const middleware = createSugarLangContextMiddleware({
       services: createServicesStub({
-        resolveForExecution
+        resolveForExecution,
+        getTargetLanguage: () => "es"
       }) as never
     });
     const execution = createTestExecution({
@@ -56,9 +57,9 @@ describe("SugarLangContextMiddleware", () => {
 
     const result = await middleware.prepare?.(execution);
 
-    expect(result).toBe(execution);
-    expect(resolveForExecution).not.toHaveBeenCalled();
-    expect(execution.annotations).toEqual({});
+    // Scripted mode now goes through context middleware
+    expect(result).toBeDefined();
+    expect(resolveForExecution).toHaveBeenCalled();
   });
 
   it("writes the pre-placement opening dialog annotations without running the budgeter", async () => {

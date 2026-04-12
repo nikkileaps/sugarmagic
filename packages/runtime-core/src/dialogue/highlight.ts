@@ -56,8 +56,11 @@ export function findTermMatches(
     .sort((a, b) => b.length - a.length);
 
   for (const term of sorted) {
+    // Match the lemma and common inflected forms (e.g. maleta → maletas,
+    // hablar → hablando). The \w{0,4} suffix allows up to 4 extra characters
+    // for plural, conjugation, or gender suffixes while staying word-bounded.
     const pattern = new RegExp(
-      `\\b${escapeRegExp(term)}\\b`,
+      `\\b${escapeRegExp(term)}\\w{0,4}\\b`,
       "gi"
     );
     let match: RegExpExecArray | null;

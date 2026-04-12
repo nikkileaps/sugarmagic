@@ -43,7 +43,8 @@ export function createTeacherContext(
         frequencyRank: 1,
         partsOfSpeech: ["interjection"],
         isQuestCritical: false,
-        sceneWeight: 1
+        sceneWeight: 1,
+        npcSourceIds: []
       },
       billete: {
         lemmaId: "billete",
@@ -51,7 +52,8 @@ export function createTeacherContext(
         frequencyRank: 15,
         partsOfSpeech: ["noun"],
         isQuestCritical: true,
-        sceneWeight: 1
+        sceneWeight: 1,
+        npcSourceIds: []
       },
       anden: {
         lemmaId: "anden",
@@ -59,7 +61,8 @@ export function createTeacherContext(
         frequencyRank: 42,
         partsOfSpeech: ["noun"],
         isQuestCritical: true,
-        sceneWeight: 1
+        sceneWeight: 1,
+        npcSourceIds: []
       },
       queso: {
         lemmaId: "queso",
@@ -67,7 +70,8 @@ export function createTeacherContext(
         frequencyRank: 90,
         partsOfSpeech: ["noun"],
         isQuestCritical: false,
-        sceneWeight: 1
+        sceneWeight: 1,
+        npcSourceIds: []
       }
     },
     properNouns: ["Orrin"],
