@@ -74,6 +74,7 @@ export interface LayoutWorkspaceViewProps {
   onCommand: (command: SemanticCommand) => void;
   getSelectedId: () => string | null;
   getRegion: () => ReturnType<typeof getActiveRegion>;
+  assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -89,11 +90,15 @@ const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
 function buildSceneTree(
   region: RegionDocument,
+  assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
   documentDefinitions: DocumentDefinition[],
   npcDefinitions: NPCDefinition[]
 ): SceneExplorerNode[] {
+  const assetKindsByDefinitionId = new Map(
+    assetDefinitions.map((definition) => [definition.definitionId, definition.assetKind])
+  );
   const foldersByParent = new Map<string | null, RegionDocument["scene"]["folders"]>();
   const assetsByParent = new Map<string | null, RegionDocument["scene"]["placedAssets"]>();
 
@@ -133,7 +138,7 @@ function buildSceneTree(
             ? `${asset.displayName} · ${documentDefinition.displayName}`
             : asset.displayName,
         entityKind: "asset" as const,
-        assetKind: asset.assetDefinitionId,
+        assetKind: assetKindsByDefinitionId.get(asset.assetDefinitionId) ?? "asset",
         assetDefinitionId: asset.assetDefinitionId,
         visible: true
       };
@@ -206,6 +211,7 @@ export function useLayoutWorkspaceView(
     onCommand,
     getSelectedId,
     getRegion,
+    assetDefinitions,
     playerDefinition,
     itemDefinitions,
     documentDefinitions,
@@ -407,13 +413,21 @@ export function useLayoutWorkspaceView(
       region
         ? buildSceneTree(
             region,
+            assetDefinitions,
             playerDefinition,
             itemDefinitions,
             documentDefinitions,
             npcDefinitions
           )
         : [],
-    [documentDefinitions, itemDefinitions, npcDefinitions, playerDefinition, region]
+    [
+      assetDefinitions,
+      documentDefinitions,
+      itemDefinitions,
+      npcDefinitions,
+      playerDefinition,
+      region
+    ]
   );
 
   const selectedAsset = useMemo(() => {

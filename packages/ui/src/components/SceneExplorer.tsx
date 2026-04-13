@@ -65,6 +65,7 @@ type ContextMenuState =
 const KIND_ICONS: Record<string, string> = {
   "builtin:cube": "📦",
   asset: "📦",
+  foliage: "🌳",
   player: "🧙",
   npc: "👤",
   item: "📦",

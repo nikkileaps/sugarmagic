@@ -157,6 +157,7 @@ export function useBuildProductModeView(
     onCommand,
     getSelectedId: () => selectedIds[0] ?? null,
     getRegion: () => (session ? getActiveRegion(session) : null),
+    assetDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     documentDefinitions,

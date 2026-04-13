@@ -1,0 +1,152 @@
+/**
+ * Import-contract tests for foliage GLBs.
+ *
+ * Verifies that the Sugarmagic import boundary can distinguish canonical
+ * foliage GLBs from generic model GLBs and fails loudly when required
+ * foliage-authored inputs are missing.
+ */
+
+import { describe, expect, it } from "vitest";
+import { analyzeSourceAssetFile } from "@sugarmagic/io";
+
+function createGlbFromJson(json: unknown): ArrayBuffer {
+  const encoder = new TextEncoder();
+  const jsonBytes = encoder.encode(JSON.stringify(json));
+  const paddedJsonLength = Math.ceil(jsonBytes.length / 4) * 4;
+  const totalLength = 12 + 8 + paddedJsonLength;
+  const buffer = new ArrayBuffer(totalLength);
+  const view = new DataView(buffer);
+
+  view.setUint32(0, 0x46546c67, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, totalLength, true);
+  view.setUint32(12, paddedJsonLength, true);
+  view.setUint32(16, 0x4e4f534a, true);
+
+  const chunkBytes = new Uint8Array(buffer, 20, paddedJsonLength);
+  chunkBytes.fill(0x20);
+  chunkBytes.set(jsonBytes);
+
+  return buffer;
+}
+
+function createValidFoilageMakerGlb(): File {
+  return new File(
+    [
+      createGlbFromJson({
+        asset: { version: "2.0" },
+        nodes: [
+          {
+            mesh: 0,
+            extras: {
+              foilagemaker_kind: "tree",
+              foilagemaker_leaf_color_rgb: "canopy_tint_gradient",
+              foilagemaker_leaf_color_alpha: "sun_exterior_bias",
+              foilagemaker_uv_layer: "UVMap"
+            }
+          }
+        ],
+        meshes: [
+          {
+            primitives: [
+              {
+                attributes: {
+                  POSITION: 0,
+                  NORMAL: 1,
+                  TEXCOORD_0: 2,
+                  COLOR_0: 3
+                },
+                material: 0
+              }
+            ]
+          }
+        ],
+        materials: [
+          {
+            pbrMetallicRoughness: {
+              baseColorTexture: { index: 0 }
+            }
+          }
+        ],
+        textures: [{ source: 0 }],
+        images: [{ uri: "data:image/png;base64,AA==" }]
+      })
+    ],
+    "stylized-tree.glb",
+    { type: "model/gltf-binary" }
+  );
+}
+
+describe("foliage GLB import analysis", () => {
+  it("detects valid FoilageMaker exports as foliage assets", async () => {
+    const analysis = await analyzeSourceAssetFile(createValidFoilageMakerGlb());
+
+    expect(analysis.assetKind).toBe("foliage");
+    expect(analysis.contract).toBe("foilagemaker-foliage");
+  });
+
+  it("keeps unmarked GLBs as generic model assets", async () => {
+    const file = new File(
+      [
+        createGlbFromJson({
+          asset: { version: "2.0" },
+          nodes: [{ mesh: 0 }],
+          meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }]
+        })
+      ],
+      "crate.glb",
+      { type: "model/gltf-binary" }
+    );
+
+    const analysis = await analyzeSourceAssetFile(file);
+
+    expect(analysis.assetKind).toBe("model");
+    expect(analysis.contract).toBe("generic-model");
+  });
+
+  it("fails loudly when a foliage-marked GLB is missing required payloads", async () => {
+    const invalidFile = new File(
+      [
+        createGlbFromJson({
+          asset: { version: "2.0" },
+          nodes: [
+            {
+              mesh: 0,
+              extras: {
+                foilagemaker_kind: "tree",
+                foilagemaker_leaf_color_rgb: "canopy_tint_gradient",
+                foilagemaker_leaf_color_alpha: "sun_exterior_bias",
+                foilagemaker_uv_layer: "UVMap"
+              }
+            }
+          ],
+          meshes: [
+            {
+              primitives: [
+                {
+                  attributes: {
+                    POSITION: 0,
+                    NORMAL: 1,
+                    TEXCOORD_0: 2
+                  },
+                  material: 0
+                }
+              ]
+            }
+          ],
+          materials: [{}],
+          images: []
+        })
+      ],
+      "broken-tree.glb",
+      { type: "model/gltf-binary" }
+    );
+
+    await expect(analyzeSourceAssetFile(invalidFile)).rejects.toThrow(
+      /Invalid foliage GLB contract:/
+    );
+    await expect(analyzeSourceAssetFile(invalidFile)).rejects.toThrow(
+      /missing COLOR_0 primitive attribute/
+    );
+  });
+});

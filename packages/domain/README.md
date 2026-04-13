@@ -9,6 +9,7 @@ Owns:
 - transactions
 - history
 - validation contracts
+- one content-library asset system for both generic model assets and specialized foliage assets
 
 Does not own:
 
@@ -29,6 +30,16 @@ as `sugarlangRole` and `sugarlangPlacementQuestionOverrideId`.
 Reserved prefixes today:
 
 - `sugarlang`
+
+## Asset Library Boundary
+
+The content library remains one canonical asset-definition system.
+
+- `assetKind: "model"` represents general imported meshes and props.
+- `assetKind: "foliage"` represents authored foliage GLBs that still live in the same asset library.
+
+Domain owns that distinction so import, authoring preview, and runtime preview do
+not invent parallel foliage registries.
 
 Future plugins that want to reserve a prefix should update this list in the PR
 that introduces the new metadata contract.
