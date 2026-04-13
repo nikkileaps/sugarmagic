@@ -1,3 +1,11 @@
+/**
+ * Canonical asset-management loop tests.
+ *
+ * Verifies that imported asset definitions, including foliage assets, stay in
+ * the same content-library and scene-resolution path rather than branching
+ * into a second authored asset system.
+ */
+
 import { describe, expect, it } from "vitest";
 import type {
   AssetDefinition,
@@ -92,6 +100,20 @@ function makeAssetDefinition(): AssetDefinition {
     source: {
       relativeAssetPath: "assets/imported/station-building.glb",
       fileName: "station-building.glb",
+      mimeType: "model/gltf-binary"
+    }
+  };
+}
+
+function makeFoliageAssetDefinition(): AssetDefinition {
+  return {
+    definitionId: "asset:stylized-tree",
+    definitionKind: "asset",
+    displayName: "Stylized Tree",
+    assetKind: "foliage",
+    source: {
+      relativeAssetPath: "assets/imported/stylized-tree.glb",
+      fileName: "stylized-tree.glb",
       mimeType: "model/gltf-binary"
     }
   };
@@ -252,8 +274,48 @@ describe("asset management loop", () => {
     });
 
     expect(sceneObjects).toHaveLength(1);
+    expect(sceneObjects[0]?.assetKind).toBe("model");
     expect(sceneObjects[0]?.modelSourcePath).toBe(
       "assets/imported/station-building.glb"
+    );
+  });
+
+  it("keeps foliage assets in the same canonical scene path", () => {
+    let session = createAuthoringSession(
+      makeProject(),
+      [makeRegion()],
+      makeContentLibrary()
+    );
+    session = addAssetDefinitionToSession(session, makeFoliageAssetDefinition());
+    session = applyCommand(session, {
+      kind: "PlaceAssetInstance",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: "arrival_station"
+      },
+      subject: { subjectKind: "placed-asset", subjectId: "placed-asset:tree" },
+      payload: {
+        instanceId: "placed-asset:tree",
+        assetDefinitionId: "asset:stylized-tree",
+        displayName: "Stylized Tree",
+        parentFolderId: null,
+        position: [2, 0, 1],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
+      }
+    });
+
+    const region = getActiveRegion(session);
+    expect(region).not.toBeNull();
+
+    const sceneObjects = resolveSceneObjects(region!, {
+      contentLibrary: session.contentLibrary
+    });
+
+    expect(sceneObjects).toHaveLength(1);
+    expect(sceneObjects[0]?.assetKind).toBe("foliage");
+    expect(sceneObjects[0]?.modelSourcePath).toBe(
+      "assets/imported/stylized-tree.glb"
     );
   });
 });

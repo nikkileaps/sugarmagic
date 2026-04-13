@@ -1,3 +1,10 @@
+/**
+ * Build-mode asset library inspector and placement surface.
+ *
+ * Shows the canonical project asset definitions, including specialized
+ * foliage assets, without creating a second asset browser just for trees.
+ */
+
 import { useMemo, useState } from "react";
 import {
   Stack,
@@ -21,6 +28,14 @@ export interface AssetsWorkspaceViewProps {
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   hasSceneReferences: (definitionId: string) => boolean;
+}
+
+function getAssetKindIcon(assetDefinition: AssetDefinition): string {
+  return assetDefinition.assetKind === "foliage" ? "🌳" : "📦";
+}
+
+function getAssetKindLabel(assetDefinition: AssetDefinition): string {
+  return assetDefinition.assetKind === "foliage" ? "Foliage" : "Model";
 }
 
 export function useAssetsWorkspaceView(
@@ -87,10 +102,13 @@ export function useAssetsWorkspaceView(
                         }
                       }}
                     >
-                      <Text size="xs">📦</Text>
+                      <Text size="xs">{getAssetKindIcon(definition)}</Text>
                       <Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
                         <Text size="xs" truncate fw={isSelected ? 600 : 400}>
                           {definition.displayName}
+                        </Text>
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          {getAssetKindLabel(definition)}
                         </Text>
                       </Group>
                     </UnstyledButton>
@@ -180,6 +198,14 @@ function AssetInspectorPanel({
       >
         Save Asset Definition
       </Button>
+      <Stack gap={4}>
+        <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+          Type
+        </Text>
+        <Text size="xs" c="var(--sm-color-text)">
+          {getAssetKindLabel(assetDefinition)}
+        </Text>
+      </Stack>
       <Stack gap={4}>
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
           Source

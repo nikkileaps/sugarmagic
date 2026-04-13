@@ -130,6 +130,7 @@ export interface WebRuntimeHost {
 
 const CUBE_COLOR = 0x89b4fa;
 const GRID_COLOR = 0x45475a;
+const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
 const gltfLoader = new GLTFLoader();
 
@@ -233,6 +234,97 @@ function createFallbackMesh(): THREE.Mesh {
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
   );
+}
+
+function createFoliageFallbackMesh(): THREE.Group {
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.14, 1.1, 8),
+    new THREE.MeshStandardMaterial({
+      color: 0x7b5c3f,
+      roughness: 0.82,
+      metalness: 0.02
+    })
+  );
+  trunk.position.y = 0.55;
+
+  const canopy = new THREE.Mesh(
+    new THREE.SphereGeometry(0.52, 12, 12),
+    new THREE.MeshStandardMaterial({
+      color: FOLIAGE_FALLBACK_COLOR,
+      roughness: 0.95,
+      metalness: 0
+    })
+  );
+  canopy.position.y = 1.32;
+
+  const group = new THREE.Group();
+  group.add(trunk);
+  group.add(canopy);
+  return group;
+}
+
+function getSceneObjectFallback(object: SceneObject): THREE.Object3D {
+  if (object.kind !== "asset") {
+    return createCapsuleFallback(object);
+  }
+
+  return object.assetKind === "foliage"
+    ? createFoliageFallbackMesh()
+    : createFallbackMesh();
+}
+
+function getAllRenderableMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      meshes.push(child);
+    }
+  });
+  return meshes;
+}
+
+function foliageMaterialHasTexture(material: THREE.Material): boolean {
+  if (!(material instanceof THREE.MeshStandardMaterial)) {
+    return false;
+  }
+
+  return Boolean(material.map || material.alphaMap || material.emissiveMap);
+}
+
+function validateRenderableAsset(object: SceneObject, renderable: THREE.Object3D): string | null {
+  if (object.assetKind !== "foliage") {
+    return null;
+  }
+
+  const meshes = getAllRenderableMeshes(renderable);
+  if (meshes.length === 0) {
+    return "Foliage GLB loaded without any mesh primitives.";
+  }
+
+  const hasUv = meshes.some((mesh) => Boolean(mesh.geometry.getAttribute("uv")));
+  if (!hasUv) {
+    return "Foliage GLB is missing UV data required for leaf texturing.";
+  }
+
+  const hasVertexColor = meshes.some((mesh) =>
+    Boolean(mesh.geometry.getAttribute("color"))
+  );
+  if (!hasVertexColor) {
+    return "Foliage GLB is missing COLOR_0 vertex color data required for canopy shading inputs.";
+  }
+
+  const hasTexture = meshes.some((mesh) => {
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      return material.some(foliageMaterialHasTexture);
+    }
+    return foliageMaterialHasTexture(material);
+  });
+  if (!hasTexture) {
+    return "Foliage GLB is missing embedded leaf texture bindings.";
+  }
+
+  return null;
 }
 
 function createCapsuleFallback(object: SceneObject): THREE.Mesh {
@@ -764,24 +856,41 @@ export function createWebRuntimeHost(
             .then((gltf) => {
               if (!scene) return;
               const renderable = gltf.scene.clone(true);
+              const validationError = validateRenderableAsset(object, renderable);
+              if (validationError) {
+                console.error("[web-runtime] invalid-asset-payload", {
+                  instanceId: object.instanceId,
+                  assetDefinitionId: object.assetDefinitionId,
+                  assetKind: object.assetKind,
+                  modelSourcePath: object.modelSourcePath,
+                  message: validationError
+                });
+                rootObject.add(getSceneObjectFallback(object));
+                return;
+              }
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
               rootObject.add(renderable);
             })
-            .catch(() => {
-              rootObject.add(
-                object.kind === "asset"
-                  ? createFallbackMesh()
-                  : createCapsuleFallback(object)
-              );
+            .catch((error) => {
+              console.error("[web-runtime] asset-load-failed", {
+                instanceId: object.instanceId,
+                assetDefinitionId: object.assetDefinitionId,
+                assetKind: object.assetKind,
+                modelSourcePath: object.modelSourcePath,
+                error
+              });
+              rootObject.add(getSceneObjectFallback(object));
             });
         } else {
-          rootObject.add(
-            object.kind === "asset"
-              ? createFallbackMesh()
-              : createCapsuleFallback(object)
-          );
+          console.error("[web-runtime] asset-source-missing", {
+            instanceId: object.instanceId,
+            assetDefinitionId: object.assetDefinitionId,
+            assetKind: object.assetKind,
+            modelSourcePath: object.modelSourcePath
+          });
+          rootObject.add(getSceneObjectFallback(object));
         }
 
         scene.add(rootObject);

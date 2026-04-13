@@ -1,5 +1,6 @@
 import {
   getAssetDefinition,
+  type AssetKind,
   type ContentLibrarySnapshot,
   type ItemDefinition,
   type NPCDefinition,
@@ -51,6 +52,7 @@ export interface SceneObject {
   kind: SceneObjectKind;
   displayName: string;
   assetDefinitionId: string | null;
+  assetKind: AssetKind | null;
   modelSourcePath: string | null;
   targetModelHeight: number | null;
   transform: SceneObjectTransform;
@@ -167,20 +169,25 @@ function createPlacedAssetSceneObject(
   asset: PlacedAssetInstance,
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
-  const sourcePath = getAssetSourcePath(asset.assetDefinitionId, contentLibrary);
+  const assetDescriptor = getAssetSourceDescriptor(
+    asset.assetDefinitionId,
+    contentLibrary
+  );
+
   return {
     instanceId: asset.instanceId,
     kind: "asset",
     displayName: asset.displayName,
     assetDefinitionId: asset.assetDefinitionId,
-    modelSourcePath: sourcePath,
+    assetKind: assetDescriptor.assetKind,
+    modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: null,
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
       scale: asset.transform.scale
     },
-    representationKey: `asset:${asset.assetDefinitionId}:${sourcePath ?? "fallback"}`,
+    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}`,
     capsule: null
   };
 }
@@ -191,7 +198,10 @@ function createPlayerSceneObject(
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
   const modelAssetDefinitionId = playerDefinition?.presentation.modelAssetDefinitionId ?? null;
-  const modelSourcePath = getAssetSourcePath(modelAssetDefinitionId, contentLibrary);
+  const assetDescriptor = getAssetSourceDescriptor(
+    modelAssetDefinitionId,
+    contentLibrary
+  );
   const height = Math.max(playerDefinition?.physicalProfile.height ?? 1.8, 0.5);
   const radius = Math.max(
     playerDefinition?.physicalProfile.radius ?? 0.35,
@@ -203,14 +213,15 @@ function createPlayerSceneObject(
     kind: "player",
     displayName: playerDefinition?.displayName ?? "Player",
     assetDefinitionId: modelAssetDefinitionId,
-    modelSourcePath,
+    assetKind: assetDescriptor.assetKind,
+    modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `player:${modelAssetDefinitionId ?? "capsule"}:${modelSourcePath ?? "fallback"}:${height}:${radius}`,
+    representationKey: `player:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}`,
     capsule: {
       height,
       radius,
@@ -225,7 +236,10 @@ function createNPCSceneObject(
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
   const modelAssetDefinitionId = npcDefinition?.presentation.modelAssetDefinitionId ?? null;
-  const modelSourcePath = getAssetSourcePath(modelAssetDefinitionId, contentLibrary);
+  const assetDescriptor = getAssetSourceDescriptor(
+    modelAssetDefinitionId,
+    contentLibrary
+  );
   const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
   const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
 
@@ -234,14 +248,15 @@ function createNPCSceneObject(
     kind: "npc",
     displayName: npcDefinition?.displayName ?? "NPC",
     assetDefinitionId: modelAssetDefinitionId,
-    modelSourcePath,
+    assetKind: assetDescriptor.assetKind,
+    modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${modelSourcePath ?? "fallback"}:${height}:${radius}`,
+    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}`,
     capsule: {
       height,
       radius,
@@ -256,7 +271,10 @@ function createItemSceneObject(
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
   const modelAssetDefinitionId = itemDefinition?.presentation.modelAssetDefinitionId ?? null;
-  const modelSourcePath = getAssetSourcePath(modelAssetDefinitionId, contentLibrary);
+  const assetDescriptor = getAssetSourceDescriptor(
+    modelAssetDefinitionId,
+    contentLibrary
+  );
   const height = Math.max(itemDefinition?.presentation.modelHeight ?? 0.45, 0.1);
 
   return {
@@ -264,23 +282,30 @@ function createItemSceneObject(
     kind: "item",
     displayName: itemDefinition?.displayName ?? "Item",
     assetDefinitionId: modelAssetDefinitionId,
-    modelSourcePath,
+    assetKind: assetDescriptor.assetKind,
+    modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${modelSourcePath ?? "fallback"}:${height}:${presence.quantity}`,
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}`,
     capsule: null
   };
 }
 
-function getAssetSourcePath(
+function getAssetSourceDescriptor(
   assetDefinitionId: string | null | undefined,
   contentLibrary?: ContentLibrarySnapshot
-): string | null {
-  if (!assetDefinitionId || !contentLibrary) return null;
+): { sourcePath: string | null; assetKind: AssetKind | null } {
+  if (!assetDefinitionId || !contentLibrary) {
+    return { sourcePath: null, assetKind: null };
+  }
+
   const definition = getAssetDefinition(contentLibrary, assetDefinitionId);
-  return definition?.source.relativeAssetPath ?? null;
+  return {
+    sourcePath: definition?.source.relativeAssetPath ?? null,
+    assetKind: definition?.assetKind ?? null
+  };
 }

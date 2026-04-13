@@ -1,3 +1,11 @@
+/**
+ * Studio application composition root.
+ *
+ * Owns top-level project/session lifecycle wiring, including the canonical
+ * asset import flow that now recognizes foliage GLBs inside the same content
+ * library system as every other imported asset.
+ */
+
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
@@ -762,14 +770,26 @@ export function App() {
     const { handle, descriptor, session: currentSession } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
-    const result = await importSourceAsset({
-      projectHandle: handle,
-      descriptor
-    });
-    projectStore
-      .getState()
-      .updateSession(addAssetDefinitionToSession(currentSession, result.assetDefinition));
-    return result.assetDefinition;
+    try {
+      const result = await importSourceAsset({
+        projectHandle: handle,
+        descriptor
+      });
+      projectStore
+        .getState()
+        .updateSession(addAssetDefinitionToSession(currentSession, result.assetDefinition));
+      return result.assetDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Asset import failed: ${String(error)}`
+      );
+      return null;
+    }
   }, []);
 
   const handleUpdateAssetDefinition = useCallback(

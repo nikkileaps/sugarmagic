@@ -1,3 +1,11 @@
+/**
+ * Content library domain types and selectors.
+ *
+ * Owns the canonical asset and environment definitions stored in the project
+ * content library. This is the one authored source of truth for imported
+ * reusable assets, including both generic models and specialized foliage.
+ */
+
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
 
@@ -18,11 +26,13 @@ export interface ContentDefinitionReference {
   definitionKind: ContentDefinitionKind;
 }
 
+export type AssetKind = "model" | "foliage";
+
 export interface AssetDefinition {
   definitionId: string;
   definitionKind: "asset";
   displayName: string;
-  assetKind: "model";
+  assetKind: AssetKind;
   source: {
     relativeAssetPath: string;
     fileName: string;
