@@ -5,6 +5,14 @@ import type {
   RegionLandscapePaintPayload
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
+import type {
+  PostProcessShaderBinding,
+  ShaderGraphDocument,
+  ShaderNodeInstance,
+  ShaderEdge,
+  ShaderParameter,
+  ShaderParameterOverride
+} from "../shader-graph";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
@@ -202,6 +210,199 @@ export type UpdateEnvironmentDefinitionCommand = SemanticCommandBase<
   {
     definitionId: string;
     definition: EnvironmentDefinition;
+  }
+>;
+
+export type CreateShaderGraphCommand = SemanticCommandBase<
+  "CreateShaderGraph",
+  {
+    definition: ShaderGraphDocument;
+  }
+>;
+
+export type RenameShaderGraphCommand = SemanticCommandBase<
+  "RenameShaderGraph",
+  {
+    shaderDefinitionId: string;
+    displayName: string;
+  }
+>;
+
+export type DeleteShaderGraphCommand = SemanticCommandBase<
+  "DeleteShaderGraph",
+  {
+    shaderDefinitionId: string;
+  }
+>;
+
+export type UpdateShaderNodeCommand = SemanticCommandBase<
+  "UpdateShaderNode",
+  {
+    shaderDefinitionId: string;
+    node: ShaderNodeInstance;
+  }
+>;
+
+export type RemoveShaderNodeCommand = SemanticCommandBase<
+  "RemoveShaderNode",
+  {
+    shaderDefinitionId: string;
+    nodeId: string;
+  }
+>;
+
+export type AddShaderEdgeCommand = SemanticCommandBase<
+  "AddShaderEdge",
+  {
+    shaderDefinitionId: string;
+    edge: ShaderEdge;
+  }
+>;
+
+export type RemoveShaderEdgeCommand = SemanticCommandBase<
+  "RemoveShaderEdge",
+  {
+    shaderDefinitionId: string;
+    edgeId: string;
+  }
+>;
+
+export type UpdateShaderParameterCommand = SemanticCommandBase<
+  "UpdateShaderParameter",
+  {
+    shaderDefinitionId: string;
+    parameter: ShaderParameter;
+  }
+>;
+
+export type RemoveShaderParameterCommand = SemanticCommandBase<
+  "RemoveShaderParameter",
+  {
+    shaderDefinitionId: string;
+    parameterId: string;
+  }
+>;
+
+export type SetAssetDefaultShaderCommand = SemanticCommandBase<
+  "SetAssetDefaultShader",
+  {
+    definitionId: string;
+    shaderDefinitionId: string | null;
+  }
+>;
+
+export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetShaderOverride",
+  {
+    instanceId: string;
+    shaderDefinitionId: string | null;
+  }
+>;
+
+export type SetNPCPresenceShaderOverrideCommand = SemanticCommandBase<
+  "SetNPCPresenceShaderOverride",
+  {
+    presenceId: string;
+    shaderDefinitionId: string | null;
+  }
+>;
+
+export type SetItemPresenceShaderOverrideCommand = SemanticCommandBase<
+  "SetItemPresenceShaderOverride",
+  {
+    presenceId: string;
+    shaderDefinitionId: string | null;
+  }
+>;
+
+export type SetPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetShaderParameterOverride",
+  {
+    instanceId: string;
+    override: ShaderParameterOverride;
+  }
+>;
+
+export type ClearPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase<
+  "ClearPlacedAssetShaderParameterOverride",
+  {
+    instanceId: string;
+    parameterId: string;
+  }
+>;
+
+export type SetNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
+  "SetNPCPresenceShaderParameterOverride",
+  {
+    presenceId: string;
+    override: ShaderParameterOverride;
+  }
+>;
+
+export type ClearNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
+  "ClearNPCPresenceShaderParameterOverride",
+  {
+    presenceId: string;
+    parameterId: string;
+  }
+>;
+
+export type SetItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
+  "SetItemPresenceShaderParameterOverride",
+  {
+    presenceId: string;
+    override: ShaderParameterOverride;
+  }
+>;
+
+export type ClearItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
+  "ClearItemPresenceShaderParameterOverride",
+  {
+    presenceId: string;
+    parameterId: string;
+  }
+>;
+
+export type AddPostProcessShaderCommand = SemanticCommandBase<
+  "AddPostProcessShader",
+  {
+    environmentDefinitionId: string;
+    binding: PostProcessShaderBinding;
+  }
+>;
+
+export type UpdatePostProcessShaderOrderCommand = SemanticCommandBase<
+  "UpdatePostProcessShaderOrder",
+  {
+    environmentDefinitionId: string;
+    shaderDefinitionId: string;
+    order: number;
+  }
+>;
+
+export type UpdatePostProcessShaderParameterCommand = SemanticCommandBase<
+  "UpdatePostProcessShaderParameter",
+  {
+    environmentDefinitionId: string;
+    shaderDefinitionId: string;
+    override: ShaderParameterOverride;
+  }
+>;
+
+export type TogglePostProcessShaderCommand = SemanticCommandBase<
+  "TogglePostProcessShader",
+  {
+    environmentDefinitionId: string;
+    shaderDefinitionId: string;
+    enabled: boolean;
+  }
+>;
+
+export type RemovePostProcessShaderCommand = SemanticCommandBase<
+  "RemovePostProcessShader",
+  {
+    environmentDefinitionId: string;
+    shaderDefinitionId: string;
   }
 >;
 
@@ -509,6 +710,30 @@ export type SemanticCommand =
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
   | UpdateEnvironmentDefinitionCommand
+  | CreateShaderGraphCommand
+  | RenameShaderGraphCommand
+  | DeleteShaderGraphCommand
+  | UpdateShaderNodeCommand
+  | RemoveShaderNodeCommand
+  | AddShaderEdgeCommand
+  | RemoveShaderEdgeCommand
+  | UpdateShaderParameterCommand
+  | RemoveShaderParameterCommand
+  | SetAssetDefaultShaderCommand
+  | SetPlacedAssetShaderOverrideCommand
+  | SetNPCPresenceShaderOverrideCommand
+  | SetItemPresenceShaderOverrideCommand
+  | SetPlacedAssetShaderParameterOverrideCommand
+  | ClearPlacedAssetShaderParameterOverrideCommand
+  | SetNPCPresenceShaderParameterOverrideCommand
+  | ClearNPCPresenceShaderParameterOverrideCommand
+  | SetItemPresenceShaderParameterOverrideCommand
+  | ClearItemPresenceShaderParameterOverrideCommand
+  | AddPostProcessShaderCommand
+  | UpdatePostProcessShaderOrderCommand
+  | UpdatePostProcessShaderParameterCommand
+  | TogglePostProcessShaderCommand
+  | RemovePostProcessShaderCommand
   | UpdatePlayerDefinitionCommand
   | CreatePlayerPresenceCommand
   | TransformPlayerPresenceCommand

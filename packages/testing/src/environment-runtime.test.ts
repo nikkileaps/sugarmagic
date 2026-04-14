@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState,
+  createDefaultFoliageWindShaderGraph,
   type ContentLibrarySnapshot,
   type RegionDocument
 } from "@sugarmagic/domain";
@@ -31,7 +32,8 @@ function makeContentLibrary(): ContentLibrarySnapshot {
         displayName: "Night",
         preset: "night"
       })
-    ]
+    ],
+    shaderDefinitions: [createDefaultFoliageWindShaderGraph("project")]
   };
 }
 

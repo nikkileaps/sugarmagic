@@ -25,6 +25,8 @@ function makeRegion(): RegionDocument {
         {
           presenceId: "presence:rick-roll",
           npcDefinitionId: "npc:rick-roll",
+          shaderOverride: null,
+          shaderParameterOverrides: [],
           transform: {
             position: [0, 0, 0],
             rotation: [0, 0, 0],

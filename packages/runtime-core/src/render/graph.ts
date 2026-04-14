@@ -12,6 +12,8 @@ import type { EnvironmentSceneWarning } from "../environment";
 export interface RuntimeRenderGraph {
   readonly pipeline: RenderPipeline | null;
   applyEnvironment: (definition: EnvironmentDefinition | null) => EnvironmentSceneWarning[];
+  getBaseOutputNode: () => unknown | null;
+  setPostProcessOutputNode: (node: unknown | null) => void;
   resize: (width: number, height: number) => void;
   setCamera: (camera: THREE.Camera) => void;
   dispose: () => void;
@@ -29,6 +31,7 @@ export function createRuntimeRenderGraph(options: {
   const scenePass = pass(scene, camera);
   const sceneColor = scenePass.getTextureNode("output");
   const bloomPass = bloom(sceneColor, 0.4, 0.4, 0.9);
+  const baseOutputNode = sceneColor.add(bloomPass);
 
   const warnings: EnvironmentSceneWarning[] = [];
   let pipeline: RenderPipeline | null = null;
@@ -36,7 +39,7 @@ export function createRuntimeRenderGraph(options: {
 
   try {
     pipeline = new RenderPipeline(renderer);
-    pipeline.outputNode = sceneColor.add(bloomPass);
+    pipeline.outputNode = baseOutputNode;
   } catch (error) {
     warnings.push({
       code: "render-pipeline-fallback",
@@ -71,6 +74,15 @@ export function createRuntimeRenderGraph(options: {
       applyBloom(definition.atmosphere.bloom);
       applySsao(definition.atmosphere.ssao);
       return warnings;
+    },
+    getBaseOutputNode() {
+      return pipeline ? baseOutputNode : null;
+    },
+    setPostProcessOutputNode(node) {
+      if (!pipeline) {
+        return;
+      }
+      pipeline.outputNode = (node as typeof baseOutputNode | null) ?? baseOutputNode;
     },
     resize() {
       // WebGPU TSL post nodes pull the drawing buffer size from the renderer

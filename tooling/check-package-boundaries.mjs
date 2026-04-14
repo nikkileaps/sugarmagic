@@ -11,6 +11,7 @@ const workspaces = [
   { dir: "packages/domain", kind: "package" },
   { dir: "packages/runtime-core", kind: "package" },
   { dir: "packages/plugins", kind: "package" },
+  { dir: "packages/render-web", kind: "package" },
   { dir: "packages/io", kind: "package" },
   { dir: "packages/ui", kind: "package" },
   { dir: "packages/workspaces", kind: "package" },
@@ -24,6 +25,7 @@ const allowedInternalDeps = {
     "@sugarmagic/io",
     "@sugarmagic/plugins",
     "@sugarmagic/productmodes",
+    "@sugarmagic/render-web",
     "@sugarmagic/runtime-core",
     "@sugarmagic/shell",
     "@sugarmagic/testing",
@@ -34,6 +36,7 @@ const allowedInternalDeps = {
     "@sugarmagic/domain",
     "@sugarmagic/runtime-core",
     "@sugarmagic/plugins",
+    "@sugarmagic/render-web",
     "@sugarmagic/io"
   ]),
   "@sugarmagic/shell": new Set([
@@ -59,6 +62,10 @@ const allowedInternalDeps = {
     "@sugarmagic/runtime-core",
     "@sugarmagic/ui"
   ]),
+  "@sugarmagic/render-web": new Set([
+    "@sugarmagic/domain",
+    "@sugarmagic/runtime-core"
+  ]),
   "@sugarmagic/io": new Set([
     "@sugarmagic/domain",
     "@sugarmagic/plugins"
@@ -76,11 +83,32 @@ const allowedInternalDeps = {
     "@sugarmagic/io",
     "@sugarmagic/plugins",
     "@sugarmagic/productmodes",
+    "@sugarmagic/render-web",
     "@sugarmagic/runtime-core",
     "@sugarmagic/shell",
     "@sugarmagic/ui",
     "@sugarmagic/workspaces"
   ])
+};
+
+const restrictedExternalImports = {
+  "@sugarmagic/runtime-core": [
+    {
+      label: "three.js runtime-core boundary",
+      specifierPattern: /^three(?:\/.*)?$/,
+      allowedFiles: new Set([
+        "packages/runtime-core/src/item/index.ts",
+        "packages/runtime-core/src/landscape/index.ts",
+        "packages/runtime-core/src/landscape/mesh.ts",
+        "packages/runtime-core/src/landscape/splatmap.ts",
+        "packages/runtime-core/src/npc/index.ts",
+        "packages/runtime-core/src/player/index.ts",
+        "packages/runtime-core/src/render/environment-scene.ts",
+        "packages/runtime-core/src/render/graph.ts",
+        "packages/runtime-core/src/render/pipeline.ts"
+      ])
+    }
+  ]
 };
 
 const manifestFieldNames = [
@@ -134,6 +162,7 @@ for (const { dir, manifest } of packageByName.values()) {
   const sourceRoot = path.join(packageRoot, "src");
   const sourceFiles = await collectSourceFiles(sourceRoot);
   const allowed = allowedInternalDeps[manifest.name] ?? new Set();
+  const externalRestrictions = restrictedExternalImports[manifest.name] ?? [];
 
   for (const filePath of sourceFiles) {
     const contents = await readFile(filePath, "utf8");
@@ -176,6 +205,19 @@ for (const { dir, manifest } of packageByName.values()) {
             `${relativePath(filePath)}: import of ${internalName} is not allowed for ${manifest.name}.`
           );
         }
+        continue;
+      }
+
+      for (const restriction of externalRestrictions) {
+        if (!restriction.specifierPattern.test(specifier)) {
+          continue;
+        }
+        if (restriction.allowedFiles.has(relativePath(filePath))) {
+          continue;
+        }
+        errors.push(
+          `${relativePath(filePath)}: external import "${specifier}" violates ${restriction.label} for ${manifest.name}.`
+        );
       }
     }
   }

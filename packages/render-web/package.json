@@ -1,16 +1,11 @@
 {
-  "name": "@sugarmagic/testing",
+  "name": "@sugarmagic/render-web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
-    "@sugarmagic/io": "workspace:*",
-    "@sugarmagic/plugins": "workspace:*",
-    "@sugarmagic/productmodes": "workspace:*",
-    "@sugarmagic/render-web": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
-    "@sugarmagic/shell": "workspace:*",
     "three": "^0.183.2"
   },
   "exports": {

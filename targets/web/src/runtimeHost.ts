@@ -47,6 +47,11 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
+  ShaderRuntime,
+  applyShaderToRenderable,
+  releaseShadersFromObjectTree
+} from "@sugarmagic/render-web";
+import {
   BillboardComponent,
   type CameraSnapshot,
   World,
@@ -70,8 +75,9 @@ import {
   createLandscapeSceneController,
   createRuntimeRenderPipeline,
   createPlayerVisualController,
+  resolveEffectivePostProcessShaderBindings,
   spawnRuntimePlayerEntity,
-  resolveEnvironmentDefinition,
+  resolveEnvironmentWithPostProcessChain,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -351,15 +357,20 @@ function createCapsuleFallback(object: SceneObject): THREE.Mesh {
 }
 
 function disposeObject(root: THREE.Object3D) {
+  const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.geometry.dispose();
     if (Array.isArray(child.material)) {
       for (const material of child.material) {
-        material.dispose();
+        if (!runtimeManagedMaterials.has(material)) {
+          material.dispose();
+        }
       }
     } else {
-      child.material.dispose();
+      if (!runtimeManagedMaterials.has(child.material)) {
+        child.material.dispose();
+      }
     }
   });
 }
@@ -582,6 +593,7 @@ export function createWebRuntimeHost(
     | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
+  let shaderRuntime: ShaderRuntime | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
   let debugHud: ReturnType<typeof createRuntimeDebugHud> | null = null;
   let gameplayAssembly:
@@ -617,6 +629,8 @@ export function createWebRuntimeHost(
     gameplaySession = null;
     billboardRenderer?.dispose();
     billboardRenderer = null;
+    shaderRuntime?.dispose();
+    shaderRuntime = null;
     textBillboardRenderer?.dispose();
     textBillboardRenderer = null;
     billboardAssetRegistry?.dispose();
@@ -646,15 +660,20 @@ export function createWebRuntimeHost(
     renderPipeline = null;
 
     if (scene) {
+      const runtimeManagedMaterials = releaseShadersFromObjectTree(scene);
       scene.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
         child.geometry.dispose();
         if (Array.isArray(child.material)) {
           for (const material of child.material) {
-            material.dispose();
+            if (!runtimeManagedMaterials.has(material)) {
+              material.dispose();
+            }
           }
         } else {
-          child.material.dispose();
+          if (!runtimeManagedMaterials.has(child.material)) {
+            child.material.dispose();
+          }
         }
       });
     }
@@ -800,6 +819,15 @@ export function createWebRuntimeHost(
       scene,
       registry: billboardAssetRegistry
     });
+    shaderRuntime = new ShaderRuntime({
+      contentLibrary: state.contentLibrary,
+      compileProfile: request.compileProfile,
+      logger: {
+        warn(message: string, payload?: Record<string, unknown>) {
+          console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        }
+      }
+    });
     textBillboardRenderer = new TextBillboardRenderer({ parent: root });
 
     camera = new THREE.PerspectiveCamera(
@@ -871,6 +899,7 @@ export function createWebRuntimeHost(
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
+              applyShaderToRenderable(renderable, object, shaderRuntime);
               rootObject.add(renderable);
             })
             .catch((error) => {
@@ -1043,13 +1072,27 @@ export function createWebRuntimeHost(
           width: root.clientWidth || 1,
           height: root.clientHeight || 1
         });
-        renderPipeline.applyEnvironment(
-          resolveEnvironmentDefinition(
-            activeRegion,
-            state.contentLibrary,
-            runtimeEnvironmentState?.activeEnvironmentId ?? null
-          )
+        const resolvedEnvironment = resolveEnvironmentWithPostProcessChain(
+          activeRegion,
+          state.contentLibrary,
+          runtimeEnvironmentState?.activeEnvironmentId ?? null
         );
+        renderPipeline.applyEnvironment(resolvedEnvironment.definition);
+        for (const binding of resolveEffectivePostProcessShaderBindings(
+          resolvedEnvironment.effectivePostProcessChain,
+          state.contentLibrary
+        )) {
+          if (!shaderRuntime) {
+            break;
+          }
+          shaderRuntime.applyShader(
+            binding,
+            {
+              targetKind: "post-process",
+              renderPipeline
+            }
+          );
+        }
 
         handleResize();
         lastTime = ownerWindow.performance.now();

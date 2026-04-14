@@ -20,6 +20,7 @@
       "@sugarmagic/io": ["packages/io/src/index.ts"],
       "@sugarmagic/plugins": ["packages/plugins/src/index.ts"],
       "@sugarmagic/productmodes": ["packages/productmodes/src/index.ts"],
+      "@sugarmagic/render-web": ["packages/render-web/src/index.ts"],
       "@sugarmagic/runtime-core": ["packages/runtime-core/src/index.ts"],
       "@sugarmagic/runtime-core/*": ["packages/runtime-core/src/*"],
       "@sugarmagic/shell": ["packages/shell/src/index.ts"],

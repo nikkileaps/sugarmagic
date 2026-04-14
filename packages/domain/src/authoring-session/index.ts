@@ -15,6 +15,7 @@ import {
   createRegionNPCPresence,
   createRegionPlayerPresence,
   createRegionItemPresence,
+  createPlacedAssetInstance,
   createDefaultRegionLandscapeState,
   createDefaultRegionLandscapeChannels,
   createRegionAreaDefinition,
@@ -44,9 +45,33 @@ import type {
   UpdateQuestDefinitionCommand,
   UpdateSpellDefinitionCommand,
   UpdatePlayerDefinitionCommand,
+  CreateShaderGraphCommand,
+  RenameShaderGraphCommand,
+  DeleteShaderGraphCommand,
+  UpdateShaderNodeCommand,
+  RemoveShaderNodeCommand,
+  AddShaderEdgeCommand,
+  RemoveShaderEdgeCommand,
+  UpdateShaderParameterCommand,
+  RemoveShaderParameterCommand,
+  SetAssetDefaultShaderCommand,
+  AddPostProcessShaderCommand,
+  UpdatePostProcessShaderOrderCommand,
+  UpdatePostProcessShaderParameterCommand,
+  TogglePostProcessShaderCommand,
+  RemovePostProcessShaderCommand,
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
-  UpdateDeploymentSettingsCommand
+  UpdateDeploymentSettingsCommand,
+  SetPlacedAssetShaderOverrideCommand,
+  SetNPCPresenceShaderOverrideCommand,
+  SetItemPresenceShaderOverrideCommand,
+  SetPlacedAssetShaderParameterOverrideCommand,
+  ClearPlacedAssetShaderParameterOverrideCommand,
+  SetNPCPresenceShaderParameterOverrideCommand,
+  ClearNPCPresenceShaderParameterOverrideCommand,
+  SetItemPresenceShaderParameterOverrideCommand,
+  ClearItemPresenceShaderParameterOverrideCommand
 } from "../commands";
 import type {
   AssetDefinition,
@@ -71,8 +96,13 @@ import {
   createEmptyContentLibrarySnapshot,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
+  listShaderDefinitions as listShaderDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot
 } from "../content-library";
+import type { ShaderGraphDocument, ShaderParameterOverride } from "../shader-graph";
+import {
+  validateShaderGraphDocument
+} from "../shader-graph";
 import { createScopedId } from "../shared";
 import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
@@ -123,10 +153,12 @@ function normalizeRegionDocument(
         : null,
     scene: {
       folders: region.scene.folders,
-      placedAssets: region.scene.placedAssets.map((asset) => ({
-        ...asset,
-        inspectable: asset.inspectable ?? null
-      })),
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        createPlacedAssetInstance({
+          ...asset,
+          inspectable: asset.inspectable ?? null
+        })
+      ),
       playerPresence: region.scene.playerPresence
         ? createRegionPlayerPresence(region.scene.playerPresence)
         : null,
@@ -291,6 +323,12 @@ export function getAllEnvironmentDefinitions(
   return listEnvironmentDefinitionsFromLibrary(session.contentLibrary);
 }
 
+export function getAllShaderDefinitions(
+  session: AuthoringSession
+): ShaderGraphDocument[] {
+  return listShaderDefinitionsFromLibrary(session.contentLibrary);
+}
+
 export function getPlayerDefinition(session: AuthoringSession) {
   return session.gameProject.playerDefinition;
 }
@@ -405,6 +443,501 @@ function applyEnvironmentDefinitionCommand(
     history: pushTransaction(session.history, transaction),
     isDirty: true
   };
+}
+
+function replaceShaderOverride<
+  T extends {
+    shaderOverride: { shaderDefinitionId: string } | null;
+    shaderParameterOverrides: ShaderParameterOverride[];
+  }
+>(
+  value: T,
+  shaderDefinitionId: string | null
+): T {
+  return {
+    ...value,
+    shaderOverride: shaderDefinitionId ? { shaderDefinitionId } : null
+  };
+}
+
+function upsertShaderParameterOverride(
+  overrides: ShaderParameterOverride[],
+  nextOverride: ShaderParameterOverride
+): ShaderParameterOverride[] {
+  const existingIndex = overrides.findIndex(
+    (override) => override.parameterId === nextOverride.parameterId
+  );
+  if (existingIndex < 0) {
+    return [...overrides, nextOverride];
+  }
+
+  const next = [...overrides];
+  next[existingIndex] = nextOverride;
+  return next;
+}
+
+function removeShaderParameterOverride(
+  overrides: ShaderParameterOverride[],
+  parameterId: string
+): ShaderParameterOverride[] {
+  return overrides.filter((override) => override.parameterId !== parameterId);
+}
+
+function applyShaderGraphMutation(
+  session: AuthoringSession,
+  shaderDefinitionId: string,
+  mutate: (definition: ShaderGraphDocument) => ShaderGraphDocument | null,
+  command: SemanticCommand
+): AuthoringSession {
+  const definitionIndex = session.contentLibrary.shaderDefinitions.findIndex(
+    (definition) => definition.shaderDefinitionId === shaderDefinitionId
+  );
+  if (definitionIndex < 0) {
+    return session;
+  }
+
+  const currentDefinition = session.contentLibrary.shaderDefinitions[definitionIndex]!;
+  const nextDefinition = mutate(currentDefinition);
+  if (!nextDefinition) {
+    return session;
+  }
+
+  const issues = validateShaderGraphDocument(nextDefinition).filter(
+    (issue) => issue.severity === "error"
+  );
+  if (issues.length > 0) {
+    console.warn("[domain] rejected invalid shader graph mutation", {
+      shaderDefinitionId,
+      commandKind: command.kind,
+      issues
+    });
+    return session;
+  }
+
+  const nextDefinitions = [...session.contentLibrary.shaderDefinitions];
+  nextDefinitions[definitionIndex] = nextDefinition;
+  const transaction = createTransactionForCommand(command, [shaderDefinitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      shaderDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyCreateShaderGraphCommand(
+  session: AuthoringSession,
+  command: CreateShaderGraphCommand
+): AuthoringSession {
+  const issues = validateShaderGraphDocument(command.payload.definition).filter(
+    (issue) => issue.severity === "error"
+  );
+  if (issues.length > 0) {
+    console.warn("[domain] rejected invalid shader graph creation", {
+      shaderDefinitionId: command.payload.definition.shaderDefinitionId,
+      issues
+    });
+    return session;
+  }
+
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.shaderDefinitionId
+  ]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      shaderDefinitions: [
+        ...session.contentLibrary.shaderDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyRenameShaderGraphCommand(
+  session: AuthoringSession,
+  command: RenameShaderGraphCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      displayName: command.payload.displayName,
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
+function applyDeleteShaderGraphCommand(
+  session: AuthoringSession,
+  command: DeleteShaderGraphCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.shaderDefinitions.filter(
+    (definition) =>
+      definition.shaderDefinitionId !== command.payload.shaderDefinitionId
+  );
+  if (nextDefinitions.length === session.contentLibrary.shaderDefinitions.length) {
+    return session;
+  }
+
+  const transaction = createTransactionForCommand(command, [
+    command.payload.shaderDefinitionId
+  ]);
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      shaderDefinitions: nextDefinitions,
+      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) =>
+        definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
+          ? { ...definition, defaultShaderDefinitionId: null }
+          : definition
+      ),
+      environmentDefinitions: session.contentLibrary.environmentDefinitions.map((definition) => ({
+        ...definition,
+        postProcessShaders: definition.postProcessShaders.filter(
+          (binding) => binding.shaderDefinitionId !== command.payload.shaderDefinitionId
+        )
+      }))
+    },
+    regions: new Map(
+      Array.from(session.regions.entries()).map(([regionId, region]) => [
+        regionId,
+        {
+          ...region,
+          scene: {
+            ...region.scene,
+            placedAssets: region.scene.placedAssets.map((asset) =>
+              asset.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
+                ? { ...asset, shaderOverride: null, shaderParameterOverrides: [] }
+                : asset
+            ),
+            npcPresences: region.scene.npcPresences.map((presence) =>
+              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
+                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+                : presence
+            ),
+            itemPresences: region.scene.itemPresences.map((presence) =>
+              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
+                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+                : presence
+            )
+          }
+        }
+      ])
+    ),
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateShaderNodeCommand(
+  session: AuthoringSession,
+  command: UpdateShaderNodeCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => {
+      const existingIndex = definition.nodes.findIndex(
+        (node) => node.nodeId === command.payload.node.nodeId
+      );
+      const nextNodes = [...definition.nodes];
+      if (existingIndex < 0) {
+        nextNodes.push(command.payload.node);
+      } else {
+        nextNodes[existingIndex] = command.payload.node;
+      }
+
+      return {
+        ...definition,
+        nodes: nextNodes,
+        revision: definition.revision + 1
+      };
+    },
+    command
+  );
+}
+
+function applyRemoveShaderNodeCommand(
+  session: AuthoringSession,
+  command: RemoveShaderNodeCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      nodes: definition.nodes.filter((node) => node.nodeId !== command.payload.nodeId),
+      edges: definition.edges.filter(
+        (edge) =>
+          edge.sourceNodeId !== command.payload.nodeId &&
+          edge.targetNodeId !== command.payload.nodeId
+      ),
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
+function applyAddShaderEdgeCommand(
+  session: AuthoringSession,
+  command: AddShaderEdgeCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      edges: [
+        ...definition.edges.filter((edge) => edge.edgeId !== command.payload.edge.edgeId),
+        command.payload.edge
+      ],
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
+function applyRemoveShaderEdgeCommand(
+  session: AuthoringSession,
+  command: RemoveShaderEdgeCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      edges: definition.edges.filter((edge) => edge.edgeId !== command.payload.edgeId),
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
+function applyUpdateShaderParameterCommand(
+  session: AuthoringSession,
+  command: UpdateShaderParameterCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => {
+      const existingIndex = definition.parameters.findIndex(
+        (parameter) => parameter.parameterId === command.payload.parameter.parameterId
+      );
+      const nextParameters = [...definition.parameters];
+      if (existingIndex < 0) {
+        nextParameters.push(command.payload.parameter);
+      } else {
+        nextParameters[existingIndex] = command.payload.parameter;
+      }
+
+      return {
+        ...definition,
+        parameters: nextParameters,
+        revision: definition.revision + 1
+      };
+    },
+    command
+  );
+}
+
+function applyRemoveShaderParameterCommand(
+  session: AuthoringSession,
+  command: RemoveShaderParameterCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      parameters: definition.parameters.filter(
+        (parameter) => parameter.parameterId !== command.payload.parameterId
+      ),
+      nodes: definition.nodes.filter((node) => {
+        if (node.nodeType !== "input.parameter") {
+          return true;
+        }
+        return node.settings.parameterId !== command.payload.parameterId;
+      }),
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
+function applySetAssetDefaultShaderCommand(
+  session: AuthoringSession,
+  command: SetAssetDefaultShaderCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definitionId
+      ? {
+          ...definition,
+          defaultShaderDefinitionId: command.payload.shaderDefinitionId
+        }
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyAddPostProcessShaderCommand(
+  session: AuthoringSession,
+  command: AddPostProcessShaderCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.environmentDefinitions.map((definition) =>
+    definition.definitionId !== command.payload.environmentDefinitionId
+      ? definition
+      : {
+          ...definition,
+          postProcessShaders: [
+            ...definition.postProcessShaders.filter(
+              (binding) =>
+                binding.shaderDefinitionId !== command.payload.binding.shaderDefinitionId
+            ),
+            command.payload.binding
+          ]
+        }
+  );
+  const transaction = createTransactionForCommand(command, [
+    command.payload.environmentDefinitionId
+  ]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      environmentDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdatePostProcessShaderOrderCommand(
+  session: AuthoringSession,
+  command: UpdatePostProcessShaderOrderCommand
+): AuthoringSession {
+  return applyEnvironmentDefinitionCommand(session, {
+    ...command,
+    kind: "UpdateEnvironmentDefinition",
+    payload: {
+      definitionId: command.payload.environmentDefinitionId,
+      definition:
+        session.contentLibrary.environmentDefinitions.find(
+          (definition) => definition.definitionId === command.payload.environmentDefinitionId
+        ) === undefined
+          ? session.contentLibrary.environmentDefinitions[0]!
+          : {
+              ...session.contentLibrary.environmentDefinitions.find(
+                (definition) => definition.definitionId === command.payload.environmentDefinitionId
+              )!,
+              postProcessShaders: session.contentLibrary.environmentDefinitions
+                .find(
+                  (definition) =>
+                    definition.definitionId === command.payload.environmentDefinitionId
+                )!
+                .postProcessShaders.map((binding) =>
+                  binding.shaderDefinitionId === command.payload.shaderDefinitionId
+                    ? { ...binding, order: command.payload.order }
+                    : binding
+                )
+            }
+    }
+  });
+}
+
+function updatePostProcessBindingOverride(
+  session: AuthoringSession,
+  command:
+    | UpdatePostProcessShaderParameterCommand
+    | TogglePostProcessShaderCommand
+    | RemovePostProcessShaderCommand
+): AuthoringSession {
+  const definition = session.contentLibrary.environmentDefinitions.find(
+    (entry) =>
+      entry.definitionId ===
+      ("environmentDefinitionId" in command.payload
+        ? command.payload.environmentDefinitionId
+        : null)
+  );
+  if (!definition) {
+    return session;
+  }
+
+  let nextDefinition: EnvironmentDefinition = definition;
+  if (command.kind === "UpdatePostProcessShaderParameter") {
+    nextDefinition = {
+      ...definition,
+      postProcessShaders: definition.postProcessShaders.map((binding) =>
+        binding.shaderDefinitionId === command.payload.shaderDefinitionId
+          ? {
+              ...binding,
+              parameterOverrides: upsertShaderParameterOverride(
+                binding.parameterOverrides,
+                command.payload.override
+              )
+            }
+          : binding
+      )
+    };
+  } else if (command.kind === "TogglePostProcessShader") {
+    nextDefinition = {
+      ...definition,
+      postProcessShaders: definition.postProcessShaders.map((binding) =>
+        binding.shaderDefinitionId === command.payload.shaderDefinitionId
+          ? { ...binding, enabled: command.payload.enabled }
+          : binding
+      )
+    };
+  } else if (command.kind === "RemovePostProcessShader") {
+    nextDefinition = {
+      ...definition,
+      postProcessShaders: definition.postProcessShaders.filter(
+        (binding) => binding.shaderDefinitionId !== command.payload.shaderDefinitionId
+      )
+    };
+  }
+
+  return applyEnvironmentDefinitionCommand(session, {
+    ...command,
+    kind: "UpdateEnvironmentDefinition",
+    payload: {
+      definitionId: definition.definitionId,
+      definition: nextDefinition
+    }
+  });
 }
 
 function applyUpdatePluginConfigurationCommand(
@@ -942,8 +1475,64 @@ export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
 ): AuthoringSession {
+  if (command.kind === "CreateShaderGraph") {
+    return applyCreateShaderGraphCommand(session, command);
+  }
+
+  if (command.kind === "RenameShaderGraph") {
+    return applyRenameShaderGraphCommand(session, command);
+  }
+
+  if (command.kind === "DeleteShaderGraph") {
+    return applyDeleteShaderGraphCommand(session, command);
+  }
+
+  if (command.kind === "UpdateShaderNode") {
+    return applyUpdateShaderNodeCommand(session, command);
+  }
+
+  if (command.kind === "RemoveShaderNode") {
+    return applyRemoveShaderNodeCommand(session, command);
+  }
+
+  if (command.kind === "AddShaderEdge") {
+    return applyAddShaderEdgeCommand(session, command);
+  }
+
+  if (command.kind === "RemoveShaderEdge") {
+    return applyRemoveShaderEdgeCommand(session, command);
+  }
+
+  if (command.kind === "UpdateShaderParameter") {
+    return applyUpdateShaderParameterCommand(session, command);
+  }
+
+  if (command.kind === "RemoveShaderParameter") {
+    return applyRemoveShaderParameterCommand(session, command);
+  }
+
+  if (command.kind === "SetAssetDefaultShader") {
+    return applySetAssetDefaultShaderCommand(session, command);
+  }
+
   if (command.kind === "UpdateEnvironmentDefinition") {
     return applyEnvironmentDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "AddPostProcessShader") {
+    return applyAddPostProcessShaderCommand(session, command);
+  }
+
+  if (command.kind === "UpdatePostProcessShaderOrder") {
+    return applyUpdatePostProcessShaderOrderCommand(session, command);
+  }
+
+  if (
+    command.kind === "UpdatePostProcessShaderParameter" ||
+    command.kind === "TogglePostProcessShader" ||
+    command.kind === "RemovePostProcessShader"
+  ) {
+    return updatePostProcessBindingOverride(session, command);
   }
 
   if (command.kind === "UpdatePlayerDefinition") {
@@ -1133,9 +1722,15 @@ export function addAssetDefinitionToSession(
 
   const nextDefinitions = [...session.contentLibrary.assetDefinitions];
   if (existingIndex >= 0) {
-    nextDefinitions[existingIndex] = assetDefinition;
+    nextDefinitions[existingIndex] = {
+      ...assetDefinition,
+      defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
+    };
   } else {
-    nextDefinitions.push(assetDefinition);
+    nextDefinitions.push({
+      ...assetDefinition,
+      defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
+    });
   }
 
   return {

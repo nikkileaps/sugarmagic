@@ -23,7 +23,8 @@ import {
   createDefaultDeploymentSettings,
   createDefaultPlayerDefinition,
   createDefaultEnvironmentDefinition,
-  createDefaultRegionLandscapeState
+  createDefaultRegionLandscapeState,
+  createDefaultFoliageWindShaderGraph
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -87,7 +88,8 @@ function makeContentLibrary(): ContentLibrarySnapshot {
         definitionId: "wordlark:environment:default",
         displayName: "Default Environment"
       })
-    ]
+    ],
+    shaderDefinitions: [createDefaultFoliageWindShaderGraph("wordlark")]
   };
 }
 
@@ -97,6 +99,7 @@ function makeAssetDefinition(): AssetDefinition {
     definitionKind: "asset",
     displayName: "Station Building",
     assetKind: "model",
+    defaultShaderDefinitionId: null,
     source: {
       relativeAssetPath: "assets/imported/station-building.glb",
       fileName: "station-building.glb",
@@ -111,6 +114,7 @@ function makeFoliageAssetDefinition(): AssetDefinition {
     definitionKind: "asset",
     displayName: "Stylized Tree",
     assetKind: "foliage",
+    defaultShaderDefinitionId: null,
     source: {
       relativeAssetPath: "assets/imported/stylized-tree.glb",
       fileName: "stylized-tree.glb",

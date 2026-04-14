@@ -1,5 +1,9 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
+import type {
+  ShaderBindingOverride,
+  ShaderParameterOverride
+} from "../shader-graph";
 
 export interface RegionPlacement {
   gridPosition: {
@@ -21,6 +25,8 @@ export interface PlacedAssetInstance {
   displayName: string;
   parentFolderId: string | null;
   inspectable: RegionInspectableBehavior | null;
+  shaderOverride: ShaderBindingOverride | null;
+  shaderParameterOverrides: ShaderParameterOverride[];
   transform: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -42,6 +48,8 @@ export interface RegionPlayerPresence {
 export interface RegionNPCPresence {
   presenceId: string;
   npcDefinitionId: string;
+  shaderOverride: ShaderBindingOverride | null;
+  shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
 
@@ -49,6 +57,8 @@ export interface RegionItemPresence {
   presenceId: string;
   itemDefinitionId: string;
   quantity: number;
+  shaderOverride: ShaderBindingOverride | null;
+  shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
 
@@ -215,6 +225,14 @@ export function createRegionNPCBehaviorId(): string {
   return createScopedId("region-behavior");
 }
 
+function createPlacedAssetInstanceIdValue(): string {
+  return createScopedId("placed-asset");
+}
+
+function createSceneFolderIdValue(): string {
+  return createScopedId("scene-folder");
+}
+
 export function createRegionNPCBehaviorTaskId(): string {
   return createScopedId("region-behavior-task");
 }
@@ -318,6 +336,26 @@ export function createLandscapeChannelId(): string {
   return createScopedId("landscape-channel");
 }
 
+export function createPlacedAssetInstance(
+  overrides: Partial<PlacedAssetInstance> &
+    Pick<PlacedAssetInstance, "assetDefinitionId">,
+): PlacedAssetInstance {
+  return {
+    instanceId: overrides.instanceId ?? createPlacedAssetInstanceIdValue(),
+    assetDefinitionId: overrides.assetDefinitionId,
+    displayName: overrides.displayName ?? "Placed Asset",
+    parentFolderId: overrides.parentFolderId ?? null,
+    inspectable: overrides.inspectable ?? null,
+    shaderOverride: overrides.shaderOverride ?? null,
+    shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
+    transform: {
+      position: overrides.transform?.position ?? [0, 0, 0],
+      rotation: overrides.transform?.rotation ?? [0, 0, 0],
+      scale: overrides.transform?.scale ?? [1, 1, 1]
+    }
+  };
+}
+
 export function createRegionSceneTransform(
   overrides: Partial<RegionSceneTransform> = {}
 ): RegionSceneTransform {
@@ -359,6 +397,8 @@ export function createRegionNPCPresence(
   return {
     presenceId: overrides.presenceId ?? createNPCPresenceId(),
     npcDefinitionId: overrides.npcDefinitionId,
+    shaderOverride: overrides.shaderOverride ?? null,
+    shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };
 }
@@ -371,6 +411,8 @@ export function createRegionItemPresence(
     presenceId: overrides.presenceId ?? createItemPresenceId(),
     itemDefinitionId: overrides.itemDefinitionId,
     quantity: Math.max(1, Math.floor(overrides.quantity ?? 1)),
+    shaderOverride: overrides.shaderOverride ?? null,
+    shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };
 }

@@ -40,6 +40,7 @@ export type CoreDesignWorkspaceKind =
   | "quests";
 
 export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
+export type RenderWorkspaceKind = "shaders" | (string & {});
 
 export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "player",
@@ -86,6 +87,7 @@ export interface ShellState {
   activeProductMode: ProductModeId;
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeDesignWorkspaceKind: DesignWorkspaceKind;
+  activeRenderWorkspaceKind: RenderWorkspaceKind;
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;
@@ -99,6 +101,7 @@ export interface ShellActions {
   setActiveProductMode: (productModeId: ProductModeId) => void;
   setActiveBuildWorkspaceKind: (kind: BuildWorkspaceKind) => void;
   setActiveDesignWorkspaceKind: (kind: DesignWorkspaceKind) => void;
+  setActiveRenderWorkspaceKind: (kind: RenderWorkspaceKind) => void;
   setActiveRegionId: (regionId: string | null) => void;
   setActiveEnvironmentId: (environmentId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
@@ -123,6 +126,12 @@ export function deriveDesignWorkspaceId(
   return `design:${kind}`;
 }
 
+export function deriveRenderWorkspaceId(
+  kind: RenderWorkspaceKind
+): string {
+  return `render:${kind}`;
+}
+
 function getBuildContextId(
   state: Pick<ShellState, "activeBuildWorkspaceKind" | "activeRegionId" | "activeEnvironmentId">,
   kind: BuildWorkspaceKind = state.activeBuildWorkspaceKind
@@ -139,6 +148,7 @@ function deriveWorkspaceIdForMode(
     | "activeProductMode"
     | "activeBuildWorkspaceKind"
     | "activeDesignWorkspaceKind"
+    | "activeRenderWorkspaceKind"
     | "activeRegionId"
     | "activeEnvironmentId"
   >,
@@ -153,6 +163,10 @@ function deriveWorkspaceIdForMode(
       state.activeBuildWorkspaceKind,
       getBuildContextId(state, state.activeBuildWorkspaceKind)
     );
+  }
+
+  if (productModeId === "render") {
+    return deriveRenderWorkspaceId(state.activeRenderWorkspaceKind);
   }
 
   return null;
@@ -174,12 +188,15 @@ export function createShellStore(
   const initialWorkspaceId =
     initialProductMode === "design"
       ? deriveDesignWorkspaceId("player")
+      : initialProductMode === "render"
+        ? deriveRenderWorkspaceId("shaders")
       : null;
 
   return createStore<ShellState & ShellActions>()((set, get) => ({
     activeProductMode: initialProductMode,
     activeBuildWorkspaceKind: "layout" as BuildWorkspaceKind,
     activeDesignWorkspaceKind: "player" as DesignWorkspaceKind,
+    activeRenderWorkspaceKind: "shaders" as RenderWorkspaceKind,
     activeRegionId: null,
     activeEnvironmentId: null,
     activeWorkspaceId: initialWorkspaceId,
@@ -264,6 +281,31 @@ export function createShellStore(
             : state.selection,
         toolSession:
           state.activeProductMode === "design"
+            ? { workspaceId, toolId: null, isActive: false }
+            : state.toolSession
+      }));
+    },
+    setActiveRenderWorkspaceKind: (kind) => {
+      const workspaceId = deriveRenderWorkspaceId(kind);
+      set((state) => ({
+        activeRenderWorkspaceKind: kind,
+        activeWorkspaceId:
+          state.activeProductMode === "render"
+            ? workspaceId
+            : state.activeWorkspaceId,
+        navigation: {
+          ...state.navigation,
+          activeWorkspaceId:
+            state.activeProductMode === "render"
+              ? workspaceId
+              : state.navigation.activeWorkspaceId
+        },
+        selection:
+          state.activeProductMode === "render"
+            ? { workspaceId, entityIds: [] }
+            : state.selection,
+        toolSession:
+          state.activeProductMode === "render"
             ? { workspaceId, toolId: null, isActive: false }
             : state.toolSession
       }));

@@ -6,6 +6,8 @@ import { createRuntimeRenderGraph } from "./graph";
 
 export interface RuntimeRenderPipeline {
   applyEnvironment: (definition: EnvironmentDefinition | null) => EnvironmentSceneWarning[];
+  getBaseOutputNode: () => unknown | null;
+  setPostProcessOutputNode: (node: unknown | null) => void;
   render: () => void;
   resize: (width: number, height: number) => void;
   setCamera: (camera: THREE.Camera) => void;
@@ -24,6 +26,12 @@ export function createRuntimeRenderPipeline(options: {
   return {
     applyEnvironment(definition) {
       return graph.applyEnvironment(definition);
+    },
+    getBaseOutputNode() {
+      return graph.getBaseOutputNode();
+    },
+    setPostProcessOutputNode(node) {
+      graph.setPostProcessOutputNode(node);
     },
     render() {
       if (!graph.pipeline) {

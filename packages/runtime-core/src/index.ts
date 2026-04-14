@@ -28,6 +28,7 @@ export * from "./scene";
 export * from "./state";
 export * from "./spatial";
 export * from "./streaming";
+export * from "./shader";
 export * from "./vfx";
 
 export type RuntimeHostKind = "studio" | "published-web";

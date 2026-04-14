@@ -96,6 +96,9 @@ importers:
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../../packages/productmodes
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../../packages/render-web
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core
@@ -146,6 +149,18 @@ importers:
 
   packages/productmodes: {}
 
+  packages/render-web:
+    dependencies:
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@sugarmagic/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
+
   packages/runtime-core:
     dependencies:
       '@sugarmagic/domain':
@@ -184,6 +199,9 @@ importers:
       '@sugarmagic/productmodes':
         specifier: workspace:*
         version: link:../productmodes
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../render-web
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core
@@ -244,6 +262,9 @@ importers:
       '@sugarmagic/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../../packages/render-web
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core

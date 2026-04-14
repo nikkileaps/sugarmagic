@@ -280,6 +280,7 @@ export async function importSourceAsset(
       definitionKind: "asset",
       displayName: stem,
       assetKind: analysis.assetKind,
+      defaultShaderDefinitionId: null,
       source: {
         relativeAssetPath,
         fileName: sourceFile.name,

@@ -2,6 +2,11 @@ import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
+  ShaderRuntime,
+  applyShaderToRenderable,
+  releaseShadersFromObjectTree
+} from "@sugarmagic/render-web";
+import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -27,6 +32,7 @@ const gltfLoader = new GLTFLoader();
 interface SceneObjectEntry {
   root: THREE.Group;
   assetSourceUrl: string | null;
+  representationKey: string;
 }
 
 interface LandscapeGridSpec {
@@ -120,22 +126,28 @@ function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
 }
 
 function disposeObject(root: THREE.Object3D) {
+  const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.geometry.dispose();
     if (Array.isArray(child.material)) {
       for (const material of child.material) {
-        material.dispose();
+        if (!runtimeManagedMaterials.has(material)) {
+          material.dispose();
+        }
       }
     } else {
-      child.material.dispose();
+      if (!runtimeManagedMaterials.has(child.material)) {
+        child.material.dispose();
+      }
     }
   });
 }
 
 async function createRenderableRoot(
   object: SceneObject,
-  assetSources: Record<string, string>
+  assetSources: Record<string, string>,
+  shaderRuntime: ShaderRuntime | null
 ): Promise<SceneObjectEntry> {
   const root = new THREE.Group();
   root.name = object.instanceId;
@@ -146,7 +158,7 @@ async function createRenderableRoot(
 
   if (!assetSourceUrl) {
     root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
-    return { root, assetSourceUrl: null };
+    return { root, assetSourceUrl: null, representationKey: object.representationKey };
   }
 
   try {
@@ -155,11 +167,12 @@ async function createRenderableRoot(
     if (object.targetModelHeight) {
       normalizeModelScale(renderable, object.targetModelHeight);
     }
+    applyShaderToRenderable(renderable, object, shaderRuntime);
     root.add(renderable);
-    return { root, assetSourceUrl };
+    return { root, assetSourceUrl, representationKey: object.representationKey };
   } catch {
     root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
-    return { root, assetSourceUrl };
+    return { root, assetSourceUrl, representationKey: object.representationKey };
   }
 }
 
@@ -204,6 +217,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
   let container: HTMLElement | null = null;
   let renderGeneration = 0;
   let mountGeneration = 0;
+  let shaderRuntime: ShaderRuntime | null = null;
 
   function syncCameraProjection(width: number, height: number) {
     const safeWidth = Math.max(1, width);
@@ -329,6 +343,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
       landscapeController.dispose();
       renderPipeline?.dispose();
       renderPipeline = null;
+      shaderRuntime?.dispose();
+      shaderRuntime = null;
 
       if (container && renderer?.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -349,6 +365,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
         assetSources,
         environmentOverrideId = null
       } = state;
+      shaderRuntime?.dispose();
+      shaderRuntime = new ShaderRuntime({
+        contentLibrary,
+        compileProfile: "authoring-preview",
+        logger: {
+          warn(message: string, payload?: Record<string, unknown>) {
+            console.warn("[studio-authoring] shader-runtime", { message, ...(payload ?? {}) });
+          }
+        }
+      });
       environmentController.apply(region, contentLibrary, environmentOverrideId);
       landscapeController.apply(region);
       syncLandscapeGrid(region.landscape);
@@ -374,7 +400,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
       }
 
       for (const object of delta.added) {
-        void createRenderableRoot(object, assetSources).then((entry) => {
+        void createRenderableRoot(object, assetSources, shaderRuntime).then((entry) => {
           if (generation !== renderGeneration) {
             disposeObject(entry.root);
             return;
@@ -389,7 +415,11 @@ export function createAuthoringViewport(): WorkspaceViewport {
         const nextAssetSourceUrl = object.modelSourcePath
           ? assetSources[object.modelSourcePath] ?? null
           : null;
-        if (existing && existing.assetSourceUrl === nextAssetSourceUrl) {
+        if (
+          existing &&
+          existing.assetSourceUrl === nextAssetSourceUrl &&
+          existing.representationKey === object.representationKey
+        ) {
           applyObjectTransform(existing.root, object);
           continue;
         }
@@ -399,7 +429,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
           objectMap.delete(object.instanceId);
         }
 
-        void createRenderableRoot(object, assetSources).then((entry) => {
+        void createRenderableRoot(object, assetSources, shaderRuntime).then((entry) => {
           if (generation !== renderGeneration) {
             disposeObject(entry.root);
             return;
@@ -419,7 +449,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
           disposeObject(entry.root);
           objectMap.delete(object.instanceId);
 
-          void createRenderableRoot(object, assetSources).then((nextEntry) => {
+          void createRenderableRoot(object, assetSources, shaderRuntime).then((nextEntry) => {
             if (generation !== renderGeneration) {
               disposeObject(nextEntry.root);
               return;
