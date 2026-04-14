@@ -11,6 +11,11 @@ import {
   type RegionNPCPresence,
   type RegionPlayerPresence
 } from "@sugarmagic/domain";
+import type { EffectiveShaderBinding } from "../shader";
+import {
+  resolveEffectiveAssetShaderBinding,
+  resolveEffectivePresenceShaderBinding
+} from "../shader";
 
 /**
  * Platform-agnostic scene loading semantics.
@@ -55,6 +60,7 @@ export interface SceneObject {
   assetKind: AssetKind | null;
   modelSourcePath: string | null;
   targetModelHeight: number | null;
+  effectiveShader: EffectiveShaderBinding | null;
   transform: SceneObjectTransform;
   representationKey: string;
   capsule: SceneObjectCapsuleSpec | null;
@@ -182,12 +188,15 @@ function createPlacedAssetSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: null,
+    effectiveShader: contentLibrary
+      ? resolveEffectiveAssetShaderBinding(asset, contentLibrary)
+      : null,
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
       scale: asset.transform.scale
     },
-    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}`,
+    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${asset.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${asset.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
     capsule: null
   };
 }
@@ -216,6 +225,7 @@ function createPlayerSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
+    effectiveShader: null,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
@@ -251,12 +261,15 @@ function createNPCSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
+    effectiveShader: contentLibrary
+      ? resolveEffectivePresenceShaderBinding(presence, assetDescriptor.definition, contentLibrary)
+      : null,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}`,
+    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${presence.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${presence.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
     capsule: {
       height,
       radius,
@@ -285,12 +298,15 @@ function createItemSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
+    effectiveShader: contentLibrary
+      ? resolveEffectivePresenceShaderBinding(presence, assetDescriptor.definition, contentLibrary)
+      : null,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}`,
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${presence.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${presence.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
     capsule: null
   };
 }
@@ -298,14 +314,19 @@ function createItemSceneObject(
 function getAssetSourceDescriptor(
   assetDefinitionId: string | null | undefined,
   contentLibrary?: ContentLibrarySnapshot
-): { sourcePath: string | null; assetKind: AssetKind | null } {
+): {
+  sourcePath: string | null;
+  assetKind: AssetKind | null;
+  definition: ReturnType<typeof getAssetDefinition>;
+} {
   if (!assetDefinitionId || !contentLibrary) {
-    return { sourcePath: null, assetKind: null };
+    return { sourcePath: null, assetKind: null, definition: null };
   }
 
   const definition = getAssetDefinition(contentLibrary, assetDefinitionId);
   return {
     sourcePath: definition?.source.relativeAssetPath ?? null,
-    assetKind: definition?.assetKind ?? null
+    assetKind: definition?.assetKind ?? null,
+    definition
   };
 }

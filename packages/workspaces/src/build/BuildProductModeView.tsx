@@ -16,6 +16,7 @@ import type {
   EnvironmentDefinition,
   NPCDefinition,
   QuestDefinition,
+  ShaderGraphDocument,
   RegionDocument
 } from "@sugarmagic/domain";
 import {
@@ -61,6 +62,7 @@ export interface BuildProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
+  shaderDefinitions: ShaderGraphDocument[];
   npcDefinitions: NPCDefinition[];
   questDefinitions: QuestDefinition[];
   getViewport: () => WorkspaceViewport | null;
@@ -78,6 +80,10 @@ export interface BuildProductModeViewProps {
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  onSetAssetDefaultShader: (
+    definitionId: string,
+    shaderDefinitionId: string | null
+  ) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   renderLayoutInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
@@ -106,6 +112,7 @@ export function useBuildProductModeView(
     assetDefinitions,
     documentDefinitions,
     environmentDefinitions,
+    shaderDefinitions,
     npcDefinitions,
     questDefinitions,
     getViewport,
@@ -123,6 +130,7 @@ export function useBuildProductModeView(
     onNavigateToTarget,
     onImportAsset,
     onUpdateAssetDefinition,
+    onSetAssetDefaultShader,
     onRemoveAssetDefinition,
     renderLayoutInspectorSections
   } = props;
@@ -184,6 +192,7 @@ export function useBuildProductModeView(
   const environmentView = useEnvironmentWorkspaceView({
     selectedEnvironment,
     boundRegionNames,
+    shaderDefinitions,
     onSelectLightingPreset: (preset) => {
       if (!selectedEnvironment) return;
       onCommand({
@@ -202,6 +211,66 @@ export function useBuildProductModeView(
             selectedEnvironment,
             preset
           )
+        }
+      });
+    },
+    onAddPostProcessShader: (shaderDefinitionId) => {
+      if (!selectedEnvironment) return;
+      onCommand({
+        kind: "AddPostProcessShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: selectedEnvironment.definitionId
+        },
+        subject: {
+          subjectKind: "environment-definition",
+          subjectId: selectedEnvironment.definitionId
+        },
+        payload: {
+          environmentDefinitionId: selectedEnvironment.definitionId,
+          binding: {
+            shaderDefinitionId,
+            order: selectedEnvironment.postProcessShaders.length,
+            enabled: true,
+            parameterOverrides: []
+          }
+        }
+      });
+    },
+    onTogglePostProcessShader: (shaderDefinitionId, enabled) => {
+      if (!selectedEnvironment) return;
+      onCommand({
+        kind: "TogglePostProcessShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: selectedEnvironment.definitionId
+        },
+        subject: {
+          subjectKind: "environment-definition",
+          subjectId: selectedEnvironment.definitionId
+        },
+        payload: {
+          environmentDefinitionId: selectedEnvironment.definitionId,
+          shaderDefinitionId,
+          enabled
+        }
+      });
+    },
+    onRemovePostProcessShader: (shaderDefinitionId) => {
+      if (!selectedEnvironment) return;
+      onCommand({
+        kind: "RemovePostProcessShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: selectedEnvironment.definitionId
+        },
+        subject: {
+          subjectKind: "environment-definition",
+          subjectId: selectedEnvironment.definitionId
+        },
+        payload: {
+          environmentDefinitionId: selectedEnvironment.definitionId,
+          shaderDefinitionId
         }
       });
     }
@@ -240,6 +309,7 @@ export function useBuildProductModeView(
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
+    shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
     onImportAsset,
@@ -269,6 +339,7 @@ export function useBuildProductModeView(
       onSelectKind("layout");
     },
     onUpdateAssetDefinition,
+    onSetAssetDefaultShader,
     onRemoveAssetDefinition,
     hasSceneReferences: (definitionId) =>
       session

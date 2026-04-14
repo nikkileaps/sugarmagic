@@ -491,7 +491,8 @@ export function useDialogueWorkspaceView(
   } | null>(null);
   const [isPlaytesting, setIsPlaytesting] = useState(false);
   const [playtestNodeId, setPlaytestNodeId] = useState<string | null>(null);
-  const graphContainerRef = useRef<HTMLDivElement | null>(null);
+  const [graphContainerElement, setGraphContainerElement] =
+    useState<HTMLDivElement | null>(null);
   const graphCanvasRef = useRef<GraphCanvas | null>(null);
   const selectedDialogueRef = useRef<DialogueDefinition | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
@@ -709,7 +710,7 @@ export function useDialogueWorkspaceView(
   }, [playtestNodeId]);
 
   useEffect(() => {
-    if (!isActive || !graphContainerRef.current || !selectedDialogueRef.current) return;
+    if (!isActive || !graphContainerElement || !selectedDialogueRef.current) return;
 
     const graphCanvas = new GraphCanvas({
       onNodeSelect: (nodeId) => setSelectedNodeId(nodeId),
@@ -889,8 +890,8 @@ export function useDialogueWorkspaceView(
       }
     });
 
-    graphContainerRef.current.innerHTML = "";
-    graphContainerRef.current.appendChild(graphCanvas.getElement());
+    graphContainerElement.innerHTML = "";
+    graphContainerElement.appendChild(graphCanvas.getElement());
     graphCanvasRef.current = graphCanvas;
     updateGraphCanvas();
     window.setTimeout(() => graphCanvas.fitToContent(), 100);
@@ -900,6 +901,7 @@ export function useDialogueWorkspaceView(
       graphCanvasRef.current = null;
     };
   }, [
+    graphContainerElement,
     isActive,
     resolveSpeakerName,
     selectedDialogue?.definitionId,
@@ -1352,7 +1354,7 @@ export function useDialogueWorkspaceView(
 
           <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
             <div
-              ref={graphContainerRef}
+              ref={setGraphContainerElement}
               style={{ position: "absolute", inset: 0, overflow: "hidden" }}
             />
             {isPlaytesting && playtestNodeId && (

@@ -4,7 +4,7 @@ export const renderProductMode: ProductModeDescriptor = {
   id: "render",
   label: "Render",
   summary: "Author presentation, VFX, and polish-oriented runtime-facing output.",
-  workspaceKinds: ["VfxWorkspace", "PresentationWorkspace"],
+  workspaceKinds: ["shaders"],
   commandSurfaceId: "render-command-surface",
   panelLayoutId: "render-panel-layout"
 };

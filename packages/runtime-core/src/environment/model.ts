@@ -2,6 +2,7 @@ import type {
   ContentLibrarySnapshot,
   EnvironmentDefinition,
   LightingPreset,
+  PostProcessShaderBinding,
   RegionDocument
 } from "@sugarmagic/domain";
 import {
@@ -26,6 +27,11 @@ export interface EnvironmentApplyResult {
   definitionId: string | null;
   preset: LightingPreset | null;
   warnings: EnvironmentSceneWarning[];
+}
+
+export interface ResolvedEnvironmentDefinition {
+  definition: EnvironmentDefinition | null;
+  effectivePostProcessChain: PostProcessShaderBinding[];
 }
 
 const LIGHTING_PRESET_LABELS: Record<LightingPreset, string> = {
@@ -87,4 +93,22 @@ export function resolveEnvironmentDefinition(
   }
 
   return contentLibrary.environmentDefinitions[0] ?? null;
+}
+
+export function resolveEnvironmentWithPostProcessChain(
+  region: RegionDocument | null,
+  contentLibrary: ContentLibrarySnapshot,
+  overrideEnvironmentId: string | null = null
+): ResolvedEnvironmentDefinition {
+  const definition = resolveEnvironmentDefinition(
+    region,
+    contentLibrary,
+    overrideEnvironmentId
+  );
+  return {
+    definition,
+    effectivePostProcessChain: [...(definition?.postProcessShaders ?? [])]
+      .filter((binding) => binding.enabled)
+      .sort((a, b) => a.order - b.order)
+  };
 }

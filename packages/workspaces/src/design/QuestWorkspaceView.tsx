@@ -572,7 +572,8 @@ export function useQuestWorkspaceView({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [contextMenuQuestId, setContextMenuQuestId] = useState<string | null>(null);
 
-  const graphContainerRef = useRef<HTMLDivElement | null>(null);
+  const [graphContainerElement, setGraphContainerElement] =
+    useState<HTMLDivElement | null>(null);
   const graphCanvasRef = useRef<GraphCanvas | null>(null);
   const selectedQuestRef = useRef<QuestDefinition | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
@@ -748,7 +749,7 @@ export function useQuestWorkspaceView({
   }, [graphStageId]);
 
   useEffect(() => {
-    if (!isActive || !graphContainerRef.current || !selectedStage) return;
+    if (!isActive || !graphContainerElement || !selectedStage) return;
 
     const graphCanvas = new GraphCanvas({
       onNodeSelect: (nodeId) => setSelectedNodeId(nodeId),
@@ -822,8 +823,8 @@ export function useQuestWorkspaceView({
       }
     });
 
-    graphContainerRef.current.innerHTML = "";
-    graphContainerRef.current.appendChild(graphCanvas.getElement());
+    graphContainerElement.innerHTML = "";
+    graphContainerElement.appendChild(graphCanvas.getElement());
     graphCanvasRef.current = graphCanvas;
     updateGraphCanvas();
     window.setTimeout(() => graphCanvas.fitToContent(), 100);
@@ -832,7 +833,15 @@ export function useQuestWorkspaceView({
       graphCanvas.dispose();
       graphCanvasRef.current = null;
     };
-  }, [graphStageId, isActive, selectedStage, updateGraphCanvas, updateNode, updateStage]);
+  }, [
+    graphContainerElement,
+    graphStageId,
+    isActive,
+    selectedStage,
+    updateGraphCanvas,
+    updateNode,
+    updateStage
+  ]);
 
   useEffect(() => {
     if (!isActive || !selectedStage) return;
@@ -989,7 +998,7 @@ export function useQuestWorkspaceView({
             </Button>
           </Group>
         </Group>
-        <Box ref={graphContainerRef} style={{ flex: 1, minHeight: 0 }} />
+        <Box ref={setGraphContainerElement} style={{ flex: 1, minHeight: 0 }} />
       </Stack>
     ) : (
       <Stack gap={0} h="100%" style={{ minHeight: 0 }}>

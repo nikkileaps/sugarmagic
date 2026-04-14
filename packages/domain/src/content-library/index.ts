@@ -3,11 +3,19 @@
  *
  * Owns the canonical asset and environment definitions stored in the project
  * content library. This is the one authored source of truth for imported
- * reusable assets, including both generic models and specialized foliage.
+ * reusable assets, render environments, and reusable shader graph documents.
  */
 
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
+import type {
+  PostProcessShaderBinding,
+  ShaderGraphDocument
+} from "../shader-graph";
+import {
+  createDefaultFoliageTintShaderGraph,
+  createDefaultFoliageWindShaderGraph
+} from "../shader-graph";
 
 export type ContentDefinitionKind =
   | "asset"
@@ -19,7 +27,8 @@ export type ContentDefinitionKind =
   | "inspection"
   | "resonance-point"
   | "vfx"
-  | "environment";
+  | "environment"
+  | "shader";
 
 export interface ContentDefinitionReference {
   definitionId: string;
@@ -33,6 +42,7 @@ export interface AssetDefinition {
   definitionKind: "asset";
   displayName: string;
   assetKind: AssetKind;
+  defaultShaderDefinitionId: string | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -102,6 +112,7 @@ export interface EnvironmentDefinition {
   definitionId: string;
   definitionKind: "environment";
   displayName: string;
+  postProcessShaders: PostProcessShaderBinding[];
   lighting: {
     preset: LightingPreset;
     adjustments: LightingAdjustments;
@@ -122,6 +133,7 @@ export interface ContentLibrarySnapshot {
   identity: DocumentIdentity;
   assetDefinitions: AssetDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
+  shaderDefinitions: ShaderGraphDocument[];
 }
 
 export const DEFAULT_LIGHTING_ADJUSTMENTS: LightingAdjustments = {
@@ -204,6 +216,7 @@ export function createDefaultEnvironmentDefinition(
     definitionId: options.definitionId ?? createEnvironmentDefinitionId(projectId),
     definitionKind: "environment",
     displayName: options.displayName ?? "Default Environment",
+    postProcessShaders: [],
     lighting: {
       preset,
       adjustments: { ...DEFAULT_LIGHTING_ADJUSTMENTS }
@@ -231,6 +244,7 @@ export function createDefaultEnvironmentDefinition(
 export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
+  const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
   return {
     identity: {
       id: `${projectId}:content-library`,
@@ -244,7 +258,8 @@ export function createEmptyContentLibrarySnapshot(
         displayName: "Default Environment",
         preset: "default"
       })
-    ]
+    ],
+    shaderDefinitions: builtInShaderDefinitions
   };
 }
 
@@ -252,6 +267,7 @@ export function normalizeContentLibrarySnapshot(
   contentLibrary: ContentLibrarySnapshot,
   projectId: string
 ): ContentLibrarySnapshot {
+  const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
   const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions?.length
     ? [...contentLibrary.environmentDefinitions]
     : [
@@ -264,9 +280,63 @@ export function normalizeContentLibrarySnapshot(
 
   return {
     identity: contentLibrary.identity,
-    assetDefinitions: [...contentLibrary.assetDefinitions],
-    environmentDefinitions: nextEnvironmentDefinitions
+    assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
+      ...definition,
+      defaultShaderDefinitionId: definition.defaultShaderDefinitionId ?? null
+    })),
+    environmentDefinitions: nextEnvironmentDefinitions.map((definition) => ({
+      ...definition,
+      postProcessShaders: [...(definition.postProcessShaders ?? [])]
+    })),
+    shaderDefinitions:
+      contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
+        ? mergeBuiltInShaderDefinitions(
+            contentLibrary.shaderDefinitions.map((definition) => ({
+            ...definition,
+            nodes: definition.nodes.map((node) => ({
+              ...node,
+              settings: { ...node.settings }
+            })),
+            edges: [...definition.edges],
+            parameters: [...definition.parameters],
+            metadata: { ...definition.metadata }
+          })),
+            builtInShaderDefinitions
+          )
+        : builtInShaderDefinitions
   };
+}
+
+function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
+  return [
+    createDefaultFoliageWindShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-wind`,
+      displayName: "Foliage Wind"
+    }),
+    createDefaultFoliageTintShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-tint`,
+      displayName: "Foliage Tint"
+    })
+  ];
+}
+
+function mergeBuiltInShaderDefinitions(
+  authoredDefinitions: ShaderGraphDocument[],
+  builtInDefinitions: ShaderGraphDocument[]
+): ShaderGraphDocument[] {
+  const nextDefinitions = [...authoredDefinitions];
+  for (const builtInDefinition of builtInDefinitions) {
+    if (
+      nextDefinitions.some(
+        (definition) =>
+          definition.shaderDefinitionId === builtInDefinition.shaderDefinitionId
+      )
+    ) {
+      continue;
+    }
+    nextDefinitions.push(builtInDefinition);
+  }
+  return nextDefinitions;
 }
 
 export function getAssetDefinition(
@@ -301,4 +371,21 @@ export function listEnvironmentDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): EnvironmentDefinition[] {
   return [...contentLibrary.environmentDefinitions];
+}
+
+export function getShaderDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  shaderDefinitionId: string
+): ShaderGraphDocument | null {
+  return (
+    contentLibrary.shaderDefinitions.find(
+      (definition) => definition.shaderDefinitionId === shaderDefinitionId
+    ) ?? null
+  );
+}
+
+export function listShaderDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): ShaderGraphDocument[] {
+  return [...contentLibrary.shaderDefinitions];
 }

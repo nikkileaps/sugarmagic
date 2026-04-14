@@ -25,6 +25,7 @@ import {
   getAllEnvironmentDefinitions,
   getAllItemDefinitions,
   getAllNPCDefinitions,
+  getAllShaderDefinitions,
   getAllPluginConfigurations,
   getPluginConfiguration,
   getAllQuestDefinitions,
@@ -70,6 +71,7 @@ import {
 import {
   useBuildProductModeView,
   useDesignProductModeView,
+  useRenderProductModeView,
   type ItemWorkspaceViewport,
   type NPCWorkspaceViewport,
   type WorkspaceNavigationTarget,
@@ -350,6 +352,7 @@ function handleStartPreview(
     activeProductMode: shell.activeProductMode,
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+    activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
     activeRegionId: shell.activeRegionId,
     activeEnvironmentId: shell.activeEnvironmentId,
     activeWorkspaceId: shell.activeWorkspaceId,
@@ -432,6 +435,9 @@ function handleStopPreview() {
   if (snapshot.activeProductMode === "design") {
     shell.setActiveDesignWorkspaceKind(snapshot.activeDesignWorkspaceKind);
   }
+  if (snapshot.activeProductMode === "render") {
+    shell.setActiveRenderWorkspaceKind(snapshot.activeRenderWorkspaceKind);
+  }
   if (snapshot.activeRegionId) {
     shell.setActiveRegionId(snapshot.activeRegionId);
   }
@@ -446,6 +452,7 @@ export function App() {
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
   const activeBuildKind = useStore(shellStore, (s) => s.activeBuildWorkspaceKind);
   const activeDesignKind = useStore(shellStore, (s) => s.activeDesignWorkspaceKind);
+  const activeRenderKind = useStore(shellStore, (s) => s.activeRenderWorkspaceKind);
   const activeRegionId = useStore(shellStore, (s) => s.activeRegionId);
   const activeEnvironmentId = useStore(shellStore, (s) => s.activeEnvironmentId);
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
@@ -458,6 +465,7 @@ export function App() {
   const undoCount = session?.undoStack.length ?? 0;
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
+  const isRender = activeProductMode === "render";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
 
   const regions = useMemo(() => {
@@ -527,6 +535,34 @@ export function App() {
     if (!session) return [];
     return getAllEnvironmentDefinitions(session);
   }, [session]);
+
+  const shaderDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllShaderDefinitions(session);
+  }, [session]);
+
+  useEffect(() => {
+    if (phase !== "active") {
+      return;
+    }
+    console.warn("[studio-app] project-state", {
+      phase,
+      hasSession: session !== null,
+      activeProductMode,
+      activeRenderKind,
+      shaderDefinitionCount: shaderDefinitions.length,
+      environmentDefinitionCount: environmentDefinitions.length,
+      assetDefinitionCount: assetDefinitions.length
+    });
+  }, [
+    activeProductMode,
+    activeRenderKind,
+    assetDefinitions.length,
+    environmentDefinitions.length,
+    phase,
+    session,
+    shaderDefinitions.length
+  ]);
 
   const playerDefinition = useMemo(() => {
     if (!session) return null;
@@ -857,8 +893,9 @@ export function App() {
   useEffect(() => {
     if (phase !== "active") return;
     if (
-      activeProductMode === "design" &&
-      !designWorkspaceRequiresViewport(activeDesignKind)
+      activeProductMode === "render" ||
+      (activeProductMode === "design" &&
+        !designWorkspaceRequiresViewport(activeDesignKind))
     ) {
       buildViewportRef.current = null;
       playerViewportRef.current = null;
@@ -958,6 +995,7 @@ export function App() {
     assetDefinitions,
     documentDefinitions,
     environmentDefinitions,
+    shaderDefinitions,
     npcDefinitions,
     questDefinitions,
     getViewport: () => buildViewportRef.current,
@@ -976,6 +1014,22 @@ export function App() {
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
+    onSetAssetDefaultShader: (definitionId, shaderDefinitionId) =>
+      dispatchCommand({
+        kind: "SetAssetDefaultShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          shaderDefinitionId: shaderDefinitionId ?? null
+        }
+      }),
     onRemoveAssetDefinition: handleRemoveAssetDefinition,
     renderLayoutInspectorSections: ({ activeRegion: layoutRegion }) =>
       renderPluginSectionGroup(
@@ -1062,6 +1116,13 @@ export function App() {
           selectedQuestNode
         }
       )
+  });
+  const renderView = useRenderProductModeView({
+    activeRenderKind,
+    gameProjectId: session?.gameProject.identity.id ?? null,
+    shaderDefinitions,
+    onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
+    onCommand: dispatchCommand
   });
   const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
     activeDesignKind
@@ -1350,14 +1411,28 @@ export function App() {
               ? buildView.subHeaderPanel
               : isDesign
                 ? designView.subHeaderPanel
+                : isRender
+                  ? renderView.subHeaderPanel
                 : undefined
             : undefined
         }
         leftPanel={
-          isBuild ? buildView.leftPanel : isDesign ? activeDesignPanels.leftPanel : null
+          isBuild
+            ? buildView.leftPanel
+            : isDesign
+              ? activeDesignPanels.leftPanel
+              : isRender
+                ? renderView.leftPanel
+                : null
         }
         rightPanel={
-          isBuild ? buildView.rightPanel : isDesign ? activeDesignPanels.rightPanel : undefined
+          isBuild
+            ? buildView.rightPanel
+            : isDesign
+              ? activeDesignPanels.rightPanel
+              : isRender
+                ? renderView.rightPanel
+                : undefined
         }
         bottomPanel={
           <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
@@ -1367,6 +1442,8 @@ export function App() {
             buildView.centerPanel
           ) : phase === "active" && isDesign && activeDesignPanels.centerPanel ? (
             activeDesignPanels.centerPanel
+          ) : phase === "active" && isRender && renderView.centerPanel ? (
+            renderView.centerPanel
           ) : (
             <ViewportFrame>
               {phase === "active" ? (
@@ -1374,6 +1451,7 @@ export function App() {
                   <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
                   {isBuild && buildView.viewportOverlay}
                   {isDesign && activeDesignPanels.viewportOverlay}
+                  {isRender && renderView.viewportOverlay}
                 </>
               ) : (
                 <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>

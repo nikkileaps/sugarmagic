@@ -3,6 +3,7 @@ import type { RegionDocument } from "@sugarmagic/domain";
 import {
   createDefaultEnvironmentDefinition,
   createDefaultDeploymentSettings,
+  createDefaultFoliageWindShaderGraph,
   createDefaultNPCDefinition,
   createDefaultPlayerDefinition,
   createAuthoringSession,
@@ -69,7 +70,8 @@ describe("layout scene presences", () => {
           createDefaultEnvironmentDefinition("project", {
             definitionId: "project:environment:default"
           })
-        ]
+        ],
+        shaderDefinitions: [createDefaultFoliageWindShaderGraph("project")]
       }
     );
 
@@ -143,6 +145,8 @@ describe("layout scene presences", () => {
           {
             presenceId: "npc-presence-1",
             npcDefinitionId: npcDefinition.definitionId,
+            shaderOverride: null,
+            shaderParameterOverrides: [],
             transform: {
               position: [3, 0, -2],
               rotation: [0, 0, 0],

@@ -57,8 +57,18 @@ import type {
   AssignPlacedAssetInspectableCommand,
   UpdatePlacedAssetInspectableCommand,
   RemovePlacedAssetInspectableCommand,
-  UpdateRegionMetadataCommand
+  UpdateRegionMetadataCommand,
+  SetPlacedAssetShaderOverrideCommand,
+  SetPlacedAssetShaderParameterOverrideCommand,
+  ClearPlacedAssetShaderParameterOverrideCommand,
+  SetNPCPresenceShaderOverrideCommand,
+  SetNPCPresenceShaderParameterOverrideCommand,
+  ClearNPCPresenceShaderParameterOverrideCommand,
+  SetItemPresenceShaderOverrideCommand,
+  SetItemPresenceShaderParameterOverrideCommand,
+  ClearItemPresenceShaderParameterOverrideCommand
 } from "./index";
+import type { ShaderParameterOverride } from "../shader-graph";
 
 export interface CommandExecutionResult {
   region: RegionDocument;
@@ -127,6 +137,8 @@ function createPlacedAssetFromCommand(
     displayName: command.payload.displayName,
     parentFolderId: command.payload.parentFolderId,
     inspectable: null,
+    shaderOverride: null,
+    shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
       rotation: command.payload.rotation,
@@ -385,6 +397,8 @@ function createNPCPresenceFromCommand(
   return {
     presenceId: command.payload.presenceId,
     npcDefinitionId: command.payload.npcDefinitionId,
+    shaderOverride: null,
+    shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
       rotation: command.payload.rotation,
@@ -400,10 +414,229 @@ function createItemPresenceFromCommand(
     presenceId: command.payload.presenceId,
     itemDefinitionId: command.payload.itemDefinitionId,
     quantity: Math.max(1, Math.floor(command.payload.quantity)),
+    shaderOverride: null,
+    shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
       rotation: command.payload.rotation,
       scale: command.payload.scale
+    }
+  };
+}
+
+function upsertShaderParameterOverride(
+  overrides: ShaderParameterOverride[],
+  nextOverride: ShaderParameterOverride
+): ShaderParameterOverride[] {
+  const index = overrides.findIndex(
+    (override) => override.parameterId === nextOverride.parameterId
+  );
+  if (index < 0) {
+    return [...overrides, nextOverride];
+  }
+
+  const next = [...overrides];
+  next[index] = nextOverride;
+  return next;
+}
+
+function applySetPlacedAssetShaderOverride(
+  region: RegionDocument,
+  command: SetPlacedAssetShaderOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              shaderOverride: command.payload.shaderDefinitionId
+                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
+                : null
+            }
+          : asset
+      )
+    }
+  };
+}
+
+function applySetPlacedAssetShaderParameterOverride(
+  region: RegionDocument,
+  command: SetPlacedAssetShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              shaderParameterOverrides: upsertShaderParameterOverride(
+                asset.shaderParameterOverrides,
+                command.payload.override
+              )
+            }
+          : asset
+      )
+    }
+  };
+}
+
+function applyClearPlacedAssetShaderParameterOverride(
+  region: RegionDocument,
+  command: ClearPlacedAssetShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      placedAssets: region.scene.placedAssets.map((asset) =>
+        asset.instanceId === command.payload.instanceId
+          ? {
+              ...asset,
+              shaderParameterOverrides: asset.shaderParameterOverrides.filter(
+                (override) => override.parameterId !== command.payload.parameterId
+              )
+            }
+          : asset
+      )
+    }
+  };
+}
+
+function applySetNPCPresenceShaderOverride(
+  region: RegionDocument,
+  command: SetNPCPresenceShaderOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: region.scene.npcPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderOverride: command.payload.shaderDefinitionId
+                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
+                : null
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applySetNPCPresenceShaderParameterOverride(
+  region: RegionDocument,
+  command: SetNPCPresenceShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: region.scene.npcPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderParameterOverrides: upsertShaderParameterOverride(
+                presence.shaderParameterOverrides,
+                command.payload.override
+              )
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applyClearNPCPresenceShaderParameterOverride(
+  region: RegionDocument,
+  command: ClearNPCPresenceShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      npcPresences: region.scene.npcPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderParameterOverrides: presence.shaderParameterOverrides.filter(
+                (override) => override.parameterId !== command.payload.parameterId
+              )
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applySetItemPresenceShaderOverride(
+  region: RegionDocument,
+  command: SetItemPresenceShaderOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderOverride: command.payload.shaderDefinitionId
+                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
+                : null
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applySetItemPresenceShaderParameterOverride(
+  region: RegionDocument,
+  command: SetItemPresenceShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderParameterOverrides: upsertShaderParameterOverride(
+                presence.shaderParameterOverrides,
+                command.payload.override
+              )
+            }
+          : presence
+      )
+    }
+  };
+}
+
+function applyClearItemPresenceShaderParameterOverride(
+  region: RegionDocument,
+  command: ClearItemPresenceShaderParameterOverrideCommand
+): RegionDocument {
+  return {
+    ...region,
+    scene: {
+      ...region.scene,
+      itemPresences: region.scene.itemPresences.map((presence) =>
+        presence.presenceId === command.payload.presenceId
+          ? {
+              ...presence,
+              shaderParameterOverrides: presence.shaderParameterOverrides.filter(
+                (override) => override.parameterId !== command.payload.parameterId
+              )
+            }
+          : presence
+      )
     }
   };
 }
@@ -869,6 +1102,15 @@ export function executeCommand(
     case "RemovePlacedAssetInspectable":
       updatedRegion = applyRemovePlacedAssetInspectable(region, command);
       break;
+    case "SetPlacedAssetShaderOverride":
+      updatedRegion = applySetPlacedAssetShaderOverride(region, command);
+      break;
+    case "SetPlacedAssetShaderParameterOverride":
+      updatedRegion = applySetPlacedAssetShaderParameterOverride(region, command);
+      break;
+    case "ClearPlacedAssetShaderParameterOverride":
+      updatedRegion = applyClearPlacedAssetShaderParameterOverride(region, command);
+      break;
     case "CreateSceneFolder":
       updatedRegion = applyCreateSceneFolder(region, command);
       break;
@@ -926,6 +1168,15 @@ export function executeCommand(
     case "TransformNPCPresence":
       updatedRegion = applyTransformNPCPresence(region, command);
       break;
+    case "SetNPCPresenceShaderOverride":
+      updatedRegion = applySetNPCPresenceShaderOverride(region, command);
+      break;
+    case "SetNPCPresenceShaderParameterOverride":
+      updatedRegion = applySetNPCPresenceShaderParameterOverride(region, command);
+      break;
+    case "ClearNPCPresenceShaderParameterOverride":
+      updatedRegion = applyClearNPCPresenceShaderParameterOverride(region, command);
+      break;
     case "RemoveNPCPresence":
       updatedRegion = applyRemoveNPCPresence(region, command);
       break;
@@ -937,6 +1188,15 @@ export function executeCommand(
       break;
     case "UpdateItemPresence":
       updatedRegion = applyUpdateItemPresence(region, command);
+      break;
+    case "SetItemPresenceShaderOverride":
+      updatedRegion = applySetItemPresenceShaderOverride(region, command);
+      break;
+    case "SetItemPresenceShaderParameterOverride":
+      updatedRegion = applySetItemPresenceShaderParameterOverride(region, command);
+      break;
+    case "ClearItemPresenceShaderParameterOverride":
+      updatedRegion = applyClearItemPresenceShaderParameterOverride(region, command);
       break;
     case "RemoveItemPresence":
       updatedRegion = applyRemoveItemPresence(region, command);
