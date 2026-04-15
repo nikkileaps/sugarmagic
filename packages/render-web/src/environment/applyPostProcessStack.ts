@@ -34,11 +34,18 @@ export function applyPostProcessStack(options: {
   }
 
   for (const binding of bindings) {
-    previousOutputNode = shaderRuntime.applyShader(binding, {
-      targetKind: "post-process",
-      renderPipeline,
-      previousOutputNode
-    }) as unknown;
+    try {
+      previousOutputNode = shaderRuntime.applyShader(binding, {
+        targetKind: "post-process",
+        renderPipeline,
+        previousOutputNode
+      }) as unknown;
+    } catch (error) {
+      console.error(
+        `[render-web] Failed to apply post-process shader "${binding.shaderDefinitionId}".`,
+        error
+      );
+    }
   }
 
   renderPipeline.setPostProcessOutputNode(previousOutputNode);

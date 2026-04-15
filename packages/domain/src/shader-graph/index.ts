@@ -190,7 +190,12 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     nodeType: "input.world-position",
     displayName: "World Position",
     category: "input",
-    validTargetKinds: ["mesh-surface", "mesh-deform", "billboard-surface"],
+    // Post-process is supported: the ShaderRuntime finalizer reconstructs
+    // fragment world position from screen UV + scene-depth + inverse
+    // projection, so depth-based post-effects (height fog, volumetrics)
+    // can read an author-friendly world position without each graph
+    // redoing the reconstruction math.
+    validTargetKinds: ["mesh-surface", "mesh-deform", "billboard-surface", "post-process"],
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "vec3")],
     settings: []
@@ -617,12 +622,13 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Split Vector",
     category: "math",
     validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
-    inputPorts: [inputPort("input", "Input", "vec4")],
+    // Input is vec3 — the common case (positions, normals, colors). Add
+    // math.split-vec4 later if vec4 splitting becomes a real use case.
+    inputPorts: [inputPort("input", "Input", "vec3")],
     outputPorts: [
       outputPort("x", "X", "float"),
       outputPort("y", "Y", "float"),
-      outputPort("z", "Z", "float"),
-      outputPort("w", "W", "float")
+      outputPort("z", "Z", "float")
     ],
     settings: []
   },
@@ -1118,7 +1124,7 @@ export function createDefaultColorGradePostProcessShaderGraph(
       createShaderEdge("edge-lum-grey-x", "luminance", "value", "grey-color", "x"),
       createShaderEdge("edge-lum-grey-y", "luminance", "value", "grey-color", "y"),
       createShaderEdge("edge-lum-grey-z", "luminance", "value", "grey-color", "z"),
-      createShaderEdge("edge-grey-sat-a", "grey-color", "value", "apply-saturation", "a"),
+      createShaderEdge("edge-grey-sat-a", "grey-color", "vec3", "apply-saturation", "a"),
       createShaderEdge("edge-gamma-sat-b", "apply-gamma", "value", "apply-saturation", "b"),
       createShaderEdge("edge-saturation-sat-alpha", "saturation", "value", "apply-saturation", "alpha"),
       createShaderEdge("edge-mid-grey-contrast-a", "mid-grey", "value", "apply-contrast", "a"),
@@ -1252,7 +1258,7 @@ export function createDefaultVignettePostProcessShaderGraph(
       createShaderEdge("edge-half-center-x", "center-half", "value", "center", "x"),
       createShaderEdge("edge-half-center-y", "center-half", "value", "center", "y"),
       createShaderEdge("edge-uv-distance-a", "screen-uv", "value", "distance", "a"),
-      createShaderEdge("edge-center-distance-b", "center", "value", "distance", "b"),
+      createShaderEdge("edge-center-distance-b", "center", "vec2", "distance", "b"),
       createShaderEdge("edge-radius-minus-softness-a", "radius", "value", "radius-minus-softness", "a"),
       createShaderEdge("edge-radius-minus-softness-b", "softness", "value", "radius-minus-softness", "b"),
       createShaderEdge("edge-radius-minus-softness-mask-edge0", "radius-minus-softness", "value", "mask", "edge0"),
@@ -1293,22 +1299,44 @@ export function createDefaultFogTintPostProcessShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Fog Tint",
     targetKind: "post-process",
-    revision: 1,
+    // Bumped to 2: graph structure changed to support height-falloff fog
+    // attenuation. Saved projects pinned to revision 1 will be upgraded by
+    // mergeBuiltInShaderDefinitions, which now replaces older built-ins.
+    revision: 2,
+    // Graph shape:
+    //   distance fog: mask_dist = 1 - exp(-sceneDepth * density)
+    //   height atten: heightAtten = exp(-max(0, worldY) * heightFalloff)
+    //   final mask:   mask = mask_dist * heightAtten
+    //   output:       mix(sceneColor, fogColor, mask)
+    // worldY = 0 is treated as fog base. Fragments above y=0 get attenuated
+    // by heightFalloff; fragments at or below y=0 get the full distance fog.
+    // heightFalloff of 0 disables height attenuation (heightAtten = 1, giving
+    // uniform distance fog — the previous behavior).
     nodes: [
       { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
       { nodeId: "scene-depth", nodeType: "input.scene-depth", position: { x: 48, y: 48 }, settings: {} },
+      { nodeId: "world-position", nodeType: "input.world-position", position: { x: 48, y: 560 }, settings: {} },
       createParameterNode("color", "color", { x: 912, y: 304 }),
       createParameterNode("density", "density", { x: 288, y: 304 }),
+      createParameterNode("heightFalloff", "heightFalloff", { x: 288, y: 688 }),
       createFloatConstantNode("one", 1, { x: 912, y: 432 }),
       createFloatConstantNode("negative-one", -1, { x: 288, y: 432 }),
+      createFloatConstantNode("zero", 0, { x: 288, y: 560 }),
       { nodeId: "depth-times-density", nodeType: "math.multiply", position: { x: 528, y: 48 }, settings: {} },
       { nodeId: "negate-depth", nodeType: "math.multiply", position: { x: 720, y: 48 }, settings: {} },
       { nodeId: "exp", nodeType: "math.exp", position: { x: 912, y: 176 }, settings: {} },
       { nodeId: "one-minus-exp", nodeType: "math.subtract", position: { x: 1120, y: 176 }, settings: {} },
-      { nodeId: "mix", nodeType: "math.lerp", position: { x: 1456, y: 176 }, settings: {} },
-      { nodeId: "output", nodeType: "output.post-process", position: { x: 1664, y: 176 }, settings: {} }
+      { nodeId: "world-y", nodeType: "math.split-vector", position: { x: 288, y: 560 }, settings: {} },
+      { nodeId: "world-y-clamped", nodeType: "math.max", position: { x: 528, y: 560 }, settings: {} },
+      { nodeId: "height-times-falloff", nodeType: "math.multiply", position: { x: 720, y: 560 }, settings: {} },
+      { nodeId: "negate-height", nodeType: "math.multiply", position: { x: 912, y: 560 }, settings: {} },
+      { nodeId: "height-atten", nodeType: "math.exp", position: { x: 1120, y: 560 }, settings: {} },
+      { nodeId: "combined-mask", nodeType: "math.multiply", position: { x: 1320, y: 368 }, settings: {} },
+      { nodeId: "mix", nodeType: "math.lerp", position: { x: 1560, y: 176 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 1780, y: 176 }, settings: {} }
     ],
     edges: [
+      // Distance fog chain
       createShaderEdge("edge-depth-density", "scene-depth", "value", "depth-times-density", "a"),
       createShaderEdge("edge-density-density", "density", "value", "depth-times-density", "b"),
       createShaderEdge("edge-depth-negate", "depth-times-density", "value", "negate-depth", "a"),
@@ -1316,15 +1344,32 @@ export function createDefaultFogTintPostProcessShaderGraph(
       createShaderEdge("edge-negate-exp", "negate-depth", "value", "exp", "input"),
       createShaderEdge("edge-one-subtract", "one", "value", "one-minus-exp", "a"),
       createShaderEdge("edge-exp-subtract", "exp", "value", "one-minus-exp", "b"),
+      // Height attenuation chain
+      createShaderEdge("edge-worldpos-split", "world-position", "value", "world-y", "input"),
+      // split-vector exposes x/y/z/w outputs — we read "y" for world altitude.
+      createShaderEdge("edge-worldy-max-a", "world-y", "y", "world-y-clamped", "a"),
+      createShaderEdge("edge-zero-max-b", "zero", "value", "world-y-clamped", "b"),
+      createShaderEdge("edge-height-times-falloff-a", "world-y-clamped", "value", "height-times-falloff", "a"),
+      createShaderEdge("edge-height-times-falloff-b", "heightFalloff", "value", "height-times-falloff", "b"),
+      createShaderEdge("edge-negate-height-a", "height-times-falloff", "value", "negate-height", "a"),
+      createShaderEdge("edge-negate-height-b", "negative-one", "value", "negate-height", "b"),
+      createShaderEdge("edge-height-exp", "negate-height", "value", "height-atten", "input"),
+      // Combine distance + height into final mask
+      createShaderEdge("edge-combine-a", "one-minus-exp", "value", "combined-mask", "a"),
+      createShaderEdge("edge-combine-b", "height-atten", "value", "combined-mask", "b"),
+      // Mix scene with fog color by combined mask
       createShaderEdge("edge-scene-mix", "scene-color", "value", "mix", "a"),
       createShaderEdge("edge-color-mix", "color", "value", "mix", "b"),
-      createShaderEdge("edge-mask-mix", "one-minus-exp", "value", "mix", "alpha"),
+      createShaderEdge("edge-mask-mix", "combined-mask", "value", "mix", "alpha"),
       createShaderEdge("edge-mix-output", "mix", "value", "output", "color")
     ],
     parameters: [
       { parameterId: "color", displayName: "Color", dataType: "color", defaultValue: [0.75, 0.82, 0.92] },
       { parameterId: "density", displayName: "Density", dataType: "float", defaultValue: 0.008 },
-      { parameterId: "heightFalloff", displayName: "Height Falloff", dataType: "float", defaultValue: 1 }
+      // 0 = uniform distance fog at all altitudes. Positive values attenuate
+      // fog exponentially with world Y above 0 (good for ground mist). A
+      // value of 1 roughly halves fog every ~0.7 world units up.
+      { parameterId: "heightFalloff", displayName: "Height Falloff", dataType: "float", defaultValue: 0 }
     ],
     metadata: {
       builtIn: true,

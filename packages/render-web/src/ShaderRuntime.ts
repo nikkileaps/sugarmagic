@@ -19,6 +19,8 @@ import {
   cameraFar,
   cameraNear,
   cameraPosition,
+  cameraProjectionMatrixInverse,
+  cameraWorldMatrix,
   clamp,
   cos,
   dot,
@@ -121,10 +123,32 @@ interface FinalizationContext {
    * compiled literal. See uniformForParameter() below.
    */
   parameterUniforms: Map<string, UniformNodeLike>;
+  /**
+   * Per-binding cache of effect nodes whose wrapped Three helpers take JS
+   * primitives (not TSL nodes) for scalar parameters — notably bloom(), which
+   * wraps strength/radius/threshold into its own internal uniforms at
+   * construction. Those internal uniforms are snapshots of the value at
+   * construction time; later calls with different numeric args would create a
+   * new BloomNode, but in a long-lived pipeline Three's TSL caches the
+   * compiled shader by graph structure and reuses it, so the updated values
+   * never reach the GPU. Caching the node itself and mutating its internal
+   * uniforms in place is what makes live parameter edits work in viewports
+   * that don't get a fresh compile each frame.
+   *
+   * Keyed by op id so each bloom/effect op in the graph gets its own cached
+   * instance. First call constructs the node; subsequent calls reuse it and
+   * mutate its internal uniforms.
+   */
+  effectNodes: Map<string, EffectNodeCacheEntry>;
 }
 
 interface UniformNodeLike {
   value: unknown;
+}
+
+interface EffectNodeCacheEntry {
+  node: unknown;
+  kind: "bloom";
 }
 
 function stableStringify(value: unknown): string {
@@ -337,6 +361,9 @@ function materializeBuiltin(
     case "deltaTime":
       return deltaTime;
     case "worldPosition":
+      if (context.target.targetKind === "post-process") {
+        return reconstructPostProcessWorldPosition(context);
+      }
       return positionWorld;
     case "localPosition":
       return positionLocal;
@@ -398,6 +425,69 @@ function materializeValue(value: ShaderIRValue, context: FinalizationContext): u
   }
 
   return materializeOp(value.opId, context);
+}
+
+/**
+ * Extract the current numeric value from a materialized TSL input.
+ *
+ * Used by effect helpers like bloom() whose underlying Three function takes
+ * JS primitives (not TSL nodes) for scalar parameters. Our parameter inputs
+ * are stored as uniform nodes with a .value property (see
+ * uniformForParameter) — reading .value at finalization time gets the
+ * current parameter value, which the effect then bakes into its own
+ * internal uniforms. Falls back to `fallback` when the input is not a
+ * uniform-like node with an accessible numeric value (e.g., disconnected
+ * optional input).
+ */
+function readNumericFromInput(input: unknown, fallback: number): number {
+  if (input && typeof input === "object" && "value" in input) {
+    const raw = (input as { value: unknown }).value;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Reconstruct the fragment's world position inside a post-process pass from
+ * screen UV and scene depth. Standard inverse-projection math:
+ *
+ *   ndc       = vec3(screenUV * 2 - 1, 1)   (far-plane point in NDC)
+ *   rayClip   = (ndc, 1) homogeneous
+ *   rayView   = (cameraProjectionMatrixInverse * rayClip).xyz / w
+ *   viewPos   = rayView * (-sceneDepth / rayView.z)
+ *   worldPos  = (cameraWorldMatrix * vec4(viewPos, 1)).xyz
+ *
+ * View space is right-handed with -Z forward, so rayView.z is negative and
+ * sceneDepth (world-space distance from camera) is positive; the scale
+ * factor comes out positive.
+ *
+ * Used for height fog and any other depth-based post-process that needs
+ * world coordinates, not just screen-space + depth.
+ */
+function reconstructPostProcessWorldPosition(context: FinalizationContext): unknown {
+  const depth = context.builtinSceneDepthNode ?? viewportLinearDepth;
+  const ndcXY = (screenUV as unknown as { mul: (other: unknown) => unknown })
+    .mul(2);
+  const ndcXYCentered = (ndcXY as unknown as { sub: (other: unknown) => unknown })
+    .sub(float(1));
+  const rayClip = vec4(ndcXYCentered as never, float(1), float(1));
+  const rayHomogeneous = (
+    cameraProjectionMatrixInverse as unknown as { mul: (other: unknown) => unknown }
+  ).mul(rayClip);
+  const rayView = (rayHomogeneous as unknown as { xyz: { div: (other: unknown) => unknown }; w: unknown })
+    .xyz.div((rayHomogeneous as unknown as { w: unknown }).w);
+  const scale = (
+    (depth as unknown as { negate: () => { div: (other: unknown) => unknown } })
+      .negate()
+      .div((rayView as unknown as { z: unknown }).z)
+  );
+  const viewPos = (rayView as unknown as { mul: (other: unknown) => unknown }).mul(scale);
+  const worldPos4 = (
+    cameraWorldMatrix as unknown as { mul: (other: unknown) => unknown }
+  ).mul(vec4(viewPos as never, float(1)));
+  return (worldPos4 as unknown as { xyz: unknown }).xyz;
 }
 
 /**
@@ -581,16 +671,14 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
               );
       break;
     case "math.split-vector": {
-      const vector = input("input") as { x: unknown; y: unknown; z: unknown; w: unknown };
+      const vector = input("input") as { x: unknown; y: unknown; z: unknown };
       const outputPortId = String(op.settings?.outputPortId ?? "x");
       result =
         outputPortId === "y"
           ? vector.y
           : outputPortId === "z"
             ? vector.z
-            : outputPortId === "w"
-              ? vector.w
-              : vector.x;
+            : vector.x;
       break;
     }
     case "effect.height-falloff": {
@@ -615,30 +703,51 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
       result = (input("color") as { mul: (other: unknown) => unknown }).mul(rim);
       break;
     }
-    case "effect.bloom-pass":
-      result = bloom(
-        input("input") as never,
-        Number(op.settings?.strength ?? 0.4),
-        Number(op.settings?.radius ?? 0.4),
-        Number(op.settings?.threshold ?? 0.9)
-      );
+    case "effect.bloom-pass": {
+      const strength = readNumericFromInput(input("strength"), 0.4);
+      const radius = readNumericFromInput(input("radius"), 0.4);
+      const threshold = readNumericFromInput(input("threshold"), 0.9);
+      const inputNode = input("input");
+      // Reuse a cached BloomNode across applyShader calls so parameter edits
+      // flow as GPU uniform updates. Creating a fresh bloom() each call
+      // produces a new node, but Three's TSL compiled-shader cache keys by
+      // graph structure and reuses the first compile — so the updated values
+      // never reach the GPU in a long-lived pipeline (bloom worked in
+      // fresh-compiled preview but not in the live authoring viewport).
+      //
+      // Both bloom's internal uniforms AND its inputNode reference are
+      // mutated in place so the cached node stays wired to the latest
+      // upstream graph (e.g., updated fog-tint output).
+      const cached = context.effectNodes.get(op.opId);
+      if (cached && cached.kind === "bloom") {
+        const node = cached.node as {
+          inputNode: unknown;
+          strength: { value: unknown };
+          radius: { value: unknown };
+          threshold: { value: unknown };
+        };
+        node.inputNode = inputNode;
+        node.strength.value = strength;
+        node.radius.value = radius;
+        node.threshold.value = threshold;
+        result = cached.node;
+      } else {
+        const node = bloom(inputNode as never, strength, radius, threshold);
+        context.effectNodes.set(op.opId, { node, kind: "bloom" });
+        result = node;
+      }
       break;
+    }
     case "effect.tonemap-aces": {
-      const exposure =
-        input("exposure") ?? float(Number(op.settings?.exposure ?? 1));
-      result = acesFilmicToneMapping(
-        (input("input") as { mul: (other: unknown) => unknown }).mul(exposure) as never,
-        float(1)
-      );
+      // The graph pre-multiplies scene color by exposure before feeding the
+      // tonemap node, so the tonemap helper itself takes exposure = 1 as
+      // its second arg (not doubling exposure). Matches the graph shape in
+      // createDefaultTonemapAcesPostProcessShaderGraph.
+      result = acesFilmicToneMapping(input("input") as never, float(1));
       break;
     }
     case "effect.tonemap-reinhard": {
-      const exposure =
-        input("exposure") ?? float(Number(op.settings?.exposure ?? 1));
-      result = reinhardToneMapping(
-        (input("input") as { mul: (other: unknown) => unknown }).mul(exposure) as never,
-        float(1)
-      );
+      result = reinhardToneMapping(input("input") as never, float(1));
       break;
     }
     case "effect.wind-gust": {
@@ -707,7 +816,8 @@ function applyIRToMaterial(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
-  parameterUniforms: Map<string, UniformNodeLike>
+  parameterUniforms: Map<string, UniformNodeLike>,
+  effectNodes: Map<string, EffectNodeCacheEntry>
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -727,7 +837,8 @@ function applyIRToMaterial(
     opNodeCache: new Map(),
     builtinSceneColorNode: null,
     builtinSceneDepthNode: null,
-    parameterUniforms: parameterUniforms
+    parameterUniforms: parameterUniforms,
+    effectNodes: effectNodes
   };
 
   if (ir.outputs.vertex) {
@@ -753,7 +864,8 @@ function applyIRToPostProcess(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>,
-  parameterUniforms: Map<string, UniformNodeLike>
+  parameterUniforms: Map<string, UniformNodeLike>,
+  effectNodes: Map<string, EffectNodeCacheEntry>
 ): unknown {
   const baseOutputNode =
     target.previousOutputNode ?? target.renderPipeline.getBaseOutputNode();
@@ -772,7 +884,8 @@ function applyIRToPostProcess(
     // in the chain reads the SAME scenePass depth — not the global viewport
     // depth, which is what broke fog in Studio but not in the runtime host.
     builtinSceneDepthNode: target.renderPipeline.getSceneDepthNode(),
-    parameterUniforms: parameterUniforms
+    parameterUniforms: parameterUniforms,
+    effectNodes: effectNodes
   };
   const nextOutputNode = ir.outputs.postProcessColor
     ? materializeValue(ir.outputs.postProcessColor, context)
@@ -800,6 +913,12 @@ export class ShaderRuntime {
    * uniformForParameter() for the reasoning.
    */
   private readonly parameterUniformCache = new Map<string, Map<string, UniformNodeLike>>();
+  /**
+   * Per-shaderDefinition cache of effect nodes (bloom, etc.) whose internal
+   * uniforms need to be mutated in place to propagate live parameter edits.
+   * Parallels parameterUniformCache but for Three-constructed helper nodes.
+   */
+  private readonly effectNodeCache = new Map<string, Map<string, EffectNodeCacheEntry>>();
   private disposed = false;
 
   constructor(options: ShaderRuntimeOptions) {
@@ -850,18 +969,48 @@ export class ShaderRuntime {
     }
 
     const ir = this.getCompiledIR(definition);
-    if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
-      this.logger.warn("Shader graph compiled with errors.", {
+    const errors = ir.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+    if (errors.length > 0) {
+      // Loud on purpose. Silent compilation failures were producing "fog
+      // works in runtime but not studio" and "height fog broke fog
+      // altogether" ghost bugs where the real root cause was a malformed
+      // edge that validateShaderGraphDocument had already diagnosed — it
+      // just never surfaced visibly.
+      //
+      // Built-in shader errors are always the engine's fault and throw
+      // (they must not ship broken). Authored shader errors throw for the
+      // same reason — an author-edited graph that fails validation should
+      // be caught by the editor before we even get here, so if we do,
+      // something's wrong in the flow and we want to know immediately.
+      const summary = errors
+        .map((error) => {
+          const location = error.nodeId
+            ? `node "${error.nodeId}"`
+            : error.edgeId
+              ? `edge "${error.edgeId}"`
+              : error.parameterId
+                ? `parameter "${error.parameterId}"`
+                : "graph";
+          return `  - ${location}: ${error.message}`;
+        })
+        .join("\n");
+      const message =
+        `Shader graph "${binding.shaderDefinitionId}" failed to compile:\n${summary}`;
+      // console.error first so the full object is inspectable in devtools;
+      // throwing right after ensures the broken state is not silently
+      // papered over by returning undefined to applyPostProcessStack.
+      console.error("[ShaderRuntime] " + message, {
         shaderDefinitionId: binding.shaderDefinitionId,
         diagnostics: ir.diagnostics
       });
-      return undefined;
+      throw new Error(message);
     }
 
     const parameterUniforms = this.getOrCreateParameterUniformCache(binding.shaderDefinitionId);
+    const effectNodes = this.getOrCreateEffectNodeCache(binding.shaderDefinitionId);
 
     if (target.targetKind === "post-process") {
-      return applyIRToPostProcess(ir, binding, target, parameterUniforms);
+      return applyIRToPostProcess(ir, binding, target, parameterUniforms, effectNodes);
     }
 
     const cacheKey = [
@@ -874,7 +1023,7 @@ export class ShaderRuntime {
     ].join("|");
 
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
-      applyIRToMaterial(ir, binding, target, parameterUniforms)
+      applyIRToMaterial(ir, binding, target, parameterUniforms, effectNodes)
     );
   }
 
@@ -898,6 +1047,17 @@ export class ShaderRuntime {
     return cache;
   }
 
+  private getOrCreateEffectNodeCache(
+    shaderDefinitionId: string
+  ): Map<string, EffectNodeCacheEntry> {
+    let cache = this.effectNodeCache.get(shaderDefinitionId);
+    if (!cache) {
+      cache = new Map();
+      this.effectNodeCache.set(shaderDefinitionId, cache);
+    }
+    return cache;
+  }
+
   releaseMaterial(material: THREE.Material): void {
     const entry = this.materialEntryByMaterial.get(material);
     if (!entry) {
@@ -917,6 +1077,7 @@ export class ShaderRuntime {
       }
     }
     this.parameterUniformCache.delete(shaderDefinitionId);
+    this.effectNodeCache.delete(shaderDefinitionId);
     this.retireMaterials((entry) => entry.shaderDefinitionId === shaderDefinitionId);
   }
 
@@ -930,6 +1091,7 @@ export class ShaderRuntime {
     this.materialCache.clear();
     this.compileCache.clear();
     this.parameterUniformCache.clear();
+    this.effectNodeCache.clear();
     this.diagnostics.clear();
   }
 
