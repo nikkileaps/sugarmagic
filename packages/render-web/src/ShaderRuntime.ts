@@ -14,13 +14,20 @@ import {
   MeshStandardNodeMaterial
 } from "three/webgpu";
 import {
+  acesFilmicToneMapping,
   abs,
+  cameraFar,
+  cameraNear,
   cameraPosition,
   clamp,
   cos,
   dot,
+  exp,
   float,
   length,
+  luminance,
+  max,
+  min,
   mix,
   normalLocal,
   normalWorld,
@@ -36,8 +43,14 @@ import {
   vec3,
   vec4,
   vertexColor,
-  normalize
+  normalize,
+  pow,
+  reinhardToneMapping,
+  saturate,
+  smoothstep,
+  viewportLinearDepth
 } from "three/tsl";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type {
   ContentLibrarySnapshot,
   ShaderGraphDocument
@@ -46,13 +59,13 @@ import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
   RuntimeCompileProfile,
-  RuntimeRenderPipeline,
   ShaderIR,
   ShaderIRDiagnostic,
   ShaderIROp,
   ShaderIRValue
 } from "@sugarmagic/runtime-core";
 import { compileShaderGraph } from "@sugarmagic/runtime-core";
+import type { RuntimeRenderPipeline } from "./render";
 
 export type ShaderApplyTarget =
   | {
@@ -68,6 +81,7 @@ export type ShaderApplyTarget =
   | {
       targetKind: "post-process";
       renderPipeline: RuntimeRenderPipeline;
+      previousOutputNode?: unknown | null;
     };
 
 interface ShaderRuntimeOptions {
@@ -294,6 +308,13 @@ function materializeBuiltin(
   value: Extract<ShaderIRValue, { kind: "builtin" }>,
   context: FinalizationContext
 ): unknown {
+  const asColorNode = (node: unknown): unknown => {
+    if (node && typeof node === "object" && "rgb" in (node as Record<string, unknown>)) {
+      return (node as { rgb: unknown }).rgb;
+    }
+    return node;
+  };
+
   switch (value.name) {
     case "time":
       return time;
@@ -332,9 +353,14 @@ function materializeBuiltin(
     case "screenUV":
       return screenUV;
     case "sceneColor":
-      return context.builtinSceneColorNode ?? vec4(0, 0, 0, 1);
+      return asColorNode(context.builtinSceneColorNode ?? vec3(0, 0, 0));
     case "sceneDepth":
-      return float(0);
+      // viewportLinearDepth from three/tsl returns view-space Z distance in
+      // world units (linearDepth(viewportDepthTexture).negate). It is NOT
+      // normalized 0..1 — that was an earlier wrong assumption. Authored
+      // density values (e.g. 0.008) match FogExp2 semantics directly because
+      // both operate on world-space distance.
+      return viewportLinearDepth;
     default:
       return float(0);
   }
@@ -386,6 +412,33 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
     case "math.divide":
       result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
       break;
+    case "math.pow":
+      result = pow(input("a") as never, input("b") as never);
+      break;
+    case "math.exp":
+      result = exp(input("input") as never);
+      break;
+    case "math.min":
+      result = min(input("a") as never, input("b") as never);
+      break;
+    case "math.max":
+      result = max(input("a") as never, input("b") as never);
+      break;
+    case "math.saturate":
+      result = saturate(input("input") as never);
+      break;
+    case "math.smoothstep":
+      result = smoothstep(
+        input("edge0") as never,
+        input("edge1") as never,
+        input("x") as never
+      );
+      break;
+    case "math.distance":
+      result = length(
+        (input("a") as { sub: (other: unknown) => unknown }).sub(input("b")) as never
+      );
+      break;
     case "math.sin":
       result = sin(input("input") as never);
       break;
@@ -400,6 +453,21 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
       break;
     case "math.lerp":
       result = mix(input("a") as never, input("b") as never, input("alpha") as never);
+      break;
+    case "color.luminance":
+      result = luminance(input("input") as never);
+      break;
+    case "color.add":
+      result = (input("a") as { add: (other: unknown) => unknown }).add(input("b"));
+      break;
+    case "color.multiply":
+      result = (input("a") as { mul: (other: unknown) => unknown }).mul(input("b"));
+      break;
+    case "color.divide":
+      result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
+      break;
+    case "color.pow":
+      result = pow(input("a") as never, input("b") as never);
       break;
     case "math.dot":
       result = dot(input("a") as never, input("b") as never);
@@ -456,6 +524,32 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
         .pow(float(Number(op.settings?.power ?? 2)))
         .mul(float(Number(op.settings?.strength ?? 1)));
       result = (input("color") as { mul: (other: unknown) => unknown }).mul(rim);
+      break;
+    }
+    case "effect.bloom-pass":
+      result = bloom(
+        input("input") as never,
+        Number(op.settings?.strength ?? 0.4),
+        Number(op.settings?.radius ?? 0.4),
+        Number(op.settings?.threshold ?? 0.9)
+      );
+      break;
+    case "effect.tonemap-aces": {
+      const exposure =
+        input("exposure") ?? float(Number(op.settings?.exposure ?? 1));
+      result = acesFilmicToneMapping(
+        (input("input") as { mul: (other: unknown) => unknown }).mul(exposure) as never,
+        float(1)
+      );
+      break;
+    }
+    case "effect.tonemap-reinhard": {
+      const exposure =
+        input("exposure") ?? float(Number(op.settings?.exposure ?? 1));
+      result = reinhardToneMapping(
+        (input("input") as { mul: (other: unknown) => unknown }).mul(exposure) as never,
+        float(1)
+      );
       break;
     }
     case "effect.wind-gust": {
@@ -567,10 +661,11 @@ function applyIRToPostProcess(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>
-): void {
-  const baseOutputNode = target.renderPipeline.getBaseOutputNode();
+): unknown {
+  const baseOutputNode =
+    target.previousOutputNode ?? target.renderPipeline.getBaseOutputNode();
   if (!baseOutputNode) {
-    return;
+    return null;
   }
 
   const context: FinalizationContext = {
@@ -581,16 +676,16 @@ function applyIRToPostProcess(
     opNodeCache: new Map(),
     builtinSceneColorNode: baseOutputNode
   };
-  target.renderPipeline.setPostProcessOutputNode(
-    ir.outputs.postProcessColor
-      ? materializeValue(ir.outputs.postProcessColor, context)
-      : baseOutputNode
-  );
+  const nextOutputNode = ir.outputs.postProcessColor
+    ? materializeValue(ir.outputs.postProcessColor, context)
+    : baseOutputNode;
+  target.renderPipeline.setPostProcessOutputNode(nextOutputNode);
+  return nextOutputNode;
 }
 
 export class ShaderRuntime {
   private static readonly DEFAULT_MATERIAL_DISPOSAL_GRACE_MS = 2000;
-  private readonly contentLibrary: ContentLibrarySnapshot;
+  private contentLibrary: ContentLibrarySnapshot;
   private readonly compileProfile: RuntimeCompileProfile;
   private readonly materialDisposalGraceMs: number;
   private readonly logger;
@@ -609,10 +704,27 @@ export class ShaderRuntime {
     this.logger = options.logger ?? { warn() {} };
   }
 
+  /**
+   * Swap the content library reference without tearing down compiled IR or
+   * material caches. Existing cache keys are keyed by shaderDefinitionId +
+   * documentRevision, so a new content library with the same revisions reuses
+   * compiled work cleanly; revision bumps invalidate naturally on next lookup.
+   *
+   * This replaces the previous "dispose the runtime on every state update"
+   * pattern, which caused material-disposal errors and destroyed the cached
+   * post-process output nodes installed on the render pipeline.
+   */
+  setContentLibrary(contentLibrary: ContentLibrarySnapshot): void {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+    this.contentLibrary = contentLibrary;
+  }
+
   applyShader(
     binding: EffectiveShaderBinding,
     target: ShaderApplyTarget
-  ): THREE.Material | void {
+  ): THREE.Material | unknown {
     if (this.disposed) {
       throw new Error("ShaderRuntime was used after disposal.");
     }
@@ -641,8 +753,7 @@ export class ShaderRuntime {
     }
 
     if (target.targetKind === "post-process") {
-      applyIRToPostProcess(ir, binding, target);
-      return;
+      return applyIRToPostProcess(ir, binding, target);
     }
 
     const cacheKey = [

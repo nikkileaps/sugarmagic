@@ -286,7 +286,7 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     category: "input",
     validTargetKinds: ["post-process"],
     inputPorts: [],
-    outputPorts: [outputPort("value", "Value", "vec4")],
+    outputPorts: [outputPort("value", "Value", "vec3")],
     settings: []
   },
   {
@@ -306,6 +306,15 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "float")],
     settings: [setting("parameterId", "Parameter", "string", "")]
+  },
+  {
+    nodeType: "input.constant-float",
+    displayName: "Constant Float",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: [setting("value", "Value", "float", 0)]
   },
   {
     nodeType: "input.constant-color",
@@ -407,6 +416,85 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: []
   },
   {
+    nodeType: "math.pow",
+    displayName: "Power",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "Base", "float"),
+      inputPort("b", "Exponent", "float")
+    ],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.exp",
+    displayName: "Exp",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("input", "Input", "float")],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.min",
+    displayName: "Min",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "float"),
+      inputPort("b", "B", "float")
+    ],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.max",
+    displayName: "Max",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "float"),
+      inputPort("b", "B", "float")
+    ],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.saturate",
+    displayName: "Saturate",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("input", "Input", "float")],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.smoothstep",
+    displayName: "Smoothstep",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("edge0", "Edge 0", "float"),
+      inputPort("edge1", "Edge 1", "float"),
+      inputPort("x", "Value", "float")
+    ],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "math.distance",
+    displayName: "Distance",
+    category: "math",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "vec2"),
+      inputPort("b", "B", "vec2")
+    ],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
     nodeType: "math.lerp",
     displayName: "Lerp",
     category: "math",
@@ -417,6 +505,63 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
       inputPort("alpha", "Alpha", "float")
     ],
     outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    nodeType: "color.luminance",
+    displayName: "Luminance",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("input", "Input", "color")],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "color.add",
+    displayName: "Color Add",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "color"),
+      inputPort("b", "B", "color")
+    ],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: []
+  },
+  {
+    nodeType: "color.multiply",
+    displayName: "Color Multiply",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "color"),
+      inputPort("b", "B", "color")
+    ],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: []
+  },
+  {
+    nodeType: "color.divide",
+    displayName: "Color Divide",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "A", "color"),
+      inputPort("b", "B", "color")
+    ],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: []
+  },
+  {
+    nodeType: "color.pow",
+    displayName: "Color Power",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [
+      inputPort("a", "Base", "color"),
+      inputPort("b", "Exponent", "color")
+    ],
+    outputPorts: [outputPort("value", "Value", "color")],
     settings: []
   },
   {
@@ -557,6 +702,48 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     ]
   },
   {
+    nodeType: "effect.bloom-pass",
+    displayName: "Bloom Pass",
+    category: "effect",
+    validTargetKinds: ["post-process"],
+    inputPorts: [
+      inputPort("input", "Input", "vec3"),
+      inputPort("strength", "Strength", "float", { optional: true }),
+      inputPort("radius", "Radius", "float", { optional: true }),
+      inputPort("threshold", "Threshold", "float", { optional: true })
+    ],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: [
+      setting("strength", "Strength", "float", 0.4, { min: 0, max: 4, step: 0.05 }),
+      setting("radius", "Radius", "float", 0.4, { min: 0, max: 1, step: 0.01 }),
+      setting("threshold", "Threshold", "float", 0.9, { min: 0, max: 4, step: 0.01 })
+    ]
+  },
+  {
+    nodeType: "effect.tonemap-aces",
+    displayName: "Tonemap ACES",
+    category: "effect",
+    validTargetKinds: ["post-process"],
+    inputPorts: [
+      inputPort("input", "Input", "vec3"),
+      inputPort("exposure", "Exposure", "float", { optional: true })
+    ],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: [setting("exposure", "Exposure", "float", 1, { min: 0, max: 8, step: 0.05 })]
+  },
+  {
+    nodeType: "effect.tonemap-reinhard",
+    displayName: "Tonemap Reinhard",
+    category: "effect",
+    validTargetKinds: ["post-process"],
+    inputPorts: [
+      inputPort("input", "Input", "vec3"),
+      inputPort("exposure", "Exposure", "float", { optional: true })
+    ],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: [setting("exposure", "Exposure", "float", 1, { min: 0, max: 8, step: 0.05 })]
+  },
+  {
     nodeType: "output.vertex",
     displayName: "Vertex Output",
     category: "output",
@@ -591,7 +778,7 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Post Process Output",
     category: "output",
     validTargetKinds: ["post-process"],
-    inputPorts: [inputPort("color", "Color", "vec4")],
+    inputPorts: [inputPort("color", "Color", "vec3")],
     outputPorts: [],
     settings: []
   }
@@ -828,6 +1015,370 @@ export function createDefaultFoliageTintShaderGraph(
   };
 }
 
+function createFloatConstantNode(
+  nodeId: string,
+  value: number,
+  position: { x: number; y: number }
+): ShaderNodeInstance {
+  return {
+    nodeId,
+    nodeType: "input.constant-float",
+    position,
+    settings: { value }
+  };
+}
+
+function createColorConstantNode(
+  nodeId: string,
+  value: [number, number, number],
+  position: { x: number; y: number }
+): ShaderNodeInstance {
+  return {
+    nodeId,
+    nodeType: "input.constant-color",
+    position,
+    settings: { color: value }
+  };
+}
+
+function createParameterNode(
+  nodeId: string,
+  parameterId: string,
+  position: { x: number; y: number }
+): ShaderNodeInstance {
+  return {
+    nodeId,
+    nodeType: "input.parameter",
+    position,
+    settings: { parameterId }
+  };
+}
+
+function createShaderEdge(
+  edgeId: string,
+  sourceNodeId: string,
+  sourcePortId: string,
+  targetNodeId: string,
+  targetPortId: string
+): ShaderEdge {
+  return {
+    edgeId,
+    sourceNodeId,
+    sourcePortId,
+    targetNodeId,
+    targetPortId
+  };
+}
+
+export function createDefaultColorGradePostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:color-grade`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Color Grade",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
+      createParameterNode("lift", "lift", { x: 48, y: 48 }),
+      createParameterNode("gamma", "gamma", { x: 48, y: 304 }),
+      createParameterNode("gain", "gain", { x: 48, y: 432 }),
+      createParameterNode("saturation", "saturation", { x: 448, y: 432 }),
+      createParameterNode("contrast", "contrast", { x: 912, y: 432 }),
+      createColorConstantNode("mid-grey", [0.5, 0.5, 0.5], { x: 912, y: 560 }),
+      createColorConstantNode("white", [1, 1, 1], { x: 448, y: 304 }),
+      { nodeId: "apply-gain", nodeType: "color.multiply", position: { x: 272, y: 176 }, settings: {} },
+      { nodeId: "apply-lift", nodeType: "color.add", position: { x: 448, y: 176 }, settings: {} },
+      { nodeId: "invert-gamma", nodeType: "color.divide", position: { x: 640, y: 304 }, settings: {} },
+      { nodeId: "apply-gamma", nodeType: "color.pow", position: { x: 816, y: 176 }, settings: {} },
+      { nodeId: "luminance", nodeType: "color.luminance", position: { x: 1088, y: 48 }, settings: {} },
+      { nodeId: "grey-color", nodeType: "math.combine-vector", position: { x: 1280, y: 48 }, settings: {} },
+      { nodeId: "apply-saturation", nodeType: "math.lerp", position: { x: 1472, y: 176 }, settings: {} },
+      { nodeId: "apply-contrast", nodeType: "math.lerp", position: { x: 1664, y: 176 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 1872, y: 176 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-scene-gain", "scene-color", "value", "apply-gain", "a"),
+      createShaderEdge("edge-gain-gain", "gain", "value", "apply-gain", "b"),
+      createShaderEdge("edge-gain-lift", "apply-gain", "value", "apply-lift", "a"),
+      createShaderEdge("edge-lift-lift", "lift", "value", "apply-lift", "b"),
+      createShaderEdge("edge-one-invert-gamma", "white", "value", "invert-gamma", "a"),
+      createShaderEdge("edge-gamma-invert-gamma", "gamma", "value", "invert-gamma", "b"),
+      createShaderEdge("edge-lifted-gamma", "apply-lift", "value", "apply-gamma", "a"),
+      createShaderEdge("edge-inverted-gamma", "invert-gamma", "value", "apply-gamma", "b"),
+      createShaderEdge("edge-gamma-luminance", "apply-gamma", "value", "luminance", "input"),
+      createShaderEdge("edge-lum-grey-x", "luminance", "value", "grey-color", "x"),
+      createShaderEdge("edge-lum-grey-y", "luminance", "value", "grey-color", "y"),
+      createShaderEdge("edge-lum-grey-z", "luminance", "value", "grey-color", "z"),
+      createShaderEdge("edge-grey-sat-a", "grey-color", "value", "apply-saturation", "a"),
+      createShaderEdge("edge-gamma-sat-b", "apply-gamma", "value", "apply-saturation", "b"),
+      createShaderEdge("edge-saturation-sat-alpha", "saturation", "value", "apply-saturation", "alpha"),
+      createShaderEdge("edge-mid-grey-contrast-a", "mid-grey", "value", "apply-contrast", "a"),
+      createShaderEdge("edge-sat-contrast-b", "apply-saturation", "value", "apply-contrast", "b"),
+      createShaderEdge("edge-contrast-contrast-alpha", "contrast", "value", "apply-contrast", "alpha"),
+      createShaderEdge("edge-contrast-output", "apply-contrast", "value", "output", "color")
+    ],
+    parameters: [
+      { parameterId: "lift", displayName: "Lift", dataType: "color", defaultValue: [0, 0, 0] },
+      { parameterId: "gamma", displayName: "Gamma", dataType: "color", defaultValue: [1, 1, 1] },
+      { parameterId: "gain", displayName: "Gain", dataType: "color", defaultValue: [1, 1, 1] },
+      { parameterId: "saturation", displayName: "Saturation", dataType: "float", defaultValue: 1 },
+      { parameterId: "contrast", displayName: "Contrast", dataType: "float", defaultValue: 1 }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "color-grade"
+    }
+  };
+}
+
+export function createDefaultTonemapAcesPostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:tonemap-aces`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Tonemap ACES",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 128 }, settings: {} },
+      createParameterNode("exposure", "exposure", { x: 48, y: 288 }),
+      { nodeId: "expose", nodeType: "color.multiply", position: { x: 288, y: 128 }, settings: {} },
+      { nodeId: "tonemap", nodeType: "effect.tonemap-aces", position: { x: 528, y: 128 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 768, y: 128 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-scene-expose", "scene-color", "value", "expose", "a"),
+      createShaderEdge("edge-exposure-expose", "exposure", "value", "expose", "b"),
+      createShaderEdge("edge-expose-tonemap", "expose", "value", "tonemap", "input"),
+      createShaderEdge("edge-exposure-tonemap", "exposure", "value", "tonemap", "exposure"),
+      createShaderEdge("edge-tonemap-output", "tonemap", "value", "output", "color")
+    ],
+    parameters: [{ parameterId: "exposure", displayName: "Exposure", dataType: "float", defaultValue: 1 }],
+    metadata: {
+      builtIn: true,
+      builtInKey: "tonemap-aces"
+    }
+  };
+}
+
+export function createDefaultTonemapReinhardPostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:tonemap-reinhard`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Tonemap Reinhard",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 128 }, settings: {} },
+      createParameterNode("exposure", "exposure", { x: 48, y: 288 }),
+      { nodeId: "expose", nodeType: "color.multiply", position: { x: 288, y: 128 }, settings: {} },
+      { nodeId: "tonemap", nodeType: "effect.tonemap-reinhard", position: { x: 528, y: 128 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 768, y: 128 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-scene-expose", "scene-color", "value", "expose", "a"),
+      createShaderEdge("edge-exposure-expose", "exposure", "value", "expose", "b"),
+      createShaderEdge("edge-expose-tonemap", "expose", "value", "tonemap", "input"),
+      createShaderEdge("edge-exposure-tonemap", "exposure", "value", "tonemap", "exposure"),
+      createShaderEdge("edge-tonemap-output", "tonemap", "value", "output", "color")
+    ],
+    parameters: [{ parameterId: "exposure", displayName: "Exposure", dataType: "float", defaultValue: 1 }],
+    metadata: {
+      builtIn: true,
+      builtInKey: "tonemap-reinhard"
+    }
+  };
+}
+
+export function createDefaultVignettePostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:vignette`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Vignette",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
+      { nodeId: "screen-uv", nodeType: "input.screen-uv", position: { x: 48, y: 48 }, settings: {} },
+      createParameterNode("color", "color", { x: 912, y: 384 }),
+      createParameterNode("intensity", "intensity", { x: 1216, y: 304 }),
+      createParameterNode("softness", "softness", { x: 448, y: 304 }),
+      createParameterNode("radius", "radius", { x: 448, y: 432 }),
+      createFloatConstantNode("center-half", 0.5, { x: 48, y: 304 }),
+      { nodeId: "center", nodeType: "math.combine-vector", position: { x: 240, y: 304 }, settings: {} },
+      { nodeId: "distance", nodeType: "math.distance", position: { x: 448, y: 128 }, settings: {} },
+      { nodeId: "radius-minus-softness", nodeType: "math.subtract", position: { x: 672, y: 304 }, settings: {} },
+      { nodeId: "mask", nodeType: "math.smoothstep", position: { x: 912, y: 128 }, settings: {} },
+      { nodeId: "intensity-mask", nodeType: "math.multiply", position: { x: 1216, y: 128 }, settings: {} },
+      { nodeId: "mix", nodeType: "math.lerp", position: { x: 1456, y: 176 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 1696, y: 176 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-half-center-x", "center-half", "value", "center", "x"),
+      createShaderEdge("edge-half-center-y", "center-half", "value", "center", "y"),
+      createShaderEdge("edge-uv-distance-a", "screen-uv", "value", "distance", "a"),
+      createShaderEdge("edge-center-distance-b", "center", "value", "distance", "b"),
+      createShaderEdge("edge-radius-minus-softness-a", "radius", "value", "radius-minus-softness", "a"),
+      createShaderEdge("edge-radius-minus-softness-b", "softness", "value", "radius-minus-softness", "b"),
+      createShaderEdge("edge-radius-minus-softness-mask-edge0", "radius-minus-softness", "value", "mask", "edge0"),
+      createShaderEdge("edge-radius-mask-edge1", "radius", "value", "mask", "edge1"),
+      createShaderEdge("edge-distance-mask-x", "distance", "value", "mask", "x"),
+      createShaderEdge("edge-mask-intensity-mask-a", "mask", "value", "intensity-mask", "a"),
+      createShaderEdge("edge-intensity-intensity-mask-b", "intensity", "value", "intensity-mask", "b"),
+      createShaderEdge("edge-scene-mix-a", "scene-color", "value", "mix", "a"),
+      createShaderEdge("edge-color-mix-b", "color", "value", "mix", "b"),
+      createShaderEdge("edge-mask-mix-alpha", "intensity-mask", "value", "mix", "alpha"),
+      createShaderEdge("edge-mix-output", "mix", "value", "output", "color")
+    ],
+    parameters: [
+      { parameterId: "color", displayName: "Color", dataType: "color", defaultValue: [0, 0, 0] },
+      { parameterId: "intensity", displayName: "Intensity", dataType: "float", defaultValue: 0.35 },
+      { parameterId: "softness", displayName: "Softness", dataType: "float", defaultValue: 0.18 },
+      { parameterId: "radius", displayName: "Radius", dataType: "float", defaultValue: 0.78 }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "vignette"
+    }
+  };
+}
+
+export function createDefaultFogTintPostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:fog-tint`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Fog Tint",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
+      { nodeId: "scene-depth", nodeType: "input.scene-depth", position: { x: 48, y: 48 }, settings: {} },
+      createParameterNode("color", "color", { x: 912, y: 304 }),
+      createParameterNode("density", "density", { x: 288, y: 304 }),
+      createFloatConstantNode("one", 1, { x: 912, y: 432 }),
+      createFloatConstantNode("negative-one", -1, { x: 288, y: 432 }),
+      { nodeId: "depth-times-density", nodeType: "math.multiply", position: { x: 528, y: 48 }, settings: {} },
+      { nodeId: "negate-depth", nodeType: "math.multiply", position: { x: 720, y: 48 }, settings: {} },
+      { nodeId: "exp", nodeType: "math.exp", position: { x: 912, y: 176 }, settings: {} },
+      { nodeId: "one-minus-exp", nodeType: "math.subtract", position: { x: 1120, y: 176 }, settings: {} },
+      { nodeId: "mix", nodeType: "math.lerp", position: { x: 1456, y: 176 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 1664, y: 176 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-depth-density", "scene-depth", "value", "depth-times-density", "a"),
+      createShaderEdge("edge-density-density", "density", "value", "depth-times-density", "b"),
+      createShaderEdge("edge-depth-negate", "depth-times-density", "value", "negate-depth", "a"),
+      createShaderEdge("edge-negative-one-negate", "negative-one", "value", "negate-depth", "b"),
+      createShaderEdge("edge-negate-exp", "negate-depth", "value", "exp", "input"),
+      createShaderEdge("edge-one-subtract", "one", "value", "one-minus-exp", "a"),
+      createShaderEdge("edge-exp-subtract", "exp", "value", "one-minus-exp", "b"),
+      createShaderEdge("edge-scene-mix", "scene-color", "value", "mix", "a"),
+      createShaderEdge("edge-color-mix", "color", "value", "mix", "b"),
+      createShaderEdge("edge-mask-mix", "one-minus-exp", "value", "mix", "alpha"),
+      createShaderEdge("edge-mix-output", "mix", "value", "output", "color")
+    ],
+    parameters: [
+      { parameterId: "color", displayName: "Color", dataType: "color", defaultValue: [0.75, 0.82, 0.92] },
+      { parameterId: "density", displayName: "Density", dataType: "float", defaultValue: 0.008 },
+      { parameterId: "heightFalloff", displayName: "Height Falloff", dataType: "float", defaultValue: 1 }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "fog-tint"
+    }
+  };
+}
+
+export function createDefaultBloomPostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:bloom`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Bloom",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
+      createParameterNode("strength", "strength", { x: 48, y: 48 }),
+      createParameterNode("radius", "radius", { x: 48, y: 176 }),
+      createParameterNode("threshold", "threshold", { x: 48, y: 304 }),
+      { nodeId: "bloom", nodeType: "effect.bloom-pass", position: { x: 352, y: 176 }, settings: {} },
+      { nodeId: "composite", nodeType: "color.add", position: { x: 640, y: 176 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 912, y: 176 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-scene-bloom", "scene-color", "value", "bloom", "input"),
+      createShaderEdge("edge-strength-bloom", "strength", "value", "bloom", "strength"),
+      createShaderEdge("edge-radius-bloom", "radius", "value", "bloom", "radius"),
+      createShaderEdge("edge-threshold-bloom", "threshold", "value", "bloom", "threshold"),
+      createShaderEdge("edge-scene-composite", "scene-color", "value", "composite", "a"),
+      createShaderEdge("edge-bloom-composite", "bloom", "value", "composite", "b"),
+      createShaderEdge("edge-composite-output", "composite", "value", "output", "color")
+    ],
+    parameters: [
+      { parameterId: "strength", displayName: "Strength", dataType: "float", defaultValue: 0.4 },
+      { parameterId: "radius", displayName: "Radius", dataType: "float", defaultValue: 0.4 },
+      { parameterId: "threshold", displayName: "Threshold", dataType: "float", defaultValue: 0.9 }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "bloom"
+    }
+  };
+}
+
 export function listShaderNodeDefinitions(): ShaderNodeDefinition[] {
   return SHADER_NODE_DEFINITIONS.map((definition) => ({
     ...definition,
@@ -1015,12 +1566,18 @@ export function validateShaderGraphDocument(
       continue;
     }
 
-    if (sourcePort.dataType !== targetPort.dataType) {
+    const effectiveSourceDataType =
+      source.nodeType === "input.parameter"
+        ? parameterMap.get(String(source.settings.parameterId ?? "").trim())?.dataType ??
+          sourcePort.dataType
+        : sourcePort.dataType;
+
+    if (effectiveSourceDataType !== targetPort.dataType) {
       const isDirectAlias =
-        (sourcePort.dataType === "vec3" && targetPort.dataType === "color") ||
-        (sourcePort.dataType === "color" && targetPort.dataType === "vec3");
+        (effectiveSourceDataType === "vec3" && targetPort.dataType === "color") ||
+        (effectiveSourceDataType === "color" && targetPort.dataType === "vec3");
       const isFloatSplat =
-        sourcePort.dataType === "float" &&
+        effectiveSourceDataType === "float" &&
         (targetPort.dataType === "vec2" ||
           targetPort.dataType === "vec3" ||
           targetPort.dataType === "vec4" ||
@@ -1030,7 +1587,7 @@ export function validateShaderGraphDocument(
         issues.push({
           severity: "error",
           edgeId: edge.edgeId,
-          message: `Port type mismatch: ${sourcePort.dataType} cannot connect to ${targetPort.dataType}.`
+          message: `Port type mismatch: ${effectiveSourceDataType} cannot connect to ${targetPort.dataType}.`
         });
       }
     }

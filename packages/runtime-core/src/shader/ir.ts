@@ -98,7 +98,7 @@ const BUILTIN_TYPES: Record<ShaderIRBuiltinName, ShaderDataType> = {
   cameraPosition: "vec3",
   viewDirection: "vec3",
   screenUV: "vec2",
-  sceneColor: "vec4",
+  sceneColor: "vec3",
   sceneDepth: "float"
 };
 

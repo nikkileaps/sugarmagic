@@ -177,6 +177,15 @@ function constantFoldBinary(
   if (opKind === "math.divide") {
     return literalValue(dataType, b.value === 0 ? 0 : a.value / b.value);
   }
+  if (opKind === "math.pow") {
+    return literalValue(dataType, Math.pow(a.value, b.value));
+  }
+  if (opKind === "math.min") {
+    return literalValue(dataType, Math.min(a.value, b.value));
+  }
+  if (opKind === "math.max") {
+    return literalValue(dataType, Math.max(a.value, b.value));
+  }
   return null;
 }
 
@@ -263,7 +272,7 @@ function builtinForNodeType(
     case "input.screen-uv":
       return asBuiltin("screenUV", "vec2");
     case "input.scene-color":
-      return asBuiltin("sceneColor", "vec4");
+      return asBuiltin("sceneColor", "vec3");
     case "input.scene-depth":
       return asBuiltin("sceneDepth", "float");
     default:
@@ -340,6 +349,16 @@ function compileNodePort(
     return value;
   }
 
+  if (node.nodeType === "input.constant-float") {
+    const value =
+      typeof node.settings.value === "number" && Number.isFinite(node.settings.value)
+        ? node.settings.value
+        : 0;
+    const literal = literalValue("float", value);
+    context.valuesByNodePort.set(cacheKey, literal);
+    return literal;
+  }
+
   if (node.nodeType === "input.constant-color") {
     const value: ShaderIRValue = {
       kind: "literal",
@@ -390,11 +409,23 @@ function compileNodePort(
     node.nodeType === "math.subtract" ||
     node.nodeType === "math.multiply" ||
     node.nodeType === "math.divide" ||
+    node.nodeType === "math.pow" ||
+    node.nodeType === "math.exp" ||
+    node.nodeType === "math.min" ||
+    node.nodeType === "math.max" ||
+    node.nodeType === "math.saturate" ||
+    node.nodeType === "math.smoothstep" ||
+    node.nodeType === "math.distance" ||
     node.nodeType === "math.sin" ||
     node.nodeType === "math.cos" ||
     node.nodeType === "math.abs" ||
     node.nodeType === "math.clamp" ||
     node.nodeType === "math.lerp" ||
+    node.nodeType === "color.luminance" ||
+    node.nodeType === "color.add" ||
+    node.nodeType === "color.multiply" ||
+    node.nodeType === "color.divide" ||
+    node.nodeType === "color.pow" ||
     node.nodeType === "math.dot" ||
     node.nodeType === "math.normalize" ||
     node.nodeType === "math.length" ||

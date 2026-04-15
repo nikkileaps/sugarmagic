@@ -35,7 +35,7 @@ import type {
   WorkspaceViewContribution
 } from "../workspace-view";
 import type { WorkspaceViewport } from "../viewport";
-import { applyLightingPresetToEnvironmentDefinition } from "@sugarmagic/runtime-core";
+import { applyLightingPresetTemplate } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useLandscapeWorkspaceView } from "./landscape";
 import { useSpatialWorkspaceView } from "./spatial";
@@ -189,30 +189,42 @@ export function useBuildProductModeView(
       .map((region) => region.displayName);
   }, [selectedEnvironment, session]);
 
+  const dispatchEnvironmentDefinition = (definition: EnvironmentDefinition) => {
+    if (!selectedEnvironment) return;
+    onCommand({
+      kind: "UpdateEnvironmentDefinition",
+      target: {
+        aggregateKind: "content-definition",
+        aggregateId: selectedEnvironment.definitionId
+      },
+      subject: {
+        subjectKind: "environment-definition",
+        subjectId: selectedEnvironment.definitionId
+      },
+      payload: {
+        definitionId: selectedEnvironment.definitionId,
+        definition
+      }
+    });
+  };
+
   const environmentView = useEnvironmentWorkspaceView({
+    projectId: session?.gameProject.identity.id ?? "project",
     selectedEnvironment,
     boundRegionNames,
     shaderDefinitions,
     onSelectLightingPreset: (preset) => {
       if (!selectedEnvironment) return;
-      onCommand({
-        kind: "UpdateEnvironmentDefinition",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: selectedEnvironment.definitionId
-        },
-        subject: {
-          subjectKind: "environment-definition",
-          subjectId: selectedEnvironment.definitionId
-        },
-        payload: {
-          definitionId: selectedEnvironment.definitionId,
-          definition: applyLightingPresetToEnvironmentDefinition(
-            selectedEnvironment,
-            preset
-          )
-        }
-      });
+      dispatchEnvironmentDefinition(
+        applyLightingPresetTemplate(
+          selectedEnvironment,
+          preset,
+          session?.gameProject.identity.id ?? "project"
+        )
+      );
+    },
+    onUpdateEnvironmentDefinition: (definition) => {
+      dispatchEnvironmentDefinition(definition);
     },
     onAddPostProcessShader: (shaderDefinitionId) => {
       if (!selectedEnvironment) return;
@@ -234,6 +246,25 @@ export function useBuildProductModeView(
             enabled: true,
             parameterOverrides: []
           }
+        }
+      });
+    },
+    onUpdatePostProcessShaderParameter: (shaderDefinitionId, override) => {
+      if (!selectedEnvironment) return;
+      onCommand({
+        kind: "UpdatePostProcessShaderParameter",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: selectedEnvironment.definitionId
+        },
+        subject: {
+          subjectKind: "environment-definition",
+          subjectId: selectedEnvironment.definitionId
+        },
+        payload: {
+          environmentDefinitionId: selectedEnvironment.definitionId,
+          shaderDefinitionId,
+          override
         }
       });
     },

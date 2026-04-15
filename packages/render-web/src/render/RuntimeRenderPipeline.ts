@@ -1,8 +1,15 @@
-import * as THREE from "three";
-import { WebGPURenderer } from "three/webgpu";
+/**
+ * Shared render pipeline wrapper.
+ *
+ * Owns the stable host-facing API for the shared WebGPU render graph used by
+ * Studio and the published web runtime.
+ */
+
+import type * as THREE from "three";
+import type { WebGPURenderer } from "three/webgpu";
 import type { EnvironmentDefinition } from "@sugarmagic/domain";
-import type { EnvironmentSceneWarning } from "../environment";
-import { createRuntimeRenderGraph } from "./graph";
+import type { EnvironmentSceneWarning } from "@sugarmagic/runtime-core";
+import { createRuntimeRenderGraph } from "./RuntimeRenderGraph";
 
 export interface RuntimeRenderPipeline {
   applyEnvironment: (definition: EnvironmentDefinition | null) => EnvironmentSceneWarning[];

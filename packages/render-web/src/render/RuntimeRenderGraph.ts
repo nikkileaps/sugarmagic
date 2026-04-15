@@ -1,13 +1,16 @@
-import * as THREE from "three";
-import { RenderPipeline, WebGPURenderer } from "three/webgpu";
+/**
+ * Shared WebGPU render graph.
+ *
+ * Owns the shared scene pass and post-process output composition for Studio
+ * and published-web hosts. Hardcoded bloom is intentionally absent; authored
+ * post-process bindings are the single source of truth for post effects.
+ */
+
+import type * as THREE from "three";
+import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
 import { pass } from "three/tsl";
-import { bloom } from "three/addons/tsl/display/BloomNode.js";
-import type {
-  BloomSettings,
-  EnvironmentDefinition,
-  SSAOSettings
-} from "@sugarmagic/domain";
-import type { EnvironmentSceneWarning } from "../environment";
+import type { EnvironmentDefinition } from "@sugarmagic/domain";
+import type { EnvironmentSceneWarning } from "@sugarmagic/runtime-core";
 
 export interface RuntimeRenderGraph {
   readonly pipeline: RenderPipeline | null;
@@ -27,11 +30,8 @@ export function createRuntimeRenderGraph(options: {
   height: number;
 }): RuntimeRenderGraph {
   const { renderer, scene } = options;
-  let camera = options.camera;
-  const scenePass = pass(scene, camera);
-  const sceneColor = scenePass.getTextureNode("output");
-  const bloomPass = bloom(sceneColor, 0.4, 0.4, 0.9);
-  const baseOutputNode = sceneColor.add(bloomPass);
+  const scenePass = pass(scene, options.camera);
+  const baseOutputNode = scenePass.getTextureNode("output");
 
   const warnings: EnvironmentSceneWarning[] = [];
   let pipeline: RenderPipeline | null = null;
@@ -48,31 +48,20 @@ export function createRuntimeRenderGraph(options: {
     pipeline = null;
   }
 
-  function applyBloom(config: BloomSettings) {
-    bloomPass.strength.value = config.enabled ? config.strength : 0;
-    bloomPass.radius.value = config.radius;
-    bloomPass.threshold.value = config.threshold;
-  }
-
-  function applySsao(config: SSAOSettings) {
-    if (!config.enabled || ssaoFallbackWarned) {
-      return;
-    }
-
-    warnings.push({
-      code: "render-pipeline-fallback",
-      message:
-        "Shared WebGPU render graph currently disables SSAO/GTAO because the Three.js GTAO node is unstable in this runtime path."
-    });
-    ssaoFallbackWarned = true;
-  }
-
   return {
     pipeline,
     applyEnvironment(definition) {
-      if (!definition) return warnings;
-      applyBloom(definition.atmosphere.bloom);
-      applySsao(definition.atmosphere.ssao);
+      if (!definition) {
+        return warnings;
+      }
+      if (definition.atmosphere.ssao.enabled && !ssaoFallbackWarned) {
+        warnings.push({
+          code: "render-pipeline-fallback",
+          message:
+            "Shared WebGPU render graph currently disables SSAO/GTAO because the Three.js GTAO node is unstable in this runtime path."
+        });
+        ssaoFallbackWarned = true;
+      }
       return warnings;
     },
     getBaseOutputNode() {
@@ -85,12 +74,9 @@ export function createRuntimeRenderGraph(options: {
       pipeline.outputNode = (node as typeof baseOutputNode | null) ?? baseOutputNode;
     },
     resize() {
-      // WebGPU TSL post nodes pull the drawing buffer size from the renderer
-      // during their own frame update. Avoid forcing an early setSize() before
-      // post nodes have finished internal setup.
+      // The TSL graph pulls the drawing buffer size from the renderer.
     },
     setCamera(nextCamera) {
-      camera = nextCamera;
       scenePass.camera = nextCamera;
     },
     dispose() {

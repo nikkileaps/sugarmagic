@@ -8,3 +8,6 @@
 
 export * from "./ShaderRuntime";
 export * from "./applyShaderToRenderable";
+export * from "./environment";
+export * from "./host";
+export * from "./render";

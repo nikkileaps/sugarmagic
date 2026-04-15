@@ -47,9 +47,10 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
-  ShaderRuntime,
   applyShaderToRenderable,
-  releaseShadersFromObjectTree
+  createWebRenderHost,
+  releaseShadersFromObjectTree,
+  type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
   BillboardComponent,
@@ -71,11 +72,8 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
-  createEnvironmentSceneController,
   createLandscapeSceneController,
-  createRuntimeRenderPipeline,
   createPlayerVisualController,
-  resolveEffectivePostProcessShaderBindings,
   spawnRuntimePlayerEntity,
   resolveEnvironmentWithPostProcessChain,
   type SceneObject,
@@ -838,6 +836,19 @@ export function createWebRuntimeHost(
     );
 
     renderer = new WebGPURenderer({ antialias: true });
+    // Enable shadow rendering. Without this, every DirectionalLight's
+    // castShadow flag is a no-op and the scene only gets orientation shading
+    // (no cast shadows on ground, no self-shadowing on geometry). PCFSoft
+    // gives blurred shadow edges suited to the stylized look we're targeting.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // TODO: tonemap should move to the authored post-process stack instead of
+    // living on the renderer (single-authority pattern, matching how fog and
+    // bloom were factored). First attempt at moving it broke rendering; left
+    // here on the renderer for now until the binding wiring is fixed.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.style.display = "block";
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
@@ -899,6 +910,16 @@ export function createWebRuntimeHost(
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
+              // Opt the loaded geometry into the shadow pipeline. Without
+              // these flags meshes are excluded from both the shadow map
+              // (no cast shadows on the ground) and shadow sampling (no
+              // self-shadowing on the building itself).
+              renderable.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                }
+              });
               applyShaderToRenderable(renderable, object, shaderRuntime);
               rootObject.add(renderable);
             })
@@ -1078,20 +1099,13 @@ export function createWebRuntimeHost(
           runtimeEnvironmentState?.activeEnvironmentId ?? null
         );
         renderPipeline.applyEnvironment(resolvedEnvironment.definition);
-        for (const binding of resolveEffectivePostProcessShaderBindings(
-          resolvedEnvironment.effectivePostProcessChain,
-          state.contentLibrary
-        )) {
-          if (!shaderRuntime) {
-            break;
-          }
-          shaderRuntime.applyShader(
-            binding,
-            {
-              targetKind: "post-process",
-              renderPipeline
-            }
-          );
+        if (shaderRuntime) {
+          applyPostProcessStack({
+            shaderRuntime,
+            renderPipeline,
+            contentLibrary: state.contentLibrary,
+            chain: resolvedEnvironment.effectivePostProcessChain
+          });
         }
 
         handleResize();
