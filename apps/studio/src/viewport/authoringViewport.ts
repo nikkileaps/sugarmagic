@@ -301,10 +301,11 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     mount(element: HTMLElement) {
       host.mount(element);
-      // Size syncing happens inside host.mount (after init resolves) for the
-      // canvas itself; the Studio-specific camera projection matrices are
-      // driven from resize() and from the initial ResizeObserver hook in the
-      // workspace shell, which fires shortly after mount.
+      // Studio has no gameplay loop of its own — let the host drive rendering
+      // so frame listeners fire every tick. Runtime host (which has its own
+      // gameplay loop) does NOT opt into this; it calls host.render() from
+      // its own loop instead.
+      host.startRenderLoop();
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);

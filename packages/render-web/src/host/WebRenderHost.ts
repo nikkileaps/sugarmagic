@@ -94,10 +94,22 @@ export interface WebRenderHost {
   unmount(): void;
 
   /**
-   * Render one frame. Called internally by the render loop; exposed so
-   * callers can render-on-demand (e.g. for thumbnails, texture bakes).
+   * Render one frame. Fires frame listeners then draws via the pipeline.
+   * Callers are responsible for driving this — either by starting the
+   * built-in render loop (startRenderLoop) or by calling render() directly
+   * from their own loop. The host does NOT auto-start a loop, because hosts
+   * like the published runtime already run their own loop for gameplay and
+   * a second internal loop would produce double-renders.
    */
   render(): void;
+
+  /**
+   * Start a requestAnimationFrame-driven render loop. Useful for callers
+   * that don't have their own loop (e.g. Studio's authoring viewport, which
+   * has no gameplay to tick). Safe to call multiple times — subsequent
+   * calls are no-ops while a loop is already running. Stops on unmount.
+   */
+  startRenderLoop(): void;
 
   /** Resize the renderer + pipeline. */
   resize(width: number, height: number): void;
@@ -193,14 +205,22 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     });
   }
 
-  function renderLoop(): void {
+  let loopRunning = false;
+
+  function renderOnce(): void {
     for (const listener of frameListeners) {
       listener();
     }
     if (renderPipeline) {
       renderPipeline.render();
     }
-    animationId = requestAnimationFrame(renderLoop);
+  }
+
+  function renderLoopTick(): void {
+    renderOnce();
+    if (loopRunning) {
+      animationId = requestAnimationFrame(renderLoopTick);
+    }
   }
 
   return {
@@ -266,7 +286,6 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
           });
 
           runPendingEnvironment();
-          renderLoop();
         })
         .catch((error) => {
           logger.warn("WebRenderHost renderer init failed.", {
@@ -277,6 +296,7 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
 
     unmount() {
       mountGeneration += 1;
+      loopRunning = false;
 
       if (animationId !== null) {
         cancelAnimationFrame(animationId);
@@ -304,9 +324,13 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     },
 
     render() {
-      if (renderPipeline) {
-        renderPipeline.render();
-      }
+      renderOnce();
+    },
+
+    startRenderLoop() {
+      if (loopRunning) return;
+      loopRunning = true;
+      animationId = requestAnimationFrame(renderLoopTick);
     },
 
     resize(width, height) {

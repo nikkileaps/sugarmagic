@@ -48,6 +48,7 @@ import {
   reinhardToneMapping,
   saturate,
   smoothstep,
+  uniform,
   viewportLinearDepth
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
@@ -109,6 +110,21 @@ interface FinalizationContext {
   opMap: Map<string, ShaderIROp>;
   opNodeCache: Map<string, unknown>;
   builtinSceneColorNode: unknown | null;
+  builtinSceneDepthNode: unknown | null;
+  /**
+   * Per-binding cache of uniform TSL nodes for parameters. Keyed by
+   * parameterId. Reused across applyShader calls for the same binding so that
+   * parameter value changes flow through as GPU uniform updates instead of
+   * baking new constants into a newly-compiled shader each time. Without this,
+   * live-editing fog density (or any other post-process parameter) in Studio
+   * had no visible effect because the shader held the old density as a
+   * compiled literal. See uniformForParameter() below.
+   */
+  parameterUniforms: Map<string, UniformNodeLike>;
+}
+
+interface UniformNodeLike {
+  value: unknown;
 }
 
 function stableStringify(value: unknown): string {
@@ -355,12 +371,14 @@ function materializeBuiltin(
     case "sceneColor":
       return asColorNode(context.builtinSceneColorNode ?? vec3(0, 0, 0));
     case "sceneDepth":
-      // viewportLinearDepth from three/tsl returns view-space Z distance in
-      // world units (linearDepth(viewportDepthTexture).negate). It is NOT
-      // normalized 0..1 — that was an earlier wrong assumption. Authored
-      // density values (e.g. 0.008) match FogExp2 semantics directly because
-      // both operate on world-space distance.
-      return viewportLinearDepth;
+      // Explicit scene-depth node wired from the scenePass (view-space Z
+      // distance, in world units). Preferred over the global
+      // viewportLinearDepth because that samples whatever depth texture is
+      // currently bound — observed to produce different results between
+      // Studio's authoring viewport and the runtime host even with
+      // otherwise-identical code. Falls back to viewportLinearDepth when no
+      // explicit depth node was provided (e.g. non-post-process targets).
+      return context.builtinSceneDepthNode ?? viewportLinearDepth;
     default:
       return float(0);
   }
@@ -376,13 +394,84 @@ function materializeValue(value: ShaderIRValue, context: FinalizationContext): u
   }
 
   if (value.kind === "parameter") {
-    return literalNode(
-      value.dataType,
-      context.parameterValues[value.parameterId] ?? 0
-    );
+    return uniformForParameter(value.parameterId, value.dataType, context);
   }
 
   return materializeOp(value.opId, context);
+}
+
+/**
+ * Get or create the uniform TSL node for a parameter, updating its .value to
+ * the current parameterValues entry. On the first call for a given parameter,
+ * a fresh uniform is created and cached in context.parameterUniforms. On
+ * subsequent calls (including after re-running applyShader on the same
+ * binding with new parameter values), the cached uniform is reused and its
+ * .value is updated — which pushes the new value to the GPU without the
+ * shader needing recompilation.
+ *
+ * This is what makes live parameter editing work. Without it, each
+ * applyShader call would bake the parameter value into a new compiled shader
+ * as a constant, and the GPU would keep using the previously-compiled shader
+ * with the stale value.
+ */
+function uniformForParameter(
+  parameterId: string,
+  dataType: ShaderIRValue["dataType"],
+  context: FinalizationContext
+): unknown {
+  const currentValue = context.parameterValues[parameterId] ?? 0;
+  const existing = context.parameterUniforms.get(parameterId);
+  if (existing) {
+    existing.value = uniformValueFromPrimitive(dataType, currentValue);
+    return existing;
+  }
+  const node = (uniform as unknown as (value: unknown) => UniformNodeLike)(
+    uniformValueFromPrimitive(dataType, currentValue)
+  );
+  context.parameterUniforms.set(parameterId, node);
+  return node;
+}
+
+function uniformValueFromPrimitive(
+  dataType: ShaderIRValue["dataType"],
+  value: unknown
+): unknown {
+  switch (dataType) {
+    case "float":
+      return typeof value === "number" ? value : 0;
+    case "vec2":
+      if (Array.isArray(value)) {
+        return new THREE.Vector2(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0
+        );
+      }
+      return new THREE.Vector2(0, 0);
+    case "vec3":
+    case "color":
+      if (Array.isArray(value)) {
+        return new THREE.Vector3(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0,
+          Number(value[2]) || 0
+        );
+      }
+      return new THREE.Vector3(0, 0, 0);
+    case "vec4":
+      if (Array.isArray(value)) {
+        return new THREE.Vector4(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0,
+          Number(value[2]) || 0,
+          Number(value[3]) || 0
+        );
+      }
+      return new THREE.Vector4(0, 0, 0, 0);
+    case "bool":
+      return value ? 1 : 0;
+    default:
+      return typeof value === "number" ? value : 0;
+  }
 }
 
 function materializeOp(opId: string, context: FinalizationContext): unknown {
@@ -617,7 +706,8 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
 function applyIRToMaterial(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>
+  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
+  parameterUniforms: Map<string, UniformNodeLike>
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -635,7 +725,9 @@ function applyIRToMaterial(
     parameterValues: binding.parameterValues,
     opMap: new Map(allOps.map((op) => [op.opId, op])),
     opNodeCache: new Map(),
-    builtinSceneColorNode: null
+    builtinSceneColorNode: null,
+    builtinSceneDepthNode: null,
+    parameterUniforms: parameterUniforms
   };
 
   if (ir.outputs.vertex) {
@@ -660,7 +752,8 @@ function applyIRToMaterial(
 function applyIRToPostProcess(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>
+  target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>,
+  parameterUniforms: Map<string, UniformNodeLike>
 ): unknown {
   const baseOutputNode =
     target.previousOutputNode ?? target.renderPipeline.getBaseOutputNode();
@@ -674,7 +767,12 @@ function applyIRToPostProcess(
     parameterValues: binding.parameterValues,
     opMap: new Map(ir.postProcessOps.map((op) => [op.opId, op])),
     opNodeCache: new Map(),
-    builtinSceneColorNode: baseOutputNode
+    builtinSceneColorNode: baseOutputNode,
+    // Pull the authoritative scene-depth node from the pipeline. Each binding
+    // in the chain reads the SAME scenePass depth — not the global viewport
+    // depth, which is what broke fog in Studio but not in the runtime host.
+    builtinSceneDepthNode: target.renderPipeline.getSceneDepthNode(),
+    parameterUniforms: parameterUniforms
   };
   const nextOutputNode = ir.outputs.postProcessColor
     ? materializeValue(ir.outputs.postProcessColor, context)
@@ -694,6 +792,14 @@ export class ShaderRuntime {
   private readonly materialEntryByMaterial = new WeakMap<THREE.Material, CachedMaterialEntry>();
   private readonly materialEntries = new Set<CachedMaterialEntry>();
   private readonly diagnostics = new Map<string, ShaderIRDiagnostic[]>();
+  /**
+   * Persistent uniform node cache, keyed by shaderDefinitionId. Each entry is
+   * a map from parameterId to the TSL uniform node for that parameter.
+   * Reused across applyShader calls for the same binding so live parameter
+   * edits become GPU-uniform updates, not shader recompilations. See
+   * uniformForParameter() for the reasoning.
+   */
+  private readonly parameterUniformCache = new Map<string, Map<string, UniformNodeLike>>();
   private disposed = false;
 
   constructor(options: ShaderRuntimeOptions) {
@@ -752,8 +858,10 @@ export class ShaderRuntime {
       return undefined;
     }
 
+    const parameterUniforms = this.getOrCreateParameterUniformCache(binding.shaderDefinitionId);
+
     if (target.targetKind === "post-process") {
-      return applyIRToPostProcess(ir, binding, target);
+      return applyIRToPostProcess(ir, binding, target, parameterUniforms);
     }
 
     const cacheKey = [
@@ -766,8 +874,28 @@ export class ShaderRuntime {
     ].join("|");
 
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
-      applyIRToMaterial(ir, binding, target)
+      applyIRToMaterial(ir, binding, target, parameterUniforms)
     );
+  }
+
+  /**
+   * Reuse uniform TSL nodes across applyShader calls for the same binding.
+   * The first call materializes a parameter as a new uniform; subsequent
+   * calls re-use the cached uniform and update its .value in place. This
+   * turns live parameter edits into GPU uniform updates rather than shader
+   * recompilations, which is what makes the fog density slider (and any
+   * other live-edit control) actually update the viewport instead of
+   * silently being overwritten by the cached compiled shader's old constant.
+   */
+  private getOrCreateParameterUniformCache(
+    shaderDefinitionId: string
+  ): Map<string, UniformNodeLike> {
+    let cache = this.parameterUniformCache.get(shaderDefinitionId);
+    if (!cache) {
+      cache = new Map();
+      this.parameterUniformCache.set(shaderDefinitionId, cache);
+    }
+    return cache;
   }
 
   releaseMaterial(material: THREE.Material): void {
@@ -788,6 +916,7 @@ export class ShaderRuntime {
         this.compileCache.delete(key);
       }
     }
+    this.parameterUniformCache.delete(shaderDefinitionId);
     this.retireMaterials((entry) => entry.shaderDefinitionId === shaderDefinitionId);
   }
 
@@ -800,6 +929,7 @@ export class ShaderRuntime {
     this.retireMaterials(() => true);
     this.materialCache.clear();
     this.compileCache.clear();
+    this.parameterUniformCache.clear();
     this.diagnostics.clear();
   }
 

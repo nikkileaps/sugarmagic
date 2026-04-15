@@ -16,6 +16,15 @@ export interface RuntimeRenderGraph {
   readonly pipeline: RenderPipeline | null;
   applyEnvironment: (definition: EnvironmentDefinition | null) => EnvironmentSceneWarning[];
   getBaseOutputNode: () => unknown | null;
+  /**
+   * The scene pass's linear depth node, in world-space view distance.
+   * Wired explicitly so authored post-process graphs have a deterministic
+   * depth source rather than relying on viewportLinearDepth — which reads
+   * from whatever depth texture is currently bound, a fragile dependency
+   * that was producing different results between Studio's authoring
+   * viewport and the published runtime (fog visible in one, not the other).
+   */
+  getSceneDepthNode: () => unknown | null;
   setPostProcessOutputNode: (node: unknown | null) => void;
   resize: (width: number, height: number) => void;
   setCamera: (camera: THREE.Camera) => void;
@@ -32,6 +41,13 @@ export function createRuntimeRenderGraph(options: {
   const { renderer, scene } = options;
   const scenePass = pass(scene, options.camera);
   const baseOutputNode = scenePass.getTextureNode("output");
+  // Explicit depth node from the scene pass. Fog and other depth-based post-
+  // process effects read this directly instead of going through
+  // viewportLinearDepth, which has been observed to return different values
+  // between Studio and the published runtime (same code, same content, same
+  // pipeline) because it samples whatever depth texture is currently bound
+  // globally rather than the scene pass's own depth attachment.
+  const sceneDepthNode = scenePass.getViewZNode().negate();
 
   const warnings: EnvironmentSceneWarning[] = [];
   let pipeline: RenderPipeline | null = null;
@@ -66,6 +82,9 @@ export function createRuntimeRenderGraph(options: {
     },
     getBaseOutputNode() {
       return pipeline ? baseOutputNode : null;
+    },
+    getSceneDepthNode() {
+      return pipeline ? sceneDepthNode : null;
     },
     setPostProcessOutputNode(node) {
       if (!pipeline) {
