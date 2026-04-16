@@ -9,6 +9,10 @@ export {
   type BuildContextSelector
 } from "./BuildSubNav";
 export {
+  ColorField,
+  type ColorFieldProps
+} from "./ColorField";
+export {
   CreateRegionDialog,
   type CreateRegionDialogProps
 } from "./CreateRegionDialog";

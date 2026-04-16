@@ -93,11 +93,13 @@ import {
 } from "../plugins";
 import type { TimestampIso } from "../shared";
 import {
+  createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
-  normalizeContentLibrarySnapshot
+  normalizeContentLibrarySnapshot,
+  synchronizeEnvironmentDefinition
 } from "../content-library";
 import type { ShaderGraphDocument, ShaderParameterOverride } from "../shader-graph";
 import {
@@ -429,7 +431,10 @@ function applyEnvironmentDefinitionCommand(
   }
 
   const nextDefinitions = [...session.contentLibrary.environmentDefinitions];
-  nextDefinitions[definitionIndex] = command.payload.definition;
+  nextDefinitions[definitionIndex] = synchronizeEnvironmentDefinition(
+    command.payload.definition,
+    session.gameProject.identity.id
+  );
   const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
 
   return {
@@ -814,35 +819,30 @@ function applyAddPostProcessShaderCommand(
   session: AuthoringSession,
   command: AddPostProcessShaderCommand
 ): AuthoringSession {
-  const nextDefinitions = session.contentLibrary.environmentDefinitions.map((definition) =>
-    definition.definitionId !== command.payload.environmentDefinitionId
-      ? definition
-      : {
-          ...definition,
-          postProcessShaders: [
-            ...definition.postProcessShaders.filter(
-              (binding) =>
-                binding.shaderDefinitionId !== command.payload.binding.shaderDefinitionId
-            ),
-            command.payload.binding
-          ]
-        }
+  const definition = session.contentLibrary.environmentDefinitions.find(
+    (entry) => entry.definitionId === command.payload.environmentDefinitionId
   );
-  const transaction = createTransactionForCommand(command, [
-    command.payload.environmentDefinitionId
-  ]);
+  if (!definition) {
+    return session;
+  }
 
-  return {
-    ...session,
-    contentLibrary: {
-      ...session.contentLibrary,
-      environmentDefinitions: nextDefinitions
-    },
-    undoStack: [...session.undoStack, checkpointSession(session)],
-    redoStack: [],
-    history: pushTransaction(session.history, transaction),
-    isDirty: true
-  };
+  return applyEnvironmentDefinitionCommand(session, {
+    ...command,
+    kind: "UpdateEnvironmentDefinition",
+    payload: {
+      definitionId: definition.definitionId,
+      definition: {
+        ...definition,
+        postProcessShaders: [
+          ...definition.postProcessShaders.filter(
+            (binding) =>
+              binding.shaderDefinitionId !== command.payload.binding.shaderDefinitionId
+          ),
+          command.payload.binding
+        ]
+      }
+    }
+  });
 }
 
 function applyUpdatePostProcessShaderOrderCommand(
@@ -912,6 +912,54 @@ function updatePostProcessBindingOverride(
           : binding
       )
     };
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInFogTintShaderId(session.gameProject.identity.id)
+    ) {
+      const currentFog = definition.atmosphere.fog;
+      nextDefinition = {
+        ...nextDefinition,
+        atmosphere: {
+          ...nextDefinition.atmosphere,
+          fog: {
+            ...currentFog,
+            color:
+              command.payload.override.parameterId === "color"
+                ? ((
+                    () => {
+                      const value = command.payload.override.value;
+                      if (
+                        Array.isArray(value) &&
+                        value.length >= 3 &&
+                        value.every(
+                          (channel) =>
+                            typeof channel === "number" && Number.isFinite(channel)
+                        )
+                      ) {
+                        return (
+                          (Math.round((value[0] ?? 0) * 255) << 16) |
+                          (Math.round((value[1] ?? 0) * 255) << 8) |
+                          Math.round((value[2] ?? 0) * 255)
+                        );
+                      }
+                      return currentFog.color;
+                    })()
+                  )
+                : currentFog.color,
+            density:
+              command.payload.override.parameterId === "density" &&
+              typeof command.payload.override.value === "number"
+                ? command.payload.override.value
+                : currentFog.density,
+            heightFalloff:
+              command.payload.override.parameterId === "heightFalloff" &&
+              typeof command.payload.override.value === "number"
+                ? command.payload.override.value
+                : currentFog.heightFalloff
+          }
+        }
+      };
+    }
   } else if (command.kind === "TogglePostProcessShader") {
     nextDefinition = {
       ...definition,
@@ -921,6 +969,21 @@ function updatePostProcessBindingOverride(
           : binding
       )
     };
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInFogTintShaderId(session.gameProject.identity.id)
+    ) {
+      nextDefinition = {
+        ...nextDefinition,
+        atmosphere: {
+          ...nextDefinition.atmosphere,
+          fog: {
+            ...nextDefinition.atmosphere.fog,
+            enabled: command.payload.enabled
+          }
+        }
+      };
+    }
   } else if (command.kind === "RemovePostProcessShader") {
     nextDefinition = {
       ...definition,
@@ -928,6 +991,21 @@ function updatePostProcessBindingOverride(
         (binding) => binding.shaderDefinitionId !== command.payload.shaderDefinitionId
       )
     };
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInFogTintShaderId(session.gameProject.identity.id)
+    ) {
+      nextDefinition = {
+        ...nextDefinition,
+        atmosphere: {
+          ...nextDefinition.atmosphere,
+          fog: {
+            ...nextDefinition.atmosphere.fog,
+            enabled: false
+          }
+        }
+      };
+    }
   }
 
   return applyEnvironmentDefinitionCommand(session, {

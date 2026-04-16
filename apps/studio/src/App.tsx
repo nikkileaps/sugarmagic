@@ -541,29 +541,6 @@ export function App() {
     return getAllShaderDefinitions(session);
   }, [session]);
 
-  useEffect(() => {
-    if (phase !== "active") {
-      return;
-    }
-    console.warn("[studio-app] project-state", {
-      phase,
-      hasSession: session !== null,
-      activeProductMode,
-      activeRenderKind,
-      shaderDefinitionCount: shaderDefinitions.length,
-      environmentDefinitionCount: environmentDefinitions.length,
-      assetDefinitionCount: assetDefinitions.length
-    });
-  }, [
-    activeProductMode,
-    activeRenderKind,
-    assetDefinitions.length,
-    environmentDefinitions.length,
-    phase,
-    session,
-    shaderDefinitions.length
-  ]);
-
   const playerDefinition = useMemo(() => {
     if (!session) return null;
     return getPlayerDefinition(session);

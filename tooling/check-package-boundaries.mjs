@@ -102,10 +102,7 @@ const restrictedExternalImports = {
         "packages/runtime-core/src/landscape/mesh.ts",
         "packages/runtime-core/src/landscape/splatmap.ts",
         "packages/runtime-core/src/npc/index.ts",
-        "packages/runtime-core/src/player/index.ts",
-        "packages/runtime-core/src/render/environment-scene.ts",
-        "packages/runtime-core/src/render/graph.ts",
-        "packages/runtime-core/src/render/pipeline.ts"
+        "packages/runtime-core/src/player/index.ts"
       ])
     }
   ]

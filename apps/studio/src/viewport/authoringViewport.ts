@@ -1,10 +1,11 @@
 import * as THREE from "three";
-import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
-  ShaderRuntime,
   applyShaderToRenderable,
-  releaseShadersFromObjectTree
+  createWebRenderHost,
+  releaseShadersFromObjectTree,
+  type ShaderRuntime,
+  type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
@@ -13,10 +14,6 @@ import {
 import {
   resolveSceneObjects,
   computeSceneDelta,
-  createEnvironmentSceneController,
-  createLandscapeSceneController,
-  createRuntimeRenderPipeline,
-  resolveEnvironmentDefinition,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import type {
@@ -147,7 +144,8 @@ function disposeObject(root: THREE.Object3D) {
 async function createRenderableRoot(
   object: SceneObject,
   assetSources: Record<string, string>,
-  shaderRuntime: ShaderRuntime | null
+  shaderRuntime: ShaderRuntime | null,
+  host: WebRenderHost
 ): Promise<SceneObjectEntry> {
   const root = new THREE.Group();
   root.name = object.instanceId;
@@ -167,6 +165,7 @@ async function createRenderableRoot(
     if (object.targetModelHeight) {
       normalizeModelScale(renderable, object.targetModelHeight);
     }
+    host.enableShadowsOnObject(renderable);
     applyShaderToRenderable(renderable, object, shaderRuntime);
     root.add(renderable);
     return { root, assetSourceUrl, representationKey: object.representationKey };
@@ -178,8 +177,6 @@ async function createRenderableRoot(
 
 export function createAuthoringViewport(): WorkspaceViewport {
   const scene = new THREE.Scene();
-  const environmentController = createEnvironmentSceneController(scene);
-  const landscapeController = createLandscapeSceneController(scene);
 
   const perspectiveCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
   perspectiveCamera.position.set(5, 5, 5);
@@ -195,8 +192,15 @@ export function createAuthoringViewport(): WorkspaceViewport {
   let projectionMode: "perspective" | "orthographic-top" = "perspective";
   let activeCamera: THREE.Camera = perspectiveCamera;
 
-  let renderer: WebGPURenderer | null = null;
-  let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
+  // Single shared host owns renderer config, render pipeline, shader runtime,
+  // environment + landscape controllers, post-process application, and the
+  // render loop. Studio composes authoring-specific state on top of it.
+  const host: WebRenderHost = createWebRenderHost({
+    scene,
+    camera: activeCamera,
+    compileProfile: "authoring-preview"
+  });
+
   let currentGridSpec = resolveLandscapeGridSpec(null);
   let grid = createLandscapeGrid(currentGridSpec);
   scene.add(grid);
@@ -210,14 +214,41 @@ export function createAuthoringViewport(): WorkspaceViewport {
   scene.add(overlayRoot);
 
   const objectMap = new Map<string, SceneObjectEntry>();
-  const frameListeners = new Set<() => void>();
+  const pendingRenderableLoads = new Set<string>();
   let previousObjects: SceneObject[] = [];
   let currentState: ViewportSceneState | null = null;
-  let animationId: number | null = null;
-  let container: HTMLElement | null = null;
   let renderGeneration = 0;
-  let mountGeneration = 0;
-  let shaderRuntime: ShaderRuntime | null = null;
+
+  function scheduleRenderableLoad(
+    object: SceneObject,
+    assetSources: Record<string, string>,
+    activeShaderRuntime: ShaderRuntime | null,
+    generation: number
+  ) {
+    if (pendingRenderableLoads.has(object.instanceId)) {
+      return;
+    }
+
+    pendingRenderableLoads.add(object.instanceId);
+    void createRenderableRoot(object, assetSources, activeShaderRuntime, host)
+      .then((entry) => {
+        pendingRenderableLoads.delete(object.instanceId);
+        if (generation !== renderGeneration) {
+          disposeObject(entry.root);
+          return;
+        }
+        const existing = objectMap.get(object.instanceId);
+        if (existing) {
+          authoredRoot.remove(existing.root);
+          disposeObject(existing.root);
+        }
+        authoredRoot.add(entry.root);
+        objectMap.set(object.instanceId, entry);
+      })
+      .catch(() => {
+        pendingRenderableLoads.delete(object.instanceId);
+      });
+  }
 
   function syncCameraProjection(width: number, height: number) {
     const safeWidth = Math.max(1, width);
@@ -233,10 +264,6 @@ export function createAuthoringViewport(): WorkspaceViewport {
     orthographicCamera.top = halfHeight;
     orthographicCamera.bottom = -halfHeight;
     orthographicCamera.updateProjectionMatrix();
-  }
-
-  function updateRenderPipelineCamera() {
-    renderPipeline?.setCamera(activeCamera);
   }
 
   function syncLandscapeGrid(landscape: RegionLandscapeState | null | undefined) {
@@ -255,18 +282,6 @@ export function createAuthoringViewport(): WorkspaceViewport {
     currentGridSpec = nextSpec;
   }
 
-  function renderLoop() {
-    for (const listener of frameListeners) {
-      listener();
-    }
-    if (renderPipeline) {
-      renderPipeline.render();
-    } else if (renderer) {
-      renderer.render(scene, activeCamera);
-    }
-    animationId = requestAnimationFrame(renderLoop);
-  }
-
   return {
     scene,
     get camera() {
@@ -274,84 +289,39 @@ export function createAuthoringViewport(): WorkspaceViewport {
     },
     authoredRoot,
     overlayRoot,
-    surfaceRoot: landscapeController.surfaceRoot,
+    surfaceRoot: host.landscapeController.surfaceRoot,
     setProjectionMode(mode) {
       projectionMode = mode;
       activeCamera =
         projectionMode === "orthographic-top"
           ? orthographicCamera
           : perspectiveCamera;
-      updateRenderPipelineCamera();
+      host.setCamera(activeCamera);
     },
 
     mount(element: HTMLElement) {
-      container = element;
-      const generation = ++mountGeneration;
-      const nextRenderer = new WebGPURenderer({ antialias: true });
-      renderer = nextRenderer;
-      nextRenderer.domElement.style.display = "block";
-      nextRenderer.domElement.style.width = "100%";
-      nextRenderer.domElement.style.height = "100%";
-      element.appendChild(nextRenderer.domElement);
-
-      void nextRenderer
-        .init()
-        .then(() => {
-          if (mountGeneration !== generation || container !== element) {
-            nextRenderer.dispose();
-            if (nextRenderer.domElement.parentElement === element) {
-              element.removeChild(nextRenderer.domElement);
-            }
-            return;
-          }
-
-          nextRenderer.setPixelRatio(window.devicePixelRatio);
-          const width = element.clientWidth || 1;
-          const height = element.clientHeight || 1;
-          nextRenderer.setSize(width, height, false);
-          syncCameraProjection(width, height);
-          renderPipeline = createRuntimeRenderPipeline({
-            renderer: nextRenderer,
-            scene,
-            camera: activeCamera,
-            width,
-            height
-          });
-
-          renderLoop();
-        })
-        .catch((error) => {
-          console.error("[sugarmagic] Failed to initialize WebGPU authoring viewport.", error);
-        });
+      host.mount(element);
+      // Studio has no gameplay loop of its own — let the host drive rendering
+      // so frame listeners fire every tick. Runtime host (which has its own
+      // gameplay loop) does NOT opt into this; it calls host.render() from
+      // its own loop instead.
+      host.startRenderLoop();
+      const width = element.clientWidth || 1;
+      const height = element.clientHeight || 1;
+      syncCameraProjection(width, height);
     },
 
     unmount() {
       renderGeneration += 1;
-
-      if (animationId !== null) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-      }
 
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
         disposeObject(entry.root);
       }
       objectMap.clear();
+      pendingRenderableLoads.clear();
       currentState = null;
-      environmentController.dispose();
-      landscapeController.dispose();
-      renderPipeline?.dispose();
-      renderPipeline = null;
-      shaderRuntime?.dispose();
-      shaderRuntime = null;
-
-      if (container && renderer?.domElement.parentElement === container) {
-        container.removeChild(renderer.domElement);
-      }
-
-      renderer?.dispose();
-      renderer = null;
+      host.unmount();
     },
 
     updateFromRegion(state: ViewportSceneState) {
@@ -365,22 +335,10 @@ export function createAuthoringViewport(): WorkspaceViewport {
         assetSources,
         environmentOverrideId = null
       } = state;
-      shaderRuntime?.dispose();
-      shaderRuntime = new ShaderRuntime({
-        contentLibrary,
-        compileProfile: "authoring-preview",
-        logger: {
-          warn(message: string, payload?: Record<string, unknown>) {
-            console.warn("[studio-authoring] shader-runtime", { message, ...(payload ?? {}) });
-          }
-        }
-      });
-      environmentController.apply(region, contentLibrary, environmentOverrideId);
-      landscapeController.apply(region);
+      // Host handles environment + post-process apply, and keeps the shader
+      // runtime's content library in sync without dispose/recreate.
+      host.applyEnvironment(region, contentLibrary, environmentOverrideId);
       syncLandscapeGrid(region.landscape);
-      renderPipeline?.applyEnvironment(
-        resolveEnvironmentDefinition(region, contentLibrary, environmentOverrideId)
-      );
 
       const currentObjects = resolveSceneObjects(region, {
         contentLibrary,
@@ -400,14 +358,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
       }
 
       for (const object of delta.added) {
-        void createRenderableRoot(object, assetSources, shaderRuntime).then((entry) => {
-          if (generation !== renderGeneration) {
-            disposeObject(entry.root);
-            return;
-          }
-          authoredRoot.add(entry.root);
-          objectMap.set(object.instanceId, entry);
-        });
+        scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
       }
 
       for (const object of delta.updated) {
@@ -429,14 +380,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
           objectMap.delete(object.instanceId);
         }
 
-        void createRenderableRoot(object, assetSources, shaderRuntime).then((entry) => {
-          if (generation !== renderGeneration) {
-            disposeObject(entry.root);
-            return;
-          }
-          authoredRoot.add(entry.root);
-          objectMap.set(object.instanceId, entry);
-        });
+        scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
       }
 
       for (const object of currentObjects) {
@@ -449,17 +393,13 @@ export function createAuthoringViewport(): WorkspaceViewport {
           disposeObject(entry.root);
           objectMap.delete(object.instanceId);
 
-          void createRenderableRoot(object, assetSources, shaderRuntime).then((nextEntry) => {
-            if (generation !== renderGeneration) {
-              disposeObject(nextEntry.root);
-              return;
-            }
-            authoredRoot.add(nextEntry.root);
-            objectMap.set(object.instanceId, nextEntry);
-          });
+          scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
           continue;
         }
-        if (!entry) continue;
+        if (!entry) {
+          scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
+          continue;
+        }
         applyObjectTransform(entry.root, object);
       }
 
@@ -468,12 +408,12 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     previewLandscape(landscape) {
       if (!currentState) return;
-      landscapeController.applyLandscape(landscape);
+      host.landscapeController.applyLandscape(landscape);
       syncLandscapeGrid(landscape);
     },
 
     paintLandscapeAt(options) {
-      return landscapeController.paintStroke({
+      return host.landscapeController.paintStroke({
         channelIndex: options.channelIndex,
         worldX: options.worldX,
         worldZ: options.worldZ,
@@ -484,11 +424,11 @@ export function createAuthoringViewport(): WorkspaceViewport {
     },
 
     renderLandscapeMask(channelIndex, canvas) {
-      landscapeController.renderMaskToCanvas(channelIndex, canvas);
+      host.landscapeController.renderMaskToCanvas(channelIndex, canvas);
     },
 
     serializeLandscapePaintPayload() {
-      return landscapeController.serializePaintPayload();
+      return host.landscapeController.serializePaintPayload();
     },
 
     previewTransform(instanceId, position, rotation, scale) {
@@ -502,24 +442,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
-      renderer?.setSize(width, height, false);
+      host.resize(width, height);
       syncCameraProjection(width, height);
-      renderPipeline?.resize(width, height);
     },
 
     render() {
-      if (renderPipeline) {
-        renderPipeline.render();
-      } else if (renderer) {
-        renderer.render(scene, activeCamera);
-      }
+      host.render();
     },
 
     subscribeFrame(listener) {
-      frameListeners.add(listener);
-      return () => {
-        frameListeners.delete(listener);
-      };
+      return host.subscribeFrame(listener);
     }
   };
 }

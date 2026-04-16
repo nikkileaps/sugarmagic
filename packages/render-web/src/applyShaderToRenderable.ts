@@ -78,7 +78,7 @@ export function applyShaderToRenderable(
           targetKind: "mesh-surface" | "mesh-deform";
           material: THREE.Material;
           geometry: THREE.BufferGeometry;
-        });
+        }) as THREE.Material | undefined;
 
       if (!finalized) {
         return material;

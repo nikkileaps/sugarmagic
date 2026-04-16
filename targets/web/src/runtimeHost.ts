@@ -47,9 +47,10 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
-  ShaderRuntime,
   applyShaderToRenderable,
-  releaseShadersFromObjectTree
+  createWebRenderHost,
+  releaseShadersFromObjectTree,
+  type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
   BillboardComponent,
@@ -71,11 +72,8 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
-  createEnvironmentSceneController,
   createLandscapeSceneController,
-  createRuntimeRenderPipeline,
   createPlayerVisualController,
-  resolveEffectivePostProcessShaderBindings,
   spawnRuntimePlayerEntity,
   resolveEnvironmentWithPostProcessChain,
   type SceneObject,
@@ -580,10 +578,12 @@ export function createWebRuntimeHost(
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
-  let renderer: WebGPURenderer | null = null;
-  let environmentController: ReturnType<typeof createEnvironmentSceneController> | null = null;
-  let landscapeController: ReturnType<typeof createLandscapeSceneController> | null = null;
-  let renderPipeline: ReturnType<typeof createRuntimeRenderPipeline> | null = null;
+  // Single shared render host owns: WebGPURenderer, RuntimeRenderPipeline,
+  // ShaderRuntime, EnvironmentSceneController, LandscapeSceneController, the
+  // render loop, and post-process application. Studio's authoring viewport
+  // uses the same host, so renderer config + pipeline setup cannot drift
+  // between the two callers.
+  let host: WebRenderHost | null = null;
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
@@ -593,7 +593,6 @@ export function createWebRuntimeHost(
     | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
-  let shaderRuntime: ShaderRuntime | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
   let debugHud: ReturnType<typeof createRuntimeDebugHud> | null = null;
   let gameplayAssembly:
@@ -629,8 +628,6 @@ export function createWebRuntimeHost(
     gameplaySession = null;
     billboardRenderer?.dispose();
     billboardRenderer = null;
-    shaderRuntime?.dispose();
-    shaderRuntime = null;
     textBillboardRenderer?.dispose();
     textBillboardRenderer = null;
     billboardAssetRegistry?.dispose();
@@ -647,17 +644,11 @@ export function createWebRuntimeHost(
     }
     sceneObjectEntries.clear();
 
-    environmentController?.dispose();
-    environmentController = null;
-    landscapeController?.dispose();
-    landscapeController = null;
     if (grid && scene) {
       scene.remove(grid);
       disposeGrid(grid);
       grid = null;
     }
-    renderPipeline?.dispose();
-    renderPipeline = null;
 
     if (scene) {
       const runtimeManagedMaterials = releaseShadersFromObjectTree(scene);
@@ -678,27 +669,24 @@ export function createWebRuntimeHost(
       });
     }
 
-    if (renderer) {
-      renderer.dispose();
-      if (renderer.domElement.parentElement === root) {
-        root.removeChild(renderer.domElement);
-      }
-    }
+    // Host unmount handles: renderer dispose, canvas removal, pipeline
+    // dispose, shader runtime dispose, environment + landscape controller
+    // dispose, frame-listener cleanup. Single-owner teardown — no drift.
+    host?.unmount();
+    host = null;
 
-    renderer = null;
     camera = null;
     scene = null;
   }
 
   function handleResize() {
-    if (!camera || !renderer) return;
+    if (!camera || !host) return;
 
     const width = root.clientWidth || 1;
     const height = root.clientHeight || 1;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-    renderPipeline?.resize(width, height);
+    host.resize(width, height);
   }
 
   function renderFrame(now: number) {
@@ -706,7 +694,7 @@ export function createWebRuntimeHost(
       !world ||
       !cameraState ||
       !camera ||
-      !renderer ||
+      !host ||
       !scene ||
       !playerVisualController ||
       !inputManager
@@ -782,8 +770,8 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
-    renderPipeline?.setCamera(camera);
-    renderPipeline?.render();
+    host.setCamera(camera);
+    host.render();
 
     debugHud?.update(delta);
 
@@ -805,8 +793,6 @@ export function createWebRuntimeHost(
     if (ownerWindow.getComputedStyle(root).position === "static") {
       root.style.position = "relative";
     }
-    environmentController = createEnvironmentSceneController(scene);
-    landscapeController = createLandscapeSceneController(scene);
     billboardAssetRegistry = new BillboardAssetRegistry({
       ownerWindow,
       logger: {
@@ -819,15 +805,6 @@ export function createWebRuntimeHost(
       scene,
       registry: billboardAssetRegistry
     });
-    shaderRuntime = new ShaderRuntime({
-      contentLibrary: state.contentLibrary,
-      compileProfile: request.compileProfile,
-      logger: {
-        warn(message: string, payload?: Record<string, unknown>) {
-          console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
-        }
-      }
-    });
     textBillboardRenderer = new TextBillboardRenderer({ parent: root });
 
     camera = new THREE.PerspectiveCamera(
@@ -837,11 +814,20 @@ export function createWebRuntimeHost(
       1000
     );
 
-    renderer = new WebGPURenderer({ antialias: true });
-    renderer.domElement.style.display = "block";
-    renderer.domElement.style.width = "100%";
-    renderer.domElement.style.height = "100%";
-    root.appendChild(renderer.domElement);
+    // Single shared host creates + configures the renderer, pipeline, shader
+    // runtime, environment + landscape controllers, and the render loop.
+    // Studio's authoring viewport creates its host the same way, so neither
+    // caller can drift in renderer config or pipeline lifecycle.
+    host = createWebRenderHost({
+      scene,
+      camera,
+      compileProfile: request.compileProfile,
+      logger: {
+        warn(message: string, payload?: Record<string, unknown>) {
+          console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        }
+      }
+    });
 
     const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
     grid = createLandscapeGrid(resolveLandscapeGridSpec(activeRegion?.landscape ?? null));
@@ -851,12 +837,6 @@ export function createWebRuntimeHost(
       contentLibrary: state.contentLibrary,
       explicitEnvironmentId: state.activeEnvironmentId
     });
-    environmentController.apply(
-      activeRegion,
-      state.contentLibrary,
-      runtimeEnvironmentState.activeEnvironmentId
-    );
-    landscapeController.apply(activeRegion);
 
     for (const region of state.regions) {
       const objects = resolveSceneObjects(region, {
@@ -899,7 +879,8 @@ export function createWebRuntimeHost(
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
-              applyShaderToRenderable(renderable, object, shaderRuntime);
+              host?.enableShadowsOnObject(renderable);
+              applyShaderToRenderable(renderable, object, host?.shaderRuntime ?? null);
               rootObject.add(renderable);
             })
             .catch((error) => {
@@ -1002,10 +983,6 @@ export function createWebRuntimeHost(
     });
     gameplaySession = gameplayAssembly.gameplaySession;
     if (adapter.boot.hostKind === "studio") {
-      const activeRenderer = renderer;
-      if (!activeRenderer) {
-        throw new Error("Preview debug HUD requires an active renderer.");
-      }
       gameplaySession.initializeDebugBillboards();
       debugHud = createRuntimeDebugHud({
         parent: root,
@@ -1014,7 +991,13 @@ export function createWebRuntimeHost(
         world,
         blackboard: gameplaySession.blackboard,
         pluginCards: gameplaySession.getDebugHudCardContributions(),
-        getRendererStats: () => readRendererDebugStats(activeRenderer),
+        getRendererStats: () => {
+          const renderer = host?.renderer;
+          if (!renderer) {
+            return { drawCalls: 0, triangles: 0, textures: 0, geometries: 0 };
+          }
+          return readRendererDebugStats(renderer);
+        },
         getGameplaySessionSnapshot: () => gameplaySession?.getDebugHudSnapshot() ?? {
           activeEntityCount: 0,
           activeSystemCount: 0,
@@ -1059,48 +1042,23 @@ export function createWebRuntimeHost(
       () => cameraState?.yaw ?? Math.PI * 1.25
     );
 
-    void renderer
-      .init()
-      .then(() => {
-        if (!renderer || !scene || !camera) return;
-
-        renderer.setPixelRatio(ownerWindow.devicePixelRatio);
-        renderPipeline = createRuntimeRenderPipeline({
-          renderer,
-          scene,
-          camera,
-          width: root.clientWidth || 1,
-          height: root.clientHeight || 1
-        });
-        const resolvedEnvironment = resolveEnvironmentWithPostProcessChain(
-          activeRegion,
-          state.contentLibrary,
-          runtimeEnvironmentState?.activeEnvironmentId ?? null
-        );
-        renderPipeline.applyEnvironment(resolvedEnvironment.definition);
-        for (const binding of resolveEffectivePostProcessShaderBindings(
-          resolvedEnvironment.effectivePostProcessChain,
-          state.contentLibrary
-        )) {
-          if (!shaderRuntime) {
-            break;
-          }
-          shaderRuntime.applyShader(
-            binding,
-            {
-              targetKind: "post-process",
-              renderPipeline
-            }
-          );
-        }
-
-        handleResize();
-        lastTime = ownerWindow.performance.now();
-        animationId = ownerWindow.requestAnimationFrame(renderFrame);
-      })
-      .catch((error) => {
-        console.error("[sugarmagic] Failed to initialize WebGPU runtime host.", error);
-      });
+    // Kick off the host mount (creates renderer + pipeline + shader runtime
+    // + controllers). Queue the environment apply so it fires inside the
+    // host's init().then() as soon as the pipeline is ready.
+    host.mount(root);
+    host.applyEnvironment(
+      activeRegion,
+      state.contentLibrary,
+      runtimeEnvironmentState?.activeEnvironmentId ?? null
+    );
+    // Runtime host drives its own render loop (renderFrame ticks gameplay
+    // then calls host.render()). We wait one tick so the host's async init
+    // can resolve and create the pipeline before we try to render.
+    ownerWindow.requestAnimationFrame(() => {
+      handleResize();
+      lastTime = ownerWindow.performance.now();
+      animationId = ownerWindow.requestAnimationFrame(renderFrame);
+    });
   }
 
   function dispose() {

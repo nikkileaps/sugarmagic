@@ -14,13 +14,22 @@ import {
   MeshStandardNodeMaterial
 } from "three/webgpu";
 import {
+  acesFilmicToneMapping,
   abs,
+  cameraFar,
+  cameraNear,
   cameraPosition,
+  cameraProjectionMatrixInverse,
+  cameraWorldMatrix,
   clamp,
   cos,
   dot,
+  exp,
   float,
   length,
+  luminance,
+  max,
+  min,
   mix,
   normalLocal,
   normalWorld,
@@ -36,8 +45,15 @@ import {
   vec3,
   vec4,
   vertexColor,
-  normalize
+  normalize,
+  pow,
+  reinhardToneMapping,
+  saturate,
+  smoothstep,
+  uniform,
+  viewportLinearDepth
 } from "three/tsl";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type {
   ContentLibrarySnapshot,
   ShaderGraphDocument
@@ -46,13 +62,13 @@ import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
   RuntimeCompileProfile,
-  RuntimeRenderPipeline,
   ShaderIR,
   ShaderIRDiagnostic,
   ShaderIROp,
   ShaderIRValue
 } from "@sugarmagic/runtime-core";
 import { compileShaderGraph } from "@sugarmagic/runtime-core";
+import type { RuntimeRenderPipeline } from "./render";
 
 export type ShaderApplyTarget =
   | {
@@ -68,6 +84,7 @@ export type ShaderApplyTarget =
   | {
       targetKind: "post-process";
       renderPipeline: RuntimeRenderPipeline;
+      previousOutputNode?: unknown | null;
     };
 
 interface ShaderRuntimeOptions {
@@ -95,6 +112,43 @@ interface FinalizationContext {
   opMap: Map<string, ShaderIROp>;
   opNodeCache: Map<string, unknown>;
   builtinSceneColorNode: unknown | null;
+  builtinSceneDepthNode: unknown | null;
+  /**
+   * Per-binding cache of uniform TSL nodes for parameters. Keyed by
+   * parameterId. Reused across applyShader calls for the same binding so that
+   * parameter value changes flow through as GPU uniform updates instead of
+   * baking new constants into a newly-compiled shader each time. Without this,
+   * live-editing fog density (or any other post-process parameter) in Studio
+   * had no visible effect because the shader held the old density as a
+   * compiled literal. See uniformForParameter() below.
+   */
+  parameterUniforms: Map<string, UniformNodeLike>;
+  /**
+   * Per-binding cache of effect nodes whose wrapped Three helpers take JS
+   * primitives (not TSL nodes) for scalar parameters — notably bloom(), which
+   * wraps strength/radius/threshold into its own internal uniforms at
+   * construction. Those internal uniforms are snapshots of the value at
+   * construction time; later calls with different numeric args would create a
+   * new BloomNode, but in a long-lived pipeline Three's TSL caches the
+   * compiled shader by graph structure and reuses it, so the updated values
+   * never reach the GPU. Caching the node itself and mutating its internal
+   * uniforms in place is what makes live parameter edits work in viewports
+   * that don't get a fresh compile each frame.
+   *
+   * Keyed by op id so each bloom/effect op in the graph gets its own cached
+   * instance. First call constructs the node; subsequent calls reuse it and
+   * mutate its internal uniforms.
+   */
+  effectNodes: Map<string, EffectNodeCacheEntry>;
+}
+
+interface UniformNodeLike {
+  value: unknown;
+}
+
+interface EffectNodeCacheEntry {
+  node: unknown;
+  kind: "bloom";
 }
 
 function stableStringify(value: unknown): string {
@@ -294,12 +348,22 @@ function materializeBuiltin(
   value: Extract<ShaderIRValue, { kind: "builtin" }>,
   context: FinalizationContext
 ): unknown {
+  const asColorNode = (node: unknown): unknown => {
+    if (node && typeof node === "object" && "rgb" in (node as Record<string, unknown>)) {
+      return (node as { rgb: unknown }).rgb;
+    }
+    return node;
+  };
+
   switch (value.name) {
     case "time":
       return time;
     case "deltaTime":
       return deltaTime;
     case "worldPosition":
+      if (context.target.targetKind === "post-process") {
+        return reconstructPostProcessWorldPosition(context);
+      }
       return positionWorld;
     case "localPosition":
       return positionLocal;
@@ -332,9 +396,16 @@ function materializeBuiltin(
     case "screenUV":
       return screenUV;
     case "sceneColor":
-      return context.builtinSceneColorNode ?? vec4(0, 0, 0, 1);
+      return asColorNode(context.builtinSceneColorNode ?? vec3(0, 0, 0));
     case "sceneDepth":
-      return float(0);
+      // Explicit scene-depth node wired from the scenePass (view-space Z
+      // distance, in world units). Preferred over the global
+      // viewportLinearDepth because that samples whatever depth texture is
+      // currently bound — observed to produce different results between
+      // Studio's authoring viewport and the runtime host even with
+      // otherwise-identical code. Falls back to viewportLinearDepth when no
+      // explicit depth node was provided (e.g. non-post-process targets).
+      return context.builtinSceneDepthNode ?? viewportLinearDepth;
     default:
       return float(0);
   }
@@ -350,13 +421,147 @@ function materializeValue(value: ShaderIRValue, context: FinalizationContext): u
   }
 
   if (value.kind === "parameter") {
-    return literalNode(
-      value.dataType,
-      context.parameterValues[value.parameterId] ?? 0
-    );
+    return uniformForParameter(value.parameterId, value.dataType, context);
   }
 
   return materializeOp(value.opId, context);
+}
+
+/**
+ * Extract the current numeric value from a materialized TSL input.
+ *
+ * Used by effect helpers like bloom() whose underlying Three function takes
+ * JS primitives (not TSL nodes) for scalar parameters. Our parameter inputs
+ * are stored as uniform nodes with a .value property (see
+ * uniformForParameter) — reading .value at finalization time gets the
+ * current parameter value, which the effect then bakes into its own
+ * internal uniforms. Falls back to `fallback` when the input is not a
+ * uniform-like node with an accessible numeric value (e.g., disconnected
+ * optional input).
+ */
+function readNumericFromInput(input: unknown, fallback: number): number {
+  if (input && typeof input === "object" && "value" in input) {
+    const raw = (input as { value: unknown }).value;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Reconstruct the fragment's world position inside a post-process pass from
+ * screen UV and scene depth. Standard inverse-projection math:
+ *
+ *   ndc       = vec3(screenUV * 2 - 1, 1)   (far-plane point in NDC)
+ *   rayClip   = (ndc, 1) homogeneous
+ *   rayView   = (cameraProjectionMatrixInverse * rayClip).xyz / w
+ *   viewPos   = rayView * (-sceneDepth / rayView.z)
+ *   worldPos  = (cameraWorldMatrix * vec4(viewPos, 1)).xyz
+ *
+ * View space is right-handed with -Z forward, so rayView.z is negative and
+ * sceneDepth (world-space distance from camera) is positive; the scale
+ * factor comes out positive.
+ *
+ * Used for height fog and any other depth-based post-process that needs
+ * world coordinates, not just screen-space + depth.
+ */
+function reconstructPostProcessWorldPosition(context: FinalizationContext): unknown {
+  const depth = context.builtinSceneDepthNode ?? viewportLinearDepth;
+  const ndcXY = (screenUV as unknown as { mul: (other: unknown) => unknown })
+    .mul(2);
+  const ndcXYCentered = (ndcXY as unknown as { sub: (other: unknown) => unknown })
+    .sub(float(1));
+  const rayClip = vec4(ndcXYCentered as never, float(1), float(1));
+  const rayHomogeneous = (
+    cameraProjectionMatrixInverse as unknown as { mul: (other: unknown) => unknown }
+  ).mul(rayClip);
+  const rayView = (rayHomogeneous as unknown as { xyz: { div: (other: unknown) => unknown }; w: unknown })
+    .xyz.div((rayHomogeneous as unknown as { w: unknown }).w);
+  const scale = (
+    (depth as unknown as { negate: () => { div: (other: unknown) => unknown } })
+      .negate()
+      .div((rayView as unknown as { z: unknown }).z)
+  );
+  const viewPos = (rayView as unknown as { mul: (other: unknown) => unknown }).mul(scale);
+  const worldPos4 = (
+    cameraWorldMatrix as unknown as { mul: (other: unknown) => unknown }
+  ).mul(vec4(viewPos as never, float(1)));
+  return (worldPos4 as unknown as { xyz: unknown }).xyz;
+}
+
+/**
+ * Get or create the uniform TSL node for a parameter, updating its .value to
+ * the current parameterValues entry. On the first call for a given parameter,
+ * a fresh uniform is created and cached in context.parameterUniforms. On
+ * subsequent calls (including after re-running applyShader on the same
+ * binding with new parameter values), the cached uniform is reused and its
+ * .value is updated — which pushes the new value to the GPU without the
+ * shader needing recompilation.
+ *
+ * This is what makes live parameter editing work. Without it, each
+ * applyShader call would bake the parameter value into a new compiled shader
+ * as a constant, and the GPU would keep using the previously-compiled shader
+ * with the stale value.
+ */
+function uniformForParameter(
+  parameterId: string,
+  dataType: ShaderIRValue["dataType"],
+  context: FinalizationContext
+): unknown {
+  const currentValue = context.parameterValues[parameterId] ?? 0;
+  const existing = context.parameterUniforms.get(parameterId);
+  if (existing) {
+    existing.value = uniformValueFromPrimitive(dataType, currentValue);
+    return existing;
+  }
+  const node = (uniform as unknown as (value: unknown) => UniformNodeLike)(
+    uniformValueFromPrimitive(dataType, currentValue)
+  );
+  context.parameterUniforms.set(parameterId, node);
+  return node;
+}
+
+function uniformValueFromPrimitive(
+  dataType: ShaderIRValue["dataType"],
+  value: unknown
+): unknown {
+  switch (dataType) {
+    case "float":
+      return typeof value === "number" ? value : 0;
+    case "vec2":
+      if (Array.isArray(value)) {
+        return new THREE.Vector2(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0
+        );
+      }
+      return new THREE.Vector2(0, 0);
+    case "vec3":
+    case "color":
+      if (Array.isArray(value)) {
+        return new THREE.Vector3(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0,
+          Number(value[2]) || 0
+        );
+      }
+      return new THREE.Vector3(0, 0, 0);
+    case "vec4":
+      if (Array.isArray(value)) {
+        return new THREE.Vector4(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0,
+          Number(value[2]) || 0,
+          Number(value[3]) || 0
+        );
+      }
+      return new THREE.Vector4(0, 0, 0, 0);
+    case "bool":
+      return value ? 1 : 0;
+    default:
+      return typeof value === "number" ? value : 0;
+  }
 }
 
 function materializeOp(opId: string, context: FinalizationContext): unknown {
@@ -386,6 +591,33 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
     case "math.divide":
       result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
       break;
+    case "math.pow":
+      result = pow(input("a") as never, input("b") as never);
+      break;
+    case "math.exp":
+      result = exp(input("input") as never);
+      break;
+    case "math.min":
+      result = min(input("a") as never, input("b") as never);
+      break;
+    case "math.max":
+      result = max(input("a") as never, input("b") as never);
+      break;
+    case "math.saturate":
+      result = saturate(input("input") as never);
+      break;
+    case "math.smoothstep":
+      result = smoothstep(
+        input("edge0") as never,
+        input("edge1") as never,
+        input("x") as never
+      );
+      break;
+    case "math.distance":
+      result = length(
+        (input("a") as { sub: (other: unknown) => unknown }).sub(input("b")) as never
+      );
+      break;
     case "math.sin":
       result = sin(input("input") as never);
       break;
@@ -400,6 +632,21 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
       break;
     case "math.lerp":
       result = mix(input("a") as never, input("b") as never, input("alpha") as never);
+      break;
+    case "color.luminance":
+      result = luminance(input("input") as never);
+      break;
+    case "color.add":
+      result = (input("a") as { add: (other: unknown) => unknown }).add(input("b"));
+      break;
+    case "color.multiply":
+      result = (input("a") as { mul: (other: unknown) => unknown }).mul(input("b"));
+      break;
+    case "color.divide":
+      result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
+      break;
+    case "color.pow":
+      result = pow(input("a") as never, input("b") as never);
       break;
     case "math.dot":
       result = dot(input("a") as never, input("b") as never);
@@ -424,16 +671,14 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
               );
       break;
     case "math.split-vector": {
-      const vector = input("input") as { x: unknown; y: unknown; z: unknown; w: unknown };
+      const vector = input("input") as { x: unknown; y: unknown; z: unknown };
       const outputPortId = String(op.settings?.outputPortId ?? "x");
       result =
         outputPortId === "y"
           ? vector.y
           : outputPortId === "z"
             ? vector.z
-            : outputPortId === "w"
-              ? vector.w
-              : vector.x;
+            : vector.x;
       break;
     }
     case "effect.height-falloff": {
@@ -456,6 +701,53 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
         .pow(float(Number(op.settings?.power ?? 2)))
         .mul(float(Number(op.settings?.strength ?? 1)));
       result = (input("color") as { mul: (other: unknown) => unknown }).mul(rim);
+      break;
+    }
+    case "effect.bloom-pass": {
+      const strength = readNumericFromInput(input("strength"), 0.4);
+      const radius = readNumericFromInput(input("radius"), 0.4);
+      const threshold = readNumericFromInput(input("threshold"), 0.9);
+      const inputNode = input("input");
+      // Reuse a cached BloomNode across applyShader calls so parameter edits
+      // flow as GPU uniform updates. Creating a fresh bloom() each call
+      // produces a new node, but Three's TSL compiled-shader cache keys by
+      // graph structure and reuses the first compile — so the updated values
+      // never reach the GPU in a long-lived pipeline (bloom worked in
+      // fresh-compiled preview but not in the live authoring viewport).
+      //
+      // Both bloom's internal uniforms AND its inputNode reference are
+      // mutated in place so the cached node stays wired to the latest
+      // upstream graph (e.g., updated fog-tint output).
+      const cached = context.effectNodes.get(op.opId);
+      if (cached && cached.kind === "bloom") {
+        const node = cached.node as {
+          inputNode: unknown;
+          strength: { value: unknown };
+          radius: { value: unknown };
+          threshold: { value: unknown };
+        };
+        node.inputNode = inputNode;
+        node.strength.value = strength;
+        node.radius.value = radius;
+        node.threshold.value = threshold;
+        result = cached.node;
+      } else {
+        const node = bloom(inputNode as never, strength, radius, threshold);
+        context.effectNodes.set(op.opId, { node, kind: "bloom" });
+        result = node;
+      }
+      break;
+    }
+    case "effect.tonemap-aces": {
+      // The graph pre-multiplies scene color by exposure before feeding the
+      // tonemap node, so the tonemap helper itself takes exposure = 1 as
+      // its second arg (not doubling exposure). Matches the graph shape in
+      // createDefaultTonemapAcesPostProcessShaderGraph.
+      result = acesFilmicToneMapping(input("input") as never, float(1));
+      break;
+    }
+    case "effect.tonemap-reinhard": {
+      result = reinhardToneMapping(input("input") as never, float(1));
       break;
     }
     case "effect.wind-gust": {
@@ -523,7 +815,9 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
 function applyIRToMaterial(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>
+  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
+  parameterUniforms: Map<string, UniformNodeLike>,
+  effectNodes: Map<string, EffectNodeCacheEntry>
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -541,7 +835,10 @@ function applyIRToMaterial(
     parameterValues: binding.parameterValues,
     opMap: new Map(allOps.map((op) => [op.opId, op])),
     opNodeCache: new Map(),
-    builtinSceneColorNode: null
+    builtinSceneColorNode: null,
+    builtinSceneDepthNode: null,
+    parameterUniforms: parameterUniforms,
+    effectNodes: effectNodes
   };
 
   if (ir.outputs.vertex) {
@@ -566,11 +863,14 @@ function applyIRToMaterial(
 function applyIRToPostProcess(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>
-): void {
-  const baseOutputNode = target.renderPipeline.getBaseOutputNode();
+  target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>,
+  parameterUniforms: Map<string, UniformNodeLike>,
+  effectNodes: Map<string, EffectNodeCacheEntry>
+): unknown {
+  const baseOutputNode =
+    target.previousOutputNode ?? target.renderPipeline.getBaseOutputNode();
   if (!baseOutputNode) {
-    return;
+    return null;
   }
 
   const context: FinalizationContext = {
@@ -579,18 +879,24 @@ function applyIRToPostProcess(
     parameterValues: binding.parameterValues,
     opMap: new Map(ir.postProcessOps.map((op) => [op.opId, op])),
     opNodeCache: new Map(),
-    builtinSceneColorNode: baseOutputNode
+    builtinSceneColorNode: baseOutputNode,
+    // Pull the authoritative scene-depth node from the pipeline. Each binding
+    // in the chain reads the SAME scenePass depth — not the global viewport
+    // depth, which is what broke fog in Studio but not in the runtime host.
+    builtinSceneDepthNode: target.renderPipeline.getSceneDepthNode(),
+    parameterUniforms: parameterUniforms,
+    effectNodes: effectNodes
   };
-  target.renderPipeline.setPostProcessOutputNode(
-    ir.outputs.postProcessColor
-      ? materializeValue(ir.outputs.postProcessColor, context)
-      : baseOutputNode
-  );
+  const nextOutputNode = ir.outputs.postProcessColor
+    ? materializeValue(ir.outputs.postProcessColor, context)
+    : baseOutputNode;
+  target.renderPipeline.setPostProcessOutputNode(nextOutputNode);
+  return nextOutputNode;
 }
 
 export class ShaderRuntime {
   private static readonly DEFAULT_MATERIAL_DISPOSAL_GRACE_MS = 2000;
-  private readonly contentLibrary: ContentLibrarySnapshot;
+  private contentLibrary: ContentLibrarySnapshot;
   private readonly compileProfile: RuntimeCompileProfile;
   private readonly materialDisposalGraceMs: number;
   private readonly logger;
@@ -599,6 +905,20 @@ export class ShaderRuntime {
   private readonly materialEntryByMaterial = new WeakMap<THREE.Material, CachedMaterialEntry>();
   private readonly materialEntries = new Set<CachedMaterialEntry>();
   private readonly diagnostics = new Map<string, ShaderIRDiagnostic[]>();
+  /**
+   * Persistent uniform node cache, keyed by shaderDefinitionId. Each entry is
+   * a map from parameterId to the TSL uniform node for that parameter.
+   * Reused across applyShader calls for the same binding so live parameter
+   * edits become GPU-uniform updates, not shader recompilations. See
+   * uniformForParameter() for the reasoning.
+   */
+  private readonly parameterUniformCache = new Map<string, Map<string, UniformNodeLike>>();
+  /**
+   * Per-shaderDefinition cache of effect nodes (bloom, etc.) whose internal
+   * uniforms need to be mutated in place to propagate live parameter edits.
+   * Parallels parameterUniformCache but for Three-constructed helper nodes.
+   */
+  private readonly effectNodeCache = new Map<string, Map<string, EffectNodeCacheEntry>>();
   private disposed = false;
 
   constructor(options: ShaderRuntimeOptions) {
@@ -609,10 +929,27 @@ export class ShaderRuntime {
     this.logger = options.logger ?? { warn() {} };
   }
 
+  /**
+   * Swap the content library reference without tearing down compiled IR or
+   * material caches. Existing cache keys are keyed by shaderDefinitionId +
+   * documentRevision, so a new content library with the same revisions reuses
+   * compiled work cleanly; revision bumps invalidate naturally on next lookup.
+   *
+   * This replaces the previous "dispose the runtime on every state update"
+   * pattern, which caused material-disposal errors and destroyed the cached
+   * post-process output nodes installed on the render pipeline.
+   */
+  setContentLibrary(contentLibrary: ContentLibrarySnapshot): void {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+    this.contentLibrary = contentLibrary;
+  }
+
   applyShader(
     binding: EffectiveShaderBinding,
     target: ShaderApplyTarget
-  ): THREE.Material | void {
+  ): THREE.Material | unknown {
     if (this.disposed) {
       throw new Error("ShaderRuntime was used after disposal.");
     }
@@ -632,17 +969,48 @@ export class ShaderRuntime {
     }
 
     const ir = this.getCompiledIR(definition);
-    if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
-      this.logger.warn("Shader graph compiled with errors.", {
+    const errors = ir.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+    if (errors.length > 0) {
+      // Loud on purpose. Silent compilation failures were producing "fog
+      // works in runtime but not studio" and "height fog broke fog
+      // altogether" ghost bugs where the real root cause was a malformed
+      // edge that validateShaderGraphDocument had already diagnosed — it
+      // just never surfaced visibly.
+      //
+      // Built-in shader errors are always the engine's fault and throw
+      // (they must not ship broken). Authored shader errors throw for the
+      // same reason — an author-edited graph that fails validation should
+      // be caught by the editor before we even get here, so if we do,
+      // something's wrong in the flow and we want to know immediately.
+      const summary = errors
+        .map((error) => {
+          const location = error.nodeId
+            ? `node "${error.nodeId}"`
+            : error.edgeId
+              ? `edge "${error.edgeId}"`
+              : error.parameterId
+                ? `parameter "${error.parameterId}"`
+                : "graph";
+          return `  - ${location}: ${error.message}`;
+        })
+        .join("\n");
+      const message =
+        `Shader graph "${binding.shaderDefinitionId}" failed to compile:\n${summary}`;
+      // console.error first so the full object is inspectable in devtools;
+      // throwing right after ensures the broken state is not silently
+      // papered over by returning undefined to applyPostProcessStack.
+      console.error("[ShaderRuntime] " + message, {
         shaderDefinitionId: binding.shaderDefinitionId,
         diagnostics: ir.diagnostics
       });
-      return undefined;
+      throw new Error(message);
     }
 
+    const parameterUniforms = this.getOrCreateParameterUniformCache(binding.shaderDefinitionId);
+    const effectNodes = this.getOrCreateEffectNodeCache(binding.shaderDefinitionId);
+
     if (target.targetKind === "post-process") {
-      applyIRToPostProcess(ir, binding, target);
-      return;
+      return applyIRToPostProcess(ir, binding, target, parameterUniforms, effectNodes);
     }
 
     const cacheKey = [
@@ -655,8 +1023,39 @@ export class ShaderRuntime {
     ].join("|");
 
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
-      applyIRToMaterial(ir, binding, target)
+      applyIRToMaterial(ir, binding, target, parameterUniforms, effectNodes)
     );
+  }
+
+  /**
+   * Reuse uniform TSL nodes across applyShader calls for the same binding.
+   * The first call materializes a parameter as a new uniform; subsequent
+   * calls re-use the cached uniform and update its .value in place. This
+   * turns live parameter edits into GPU uniform updates rather than shader
+   * recompilations, which is what makes the fog density slider (and any
+   * other live-edit control) actually update the viewport instead of
+   * silently being overwritten by the cached compiled shader's old constant.
+   */
+  private getOrCreateParameterUniformCache(
+    shaderDefinitionId: string
+  ): Map<string, UniformNodeLike> {
+    let cache = this.parameterUniformCache.get(shaderDefinitionId);
+    if (!cache) {
+      cache = new Map();
+      this.parameterUniformCache.set(shaderDefinitionId, cache);
+    }
+    return cache;
+  }
+
+  private getOrCreateEffectNodeCache(
+    shaderDefinitionId: string
+  ): Map<string, EffectNodeCacheEntry> {
+    let cache = this.effectNodeCache.get(shaderDefinitionId);
+    if (!cache) {
+      cache = new Map();
+      this.effectNodeCache.set(shaderDefinitionId, cache);
+    }
+    return cache;
   }
 
   releaseMaterial(material: THREE.Material): void {
@@ -677,6 +1076,8 @@ export class ShaderRuntime {
         this.compileCache.delete(key);
       }
     }
+    this.parameterUniformCache.delete(shaderDefinitionId);
+    this.effectNodeCache.delete(shaderDefinitionId);
     this.retireMaterials((entry) => entry.shaderDefinitionId === shaderDefinitionId);
   }
 
@@ -689,6 +1090,8 @@ export class ShaderRuntime {
     this.retireMaterials(() => true);
     this.materialCache.clear();
     this.compileCache.clear();
+    this.parameterUniformCache.clear();
+    this.effectNodeCache.clear();
     this.diagnostics.clear();
   }
 

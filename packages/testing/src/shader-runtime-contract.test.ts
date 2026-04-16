@@ -8,10 +8,12 @@ import {
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
 import {
+  createDefaultColorGradePostProcessShaderGraph,
   createDefaultEnvironmentDefinition,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
   createDefaultShaderGraphDocument,
+  createDefaultVignettePostProcessShaderGraph,
   createPlacedAssetInstance,
   createRegionPlayerPresence,
   type ContentLibrarySnapshot,
@@ -157,6 +159,32 @@ describe("shader runtime contracts", () => {
 
     expect(compiled.targetKind).toBe("mesh-surface");
     expect(compiled.outputs.fragmentColor).toBeDefined();
+    expect(
+      compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    ).toEqual([]);
+  });
+
+  it("compiles the shipped color grade graph without validation errors", () => {
+    const shader = createDefaultColorGradePostProcessShaderGraph("project");
+    const compiled = compileShaderGraph(shader, {
+      compileProfile: "authoring-preview"
+    });
+
+    expect(compiled.targetKind).toBe("post-process");
+    expect(compiled.outputs.postProcessColor).toBeDefined();
+    expect(
+      compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    ).toEqual([]);
+  });
+
+  it("compiles the shipped vignette graph without validation errors", () => {
+    const shader = createDefaultVignettePostProcessShaderGraph("project");
+    const compiled = compileShaderGraph(shader, {
+      compileProfile: "authoring-preview"
+    });
+
+    expect(compiled.targetKind).toBe("post-process");
+    expect(compiled.outputs.postProcessColor).toBeDefined();
     expect(
       compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
     ).toEqual([]);
