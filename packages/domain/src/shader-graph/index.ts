@@ -40,13 +40,31 @@ export type ShaderParameterValue =
   | string
   | boolean;
 
+export type ShaderSlotKind = "surface" | "deform";
+
+export const SHADER_SLOT_KINDS: readonly ShaderSlotKind[] = [
+  "surface",
+  "deform"
+] as const;
+
+export type ShaderSlotBindingMap = Record<ShaderSlotKind, string | null>;
+
+export function createEmptyShaderSlotBindingMap(): ShaderSlotBindingMap {
+  return {
+    surface: null,
+    deform: null
+  };
+}
+
 export interface ShaderParameterOverride {
   parameterId: string;
+  slot?: ShaderSlotKind;
   value: ShaderParameterValue;
 }
 
 export interface ShaderBindingOverride {
   shaderDefinitionId: string;
+  slot: ShaderSlotKind;
 }
 
 export interface ShaderPortDefinition {
@@ -100,6 +118,7 @@ export interface ShaderParameter {
   displayName: string;
   dataType: Exclude<ShaderDataType, "texture2d"> | "texture2d";
   defaultValue: ShaderParameterValue;
+  colorSpace?: "sdr" | "hdr";
 }
 
 export interface ShaderGraphDocument {
@@ -274,6 +293,27 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     validTargetKinds: ["mesh-surface", "mesh-deform", "billboard-surface"],
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    nodeType: "input.sun-direction",
+    displayName: "Sun Direction",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    nodeType: "input.material-texture",
+    displayName: "Material Texture",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "billboard-surface"],
+    inputPorts: [],
+    outputPorts: [
+      outputPort("color", "Color", "color"),
+      outputPort("alpha", "Alpha", "float")
+    ],
     settings: []
   },
   {
@@ -622,13 +662,12 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Split Vector",
     category: "math",
     validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
-    // Input is vec3 — the common case (positions, normals, colors). Add
-    // math.split-vec4 later if vec4 splitting becomes a real use case.
-    inputPorts: [inputPort("input", "Input", "vec3")],
+    inputPorts: [inputPort("input", "Input", "vec4")],
     outputPorts: [
       outputPort("x", "X", "float"),
       outputPort("y", "Y", "float"),
-      outputPort("z", "Z", "float")
+      outputPort("z", "Z", "float"),
+      outputPort("w", "W", "float")
     ],
     settings: []
   },
@@ -1017,6 +1056,114 @@ export function createDefaultFoliageTintShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "foliage-tint"
+    }
+  };
+}
+
+export function createDefaultFoliageSurfaceShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "leaf-texture", nodeType: "input.material-texture", position: { x: 48, y: 156 }, settings: {} },
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 248, y: 340 }, settings: {} },
+      { nodeId: "canopy-tint", nodeType: "math.combine-vector", position: { x: 448, y: 232 }, settings: {} },
+      { nodeId: "base-color", nodeType: "color.multiply", position: { x: 656, y: 160 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 556 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 652 }, settings: {} },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 604 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 604 }, settings: {} },
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 656, y: 460 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 656, y: 556 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "exterior-bias-strength", nodeType: "math.multiply", position: { x: 656, y: 652 }, settings: {} },
+      { nodeId: "warm-mask", nodeType: "math.multiply", position: { x: 864, y: 652 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 1088, y: 540 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 656, y: 780 }, settings: {} },
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 656, y: 876 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 1088, y: 876 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 880, y: 780 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 1296, y: 780 }, settings: {} },
+      { nodeId: "base-plus-warm", nodeType: "color.add", position: { x: 1296, y: 268 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1504, y: 420 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1728, y: 420 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-vertex-split", "vertex-color", "value", "split-vertex-color", "input"),
+      createShaderEdge("edge-split-x-tint", "split-vertex-color", "x", "canopy-tint", "x"),
+      createShaderEdge("edge-split-y-tint", "split-vertex-color", "y", "canopy-tint", "y"),
+      createShaderEdge("edge-split-z-tint", "split-vertex-color", "z", "canopy-tint", "z"),
+      createShaderEdge("edge-texture-base", "leaf-texture", "color", "base-color", "a"),
+      createShaderEdge("edge-tint-base", "canopy-tint", "vec3", "base-color", "b"),
+      createShaderEdge("edge-normal-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("edge-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("edge-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+      createShaderEdge("edge-vertex-a-bias", "split-vertex-color", "w", "exterior-bias-strength", "a"),
+      createShaderEdge("edge-strength-bias", "warm-strength", "value", "exterior-bias-strength", "b"),
+      createShaderEdge("edge-bias-mask", "exterior-bias-strength", "value", "warm-mask", "a"),
+      createShaderEdge("edge-sunmask-warmmask", "sun-mask", "value", "warm-mask", "b"),
+      createShaderEdge("edge-warmcolor-warmterm", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("edge-warmmask-warmterm", "warm-mask", "value", "warm-term", "b"),
+      createShaderEdge("edge-normal-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("edge-view-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("edge-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("edge-rimfresnel-rimterm", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("edge-rimstrength-rimterm", "rim-strength", "value", "rim-term", "b"),
+      createShaderEdge("edge-base-basepluswarm", "base-color", "value", "base-plus-warm", "a"),
+      createShaderEdge("edge-warm-basepluswarm", "warm-term", "value", "base-plus-warm", "b"),
+      createShaderEdge("edge-basepluswarm-final", "base-plus-warm", "value", "final-color", "a"),
+      createShaderEdge("edge-rimterm-final", "rim-term", "value", "final-color", "b"),
+      createShaderEdge("edge-final-output", "final-color", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "leaf-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.55
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.82, 0.95, 0.78]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.24
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "foliage-surface"
     }
   };
 }

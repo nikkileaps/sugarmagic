@@ -9,4 +9,8 @@ export type WorkspaceNavigationTarget =
       regionId: string;
       behaviorId: string;
       taskId: string | null;
+    }
+  | {
+      kind: "shader-graph";
+      shaderDefinitionId: string;
     };

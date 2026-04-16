@@ -48,13 +48,9 @@ export function applyShaderToRenderable(
   object: SceneObject,
   shaderRuntime: ShaderRuntime | null
 ) {
-  if (!shaderRuntime || !object.effectiveShader) {
-    return;
-  }
-
   if (
-    object.effectiveShader.targetKind !== "mesh-surface" &&
-    object.effectiveShader.targetKind !== "mesh-deform"
+    !shaderRuntime ||
+    (!object.effectiveShaders.surface && !object.effectiveShaders.deform)
   ) {
     return;
   }
@@ -67,17 +63,11 @@ export function applyShaderToRenderable(
     if (!(child instanceof THREE.Mesh)) {
       return;
     }
-    const targetKind = object.effectiveShader!.targetKind;
 
     const applyMaterial = (material: THREE.Material): THREE.Material => {
-      const finalized = shaderRuntime.applyShader(object.effectiveShader!, {
-          targetKind,
+      const finalized = shaderRuntime.applyShaderSet(object.effectiveShaders, {
           material,
           geometry: child.geometry
-        } as {
-          targetKind: "mesh-surface" | "mesh-deform";
-          material: THREE.Material;
-          geometry: THREE.BufferGeometry;
         }) as THREE.Material | undefined;
 
       if (!finalized) {

@@ -269,6 +269,8 @@ function builtinForNodeType(
       return asBuiltin("cameraPosition", "vec3");
     case "input.view-direction":
       return asBuiltin("viewDirection", "vec3");
+    case "input.sun-direction":
+      return asBuiltin("sunDirection", "vec3");
     case "input.screen-uv":
       return asBuiltin("screenUV", "vec2");
     case "input.scene-color":
@@ -345,6 +347,15 @@ function compileNodePort(
       parameter.dataType === "texture2d" ? "texture2d" : parameter.dataType,
       parameter.parameterId
     );
+    context.valuesByNodePort.set(cacheKey, value);
+    return value;
+  }
+
+  if (node.nodeType === "input.material-texture") {
+    const value =
+      requestedPortId === "alpha"
+        ? asBuiltin("materialTextureAlpha", "float")
+        : asBuiltin("materialTextureColor", "color");
     context.valuesByNodePort.set(cacheKey, value);
     return value;
   }

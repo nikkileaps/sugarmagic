@@ -50,6 +50,7 @@ import {
   reinhardToneMapping,
   saturate,
   smoothstep,
+  texture as textureNode,
   uniform,
   viewportLinearDepth
 } from "three/tsl";
@@ -61,6 +62,7 @@ import type {
 import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
+  EffectiveShaderBindingSet,
   RuntimeCompileProfile,
   ShaderIR,
   ShaderIRDiagnostic,
@@ -123,6 +125,7 @@ interface FinalizationContext {
    * compiled literal. See uniformForParameter() below.
    */
   parameterUniforms: Map<string, UniformNodeLike>;
+  sunDirectionUniform: UniformNodeLike;
   /**
    * Per-binding cache of effect nodes whose wrapped Three helpers take JS
    * primitives (not TSL nodes) for scalar parameters — notably bloom(), which
@@ -149,6 +152,11 @@ interface UniformNodeLike {
 interface EffectNodeCacheEntry {
   node: unknown;
   kind: "bloom";
+}
+
+interface MeshShaderSetApplyTarget {
+  material: THREE.Material;
+  geometry: THREE.BufferGeometry;
 }
 
 function stableStringify(value: unknown): string {
@@ -344,6 +352,23 @@ function getVertexColorNode(
   return vertexColor();
 }
 
+function sampleMaterialTextureNode(
+  target: Extract<
+    ShaderApplyTarget,
+    { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }
+  >,
+  output: "color" | "alpha"
+): unknown {
+  const map = "map" in target.material ? target.material.map : null;
+  if (!map) {
+    return output === "color" ? vec3(1, 1, 1) : float(1);
+  }
+  const sample = textureNode(map, uv());
+  return output === "color"
+    ? (sample as { rgb: unknown }).rgb
+    : (sample as { a: unknown }).a;
+}
+
 function materializeBuiltin(
   value: Extract<ShaderIRValue, { kind: "builtin" }>,
   context: FinalizationContext
@@ -393,6 +418,24 @@ function materializeBuiltin(
       return cameraPosition;
     case "viewDirection":
       return positionViewDirection;
+    case "sunDirection":
+      return context.sunDirectionUniform;
+    case "materialTextureColor":
+      if (
+        context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "billboard-surface"
+      ) {
+        return vec3(1, 1, 1);
+      }
+      return sampleMaterialTextureNode(context.target, "color");
+    case "materialTextureAlpha":
+      if (
+        context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "billboard-surface"
+      ) {
+        return float(1);
+      }
+      return sampleMaterialTextureNode(context.target, "alpha");
     case "screenUV":
       return screenUV;
     case "sceneColor":
@@ -671,13 +714,15 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
               );
       break;
     case "math.split-vector": {
-      const vector = input("input") as { x: unknown; y: unknown; z: unknown };
+      const vector = input("input") as { x: unknown; y: unknown; z: unknown; w?: unknown };
       const outputPortId = String(op.settings?.outputPortId ?? "x");
       result =
         outputPortId === "y"
           ? vector.y
           : outputPortId === "z"
             ? vector.z
+            : outputPortId === "w"
+              ? (vector.w ?? float(1))
             : vector.x;
       break;
     }
@@ -817,6 +862,7 @@ function applyIRToMaterial(
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
+  sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>
 ): THREE.Material {
   const material =
@@ -838,6 +884,7 @@ function applyIRToMaterial(
     builtinSceneColorNode: null,
     builtinSceneDepthNode: null,
     parameterUniforms: parameterUniforms,
+    sunDirectionUniform,
     effectNodes: effectNodes
   };
 
@@ -865,6 +912,7 @@ function applyIRToPostProcess(
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
+  sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>
 ): unknown {
   const baseOutputNode =
@@ -885,6 +933,7 @@ function applyIRToPostProcess(
     // depth, which is what broke fog in Studio but not in the runtime host.
     builtinSceneDepthNode: target.renderPipeline.getSceneDepthNode(),
     parameterUniforms: parameterUniforms,
+    sunDirectionUniform,
     effectNodes: effectNodes
   };
   const nextOutputNode = ir.outputs.postProcessColor
@@ -919,6 +968,9 @@ export class ShaderRuntime {
    * Parallels parameterUniformCache but for Three-constructed helper nodes.
    */
   private readonly effectNodeCache = new Map<string, Map<string, EffectNodeCacheEntry>>();
+  private readonly sunDirectionUniform = (
+    uniform as unknown as (value: unknown) => UniformNodeLike
+  )(new THREE.Vector3(0, 1, 0));
   private disposed = false;
 
   constructor(options: ShaderRuntimeOptions) {
@@ -944,6 +996,17 @@ export class ShaderRuntime {
       throw new Error("ShaderRuntime was used after disposal.");
     }
     this.contentLibrary = contentLibrary;
+  }
+
+  setSunDirection(direction: THREE.Vector3Like): void {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+    this.sunDirectionUniform.value = new THREE.Vector3(
+      direction.x,
+      direction.y,
+      direction.z
+    ).normalize();
   }
 
   applyShader(
@@ -1010,7 +1073,14 @@ export class ShaderRuntime {
     const effectNodes = this.getOrCreateEffectNodeCache(binding.shaderDefinitionId);
 
     if (target.targetKind === "post-process") {
-      return applyIRToPostProcess(ir, binding, target, parameterUniforms, effectNodes);
+      return applyIRToPostProcess(
+        ir,
+        binding,
+        target,
+        parameterUniforms,
+        this.sunDirectionUniform,
+        effectNodes
+      );
     }
 
     const cacheKey = [
@@ -1023,8 +1093,111 @@ export class ShaderRuntime {
     ].join("|");
 
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
-      applyIRToMaterial(ir, binding, target, parameterUniforms, effectNodes)
+      applyIRToMaterial(
+        ir,
+        binding,
+        target,
+        parameterUniforms,
+        this.sunDirectionUniform,
+        effectNodes
+      )
     );
+  }
+
+  applyShaderSet(
+    bindings: EffectiveShaderBindingSet,
+    target: MeshShaderSetApplyTarget
+  ): THREE.Material {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+
+    const surface = bindings.surface;
+    const deform = bindings.deform;
+    if (!surface && !deform) {
+      return target.material;
+    }
+
+    const surfaceDefinition = surface
+      ? getShaderDefinition(this.contentLibrary, surface.shaderDefinitionId)
+      : null;
+    const deformDefinition = deform
+      ? getShaderDefinition(this.contentLibrary, deform.shaderDefinitionId)
+      : null;
+
+    if (surface && (!surfaceDefinition || surfaceDefinition.targetKind !== "mesh-surface")) {
+      throw new Error(`Surface shader "${surface.shaderDefinitionId}" is not a mesh-surface graph.`);
+    }
+    if (deform && (!deformDefinition || deformDefinition.targetKind !== "mesh-deform")) {
+      throw new Error(`Deform shader "${deform.shaderDefinitionId}" is not a mesh-deform graph.`);
+    }
+
+    const surfaceIR = surfaceDefinition ? this.getCompiledIR(surfaceDefinition) : null;
+    const deformIR = deformDefinition ? this.getCompiledIR(deformDefinition) : null;
+
+    for (const [binding, ir] of [
+      [surface, surfaceIR],
+      [deform, deformIR]
+    ] as const) {
+      if (!binding || !ir) {
+        continue;
+      }
+      const errors = ir.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+      if (errors.length > 0) {
+        const summary = errors
+          .map((error) => {
+            const location = error.nodeId
+              ? `node "${error.nodeId}"`
+              : error.edgeId
+                ? `edge "${error.edgeId}"`
+                : error.parameterId
+                  ? `parameter "${error.parameterId}"`
+                  : "graph";
+            return `  - ${location}: ${error.message}`;
+          })
+          .join("\n");
+        throw new Error(
+          `Shader graph "${binding.shaderDefinitionId}" failed to compile:\n${summary}`
+        );
+      }
+    }
+
+    const cacheKey = [
+      "shader-set",
+      surface?.shaderDefinitionId ?? "no-surface",
+      surface?.documentRevision ?? 0,
+      stableStringify(surface?.parameterValues ?? {}),
+      deform?.shaderDefinitionId ?? "no-deform",
+      deform?.documentRevision ?? 0,
+      stableStringify(deform?.parameterValues ?? {}),
+      this.compileProfile,
+      materialCarrierSignature(target.material, target.geometry)
+    ].join("|");
+
+    return this.acquireMaterial(cacheKey, surface?.shaderDefinitionId ?? deform!.shaderDefinitionId, () => {
+      let material = toMeshStandardNodeMaterial(target.material);
+      if (surface && surfaceIR) {
+        material = applyIRToMaterial(
+          surfaceIR,
+          surface,
+          { targetKind: "mesh-surface", material, geometry: target.geometry },
+          this.getOrCreateParameterUniformCache(surface.shaderDefinitionId),
+          this.sunDirectionUniform,
+          this.getOrCreateEffectNodeCache(surface.shaderDefinitionId)
+        ) as MeshStandardNodeMaterial;
+      }
+      if (deform && deformIR) {
+        material = applyIRToMaterial(
+          deformIR,
+          deform,
+          { targetKind: "mesh-deform", material, geometry: target.geometry },
+          this.getOrCreateParameterUniformCache(deform.shaderDefinitionId),
+          this.sunDirectionUniform,
+          this.getOrCreateEffectNodeCache(deform.shaderDefinitionId)
+        ) as MeshStandardNodeMaterial;
+      }
+      return material;
+    });
   }
 
   /**

@@ -25,7 +25,12 @@ export interface PlacedAssetInstance {
   displayName: string;
   parentFolderId: string | null;
   inspectable: RegionInspectableBehavior | null;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /**
+   * @deprecated Legacy single-binding field. Normalization upgrades this into
+   * shaderOverrides; new code should only use shaderOverrides.
+   */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: {
     position: [number, number, number];
@@ -48,7 +53,9 @@ export interface RegionPlayerPresence {
 export interface RegionNPCPresence {
   presenceId: string;
   npcDefinitionId: string;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /** @deprecated Legacy single-binding field. */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
@@ -57,7 +64,9 @@ export interface RegionItemPresence {
   presenceId: string;
   itemDefinitionId: string;
   quantity: number;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /** @deprecated Legacy single-binding field. */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
@@ -346,7 +355,8 @@ export function createPlacedAssetInstance(
     displayName: overrides.displayName ?? "Placed Asset",
     parentFolderId: overrides.parentFolderId ?? null,
     inspectable: overrides.inspectable ?? null,
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: {
       position: overrides.transform?.position ?? [0, 0, 0],
@@ -397,7 +407,8 @@ export function createRegionNPCPresence(
   return {
     presenceId: overrides.presenceId ?? createNPCPresenceId(),
     npcDefinitionId: overrides.npcDefinitionId,
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };
@@ -411,7 +422,8 @@ export function createRegionItemPresence(
     presenceId: overrides.presenceId ?? createItemPresenceId(),
     itemDefinitionId: overrides.itemDefinitionId,
     quantity: Math.max(1, Math.floor(overrides.quantity ?? 1)),
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };

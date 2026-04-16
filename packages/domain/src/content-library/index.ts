@@ -10,11 +10,16 @@ import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
 import type {
   PostProcessShaderBinding,
-  ShaderGraphDocument
+  ShaderGraphDocument,
+  ShaderParameterOverride,
+  ShaderSlotBindingMap,
+  ShaderTargetKind
 } from "../shader-graph";
 import {
+  createEmptyShaderSlotBindingMap,
   createDefaultBloomPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
+  createDefaultFoliageSurfaceShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -48,7 +53,13 @@ export interface AssetDefinition {
   definitionKind: "asset";
   displayName: string;
   assetKind: AssetKind;
-  defaultShaderDefinitionId: string | null;
+  defaultShaderBindings?: ShaderSlotBindingMap;
+  defaultShaderParameterOverrides?: ShaderParameterOverride[];
+  /**
+   * @deprecated Legacy single-binding field migrated into defaultShaderBindings
+   * during normalization. New code should only read/write defaultShaderBindings.
+   */
+  defaultShaderDefinitionId?: string | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -215,6 +226,50 @@ export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   rim: null,
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
+
+function slotForTargetKind(
+  targetKind: ShaderTargetKind | null | undefined
+): "surface" | "deform" | null {
+  if (targetKind === "mesh-surface") {
+    return "surface";
+  }
+  if (targetKind === "mesh-deform") {
+    return "deform";
+  }
+  return null;
+}
+
+function normalizeAssetShaderBindings(
+  definition: AssetDefinition,
+  shaderTargetKinds: ReadonlyMap<string, ShaderTargetKind>,
+  builtInFoliageSurfaceId: string,
+  builtInFoliageWindId: string
+): ShaderSlotBindingMap {
+  const next = {
+    ...createEmptyShaderSlotBindingMap(),
+    ...(definition.defaultShaderBindings ?? {})
+  };
+
+  if (definition.defaultShaderDefinitionId) {
+    const slot = slotForTargetKind(
+      shaderTargetKinds.get(definition.defaultShaderDefinitionId) ?? null
+    );
+    if (slot) {
+      next[slot] = definition.defaultShaderDefinitionId;
+    } else if (definition.assetKind === "foliage") {
+      next.deform = definition.defaultShaderDefinitionId;
+    } else {
+      next.surface = definition.defaultShaderDefinitionId;
+    }
+  }
+
+  if (definition.assetKind === "foliage") {
+    next.surface = next.surface ?? builtInFoliageSurfaceId;
+    next.deform = next.deform ?? builtInFoliageWindId;
+  }
+
+  return next;
+}
 
 export const DEFAULT_FOG_SETTINGS: FogSettings = {
   enabled: true,
@@ -863,6 +918,29 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const authoredShaderDefinitions =
+    contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
+      ? contentLibrary.shaderDefinitions.map((definition) => ({
+          ...definition,
+          nodes: definition.nodes.map((node) => ({
+            ...node,
+            settings: { ...node.settings }
+          })),
+          edges: [...definition.edges],
+          parameters: [...definition.parameters],
+          metadata: { ...definition.metadata }
+        }))
+      : [];
+  const mergedShaderDefinitions =
+    authoredShaderDefinitions.length > 0
+      ? mergeBuiltInShaderDefinitions(authoredShaderDefinitions, builtInShaderDefinitions)
+      : builtInShaderDefinitions;
+  const shaderTargetKinds = new Map(
+    mergedShaderDefinitions.map((definition) => [
+      definition.shaderDefinitionId,
+      definition.targetKind
+    ])
+  );
   const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions?.length
     ? [...contentLibrary.environmentDefinitions]
     : [
@@ -874,6 +952,8 @@ export function normalizeContentLibrarySnapshot(
       ];
 
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
+  const foliageSurfaceShaderDefinitionId = `${projectId}:shader:foliage-surface`;
+  const foliageWindShaderDefinitionId = `${projectId}:shader:foliage-wind`;
 
   return {
     identity: {
@@ -882,6 +962,13 @@ export function normalizeContentLibrarySnapshot(
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
+      defaultShaderBindings: normalizeAssetShaderBindings(
+        definition,
+        shaderTargetKinds,
+        foliageSurfaceShaderDefinitionId,
+        foliageWindShaderDefinitionId
+      ),
+      defaultShaderParameterOverrides: [...(definition.defaultShaderParameterOverrides ?? [])],
       defaultShaderDefinitionId: definition.defaultShaderDefinitionId ?? null
     })),
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
@@ -973,27 +1060,16 @@ export function normalizeContentLibrarySnapshot(
         projectId
       );
     }),
-    shaderDefinitions:
-      contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
-        ? mergeBuiltInShaderDefinitions(
-            contentLibrary.shaderDefinitions.map((definition) => ({
-            ...definition,
-            nodes: definition.nodes.map((node) => ({
-              ...node,
-              settings: { ...node.settings }
-            })),
-            edges: [...definition.edges],
-            parameters: [...definition.parameters],
-            metadata: { ...definition.metadata }
-          })),
-            builtInShaderDefinitions
-          )
-        : builtInShaderDefinitions
+    shaderDefinitions: mergedShaderDefinitions
   };
 }
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
   return [
+    createDefaultFoliageSurfaceShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface`,
+      displayName: "Foliage Surface"
+    }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
       displayName: "Foliage Wind"

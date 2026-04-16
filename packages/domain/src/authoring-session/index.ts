@@ -55,6 +55,8 @@ import type {
   UpdateShaderParameterCommand,
   RemoveShaderParameterCommand,
   SetAssetDefaultShaderCommand,
+  SetAssetDefaultShaderParameterOverrideCommand,
+  ClearAssetDefaultShaderParameterOverrideCommand,
   AddPostProcessShaderCommand,
   UpdatePostProcessShaderOrderCommand,
   UpdatePostProcessShaderParameterCommand,
@@ -103,6 +105,9 @@ import {
 } from "../content-library";
 import type { ShaderGraphDocument, ShaderParameterOverride } from "../shader-graph";
 import {
+  createEmptyShaderSlotBindingMap,
+  type ShaderBindingOverride,
+  type ShaderSlotKind,
   validateShaderGraphDocument
 } from "../shader-graph";
 import { createScopedId } from "../shared";
@@ -129,6 +134,58 @@ export interface AuthoringSession {
 
 function defaultEnvironmentId(contentLibrary: ContentLibrarySnapshot): string | null {
   return contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
+}
+
+function slotForShaderDefinitionId(
+  contentLibrary: ContentLibrarySnapshot,
+  shaderDefinitionId: string | null | undefined
+): ShaderSlotKind | null {
+  if (!shaderDefinitionId) {
+    return null;
+  }
+  const definition = contentLibrary.shaderDefinitions.find(
+    (entry) => entry.shaderDefinitionId === shaderDefinitionId
+  );
+  if (definition?.targetKind === "mesh-deform") {
+    return "deform";
+  }
+  if (definition?.targetKind === "mesh-surface") {
+    return "surface";
+  }
+  return null;
+}
+
+function normalizeShaderOverrides(
+  contentLibrary: ContentLibrarySnapshot,
+  overrides: {
+    shaderOverrides?: ShaderBindingOverride[];
+    shaderOverride?: ShaderBindingOverride | null;
+  }
+): ShaderBindingOverride[] {
+  const nextOverrides = new Map<ShaderSlotKind, ShaderBindingOverride>();
+  for (const override of overrides.shaderOverrides ?? []) {
+    const slot =
+      override.slot ??
+      slotForShaderDefinitionId(contentLibrary, override.shaderDefinitionId) ??
+      "surface";
+    nextOverrides.set(slot, { shaderDefinitionId: override.shaderDefinitionId, slot });
+  }
+  if (overrides.shaderOverride?.shaderDefinitionId) {
+    const slot =
+      overrides.shaderOverride.slot ??
+      slotForShaderDefinitionId(
+        contentLibrary,
+        overrides.shaderOverride.shaderDefinitionId
+      ) ??
+      "surface";
+    if (!nextOverrides.has(slot)) {
+      nextOverrides.set(slot, {
+        shaderDefinitionId: overrides.shaderOverride.shaderDefinitionId,
+        slot
+      });
+    }
+  }
+  return [...nextOverrides.values()];
 }
 
 function normalizeRegionDocument(
@@ -158,17 +215,24 @@ function normalizeRegionDocument(
       placedAssets: region.scene.placedAssets.map((asset) =>
         createPlacedAssetInstance({
           ...asset,
-          inspectable: asset.inspectable ?? null
+          inspectable: asset.inspectable ?? null,
+          shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
         })
       ),
       playerPresence: region.scene.playerPresence
         ? createRegionPlayerPresence(region.scene.playerPresence)
         : null,
       npcPresences: region.scene.npcPresences.map((presence) =>
-        createRegionNPCPresence(presence)
+        createRegionNPCPresence({
+          ...presence,
+          shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
+        })
       ),
       itemPresences: (region.scene.itemPresences ?? []).map((presence) =>
-        createRegionItemPresence(presence)
+        createRegionItemPresence({
+          ...presence,
+          shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
+        })
       )
     },
     environmentBinding: {
@@ -607,11 +671,28 @@ function applyDeleteShaderGraphCommand(
     contentLibrary: {
       ...session.contentLibrary,
       shaderDefinitions: nextDefinitions,
-      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) =>
-        definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
-          ? { ...definition, defaultShaderDefinitionId: null }
-          : definition
-      ),
+      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
+        ...definition,
+        defaultShaderBindings: {
+          ...createEmptyShaderSlotBindingMap(),
+          ...definition.defaultShaderBindings,
+          surface:
+            definition.defaultShaderBindings?.surface ===
+            command.payload.shaderDefinitionId
+              ? null
+              : definition.defaultShaderBindings?.surface ?? null,
+          deform:
+            definition.defaultShaderBindings?.deform ===
+            command.payload.shaderDefinitionId
+              ? null
+              : definition.defaultShaderBindings?.deform ?? null
+        },
+        defaultShaderDefinitionId:
+          definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
+            ? null
+            : definition.defaultShaderDefinitionId ?? null,
+        defaultShaderParameterOverrides: []
+      })),
       environmentDefinitions: session.contentLibrary.environmentDefinitions.map((definition) => ({
         ...definition,
         postProcessShaders: definition.postProcessShaders.filter(
@@ -627,18 +708,48 @@ function applyDeleteShaderGraphCommand(
           scene: {
             ...region.scene,
             placedAssets: region.scene.placedAssets.map((asset) =>
-              asset.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...asset, shaderOverride: null, shaderParameterOverrides: [] }
+              (asset.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...asset,
+                    shaderOverrides: (asset.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : asset
             ),
             npcPresences: region.scene.npcPresences.map((presence) =>
-              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+              (presence.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...presence,
+                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : presence
             ),
             itemPresences: region.scene.itemPresences.map((presence) =>
-              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+              (presence.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...presence,
+                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : presence
             )
           }
@@ -796,7 +907,78 @@ function applySetAssetDefaultShaderCommand(
     definition.definitionId === command.payload.definitionId
       ? {
           ...definition,
-          defaultShaderDefinitionId: command.payload.shaderDefinitionId
+          defaultShaderBindings: {
+            ...createEmptyShaderSlotBindingMap(),
+            ...definition.defaultShaderBindings,
+            [command.payload.slot]: command.payload.shaderDefinitionId
+          },
+          defaultShaderDefinitionId:
+            command.payload.slot === "surface"
+              ? command.payload.shaderDefinitionId
+              : definition.defaultShaderDefinitionId ?? null
+        }
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applySetAssetDefaultShaderParameterOverrideCommand(
+  session: AuthoringSession,
+  command: SetAssetDefaultShaderParameterOverrideCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definitionId
+      ? {
+          ...definition,
+          defaultShaderParameterOverrides: upsertShaderParameterOverride(
+            definition.defaultShaderParameterOverrides ?? [],
+            { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
+          )
+        }
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyClearAssetDefaultShaderParameterOverrideCommand(
+  session: AuthoringSession,
+  command: ClearAssetDefaultShaderParameterOverrideCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definitionId
+      ? {
+          ...definition,
+          defaultShaderParameterOverrides: (definition.defaultShaderParameterOverrides ?? []).filter(
+            (override) =>
+              !(
+                override.parameterId === command.payload.parameterId &&
+                override.slot === command.payload.slot
+              )
+          )
         }
       : definition
   );
@@ -1591,6 +1773,12 @@ export function applyCommand(
 
   if (command.kind === "SetAssetDefaultShader") {
     return applySetAssetDefaultShaderCommand(session, command);
+  }
+  if (command.kind === "SetAssetDefaultShaderParameterOverride") {
+    return applySetAssetDefaultShaderParameterOverrideCommand(session, command);
+  }
+  if (command.kind === "ClearAssetDefaultShaderParameterOverride") {
+    return applyClearAssetDefaultShaderParameterOverrideCommand(session, command);
   }
 
   if (command.kind === "UpdateEnvironmentDefinition") {

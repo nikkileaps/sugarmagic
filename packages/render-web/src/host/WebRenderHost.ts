@@ -166,6 +166,16 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
   const environmentController = createEnvironmentSceneController(scene);
   const landscapeController = createLandscapeSceneController(scene);
 
+  function directionFromAngles(azimuthDeg: number, elevationDeg: number): THREE.Vector3 {
+    const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+    const elevation = THREE.MathUtils.degToRad(elevationDeg);
+    return new THREE.Vector3(
+      Math.cos(elevation) * Math.sin(azimuth),
+      Math.sin(elevation),
+      Math.cos(elevation) * Math.cos(azimuth)
+    ).normalize();
+  }
+
   function configureRenderer(next: WebGPURenderer): void {
     // Single canonical renderer configuration — consumed by both Studio and
     // the published web runtime so they cannot drift.
@@ -196,6 +206,14 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       contentLibrary,
       environmentOverrideId
     );
+    if (resolved.definition) {
+      shaderRuntime.setSunDirection(
+        directionFromAngles(
+          resolved.definition.lighting.sun.azimuthDeg,
+          resolved.definition.lighting.sun.elevationDeg
+        )
+      );
+    }
     renderPipeline.applyEnvironment(resolved.definition);
     applyPostProcessStack({
       shaderRuntime,

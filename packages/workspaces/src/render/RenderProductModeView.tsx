@@ -36,6 +36,7 @@ import {
 } from "@sugarmagic/domain";
 import { BuildSubNav, GraphCanvas, Inspector, PanelSection, type GraphCanvasEdge, type GraphCanvasNode } from "@sugarmagic/ui";
 import type { RenderWorkspaceKind } from "@sugarmagic/shell";
+import type { WorkspaceNavigationTarget } from "../workspace-navigation";
 
 const renderWorkspaceKinds = [{ id: "shaders", label: "Shaders", icon: "🎨" }];
 const RENDER_WORKSPACE_DEBUG_STORAGE_KEY = "sugarmagic:debug:render-workspace";
@@ -180,6 +181,8 @@ export interface RenderProductModeViewProps {
   shaderDefinitions: ShaderGraphDocument[];
   onSelectKind: (kind: RenderWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
+  navigationTarget?: WorkspaceNavigationTarget | null;
+  onConsumeNavigationTarget?: () => void;
 }
 
 export interface RenderProductModeViewResult {
@@ -193,8 +196,15 @@ export interface RenderProductModeViewResult {
 export function useRenderProductModeView(
   props: RenderProductModeViewProps
 ): RenderProductModeViewResult {
-  const { activeRenderKind, gameProjectId, shaderDefinitions, onSelectKind, onCommand } =
-    props;
+  const {
+    activeRenderKind,
+    gameProjectId,
+    shaderDefinitions,
+    onSelectKind,
+    onCommand,
+    navigationTarget,
+    onConsumeNavigationTarget
+  } = props;
   const [selectedShaderId, setSelectedShaderId] = useState<string | null>(
     shaderDefinitions[0]?.shaderDefinitionId ?? null
   );
@@ -252,6 +262,14 @@ export function useRenderProductModeView(
       });
     };
   }, [activeRenderKind, selectedShaderId, shaderDefinitions.length]);
+
+  useEffect(() => {
+    if (navigationTarget?.kind !== "shader-graph") {
+      return;
+    }
+    setSelectedShaderId(navigationTarget.shaderDefinitionId);
+    onConsumeNavigationTarget?.();
+  }, [navigationTarget, onConsumeNavigationTarget]);
 
   useEffect(() => {
     if (shaderDefinitions.length === 0 && selectedShaderId === null && !selectedShader) {

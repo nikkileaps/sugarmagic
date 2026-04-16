@@ -492,6 +492,11 @@ export function App() {
       shell.setActiveDesignWorkspaceKind("quests");
       return;
     }
+    if (target.kind === "shader-graph") {
+      shell.setActiveProductMode("render");
+      shell.setActiveRenderWorkspaceKind("shaders");
+      return;
+    }
 
     shell.setActiveProductMode("build");
     shell.setActiveRegionId(target.regionId);
@@ -991,7 +996,7 @@ export function App() {
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
-    onSetAssetDefaultShader: (definitionId, shaderDefinitionId) =>
+    onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
       dispatchCommand({
         kind: "SetAssetDefaultShader",
         target: {
@@ -1004,7 +1009,42 @@ export function App() {
         },
         payload: {
           definitionId,
+          slot,
           shaderDefinitionId: shaderDefinitionId ?? null
+        }
+      }),
+    onSetAssetDefaultShaderParameterOverride: (definitionId, slot, override) =>
+      dispatchCommand({
+        kind: "SetAssetDefaultShaderParameterOverride",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          override
+        }
+      }),
+    onClearAssetDefaultShaderParameterOverride: (definitionId, slot, parameterId) =>
+      dispatchCommand({
+        kind: "ClearAssetDefaultShaderParameterOverride",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          parameterId
         }
       }),
     onRemoveAssetDefinition: handleRemoveAssetDefinition,
@@ -1099,7 +1139,9 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     shaderDefinitions,
     onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
-    onCommand: dispatchCommand
+    onCommand: dispatchCommand,
+    navigationTarget: workspaceNavigationTarget,
+    onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
   const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
     activeDesignKind

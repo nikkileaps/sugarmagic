@@ -11,7 +11,8 @@ import type {
   ShaderNodeInstance,
   ShaderEdge,
   ShaderParameter,
-  ShaderParameterOverride
+  ShaderParameterOverride,
+  ShaderSlotKind
 } from "../shader-graph";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { ItemDefinition } from "../item-definition";
@@ -287,7 +288,26 @@ export type SetAssetDefaultShaderCommand = SemanticCommandBase<
   "SetAssetDefaultShader",
   {
     definitionId: string;
+    slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
+  }
+>;
+
+export type SetAssetDefaultShaderParameterOverrideCommand = SemanticCommandBase<
+  "SetAssetDefaultShaderParameterOverride",
+  {
+    definitionId: string;
+    slot: ShaderSlotKind;
+    override: ShaderParameterOverride;
+  }
+>;
+
+export type ClearAssetDefaultShaderParameterOverrideCommand = SemanticCommandBase<
+  "ClearAssetDefaultShaderParameterOverride",
+  {
+    definitionId: string;
+    slot: ShaderSlotKind;
+    parameterId: string;
   }
 >;
 
@@ -295,6 +315,7 @@ export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
   "SetPlacedAssetShaderOverride",
   {
     instanceId: string;
+    slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
   }
 >;
@@ -303,6 +324,7 @@ export type SetNPCPresenceShaderOverrideCommand = SemanticCommandBase<
   "SetNPCPresenceShaderOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
   }
 >;
@@ -311,6 +333,7 @@ export type SetItemPresenceShaderOverrideCommand = SemanticCommandBase<
   "SetItemPresenceShaderOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
   }
 >;
@@ -319,6 +342,7 @@ export type SetPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase<
   "SetPlacedAssetShaderParameterOverride",
   {
     instanceId: string;
+    slot: ShaderSlotKind;
     override: ShaderParameterOverride;
   }
 >;
@@ -327,6 +351,7 @@ export type ClearPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase
   "ClearPlacedAssetShaderParameterOverride",
   {
     instanceId: string;
+    slot: ShaderSlotKind;
     parameterId: string;
   }
 >;
@@ -335,6 +360,7 @@ export type SetNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   "SetNPCPresenceShaderParameterOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     override: ShaderParameterOverride;
   }
 >;
@@ -343,6 +369,7 @@ export type ClearNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase
   "ClearNPCPresenceShaderParameterOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     parameterId: string;
   }
 >;
@@ -351,6 +378,7 @@ export type SetItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   "SetItemPresenceShaderParameterOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     override: ShaderParameterOverride;
   }
 >;
@@ -359,6 +387,7 @@ export type ClearItemPresenceShaderParameterOverrideCommand = SemanticCommandBas
   "ClearItemPresenceShaderParameterOverride",
   {
     presenceId: string;
+    slot: ShaderSlotKind;
     parameterId: string;
   }
 >;
@@ -720,6 +749,8 @@ export type SemanticCommand =
   | UpdateShaderParameterCommand
   | RemoveShaderParameterCommand
   | SetAssetDefaultShaderCommand
+  | SetAssetDefaultShaderParameterOverrideCommand
+  | ClearAssetDefaultShaderParameterOverrideCommand
   | SetPlacedAssetShaderOverrideCommand
   | SetNPCPresenceShaderOverrideCommand
   | SetItemPresenceShaderOverrideCommand

@@ -68,7 +68,11 @@ import type {
   SetItemPresenceShaderParameterOverrideCommand,
   ClearItemPresenceShaderParameterOverrideCommand
 } from "./index";
-import type { ShaderParameterOverride } from "../shader-graph";
+import type {
+  ShaderBindingOverride,
+  ShaderParameterOverride,
+  ShaderSlotKind
+} from "../shader-graph";
 
 export interface CommandExecutionResult {
   region: RegionDocument;
@@ -137,7 +141,7 @@ function createPlacedAssetFromCommand(
     displayName: command.payload.displayName,
     parentFolderId: command.payload.parentFolderId,
     inspectable: null,
-    shaderOverride: null,
+    shaderOverrides: [],
     shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
@@ -397,7 +401,7 @@ function createNPCPresenceFromCommand(
   return {
     presenceId: command.payload.presenceId,
     npcDefinitionId: command.payload.npcDefinitionId,
-    shaderOverride: null,
+    shaderOverrides: [],
     shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
@@ -414,7 +418,7 @@ function createItemPresenceFromCommand(
     presenceId: command.payload.presenceId,
     itemDefinitionId: command.payload.itemDefinitionId,
     quantity: Math.max(1, Math.floor(command.payload.quantity)),
-    shaderOverride: null,
+    shaderOverrides: [],
     shaderParameterOverrides: [],
     transform: {
       position: command.payload.position,
@@ -429,7 +433,9 @@ function upsertShaderParameterOverride(
   nextOverride: ShaderParameterOverride
 ): ShaderParameterOverride[] {
   const index = overrides.findIndex(
-    (override) => override.parameterId === nextOverride.parameterId
+    (override) =>
+      override.parameterId === nextOverride.parameterId &&
+      override.slot === nextOverride.slot
   );
   if (index < 0) {
     return [...overrides, nextOverride];
@@ -437,6 +443,15 @@ function upsertShaderParameterOverride(
 
   const next = [...overrides];
   next[index] = nextOverride;
+  return next;
+}
+
+function upsertShaderBindingOverride(
+  overrides: ShaderBindingOverride[],
+  nextOverride: { shaderDefinitionId: string; slot: ShaderSlotKind }
+): ShaderBindingOverride[] {
+  const next = overrides.filter((override) => override.slot !== nextOverride.slot);
+  next.push(nextOverride);
   return next;
 }
 
@@ -452,9 +467,14 @@ function applySetPlacedAssetShaderOverride(
         asset.instanceId === command.payload.instanceId
           ? {
               ...asset,
-              shaderOverride: command.payload.shaderDefinitionId
-                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
-                : null
+              shaderOverrides: command.payload.shaderDefinitionId
+                ? upsertShaderBindingOverride(asset.shaderOverrides ?? [], {
+                    shaderDefinitionId: command.payload.shaderDefinitionId,
+                    slot: command.payload.slot
+                  })
+                : (asset.shaderOverrides ?? []).filter(
+                    (override) => override.slot !== command.payload.slot
+                  )
             }
           : asset
       )
@@ -476,7 +496,7 @@ function applySetPlacedAssetShaderParameterOverride(
               ...asset,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 asset.shaderParameterOverrides,
-                command.payload.override
+                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
               )
             }
           : asset
@@ -498,7 +518,11 @@ function applyClearPlacedAssetShaderParameterOverride(
           ? {
               ...asset,
               shaderParameterOverrides: asset.shaderParameterOverrides.filter(
-                (override) => override.parameterId !== command.payload.parameterId
+                (override) =>
+                  !(
+                    override.parameterId === command.payload.parameterId &&
+                    override.slot === command.payload.slot
+                  )
               )
             }
           : asset
@@ -519,9 +543,14 @@ function applySetNPCPresenceShaderOverride(
         presence.presenceId === command.payload.presenceId
           ? {
               ...presence,
-              shaderOverride: command.payload.shaderDefinitionId
-                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
-                : null
+              shaderOverrides: command.payload.shaderDefinitionId
+                ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
+                    shaderDefinitionId: command.payload.shaderDefinitionId,
+                    slot: command.payload.slot
+                  })
+                : (presence.shaderOverrides ?? []).filter(
+                    (override) => override.slot !== command.payload.slot
+                  )
             }
           : presence
       )
@@ -543,7 +572,7 @@ function applySetNPCPresenceShaderParameterOverride(
               ...presence,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 presence.shaderParameterOverrides,
-                command.payload.override
+                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
               )
             }
           : presence
@@ -565,7 +594,11 @@ function applyClearNPCPresenceShaderParameterOverride(
           ? {
               ...presence,
               shaderParameterOverrides: presence.shaderParameterOverrides.filter(
-                (override) => override.parameterId !== command.payload.parameterId
+                (override) =>
+                  !(
+                    override.parameterId === command.payload.parameterId &&
+                    override.slot === command.payload.slot
+                  )
               )
             }
           : presence
@@ -586,9 +619,14 @@ function applySetItemPresenceShaderOverride(
         presence.presenceId === command.payload.presenceId
           ? {
               ...presence,
-              shaderOverride: command.payload.shaderDefinitionId
-                ? { shaderDefinitionId: command.payload.shaderDefinitionId }
-                : null
+              shaderOverrides: command.payload.shaderDefinitionId
+                ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
+                    shaderDefinitionId: command.payload.shaderDefinitionId,
+                    slot: command.payload.slot
+                  })
+                : (presence.shaderOverrides ?? []).filter(
+                    (override) => override.slot !== command.payload.slot
+                  )
             }
           : presence
       )
@@ -610,7 +648,7 @@ function applySetItemPresenceShaderParameterOverride(
               ...presence,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 presence.shaderParameterOverrides,
-                command.payload.override
+                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
               )
             }
           : presence
@@ -632,7 +670,11 @@ function applyClearItemPresenceShaderParameterOverride(
           ? {
               ...presence,
               shaderParameterOverrides: presence.shaderParameterOverrides.filter(
-                (override) => override.parameterId !== command.payload.parameterId
+                (override) =>
+                  !(
+                    override.parameterId === command.payload.parameterId &&
+                    override.slot === command.payload.slot
+                  )
               )
             }
           : presence
