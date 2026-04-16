@@ -19,6 +19,7 @@ import {
 import {
   applyLightingPresetTemplate,
   computeSkyDrivenAmbient,
+  expandShadowQuality,
   resolveEnvironmentWithPostProcessChain
 } from "@sugarmagic/runtime-core";
 
@@ -163,5 +164,49 @@ describe("environment contract", () => {
       (edge) => edge.targetNodeId === "one-minus-exp" && edge.targetPortId === "a"
     );
     expect(subtractInput?.sourceNodeId).toBe("one");
+  });
+
+  // Story 3 (shadows): authored shadow quality maps to concrete GPU-facing
+  // parameters. Each preset is fixed and documented in the epic, so these
+  // tests double as regression guards against accidental table drift.
+  it("expandShadowQuality returns the documented cascade + map + pcf numbers", () => {
+    expect(expandShadowQuality("low")).toEqual({
+      cascadeCount: 1,
+      mapSize: 1024,
+      pcfSamples: 1
+    });
+    expect(expandShadowQuality("medium")).toEqual({
+      cascadeCount: 2,
+      mapSize: 2048,
+      pcfSamples: 4
+    });
+    expect(expandShadowQuality("high")).toEqual({
+      cascadeCount: 3,
+      mapSize: 2048,
+      pcfSamples: 9
+    });
+    expect(expandShadowQuality("ultra")).toEqual({
+      cascadeCount: 4,
+      mapSize: 4096,
+      pcfSamples: 16
+    });
+  });
+
+  it("expandShadowQuality returns a fresh copy each call (no shared mutable state)", () => {
+    const first = expandShadowQuality("high");
+    first.cascadeCount = 99;
+    const second = expandShadowQuality("high");
+    expect(second.cascadeCount).toBe(3);
+  });
+
+  it("fresh environment definitions ship with enabled shadow defaults", () => {
+    const definition = createDefaultEnvironmentDefinition("project", {
+      definitionId: "project:environment:default",
+      displayName: "Default",
+      preset: "default"
+    });
+    expect(definition.lighting.sun.shadows.enabled).toBe(true);
+    expect(definition.lighting.sun.shadows.quality).toBe("high");
+    expect(definition.lighting.sun.shadows.distance).toBeGreaterThan(0);
   });
 });

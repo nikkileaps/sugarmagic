@@ -127,4 +127,137 @@ describe("environment migration", () => {
     ).toBe(0.6);
     expect("bloom" in (definition.atmosphere as Record<string, unknown>)).toBe(false);
   });
+
+  it("fills in DEFAULT_SUN_SHADOWS on a v2 document missing the shadows block", () => {
+    // Simulate an intermediate-v2 document that has the reworked lighting
+    // model but predates Story 3 (no authored shadows yet).
+    const library: ContentLibrarySnapshot = {
+      identity: {
+        id: "project:content-library",
+        schema: "ContentLibrary",
+        version: 2
+      },
+      assetDefinitions: [],
+      shaderDefinitions: [],
+      environmentDefinitions: [
+        {
+          definitionId: "project:environment:intermediate",
+          definitionKind: "environment",
+          displayName: "Intermediate Environment",
+          postProcessShaders: [],
+          lighting: {
+            preset: "default",
+            sun: {
+              azimuthDeg: 225,
+              elevationDeg: 35,
+              color: 0xffffff,
+              intensity: 1
+              // shadows: (missing — pre-Story 3 v2 doc)
+            },
+            rim: null,
+            ambient: { mode: "flat", color: 0xffffff, intensity: 0.6 }
+          },
+          atmosphere: {
+            fog: { enabled: false, density: 0.008, color: 0x808080, heightFalloff: 0 },
+            ssao: { enabled: false, kernelRadius: 8, minDistance: 0.005, maxDistance: 0.1 },
+            sky: {
+              enabled: true,
+              mode: "gradient",
+              topColor: 0x404040,
+              bottomColor: 0x2a2a2a,
+              horizonBlend: 0.5,
+              gradientExponent: 1.5,
+              saturation: 1,
+              nebulaDensity: 0,
+              nebulaSpeed: 0,
+              riftEnabled: false,
+              riftIntensity: 0,
+              riftPulseSpeed: 0,
+              riftSwirlStrength: 0,
+              cloudsEnabled: false,
+              cloudCoverage: 0,
+              cloudSoftness: 0,
+              cloudOpacity: 0,
+              cloudScale: 1,
+              cloudSpeed: 0,
+              cloudDirectionDegrees: 0
+            }
+          },
+          backdrop: { cityscapeEnabled: false, bufferZoneEnabled: false }
+        } as unknown as ContentLibrarySnapshot["environmentDefinitions"][number]
+      ]
+    };
+
+    const normalized = normalizeContentLibrarySnapshot(library, "project");
+    const definition = normalized.environmentDefinitions[0]!;
+    expect(definition.lighting.sun.shadows).toBeDefined();
+    expect(definition.lighting.sun.shadows.enabled).toBe(true);
+    expect(definition.lighting.sun.shadows.quality).toBe("high");
+  });
+
+  it("migrates deprecated sun.castShadows into shadows.enabled and drops the old field", () => {
+    const library: ContentLibrarySnapshot = {
+      identity: {
+        id: "project:content-library",
+        schema: "ContentLibrary",
+        version: 2
+      },
+      assetDefinitions: [],
+      shaderDefinitions: [],
+      environmentDefinitions: [
+        {
+          definitionId: "project:environment:with-castshadows",
+          definitionKind: "environment",
+          displayName: "Env with legacy castShadows flag",
+          postProcessShaders: [],
+          lighting: {
+            preset: "default",
+            sun: {
+              azimuthDeg: 225,
+              elevationDeg: 35,
+              color: 0xffffff,
+              intensity: 1,
+              castShadows: false
+              // shadows: missing, castShadows: false should produce shadows.enabled: false
+            },
+            rim: null,
+            ambient: { mode: "flat", color: 0xffffff, intensity: 0.6 }
+          },
+          atmosphere: {
+            fog: { enabled: false, density: 0.008, color: 0x808080, heightFalloff: 0 },
+            ssao: { enabled: false, kernelRadius: 8, minDistance: 0.005, maxDistance: 0.1 },
+            sky: {
+              enabled: true,
+              mode: "gradient",
+              topColor: 0x404040,
+              bottomColor: 0x2a2a2a,
+              horizonBlend: 0.5,
+              gradientExponent: 1.5,
+              saturation: 1,
+              nebulaDensity: 0,
+              nebulaSpeed: 0,
+              riftEnabled: false,
+              riftIntensity: 0,
+              riftPulseSpeed: 0,
+              riftSwirlStrength: 0,
+              cloudsEnabled: false,
+              cloudCoverage: 0,
+              cloudSoftness: 0,
+              cloudOpacity: 0,
+              cloudScale: 1,
+              cloudSpeed: 0,
+              cloudDirectionDegrees: 0
+            }
+          },
+          backdrop: { cityscapeEnabled: false, bufferZoneEnabled: false }
+        } as unknown as ContentLibrarySnapshot["environmentDefinitions"][number]
+      ]
+    };
+
+    const normalized = normalizeContentLibrarySnapshot(library, "project");
+    const definition = normalized.environmentDefinitions[0]!;
+    expect(definition.lighting.sun.shadows.enabled).toBe(false);
+    // The old castShadows field should be gone from the upgraded doc.
+    expect("castShadows" in definition.lighting.sun).toBe(false);
+  });
 });

@@ -399,7 +399,7 @@ export function useEnvironmentWorkspaceView(
                 />
                 <Switch
                   label="Cast Shadows"
-                  checked={selectedEnvironment.lighting.sun.castShadows}
+                  checked={selectedEnvironment.lighting.sun.shadows.enabled}
                   onChange={(event) =>
                     updateDefinition((definition) => ({
                       ...definition,
@@ -407,12 +407,178 @@ export function useEnvironmentWorkspaceView(
                         ...definition.lighting,
                         sun: {
                           ...definition.lighting.sun,
-                          castShadows: event.currentTarget.checked
+                          shadows: {
+                            ...definition.lighting.sun.shadows,
+                            enabled: event.currentTarget.checked
+                          }
                         }
                       }
                     }))
                   }
                 />
+                {selectedEnvironment.lighting.sun.shadows.enabled && (
+                  <Stack gap="sm" pl="md">
+                    <Select
+                      label="Quality"
+                      description="Higher quality = more cascades + larger shadow maps. Low is fast; Ultra is hero-shot territory."
+                      data={[
+                        { value: "low", label: "Low" },
+                        { value: "medium", label: "Medium" },
+                        { value: "high", label: "High (recommended)" },
+                        { value: "ultra", label: "Ultra" }
+                      ]}
+                      value={selectedEnvironment.lighting.sun.shadows.quality}
+                      onChange={(value) => {
+                        if (
+                          value !== "low" &&
+                          value !== "medium" &&
+                          value !== "high" &&
+                          value !== "ultra"
+                        ) {
+                          return;
+                        }
+                        updateDefinition((definition) => ({
+                          ...definition,
+                          lighting: {
+                            ...definition.lighting,
+                            sun: {
+                              ...definition.lighting.sun,
+                              shadows: {
+                                ...definition.lighting.sun.shadows,
+                                quality: value
+                              }
+                            }
+                          }
+                        }));
+                      }}
+                      allowDeselect={false}
+                    />
+                    <SliderNumberField
+                      label="Distance"
+                      value={selectedEnvironment.lighting.sun.shadows.distance}
+                      min={10}
+                      max={500}
+                      step={1}
+                      precision={0}
+                      onChange={(value) =>
+                        updateDefinition((definition) => ({
+                          ...definition,
+                          lighting: {
+                            ...definition.lighting,
+                            sun: {
+                              ...definition.lighting.sun,
+                              shadows: {
+                                ...definition.lighting.sun.shadows,
+                                distance: value
+                              }
+                            }
+                          }
+                        }))
+                      }
+                    />
+                    <SliderNumberField
+                      label="Strength"
+                      value={selectedEnvironment.lighting.sun.shadows.strength}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) =>
+                        updateDefinition((definition) => ({
+                          ...definition,
+                          lighting: {
+                            ...definition.lighting,
+                            sun: {
+                              ...definition.lighting.sun,
+                              shadows: {
+                                ...definition.lighting.sun.shadows,
+                                strength: value
+                              }
+                            }
+                          }
+                        }))
+                      }
+                    />
+                    <SliderNumberField
+                      label="Softness"
+                      value={selectedEnvironment.lighting.sun.shadows.softness}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) =>
+                        updateDefinition((definition) => ({
+                          ...definition,
+                          lighting: {
+                            ...definition.lighting,
+                            sun: {
+                              ...definition.lighting.sun,
+                              shadows: {
+                                ...definition.lighting.sun.shadows,
+                                softness: value
+                              }
+                            }
+                          }
+                        }))
+                      }
+                    />
+                    <details>
+                      <summary style={{ cursor: "pointer", fontSize: "0.85rem", opacity: 0.8 }}>
+                        Advanced
+                      </summary>
+                      <Stack gap="sm" mt="sm">
+                        <NumberInput
+                          label="Bias"
+                          description="Shadow acne prevention. Small negative values (e.g. -0.0001) are typical."
+                          value={selectedEnvironment.lighting.sun.shadows.bias}
+                          step={0.00005}
+                          decimalScale={5}
+                          onChange={(value) => {
+                            if (typeof value !== "number") return;
+                            updateDefinition((definition) => ({
+                              ...definition,
+                              lighting: {
+                                ...definition.lighting,
+                                sun: {
+                                  ...definition.lighting.sun,
+                                  shadows: {
+                                    ...definition.lighting.sun.shadows,
+                                    bias: value
+                                  }
+                                }
+                              }
+                            }));
+                          }}
+                        />
+                        <NumberInput
+                          label="Normal Bias"
+                          description="Offset in normal direction; typical range 0.01–0.1."
+                          value={selectedEnvironment.lighting.sun.shadows.normalBias}
+                          step={0.01}
+                          decimalScale={3}
+                          min={0}
+                          max={1}
+                          onChange={(value) => {
+                            if (typeof value !== "number") return;
+                            updateDefinition((definition) => ({
+                              ...definition,
+                              lighting: {
+                                ...definition.lighting,
+                                sun: {
+                                  ...definition.lighting.sun,
+                                  shadows: {
+                                    ...definition.lighting.sun.shadows,
+                                    normalBias: value
+                                  }
+                                }
+                              }
+                            }));
+                          }}
+                        />
+                      </Stack>
+                    </details>
+                  </Stack>
+                )}
               </Stack>
             </PanelSection>
 

@@ -14,6 +14,7 @@ import type {
   LightingPreset,
   PostProcessShaderBinding,
   RegionDocument,
+  ShadowQuality,
   SkySettings
 } from "@sugarmagic/domain";
 import {
@@ -150,6 +151,43 @@ export function getLightingPresetOptions(): Array<{
     value: value as LightingPreset,
     label
   }));
+}
+
+/**
+ * Concrete GPU-facing shadow parameters for each authored quality preset.
+ *
+ * Authors pick a preset ("low" / "medium" / "high" / "ultra"); this table
+ * maps to the specific cascade count, shadow map size, and PCF sample count
+ * used by the WebGPU CSM setup. Centralized here so the mapping can be
+ * unit-tested without Three.js imports and so adding a new preset is a
+ * single-file change.
+ *
+ * Cost column is the approximate GPU-time multiplier vs. "no shadows at all"
+ * on typical mid-range hardware. Numbers are ballpark guidance for authors,
+ * not a perf SLA.
+ *
+ * | Quality | Cascades | Map size | PCF samples | Typical cost |
+ * |---------|----------|----------|-------------|--------------|
+ * | low     | 1        | 1024     | 1           | ~1.3x        |
+ * | medium  | 2        | 2048     | 4           | ~2x          |
+ * | high    | 3        | 2048     | 9           | ~3.5x        |
+ * | ultra   | 4        | 4096     | 16          | ~6-8x        |
+ */
+export interface ExpandedShadowQuality {
+  cascadeCount: number;
+  mapSize: number;
+  pcfSamples: number;
+}
+
+const SHADOW_QUALITY_TABLE: Record<ShadowQuality, ExpandedShadowQuality> = {
+  low: { cascadeCount: 1, mapSize: 1024, pcfSamples: 1 },
+  medium: { cascadeCount: 2, mapSize: 2048, pcfSamples: 4 },
+  high: { cascadeCount: 3, mapSize: 2048, pcfSamples: 9 },
+  ultra: { cascadeCount: 4, mapSize: 4096, pcfSamples: 16 }
+};
+
+export function expandShadowQuality(quality: ShadowQuality): ExpandedShadowQuality {
+  return { ...SHADOW_QUALITY_TABLE[quality] };
 }
 
 export function applyLightingPresetTemplate(

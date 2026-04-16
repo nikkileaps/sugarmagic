@@ -63,12 +63,41 @@ export type LightingPreset =
   | "golden_hour"
   | "night";
 
+/**
+ * Authored shadow quality preset. The actual GPU-facing values (cascade count,
+ * shadow map size, PCF sampling) are derived from this preset by
+ * expandShadowQuality() in runtime-core. Authors don't pick implementation
+ * details; they pick a named tier and the engine maps it concretely.
+ */
+export type ShadowQuality = "low" | "medium" | "high" | "ultra";
+
+export interface SunShadowSettings {
+  enabled: boolean;
+  quality: ShadowQuality;
+  /** World-space distance the shadow cascades cover from the camera. */
+  distance: number;
+  /** 0..1 — multiplier on shadow darkness. */
+  strength: number;
+  /** 0..1 — PCF softness factor; drives sample radius within the quality preset. */
+  softness: number;
+  /** Shadow acne prevention. Small negative values (~-0.0001) are typical. */
+  bias: number;
+  /** Normal-offset bias; typical range 0.01..0.1. */
+  normalBias: number;
+}
+
 export interface SunLight {
   azimuthDeg: number;
   elevationDeg: number;
   color: number;
   intensity: number;
-  castShadows: boolean;
+  /**
+   * @deprecated Use `shadows.enabled` instead. Retained for v1 doc migration
+   * only — normalization moves this into `shadows.enabled` and drops the field.
+   * New code should read and write `shadows.enabled`.
+   */
+  castShadows?: boolean;
+  shadows: SunShadowSettings;
 }
 
 export interface RimLight {
@@ -156,12 +185,22 @@ export interface ContentLibrarySnapshot {
   shaderDefinitions: ShaderGraphDocument[];
 }
 
+export const DEFAULT_SUN_SHADOWS: SunShadowSettings = {
+  enabled: true,
+  quality: "high",
+  distance: 80,
+  strength: 1,
+  softness: 0.5,
+  bias: -0.0001,
+  normalBias: 0.05
+};
+
 export const DEFAULT_SUN_LIGHT: SunLight = {
   azimuthDeg: 225,
   elevationDeg: 35,
   color: 0xffffff,
   intensity: 0.9,
-  castShadows: true
+  shadows: { ...DEFAULT_SUN_SHADOWS }
 };
 
 export const DEFAULT_AMBIENT_CONFIG: AmbientConfig = {
@@ -172,7 +211,7 @@ export const DEFAULT_AMBIENT_CONFIG: AmbientConfig = {
 
 export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   preset: "default",
-  sun: { ...DEFAULT_SUN_LIGHT },
+  sun: { ...DEFAULT_SUN_LIGHT, shadows: { ...DEFAULT_SUN_SHADOWS } },
   rim: null,
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
@@ -238,7 +277,7 @@ export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighti
       elevationDeg: 45,
       color: 0xffffff,
       intensity: 1,
-      castShadows: true
+      shadows: { ...DEFAULT_SUN_SHADOWS }
     },
     rim: {
       // Opposite hemisphere from the sun, slightly lower elevation. Acts as
@@ -264,7 +303,7 @@ export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighti
       elevationDeg: 68,
       color: 0xfff5e0,
       intensity: 1,
-      castShadows: true
+      shadows: { ...DEFAULT_SUN_SHADOWS }
     },
     // Fill from the opposite hemisphere — a slightly cool tint that reads as
     // "sky bounce" filling the sun's shadow side. Real noon outdoor scenes
@@ -289,7 +328,7 @@ export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighti
       elevationDeg: 36,
       color: 0xffe2bc,
       intensity: 1.02,
-      castShadows: true
+      shadows: { ...DEFAULT_SUN_SHADOWS }
     },
     rim: {
       azimuthDeg: 55,
@@ -310,7 +349,7 @@ export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighti
       elevationDeg: 25,
       color: 0xffe0b5,
       intensity: 0.9,
-      castShadows: true
+      shadows: { ...DEFAULT_SUN_SHADOWS }
     },
     rim: {
       azimuthDeg: 55,
@@ -331,7 +370,7 @@ export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighti
       elevationDeg: 55,
       color: 0x7788aa,
       intensity: 0.3,
-      castShadows: true
+      shadows: { ...DEFAULT_SUN_SHADOWS }
     },
     rim: null,
     ambient: {
@@ -370,9 +409,18 @@ export function createBuiltInTonemapAcesShaderId(projectId: string): string {
 }
 
 function cloneLighting(lighting: EnvironmentLighting): EnvironmentLighting {
+  // Tolerate v2 documents authored before Story 3 that don't have a shadows
+  // block on the sun — normalizeSunShadows runs after cloneLighting and
+  // fills it in from DEFAULT_SUN_SHADOWS + any legacy castShadows.
+  const sunShadows = lighting.sun.shadows
+    ? { ...lighting.sun.shadows }
+    : undefined;
   return {
     preset: lighting.preset,
-    sun: { ...lighting.sun },
+    sun: {
+      ...lighting.sun,
+      ...(sunShadows ? { shadows: sunShadows } : {})
+    } as EnvironmentLighting["sun"],
     rim: lighting.rim ? { ...lighting.rim } : null,
     ambient: { ...lighting.ambient }
   };
@@ -565,6 +613,20 @@ function migrateLightingFromLegacy(
   const template = cloneLighting(LIGHTING_PRESET_TEMPLATES[preset]);
   const legacyAdjustments = definition.lighting?.adjustments;
   if (!legacyAdjustments) {
+    // Not a legacy v1 document. If the existing lighting already has the
+    // reworked shape (authored sun/ambient fields), preserve it verbatim —
+    // the template is only a fallback for *truly missing* lighting. Before
+    // this guard, every v2 normalization pass silently reset the author's
+    // sun direction / color / intensity back to the preset template.
+    const candidate = definition.lighting as unknown as Partial<EnvironmentLighting> | undefined;
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      candidate.sun &&
+      candidate.ambient
+    ) {
+      return cloneLighting(candidate as EnvironmentLighting);
+    }
     return template;
   }
 
@@ -646,7 +708,66 @@ export function synchronizeEnvironmentDefinition(
   };
 
   nextDefinition.postProcessShaders = synchronizeFogBinding(nextDefinition, projectId);
+  nextDefinition.lighting = normalizeSunShadows(nextDefinition.lighting);
   return nextDefinition;
+}
+
+/**
+ * Fill in `sun.shadows` if missing on an upgraded document, and migrate the
+ * deprecated `sun.castShadows` boolean into `sun.shadows.enabled`. Idempotent —
+ * documents that already have a well-formed `shadows` block are returned with
+ * only the `castShadows` field stripped. Older v1 documents (before lighting
+ * rework) have already been through migrateLightingFromLegacy before they
+ * reach this function, so their sun comes from a preset template; we just
+ * need to make sure templates without shadows get defaults.
+ */
+function normalizeSunShadows(lighting: EnvironmentLighting): EnvironmentLighting {
+  const existing = lighting.sun.shadows;
+  const legacyCastShadows = lighting.sun.castShadows;
+  const resolved: SunShadowSettings = existing
+    ? {
+        enabled:
+          typeof existing.enabled === "boolean"
+            ? existing.enabled
+            : legacyCastShadows ?? DEFAULT_SUN_SHADOWS.enabled,
+        quality: existing.quality ?? DEFAULT_SUN_SHADOWS.quality,
+        distance:
+          typeof existing.distance === "number"
+            ? existing.distance
+            : DEFAULT_SUN_SHADOWS.distance,
+        strength:
+          typeof existing.strength === "number"
+            ? existing.strength
+            : DEFAULT_SUN_SHADOWS.strength,
+        softness:
+          typeof existing.softness === "number"
+            ? existing.softness
+            : DEFAULT_SUN_SHADOWS.softness,
+        bias:
+          typeof existing.bias === "number"
+            ? existing.bias
+            : DEFAULT_SUN_SHADOWS.bias,
+        normalBias:
+          typeof existing.normalBias === "number"
+            ? existing.normalBias
+            : DEFAULT_SUN_SHADOWS.normalBias
+      }
+    : {
+        ...DEFAULT_SUN_SHADOWS,
+        enabled:
+          typeof legacyCastShadows === "boolean"
+            ? legacyCastShadows
+            : DEFAULT_SUN_SHADOWS.enabled
+      };
+
+  const { castShadows: _droppedCastShadows, ...cleanSun } = lighting.sun;
+  return {
+    ...lighting,
+    sun: {
+      ...cleanSun,
+      shadows: resolved
+    }
+  };
 }
 
 export function applyLightingPresetTemplate(

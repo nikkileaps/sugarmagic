@@ -79,6 +79,11 @@ All of this is achievable in-engine today once the environment model is upgraded
   - Rim light toggle + azimuth/elevation/color/intensity when enabled
   - Ambient mode selector (`sky-driven` | `flat`), plus color/intensity when flat
   - Fog color picker + density + height-falloff
+- **First-class sun shadow authoring** via Three's WebGPU `CSMShadowNode`:
+  - Single authored `lighting.sun.shadows` block on `EnvironmentDefinition`: enabled, quality preset, distance, strength, softness, bias, normalBias.
+  - Quality preset (`low`/`medium`/`high`/`ultra`) drives cascade count, shadow map size, and PCF sampling internally — authors don't pick cascade count or split mode directly.
+  - Single implementation path in `EnvironmentSceneController`; used by Studio authoring viewport and published runtime identically.
+  - Cheap live edits (distance/strength/softness) update uniforms; expensive ones (quality change) rebuild the shadow setup.
 - **Command surface policy:** extend the currently-shipped environment and post-process command family — do not rename. Specifically:
   - Lighting, rim, ambient, fog, and any other `EnvironmentDefinition`-scoped edits route through the existing `UpdateEnvironmentDefinitionCommand` (`packages/domain/src/commands/index.ts:208`). New authored fields (sun azimuth, etc.) are reached via this one command by supplying a whole updated definition.
   - Post-process stack edits route through the existing `AddPostProcessShaderCommand` / `RemovePostProcessShaderCommand` / `UpdatePostProcessShaderOrderCommand` / `UpdatePostProcessShaderParameterCommand` / `TogglePostProcessShaderCommand` family — already shipped, already handled by the reducer in `authoring-session/index.ts`.
@@ -93,7 +98,9 @@ All of this is achievable in-engine today once the environment model is upgraded
 - SSAO re-enablement. SSAO is a g-buffer effect, not a post-process in the authored sense; it stays as a scalar setting and remains disabled in the render graph until the Three.js GTAO node is stable. Not blocking for this look.
 - 3D LUT file import. Authored lift/gamma/gain + saturation is sufficient for MVP; LUT import can follow later.
 - Volumetric fog / height fog with geometry. Flat depth-based fog-tint is the MVP.
-- Cascade shadow maps or shadow quality knobs beyond a single `castShadows` boolean on the sun. Shadow authoring is a separate concern.
+- Per-asset shadow opt-out (e.g., a specific mesh that should not cast shadows despite being in a scene where the sun casts). All `PlacedAssetInstance` meshes currently cast shadows by default via the host's `enableShadowsOnObject` pass; per-asset override is a follow-up if authors need it.
+- Shadow debug visualization (cascade-color overlay, shadow camera bounds gizmo) — useful for engine debugging but not authored state. Belongs in a dev-only debug HUD card (Plan 027), not on `EnvironmentDefinition`.
+- Per-preset shadow defaults. v1 ships identical shadow defaults across every preset and tunes after seeing real reference scenes.
 - Workspace restructure. The stack editor lives in the existing Environment pane.
 
 ## Architecture rework
@@ -180,9 +187,9 @@ Fog today is `scene.fog = new THREE.FogExp2(color, density)` — a scene-level `
 Concretely:
 
 - `EnvironmentDefinition.atmosphere.fog` (the authored `FogSettings`) remains the single **authored** source of truth — authors still think of fog as "an environment property." Nothing changes at the authoring layer conceptually.
-- At runtime, `FogSettings` is realized by **exactly one mechanism**: if `fog.enabled` is true, a `:built-in:fog-tint` post-process binding must be present in the stack. Its `color`, `density`, and `heightFalloff` parameters mirror the authored `FogSettings`. The fog inspector UI (Story 7) edits the fog settings directly; the post-process stack editor shows the bound fog-tint entry and can edit its parameters too — both write to the same underlying `FogSettings` fields.
+- At runtime, `FogSettings` is realized by **exactly one mechanism**: if `fog.enabled` is true, a `:built-in:fog-tint` post-process binding must be present in the stack. Its `color`, `density`, and `heightFalloff` parameters mirror the authored `FogSettings`. The fog inspector UI (Story 8) edits the fog settings directly; the post-process stack editor shows the bound fog-tint entry and can edit its parameters too — both write to the same underlying `FogSettings` fields.
 - `runtime-core/src/render/environment-scene.ts` (now in `render-web`) no longer sets `scene.fog`. Materials that previously read `THREE.Fog` uniforms simply don't get them. Post-process depth-based fog composites uniformly across the whole frame instead.
-- The migration (Story 1 normalization) auto-inserts a `:built-in:fog-tint` binding into `postProcessShaders` for any environment where `fog.enabled` was true, with parameters derived from `fog.color`, `fog.density`, and `fog.heightFalloff`. Same pattern as the bloom migration in Story 6.
+- The migration (Story 1 normalization) auto-inserts a `:built-in:fog-tint` binding into `postProcessShaders` for any environment where `fog.enabled` was true, with parameters derived from `fog.color`, `fog.density`, and `fog.heightFalloff`. Same pattern as the bloom migration in Story 7.
 - If a future material needs fog-aware shading at the material level (e.g., a water shader fading into distance), it reads fog color/density via `input.parameter` bindings to the same authored `FogSettings` — the `ShaderRuntime` exposes them as named scene parameters. Still one source of truth; different consumers, same data.
 
 **Trade-off acknowledged:** we lose Three's built-in material-level fog on all existing opaque geometry. In practice this is fine because (a) post-process depth-fog composites uniformly regardless of material, (b) the visible difference is negligible for the target stylized look, and (c) keeping both was exactly the duplicated-behavior trap the user flagged.
@@ -296,7 +303,7 @@ A new `LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighting>` c
   - `skyMaterial.ts` — moved `buildSkyMaterial()` here.
   - `index.ts` barrel.
 - Delete `runtime-core/src/render/environment-scene.ts` (or reduce it to pure-data helpers if anything there survives the split).
-- **Remove `scene.fog` assignment from the relocated `EnvironmentSceneController`.** Fog is now realized exclusively through the `:built-in:fog-tint` post-process binding (wired in Story 3, migration auto-inserted in Story 1). No `THREE.FogExp2` or `THREE.Fog` is constructed anywhere in the render path. This is the concrete removal of the pre-existing dual-enforcer.
+- **Remove `scene.fog` assignment from the relocated `EnvironmentSceneController`.** Fog is now realized exclusively through the `:built-in:fog-tint` post-process binding (wired in Story 4, migration auto-inserted in Story 1). No `THREE.FogExp2` or `THREE.Fog` is constructed anywhere in the render path. This is the concrete removal of the pre-existing dual-enforcer.
 - Add a pure `computeSkyDrivenAmbient(sky: SkySettings): { color: number; intensity: number }` in runtime-core (no Three.js) that computes a hemisphere-style ambient from the sky gradient. `EnvironmentSceneController` in render-web calls this when `ambient.mode === "sky-driven"`.
 - Update `targets/web/src/runtimeHost.ts` to import `EnvironmentSceneController` from `@sugarmagic/render-web` instead of `@sugarmagic/runtime-core`.
 - Update `apps/studio/src/viewport/authoringViewport.ts` similarly.
@@ -304,15 +311,117 @@ A new `LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighting>` c
 
 **Acceptance.**
 
-- `grep -rn "from \"three" packages/runtime-core/src/environment/ packages/runtime-core/src/render/environment-scene.ts` returns zero matches. (`render/graph.ts` is addressed in Story 6; `render/pipeline.ts` and other runtime-core modules are explicitly out of scope.)
+- `grep -rn "from \"three" packages/runtime-core/src/environment/ packages/runtime-core/src/render/environment-scene.ts` returns zero matches. (`render/graph.ts` is addressed in Story 7; `render/pipeline.ts` and other runtime-core modules are explicitly out of scope.)
 - `tooling/check-package-boundaries.mjs` run passes for the scoped directories, and intentionally fails if a `three` import is reintroduced into the environment module. (A parallel guardrail for the remaining runtime-core modules is tracked as a separate follow-up ticket, not blocked on this epic.)
-- Existing environment runtime tests (`packages/testing/src/environment-runtime.test.ts`, renamed to `render-web-environment.test.ts` in Story 9) still pass after the relocation.
+- Existing environment runtime tests (`packages/testing/src/environment-runtime.test.ts`, renamed to `render-web-environment.test.ts` in Story 10) still pass after the relocation.
 - `grep -rn "scene\.fog\|FogExp2\|new THREE\.Fog" packages/render-web/src/ targets/web/src/ packages/runtime-core/src/` returns zero matches — fog has exactly one runtime enforcer, the `fog-tint` post-process binding.
 - Studio authoring viewport and published web target both render environments correctly (manual smoke test: switch presets, see the scene change, including fog tint).
 
 ---
 
-### Story 3: Wire authored post-process stack through ShaderRuntime
+### Story 3: First-class sun shadow authoring with WebGPU cascaded shadows
+
+**Goal.** Replace the current "single fixed shadow map with hardcoded frustum" rig with authored shadow controls on `EnvironmentDefinition.lighting.sun.shadows`, realized by a single `CSMShadowNode`-based path in `EnvironmentSceneController`. Same path in Studio and runtime — the WebRenderHost consolidation pattern extended to shadows.
+
+**Motivation.** The current setup (hardcoded ±50 world-unit frustum, 2K single shadow map, PCF-soft) produces acceptable shadows on small authored scenes but breaks down as soon as the scene gets bigger than a handful of buildings: near-camera detail goes mushy, far-camera shadows disappear, artifacts appear on moving viewpoints. For the stylized-outdoor target look, cascaded shadows are the standard solution. Three's WebGPU stack ships `CSMShadowNode` specifically for this.
+
+Equally important: today's shadow parameters are literally invisible to authors — the frustum size, bias, and softness are magic numbers in `createDirectionalLight()`. Every time we want to tweak them we're editing engine code. That's exactly the "hidden rig" problem Story 1 fixed for lighting. Shadows deserve the same first-class authoring treatment.
+
+**Authored domain shape.** Add `shadows` to the existing `SunLight` interface in `packages/domain/src/content-library/index.ts`:
+
+```typescript
+export type ShadowQuality = "low" | "medium" | "high" | "ultra";
+
+export interface SunShadowSettings {
+  enabled: boolean;
+  quality: ShadowQuality;
+  /** World-space distance the shadow cascades cover from the camera. */
+  distance: number;
+  /** 0..1 — multiplier on shadow darkness (alpha of the shadow region). */
+  strength: number;
+  /** 0..1 — PCF softness factor; drives sample radius within the quality preset. */
+  softness: number;
+  /** Shadow acne prevention. Small negative values (~-0.0001) are typical. */
+  bias: number;
+  /** Normal-offset bias; typical range 0.01..0.1. */
+  normalBias: number;
+}
+
+export interface SunLight {
+  // ...existing fields...
+  shadows: SunShadowSettings;
+}
+```
+
+Intentionally **not** on the authored shape (see Out of scope):
+
+- `technique` — one implementation, no author-facing toggle.
+- `cascades.count` / `cascades.mode` / `cascades.fade` / `cascades.margin` — driven by the quality preset internally.
+- `shadowDebug` — belongs in the debug HUD card, not in saved project data.
+
+**Quality preset table.** Concrete numbers, no engineer's-choice-on-the-day:
+
+| Quality | Cascade count | Map size per cascade | PCF samples | Typical GPU cost vs. base (no shadows) |
+|---|---|---|---|---|
+| low | 1 | 1024 | 1 (hard) | ~1.3× |
+| medium | 2 | 2048 | 4 | ~2× |
+| high | 3 | 2048 | 9 | ~3.5× |
+| ultra | 4 | 4096 | 16 | ~6–8× |
+
+`low` is appropriate for mid-range laptops or web builds targeting broad hardware. `high` is the recommended default for Studio. `ultra` is for screenshots / hero shots only.
+
+**Defaults.** Until per-preset shadow tuning lands, every lighting preset ships the same shadow defaults:
+
+```typescript
+const DEFAULT_SUN_SHADOWS: SunShadowSettings = {
+  enabled: true,
+  quality: "high",
+  distance: 80,
+  strength: 1,
+  softness: 0.5,
+  bias: -0.0001,
+  normalBias: 0.05
+};
+```
+
+**Tasks.**
+
+- Extend `SunLight` in domain with `shadows: SunShadowSettings`. Update the five preset templates in `LIGHTING_PRESET_TEMPLATES` to include `shadows: DEFAULT_SUN_SHADOWS`. Update `normalizeContentLibrarySnapshot` to fill in `shadows` on any upgraded v2 document that's missing it (defaults to `DEFAULT_SUN_SHADOWS`).
+- Rework `EnvironmentSceneController.createDirectionalLight()` in `packages/render-web/src/environment/`:
+  - When `shadows.enabled === false`, the sun is a plain `DirectionalLight` with `castShadow = false`.
+  - When enabled, attach a `CSMShadowNode` to the sun with cascade count + map size + PCF samples driven by the quality preset. Distance controls the overall cascade coverage; bias/normalBias wire through; strength and softness drive the node's exposed uniforms.
+  - The CSM setup is **created once per quality change** and cached on the controller; distance/strength/softness/bias/normalBias edits update uniforms in place (cheap), same pattern as the bloom node cache in `ShaderRuntime`.
+- Add a pure runtime-core helper `expandShadowQuality(quality)` → `{ cascadeCount, mapSize, pcfSamples }` so the mapping lives in one data-driven place and can be unit-tested without Three.js imports. `EnvironmentSceneController` calls this to parameterize the CSM setup.
+- Ensure `WebRenderHost.enableShadowsOnObject(root)` continues to be the single authority for marking mesh geometry shadow-participating. Document (in the host file header or an adjacent readme) that all `PlacedAssetInstance` meshes cast shadows by default — per-asset opt-out is not part of this story but is a reasonable future addition.
+- Performance guardrail: the ShaderRuntime already notes TSL cache behavior; add an equivalent note on the shadow controller explaining that quality changes trigger a full CSM rebuild while other shadow parameters update uniforms in place. This avoids re-learning the pattern next time someone adds a shadow knob.
+- Authoring UI in the sun/lighting inspector (part of Story 8's scope, listed here for completeness):
+  - Primary controls: Cast Shadows toggle, Quality select, Distance / Strength / Softness sliders.
+  - **Advanced section (collapsed by default):** Bias / Normal Bias sliders.
+  - No technique picker, no cascade count, no debug viz.
+- Integration test in `packages/testing/src/render-web-environment.test.ts` (or the renamed equivalent from Story 10): an environment with `shadows.enabled: true, quality: "medium"` produces a shadow-casting directional light with the expected cascade count. Disabling shadows removes the shadow configuration.
+
+**Acceptance.**
+
+- A preset-default environment casts visible soft shadows from the sun on geometry in both Studio and runtime preview, identical between the two hosts.
+- Changing Quality from `medium` to `high` in the inspector visibly improves shadow resolution on close-camera detail; reverting restores the cheaper look. Done live, no reload.
+- Changing Distance, Strength, Softness in the inspector live-updates without any visible stutter from shader recompilation — verifies the uniform-update path, not the rebuild path.
+- Changing Quality triggers one detectable rebuild (a small frame hitch is acceptable). Distance/Strength/Softness edits do NOT trigger a rebuild.
+- The hardcoded 2048/±50/PCFSoft configuration is removed from `createDirectionalLight`. Sun shadow behavior is now entirely driven by the authored `SunShadowSettings`.
+- No shadow authoring state leaks into editor-only surfaces: `EnvironmentDefinition` is still the single source of truth, no `debugShadowSettings` or similar added elsewhere.
+- Unit test for `expandShadowQuality` covers all four presets.
+- Documentation note on `EnvironmentSceneController` explicitly states the quality-change-rebuilds / other-edits-update-uniforms contract.
+
+**What this does NOT solve.** Worth stating up front so nobody expects shadows alone to produce the reference look:
+
+- Shadows without good sky ambient still look graphic and flat. Sky-driven ambient (already in Story 1) is a necessary counterpart.
+- Shadows without IBL / environment map sampling don't get the "lit by the world" feel Blender's default produces. IBL is a separate concern — not this epic.
+- Shadows won't rescue a scene where bloom is cranked (dominant colors smear across shadow regions) or where tonemap exposure is wrong (crushed blacks eat shadow detail). These are tuning problems at the post-process layer.
+
+**What this does solve.** Stable, tunable, authored sun shadows — the foundation every other stylized-outdoor technique stacks on top of.
+
+---
+
+### Story 4: Wire authored post-process stack through ShaderRuntime
 
 **Goal.** `EnvironmentDefinition.postProcessShaders` actually runs at runtime, composed through the ShaderRuntime's post-process finalizer in order.
 
@@ -323,23 +432,23 @@ A new `LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighting>` c
   - For each binding, calls `ShaderRuntime.applyShader({ targetKind: "post-process", renderPipeline, previousOutputNode })`.
   - Passes `previousOutputNode` from one binding to the next as the input so they compose.
   - After the last binding, calls `renderPipeline.setOutputNode(finalNode)` via the existing `setPostProcessOutputNode()` API on `RuntimeRenderPipeline`.
-  - If the chain is empty, falls back to `getBaseOutputNode()` (the scene pass). Bloom is no longer hardcoded — see Story 6.
+  - If the chain is empty, falls back to `getBaseOutputNode()` (the scene pass). Bloom is no longer hardcoded — see Story 7.
 - Verify the Plan 029 post-process finalizer accepts `previousOutputNode` as input. If it doesn't, extend the `ShaderApplyTarget` discriminated union and the post-process finalizer to thread a "previous" input node. This is a small API tightening, not a rewrite.
 - Hook `applyPostProcessStack` into `runtimeHost.ts` so it fires on every environment apply (post-process chain changes when the environment changes, and when an authored binding is added/removed/reordered — revision-based invalidation handles the latter).
 - Expose the ShaderRuntime's compile diagnostics for post-process bindings to the debug HUD (Plan 027 HUD card), so authoring a broken post-process graph surfaces visibly.
 
 **Acceptance.**
 
-- An empty post-process chain renders the scene identically to pre-epic minus bloom (which moves into the stack in Story 6).
+- An empty post-process chain renders the scene identically to pre-epic minus bloom (which moves into the stack in Story 7).
 - A post-process chain with two bindings (color-grade then vignette) renders the vignette on top of the graded output, not on the ungraded scene.
 - Reordering bindings via a command triggers re-application on next apply (revision counter advances → ShaderRuntime cache key changes → re-finalization).
 - Disabling a binding removes it from the composed chain without recompilation (pure filter on apply).
 
 ---
 
-### Story 4: Extend shader node registry with capabilities required by post-process graphs
+### Story 5: Extend shader node registry with capabilities required by post-process graphs
 
-**Goal.** Honestly close the gap between what Plan 029's node registry ships and what the built-in post-process graphs in Story 5 need. Every node used by a built-in graph must exist in the registry, be validated by the compiler, and be realized by the post-process finalizer. No hand-waving.
+**Goal.** Honestly close the gap between what Plan 029's node registry ships and what the built-in post-process graphs in Story 6 need. Every node used by a built-in graph must exist in the registry, be validated by the compiler, and be realized by the post-process finalizer. No hand-waving.
 
 **What Plan 029 already ships that these graphs can use as-is:**
 
@@ -380,13 +489,13 @@ Engine-owned helper nodes (following `effect.wind-sway` precedent — defined in
 
 - All 11 new node definitions appear in the registry, show up in the Render workspace node palette, and pass validation.
 - The post-process finalizer in render-web realizes each new node correctly (verified by the per-node tests).
-- No node Story 5's built-in graphs depend on remains undefined.
+- No node Story 6's built-in graphs depend on remains undefined.
 
 ---
 
-### Story 5: Built-in post-process shader graphs
+### Story 6: Built-in post-process shader graphs
 
-**Goal.** Ship the six named built-in post-process graphs using the registry from Story 4 so authors have a real starting library. (Tonemap splits into two — ACES and Reinhard — as separate graphs.)
+**Goal.** Ship the six named built-in post-process graphs using the registry from Story 5 so authors have a real starting library. (Tonemap splits into two — ACES and Reinhard — as separate graphs.)
 
 **Tasks.**
 
@@ -414,15 +523,15 @@ Each factory requires:
 - Six built-in post-process shader graphs exist, each with a header comment and factory function.
 - Each compiles cleanly through the Plan 029 semantic compiler (no diagnostics).
 - Each finalizes to a valid `colorNode` via the post-process finalizer in render-web.
-- `packages/testing/src/shader-runtime-contract.test.ts` is extended with one compile-and-finalize test per graph (six new tests on top of the 11 per-node tests from Story 4).
+- `packages/testing/src/shader-runtime-contract.test.ts` is extended with one compile-and-finalize test per graph (six new tests on top of the 11 per-node tests from Story 5).
 - The Render workspace lists all six under built-in shaders.
 - The Environment post-process add-menu offers all six.
 
 ---
 
-### Story 6: Remove hardcoded bloom and delete `BloomSettings` from domain
+### Story 7: Remove hardcoded bloom and delete `BloomSettings` from domain
 
-**Goal.** `runtime-core/src/render/graph.ts` stops owning bloom; the `bloom` built-in graph in Story 5 replaces it. This also clears the three.js imports from that file — second half of the Story 2 layer fix. **Critically**, this is also where `BloomSettings` and `atmosphere.bloom` disappear from the domain entirely: bloom has exactly one authored home, the post-process binding, with no parallel scalar copy. No dual-truth, same rule as fog.
+**Goal.** `runtime-core/src/render/graph.ts` stops owning bloom; the `bloom` built-in graph in Story 6 replaces it. This also clears the three.js imports from that file — second half of the Story 2 layer fix. **Critically**, this is also where `BloomSettings` and `atmosphere.bloom` disappear from the domain entirely: bloom has exactly one authored home, the post-process binding, with no parallel scalar copy. No dual-truth, same rule as fog.
 
 **Why delete instead of deprecate.** Unlike fog, bloom is not a world-state concept — no gameplay reads "is there bloom." Bloom is a visual post effect that happened to live in `atmosphere.bloom` only because Sugarbuilder had nowhere else to put it. Now that a real post-process stack exists, the binding *is* the authored truth. Keeping `BloomSettings` around as a "cosmetic scalar" would exactly reproduce the duplicated-runtime-visible-behavior trap the repo forbids.
 
@@ -444,7 +553,7 @@ Each factory requires:
 
 ---
 
-### Story 7: Lighting authoring UI in Environment pane
+### Story 8: Lighting authoring UI in Environment pane
 
 **Goal.** Authors can rotate the sun, pick colors, and tweak lighting live.
 
@@ -452,6 +561,11 @@ Each factory requires:
 
 - In `packages/workspaces/src/build/environment/`, add:
   - **Sun inspector**: azimuth slider (0–360°), elevation slider (-90 to 90°), color picker, intensity slider, cast-shadows toggle. Inline 2D compass preview showing sun direction dot on a circle.
+  - **Sun > Shadows subsection** (driven by Story 3's authored `shadows` block):
+    - Primary controls: Quality select (Low / Medium / High / Ultra), Distance slider, Strength slider, Softness slider.
+    - Advanced section (collapsed by default): Bias slider, Normal Bias slider.
+    - The Cast Shadows toggle at the top of the Sun inspector is the single authority for `shadows.enabled`. When off, the subsection is greyed out.
+    - No technique picker, no cascade count, no debug viz.
   - **Rim inspector**: enable toggle. When enabled, same four controls as sun (azimuth/elevation/color/intensity, no shadows).
   - **Ambient inspector**: mode dropdown (`sky-driven` | `flat`). When `flat`, color picker + intensity slider.
   - **Fog inspector**: color picker (new), density slider, height-falloff slider (new).
@@ -465,12 +579,13 @@ Each factory requires:
 - Rotating the sun azimuth visibly rotates cast shadows in the authoring viewport.
 - Switching ambient mode from `sky-driven` to `flat` visibly changes ambient fill color.
 - Changing fog color tints the distance haze.
-- Undo/redo round-trips all edits.
+- Switching shadow Quality visibly changes shadow sharpness; Distance / Strength / Softness live-update without a stutter.
+- Undo/redo round-trips all edits (including shadow-subsection edits).
 - Selecting a different preset populates fields to the preset template and is itself undoable.
 
 ---
 
-### Story 8: Post-process stack editor in Environment pane
+### Story 9: Post-process stack editor in Environment pane
 
 **Goal.** Authors can stack, reorder, enable, and tune post-process bindings with live preview.
 
@@ -494,7 +609,7 @@ Each factory requires:
 
 ---
 
-### Story 9: Integration tests
+### Story 10: Integration tests
 
 **Goal.** Lock in the end-to-end contract so the authored lighting + post-process stack survives future refactors.
 
@@ -505,7 +620,7 @@ Each factory requires:
 | `environment-contract.test.ts` (**new**) | `@sugarmagic/domain`, `@sugarmagic/runtime-core` only. **Not** `three`, **not** `@sugarmagic/render-web`. | Pure runtime-core resolution and domain-shape invariants: `resolveEnvironmentWithPostProcessChain` sort/filter, `computeSkyDrivenAmbient` math, `applyLightingPresetTemplate` correctness. |
 | `environment-migration.test.ts` (**new**) | `@sugarmagic/domain` only. | `normalizeContentLibrarySnapshot` upgrade paths for lighting rework, fog-tint auto-insertion, bloom binding auto-insertion + `atmosphere.bloom` removal. |
 | `render-web-environment.test.ts` (**renamed from `environment-runtime.test.ts`**) | `@sugarmagic/render-web` + `three` + domain. | Three.js-object-level assertions: `EnvironmentSceneController` produces a `THREE.DirectionalLight` with the expected world-space direction from a given `SunLight`, sky mesh built as expected, `scene.fog` is never assigned, and `applyPostProcessStack` invokes `ShaderRuntime.applyShader` in order. |
-| `shader-runtime-contract.test.ts` (**existing, extended**) | `@sugarmagic/domain`, `@sugarmagic/render-web`. | Per-node and per-graph compile-and-finalize for the Story 4 and Story 5 additions. |
+| `shader-runtime-contract.test.ts` (**existing, extended**) | `@sugarmagic/domain`, `@sugarmagic/render-web`. | Per-node and per-graph compile-and-finalize for the Story 5 and Story 6 additions. |
 
 The rule: **if a test imports `three` or `@sugarmagic/render-web`, it lives in `render-web-environment.test.ts` or `shader-runtime-contract.test.ts`, not in a contract/migration file.** This keeps runtime-core contract tests executable and reviewable without a Three.js mental model.
 
@@ -516,17 +631,20 @@ The rule: **if a test imports `three` or `@sugarmagic/render-web`, it lives in `
   - A definition with a two-binding post-process chain (`color-grade` + `vignette`); assert `applyPostProcessStack` invokes `ShaderRuntime.applyShader` twice in order, and that `pipeline.outputNode` is the vignette's output node.
   - A definition with an enabled binding + a disabled binding; assert only the enabled one is applied.
   - A definition with `atmosphere.fog.enabled: true` and its auto-inserted `:built-in:fog-tint` binding; assert `scene.fog` is null and the post stack applied the fog-tint binding. (Enforces the single-authority decision.)
+  - A definition with `shadows.enabled: true, quality: "medium"`; assert the sun's attached `CSMShadowNode` has the expected cascade count from `expandShadowQuality("medium")`. A second pass with `shadows.enabled: false` asserts no shadow setup is attached.
 - Create `packages/testing/src/environment-contract.test.ts` (pure, no Three.js imports):
   - `resolveEnvironmentWithPostProcessChain` sorts by `order` and filters by `enabled`.
   - `computeSkyDrivenAmbient` returns a color between the sky's top and bottom colors (assert approximate HSL midpoint for a representative sky).
   - `applyLightingPresetTemplate(def, "golden_hour")` populates sun / rim / ambient to the expected template values.
+  - `expandShadowQuality("low"|"medium"|"high"|"ultra")` returns the table values from Story 3. One case per quality preset.
 - Create `packages/testing/src/environment-migration.test.ts` (pure, domain only):
   - v1 environment with `warmth: 0.3, keyIntensity: 1.0, preset: "golden_hour"` → v2 with explicit sun color/intensity and no `LightingAdjustments`.
   - v1 environment with `fog.enabled: true, fog.density: 0.008` and no fog-tint binding → v2 with exactly one `:built-in:fog-tint` binding whose parameters mirror the fog settings.
   - v1 environment with `atmosphere.bloom.enabled: true, strength: 0.6` → v2 with exactly one `:built-in:bloom` binding and no `atmosphere.bloom` field on the document.
+  - v2 environment missing `lighting.sun.shadows` → normalized v2 fills in `DEFAULT_SUN_SHADOWS`.
 - Extend `packages/testing/src/shader-runtime-contract.test.ts`:
-  - Per-node compile-and-finalize tests for the 11 new nodes from Story 4.
-  - Per-graph compile-and-finalize tests for the six new built-in post-process graphs from Story 5.
+  - Per-node compile-and-finalize tests for the 11 new nodes from Story 5.
+  - Per-graph compile-and-finalize tests for the six new built-in post-process graphs from Story 6.
 
 **Acceptance.**
 
@@ -545,6 +663,8 @@ The rule: **if a test imports `three` or `@sugarmagic/render-web`, it lives in `
 - **Migration accidentally losing author intent.** The migration rule for `warmth` is documented and tested: positive warmth shifts sun color warm, negative shifts cool. If this turns out to produce visibly different results on existing projects, the epic's acceptance gate includes a manual visual diff on the test scene before the v1→v2 auto-migration runs in the user's main project.
 - **Live-edit thrashing.** Same revision-based cache invalidation from Plan 029 applies — parameter-only edits do not recompile, just uniform-update. Only structural changes (add/remove/reorder bindings) bump the revision and trigger re-finalization.
 - **Layer-violation regression.** `tooling/check-package-boundaries.mjs` gains a hard check that forbids `three`, `three/webgpu`, `three/tsl` under `packages/runtime-core/src/environment/**` and under the specific `render/` files this epic relocates (`render/graph.ts`, `render/environment-scene.ts`). CI fails on regression within that scope. A broader runtime-core-wide check is desirable but requires relocating player/NPC/item/landscape/pipeline first — tracked as a separate follow-up.
+- **Shadow quality thrash.** Changing `shadows.quality` triggers a CSM rebuild. If an author drags the quality slider rapidly, we could thrash. Mitigation: quality is a discrete select (not a slider), so this is a user-gesture-bounded problem — at most a handful of rebuilds per authoring session. Distance/Strength/Softness remain cheap uniform updates by design.
+- **Shadow-over-fog interaction.** With both shadows and fog-tint active, the shadow-darkened regions of geometry may be re-tinted by the fog post-process and look muddy. Acceptable baseline behavior; if it becomes a real problem, the fix is in the fog-tint graph (modulate fog contribution by view-space distance, not luminance), not in the shadow system. Flagged here so "muddy shadows in fog" isn't mis-diagnosed as a shadow bug.
 
 ## Open questions
 
@@ -553,6 +673,7 @@ The rule: **if a test imports `three` or `@sugarmagic/render-web`, it lives in `
 3. **ACES vs Reinhard as default tonemap.** ACES gives the "Unreal look" most reliably; Reinhard is cheaper and more neutral. Recommend: ACES default, document the trade-off.
 4. ~~**Fog-tint vs scene fog coexistence.**~~ **Resolved.** See "Fog has a single runtime authority" in the Architecture rework section. Authored `fog-tint` is the sole runtime enforcer; `scene.fog` is removed from the render path. Dual-enforcer pattern rejected.
 5. **Where does the sky gradient live?** `SkySettings` stays as-is on `EnvironmentDefinition.atmosphere.sky`. `computeSkyDrivenAmbient()` reads from it. No changes.
+6. **Default shadow quality.** Proposal ships `high` as the default for all presets. Published web builds targeting broad hardware may want `medium` by default with the option to raise it. Recommend: ship `high` as the Studio/authoring default; add a publish-time override (not part of this epic — a follow-up on the publish pipeline) that can downgrade to `medium` or `low` based on hardware detection. Until that lands, authors set it per-environment.
 
 ## Out of scope for v1 (deferred to follow-ups)
 
@@ -571,9 +692,10 @@ The rule: **if a test imports `three` or `@sugarmagic/render-web`, it lives in `
 
 1. Opening a fresh project with `golden_hour` preset produces an explicit sun at a visible azimuth/elevation the author can grab and rotate.
 2. Dropping `color-grade`, `bloom`, `tonemap`, `vignette` into the post-process stack and tuning their parameters for five minutes produces a visually warmer, moodier, more stylized-PBR scene — approaching the reference image's character without any PBR surface shader changes yet.
-3. `packages/runtime-core/src/environment/**`, `packages/runtime-core/src/render/graph.ts`, and `packages/runtime-core/src/render/environment-scene.ts` import nothing from `three`, `three/webgpu`, or `three/tsl`. (Player, NPC, item, landscape, and `render/pipeline.ts` still import `three` today; cleaning those up is tracked as a separate follow-up and is explicitly not a success criterion for this epic.)
-4. Migrating a v1 project with old `warmth: 0.3` and `atmosphere.bloom.enabled: true` produces a v2 project with matching sun color and a `:built-in:bloom` post-process binding, rendering within visual-diff tolerance of the original.
-5. All environment and shader-runtime contract tests pass.
+3. A fresh project renders soft cascaded sun shadows from Story 3 by default; switching shadow Quality visibly changes shadow resolution; Distance / Strength / Softness live-update without a stutter.
+4. `packages/runtime-core/src/environment/**`, `packages/runtime-core/src/render/graph.ts`, and `packages/runtime-core/src/render/environment-scene.ts` import nothing from `three`, `three/webgpu`, or `three/tsl`. (Player, NPC, item, landscape, and `render/pipeline.ts` still import `three` today; cleaning those up is tracked as a separate follow-up and is explicitly not a success criterion for this epic.)
+5. Migrating a v1 project with old `warmth: 0.3` and `atmosphere.bloom.enabled: true` produces a v2 project with matching sun color and a `:built-in:bloom` post-process binding, rendering within visual-diff tolerance of the original.
+6. All environment and shader-runtime contract tests pass.
 
 ---
 
