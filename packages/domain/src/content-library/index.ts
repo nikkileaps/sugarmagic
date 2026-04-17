@@ -23,6 +23,7 @@ import {
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
+  createSimpleAlphaTestShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -1077,6 +1078,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageTintShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-tint`,
       displayName: "Foliage Tint"
+    }),
+    createSimpleAlphaTestShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:simple-alpha-test`,
+      displayName: "Simple Alpha Test"
     }),
     createDefaultColorGradePostProcessShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:color-grade`,

@@ -284,27 +284,22 @@ function builtinForNodeType(
 
 function compileOutputNode(
   context: CompileContext,
-  node: ShaderNodeInstance
+  node: ShaderNodeInstance,
+  requestedPortId: string
 ): ShaderIRValue | null {
   const definition = getShaderNodeDefinition(node.nodeType);
   if (!definition) {
     return null;
   }
 
-  if (node.nodeType === "output.vertex") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.fragment") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.emissive") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.post-process") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
+  const port =
+    definition.inputPorts.find((candidate) => candidate.portId === requestedPortId) ??
+    null;
+  if (!port) {
+    return null;
   }
 
-  return null;
+  return incomingValue(context, node, port);
 }
 
 function compileNodePort(
@@ -381,7 +376,7 @@ function compileNodePort(
   }
 
   if (node.nodeType.startsWith("output.")) {
-    const outputValue = compileOutputNode(context, node);
+    const outputValue = compileOutputNode(context, node, requestedPortId);
     if (outputValue) {
       context.valuesByNodePort.set(cacheKey, outputValue);
     }

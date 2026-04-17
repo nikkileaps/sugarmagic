@@ -897,7 +897,12 @@ function applyIRToMaterial(
   }
   if (ir.outputs.fragmentAlpha && "opacityNode" in material) {
     material.opacityNode = materializeValue(ir.outputs.fragmentAlpha, context) as never;
-    material.transparent = true;
+    // Do NOT force material.transparent = true. The GLB's authored
+    // alphaMode is the single source of truth: MASK → alphaTest > 0
+    // (hard cutout, carved silhouettes); BLEND → transparent: true
+    // (soft-edge blending). Overriding to transparent = true turned every
+    // MASK-mode asset into blend-mode, which is why foliage leaf cards
+    // looked like translucent rectangles instead of carved leaf shapes.
   }
   if (ir.outputs.emissive && material instanceof MeshStandardNodeMaterial) {
     material.emissiveNode = materializeValue(ir.outputs.emissive, context) as never;

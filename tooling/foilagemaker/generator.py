@@ -17,7 +17,7 @@ from pathlib import Path
 import bpy
 from mathutils import Quaternion, Vector
 
-ADDON_VERSION = "0.11.1"
+ADDON_VERSION = "0.11.2"
 TREE_KIND = "tree"
 OBJECT_KIND_KEY = "foilagemaker_kind"
 ASSET_KIND_KEY = "sugarmagic_asset_kind"

@@ -1060,6 +1060,44 @@ export function createDefaultFoliageTintShaderGraph(
   };
 }
 
+/**
+ * Minimal surface shader used to isolate alpha-cutout behavior. Samples the
+ * material base color texture and routes color + alpha straight to the
+ * fragment output. Apply this to simple_alpha_test.glb (tooling/simple-alpha-test/)
+ * to distinguish shader-graph problems from GLB/Three loader problems.
+ */
+export function createSimpleAlphaTestShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:simple-alpha-test`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Simple Alpha Test",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 384, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-color-output", "base-texture", "color", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: {
+      builtIn: true,
+      builtInKey: "simple-alpha-test"
+    }
+  };
+}
+
 export function createDefaultFoliageSurfaceShaderGraph(
   projectId: string,
   options: {
