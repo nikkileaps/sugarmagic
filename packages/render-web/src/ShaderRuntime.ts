@@ -848,6 +848,40 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
       );
       break;
     }
+    case "splat": {
+      const scalar = input("input") as never;
+      result =
+        op.dataType === "vec2"
+          ? vec2(scalar, scalar)
+          : op.dataType === "vec3" || op.dataType === "color"
+            ? vec3(scalar, scalar, scalar)
+            : vec4(scalar, scalar, scalar, scalar);
+      break;
+    }
+    case "truncate": {
+      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
+      result =
+        op.dataType === "vec2"
+          ? vec2(source.x as never, source.y as never)
+          : vec3(source.x as never, source.y as never, source.z as never);
+      break;
+    }
+    case "widen": {
+      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
+      if (op.dataType === "vec4") {
+        result = vec4(
+          source.x as never,
+          source.y as never,
+          (source.z ?? float(0)) as never,
+          float(0) as never
+        );
+      } else if (op.dataType === "vec3" || op.dataType === "color") {
+        result = vec3(source.x as never, source.y as never, float(0) as never);
+      } else {
+        result = vec2(source.x as never, source.y as never);
+      }
+      break;
+    }
     default:
       result = float(0);
       break;

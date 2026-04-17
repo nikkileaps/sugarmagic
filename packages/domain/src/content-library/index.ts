@@ -24,6 +24,10 @@ import {
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
   createSimpleAlphaTestShaderGraph,
+  createDebugParameterColorShaderGraph,
+  createDebugWarmIsolatedShaderGraph,
+  createDebugSunMaskShaderGraph,
+  createDebugVertexAlphaShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -1082,6 +1086,22 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createSimpleAlphaTestShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:simple-alpha-test`,
       displayName: "Simple Alpha Test"
+    }),
+    createDebugParameterColorShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-parameter-color`,
+      displayName: "Debug Parameter Color"
+    }),
+    createDebugWarmIsolatedShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-warm-isolated`,
+      displayName: "Debug Warm Isolated"
+    }),
+    createDebugSunMaskShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-sun-mask`,
+      displayName: "Debug Sun Mask"
+    }),
+    createDebugVertexAlphaShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-vertex-alpha`,
+      displayName: "Debug Vertex Alpha"
     }),
     createDefaultColorGradePostProcessShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:color-grade`,

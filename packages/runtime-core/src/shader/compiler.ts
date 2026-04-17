@@ -144,6 +144,22 @@ function coerceValue(
     return referenceValue(targetType, opId);
   }
 
+  if (
+    (value.dataType === "vec3" && targetType === "vec4") ||
+    (value.dataType === "vec2" && (targetType === "vec3" || targetType === "vec4")) ||
+    (value.dataType === "color" && targetType === "vec4")
+  ) {
+    const opId = nextOpId(context, "widen");
+    context.currentOps.push({
+      opId,
+      opKind: "widen",
+      dataType: targetType,
+      nodeId,
+      inputs: { input: value }
+    });
+    return referenceValue(targetType, opId);
+  }
+
   context.diagnostics.push({
     severity: "error",
     nodeId,

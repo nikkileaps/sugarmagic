@@ -179,18 +179,26 @@ export function computeSceneDelta(
 
 function shaderRepresentationKey(
   effectiveShaders: EffectiveShaderBindingSet,
-  parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" }[]
+  _parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" }[]
 ): string {
   return [
-    `surface:${effectiveShaders.surface?.shaderDefinitionId ?? "none"}`,
-    `deform:${effectiveShaders.deform?.shaderDefinitionId ?? "none"}`,
-    parameterOverrides
-      .map(
-        (override) =>
-          `${override.slot ?? "auto"}:${override.parameterId}:${JSON.stringify(override.value)}`
-      )
-      .join("|")
+    shaderSlotRepresentation("surface", effectiveShaders.surface),
+    shaderSlotRepresentation("deform", effectiveShaders.deform)
   ].join(":");
+}
+
+function shaderSlotRepresentation(
+  slotLabel: string,
+  binding: EffectiveShaderBinding | null
+): string {
+  if (!binding) {
+    return `${slotLabel}:none`;
+  }
+  const serializedParams = Object.keys(binding.parameterValues)
+    .sort()
+    .map((key) => `${key}=${JSON.stringify(binding.parameterValues[key])}`)
+    .join("|");
+  return `${slotLabel}:${binding.shaderDefinitionId}[${serializedParams}]`;
 }
 
 function createPlacedAssetSceneObject(

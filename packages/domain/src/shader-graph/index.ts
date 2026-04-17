@@ -1098,6 +1098,207 @@ export function createSimpleAlphaTestShaderGraph(
   };
 }
 
+/**
+ * Debug shader: outputs a single authored color (parameter "debugColor")
+ * multiplied by texture alpha for cutout. Used to verify both
+ * (a) that the shader is being applied at all, and
+ * (b) that parameter edits reach the GPU — if changing debugColor in the
+ *     inspector doesn't visibly change the object, parameter propagation
+ *     is broken.
+ */
+export function createDebugParameterColorShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-parameter-color`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Parameter Color",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      {
+        nodeId: "debug-color",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 300 },
+        settings: { parameterId: "debugColor" }
+      },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 384, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-debug-output", "debug-color", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "debugColor",
+        displayName: "Debug Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.0, 0.0, 1.0]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "debug-parameter-color"
+    }
+  };
+}
+
+/**
+ * Debug shader to isolate whether warmColor + warmStrength multiplication
+ * itself works, independent of sun-mask / exterior-bias. Emits
+ * warmColor × warmStrength directly as fragment color. If cranking warmStrength
+ * in the inspector makes the tree visibly brighter with this shader but the
+ * Foliage Surface shader stays unchanged, the problem is downstream — the
+ * sun-mask or exterior-bias-strength path is zeroing out warm-term.
+ */
+export function createDebugWarmIsolatedShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-warm-isolated`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Warm Isolated",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      {
+        nodeId: "warm-color",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 300 },
+        settings: { parameterId: "warmColor" }
+      },
+      {
+        nodeId: "warm-strength",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 400 },
+        settings: { parameterId: "warmStrength" }
+      },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 280, y: 340 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 520, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-warm-a", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("edge-warm-b", "warm-strength", "value", "warm-term", "b"),
+      createShaderEdge("edge-color-output", "warm-term", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.55
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "debug-warm-isolated"
+    }
+  };
+}
+
+/**
+ * Debug shader: outputs sun-mask (saturate(worldNormal · sunDirection)) as
+ * grayscale. If the tree renders black, sunDirection is zero or worldNormal
+ * is wrong — which kills the warm term in the foliage shader.
+ */
+export function createDebugSunMaskShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-sun-mask`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Sun Mask",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 400 }, settings: {} },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 280, y: 350 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 520, y: 350 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 760, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-n", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-s", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-d", "sun-dot", "value", "sun-mask", "input"),
+      createShaderEdge("e-mc", "sun-mask", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-sun-mask" }
+  };
+}
+
+/**
+ * Debug shader: outputs vertex-color .w (the FoilageMaker sun_exterior_bias
+ * channel) as grayscale. Black means the COLOR_0 attribute's .w is always 0,
+ * which zeroes out exterior-bias-strength and kills the warm term.
+ */
+export function createDebugVertexAlphaShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-vertex-alpha`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Vertex Alpha",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "split", nodeType: "math.split-vector", position: { x: 280, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 520, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-split", "vertex-color", "value", "split", "input"),
+      createShaderEdge("e-c", "split", "w", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-vertex-alpha" }
+  };
+}
+
 export function createDefaultFoliageSurfaceShaderGraph(
   projectId: string,
   options: {
