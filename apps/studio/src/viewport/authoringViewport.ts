@@ -1,10 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
+  createCapsuleFallback,
+  createFallbackMesh,
   createRenderableShaderApplicationState,
   createWebRenderHost,
+  disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
-  releaseShadersFromObjectTree,
+  normalizeModelScale,
   type RenderableShaderApplicationState,
   type ShaderRuntime,
   type WebRenderHost
@@ -24,7 +27,6 @@ import type {
   ViewportSceneState
 } from "@sugarmagic/workspaces";
 
-const CUBE_COLOR = EDITOR_NEUTRAL_CLAY_COLOR;
 const GRID_COLOR = 0x45475a;
 
 const gltfLoader = new GLTFLoader();
@@ -65,13 +67,6 @@ function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
 
 function disposeGrid(grid: THREE.GridHelper) {
   grid.geometry.dispose();
-}
-
-function createFallbackMesh(): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
-  );
 }
 
 /**
@@ -132,29 +127,6 @@ function reportRenderableError(
   );
 }
 
-function createCapsuleFallback(object: SceneObject): THREE.Mesh {
-  const capsule = object.capsule;
-  if (!capsule) {
-    return createFallbackMesh();
-  }
-
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(
-      capsule.radius,
-      Math.max(0.05, capsule.height - capsule.radius * 2),
-      8,
-      16
-    ),
-    new THREE.MeshStandardMaterial({
-      color: capsule.color,
-      roughness: 0.38,
-      metalness: 0.04
-    })
-  );
-  mesh.position.y = capsule.height / 2;
-  return mesh;
-}
-
 function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
   root.position.set(
     object.transform.position[0],
@@ -171,37 +143,6 @@ function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
     object.transform.scale[1],
     object.transform.scale[2]
   );
-}
-
-function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y <= 0) return;
-
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
-  box.setFromObject(root);
-  root.position.y -= box.min.y;
-}
-
-function disposeObject(root: THREE.Object3D) {
-  const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
-  root.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    child.geometry.dispose();
-    if (Array.isArray(child.material)) {
-      for (const material of child.material) {
-        if (!runtimeManagedMaterials.has(material)) {
-          material.dispose();
-        }
-      }
-    } else {
-      if (!runtimeManagedMaterials.has(child.material)) {
-        child.material.dispose();
-      }
-    }
-  });
 }
 
 function assetSourceAvailable(
@@ -226,7 +167,13 @@ async function createRenderableRoot(
     object.modelSourcePath ? assetSources[object.modelSourcePath] ?? null : null;
 
   if (!assetSourceUrl) {
-    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
+    root.add(
+      object.kind === "asset"
+        ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
+        : createCapsuleFallback(object, {
+            fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
+          })
+    );
     return {
       root,
       object,
@@ -361,13 +308,13 @@ export function createAuthoringViewport(): WorkspaceViewport {
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
         if (generation !== renderGeneration) {
-          disposeObject(entry.root);
+          disposeRenderableObject(entry.root);
           return;
         }
         const existing = objectMap.get(object.instanceId);
         if (existing) {
           authoredRoot.remove(existing.root);
-          disposeObject(existing.root);
+          disposeRenderableObject(existing.root);
         }
         authoredRoot.add(entry.root);
         ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
@@ -457,7 +404,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
-        disposeObject(entry.root);
+        disposeRenderableObject(entry.root);
       }
       objectMap.clear();
       pendingRenderableLoads.clear();
@@ -494,7 +441,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
         const entry = objectMap.get(id);
         if (!entry) continue;
         authoredRoot.remove(entry.root);
-        disposeObject(entry.root);
+        disposeRenderableObject(entry.root);
         objectMap.delete(id);
       }
 
@@ -517,7 +464,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
         }
         if (existing) {
           authoredRoot.remove(existing.root);
-          disposeObject(existing.root);
+          disposeRenderableObject(existing.root);
           objectMap.delete(object.instanceId);
         }
 
@@ -529,7 +476,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
         const assetAvailable = assetSourceAvailable(object, assetSources);
         if (entry && entry.loadedWithAsset !== assetAvailable) {
           authoredRoot.remove(entry.root);
-          disposeObject(entry.root);
+          disposeRenderableObject(entry.root);
           objectMap.delete(object.instanceId);
 
           scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);

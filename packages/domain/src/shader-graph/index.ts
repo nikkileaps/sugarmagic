@@ -1132,6 +1132,14 @@ export function createSimpleAlphaTestShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: gives artists and engineers a one-knob proof that shader
+ * application and parameter propagation are still working in a live scene.
+ * What replaces it: nothing today; this is the minimal canonical debug graph
+ * for "is the shader bound and are parameters reaching the GPU?"
+ * When to remove it: only once Sugarmagic has a richer built-in shader
+ * debugger or material-inspector workflow that covers the same verification.
+ *
  * Debug shader: outputs a single authored color (parameter "debugColor")
  * multiplied by texture alpha for cutout. Used to verify both
  * (a) that the shader is being applied at all, and
@@ -1186,6 +1194,15 @@ export function createDebugParameterColorShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: isolates the warm-term math from the rest of the foliage
+ * graph so authors can tell whether failures come from the warm term itself
+ * or from later masking/bias logic.
+ * What replaces it: nothing today; this is the canonical narrow probe for the
+ * warm-color × warm-strength path.
+ * When to remove it: only once graph debugging can selectively preview
+ * intermediate nodes/branches inside authored shaders.
+ *
  * Debug shader to isolate whether warmColor + warmStrength multiplication
  * itself works, independent of sun-mask / exterior-bias. Emits
  * warmColor × warmStrength directly as fragment color. If cranking warmStrength
@@ -1255,6 +1272,13 @@ export function createDebugWarmIsolatedShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the exact sun-direction/normal mask the foliage
+ * shaders depend on without the rest of the surface graph obscuring it.
+ * What replaces it: nothing today; this is the canonical sun-mask probe.
+ * When to remove it: only once authored shaders support built-in intermediate
+ * visualization of directional-light terms.
+ *
  * Debug shader: outputs sun-mask (saturate(worldNormal · sunDirection)) as
  * grayscale. If the tree renders black, sunDirection is zero or worldNormal
  * is wrong — which kills the warm term in the foliage shader.
@@ -1296,6 +1320,13 @@ export function createDebugSunMaskShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the packed vertex-alpha / exterior-bias channel
+ * independently from the rest of the foliage shading stack.
+ * What replaces it: nothing today; this is the canonical COLOR_0.w probe.
+ * When to remove it: only once the asset/material inspector can preview
+ * authored vertex channels directly.
+ *
  * Debug shader: outputs vertex-color .w (the FoilageMaker sun_exterior_bias
  * channel) as grayscale. Black means the COLOR_0 attribute's .w is always 0,
  * which zeroes out exterior-bias-strength and kills the warm term.
@@ -1333,6 +1364,14 @@ export function createDebugVertexAlphaShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: provides a trivial falsification shader so teams can prove a
+ * rendering problem is downstream of shader inputs rather than in the graph.
+ * What replaces it: nothing today; this is the minimal "constant output"
+ * sanity check for the surface path.
+ * When to remove it: only once Sugarmagic ships an equivalent built-in
+ * material/shader bypass diagnostic.
+ *
  * Debug shader: outputs a literal constant red. No inputs, no math.
  * Falsification test for "sphere-normal is the culprit": if the tree renders
  * red at ALL presets, the sphere-normal path works and the noon-dark-leaves
@@ -1372,6 +1411,14 @@ export function createDebugConstantRedShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the custom sphere-normal attribute path directly so
+ * foliage exports can be diagnosed without touching production shaders.
+ * What replaces it: nothing today; this remains the canonical sphere-normal
+ * attribute probe.
+ * When to remove it: only once asset inspection can preview custom vertex
+ * attributes or the foliage toolchain no longer emits sphere normals.
+ *
  * Debug shader: outputs sphereNormal.xyz directly as color. Components in
  * [-1,1] get clamped to [0,1] at output, so a normal of (1,0,0) appears red,
  * (0,1,0) green, (0,0,1) blue; negative components show as black. If the
@@ -1411,6 +1458,13 @@ export function createDebugSphereNormalShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the baked tree-height attribute independently from
+ * all lighting math so foliage gradients can be debugged at the source.
+ * What replaces it: nothing today; this is the canonical tree-height probe.
+ * When to remove it: only once asset inspection can preview custom vertex
+ * attributes or the foliage stack stops depending on tree-height.
+ *
  * Debug shader: outputs treeHeight (custom vertex attribute) as grayscale.
  * Should show a gradient from black (base) to white (top) of the tree.
  * If the tree renders a flat color, the _tree_height attribute isn't being
@@ -1447,6 +1501,13 @@ export function createDebugTreeHeightShaderGraph(
 }
 
 /**
+ * Permanent authoring aid — keep.
+ * Why it exists: isolates the view-direction/fresnel branch used by painterly
+ * foliage rims so teams can test that term without the rest of the graph.
+ * What replaces it: nothing today; this is the canonical fresnel probe.
+ * When to remove it: only once authored shaders support intermediate-node
+ * previews or a built-in rim/fresnel debugger.
+ *
  * Debug shader: outputs the fresnel rim-intensity as grayscale. Edges of the
  * geometry should glow white; facing surfaces should be black. If it renders
  * flat black at non-default presets but correctly at default, the
