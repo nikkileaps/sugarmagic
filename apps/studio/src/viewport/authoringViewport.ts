@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
-  applyShaderToRenderable,
+  createRenderableShaderApplicationState,
   createWebRenderHost,
+  ensureShaderSetAppliedToRenderable,
   releaseShadersFromObjectTree,
+  type RenderableShaderApplicationState,
   type ShaderRuntime,
   type WebRenderHost
 } from "@sugarmagic/render-web";
@@ -28,9 +30,10 @@ const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
-  assetSourceUrl: string | null;
+  object: SceneObject;
   representationKey: string;
-  shaderBindingsApplied: boolean;
+  loadedWithAsset: boolean;
+  shaderApplication: RenderableShaderApplicationState;
 }
 
 interface LandscapeGridSpec {
@@ -67,6 +70,64 @@ function createFallbackMesh(): THREE.Mesh {
   return new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
+  );
+}
+
+/**
+ * Visibly distinct "something went wrong" mesh — bright magenta with rough
+ * emissive glow so authors can tell an error fallback apart from an
+ * asset-not-yet-loaded placeholder cube. Pair with a console error + alert
+ * explaining why it's here.
+ */
+function createErrorFallbackMesh(): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({
+      color: 0xff00ff,
+      emissive: 0xff00ff,
+      emissiveIntensity: 0.6,
+      roughness: 1,
+      metalness: 0
+    })
+  );
+}
+
+// Dedupe key → last-seen error message. Prevents an alert-storm when the
+// per-frame shader-ensure loop re-fires a broken shader every frame.
+const alertedRenderableErrors = new Map<string, string>();
+
+function reportRenderableError(
+  object: SceneObject,
+  phase: string,
+  error: unknown,
+  extra?: Record<string, unknown>
+): void {
+  const message =
+    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const payload = {
+    instanceId: object.instanceId,
+    kind: object.kind,
+    displayName: object.displayName,
+    modelSourcePath: object.modelSourcePath ?? null,
+    representationKey: object.representationKey,
+    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null,
+    phase,
+    error,
+    ...extra
+  };
+  console.error(`[authoring-viewport:renderable:${phase}] ${message}`, payload);
+  if (error instanceof Error && error.stack) {
+    console.error(error.stack);
+  }
+
+  const dedupeKey = `${object.instanceId}|${phase}`;
+  if (alertedRenderableErrors.get(dedupeKey) === message) {
+    return;
+  }
+  alertedRenderableErrors.set(dedupeKey, message);
+  window.alert(
+    `Renderable failed (${phase}) for "${object.displayName}" (${object.instanceId}).\n\n${message}\n\nSee console for full details.`
   );
 }
 
@@ -142,6 +203,14 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
+function assetSourceAvailable(
+  object: SceneObject,
+  assetSources: Record<string, string>
+): boolean {
+  if (!object.modelSourcePath) return false;
+  return Boolean(assetSources[object.modelSourcePath]);
+}
+
 async function createRenderableRoot(
   object: SceneObject,
   assetSources: Record<string, string>,
@@ -156,56 +225,63 @@ async function createRenderableRoot(
     object.modelSourcePath ? assetSources[object.modelSourcePath] ?? null : null;
 
   if (!assetSourceUrl) {
-    console.warn("[studio-viewport:renderable:fallback]", {
-      instanceId: object.instanceId,
-      assetSourceUrl: null,
-      hasShaderRuntimeAtLoad: shaderRuntime !== null
-    });
     root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
     return {
       root,
-      assetSourceUrl: null,
+      object,
       representationKey: object.representationKey,
-      shaderBindingsApplied: false
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
     };
   }
 
+  let gltf: Awaited<ReturnType<typeof gltfLoader.loadAsync>>;
   try {
-    const gltf = await gltfLoader.loadAsync(assetSourceUrl);
-    const renderable = gltf.scene.clone(true);
-    if (object.targetModelHeight) {
-      normalizeModelScale(renderable, object.targetModelHeight);
-    }
-    host.enableShadowsOnObject(renderable);
-    applyShaderToRenderable(renderable, object, shaderRuntime);
-    console.warn("[studio-viewport:renderable:loaded]", {
-      instanceId: object.instanceId,
-      assetSourceUrl,
-      hasShaderRuntimeAtLoad: shaderRuntime !== null,
-      surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-      deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-    });
-    root.add(renderable);
+    gltf = await gltfLoader.loadAsync(assetSourceUrl);
+  } catch (error) {
+    reportRenderableError(object, "gltf-load", error, { assetSourceUrl });
+    root.add(createErrorFallbackMesh());
     return {
       root,
-      assetSourceUrl,
+      object,
       representationKey: object.representationKey,
-      shaderBindingsApplied: shaderRuntime !== null
-    };
-  } catch {
-    console.warn("[studio-viewport:renderable:error-fallback]", {
-      instanceId: object.instanceId,
-      assetSourceUrl,
-      hasShaderRuntimeAtLoad: shaderRuntime !== null
-    });
-    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
-    return {
-      root,
-      assetSourceUrl,
-      representationKey: object.representationKey,
-      shaderBindingsApplied: false
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
     };
   }
+
+  const renderable = gltf.scene.clone(true);
+  if (object.targetModelHeight) {
+    normalizeModelScale(renderable, object.targetModelHeight);
+  }
+  host.enableShadowsOnObject(renderable);
+  const shaderApplication = createRenderableShaderApplicationState();
+  try {
+    ensureShaderSetAppliedToRenderable(
+      renderable,
+      object,
+      shaderRuntime,
+      shaderApplication
+    );
+  } catch (error) {
+    reportRenderableError(object, "shader-apply", error);
+    root.add(createErrorFallbackMesh());
+    return {
+      root,
+      object,
+      representationKey: object.representationKey,
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
+    };
+  }
+  root.add(renderable);
+  return {
+    root,
+    object,
+    representationKey: object.representationKey,
+    loadedWithAsset: true,
+    shaderApplication
+  };
 }
 
 function ensureRenderableShadersApplied(
@@ -213,18 +289,16 @@ function ensureRenderableShadersApplied(
   object: SceneObject,
   shaderRuntime: ShaderRuntime | null
 ) {
-  console.warn("[studio-viewport:ensure-shaders]", {
-    instanceId: object.instanceId,
-    shaderBindingsApplied: entry.shaderBindingsApplied,
-    hasShaderRuntime: shaderRuntime !== null,
-    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-  });
-  if (!shaderRuntime || entry.shaderBindingsApplied) {
-    return;
+  try {
+    ensureShaderSetAppliedToRenderable(
+      entry.root,
+      object,
+      shaderRuntime,
+      entry.shaderApplication
+    );
+  } catch (error) {
+    reportRenderableError(object, "shader-ensure", error);
   }
-  applyShaderToRenderable(entry.root, object, shaderRuntime);
-  entry.shaderBindingsApplied = true;
 }
 
 export function createAuthoringViewport(): WorkspaceViewport {
@@ -359,6 +433,19 @@ export function createAuthoringViewport(): WorkspaceViewport {
       // gameplay loop) does NOT opt into this; it calls host.render() from
       // its own loop instead.
       host.startRenderLoop();
+      // Match runtime host behavior: re-ensure every scene object's shader
+      // application each frame. Diagnostic — isolating whether the bug is
+      // "authoring lacks this step" or something else.
+      host.subscribeFrame(() => {
+        for (const entry of objectMap.values()) {
+          ensureShaderSetAppliedToRenderable(
+            entry.root,
+            entry.object,
+            host.shaderRuntime,
+            entry.shaderApplication
+          );
+        }
+      });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);
@@ -388,15 +475,6 @@ export function createAuthoringViewport(): WorkspaceViewport {
         assetSources,
         environmentOverrideId = null
       } = state;
-      console.warn("[studio-viewport:update-from-region]", {
-        regionId: region.identity.id,
-        environmentOverrideId,
-        activeEnvironmentId: region.environmentBinding.defaultEnvironmentId,
-        hasShaderRuntime: host.shaderRuntime !== null
-      });
-      console.warn(
-        `[studio-viewport:update-from-region:summary] region=${region.identity.id} override=${environmentOverrideId ?? "none"} regionEnv=${region.environmentBinding.defaultEnvironmentId ?? "none"} shaderRuntime=${host.shaderRuntime !== null}`
-      );
       // Host handles environment + post-process apply, and keeps the shader
       // runtime's content library in sync without dispose/recreate.
       host.applyEnvironment(region, contentLibrary, environmentOverrideId);
@@ -407,16 +485,6 @@ export function createAuthoringViewport(): WorkspaceViewport {
         playerDefinition,
         itemDefinitions,
         npcDefinitions
-      });
-      console.warn("[studio-viewport:resolved-objects]", {
-        count: currentObjects.length,
-        objects: currentObjects.map((object) => ({
-          instanceId: object.instanceId,
-          kind: object.kind,
-          assetKind: object.assetKind ?? null,
-          surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-          deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-        }))
       });
       const delta = computeSceneDelta(previousObjects, currentObjects);
       const generation = ++renderGeneration;
@@ -435,14 +503,13 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of delta.updated) {
         const existing = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.modelSourcePath
-          ? assetSources[object.modelSourcePath] ?? null
-          : null;
+        const assetAvailable = assetSourceAvailable(object, assetSources);
         if (
           existing &&
-          existing.assetSourceUrl === nextAssetSourceUrl &&
-          existing.representationKey === object.representationKey
+          existing.representationKey === object.representationKey &&
+          existing.loadedWithAsset === assetAvailable
         ) {
+          existing.object = object;
           applyObjectTransform(existing.root, object);
           ensureRenderableShadersApplied(existing, object, host.shaderRuntime);
           continue;
@@ -458,10 +525,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of currentObjects) {
         const entry = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.modelSourcePath
-          ? assetSources[object.modelSourcePath] ?? null
-          : null;
-        if (entry && entry.assetSourceUrl !== nextAssetSourceUrl) {
+        const assetAvailable = assetSourceAvailable(object, assetSources);
+        if (entry && entry.loadedWithAsset !== assetAvailable) {
           authoredRoot.remove(entry.root);
           disposeObject(entry.root);
           objectMap.delete(object.instanceId);
@@ -473,6 +538,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
           scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
           continue;
         }
+        entry.object = object;
         applyObjectTransform(entry.root, object);
         ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
       }

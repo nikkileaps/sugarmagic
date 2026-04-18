@@ -1332,6 +1332,213 @@ export function createDebugVertexAlphaShaderGraph(
   };
 }
 
+/**
+ * Debug shader: outputs a literal constant red. No inputs, no math.
+ * Falsification test for "sphere-normal is the culprit": if the tree renders
+ * red at ALL presets, the sphere-normal path works and the noon-dark-leaves
+ * bug is downstream (Three's lighting pipeline crushing the albedo for
+ * transparent materials under HemisphereLight). If the tree's leaves go
+ * black at noon even with THIS shader, we can rule in "it's not about the
+ * shader inputs at all — it's downstream".
+ */
+export function createDebugConstantRedShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-constant-red`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Constant Red",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "red", nodeType: "input.constant-color", position: { x: 48, y: 300 }, settings: { color: [1, 0, 0] } },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "red", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-constant-red" }
+  };
+}
+
+/**
+ * Debug shader: outputs sphereNormal.xyz directly as color. Components in
+ * [-1,1] get clamped to [0,1] at output, so a normal of (1,0,0) appears red,
+ * (0,1,0) green, (0,0,1) blue; negative components show as black. If the
+ * tree renders a varied gradient of colors (rainbow-ish across leaf
+ * clusters) the sphere-normal attribute is being read correctly; if it
+ * renders a single flat color or black, the custom-attribute +
+ * modelNormalMatrix path is broken.
+ */
+export function createDebugSphereNormalShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-sphere-normal`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Sphere Normal",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "sphere-normal", nodeType: "input.sphere-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "sphere-normal", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-sphere-normal" }
+  };
+}
+
+/**
+ * Debug shader: outputs treeHeight (custom vertex attribute) as grayscale.
+ * Should show a gradient from black (base) to white (top) of the tree.
+ * If the tree renders a flat color, the _tree_height attribute isn't being
+ * read correctly.
+ */
+export function createDebugTreeHeightShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-tree-height`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Tree Height",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "tree-height", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-tree-height" }
+  };
+}
+
+/**
+ * Debug shader: outputs the fresnel rim-intensity as grayscale. Edges of the
+ * geometry should glow white; facing surfaces should be black. If it renders
+ * flat black at non-default presets but correctly at default, the
+ * fresnel/viewDirection path is the culprit.
+ */
+export function createDebugFresnelShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-fresnel`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Fresnel",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 400 }, settings: {} },
+      { nodeId: "white", nodeType: "input.constant-color", position: { x: 48, y: 500 }, settings: { color: [1, 1, 1] } },
+      {
+        nodeId: "fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 320, y: 350 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 600, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-n", "world-normal", "value", "fresnel", "normal"),
+      createShaderEdge("e-v", "view-direction", "value", "fresnel", "viewDirection"),
+      createShaderEdge("e-col", "white", "value", "fresnel", "color"),
+      createShaderEdge("e-c", "fresnel", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-fresnel" }
+  };
+}
+
+/**
+ * Foliage Surface 2: the authoritative painterly foliage surface shader
+ * going forward. Built around the tree-height gradient (base → top), which
+ * evaluates consistently across ALL lighting presets because it only reads
+ * a vertex attribute — no TSL matrix math.
+ *
+ * This replaces the original `createDefaultFoliageSurfaceShaderGraph`
+ * (which depended on `sphereNormal`) because of a bug we hit where TSL
+ * matrix-math builtins applied to custom vertex attributes collapse to
+ * zero when the scene uses HemisphereLight-based ambient (any non-default
+ * preset). See the `sphereNormal` case in `ShaderRuntime.ts` for the full
+ * investigation trail and where to pick it back up.
+ *
+ * Starting point cloned from the Debug Tree Height shader. Iterate here as
+ * the foliage shading model evolves.
+ */
+export function createDefaultFoliageSurface2ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface-2`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface 2",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "tree-height", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "foliage-surface-2" }
+  };
+}
+
 export function createDefaultFoliageSurfaceShaderGraph(
   projectId: string,
   options: {

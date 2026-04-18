@@ -20,6 +20,7 @@ import {
   createDefaultBloomPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
+  createDefaultFoliageSurface2ShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -28,6 +29,10 @@ import {
   createDebugWarmIsolatedShaderGraph,
   createDebugSunMaskShaderGraph,
   createDebugVertexAlphaShaderGraph,
+  createDebugSphereNormalShaderGraph,
+  createDebugTreeHeightShaderGraph,
+  createDebugFresnelShaderGraph,
+  createDebugConstantRedShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -1075,6 +1080,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
       shaderDefinitionId: `${projectId}:shader:foliage-surface`,
       displayName: "Foliage Surface"
     }),
+    createDefaultFoliageSurface2ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface-2`,
+      displayName: "Foliage Surface 2"
+    }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
       displayName: "Foliage Wind"
@@ -1102,6 +1111,22 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDebugVertexAlphaShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:debug-vertex-alpha`,
       displayName: "Debug Vertex Alpha"
+    }),
+    createDebugSphereNormalShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-sphere-normal`,
+      displayName: "Debug Sphere Normal"
+    }),
+    createDebugTreeHeightShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-tree-height`,
+      displayName: "Debug Tree Height"
+    }),
+    createDebugFresnelShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-fresnel`,
+      displayName: "Debug Fresnel"
+    }),
+    createDebugConstantRedShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-constant-red`,
+      displayName: "Debug Constant Red"
     }),
     createDefaultColorGradePostProcessShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:color-grade`,

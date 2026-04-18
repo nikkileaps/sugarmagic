@@ -18,8 +18,10 @@ import {
 import {
   applyPostProcessStack,
   assignRenderPipelineOutputNode,
+  createRenderableShaderApplicationState,
   createEnvironmentSceneController,
   // Canonical authored sun-vector semantics shared by the light rig and shader runtime.
+  ensureShaderSetAppliedToRenderable,
   sunIncomingDirectionFromAngles,
   sunPositionDirectionFromAngles,
   type RuntimeRenderPipeline,
@@ -156,5 +158,39 @@ describe("render-web environment", () => {
 
     expect(pipeline.outputNode).toBe("base-output");
     expect(pipeline.needsUpdate).toBe(true);
+  });
+
+  it("does not treat a renderable as shader-applied until meshes actually exist", () => {
+    const shaderRuntime = {
+      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material)
+    } as unknown as ShaderRuntime;
+    const state = createRenderableShaderApplicationState();
+    const root = new THREE.Group();
+    const object = {
+      representationKey: "asset:tree:foliage-shaders",
+      effectiveShaders: {
+        surface: {
+          shaderDefinitionId: "project:shader:foliage-surface",
+          targetKind: "mesh-surface",
+          documentRevision: 1,
+          parameterValues: {},
+          parameterOverrides: []
+        },
+        deform: null
+      }
+    } as never;
+
+    ensureShaderSetAppliedToRenderable(root, object, shaderRuntime, state);
+    expect(state.appliedShaderSignature).toBeNull();
+
+    root.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
+      )
+    );
+
+    ensureShaderSetAppliedToRenderable(root, object, shaderRuntime, state);
+    expect(state.appliedShaderSignature).toBe("asset:tree:foliage-shaders");
   });
 });

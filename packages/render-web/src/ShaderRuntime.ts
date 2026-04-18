@@ -27,8 +27,10 @@ import {
   dot,
   exp,
   float,
-  modelNormalMatrix,
+  modelWorldMatrix,
   select,
+  transformDirection,
+  transformNormal,
   length,
   luminance,
   max,
@@ -424,40 +426,61 @@ function materializeBuiltin(
     case "sunDirection":
       return context.sunDirectionUniform;
     case "sphereNormal": {
-      // Sample the FoilageMaker-baked local-space sphere normal and rotate
-      // it into world space for lighting math. Trunk vertices (and any
-      // mesh with no sphere-normal attribute) have a zero vector here — we
-      // fall back to the real world normal so the trunk/branch geometry
-      // keeps its usual surface shading.
+      // KNOWN-BROKEN WORKAROUND. Falls back to `normalWorld`. See note below.
       //
-      // NOTE on naming: Three's GLTFLoader lowercases all non-standard
-      // attribute names when loading (see loader source near line 4789),
-      // so the glTF attribute `_SPHERE_NORMAL` ends up on the geometry as
-      // `_sphere_normal`. TSL `attribute()` reads BufferGeometry attributes
-      // by their in-memory name, which is the lowercased form.
-      const localSphereNormal = (tslAttribute as unknown as (
-        name: string,
-        type: string
-      ) => unknown)("_sphere_normal", "vec3");
-      const localDot = (localSphereNormal as { dot: (other: unknown) => unknown }).dot(
-        localSphereNormal
-      );
-      const worldSphereNormal = (
-        (modelNormalMatrix as { mul: (other: unknown) => unknown }).mul(
-          localSphereNormal
-        ) as { normalize: () => unknown }
-      ).normalize();
-      return (select as unknown as (
-        cond: unknown,
-        a: unknown,
-        b: unknown
-      ) => unknown)(
-        (localDot as { greaterThan: (other: unknown) => unknown }).greaterThan(
-          float(0.01)
-        ),
-        worldSphereNormal,
-        normalWorld
-      );
+      // ── Background ──────────────────────────────────────────────────────
+      // The FoilageMaker export bakes a per-vertex local-space "sphere
+      // normal" (`_SPHERE_NORMAL`, lowercased to `_sphere_normal` by
+      // GLTFLoader) that's intended to let each leaf cluster shade as if it
+      // were a smooth volumetric sphere. The shading math wants this vector
+      // in world space, which requires rotating the local attribute through
+      // the object's world transform.
+      //
+      // ── Bug we hit ──────────────────────────────────────────────────────
+      // Any TSL matrix-math path applied to the custom attribute returns
+      // zero in the authoring viewport WHEN the active environment uses a
+      // non-flat ambient (HemisphereLight-based: noon, late_afternoon,
+      // golden_hour, night). Under the "default" preset (flat AmbientLight)
+      // the same math returns correct results. Same asset, same transform,
+      // same attribute data, same shader — only the scene lighting differs.
+      // Observed failure modes (all returned zero at non-default presets):
+      //   - modelNormalMatrix.mul(localSphereNormal).normalize()
+      //   - modelWorldMatrix.mul(vec4(localSphereNormal, 0)).xyz.normalize()
+      //   - transformDirection(localSphereNormal, modelWorldMatrix)
+      //   - transformNormal(localSphereNormal, modelWorldMatrix)
+      // A diagnostic that returned the raw attribute with zero math
+      // rendered correctly at ALL presets, proving the attribute read path
+      // is fine; the failure is specific to TSL matrix ops applied to it.
+      // `normalWorld` (which internally uses modelNormalMatrix on the
+      // standard `normal` attribute) works at all presets, so Three's core
+      // normal path handles this case — only user-custom attributes through
+      // matrix uniforms misbehave on material recompile after a light-setup
+      // swap. Best guess: Three's WebGPU pipeline drops/zeroes the
+      // custom-attribute + per-object matrix uniform binding during the
+      // recompile that fires when scene lights change shape (AmbientLight
+      // → HemisphereLight).
+      //
+      // ── Where we stopped ───────────────────────────────────────────────
+      // Next steps if we come back to this:
+      //   1. Instrument the compiled WGSL for foliage-surface under the
+      //      default vs noon preset and diff them — if the noon version
+      //      is missing the modelNormalMatrix uniform binding or the
+      //      `_sphere_normal` vertex attribute binding, that's the smoking
+      //      gun.
+      //   2. Try baking the sphere normal in WORLD SPACE (FoilageMaker
+      //      side) so no runtime transform is needed. Breaks if a tree is
+      //      rotated post-placement, but that's probably rare.
+      //   3. Push the object's rotation matrix as our own uniform on the
+      //      material (via onBeforeRender) and apply it ourselves instead
+      //      of using TSL's per-object matrix builtins.
+      //
+      // ── Current behavior ───────────────────────────────────────────────
+      // Returns `normalWorld` unconditionally. Loses the painterly per-
+      // cluster sphere shading but renders the foliage correctly at all
+      // presets. The Foliage Surface shader graph that depended on this
+      // feature is no longer authoritative — authoring defaults should
+      // point at "Foliage Surface 2" which was built without sphereNormal.
+      return normalWorld;
     }
     case "treeHeight":
       // Three's GLTFLoader lowercases custom attribute names — see note

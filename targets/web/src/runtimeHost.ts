@@ -47,9 +47,11 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
-  applyShaderToRenderable,
+  createRenderableShaderApplicationState,
   createWebRenderHost,
+  ensureShaderSetAppliedToRenderable,
   releaseShadersFromObjectTree,
+  type RenderableShaderApplicationState,
   type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
@@ -140,6 +142,8 @@ const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
+  object: SceneObject;
+  shaderApplication: RenderableShaderApplicationState;
 }
 
 function createCameraSnapshot(
@@ -770,6 +774,15 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
+    for (const entry of sceneObjectEntries.values()) {
+      ensureShaderSetAppliedToRenderable(
+        entry.root,
+        entry.object,
+        host.shaderRuntime,
+        entry.shaderApplication
+      );
+    }
+
     host.setCamera(camera);
     host.render();
 
@@ -846,19 +859,9 @@ export function createWebRuntimeHost(
         npcDefinitions: state.npcDefinitions,
         includePlayerPresence: false
       });
-      console.warn("[web-runtime:resolved-objects]", {
-        regionId: region.identity.id,
-        count: objects.length,
-        objects: objects.map((object) => ({
-          instanceId: object.instanceId,
-          kind: object.kind,
-          assetKind: object.assetKind ?? null,
-          surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-          deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-        }))
-      });
       for (const object of objects) {
         const rootObject = new THREE.Group();
+        const shaderApplication = createRenderableShaderApplicationState();
         rootObject.name = object.instanceId;
         rootObject.userData.sceneInstanceId = object.instanceId;
         rootObject.position.set(...object.transform.position);
@@ -891,14 +894,12 @@ export function createWebRuntimeHost(
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
               host?.enableShadowsOnObject(renderable);
-              applyShaderToRenderable(renderable, object, host?.shaderRuntime ?? null);
-              console.warn("[web-runtime:renderable:loaded]", {
-                instanceId: object.instanceId,
-                assetSourceUrl,
-                hasShaderRuntimeAtLoad: host?.shaderRuntime !== null,
-                surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-                deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-              });
+              ensureShaderSetAppliedToRenderable(
+                renderable,
+                object,
+                host?.shaderRuntime ?? null,
+                shaderApplication
+              );
               rootObject.add(renderable);
             })
             .catch((error) => {
@@ -923,7 +924,9 @@ export function createWebRuntimeHost(
 
         scene.add(rootObject);
         sceneObjectEntries.set(object.instanceId, {
-          root: rootObject
+          root: rootObject,
+          object,
+          shaderApplication
         });
       }
     }

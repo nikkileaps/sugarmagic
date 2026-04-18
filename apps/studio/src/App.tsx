@@ -53,7 +53,6 @@ import {
   createProjectInDirectory,
   openProject,
   pickDirectory,
-  readBlobFile,
   saveProject,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
@@ -95,6 +94,7 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
+import { useAssetSources } from "./asset-sources";
 import {
   getStudioPluginWorkspaceDefinition,
   listStudioPluginWorkspaceDefinitions
@@ -102,30 +102,6 @@ import {
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
 import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
-
-function revokeAssetSources(assetSources: Record<string, string>) {
-  for (const url of Object.values(assetSources)) {
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function createAssetSourceMap(
-  handle: FileSystemDirectoryHandle,
-  assetDefinitions: ReturnType<typeof getAllAssetDefinitions>
-): Promise<Record<string, string>> {
-  const nextSources: Record<string, string> = {};
-
-  for (const definition of assetDefinitions) {
-    const pathSegments = definition.source.relativeAssetPath
-      .split("/")
-      .filter(Boolean);
-    const blob = await readBlobFile(handle, ...pathSegments);
-    if (!blob) continue;
-    nextSources[definition.source.relativeAssetPath] = URL.createObjectURL(blob);
-  }
-
-  return nextSources;
-}
 
 function renderPluginSectionGroup(
   sections: ReturnType<typeof collectPluginShellContributions>["designSections"],
@@ -503,7 +479,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [assetSources, setAssetSources] = useState<Record<string, string>>({});
   const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
@@ -559,6 +534,7 @@ export function App() {
     if (!session) return [];
     return getAllAssetDefinitions(session);
   }, [session]);
+  const assetSources = useAssetSources(projectHandle, assetDefinitions);
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -816,36 +792,6 @@ export function App() {
       }
     });
   }
-
-  useEffect(() => {
-    let disposed = false;
-    let generatedSources: Record<string, string> = {};
-
-    if (!projectHandle || assetDefinitions.length === 0) {
-      void Promise.resolve().then(() => {
-        if (!disposed) {
-          setAssetSources({});
-        }
-      });
-      return undefined;
-    }
-
-    void createAssetSourceMap(projectHandle, assetDefinitions).then(
-      (nextSources) => {
-        if (disposed) {
-          revokeAssetSources(nextSources);
-          return;
-        }
-        generatedSources = nextSources;
-        setAssetSources(nextSources);
-      }
-    );
-
-    return () => {
-      disposed = true;
-      revokeAssetSources(generatedSources);
-    };
-  }, [assetDefinitions, projectHandle]);
 
   const handleImportAsset = useCallback(async () => {
     const { handle, descriptor, session: currentSession } = projectStore.getState();

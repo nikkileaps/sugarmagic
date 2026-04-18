@@ -2,8 +2,9 @@
  * applyShaderToRenderable
  *
  * Applies a resolved runtime-core shader binding to a loaded Three.js object
- * using the shared web ShaderRuntime. Keeps object traversal policy in one
- * place so Studio and published web hosts do not drift.
+ * using the shared web ShaderRuntime. This module owns both the mesh traversal
+ * policy and the "apply once the runtime exists, regardless of load order"
+ * lifecycle so Studio and published web hosts do not drift.
  */
 
 import * as THREE from "three";
@@ -16,6 +17,24 @@ interface ShaderMaterialLease {
 }
 
 const shaderMaterialLeases = new WeakMap<THREE.Object3D, ShaderMaterialLease[]>();
+
+export interface RenderableShaderApplicationState {
+  appliedShaderSignature: string | null;
+}
+
+export function createRenderableShaderApplicationState(): RenderableShaderApplicationState {
+  return {
+    appliedShaderSignature: null
+  };
+}
+
+function getRenderableShaderSignature(object: SceneObject): string | null {
+  if (!object.effectiveShaders.surface && !object.effectiveShaders.deform) {
+    return null;
+  }
+
+  return object.representationKey;
+}
 
 export function releaseShadersFromRenderable(
   renderable: THREE.Object3D
@@ -47,28 +66,13 @@ export function applyShaderToRenderable(
   renderable: THREE.Object3D,
   object: SceneObject,
   shaderRuntime: ShaderRuntime | null
-) {
+): boolean {
   if (
     !shaderRuntime ||
     (!object.effectiveShaders.surface && !object.effectiveShaders.deform)
   ) {
-    console.warn("[shader-apply:skip]", {
-      instanceId: object.instanceId,
-      compileProfile:
-        shaderRuntime?.getCompileProfile?.() ?? null,
-      hasShaderRuntime: shaderRuntime !== null,
-      surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-      deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-    });
-    return;
+    return false;
   }
-
-  console.warn("[shader-apply:start]", {
-    instanceId: object.instanceId,
-    compileProfile: shaderRuntime.getCompileProfile(),
-    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
-  });
 
   const previousManagedMaterials = releaseShadersFromRenderable(renderable);
   const nextLeases: ShaderMaterialLease[] = [];
@@ -114,13 +118,32 @@ export function applyShaderToRenderable(
   for (const material of replacedBaseMaterials) {
     material.dispose();
   }
+  return meshCount > 0;
+}
 
-  console.warn("[shader-apply:done]", {
-    instanceId: object.instanceId,
-    compileProfile: shaderRuntime.getCompileProfile(),
-    meshCount,
-    finalizedCount,
-    leasedMaterialCount: nextLeases.length,
-    replacedBaseMaterialCount: replacedBaseMaterials.size
-  });
+export function ensureShaderSetAppliedToRenderable(
+  renderable: THREE.Object3D,
+  object: SceneObject,
+  shaderRuntime: ShaderRuntime | null,
+  state: RenderableShaderApplicationState
+) {
+  if (!shaderRuntime) {
+    return;
+  }
+
+  const nextSignature = getRenderableShaderSignature(object);
+  if (!nextSignature) {
+    state.appliedShaderSignature = null;
+    return;
+  }
+  if (state.appliedShaderSignature === nextSignature) {
+    return;
+  }
+
+  const applied = applyShaderToRenderable(renderable, object, shaderRuntime);
+  if (!applied) {
+    return;
+  }
+
+  state.appliedShaderSignature = nextSignature;
 }

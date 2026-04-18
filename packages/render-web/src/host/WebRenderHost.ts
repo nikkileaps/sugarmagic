@@ -177,21 +177,6 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     next.outputColorSpace = THREE.SRGBColorSpace;
   }
 
-  function serializePostProcessChain(
-    chain: Array<{
-      shaderDefinitionId: string;
-      enabled?: boolean;
-      order?: number;
-    }>
-  ): string {
-    return chain
-      .map(
-        (binding) =>
-          `${binding.shaderDefinitionId}:${binding.enabled === false ? "off" : "on"}@${binding.order ?? "?"}`
-      )
-      .join(", ");
-  }
-
   function runPendingEnvironment(): void {
     if (!pendingEnvironmentState || !renderPipeline || !shaderRuntime) {
       return;
@@ -212,68 +197,11 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       contentLibrary,
       environmentOverrideId
     );
-    const fogShaderIds = new Set(
-      contentLibrary.shaderDefinitions
-        .filter((definition) => definition.metadata.builtInKey === "fog-tint")
-        .map((definition) => definition.shaderDefinitionId)
-    );
-    const authoredFogBinding =
-      resolved.definition?.postProcessShaders.find((binding) =>
-        fogShaderIds.has(binding.shaderDefinitionId)
-      ) ?? null;
-    const effectiveFogBindingEnabled = resolved.effectivePostProcessChain.some((binding) =>
-      fogShaderIds.has(binding.shaderDefinitionId)
-    );
-    console.warn("[render-host:environment]", {
-      compileProfile,
-      environmentDefinitionId: resolved.definition?.definitionId ?? null,
-      environmentOverrideId,
-      regionEnvironmentId: region?.environmentBinding.defaultEnvironmentId ?? null,
-      preset: resolved.definition?.lighting.preset ?? null,
-      skyEnabled: resolved.definition?.atmosphere.sky.enabled ?? null,
-      fogEnabled: resolved.definition?.atmosphere.fog.enabled ?? null,
-      fogBindingEnabled: authoredFogBinding?.enabled ?? null,
-      effectiveFogBindingEnabled,
-      sun: resolved.definition
-        ? {
-            azimuthDeg: resolved.definition.lighting.sun.azimuthDeg,
-            elevationDeg: resolved.definition.lighting.sun.elevationDeg,
-            color: resolved.definition.lighting.sun.color,
-            intensity: resolved.definition.lighting.sun.intensity
-          }
-        : null,
-      postProcessChain: resolved.effectivePostProcessChain.map((binding) => ({
-        shaderDefinitionId: binding.shaderDefinitionId,
-        enabled: binding.enabled,
-        order: binding.order
-      })),
-      chainSummary: serializePostProcessChain(resolved.effectivePostProcessChain)
-    });
-    console.warn(
-      `[render-host:environment:summary] profile=${compileProfile} env=${resolved.definition?.definitionId ?? "none"} override=${environmentOverrideId ?? "none"} regionEnv=${region?.environmentBinding.defaultEnvironmentId ?? "none"} sky=${String(resolved.definition?.atmosphere.sky.enabled ?? null)} fog=${String(resolved.definition?.atmosphere.fog.enabled ?? null)} fogBinding=${String(authoredFogBinding?.enabled ?? null)} effectiveFog=${String(effectiveFogBindingEnabled)} chain=[${serializePostProcessChain(resolved.effectivePostProcessChain)}]`
-    );
-    if (
-      resolved.definition &&
-      authoredFogBinding &&
-      resolved.definition.atmosphere.fog.enabled !== authoredFogBinding.enabled
-    ) {
-      console.error(
-        `[render-host:environment:mismatch] env=${resolved.definition.definitionId} fogEnabled=${resolved.definition.atmosphere.fog.enabled} fogBindingEnabled=${authoredFogBinding.enabled}`
-      );
-    }
     if (resolved.definition) {
       const incomingSunDirection = sunIncomingDirectionFromAngles(
           resolved.definition.lighting.sun.azimuthDeg,
           resolved.definition.lighting.sun.elevationDeg
         );
-      console.warn("[render-host:sun-direction]", {
-        compileProfile,
-        incomingSunDirection: {
-          x: incomingSunDirection.x,
-          y: incomingSunDirection.y,
-          z: incomingSunDirection.z
-        }
-      });
       shaderRuntime.setSunDirection(incomingSunDirection);
     }
     renderPipeline.applyEnvironment(resolved.definition);
@@ -282,6 +210,25 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       renderPipeline,
       contentLibrary,
       chain: resolved.effectivePostProcessChain
+    });
+
+    // Three's WebGPU node materials bake scene light analysis into their
+    // compiled shaders at first use. When the environment swaps (e.g. flat
+    // AmbientLight → HemisphereLight on a preset change), already-compiled
+    // materials keep referencing the prior light setup and render with the
+    // old lighting (or, for transparent materials whose path doesn't
+    // auto-recompile, with zero ambient — leaves go black). Marking every
+    // material dirty forces Three to rebuild shaders against the current
+    // lights on the next frame.
+    scene.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (Array.isArray(child.material)) {
+        for (const material of child.material) {
+          material.needsUpdate = true;
+        }
+      } else if (child.material) {
+        child.material.needsUpdate = true;
+      }
     });
   }
 
