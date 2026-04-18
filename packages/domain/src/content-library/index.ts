@@ -21,6 +21,7 @@ import {
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageSurface2ShaderGraph,
+  createDefaultFoliageSurface3ShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -1084,6 +1085,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageSurface2ShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-surface-2`,
       displayName: "Foliage Surface 2"
+    }),
+    createDefaultFoliageSurface3ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface-3`,
+      displayName: "Foliage Surface 3"
     }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,

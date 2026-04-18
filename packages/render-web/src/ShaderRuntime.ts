@@ -1000,12 +1000,28 @@ function applyIRToMaterial(
   }
   if (ir.outputs.fragmentAlpha && "opacityNode" in material) {
     material.opacityNode = materializeValue(ir.outputs.fragmentAlpha, context) as never;
-    // Do NOT force material.transparent = true. The GLB's authored
-    // alphaMode is the single source of truth: MASK → alphaTest > 0
-    // (hard cutout, carved silhouettes); BLEND → transparent: true
-    // (soft-edge blending). Overriding to transparent = true turned every
-    // MASK-mode asset into blend-mode, which is why foliage leaf cards
-    // looked like translucent rectangles instead of carved leaf shapes.
+    // An authored shader writing an opacity output is opting into MASK-mode
+    // cutout rendering: opaque where alpha passes the threshold, discarded
+    // below it, and (critically) writing to the depth buffer on the opaque
+    // pixels so near leaf cards properly occlude branches / other leaves
+    // behind them.
+    //
+    // Previously we deferred to the GLB's authored alphaMode on the
+    // theory "the author knows best," but tools like FoilageMaker export
+    // leaf cards as BLEND (transparent: true) which disables depth-write
+    // and causes the characteristic "see-through-the-front-leaves-to-the-
+    // branches-inside" artifact. Since the shader graph's opacityNode IS
+    // the author's intent for per-pixel alpha, we treat that intent as
+    // "cutout" and set the material up accordingly. If a future shader
+    // needs true BLEND (glass, smoke), that becomes a per-shader opt-in
+    // instead of a per-GLB accident.
+    (material as { transparent: boolean }).transparent = false;
+    if ("alphaTest" in material) {
+      (material as { alphaTest: number }).alphaTest = 0.5;
+    }
+    if ("depthWrite" in material) {
+      (material as { depthWrite: boolean }).depthWrite = true;
+    }
   }
   if (ir.outputs.emissive && material instanceof MeshStandardNodeMaterial) {
     material.emissiveNode = materializeValue(ir.outputs.emissive, context) as never;

@@ -1539,6 +1539,141 @@ export function createDefaultFoliageSurface2ShaderGraph(
   };
 }
 
+/**
+ * Foliage Surface 3: FS2's smooth tree-height base + FS's warm-sun and
+ * rim-fresnel highlight terms, driven off `world-normal` instead of the
+ * broken `sphere-normal` path. Keeps the soft in-shade blending the FS2
+ * gradient gives you, but adds bloom-catchable pops on sunlit leaf tops
+ * and silhouette edges.
+ *
+ * Graph shape:
+ *   base      = tree-height                               (float, splats to greyscale vec3)
+ *   warmTerm  = warmColor * saturate(dot(worldNormal, sunDir)) * warmStrength
+ *   rimTerm   = fresnel(worldNormal, viewDir, rimColor, power=2.4, strength=1.2) * rimStrength
+ *   color     = base + warmTerm + rimTerm
+ *   alpha     = leafTexture.alpha
+ *
+ * Tune warmStrength / rimStrength from the inspector to taste. Default
+ * values are deliberately modest — the intent is "a little more pop than
+ * FS2," not "as much pop as FS original."
+ */
+export function createDefaultFoliageSurface3ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface-3`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface 3",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+
+      // Shared inputs for lighting math
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 440 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 540 }, settings: {} },
+
+      // Warm sun term: warmColor * saturate(worldNormal · sunDirection) * warmStrength
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 48, y: 240 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 256, y: 240 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 380 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 380 }, settings: {} },
+      { nodeId: "warm-scalar", nodeType: "math.multiply", position: { x: 640, y: 310 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 832, y: 260 }, settings: {} },
+
+      // Rim term: fresnel(worldNormal, viewDir, rimColor) * rimStrength
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 48, y: 640 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 256, y: 640 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 448, y: 540 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 640, y: 620 }, settings: {} },
+
+      // Combine: base (tree-height) + warm + rim
+      { nodeId: "warm-plus-rim", nodeType: "color.add", position: { x: 1024, y: 440 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1216, y: 260 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1440, y: 260 }, settings: {} }
+    ],
+    edges: [
+      // Sun dot / sun mask
+      createShaderEdge("e-n-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+
+      // Warm scalar = warmStrength * sun-mask
+      createShaderEdge("e-warmstrength-scalar", "warm-strength", "value", "warm-scalar", "a"),
+      createShaderEdge("e-sunmask-scalar", "sun-mask", "value", "warm-scalar", "b"),
+
+      // Warm term = warmColor * warmScalar  (scalar splats to vec3)
+      createShaderEdge("e-warmcolor-term", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("e-warmscalar-term", "warm-scalar", "value", "warm-term", "b"),
+
+      // Rim fresnel
+      createShaderEdge("e-n-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("e-v-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("e-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+
+      // Rim term = rimFresnel * rimStrength  (scalar splats)
+      createShaderEdge("e-rimfresnel-term", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("e-rimstrength-term", "rim-strength", "value", "rim-term", "b"),
+
+      // Combine warm + rim, then add the tree-height base
+      createShaderEdge("e-warm-plus-rim-a", "warm-term", "value", "warm-plus-rim", "a"),
+      createShaderEdge("e-warm-plus-rim-b", "rim-term", "value", "warm-plus-rim", "b"),
+      createShaderEdge("e-base-final", "tree-height", "value", "final-color", "a"),
+      createShaderEdge("e-warmrim-final", "warm-plus-rim", "value", "final-color", "b"),
+
+      // Output
+      createShaderEdge("e-final-output", "final-color", "value", "output", "color"),
+      createShaderEdge("e-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.45, 1.15, 0.72]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.4
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.82, 0.95, 0.78]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.3
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "foliage-surface-3"
+    }
+  };
+}
+
 export function createDefaultFoliageSurfaceShaderGraph(
   projectId: string,
   options: {
