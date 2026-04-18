@@ -1251,6 +1251,32 @@ def _ensure_export_trunk_material():
 
 
 def _ensure_export_leaf_material():
+    # NOTE ON ALPHA MODE (2026-04-18):
+    #
+    # The glTF alphaMode carried out of this exporter is currently NOT the
+    # source of truth for how foliage renders in Sugarmagic. The
+    # Sugarmagic web shader runtime (packages/render-web/src/ShaderRuntime.ts,
+    # applyIRToMaterial) forces every shader graph that outputs an
+    # opacityNode into MASK-mode cutout rendering regardless of what the
+    # GLB's alphaMode says (transparent=false, alphaTest=0.5, depthWrite=
+    # true). That's the only way we got correct near-leaf-occludes-inner-
+    # branch behavior across all lighting presets without the "see through
+    # the front leaves to the trunk" bug.
+    #
+    # So: the CLIP / alpha_threshold=0.5 we set here is correct in spirit
+    # (it matches what Sugarmagic does downstream anyway) but the specific
+    # value bakes no longer matter — the engine overrides them. Keep the
+    # CLIP setting for two reasons: (1) it keeps Blender's preview
+    # viewport looking right for authors working in Blender, (2) it makes
+    # the GLB "honest" about its intent if it's ever loaded somewhere
+    # other than Sugarmagic.
+    #
+    # TODO: revisit once we have a per-shader alpha-mode control in
+    # Sugarmagic (BLEND for glass / soft edges, MASK for foliage, OPAQUE
+    # for solid). At that point the GLB's authored alphaMode can become
+    # authoritative again and this exporter's blend_method choice starts
+    # mattering. Until then, don't spend time tuning alphaMode here —
+    # tune it in Sugarmagic's ShaderRuntime.
     material = bpy.data.materials.get("FoilageMaker Export Leaves")
     if material is None:
         material = bpy.data.materials.new(name="FoilageMaker Export Leaves")

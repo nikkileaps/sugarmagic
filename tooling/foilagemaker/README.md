@@ -26,6 +26,30 @@ The add-on does **not** make Blender procedural graphs part of Sugarmagic's
 runtime. The runtime should consume exported foliage GLBs, not live Blender
 semantics.
 
+## Leaf alpha mode: currently overridden in Sugarmagic
+
+Heads-up for anyone touching the export leaf material here: the glTF
+`alphaMode` that this add-on produces is **not** the source of truth for
+how foliage renders in Sugarmagic today. The Sugarmagic web shader runtime
+(`packages/render-web/src/ShaderRuntime.ts`, `applyIRToMaterial`) forces
+any shader graph with an opacity output into MASK-mode cutout rendering
+(`transparent: false`, `alphaTest: 0.5`, `depthWrite: true`) regardless of
+the GLB's authored alphaMode. That's what fixed the "see through the front
+leaves to the trunk / inner branches" artifact we were fighting for a
+while.
+
+So: keep the CLIP / `alpha_threshold = 0.5` setup in `generator.py` — it
+keeps Blender's viewport preview honest and keeps the GLB self-describing
+for any future non-Sugarmagic consumer — but don't burn time tuning it
+for Sugarmagic rendering. The authoritative knobs for cutout threshold
+live in ShaderRuntime, not here.
+
+TODO: revisit once Sugarmagic grows a per-shader alpha-mode control
+(BLEND for glass / soft edges, MASK for foliage, OPAQUE for solid). At
+that point the GLB's authored alphaMode becomes authoritative again and
+FoilageMaker's export material choice starts mattering. Until then, tune
+alpha behavior in Sugarmagic's ShaderRuntime, not here.
+
 ## Install
 
 1. In Blender, open `Edit > Preferences > Add-ons`.
