@@ -10,14 +10,30 @@ import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
 import type {
   PostProcessShaderBinding,
-  ShaderGraphDocument
+  ShaderGraphDocument,
+  ShaderParameterOverride,
+  ShaderSlotBindingMap,
+  ShaderTargetKind
 } from "../shader-graph";
 import {
+  createEmptyShaderSlotBindingMap,
   createDefaultBloomPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
+  createDefaultFoliageSurfaceShaderGraph,
+  createDefaultFoliageSurface2ShaderGraph,
+  createDefaultFoliageSurface3ShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
+  createSimpleAlphaTestShaderGraph,
+  createDebugParameterColorShaderGraph,
+  createDebugWarmIsolatedShaderGraph,
+  createDebugSunMaskShaderGraph,
+  createDebugVertexAlphaShaderGraph,
+  createDebugSphereNormalShaderGraph,
+  createDebugTreeHeightShaderGraph,
+  createDebugFresnelShaderGraph,
+  createDebugConstantRedShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -48,7 +64,13 @@ export interface AssetDefinition {
   definitionKind: "asset";
   displayName: string;
   assetKind: AssetKind;
-  defaultShaderDefinitionId: string | null;
+  defaultShaderBindings?: ShaderSlotBindingMap;
+  defaultShaderParameterOverrides?: ShaderParameterOverride[];
+  /**
+   * @deprecated Legacy single-binding field migrated into defaultShaderBindings
+   * during normalization. New code should only read/write defaultShaderBindings.
+   */
+  defaultShaderDefinitionId?: string | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -216,8 +238,52 @@ export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
 
+function slotForTargetKind(
+  targetKind: ShaderTargetKind | null | undefined
+): "surface" | "deform" | null {
+  if (targetKind === "mesh-surface") {
+    return "surface";
+  }
+  if (targetKind === "mesh-deform") {
+    return "deform";
+  }
+  return null;
+}
+
+function normalizeAssetShaderBindings(
+  definition: AssetDefinition,
+  shaderTargetKinds: ReadonlyMap<string, ShaderTargetKind>,
+  builtInFoliageSurfaceId: string,
+  builtInFoliageWindId: string
+): ShaderSlotBindingMap {
+  const next = {
+    ...createEmptyShaderSlotBindingMap(),
+    ...(definition.defaultShaderBindings ?? {})
+  };
+
+  if (definition.defaultShaderDefinitionId) {
+    const slot = slotForTargetKind(
+      shaderTargetKinds.get(definition.defaultShaderDefinitionId) ?? null
+    );
+    if (slot) {
+      next[slot] = definition.defaultShaderDefinitionId;
+    } else if (definition.assetKind === "foliage") {
+      next.deform = definition.defaultShaderDefinitionId;
+    } else {
+      next.surface = definition.defaultShaderDefinitionId;
+    }
+  }
+
+  if (definition.assetKind === "foliage") {
+    next.surface = next.surface ?? builtInFoliageSurfaceId;
+    next.deform = next.deform ?? builtInFoliageWindId;
+  }
+
+  return next;
+}
+
 export const DEFAULT_FOG_SETTINGS: FogSettings = {
-  enabled: true,
+  enabled: false,
   density: 0.008,
   color: 0x879bb4,
   heightFalloff: 1
@@ -863,6 +929,29 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const authoredShaderDefinitions =
+    contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
+      ? contentLibrary.shaderDefinitions.map((definition) => ({
+          ...definition,
+          nodes: definition.nodes.map((node) => ({
+            ...node,
+            settings: { ...node.settings }
+          })),
+          edges: [...definition.edges],
+          parameters: [...definition.parameters],
+          metadata: { ...definition.metadata }
+        }))
+      : [];
+  const mergedShaderDefinitions =
+    authoredShaderDefinitions.length > 0
+      ? mergeBuiltInShaderDefinitions(authoredShaderDefinitions, builtInShaderDefinitions)
+      : builtInShaderDefinitions;
+  const shaderTargetKinds = new Map(
+    mergedShaderDefinitions.map((definition) => [
+      definition.shaderDefinitionId,
+      definition.targetKind
+    ])
+  );
   const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions?.length
     ? [...contentLibrary.environmentDefinitions]
     : [
@@ -874,6 +963,8 @@ export function normalizeContentLibrarySnapshot(
       ];
 
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
+  const foliageSurfaceShaderDefinitionId = `${projectId}:shader:foliage-surface`;
+  const foliageWindShaderDefinitionId = `${projectId}:shader:foliage-wind`;
 
   return {
     identity: {
@@ -882,6 +973,13 @@ export function normalizeContentLibrarySnapshot(
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
+      defaultShaderBindings: normalizeAssetShaderBindings(
+        definition,
+        shaderTargetKinds,
+        foliageSurfaceShaderDefinitionId,
+        foliageWindShaderDefinitionId
+      ),
+      defaultShaderParameterOverrides: [...(definition.defaultShaderParameterOverrides ?? [])],
       defaultShaderDefinitionId: definition.defaultShaderDefinitionId ?? null
     })),
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
@@ -895,7 +993,8 @@ export function normalizeContentLibrarySnapshot(
         lighting: migrateLightingFromLegacy(legacyDefinition, preset),
         atmosphere: {
           fog: {
-            enabled: legacyDefinition.atmosphere?.fog?.enabled ?? true,
+            enabled:
+              legacyDefinition.atmosphere?.fog?.enabled ?? DEFAULT_FOG_SETTINGS.enabled,
             density:
               legacyDefinition.atmosphere?.fog?.density ??
               getDefaultFogDensityForPreset(preset),
@@ -973,27 +1072,24 @@ export function normalizeContentLibrarySnapshot(
         projectId
       );
     }),
-    shaderDefinitions:
-      contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
-        ? mergeBuiltInShaderDefinitions(
-            contentLibrary.shaderDefinitions.map((definition) => ({
-            ...definition,
-            nodes: definition.nodes.map((node) => ({
-              ...node,
-              settings: { ...node.settings }
-            })),
-            edges: [...definition.edges],
-            parameters: [...definition.parameters],
-            metadata: { ...definition.metadata }
-          })),
-            builtInShaderDefinitions
-          )
-        : builtInShaderDefinitions
+    shaderDefinitions: mergedShaderDefinitions
   };
 }
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
   return [
+    createDefaultFoliageSurfaceShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface`,
+      displayName: "Foliage Surface"
+    }),
+    createDefaultFoliageSurface2ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface-2`,
+      displayName: "Foliage Surface 2"
+    }),
+    createDefaultFoliageSurface3ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:foliage-surface-3`,
+      displayName: "Foliage Surface 3"
+    }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
       displayName: "Foliage Wind"
@@ -1001,6 +1097,42 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageTintShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-tint`,
       displayName: "Foliage Tint"
+    }),
+    createSimpleAlphaTestShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:simple-alpha-test`,
+      displayName: "Simple Alpha Test"
+    }),
+    createDebugParameterColorShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-parameter-color`,
+      displayName: "Debug Parameter Color"
+    }),
+    createDebugWarmIsolatedShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-warm-isolated`,
+      displayName: "Debug Warm Isolated"
+    }),
+    createDebugSunMaskShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-sun-mask`,
+      displayName: "Debug Sun Mask"
+    }),
+    createDebugVertexAlphaShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-vertex-alpha`,
+      displayName: "Debug Vertex Alpha"
+    }),
+    createDebugSphereNormalShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-sphere-normal`,
+      displayName: "Debug Sphere Normal"
+    }),
+    createDebugTreeHeightShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-tree-height`,
+      displayName: "Debug Tree Height"
+    }),
+    createDebugFresnelShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-fresnel`,
+      displayName: "Debug Fresnel"
+    }),
+    createDebugConstantRedShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:debug-constant-red`,
+      displayName: "Debug Constant Red"
     }),
     createDefaultColorGradePostProcessShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:color-grade`,

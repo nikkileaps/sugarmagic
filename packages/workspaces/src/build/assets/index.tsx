@@ -12,16 +12,26 @@ import {
   Button,
   UnstyledButton,
   Group,
-  TextInput,
-  Select
+  TextInput
 } from "@mantine/core";
-import type { AssetDefinition, RegionDocument, ShaderGraphDocument } from "@sugarmagic/domain";
+import type {
+  AssetDefinition,
+  ContentLibrarySnapshot,
+  RegionDocument,
+  ShaderGraphDocument,
+  ShaderParameterOverride,
+  ShaderSlotKind
+} from "@sugarmagic/domain";
+import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
 import { PanelSection, Inspector } from "@sugarmagic/ui";
+import { resolveAssetDefinitionShaderBindings } from "@sugarmagic/runtime-core";
 import type { WorkspaceViewContribution } from "../../workspace-view";
+import { ShaderSlotEditor } from "../ShaderSlotEditor";
 
 export interface AssetsWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   activeRegion: RegionDocument | null;
+  contentLibrary: ContentLibrarySnapshot;
   shaderDefinitions: ShaderGraphDocument[];
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
@@ -30,8 +40,20 @@ export interface AssetsWorkspaceViewProps {
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
+    slot: ShaderSlotKind,
     shaderDefinitionId: string | null
   ) => void;
+  onSetAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: ShaderSlotKind,
+    override: ShaderParameterOverride
+  ) => void;
+  onClearAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: ShaderSlotKind,
+    parameterId: string
+  ) => void;
+  onEditShaderGraph?: (shaderDefinitionId: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   hasSceneReferences: (definitionId: string) => boolean;
 }
@@ -50,6 +72,7 @@ export function useAssetsWorkspaceView(
   const {
     assetDefinitions,
     activeRegion,
+    contentLibrary,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
@@ -57,6 +80,9 @@ export function useAssetsWorkspaceView(
     onPlaceAsset,
     onUpdateAssetDefinition,
     onSetAssetDefaultShader,
+    onSetAssetDefaultShaderParameterOverride,
+    onClearAssetDefaultShaderParameterOverride,
+    onEditShaderGraph,
     onRemoveAssetDefinition,
     hasSceneReferences
   } = props;
@@ -134,12 +160,20 @@ export function useAssetsWorkspaceView(
           <AssetInspectorPanel
             key={selectedAsset.definitionId}
             assetDefinition={selectedAsset}
+            contentLibrary={contentLibrary}
             canPlace={Boolean(activeRegion)}
             canRemove={!hasSceneReferences(selectedAsset.definitionId)}
             shaderDefinitions={shaderDefinitions}
             onPlaceAsset={onPlaceAsset}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
             onSetAssetDefaultShader={onSetAssetDefaultShader}
+            onSetAssetDefaultShaderParameterOverride={
+              onSetAssetDefaultShaderParameterOverride
+            }
+            onClearAssetDefaultShaderParameterOverride={
+              onClearAssetDefaultShaderParameterOverride
+            }
+            onEditShaderGraph={onEditShaderGraph}
             onRemoveAssetDefinition={onRemoveAssetDefinition}
           />
         ) : (
@@ -155,15 +189,20 @@ export function useAssetsWorkspaceView(
 
 function AssetInspectorPanel({
   assetDefinition,
+  contentLibrary,
   canPlace,
   canRemove,
   shaderDefinitions,
   onPlaceAsset,
   onUpdateAssetDefinition,
   onSetAssetDefaultShader,
+  onSetAssetDefaultShaderParameterOverride,
+  onClearAssetDefaultShaderParameterOverride,
+  onEditShaderGraph,
   onRemoveAssetDefinition
 }: {
   assetDefinition: AssetDefinition;
+  contentLibrary: ContentLibrarySnapshot;
   canPlace: boolean;
   canRemove: boolean;
   shaderDefinitions: ShaderGraphDocument[];
@@ -171,12 +210,28 @@ function AssetInspectorPanel({
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
+    slot: ShaderSlotKind,
     shaderDefinitionId: string | null
   ) => void;
+  onSetAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: ShaderSlotKind,
+    override: ShaderParameterOverride
+  ) => void;
+  onClearAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: ShaderSlotKind,
+    parameterId: string
+  ) => void;
+  onEditShaderGraph?: (shaderDefinitionId: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
 }) {
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
+  );
+  const shaderResolution = useMemo(
+    () => resolveAssetDefinitionShaderBindings(assetDefinition, contentLibrary),
+    [assetDefinition, contentLibrary]
   );
 
   return (
@@ -234,30 +289,45 @@ function AssetInspectorPanel({
           {assetDefinition.source.relativeAssetPath}
         </Text>
       </Stack>
-      <Select
-        label="Default Shader"
-        size="xs"
-        data={[
-          { value: "__none__", label: "No Shader" },
-          ...shaderDefinitions
-            .filter((definition) =>
-              assetDefinition.assetKind === "foliage"
-                ? definition.targetKind === "mesh-deform" ||
-                  definition.targetKind === "mesh-surface"
-                : definition.targetKind === "mesh-surface"
-            )
-            .map((definition) => ({
-              value: definition.shaderDefinitionId,
-              label: `${definition.displayName} (${definition.targetKind})`
-            }))
-        ]}
-        value={assetDefinition.defaultShaderDefinitionId ?? "__none__"}
-        onChange={(value) =>
-          onSetAssetDefaultShader(
-            assetDefinition.definitionId,
-            value && value !== "__none__" ? value : null
+      <ShaderSlotEditor
+        bindings={{
+          ...createEmptyShaderSlotBindingMap(),
+          ...(assetDefinition.defaultShaderBindings ?? {})
+        }}
+        shaderDefinitions={
+          shaderDefinitions.filter((definition) =>
+            assetDefinition.assetKind === "foliage"
+              ? definition.targetKind === "mesh-deform" ||
+                definition.targetKind === "mesh-surface"
+              : definition.targetKind === "mesh-surface"
           )
         }
+        onChangeBinding={(slot, shaderDefinitionId) =>
+          onSetAssetDefaultShader(assetDefinition.definitionId, slot, shaderDefinitionId)
+        }
+        parameterOverrides={assetDefinition.defaultShaderParameterOverrides ?? []}
+        diagnostics={shaderResolution.diagnostics}
+        onChangeParameterOverride={
+          onSetAssetDefaultShaderParameterOverride
+            ? (slot, override) =>
+                onSetAssetDefaultShaderParameterOverride(
+                  assetDefinition.definitionId,
+                  slot,
+                  override
+                )
+            : undefined
+        }
+        onClearParameterOverride={
+          onClearAssetDefaultShaderParameterOverride
+            ? (slot, parameterId) =>
+                onClearAssetDefaultShaderParameterOverride(
+                  assetDefinition.definitionId,
+                  slot,
+                  parameterId
+                )
+            : undefined
+        }
+        onEditShaderGraph={onEditShaderGraph}
       />
       <Button size="xs" disabled={!canPlace} onClick={() => onPlaceAsset(assetDefinition)}>
         Place In Active Region

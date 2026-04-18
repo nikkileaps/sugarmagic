@@ -17,7 +17,13 @@ import {
 } from "@sugarmagic/domain";
 import {
   applyPostProcessStack,
+  assignRenderPipelineOutputNode,
+  createRenderableShaderApplicationState,
   createEnvironmentSceneController,
+  // Canonical authored sun-vector semantics shared by the light rig and shader runtime.
+  ensureShaderSetAppliedToRenderable,
+  sunIncomingDirectionFromAngles,
+  sunPositionDirectionFromAngles,
   type RuntimeRenderPipeline,
   type ShaderRuntime
 } from "@sugarmagic/render-web";
@@ -57,17 +63,6 @@ function makeContentLibrary(): ContentLibrarySnapshot {
   };
 }
 
-function directionFromAngles(azimuthDeg: number, elevationDeg: number): THREE.Vector3 {
-  const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
-  const elevation = THREE.MathUtils.degToRad(elevationDeg);
-  const horizontal = Math.cos(elevation);
-  return new THREE.Vector3(
-    Math.sin(azimuth) * horizontal,
-    Math.sin(elevation),
-    Math.cos(azimuth) * horizontal
-  ).normalize();
-}
-
 describe("render-web environment", () => {
   it("realizes the authored sun direction and never assigns scene fog", () => {
     const scene = new THREE.Scene();
@@ -85,13 +80,20 @@ describe("render-web environment", () => {
     expect(sun).toBeTruthy();
     expect(scene.fog).toBeNull();
 
-    const expectedDirection = directionFromAngles(
+    const expectedDirection = sunPositionDirectionFromAngles(
       environment.lighting.sun.azimuthDeg,
       environment.lighting.sun.elevationDeg
     );
     expect(sun!.position.clone().normalize().distanceTo(expectedDirection)).toBeLessThan(
       0.0001
     );
+  });
+
+  it("defines shader sun direction as the incoming light vector, opposite the light position vector", () => {
+    const positionDirection = sunPositionDirectionFromAngles(155, 68);
+    const incomingDirection = sunIncomingDirectionFromAngles(155, 68);
+
+    expect(positionDirection.dot(incomingDirection)).toBeCloseTo(-1, 5);
   });
 
   it("applies the resolved post-process stack in authored order", () => {
@@ -136,5 +138,59 @@ describe("render-web environment", () => {
     expect(setOutput).toHaveBeenCalledWith(
       "project:shader:tonemap-reinhard:output"
     );
+  });
+
+  it("invalidates the render pipeline when the post-process output node changes", () => {
+    const pipeline = {
+      outputNode: "old-output",
+      needsUpdate: false
+    } as unknown as {
+      outputNode: unknown;
+      needsUpdate: boolean;
+    };
+
+    assignRenderPipelineOutputNode(pipeline as never, "new-output", "base-output");
+
+    expect(pipeline.outputNode).toBe("new-output");
+    expect(pipeline.needsUpdate).toBe(true);
+
+    assignRenderPipelineOutputNode(pipeline as never, null, "base-output");
+
+    expect(pipeline.outputNode).toBe("base-output");
+    expect(pipeline.needsUpdate).toBe(true);
+  });
+
+  it("does not treat a renderable as shader-applied until meshes actually exist", () => {
+    const shaderRuntime = {
+      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material)
+    } as unknown as ShaderRuntime;
+    const state = createRenderableShaderApplicationState();
+    const root = new THREE.Group();
+    const object = {
+      representationKey: "asset:tree:foliage-shaders",
+      effectiveShaders: {
+        surface: {
+          shaderDefinitionId: "project:shader:foliage-surface",
+          targetKind: "mesh-surface",
+          documentRevision: 1,
+          parameterValues: {},
+          parameterOverrides: []
+        },
+        deform: null
+      }
+    } as never;
+
+    ensureShaderSetAppliedToRenderable(root, object, shaderRuntime, state);
+    expect(state.appliedShaderSignature).toBeNull();
+
+    root.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0xffffff })
+      )
+    );
+
+    ensureShaderSetAppliedToRenderable(root, object, shaderRuntime, state);
+    expect(state.appliedShaderSignature).toBe("asset:tree:foliage-shaders");
   });
 });

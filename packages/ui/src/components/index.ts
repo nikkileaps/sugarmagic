@@ -10,6 +10,7 @@ export {
 } from "./BuildSubNav";
 export {
   ColorField,
+  HDRColorField,
   type ColorFieldProps
 } from "./ColorField";
 export {

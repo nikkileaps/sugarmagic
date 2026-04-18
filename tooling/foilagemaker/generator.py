@@ -17,7 +17,7 @@ from pathlib import Path
 import bpy
 from mathutils import Quaternion, Vector
 
-ADDON_VERSION = "0.11.1"
+ADDON_VERSION = "0.12.1"
 TREE_KIND = "tree"
 OBJECT_KIND_KEY = "foilagemaker_kind"
 ASSET_KIND_KEY = "sugarmagic_asset_kind"
@@ -25,15 +25,25 @@ VERSION_KEY = "foilagemaker_version"
 SUPPRESS_UPDATE_KEY = "_foilagemaker_suppress_update"
 LEAF_IMAGE_NAME = "FoilageMakerLeafSprite"
 LEAF_COLOR_ATTRIBUTE = "FoilageMakerLeafColor"
+# Custom glTF vertex attributes. The glTF 2.0 spec requires custom (user-defined)
+# attribute names to start with an underscore. Blender's glTF exporter preserves
+# attribute names exactly when they already start with "_", so these string
+# constants must match the TSL `attribute()` calls in ShaderRuntime.ts.
+SPHERE_NORMAL_ATTRIBUTE = "_SPHERE_NORMAL"
+TREE_HEIGHT_ATTRIBUTE = "_TREE_HEIGHT"
 DEFAULT_TREE_PRESET = "clustered_stylized"
 _TREE_PRESET_LABELS = {
     "clustered_stylized": "Clustered Stylized Canopy",
     "round_deciduous": "Round Deciduous",
     "tall_pine_ish": "Tall Pine-ish",
 }
-PROTOTYPE_TEXTURE_ROOT = Path(
-    "/Users/nikki/projects/sugarmagic/tooling/.foilagemaker-prototype-textures/textures"
-)
+_PLUGIN_DIR = Path(__file__).resolve().parent
+# Bundled leaf texture library. Ships with the add-on zip under
+# `foilagemaker/textures/`. Each authored tree picks which texture to use
+# via its `leaf_texture_variant` property (see props.py). `mixed` mode
+# atlases the first four `_transparency.png` files; a specific variant
+# (`leavesTexture03` etc.) uses just that single file as the leaf sprite.
+LEAF_TEXTURE_DIR = _PLUGIN_DIR / "textures"
 VERTEX_WARNING_THRESHOLD = 12_000
 VERTEX_ERROR_THRESHOLD = 30_000
 POLYGON_WARNING_THRESHOLD = 4_000
@@ -62,7 +72,7 @@ def rebuild_tree_object(obj: bpy.types.Object) -> None:
         return
 
     props = obj.foilagemaker_tree
-    buffers = _build_tree_mesh(props)
+    buffers = _build_tree_mesh(props, tree_obj=obj)
     mesh = obj.data
     mesh.clear_geometry()
     mesh.from_pydata(buffers.verts, [], buffers.faces)
@@ -76,8 +86,11 @@ def rebuild_tree_object(obj: bpy.types.Object) -> None:
         if index < len(buffers.face_smooth):
             polygon.use_smooth = buffers.face_smooth[index]
 
+    _finalize_tree_height(buffers)
     _apply_uvs(mesh, buffers)
     _apply_vertex_colors(mesh, buffers)
+    _apply_sphere_normal_attribute(mesh, buffers)
+    _apply_tree_height_attribute(mesh, buffers)
     _apply_custom_normals(mesh, buffers)
 
     obj[ASSET_KIND_KEY] = "foliage"
@@ -146,13 +159,6 @@ def validate_tree_object(obj: bpy.types.Object | None) -> list[dict[str, str]]:
     uv_layers = {layer.name for layer in mesh.uv_layers}
     props = obj.foilagemaker_tree
 
-    if props.display_leaf_blocks:
-        issues.append(
-            {
-                "severity": "error",
-                "message": "Disable Display Blocks before export so guide canopy geometry is not emitted.",
-            }
-        )
     if "UVMap" not in uv_layers:
         issues.append(
             {
@@ -221,11 +227,11 @@ def validate_tree_object(obj: bpy.types.Object | None) -> list[dict[str, str]]:
             }
         )
 
-    if props.leaf_density < 2:
+    if props.leaf_count < 16:
         issues.append(
             {
                 "severity": "warning",
-                "message": "Leaf density is very low; exported trees may read sparse in-game.",
+                "message": "Leaf count is very low; exported trees may read sparse in-game.",
             }
         )
 
@@ -301,6 +307,15 @@ class _MeshBuffers:
     verts: list[tuple[float, float, float]] = field(default_factory=list)
     vertex_colors: list[tuple[float, float, float, float]] = field(default_factory=list)
     vertex_normal_overrides: list[Vector | None] = field(default_factory=list)
+    # Fake per-cluster "sphere normal" for painterly lighting. Leaf-card vertices
+    # store normalize(vertexPos - clusterCenter); trunk vertices keep (0,0,0)
+    # (sampled via lerp against world-normal in the shader so the trunk falls
+    # through to using its real surface normal).
+    vertex_sphere_normals: list[tuple[float, float, float]] = field(default_factory=list)
+    # Post-pass 0..1 altitude within the tree. 0 at base of trunk, 1 at top
+    # of highest canopy cluster. Drives the tree-wide top-warm / bottom-cool
+    # color gradient in the foliage-surface shader.
+    vertex_tree_height: list[float] = field(default_factory=list)
     faces: list[tuple[int, ...]] = field(default_factory=list)
     face_materials: list[int] = field(default_factory=list)
     face_smooth: list[bool] = field(default_factory=list)
@@ -319,18 +334,10 @@ class _MeshBuffers:
         self.face_uvs.append(uv_coords)
 
 
-@dataclass
-class _CanopyCluster:
-    center: Vector
-    radius_x: float
-    radius_y: float
-    radius_z: float
-    surface_sprays: int
-    interior_sprays: int
-    outer_bias: float
-
-
-def _build_tree_mesh(props) -> _MeshBuffers:
+def _build_tree_mesh(
+    props,
+    tree_obj: bpy.types.Object | None = None,
+) -> _MeshBuffers:
     rng = random.Random(int(props.random_seed))
     buffers = _MeshBuffers()
     leaf_variant_count = _get_leaf_variant_count()
@@ -388,14 +395,18 @@ def _build_tree_mesh(props) -> _MeshBuffers:
             )
             leaf_tips.append(secondary_points[-1])
 
-    canopy_clusters = _build_canopy_clusters(
-        leaf_tips=leaf_tips,
+    # 0.15.0 canopy pipeline: scatter leaves on a procedural shape mesh.
+    # The shape mesh is a staging structure only — leaves are the output,
+    # the shape itself never ends up in the exported GLB or the Blender
+    # viewport. Silhouette is guaranteed to match the chosen shape.
+    _scatter_leaves_on_canopy_shape(
+        buffers=buffers,
         canopy_center=canopy_center,
         props=props,
         rng=rng,
+        leaf_variant_count=leaf_variant_count,
+        tree_obj=tree_obj,
     )
-    for cluster in canopy_clusters:
-        _add_canopy_cluster(buffers, cluster, props, rng, leaf_variant_count)
 
     return buffers
 
@@ -513,326 +524,426 @@ def _build_secondary_branch_points(
     return points, max(props.secondary_branch_radius, 0.005)
 
 
-def _build_canopy_clusters(
-    leaf_tips: list[Vector],
+def _scatter_leaves_on_canopy_shape(
+    buffers: _MeshBuffers,
     canopy_center: Vector,
     props,
     rng: random.Random,
-) -> list[_CanopyCluster]:
-    if leaf_tips:
-        source_points = list(leaf_tips)
-    else:
-        source_points = [canopy_center]
-
-    desired = max(2, int(props.canopy_cluster_count))
-    central = Vector((0.0, 0.0, 0.0))
-    for point in source_points:
-        central += point
-    central /= max(1, len(source_points))
-    central = central.lerp(canopy_center, 0.3)
-
-    base_surface = max(12, int(props.leaf_density * props.canopy_density_multiplier))
-    clusters: list[_CanopyCluster] = [
-        _CanopyCluster(
-            center=central,
-            radius_x=props.canopy_radius * 0.92,
-            radius_y=props.canopy_radius * 0.9,
-            radius_z=props.canopy_radius * props.canopy_vertical_scale * 0.82,
-            surface_sprays=max(10, int(base_surface * 0.5)),
-            interior_sprays=max(6, int(base_surface * 0.28)),
-            outer_bias=0.74,
-        )
-    ]
-
-    if desired > 1:
-        anchors = _pick_canopy_anchor_points(source_points, central, desired - 1)
-
-        for bucket_index, anchor in enumerate(anchors):
-            direction = anchor - central
-            if direction.length < 0.001:
-                angle = math.tau * bucket_index / max(1, desired - 1)
-                direction = Vector((math.cos(angle), math.sin(angle), 0.15))
-            direction = direction.normalized()
-
-            anchor_distance = max(props.canopy_radius * 0.65, (anchor - central).length)
-            radial_distance = anchor_distance * rng.uniform(0.95, 1.25)
-            lift = props.canopy_radius * rng.uniform(0.08, 0.28)
-            merged_center = central + Vector(
-                (
-                    direction.x * radial_distance,
-                    direction.y * radial_distance,
-                    direction.z * radial_distance * 0.35 + lift,
-                )
-            )
-            radius_scale = rng.uniform(0.82, 1.12)
-            radius_x = props.canopy_radius * radius_scale
-            radius_y = props.canopy_radius * rng.uniform(0.8, 1.08)
-            radius_z = props.canopy_radius * props.canopy_vertical_scale * rng.uniform(0.78, 1.02)
-            surface = max(8, int(base_surface * rng.uniform(0.44, 0.68)))
-            clusters.append(
-                _CanopyCluster(
-                    center=merged_center,
-                    radius_x=radius_x,
-                    radius_y=radius_y,
-                    radius_z=radius_z,
-                    surface_sprays=surface,
-                    interior_sprays=max(4, int(surface * 0.34)),
-                    outer_bias=rng.uniform(0.8, 0.93),
-                )
-            )
-
-    if props.add_outer_leaves:
-        satellites = clusters[1:] if len(clusters) > 1 else clusters[:1]
-        bridge_limit = min(2, len(satellites))
-        for cluster in satellites[:bridge_limit]:
-            bridge_center = central.lerp(cluster.center, 0.42)
-            clusters.append(
-                _CanopyCluster(
-                    center=bridge_center,
-                    radius_x=cluster.radius_x * 0.56,
-                    radius_y=cluster.radius_y * 0.56,
-                    radius_z=cluster.radius_z * 0.5,
-                    surface_sprays=max(4, int(cluster.surface_sprays * 0.18)),
-                    interior_sprays=max(2, int(cluster.interior_sprays * 0.12)),
-                    outer_bias=0.84,
-                )
-            )
-
-    return clusters
-
-
-def _pick_canopy_anchor_points(
-    source_points: list[Vector],
-    central: Vector,
-    count: int,
-) -> list[Vector]:
-    if count <= 0:
-        return []
-    if len(source_points) <= count:
-        return list(source_points)
-
-    anchors: list[Vector] = []
-    remaining = sorted(source_points, key=lambda point: point.z, reverse=True)
-    anchors.append(remaining.pop(0))
-
-    while remaining and len(anchors) < count:
-        best_index = 0
-        best_score = -1.0
-        for index, point in enumerate(remaining):
-            min_distance = min((point - anchor).length for anchor in anchors)
-            radial_bonus = (point - central).length * 0.35
-            height_bonus = max(0.0, point.z - central.z) * 0.15
-            score = min_distance + radial_bonus + height_bonus
-            if score > best_score:
-                best_score = score
-                best_index = index
-        anchors.append(remaining.pop(best_index))
-
-    return anchors
-
-
-def _add_canopy_cluster(
-    buffers: _MeshBuffers,
-    cluster: _CanopyCluster,
-    props,
-    rng: random.Random,
     leaf_variant_count: int,
+    tree_obj: bpy.types.Object | None = None,
 ) -> None:
-    if props.display_leaf_blocks:
-        _add_canopy_guide(
-            buffers=buffers,
-            center=cluster.center,
-            radius_x=cluster.radius_x,
-            radius_y=cluster.radius_y,
-            radius_z=cluster.radius_z,
-            material_index=2,
+    """Build a procedural canopy shape (sphere / cone / teardrop), scatter
+    leaf cards across its surface, and write the resulting leaf geometry
+    into `buffers`.
+
+    The shape mesh itself is a STAGING structure — it lives only inside
+    this function, feeds position/normal data into the leaf-card generator,
+    and is discarded. Only the leaf cards end up in the output mesh (and
+    therefore in the exported GLB). Silhouette is guaranteed to match the
+    chosen shape because leaves can only land on its surface.
+    """
+    horizontal_radius = max(0.05, float(getattr(props, "canopy_size", 1.1)))
+    vertical_scale = max(0.1, float(getattr(props, "canopy_vertical_scale", 1.2)))
+    # canopy_base_offset is in Blender units, not a fraction of canopy
+    # size. That means a value of -3 literally drops the canopy base 3
+    # meters below the trunk top regardless of how big the canopy is —
+    # which is what authors actually want when lining the canopy up with
+    # where branches start.
+    base_offset = float(getattr(props, "canopy_base_offset", -0.2))
+    shape_kind = str(getattr(props, "canopy_shape", "sphere"))
+    leaf_count = max(8, int(getattr(props, "leaf_count", 140)))
+
+    canopy_base_z = canopy_center.z + base_offset
+    shape_center = Vector((canopy_center.x, canopy_center.y, canopy_base_z))
+
+    if shape_kind == "custom":
+        custom_collection = getattr(props, "canopy_custom_collection", None)
+        shape_verts, shape_tris = _extract_custom_shape_mesh(
+            custom_collection, tree_obj
+        )
+        if not shape_verts or not shape_tris:
+            # Collection empty, unset, or contains no valid mesh objects.
+            # Fall back to a sphere so the author still sees a canopy
+            # instead of a bald trunk, signaling visually that nothing's
+            # wired up yet.
+            shape_verts, shape_tris = _build_sphere_shape_mesh(
+                shape_center, horizontal_radius, vertical_scale
+            )
+    elif shape_kind == "cone":
+        shape_verts, shape_tris = _build_cone_shape_mesh(
+            shape_center, horizontal_radius, vertical_scale
+        )
+    elif shape_kind == "teardrop":
+        shape_verts, shape_tris = _build_teardrop_shape_mesh(
+            shape_center, horizontal_radius, vertical_scale
+        )
+    else:  # sphere / default
+        shape_verts, shape_tris = _build_sphere_shape_mesh(
+            shape_center, horizontal_radius, vertical_scale
         )
 
-    for _ in range(cluster.surface_sprays):
-        point, normal = _sample_ellipsoid_shell(cluster, props, rng)
-        point += normal * rng.uniform(0.0, props.outer_leaf_offset * 0.12)
+    points = _scatter_points_on_mesh(shape_verts, shape_tris, leaf_count, rng)
+    if not points:
+        return
+
+    # Canopy z-bounds for leaf-color height gradient. Using the actual
+    # scatter-point span (not the shape mesh bounds) gives the top-of-
+    # canopy vs. bottom-of-canopy colors the right reference even if the
+    # scatter happens to miss the pole of the shape.
+    z_min = min(p[0].z for p in points)
+    z_max = max(p[0].z for p in points)
+    z_range = max(0.001, z_max - z_min)
+
+    # Reference centroid for the `_SPHERE_NORMAL` vertex attribute bake.
+    # The foliage shader in Sugarmagic uses it as the anchor from which it
+    # derives a smooth per-cluster-style normal. For scatter-on-shape the
+    # shape centroid is the right reference — it makes every scattered
+    # leaf shade as if it were on the surface of the shape "sphere."
+    shape_centroid = Vector((0.0, 0.0, 0.0))
+    for v in shape_verts:
+        shape_centroid += v
+    if shape_verts:
+        shape_centroid /= len(shape_verts)
+
+    for point, normal in points:
+        top_factor = _clamp01((point.z - z_min) / z_range)
+        color = _sample_scattered_leaf_color(top_factor, rng)
+        # Light outward push so leaf cards don't ride exactly on the shape
+        # surface — slight offset reads as fluff and avoids Z-fighting when
+        # neighboring cards share a triangle face.
+        jitter_push = rng.uniform(0.0, props.leaf_size * 0.08)
         _add_leaf_spray(
             buffers=buffers,
-            center=point,
+            center=point + normal * jitter_push,
             normal=normal,
+            cluster_center=shape_centroid,
             leaf_size=props.leaf_size * rng.uniform(0.72, 1.2),
             leaf_width_bias=props.leaf_width * rng.uniform(0.9, 1.1),
             leaf_height_bias=props.leaf_height * rng.uniform(0.9, 1.1),
             card_count=max(2, int(props.leaf_card_count)),
             material_index=1,
-            color_hint=_sample_leaf_color(point, cluster, rng, interior=False),
-            rng=rng,
-            leaf_variant_count=leaf_variant_count,
-        )
-
-    for _ in range(cluster.interior_sprays):
-        point, normal = _sample_ellipsoid_interior(cluster, props, rng)
-        point += normal * rng.uniform(-props.leaf_size * 0.08, props.leaf_size * 0.04)
-        _add_leaf_spray(
-            buffers=buffers,
-            center=point,
-            normal=normal.lerp(Vector((0.0, 0.0, 1.0)), 0.2).normalized(),
-            leaf_size=props.leaf_size * rng.uniform(0.55, 0.9),
-            leaf_width_bias=props.leaf_width * rng.uniform(0.9, 1.1),
-            leaf_height_bias=props.leaf_height * rng.uniform(0.9, 1.1),
-            card_count=max(2, int(props.leaf_card_count) - 1),
-            material_index=1,
-            color_hint=_sample_leaf_color(point, cluster, rng, interior=True),
+            color_hint=color,
             rng=rng,
             leaf_variant_count=leaf_variant_count,
         )
 
 
-def _sample_ellipsoid_shell(
-    cluster: _CanopyCluster, props, rng: random.Random
-) -> tuple[Vector, Vector]:
-    theta = rng.uniform(0.0, math.tau)
-    phi = math.acos(rng.uniform(-1.0, 1.0))
-    local = Vector(
-        (
-            math.sin(phi) * math.cos(theta),
-            math.sin(phi) * math.sin(theta),
-            math.cos(phi),
-        )
-    )
-    shell_bias = cluster.outer_bias
-    radius_factor = shell_bias + (1.0 - shell_bias) * pow(rng.random(), 2.3)
-    radius_factor += rng.uniform(-props.leaf_jitter * 0.04, props.leaf_jitter * 0.04)
-    radius_factor = max(0.55, radius_factor)
-    scaled = Vector(
-        (
-            local.x * cluster.radius_x * radius_factor,
-            local.y * cluster.radius_y * radius_factor,
-            local.z * cluster.radius_z * radius_factor,
-        )
-    )
-    point = cluster.center + scaled
-    normal = Vector(
-        (
-            scaled.x / max(cluster.radius_x * cluster.radius_x, 0.0001),
-            scaled.y / max(cluster.radius_y * cluster.radius_y, 0.0001),
-            scaled.z / max(cluster.radius_z * cluster.radius_z, 0.0001),
-        )
-    ).normalized()
-    return point, normal
+# ── Procedural canopy shape meshes ──────────────────────────────────────
+# All three shape generators share the same "rings of segments" topology,
+# so they can feed a single _scatter_points_on_mesh pass. They return
+# (vertices, triangles) where triangles are (i0, i1, i2) tuples referring
+# into the vertex list.
+
+_SHAPE_MESH_RINGS = 14
+_SHAPE_MESH_SEGMENTS = 24
 
 
-def _sample_ellipsoid_interior(
-    cluster: _CanopyCluster, props, rng: random.Random
-) -> tuple[Vector, Vector]:
-    theta = rng.uniform(0.0, math.tau)
-    phi = math.acos(rng.uniform(-1.0, 1.0))
-    distance = pow(rng.random(), 1.8) * 0.82
-    local = Vector(
-        (
-            math.sin(phi) * math.cos(theta),
-            math.sin(phi) * math.sin(theta),
-            math.cos(phi),
-        )
-    ) * distance
-    scaled = Vector(
-        (
-            local.x * cluster.radius_x,
-            local.y * cluster.radius_y,
-            local.z * cluster.radius_z,
-        )
-    )
-    point = cluster.center + scaled
-    normal = Vector(
-        (
-            scaled.x / max(cluster.radius_x * cluster.radius_x, 0.0001),
-            scaled.y / max(cluster.radius_y * cluster.radius_y, 0.0001),
-            scaled.z / max(cluster.radius_z * cluster.radius_z, 0.0001),
-        )
-    )
-    if normal.length == 0.0:
-        normal = Vector((0.0, 0.0, 1.0))
-    return point, normal.normalized()
+def _build_sphere_shape_mesh(
+    base_center: Vector,
+    horizontal_radius: float,
+    vertical_scale: float,
+) -> tuple[list[Vector], list[tuple[int, int, int]]]:
+    # Sphere whose BOTTOM (south pole) sits at base_center. Total vertical
+    # extent is horizontal_radius * vertical_scale * 2 (the "diameter"
+    # along Z), matching the intuition that a vertical_scale of 1 makes
+    # a ball as tall as it is wide.
+    vertical_radius = horizontal_radius * vertical_scale
+    verts: list[Vector] = []
+    for ring in range(_SHAPE_MESH_RINGS + 1):
+        lat = (ring / _SHAPE_MESH_RINGS) * math.pi - math.pi / 2  # -π/2 .. +π/2
+        ring_factor = math.cos(lat)
+        z = base_center.z + vertical_radius * (math.sin(lat) + 1.0)  # shift so south pole sits at base
+        for seg in range(_SHAPE_MESH_SEGMENTS):
+            angle = math.tau * seg / _SHAPE_MESH_SEGMENTS
+            verts.append(
+                Vector(
+                    (
+                        base_center.x + horizontal_radius * ring_factor * math.cos(angle),
+                        base_center.y + horizontal_radius * ring_factor * math.sin(angle),
+                        z,
+                    )
+                )
+            )
+    return verts, _shape_mesh_tris(_SHAPE_MESH_RINGS, _SHAPE_MESH_SEGMENTS)
 
 
-def _sample_leaf_color(
-    point: Vector,
-    cluster: _CanopyCluster,
+def _build_cone_shape_mesh(
+    base_center: Vector,
+    base_radius: float,
+    vertical_scale: float,
+) -> tuple[list[Vector], list[tuple[int, int, int]]]:
+    # Cone with base disc at base_center, apex at base_center +
+    # (0, 0, base_radius * vertical_scale). Linear taper — the most direct
+    # way to produce a triangular silhouette.
+    apex_height = base_radius * vertical_scale
+    verts: list[Vector] = []
+    for ring in range(_SHAPE_MESH_RINGS + 1):
+        t = ring / _SHAPE_MESH_RINGS
+        radius = base_radius * (1.0 - t)
+        z = base_center.z + apex_height * t
+        for seg in range(_SHAPE_MESH_SEGMENTS):
+            angle = math.tau * seg / _SHAPE_MESH_SEGMENTS
+            verts.append(
+                Vector(
+                    (
+                        base_center.x + radius * math.cos(angle),
+                        base_center.y + radius * math.sin(angle),
+                        z,
+                    )
+                )
+            )
+    return verts, _shape_mesh_tris(_SHAPE_MESH_RINGS, _SHAPE_MESH_SEGMENTS)
+
+
+def _build_teardrop_shape_mesh(
+    base_center: Vector,
+    horizontal_radius: float,
+    vertical_scale: float,
+) -> tuple[list[Vector], list[tuple[int, int, int]]]:
+    # Teardrop: rounded (hemisphere-ish) lower third, linear taper to a
+    # point across the upper two thirds. Softer than a pure cone — reads
+    # as stylized deciduous rather than conifer.
+    total_height = horizontal_radius * vertical_scale
+    # Round-base cutoff: 0.35 means the lower 35% of the height follows a
+    # half-sphere curve (wider at base, swelling to max radius); the
+    # remaining 65% tapers linearly to zero.
+    round_base_fraction = 0.35
+    verts: list[Vector] = []
+    for ring in range(_SHAPE_MESH_RINGS + 1):
+        t = ring / _SHAPE_MESH_RINGS
+        if t < round_base_fraction:
+            # Hemisphere-like swell from 0 up to horizontal_radius over the
+            # first round_base_fraction of height.
+            s = t / round_base_fraction  # 0..1 within the round region
+            radius = horizontal_radius * math.sin(s * math.pi / 2)
+        else:
+            # Linear taper from max radius down to 0.
+            s = (t - round_base_fraction) / (1.0 - round_base_fraction)
+            radius = horizontal_radius * (1.0 - s)
+        z = base_center.z + total_height * t
+        for seg in range(_SHAPE_MESH_SEGMENTS):
+            angle = math.tau * seg / _SHAPE_MESH_SEGMENTS
+            verts.append(
+                Vector(
+                    (
+                        base_center.x + radius * math.cos(angle),
+                        base_center.y + radius * math.sin(angle),
+                        z,
+                    )
+                )
+            )
+    return verts, _shape_mesh_tris(_SHAPE_MESH_RINGS, _SHAPE_MESH_SEGMENTS)
+
+
+def _extract_custom_shape_mesh(
+    custom_collection: bpy.types.Collection | None,
+    tree_obj: bpy.types.Object | None,
+) -> tuple[list[Vector], list[tuple[int, int, int]]]:
+    """Combine every mesh object in `custom_collection` (recursively) into a
+    single (vertices, triangles) buffer for leaf scattering.
+
+    The caller scatters points on this combined surface; because points
+    are weighted by triangle area, bigger meshes in the collection
+    naturally get proportionally more leaves. Each mesh's own world
+    transform is honored independently — the author can position/rotate/
+    scale each piece freely in the viewport.
+
+    Vertices are returned in TREE-LOCAL space. The transform chain per
+    source mesh is: object-local → world (object.matrix_world) →
+    tree-local (inverse of tree_obj.matrix_world). That keeps leaf
+    positions consistent no matter where the tree's own origin sits.
+
+    Filters applied:
+      - Only MESH-type objects are processed (lights / empties / curves
+        in the collection are silently ignored).
+      - FoilageMaker trees are filtered out so a tree that shares a
+        collection with its canopy meshes doesn't accidentally scatter
+        leaves on its own trunk (and doesn't create a rebuild feedback
+        loop).
+      - `all_objects` is used so nested sub-collections count too.
+
+    Each source mesh is evaluated through the depsgraph, so modifiers and
+    shape-key deforms are baked in — authors can sculpt live and see the
+    scatter track.
+
+    Faces with more than 3 verts are fan-triangulated. Correct for
+    convex polygons; concave n-gons could produce slightly off tris, but
+    authored canopy shapes are essentially always convex.
+    """
+    if custom_collection is None:
+        return [], []
+
+    tree_world_matrix = (
+        tree_obj.matrix_world if tree_obj is not None else None
+    )
+    tree_world_inverse = (
+        tree_world_matrix.inverted() if tree_world_matrix is not None else None
+    )
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+
+    combined_verts: list[Vector] = []
+    combined_tris: list[tuple[int, int, int]] = []
+
+    for obj in custom_collection.all_objects:
+        if obj is None or obj.type != "MESH":
+            continue
+        if obj.get(OBJECT_KIND_KEY) == TREE_KIND:
+            # Don't scatter on other FoilageMaker trees — would produce
+            # leaves on their trunks and, if the OWN tree shares this
+            # collection, a rebuild feedback loop.
+            continue
+
+        evaluated = obj.evaluated_get(depsgraph)
+        try:
+            eval_mesh = evaluated.to_mesh()
+        except RuntimeError:
+            continue
+        if eval_mesh is None:
+            continue
+
+        try:
+            if tree_world_inverse is not None:
+                transform = tree_world_inverse @ obj.matrix_world
+            else:
+                transform = obj.matrix_world
+
+            base_index = len(combined_verts)
+            for vertex in eval_mesh.vertices:
+                combined_verts.append(transform @ vertex.co)
+
+            for polygon in eval_mesh.polygons:
+                loop_indices = list(polygon.loop_indices)
+                if len(loop_indices) < 3:
+                    continue
+                vert_indices = [
+                    base_index + eval_mesh.loops[li].vertex_index
+                    for li in loop_indices
+                ]
+                # Fan-triangulate (v0, vi, vi+1) for i in [1 .. n-2].
+                for i in range(1, len(vert_indices) - 1):
+                    combined_tris.append(
+                        (vert_indices[0], vert_indices[i], vert_indices[i + 1])
+                    )
+        finally:
+            # Release the evaluated mesh copy — leaking these accumulates
+            # memory and can crash Blender across many rebuilds.
+            evaluated.to_mesh_clear()
+
+    return combined_verts, combined_tris
+
+
+def _shape_mesh_tris(
+    rings: int, segments: int
+) -> list[tuple[int, int, int]]:
+    """Stitch a ring * segments vertex grid into a triangulated surface.
+
+    Emits two triangles per quad. Zero-area degenerate triangles at the
+    poles (where several vertices collapse to the same point) are harmless
+    because the scatter pass filters them out by area threshold.
+    """
+    tris: list[tuple[int, int, int]] = []
+    for ring in range(rings):
+        for seg in range(segments):
+            next_seg = (seg + 1) % segments
+            v00 = ring * segments + seg
+            v01 = ring * segments + next_seg
+            v10 = (ring + 1) * segments + seg
+            v11 = (ring + 1) * segments + next_seg
+            tris.append((v00, v10, v11))
+            tris.append((v00, v11, v01))
+    return tris
+
+
+def _scatter_points_on_mesh(
+    verts: list[Vector],
+    tris: list[tuple[int, int, int]],
+    count: int,
     rng: random.Random,
-    interior: bool,
+) -> list[tuple[Vector, Vector]]:
+    """Distribute `count` points randomly across the surface, weighted by
+    triangle area (uniform density per unit area). Returns (position,
+    normal) pairs.
+    """
+    if count <= 0 or not tris or not verts:
+        return []
+
+    tri_data: list[tuple[Vector, Vector, Vector, float, Vector]] = []
+    cumulative_areas: list[float] = []
+    running_total = 0.0
+    for tri in tris:
+        v0, v1, v2 = verts[tri[0]], verts[tri[1]], verts[tri[2]]
+        edge1 = v1 - v0
+        edge2 = v2 - v0
+        cross = edge1.cross(edge2)
+        area = cross.length * 0.5
+        if area < 1e-9:
+            continue
+        normal = cross.normalized()
+        tri_data.append((v0, v1, v2, area, normal))
+        running_total += area
+        cumulative_areas.append(running_total)
+
+    if not tri_data or running_total <= 0.0:
+        return []
+
+    results: list[tuple[Vector, Vector]] = []
+    for _ in range(count):
+        target = rng.uniform(0.0, running_total)
+        # Linear search over cumulative areas — N is small (N_rings * N_segments
+        # * 2, typically < 700), so bisect-vs-linear doesn't meaningfully matter.
+        chosen_index = 0
+        for i, cumulative in enumerate(cumulative_areas):
+            if cumulative >= target:
+                chosen_index = i
+                break
+        v0, v1, v2, _area, normal = tri_data[chosen_index]
+        # Uniform barycentric sampling over the triangle: reflect if the
+        # (u, v) lands in the opposite triangle of the parallelogram.
+        u = rng.random()
+        v = rng.random()
+        if u + v > 1.0:
+            u = 1.0 - u
+            v = 1.0 - v
+        w = 1.0 - u - v
+        point = v0 * w + v1 * u + v2 * v
+        results.append((point, normal))
+    return results
+
+
+def _sample_scattered_leaf_color(
+    top_factor: float,
+    rng: random.Random,
 ) -> tuple[float, float, float, float]:
-    vertical_min = cluster.center.z - cluster.radius_z
-    vertical_max = cluster.center.z + cluster.radius_z
-    top_factor = _clamp01((point.z - vertical_min) / max(vertical_max - vertical_min, 0.0001))
+    """Vertex color for a leaf card on the canopy shape.
+
+    RGB: cool/dark at the canopy base, bright/warm at the top, with a
+    small per-leaf random nudge so batches don't render as a solid flat
+    tint. Alpha: "exterior bias" gate used by the foliage shader's warm-
+    sun term. Scattered leaves are all on the exterior of the shape
+    surface, so we use a single high-ish bias rather than the old
+    interior/exterior split.
+    """
+    top_factor = _clamp01(top_factor)
     bottom_color = Vector((0.21, 0.41, 0.16))
     top_color = Vector((0.73, 0.88, 0.44))
-    random_color = Vector(
+    color = bottom_color.lerp(top_color, pow(top_factor, 0.9))
+    jitter = Vector(
         (
             rng.uniform(0.88, 1.05),
             rng.uniform(0.92, 1.08),
             rng.uniform(0.86, 1.02),
         )
     )
-    color = bottom_color.lerp(top_color, pow(top_factor, 0.9))
-    color = Vector((color.x * random_color.x, color.y * random_color.y, color.z * random_color.z))
-    if interior:
-        color *= 0.72
-    exterior_bias = 0.38 if interior else 0.86
-    shade_bias = _clamp01(top_factor * 0.58 + exterior_bias * 0.42)
-    return (_clamp01(color.x), _clamp01(color.y), _clamp01(color.z), shade_bias)
-
-
-def _add_canopy_guide(
-    buffers: _MeshBuffers,
-    center: Vector,
-    radius_x: float,
-    radius_y: float,
-    radius_z: float,
-    material_index: int,
-) -> None:
-    rings = 6
-    sides = 10
-    ring_indices: list[list[int]] = []
-    for ring in range(rings + 1):
-        v = ring / rings
-        phi = (v - 0.5) * math.pi
-        ring_radius = math.cos(phi)
-        z = math.sin(phi)
-        indices: list[int] = []
-        for side in range(sides):
-            angle = math.tau * side / sides
-            point = center + Vector(
-                (
-                    math.cos(angle) * ring_radius * radius_x,
-                    math.sin(angle) * ring_radius * radius_y,
-                    z * radius_z,
-                )
-            )
-            indices.append(
-                _append_vertex(
-                    buffers,
-                    point,
-                    color=(0.8, 0.9, 0.8, 0.14),
-                )
-            )
-        ring_indices.append(indices)
-
-    for ring in range(rings):
-        current_ring = ring_indices[ring]
-        next_ring = ring_indices[ring + 1]
-        for side in range(sides):
-            next_side = (side + 1) % sides
-            buffers.add_face(
-                (
-                    current_ring[side],
-                    current_ring[next_side],
-                    next_ring[next_side],
-                    next_ring[side],
-                ),
-                material_index,
-                smooth=True,
-            )
+    color = Vector((color.x * jitter.x, color.y * jitter.y, color.z * jitter.z))
+    exterior_bias = 0.78
+    return (_clamp01(color.x), _clamp01(color.y), _clamp01(color.z), exterior_bias)
 
 
 def _add_leaf_spray(
     buffers: _MeshBuffers,
     center: Vector,
     normal: Vector,
+    cluster_center: Vector,
     leaf_size: float,
     leaf_width_bias: float,
     leaf_height_bias: float,
@@ -854,6 +965,7 @@ def _add_leaf_spray(
             buffers=buffers,
             center=card_center,
             normal=card_normal,
+            cluster_center=cluster_center,
             height=leaf_size * _resolve_leaf_dimension_scale(leaf_height_bias) * scale,
             width=leaf_size * _resolve_leaf_dimension_scale(leaf_width_bias) * scale,
             rotation=rotation,
@@ -939,6 +1051,7 @@ def _add_leaf_card(
     buffers: _MeshBuffers,
     center: Vector,
     normal: Vector,
+    cluster_center: Vector,
     height: float,
     width: float,
     rotation: float,
@@ -955,29 +1068,37 @@ def _add_leaf_card(
 
     half_width = width * 0.5
     half_height = height * 0.5
+    p0 = center - right * half_width - up * half_height
+    p1 = center + right * half_width - up * half_height
+    p2 = center + right * half_width + up * half_height
+    p3 = center - right * half_width + up * half_height
     v0 = _append_vertex(
         buffers,
-        center - right * half_width - up * half_height,
+        p0,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p0, cluster_center),
     )
     v1 = _append_vertex(
         buffers,
-        center + right * half_width - up * half_height,
+        p1,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p1, cluster_center),
     )
     v2 = _append_vertex(
         buffers,
-        center + right * half_width + up * half_height,
+        p2,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p2, cluster_center),
     )
     v3 = _append_vertex(
         buffers,
-        center - right * half_width + up * half_height,
+        p3,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p3, cluster_center),
     )
     uv_u0, uv_v0, uv_u1, uv_v1 = uv_rect
     buffers.add_face(
@@ -998,11 +1119,27 @@ def _append_vertex(
     position: Vector,
     color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     normal_override: Vector | None = None,
+    sphere_normal: tuple[float, float, float] | None = None,
 ) -> int:
     buffers.verts.append((position.x, position.y, position.z))
     buffers.vertex_colors.append(color)
     buffers.vertex_normal_overrides.append(normal_override.copy() if normal_override else None)
+    # (0,0,0) signals "no sphere normal for this vertex" — the foliage shader
+    # falls back to the real world-normal for trunk/branch vertices via a
+    # length check so the painterly look stays on leaves only.
+    buffers.vertex_sphere_normals.append(sphere_normal or (0.0, 0.0, 0.0))
+    buffers.vertex_tree_height.append(0.0)  # filled in by post-pass
     return len(buffers.verts) - 1
+
+
+def _sphere_normal_for(
+    position: Vector, cluster_center: Vector
+) -> tuple[float, float, float]:
+    offset = position - cluster_center
+    if offset.length < 1e-5:
+        return (0.0, 0.0, 1.0)
+    n = offset.normalized()
+    return (n.x, n.y, n.z)
 
 
 def _apply_uvs(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
@@ -1028,6 +1165,77 @@ def _apply_vertex_colors(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
     )
     for index, color in enumerate(buffers.vertex_colors):
         attribute.data[index].color = color
+
+
+def _finalize_tree_height(buffers: _MeshBuffers) -> None:
+    """Post-pass: fill vertex_tree_height with 0..1 altitude along the tree.
+
+    Leaf vertices (identified by their non-zero sphere_normal) are normalized
+    against the CANOPY-only Z range so a leaf at the bottom of the canopy
+    gets tree_height=0 and a leaf at the top of the canopy gets 1. This is
+    what makes the painterly top-warm / bottom-cool gradient separate
+    visually — if we used the whole-tree range instead, canopy leaves would
+    only cover the top half of the gradient and never reach bottomColor.
+
+    Trunk vertices fall back to whole-tree normalization so the trunk
+    itself also shows a subtle bottom-to-top hue shift.
+    """
+    if not buffers.verts:
+        return
+
+    leaf_indices = [
+        i for i, sn in enumerate(buffers.vertex_sphere_normals)
+        if (sn[0] * sn[0] + sn[1] * sn[1] + sn[2] * sn[2]) > 1e-8
+    ]
+    tree_min_z = min(v[2] for v in buffers.verts)
+    tree_max_z = max(v[2] for v in buffers.verts)
+    tree_span = max(tree_max_z - tree_min_z, 1e-5)
+
+    if leaf_indices:
+        leaf_min_z = min(buffers.verts[i][2] for i in leaf_indices)
+        leaf_max_z = max(buffers.verts[i][2] for i in leaf_indices)
+        leaf_span = max(leaf_max_z - leaf_min_z, 1e-5)
+    else:
+        leaf_min_z = tree_min_z
+        leaf_span = tree_span
+
+    leaf_set = set(leaf_indices)
+    heights: list[float] = []
+    for i, vertex in enumerate(buffers.verts):
+        if i in leaf_set:
+            h = (vertex[2] - leaf_min_z) / leaf_span
+        else:
+            h = (vertex[2] - tree_min_z) / tree_span
+        heights.append(max(0.0, min(1.0, h)))
+    buffers.vertex_tree_height = heights
+
+
+def _apply_sphere_normal_attribute(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
+    _remove_attribute_if_present(mesh, SPHERE_NORMAL_ATTRIBUTE)
+    attribute = mesh.attributes.new(
+        name=SPHERE_NORMAL_ATTRIBUTE,
+        type="FLOAT_VECTOR",
+        domain="POINT",
+    )
+    for index, vec in enumerate(buffers.vertex_sphere_normals):
+        attribute.data[index].vector = vec
+
+
+def _apply_tree_height_attribute(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
+    _remove_attribute_if_present(mesh, TREE_HEIGHT_ATTRIBUTE)
+    attribute = mesh.attributes.new(
+        name=TREE_HEIGHT_ATTRIBUTE,
+        type="FLOAT",
+        domain="POINT",
+    )
+    for index, value in enumerate(buffers.vertex_tree_height):
+        attribute.data[index].value = value
+
+
+def _remove_attribute_if_present(mesh: bpy.types.Mesh, name: str) -> None:
+    existing = mesh.attributes.get(name)
+    if existing is not None:
+        mesh.attributes.remove(existing)
 
 
 def _apply_custom_normals(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
@@ -1133,6 +1341,32 @@ def _ensure_export_trunk_material():
 
 
 def _ensure_export_leaf_material():
+    # NOTE ON ALPHA MODE (2026-04-18):
+    #
+    # The glTF alphaMode carried out of this exporter is currently NOT the
+    # source of truth for how foliage renders in Sugarmagic. The
+    # Sugarmagic web shader runtime (packages/render-web/src/ShaderRuntime.ts,
+    # applyIRToMaterial) forces every shader graph that outputs an
+    # opacityNode into MASK-mode cutout rendering regardless of what the
+    # GLB's alphaMode says (transparent=false, alphaTest=0.5, depthWrite=
+    # true). That's the only way we got correct near-leaf-occludes-inner-
+    # branch behavior across all lighting presets without the "see through
+    # the front leaves to the trunk" bug.
+    #
+    # So: the CLIP / alpha_threshold=0.5 we set here is correct in spirit
+    # (it matches what Sugarmagic does downstream anyway) but the specific
+    # value bakes no longer matter — the engine overrides them. Keep the
+    # CLIP setting for two reasons: (1) it keeps Blender's preview
+    # viewport looking right for authors working in Blender, (2) it makes
+    # the GLB "honest" about its intent if it's ever loaded somewhere
+    # other than Sugarmagic.
+    #
+    # TODO: revisit once we have a per-shader alpha-mode control in
+    # Sugarmagic (BLEND for glass / soft edges, MASK for foliage, OPAQUE
+    # for solid). At that point the GLB's authored alphaMode can become
+    # authoritative again and this exporter's blend_method choice starts
+    # mattering. Until then, don't spend time tuning alphaMode here —
+    # tune it in Sugarmagic's ShaderRuntime.
     material = bpy.data.materials.get("FoilageMaker Export Leaves")
     if material is None:
         material = bpy.data.materials.new(name="FoilageMaker Export Leaves")
@@ -1280,10 +1514,52 @@ def _ensure_canopy_material():
 
 
 def _ensure_leaf_sprite_image():
-    prototype_paths = _get_prototype_leaf_paths()
-    if prototype_paths:
-        return _ensure_prototype_leaf_atlas(prototype_paths)
+    variant = _get_active_leaf_texture_variant()
+    if variant == "mixed":
+        prototype_paths = _get_mixed_atlas_leaf_paths()
+        if prototype_paths:
+            return _ensure_prototype_leaf_atlas(prototype_paths)
+    elif variant:
+        single_path = _get_single_leaf_texture_path(variant)
+        if single_path is not None:
+            return _ensure_single_leaf_image(single_path)
     return _ensure_generated_leaf_sprite()
+
+
+def _ensure_single_leaf_image(path: "Path"):
+    """Load a specific bundled leaf texture as the one-and-only leaf sprite.
+
+    Replaces any existing `LEAF_IMAGE_NAME` image so the leaf material's
+    image reference stays stable across texture swaps. The image is packed
+    so the .blend file stays self-contained after the user saves, matching
+    the behavior of the atlas / generated paths.
+    """
+    existing = bpy.data.images.get(LEAF_IMAGE_NAME)
+    if existing is not None:
+        bpy.data.images.remove(existing)
+    image = bpy.data.images.load(str(path))
+    image.name = LEAF_IMAGE_NAME
+    image.pack()
+    image.use_fake_user = True
+    return image
+
+
+def _get_active_leaf_texture_variant() -> str | None:
+    """Return the active tree's `leaf_texture_variant`, or None if no foliage
+    tree is currently the context's active object.
+
+    Reads from bpy.context rather than taking an explicit parameter because
+    the leaf-material / leaf-sprite code path is shared across several
+    entry points (initial creation, rebuild, validation, export) and
+    threading the tree object through every call is more churn than it's
+    worth — the rebuild path that actually matters always runs with the
+    tree selected as the active object.
+    """
+    context = getattr(bpy, "context", None)
+    obj = getattr(context, "active_object", None) if context else None
+    if not is_foilagemaker_tree(obj):
+        return None
+    return getattr(obj.foilagemaker_tree, "leaf_texture_variant", None)
 
 
 def _ensure_generated_leaf_sprite():
@@ -1355,14 +1631,42 @@ def _ensure_prototype_leaf_atlas(prototype_paths: list[Path]):
     return atlas
 
 
-def _get_prototype_leaf_paths() -> list[Path]:
-    if not PROTOTYPE_TEXTURE_ROOT.exists():
+def _get_mixed_atlas_leaf_paths() -> list[Path]:
+    """First four `_transparency.png` files in the bundled textures dir, for
+    the "mixed" variant that atlases multiple leaf textures into one image.
+    """
+    if not LEAF_TEXTURE_DIR.exists():
         return []
-    return sorted(PROTOTYPE_TEXTURE_ROOT.glob("leavesTexture*_transparency.png"))[:4]
+    return sorted(LEAF_TEXTURE_DIR.glob("leavesTexture*_transparency.png"))[:4]
+
+
+def _get_single_leaf_texture_path(variant: str) -> Path | None:
+    """Path to the bundled `<variant>_transparency.png`, or None if missing.
+
+    `variant` is an identifier like "leavesTexture03". Returning None makes
+    the caller fall through to the procedural-atlas fallback so a missing
+    bundled texture degrades gracefully rather than crashing the add-on.
+    """
+    if not LEAF_TEXTURE_DIR.exists():
+        return None
+    path = LEAF_TEXTURE_DIR / f"{variant}_transparency.png"
+    if not path.exists():
+        return None
+    return path
 
 
 def _get_leaf_variant_count() -> int:
-    return max(1, len(_get_prototype_leaf_paths()[:4]))
+    """How many leaf-card UV cells the atlas exposes. The cell layout below
+    (see `_resolve_leaf_uv_rect`) uses this to pick which quadrant of the
+    atlas a given leaf-card instance samples.
+
+    In "mixed" mode we expose up to 4 cells (one per atlased texture). In
+    single-texture mode there's exactly 1 cell covering the full UV range,
+    so every card samples the same texture.
+    """
+    if _get_active_leaf_texture_variant() == "mixed":
+        return max(1, len(_get_mixed_atlas_leaf_paths()[:4]))
+    return 1
 
 
 def _resolve_leaf_uv_rect(
@@ -1445,19 +1749,15 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "secondary_branch_radius": 0.03,
             "secondary_branch_segments": 3,
             "secondary_branch_sides": 4,
-            "display_leaf_blocks": False,
-            "canopy_cluster_count": 4,
-            "canopy_radius": 1.04,
-            "canopy_vertical_scale": 1.05,
-            "canopy_density_multiplier": 24.5,
+            "canopy_shape": "sphere",
+            "canopy_size": 1.1,
+            "canopy_vertical_scale": 1.15,
+            "canopy_base_offset": -0.25,
+            "leaf_count": 160,
             "leaf_card_count": 4,
             "leaf_size": 1.22,
             "leaf_width": 0.82,
             "leaf_height": 0.88,
-            "leaf_density": 5,
-            "leaf_jitter": 0.98,
-            "add_outer_leaves": True,
-            "outer_leaf_offset": 0.95,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -1489,19 +1789,15 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "secondary_branch_radius": 0.028,
             "secondary_branch_segments": 3,
             "secondary_branch_sides": 4,
-            "display_leaf_blocks": False,
-            "canopy_cluster_count": 5,
-            "canopy_radius": 1.08,
-            "canopy_vertical_scale": 1.02,
-            "canopy_density_multiplier": 28.0,
+            "canopy_shape": "sphere",
+            "canopy_size": 1.18,
+            "canopy_vertical_scale": 1.0,
+            "canopy_base_offset": -0.3,
+            "leaf_count": 200,
             "leaf_card_count": 4,
             "leaf_size": 1.05,
             "leaf_width": 0.96,
             "leaf_height": 0.82,
-            "leaf_density": 5,
-            "leaf_jitter": 0.84,
-            "add_outer_leaves": True,
-            "outer_leaf_offset": 0.8,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -1533,19 +1829,15 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "secondary_branch_radius": 0.02,
             "secondary_branch_segments": 3,
             "secondary_branch_sides": 4,
-            "display_leaf_blocks": False,
-            "canopy_cluster_count": 6,
-            "canopy_radius": 0.72,
-            "canopy_vertical_scale": 1.48,
-            "canopy_density_multiplier": 20.0,
+            "canopy_shape": "cone",
+            "canopy_size": 0.85,
+            "canopy_vertical_scale": 2.2,
+            "canopy_base_offset": -0.3,
+            "leaf_count": 220,
             "leaf_card_count": 4,
             "leaf_size": 0.82,
             "leaf_width": 0.68,
             "leaf_height": 1.05,
-            "leaf_density": 4,
-            "leaf_jitter": 0.9,
-            "add_outer_leaves": True,
-            "outer_leaf_offset": 0.64,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,

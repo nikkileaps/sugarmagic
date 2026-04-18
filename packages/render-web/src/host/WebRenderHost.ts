@@ -40,6 +40,7 @@ import {
   type EnvironmentSceneController
 } from "../environment/EnvironmentSceneController";
 import { applyPostProcessStack } from "../environment/applyPostProcessStack";
+import { sunIncomingDirectionFromAngles } from "../environment/sunVectors";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
 import { ShaderRuntime } from "../ShaderRuntime";
 
@@ -196,12 +197,38 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       contentLibrary,
       environmentOverrideId
     );
+    if (resolved.definition) {
+      const incomingSunDirection = sunIncomingDirectionFromAngles(
+          resolved.definition.lighting.sun.azimuthDeg,
+          resolved.definition.lighting.sun.elevationDeg
+        );
+      shaderRuntime.setSunDirection(incomingSunDirection);
+    }
     renderPipeline.applyEnvironment(resolved.definition);
     applyPostProcessStack({
       shaderRuntime,
       renderPipeline,
       contentLibrary,
       chain: resolved.effectivePostProcessChain
+    });
+
+    // Three's WebGPU node materials bake scene light analysis into their
+    // compiled shaders at first use. When the environment swaps (e.g. flat
+    // AmbientLight → HemisphereLight on a preset change), already-compiled
+    // materials keep referencing the prior light setup and render with the
+    // old lighting (or, for transparent materials whose path doesn't
+    // auto-recompile, with zero ambient — leaves go black). Marking every
+    // material dirty forces Three to rebuild shaders against the current
+    // lights on the next frame.
+    scene.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      if (Array.isArray(child.material)) {
+        for (const material of child.material) {
+          material.needsUpdate = true;
+        }
+      } else if (child.material) {
+        child.material.needsUpdate = true;
+      }
     });
   }
 

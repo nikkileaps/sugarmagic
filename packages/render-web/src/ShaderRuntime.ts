@@ -23,9 +23,14 @@ import {
   cameraWorldMatrix,
   clamp,
   cos,
+  attribute as tslAttribute,
   dot,
   exp,
   float,
+  modelWorldMatrix,
+  select,
+  transformDirection,
+  transformNormal,
   length,
   luminance,
   max,
@@ -50,6 +55,7 @@ import {
   reinhardToneMapping,
   saturate,
   smoothstep,
+  texture as textureNode,
   uniform,
   viewportLinearDepth
 } from "three/tsl";
@@ -61,6 +67,7 @@ import type {
 import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
+  EffectiveShaderBindingSet,
   RuntimeCompileProfile,
   ShaderIR,
   ShaderIRDiagnostic,
@@ -123,6 +130,7 @@ interface FinalizationContext {
    * compiled literal. See uniformForParameter() below.
    */
   parameterUniforms: Map<string, UniformNodeLike>;
+  sunDirectionUniform: UniformNodeLike;
   /**
    * Per-binding cache of effect nodes whose wrapped Three helpers take JS
    * primitives (not TSL nodes) for scalar parameters — notably bloom(), which
@@ -149,6 +157,11 @@ interface UniformNodeLike {
 interface EffectNodeCacheEntry {
   node: unknown;
   kind: "bloom";
+}
+
+interface MeshShaderSetApplyTarget {
+  material: THREE.Material;
+  geometry: THREE.BufferGeometry;
 }
 
 function stableStringify(value: unknown): string {
@@ -344,6 +357,23 @@ function getVertexColorNode(
   return vertexColor();
 }
 
+function sampleMaterialTextureNode(
+  target: Extract<
+    ShaderApplyTarget,
+    { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }
+  >,
+  output: "color" | "alpha"
+): unknown {
+  const map = "map" in target.material ? target.material.map : null;
+  if (!map) {
+    return output === "color" ? vec3(1, 1, 1) : float(1);
+  }
+  const sample = textureNode(map, uv());
+  return output === "color"
+    ? (sample as { rgb: unknown }).rgb
+    : (sample as { a: unknown }).a;
+}
+
 function materializeBuiltin(
   value: Extract<ShaderIRValue, { kind: "builtin" }>,
   context: FinalizationContext
@@ -393,6 +423,88 @@ function materializeBuiltin(
       return cameraPosition;
     case "viewDirection":
       return positionViewDirection;
+    case "sunDirection":
+      return context.sunDirectionUniform;
+    case "sphereNormal": {
+      // KNOWN-BROKEN WORKAROUND. Falls back to `normalWorld`. See note below.
+      //
+      // ── Background ──────────────────────────────────────────────────────
+      // The FoilageMaker export bakes a per-vertex local-space "sphere
+      // normal" (`_SPHERE_NORMAL`, lowercased to `_sphere_normal` by
+      // GLTFLoader) that's intended to let each leaf cluster shade as if it
+      // were a smooth volumetric sphere. The shading math wants this vector
+      // in world space, which requires rotating the local attribute through
+      // the object's world transform.
+      //
+      // ── Bug we hit ──────────────────────────────────────────────────────
+      // Any TSL matrix-math path applied to the custom attribute returns
+      // zero in the authoring viewport WHEN the active environment uses a
+      // non-flat ambient (HemisphereLight-based: noon, late_afternoon,
+      // golden_hour, night). Under the "default" preset (flat AmbientLight)
+      // the same math returns correct results. Same asset, same transform,
+      // same attribute data, same shader — only the scene lighting differs.
+      // Observed failure modes (all returned zero at non-default presets):
+      //   - modelNormalMatrix.mul(localSphereNormal).normalize()
+      //   - modelWorldMatrix.mul(vec4(localSphereNormal, 0)).xyz.normalize()
+      //   - transformDirection(localSphereNormal, modelWorldMatrix)
+      //   - transformNormal(localSphereNormal, modelWorldMatrix)
+      // A diagnostic that returned the raw attribute with zero math
+      // rendered correctly at ALL presets, proving the attribute read path
+      // is fine; the failure is specific to TSL matrix ops applied to it.
+      // `normalWorld` (which internally uses modelNormalMatrix on the
+      // standard `normal` attribute) works at all presets, so Three's core
+      // normal path handles this case — only user-custom attributes through
+      // matrix uniforms misbehave on material recompile after a light-setup
+      // swap. Best guess: Three's WebGPU pipeline drops/zeroes the
+      // custom-attribute + per-object matrix uniform binding during the
+      // recompile that fires when scene lights change shape (AmbientLight
+      // → HemisphereLight).
+      //
+      // ── Where we stopped ───────────────────────────────────────────────
+      // Next steps if we come back to this:
+      //   1. Instrument the compiled WGSL for foliage-surface under the
+      //      default vs noon preset and diff them — if the noon version
+      //      is missing the modelNormalMatrix uniform binding or the
+      //      `_sphere_normal` vertex attribute binding, that's the smoking
+      //      gun.
+      //   2. Try baking the sphere normal in WORLD SPACE (FoilageMaker
+      //      side) so no runtime transform is needed. Breaks if a tree is
+      //      rotated post-placement, but that's probably rare.
+      //   3. Push the object's rotation matrix as our own uniform on the
+      //      material (via onBeforeRender) and apply it ourselves instead
+      //      of using TSL's per-object matrix builtins.
+      //
+      // ── Current behavior ───────────────────────────────────────────────
+      // Returns `normalWorld` unconditionally. Loses the painterly per-
+      // cluster sphere shading but renders the foliage correctly at all
+      // presets. The Foliage Surface shader graph that depended on this
+      // feature is no longer authoritative — authoring defaults should
+      // point at "Foliage Surface 2" which was built without sphereNormal.
+      return normalWorld;
+    }
+    case "treeHeight":
+      // Three's GLTFLoader lowercases custom attribute names — see note
+      // on sphereNormal above.
+      return (tslAttribute as unknown as (
+        name: string,
+        type: string
+      ) => unknown)("_tree_height", "float");
+    case "materialTextureColor":
+      if (
+        context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "billboard-surface"
+      ) {
+        return vec3(1, 1, 1);
+      }
+      return sampleMaterialTextureNode(context.target, "color");
+    case "materialTextureAlpha":
+      if (
+        context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "billboard-surface"
+      ) {
+        return float(1);
+      }
+      return sampleMaterialTextureNode(context.target, "alpha");
     case "screenUV":
       return screenUV;
     case "sceneColor":
@@ -671,13 +783,15 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
               );
       break;
     case "math.split-vector": {
-      const vector = input("input") as { x: unknown; y: unknown; z: unknown };
+      const vector = input("input") as { x: unknown; y: unknown; z: unknown; w?: unknown };
       const outputPortId = String(op.settings?.outputPortId ?? "x");
       result =
         outputPortId === "y"
           ? vector.y
           : outputPortId === "z"
             ? vector.z
+            : outputPortId === "w"
+              ? (vector.w ?? float(1))
             : vector.x;
       break;
     }
@@ -803,6 +917,40 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
       );
       break;
     }
+    case "splat": {
+      const scalar = input("input") as never;
+      result =
+        op.dataType === "vec2"
+          ? vec2(scalar, scalar)
+          : op.dataType === "vec3" || op.dataType === "color"
+            ? vec3(scalar, scalar, scalar)
+            : vec4(scalar, scalar, scalar, scalar);
+      break;
+    }
+    case "truncate": {
+      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
+      result =
+        op.dataType === "vec2"
+          ? vec2(source.x as never, source.y as never)
+          : vec3(source.x as never, source.y as never, source.z as never);
+      break;
+    }
+    case "widen": {
+      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
+      if (op.dataType === "vec4") {
+        result = vec4(
+          source.x as never,
+          source.y as never,
+          (source.z ?? float(0)) as never,
+          float(0) as never
+        );
+      } else if (op.dataType === "vec3" || op.dataType === "color") {
+        result = vec3(source.x as never, source.y as never, float(0) as never);
+      } else {
+        result = vec2(source.x as never, source.y as never);
+      }
+      break;
+    }
     default:
       result = float(0);
       break;
@@ -817,6 +965,7 @@ function applyIRToMaterial(
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
+  sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>
 ): THREE.Material {
   const material =
@@ -838,6 +987,7 @@ function applyIRToMaterial(
     builtinSceneColorNode: null,
     builtinSceneDepthNode: null,
     parameterUniforms: parameterUniforms,
+    sunDirectionUniform,
     effectNodes: effectNodes
   };
 
@@ -850,7 +1000,28 @@ function applyIRToMaterial(
   }
   if (ir.outputs.fragmentAlpha && "opacityNode" in material) {
     material.opacityNode = materializeValue(ir.outputs.fragmentAlpha, context) as never;
-    material.transparent = true;
+    // An authored shader writing an opacity output is opting into MASK-mode
+    // cutout rendering: opaque where alpha passes the threshold, discarded
+    // below it, and (critically) writing to the depth buffer on the opaque
+    // pixels so near leaf cards properly occlude branches / other leaves
+    // behind them.
+    //
+    // Previously we deferred to the GLB's authored alphaMode on the
+    // theory "the author knows best," but tools like FoilageMaker export
+    // leaf cards as BLEND (transparent: true) which disables depth-write
+    // and causes the characteristic "see-through-the-front-leaves-to-the-
+    // branches-inside" artifact. Since the shader graph's opacityNode IS
+    // the author's intent for per-pixel alpha, we treat that intent as
+    // "cutout" and set the material up accordingly. If a future shader
+    // needs true BLEND (glass, smoke), that becomes a per-shader opt-in
+    // instead of a per-GLB accident.
+    (material as { transparent: boolean }).transparent = false;
+    if ("alphaTest" in material) {
+      (material as { alphaTest: number }).alphaTest = 0.5;
+    }
+    if ("depthWrite" in material) {
+      (material as { depthWrite: boolean }).depthWrite = true;
+    }
   }
   if (ir.outputs.emissive && material instanceof MeshStandardNodeMaterial) {
     material.emissiveNode = materializeValue(ir.outputs.emissive, context) as never;
@@ -865,6 +1036,7 @@ function applyIRToPostProcess(
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "post-process" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
+  sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>
 ): unknown {
   const baseOutputNode =
@@ -885,6 +1057,7 @@ function applyIRToPostProcess(
     // depth, which is what broke fog in Studio but not in the runtime host.
     builtinSceneDepthNode: target.renderPipeline.getSceneDepthNode(),
     parameterUniforms: parameterUniforms,
+    sunDirectionUniform,
     effectNodes: effectNodes
   };
   const nextOutputNode = ir.outputs.postProcessColor
@@ -919,6 +1092,9 @@ export class ShaderRuntime {
    * Parallels parameterUniformCache but for Three-constructed helper nodes.
    */
   private readonly effectNodeCache = new Map<string, Map<string, EffectNodeCacheEntry>>();
+  private readonly sunDirectionUniform = (
+    uniform as unknown as (value: unknown) => UniformNodeLike
+  )(new THREE.Vector3(0, 1, 0));
   private disposed = false;
 
   constructor(options: ShaderRuntimeOptions) {
@@ -944,6 +1120,21 @@ export class ShaderRuntime {
       throw new Error("ShaderRuntime was used after disposal.");
     }
     this.contentLibrary = contentLibrary;
+  }
+
+  setSunDirection(direction: THREE.Vector3Like): void {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+    this.sunDirectionUniform.value = new THREE.Vector3(
+      direction.x,
+      direction.y,
+      direction.z
+    ).normalize();
+  }
+
+  getCompileProfile(): RuntimeCompileProfile {
+    return this.compileProfile;
   }
 
   applyShader(
@@ -1010,7 +1201,14 @@ export class ShaderRuntime {
     const effectNodes = this.getOrCreateEffectNodeCache(binding.shaderDefinitionId);
 
     if (target.targetKind === "post-process") {
-      return applyIRToPostProcess(ir, binding, target, parameterUniforms, effectNodes);
+      return applyIRToPostProcess(
+        ir,
+        binding,
+        target,
+        parameterUniforms,
+        this.sunDirectionUniform,
+        effectNodes
+      );
     }
 
     const cacheKey = [
@@ -1023,8 +1221,111 @@ export class ShaderRuntime {
     ].join("|");
 
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
-      applyIRToMaterial(ir, binding, target, parameterUniforms, effectNodes)
+      applyIRToMaterial(
+        ir,
+        binding,
+        target,
+        parameterUniforms,
+        this.sunDirectionUniform,
+        effectNodes
+      )
     );
+  }
+
+  applyShaderSet(
+    bindings: EffectiveShaderBindingSet,
+    target: MeshShaderSetApplyTarget
+  ): THREE.Material {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+
+    const surface = bindings.surface;
+    const deform = bindings.deform;
+    if (!surface && !deform) {
+      return target.material;
+    }
+
+    const surfaceDefinition = surface
+      ? getShaderDefinition(this.contentLibrary, surface.shaderDefinitionId)
+      : null;
+    const deformDefinition = deform
+      ? getShaderDefinition(this.contentLibrary, deform.shaderDefinitionId)
+      : null;
+
+    if (surface && (!surfaceDefinition || surfaceDefinition.targetKind !== "mesh-surface")) {
+      throw new Error(`Surface shader "${surface.shaderDefinitionId}" is not a mesh-surface graph.`);
+    }
+    if (deform && (!deformDefinition || deformDefinition.targetKind !== "mesh-deform")) {
+      throw new Error(`Deform shader "${deform.shaderDefinitionId}" is not a mesh-deform graph.`);
+    }
+
+    const surfaceIR = surfaceDefinition ? this.getCompiledIR(surfaceDefinition) : null;
+    const deformIR = deformDefinition ? this.getCompiledIR(deformDefinition) : null;
+
+    for (const [binding, ir] of [
+      [surface, surfaceIR],
+      [deform, deformIR]
+    ] as const) {
+      if (!binding || !ir) {
+        continue;
+      }
+      const errors = ir.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+      if (errors.length > 0) {
+        const summary = errors
+          .map((error) => {
+            const location = error.nodeId
+              ? `node "${error.nodeId}"`
+              : error.edgeId
+                ? `edge "${error.edgeId}"`
+                : error.parameterId
+                  ? `parameter "${error.parameterId}"`
+                  : "graph";
+            return `  - ${location}: ${error.message}`;
+          })
+          .join("\n");
+        throw new Error(
+          `Shader graph "${binding.shaderDefinitionId}" failed to compile:\n${summary}`
+        );
+      }
+    }
+
+    const cacheKey = [
+      "shader-set",
+      surface?.shaderDefinitionId ?? "no-surface",
+      surface?.documentRevision ?? 0,
+      stableStringify(surface?.parameterValues ?? {}),
+      deform?.shaderDefinitionId ?? "no-deform",
+      deform?.documentRevision ?? 0,
+      stableStringify(deform?.parameterValues ?? {}),
+      this.compileProfile,
+      materialCarrierSignature(target.material, target.geometry)
+    ].join("|");
+
+    return this.acquireMaterial(cacheKey, surface?.shaderDefinitionId ?? deform!.shaderDefinitionId, () => {
+      let material = toMeshStandardNodeMaterial(target.material);
+      if (surface && surfaceIR) {
+        material = applyIRToMaterial(
+          surfaceIR,
+          surface,
+          { targetKind: "mesh-surface", material, geometry: target.geometry },
+          this.getOrCreateParameterUniformCache(surface.shaderDefinitionId),
+          this.sunDirectionUniform,
+          this.getOrCreateEffectNodeCache(surface.shaderDefinitionId)
+        ) as MeshStandardNodeMaterial;
+      }
+      if (deform && deformIR) {
+        material = applyIRToMaterial(
+          deformIR,
+          deform,
+          { targetKind: "mesh-deform", material, geometry: target.geometry },
+          this.getOrCreateParameterUniformCache(deform.shaderDefinitionId),
+          this.sunDirectionUniform,
+          this.getOrCreateEffectNodeCache(deform.shaderDefinitionId)
+        ) as MeshStandardNodeMaterial;
+      }
+      return material;
+    });
   }
 
   /**

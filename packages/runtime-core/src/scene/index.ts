@@ -13,8 +13,9 @@ import {
 } from "@sugarmagic/domain";
 import type { EffectiveShaderBinding } from "../shader";
 import {
-  resolveEffectiveAssetShaderBinding,
-  resolveEffectivePresenceShaderBinding
+  type EffectiveShaderBindingSet,
+  resolveEffectiveAssetShaderBindings,
+  resolveEffectivePresenceShaderBindings
 } from "../shader";
 
 /**
@@ -60,7 +61,12 @@ export interface SceneObject {
   assetKind: AssetKind | null;
   modelSourcePath: string | null;
   targetModelHeight: number | null;
-  effectiveShader: EffectiveShaderBinding | null;
+  effectiveShaders: EffectiveShaderBindingSet;
+  /**
+   * @deprecated Legacy singular shader view retained as a shim while hosts and
+   * tests move to effectiveShaders.
+   */
+  effectiveShader?: EffectiveShaderBinding | null;
   transform: SceneObjectTransform;
   representationKey: string;
   capsule: SceneObjectCapsuleSpec | null;
@@ -171,6 +177,30 @@ export function computeSceneDelta(
   return { added, updated, removed };
 }
 
+function shaderRepresentationKey(
+  effectiveShaders: EffectiveShaderBindingSet,
+  _parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" }[]
+): string {
+  return [
+    shaderSlotRepresentation("surface", effectiveShaders.surface),
+    shaderSlotRepresentation("deform", effectiveShaders.deform)
+  ].join(":");
+}
+
+function shaderSlotRepresentation(
+  slotLabel: string,
+  binding: EffectiveShaderBinding | null
+): string {
+  if (!binding) {
+    return `${slotLabel}:none`;
+  }
+  const serializedParams = Object.keys(binding.parameterValues)
+    .sort()
+    .map((key) => `${key}=${JSON.stringify(binding.parameterValues[key])}`)
+    .join("|");
+  return `${slotLabel}:${binding.shaderDefinitionId}[${serializedParams}]`;
+}
+
 function createPlacedAssetSceneObject(
   asset: PlacedAssetInstance,
   contentLibrary?: ContentLibrarySnapshot
@@ -179,6 +209,9 @@ function createPlacedAssetSceneObject(
     asset.assetDefinitionId,
     contentLibrary
   );
+  const effectiveShaders = contentLibrary
+    ? resolveEffectiveAssetShaderBindings(asset, contentLibrary)
+    : { surface: null, deform: null };
 
   return {
     instanceId: asset.instanceId,
@@ -188,15 +221,14 @@ function createPlacedAssetSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: null,
-    effectiveShader: contentLibrary
-      ? resolveEffectiveAssetShaderBinding(asset, contentLibrary)
-      : null,
+    effectiveShaders,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
       scale: asset.transform.scale
     },
-    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${asset.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${asset.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
+    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, asset.shaderParameterOverrides)}`,
     capsule: null
   };
 }
@@ -225,6 +257,7 @@ function createPlayerSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
+    effectiveShaders: { surface: null, deform: null },
     effectiveShader: null,
     transform: {
       position: presence.transform.position,
@@ -252,6 +285,9 @@ function createNPCSceneObject(
   );
   const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
   const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
+  const effectiveShaders = contentLibrary
+    ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
+    : { surface: null, deform: null };
 
   return {
     instanceId: presence.presenceId,
@@ -261,15 +297,14 @@ function createNPCSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
-    effectiveShader: contentLibrary
-      ? resolveEffectivePresenceShaderBinding(presence, assetDescriptor.definition, contentLibrary)
-      : null,
+    effectiveShaders,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${presence.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${presence.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
+    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${shaderRepresentationKey(effectiveShaders, presence.shaderParameterOverrides)}`,
     capsule: {
       height,
       radius,
@@ -289,6 +324,9 @@ function createItemSceneObject(
     contentLibrary
   );
   const height = Math.max(itemDefinition?.presentation.modelHeight ?? 0.45, 0.1);
+  const effectiveShaders = contentLibrary
+    ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
+    : { surface: null, deform: null };
 
   return {
     instanceId: presence.presenceId,
@@ -298,15 +336,14 @@ function createItemSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
-    effectiveShader: contentLibrary
-      ? resolveEffectivePresenceShaderBinding(presence, assetDescriptor.definition, contentLibrary)
-      : null,
+    effectiveShaders,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${presence.shaderOverride?.shaderDefinitionId ?? assetDescriptor.definition?.defaultShaderDefinitionId ?? "no-shader"}:${presence.shaderParameterOverrides.map((override) => `${override.parameterId}:${JSON.stringify(override.value)}`).join("|")}`,
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, presence.shaderParameterOverrides)}`,
     capsule: null
   };
 }

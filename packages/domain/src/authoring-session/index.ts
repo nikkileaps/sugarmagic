@@ -11,17 +11,7 @@ import type { GameProject } from "../game-project";
 import { normalizeGameProject } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { RegionDocument } from "../region-authoring";
-import {
-  createRegionNPCPresence,
-  createRegionPlayerPresence,
-  createRegionItemPresence,
-  createPlacedAssetInstance,
-  createDefaultRegionLandscapeState,
-  createDefaultRegionLandscapeChannels,
-  createRegionAreaDefinition,
-  createRegionNPCBehaviorDefinition,
-  createRegionNPCBehaviorTask
-} from "../region-authoring";
+import { normalizeRegionDocumentForLoad } from "../io";
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
@@ -55,6 +45,8 @@ import type {
   UpdateShaderParameterCommand,
   RemoveShaderParameterCommand,
   SetAssetDefaultShaderCommand,
+  SetAssetDefaultShaderParameterOverrideCommand,
+  ClearAssetDefaultShaderParameterOverrideCommand,
   AddPostProcessShaderCommand,
   UpdatePostProcessShaderOrderCommand,
   UpdatePostProcessShaderParameterCommand,
@@ -103,6 +95,7 @@ import {
 } from "../content-library";
 import type { ShaderGraphDocument, ShaderParameterOverride } from "../shader-graph";
 import {
+  createEmptyShaderSlotBindingMap,
   validateShaderGraphDocument
 } from "../shader-graph";
 import { createScopedId } from "../shared";
@@ -125,142 +118,6 @@ export interface AuthoringSession {
   redoStack: SessionCheckpoint[];
   history: AuthoringHistory;
   isDirty: boolean;
-}
-
-function defaultEnvironmentId(contentLibrary: ContentLibrarySnapshot): string | null {
-  return contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
-}
-
-function normalizeRegionDocument(
-  region: RegionDocument,
-  contentLibrary: ContentLibrarySnapshot
-): RegionDocument {
-  const legacyLandscape = (region as RegionDocument & {
-    landscape?: Partial<ReturnType<typeof createDefaultRegionLandscapeState>> & {
-      baseColor?: number;
-    };
-  }).landscape;
-  const defaultLandscape = createDefaultRegionLandscapeState({
-    channels: createDefaultRegionLandscapeChannels(legacyLandscape?.baseColor)
-  });
-  const normalizedBinding = (region as RegionDocument & {
-    environmentBinding?: { defaultEnvironmentId?: string | null };
-  }).environmentBinding;
-
-  return {
-    ...region,
-    lorePageId:
-      typeof region.lorePageId === "string" && region.lorePageId.trim().length > 0
-        ? region.lorePageId.trim()
-        : null,
-    scene: {
-      folders: region.scene.folders,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        createPlacedAssetInstance({
-          ...asset,
-          inspectable: asset.inspectable ?? null
-        })
-      ),
-      playerPresence: region.scene.playerPresence
-        ? createRegionPlayerPresence(region.scene.playerPresence)
-        : null,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        createRegionNPCPresence(presence)
-      ),
-      itemPresences: (region.scene.itemPresences ?? []).map((presence) =>
-        createRegionItemPresence(presence)
-      )
-    },
-    environmentBinding: {
-      defaultEnvironmentId:
-        normalizedBinding?.defaultEnvironmentId ?? defaultEnvironmentId(contentLibrary)
-    },
-    areas: (region.areas ?? []).map((area) =>
-      createRegionAreaDefinition({
-        ...area,
-        lorePageId:
-          typeof area.lorePageId === "string" && area.lorePageId.trim().length > 0
-            ? area.lorePageId.trim()
-            : null,
-        parentAreaId:
-          typeof area.parentAreaId === "string" && area.parentAreaId.trim().length > 0
-            ? area.parentAreaId.trim()
-          : null
-      })
-    ),
-    behaviors: (region.behaviors ?? []).map((behavior) =>
-      createRegionNPCBehaviorDefinition({
-        ...behavior,
-        displayName:
-          typeof behavior.displayName === "string" && behavior.displayName.trim().length > 0
-            ? behavior.displayName.trim()
-            : undefined,
-        tasks: (behavior.tasks ?? []).map((task) =>
-          createRegionNPCBehaviorTask({
-            ...task,
-            displayName:
-              typeof task.displayName === "string" && task.displayName.trim().length > 0
-                ? task.displayName.trim()
-                : undefined,
-            description:
-              typeof task.description === "string" && task.description.trim().length > 0
-                ? task.description
-                : null,
-            currentActivity:
-              typeof task.currentActivity === "string" &&
-              task.currentActivity.trim().length > 0
-                ? task.currentActivity.trim()
-                : undefined,
-            currentGoal:
-              typeof task.currentGoal === "string" &&
-              task.currentGoal.trim().length > 0
-                ? task.currentGoal.trim()
-                : undefined,
-            targetAreaId:
-              typeof task.targetAreaId === "string" &&
-              task.targetAreaId.trim().length > 0
-                ? task.targetAreaId.trim()
-                : null,
-            activation: {
-              questDefinitionId:
-                typeof task.activation?.questDefinitionId === "string" &&
-                task.activation.questDefinitionId.trim().length > 0
-                  ? task.activation.questDefinitionId.trim()
-                  : null,
-              questStageId:
-                typeof task.activation?.questStageId === "string" &&
-                task.activation.questStageId.trim().length > 0
-                  ? task.activation.questStageId.trim()
-                  : null,
-              worldFlagEquals:
-                typeof task.activation?.worldFlagEquals?.key === "string" &&
-                task.activation.worldFlagEquals.key.trim().length > 0
-                  ? {
-                      key: task.activation.worldFlagEquals.key.trim(),
-                      valueType:
-                        task.activation.worldFlagEquals.valueType ?? "boolean",
-                      value:
-                        typeof task.activation.worldFlagEquals.value === "string" &&
-                        task.activation.worldFlagEquals.value.trim().length > 0
-                          ? task.activation.worldFlagEquals.value.trim()
-                          : null
-                    }
-                  : null
-            }
-          })
-        )
-      })
-    ),
-    landscape: createDefaultRegionLandscapeState({
-      ...defaultLandscape,
-      ...(legacyLandscape ?? {}),
-      channels:
-        legacyLandscape?.channels && legacyLandscape.channels.length > 0
-          ? legacyLandscape.channels
-          : defaultLandscape.channels,
-      paintPayload: legacyLandscape?.paintPayload ?? null
-    })
-  };
 }
 
 function createTransactionForCommand(
@@ -387,7 +244,7 @@ export function createAuthoringSession(
   for (const region of regions) {
     regionMap.set(
       region.identity.id,
-      normalizeRegionDocument(region, normalizedContentLibrary)
+      normalizeRegionDocumentForLoad(region, normalizedContentLibrary)
     );
   }
 
@@ -607,11 +464,28 @@ function applyDeleteShaderGraphCommand(
     contentLibrary: {
       ...session.contentLibrary,
       shaderDefinitions: nextDefinitions,
-      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) =>
-        definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
-          ? { ...definition, defaultShaderDefinitionId: null }
-          : definition
-      ),
+      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
+        ...definition,
+        defaultShaderBindings: {
+          ...createEmptyShaderSlotBindingMap(),
+          ...definition.defaultShaderBindings,
+          surface:
+            definition.defaultShaderBindings?.surface ===
+            command.payload.shaderDefinitionId
+              ? null
+              : definition.defaultShaderBindings?.surface ?? null,
+          deform:
+            definition.defaultShaderBindings?.deform ===
+            command.payload.shaderDefinitionId
+              ? null
+              : definition.defaultShaderBindings?.deform ?? null
+        },
+        defaultShaderDefinitionId:
+          definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
+            ? null
+            : definition.defaultShaderDefinitionId ?? null,
+        defaultShaderParameterOverrides: []
+      })),
       environmentDefinitions: session.contentLibrary.environmentDefinitions.map((definition) => ({
         ...definition,
         postProcessShaders: definition.postProcessShaders.filter(
@@ -627,18 +501,48 @@ function applyDeleteShaderGraphCommand(
           scene: {
             ...region.scene,
             placedAssets: region.scene.placedAssets.map((asset) =>
-              asset.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...asset, shaderOverride: null, shaderParameterOverrides: [] }
+              (asset.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...asset,
+                    shaderOverrides: (asset.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : asset
             ),
             npcPresences: region.scene.npcPresences.map((presence) =>
-              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+              (presence.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...presence,
+                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : presence
             ),
             itemPresences: region.scene.itemPresences.map((presence) =>
-              presence.shaderOverride?.shaderDefinitionId === command.payload.shaderDefinitionId
-                ? { ...presence, shaderOverride: null, shaderParameterOverrides: [] }
+              (presence.shaderOverrides ?? []).some(
+                (override) =>
+                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+              )
+                ? {
+                    ...presence,
+                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
+                      (override) =>
+                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                    ),
+                    shaderParameterOverrides: []
+                  }
                 : presence
             )
           }
@@ -796,7 +700,78 @@ function applySetAssetDefaultShaderCommand(
     definition.definitionId === command.payload.definitionId
       ? {
           ...definition,
-          defaultShaderDefinitionId: command.payload.shaderDefinitionId
+          defaultShaderBindings: {
+            ...createEmptyShaderSlotBindingMap(),
+            ...definition.defaultShaderBindings,
+            [command.payload.slot]: command.payload.shaderDefinitionId
+          },
+          defaultShaderDefinitionId:
+            command.payload.slot === "surface"
+              ? command.payload.shaderDefinitionId
+              : definition.defaultShaderDefinitionId ?? null
+        }
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applySetAssetDefaultShaderParameterOverrideCommand(
+  session: AuthoringSession,
+  command: SetAssetDefaultShaderParameterOverrideCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definitionId
+      ? {
+          ...definition,
+          defaultShaderParameterOverrides: upsertShaderParameterOverride(
+            definition.defaultShaderParameterOverrides ?? [],
+            { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
+          )
+        }
+      : definition
+  );
+  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      assetDefinitions: nextDefinitions
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyClearAssetDefaultShaderParameterOverrideCommand(
+  session: AuthoringSession,
+  command: ClearAssetDefaultShaderParameterOverrideCommand
+): AuthoringSession {
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
+    definition.definitionId === command.payload.definitionId
+      ? {
+          ...definition,
+          defaultShaderParameterOverrides: (definition.defaultShaderParameterOverrides ?? []).filter(
+            (override) =>
+              !(
+                override.parameterId === command.payload.parameterId &&
+                override.slot === command.payload.slot
+              )
+          )
         }
       : definition
   );
@@ -1592,6 +1567,12 @@ export function applyCommand(
   if (command.kind === "SetAssetDefaultShader") {
     return applySetAssetDefaultShaderCommand(session, command);
   }
+  if (command.kind === "SetAssetDefaultShaderParameterOverride") {
+    return applySetAssetDefaultShaderParameterOverrideCommand(session, command);
+  }
+  if (command.kind === "ClearAssetDefaultShaderParameterOverride") {
+    return applyClearAssetDefaultShaderParameterOverrideCommand(session, command);
+  }
 
   if (command.kind === "UpdateEnvironmentDefinition") {
     return applyEnvironmentDefinitionCommand(session, command);
@@ -1766,7 +1747,10 @@ export function addRegionToSession(
   session: AuthoringSession,
   region: RegionDocument
 ): AuthoringSession {
-  const normalizedRegion = normalizeRegionDocument(region, session.contentLibrary);
+  const normalizedRegion = normalizeRegionDocumentForLoad(
+    region,
+    session.contentLibrary
+  );
   const newRegions = new Map(session.regions);
   newRegions.set(normalizedRegion.identity.id, normalizedRegion);
 

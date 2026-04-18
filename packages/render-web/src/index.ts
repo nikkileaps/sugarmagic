@@ -11,3 +11,5 @@ export * from "./applyShaderToRenderable";
 export * from "./environment";
 export * from "./host";
 export * from "./render";
+export * from "./renderableFallbacks";
+export * from "./renderableTransforms";

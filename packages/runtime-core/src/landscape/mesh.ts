@@ -95,7 +95,16 @@ export class RuntimeLandscapeMesh {
 
   private getPlaceholder(): THREE.DataTexture {
     if (!this.placeholder) {
-      this.placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+      // All-zero placeholder: represents "no channel painted anywhere".
+      // With all-zero splat samples the base-channel weight in
+      // rebuildMaterialNodes evaluates to 1 (full base), which is the
+      // correct default for a freshly-created landscape with no paint
+      // data. A white (255,255,255,255) placeholder would instead mean
+      // "every paint channel is fully painted everywhere," driving the
+      // base weight to zero and blending the (typically undefined, thus
+      // black) non-base channel colors on top — that's what was showing
+      // up as a pitch-black ground on new regions.
+      this.placeholder = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
       this.placeholder.needsUpdate = true;
     }
     return this.placeholder;

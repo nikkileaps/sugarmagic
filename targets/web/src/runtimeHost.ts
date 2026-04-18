@@ -47,9 +47,14 @@ import {
   createResolvedRuntimePluginManager
 } from "@sugarmagic/plugins";
 import {
-  applyShaderToRenderable,
+  createCapsuleFallback,
+  createFallbackMesh,
+  createRenderableShaderApplicationState,
   createWebRenderHost,
-  releaseShadersFromObjectTree,
+  disposeRenderableObject,
+  ensureShaderSetAppliedToRenderable,
+  normalizeModelScale,
+  type RenderableShaderApplicationState,
   type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
@@ -132,14 +137,14 @@ export interface WebRuntimeHost {
   dispose: () => void;
 }
 
-const CUBE_COLOR = 0x89b4fa;
-const GRID_COLOR = 0x45475a;
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
 const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
+  object: SceneObject;
+  shaderApplication: RenderableShaderApplicationState;
 }
 
 function createCameraSnapshot(
@@ -201,43 +206,6 @@ function applyBillboardLodEnforcement(input: {
 
     root.visible = false;
   }
-}
-
-interface LandscapeGridSpec {
-  size: number;
-  divisions: number;
-}
-
-function resolveLandscapeGridSpec(
-  landscape: RegionLandscapeState | null | undefined
-): LandscapeGridSpec {
-  const size =
-    landscape && Number.isFinite(landscape.size) && landscape.size > 0
-      ? landscape.size
-      : DEFAULT_REGION_LANDSCAPE_SIZE;
-
-  return {
-    size,
-    divisions: Math.max(1, Math.min(200, Math.round(size)))
-  };
-}
-
-function createLandscapeGrid(spec: LandscapeGridSpec): THREE.GridHelper {
-  const grid = new THREE.GridHelper(spec.size, spec.divisions, GRID_COLOR, GRID_COLOR);
-  grid.position.y = 0.01;
-  grid.name = "runtime-landscape-grid";
-  return grid;
-}
-
-function disposeGrid(grid: THREE.GridHelper) {
-  grid.geometry.dispose();
-}
-
-function createFallbackMesh(): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
-  );
 }
 
 function createFoliageFallbackMesh(): THREE.Group {
@@ -329,48 +297,6 @@ function validateRenderableAsset(object: SceneObject, renderable: THREE.Object3D
   }
 
   return null;
-}
-
-function createCapsuleFallback(object: SceneObject): THREE.Mesh {
-  const capsule = object.capsule;
-  if (!capsule) {
-    return createFallbackMesh();
-  }
-
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(
-      capsule.radius,
-      Math.max(0.05, capsule.height - capsule.radius * 2),
-      8,
-      16
-    ),
-    new THREE.MeshStandardMaterial({
-      color: capsule.color,
-      roughness: 0.38,
-      metalness: 0.04
-    })
-  );
-  mesh.position.y = capsule.height / 2;
-  return mesh;
-}
-
-function disposeObject(root: THREE.Object3D) {
-  const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
-  root.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    child.geometry.dispose();
-    if (Array.isArray(child.material)) {
-      for (const material of child.material) {
-        if (!runtimeManagedMaterials.has(material)) {
-          material.dispose();
-        }
-      }
-    } else {
-      if (!runtimeManagedMaterials.has(child.material)) {
-        child.material.dispose();
-      }
-    }
-  });
 }
 
 interface SpellCastFeedbackHost {
@@ -530,18 +456,6 @@ function createRuntimePluginBannerHost(parent: HTMLElement): RuntimePluginBanner
   };
 }
 
-function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y <= 0) return;
-
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
-  box.setFromObject(root);
-  root.position.y -= box.min.y;
-}
-
 function getActiveRegion(
   regions: RegionDocument[],
   activeRegionId: string | null | undefined
@@ -599,7 +513,6 @@ export function createWebRuntimeHost(
     | ReturnType<typeof createRuntimeGameplayAssembly>
     | null = null;
   let playerEyeHeight = 1.62;
-  let grid: THREE.GridHelper | null = null;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let pluginBannerHost: RuntimePluginBannerHost | null = null;
   let animationId: number | null = null;
@@ -640,33 +553,12 @@ export function createWebRuntimeHost(
 
     for (const entry of sceneObjectEntries.values()) {
       scene?.remove(entry.root);
-      disposeObject(entry.root);
+      disposeRenderableObject(entry.root);
     }
     sceneObjectEntries.clear();
 
-    if (grid && scene) {
-      scene.remove(grid);
-      disposeGrid(grid);
-      grid = null;
-    }
-
     if (scene) {
-      const runtimeManagedMaterials = releaseShadersFromObjectTree(scene);
-      scene.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        child.geometry.dispose();
-        if (Array.isArray(child.material)) {
-          for (const material of child.material) {
-            if (!runtimeManagedMaterials.has(material)) {
-              material.dispose();
-            }
-          }
-        } else {
-          if (!runtimeManagedMaterials.has(child.material)) {
-            child.material.dispose();
-          }
-        }
-      });
+      disposeRenderableObject(scene);
     }
 
     // Host unmount handles: renderer dispose, canvas removal, pipeline
@@ -770,6 +662,15 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
+    for (const entry of sceneObjectEntries.values()) {
+      ensureShaderSetAppliedToRenderable(
+        entry.root,
+        entry.object,
+        host.shaderRuntime,
+        entry.shaderApplication
+      );
+    }
+
     host.setCamera(camera);
     host.render();
 
@@ -830,8 +731,6 @@ export function createWebRuntimeHost(
     });
 
     const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
-    grid = createLandscapeGrid(resolveLandscapeGridSpec(activeRegion?.landscape ?? null));
-    scene.add(grid);
     runtimeEnvironmentState = createRuntimeEnvironmentState({
       region: activeRegion,
       contentLibrary: state.contentLibrary,
@@ -848,6 +747,7 @@ export function createWebRuntimeHost(
       });
       for (const object of objects) {
         const rootObject = new THREE.Group();
+        const shaderApplication = createRenderableShaderApplicationState();
         rootObject.name = object.instanceId;
         rootObject.userData.sceneInstanceId = object.instanceId;
         rootObject.position.set(...object.transform.position);
@@ -880,7 +780,12 @@ export function createWebRuntimeHost(
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
               host?.enableShadowsOnObject(renderable);
-              applyShaderToRenderable(renderable, object, host?.shaderRuntime ?? null);
+              ensureShaderSetAppliedToRenderable(
+                renderable,
+                object,
+                host?.shaderRuntime ?? null,
+                shaderApplication
+              );
               rootObject.add(renderable);
             })
             .catch((error) => {
@@ -905,7 +810,9 @@ export function createWebRuntimeHost(
 
         scene.add(rootObject);
         sceneObjectEntries.set(object.instanceId, {
-          root: rootObject
+          root: rootObject,
+          object,
+          shaderApplication
         });
       }
     }
@@ -977,7 +884,7 @@ export function createWebRuntimeHost(
         const entry = sceneObjectEntries.get(presenceId);
         if (!entry || !scene) return;
         scene.remove(entry.root);
-        disposeObject(entry.root);
+        disposeRenderableObject(entry.root);
         sceneObjectEntries.delete(presenceId);
       }
     });

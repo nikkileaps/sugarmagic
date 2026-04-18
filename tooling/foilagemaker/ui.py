@@ -109,20 +109,53 @@ class VIEW3D_PT_foilagemaker(bpy.types.Panel):
         secondary.prop(props, "secondary_branch_sides")
 
         leaves = layout.box()
-        leaves.label(text="Canopy")
-        leaves.prop(props, "display_leaf_blocks")
-        leaves.prop(props, "canopy_cluster_count")
-        leaves.prop(props, "canopy_radius")
-        leaves.prop(props, "canopy_vertical_scale")
-        leaves.prop(props, "canopy_density_multiplier")
+        leaves.label(text="Canopy Shape")
+        leaves.prop(props, "canopy_shape")
+        if props.canopy_shape == "custom":
+            # Blender renders a PointerProperty→Collection as a picker
+            # with an eyedropper automatically. Every mesh object in the
+            # picked collection (including nested sub-collections) becomes
+            # part of the scatter surface, weighted by surface area. Each
+            # mesh's own world-space transform drives where its section
+            # of the canopy sits, so the built-in shape knobs (size,
+            # vertical scale, base offset) don't apply here.
+            leaves.prop(props, "canopy_custom_collection")
+            if not props.canopy_custom_collection:
+                leaves.label(
+                    text="Pick a collection above — leaves scatter on every mesh inside.",
+                    icon="INFO",
+                )
+            else:
+                mesh_count = sum(
+                    1
+                    for obj in props.canopy_custom_collection.all_objects
+                    if obj.type == "MESH"
+                )
+                if mesh_count == 0:
+                    leaves.label(
+                        text="Selected collection has no mesh objects.",
+                        icon="ERROR",
+                    )
+                else:
+                    label = (
+                        f"{mesh_count} mesh in collection"
+                        if mesh_count == 1
+                        else f"{mesh_count} meshes in collection"
+                    )
+                    leaves.label(text=label, icon="OUTLINER_OB_MESH")
+        else:
+            leaves.prop(props, "canopy_size")
+            leaves.prop(props, "canopy_vertical_scale")
+            leaves.prop(props, "canopy_base_offset")
+        leaves.separator()
+        leaves.label(text="Leaves")
+        leaves.prop(props, "leaf_count")
         leaves.prop(props, "leaf_card_count")
         leaves.prop(props, "leaf_size")
         leaves.prop(props, "leaf_width")
         leaves.prop(props, "leaf_height")
-        leaves.prop(props, "leaf_density")
-        leaves.prop(props, "leaf_jitter")
-        leaves.prop(props, "add_outer_leaves")
-        leaves.prop(props, "outer_leaf_offset")
+        leaves.separator()
+        leaves.prop(props, "leaf_texture_variant")
 
         wind = layout.box()
         wind.label(text="Wind Metadata")

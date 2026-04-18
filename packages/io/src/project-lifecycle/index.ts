@@ -8,6 +8,7 @@
 import type { GameProject, RegionDocument, ContentLibrarySnapshot } from "@sugarmagic/domain";
 import {
   createDefaultGameProject,
+  createDefaultRegion,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import {
@@ -90,13 +91,38 @@ export async function createProjectInDirectory(
   handle: FileSystemDirectoryHandle,
   input: CreateProjectInput
 ): Promise<ActiveProject> {
-  const project = makeEmptyProject(input.gameName, input.slug);
-  const contentLibrary = createEmptyContentLibrarySnapshot(project.identity.id);
+  const baseProject = makeEmptyProject(input.gameName, input.slug);
+  const contentLibrary = createEmptyContentLibrarySnapshot(baseProject.identity.id);
+
+  // Every new project gets a ready-to-use "Default Region" so the authoring
+  // viewport opens into a real scene (landscape, environment binding, etc.)
+  // rather than a null-region void. The landscape is a first-class part of
+  // the region document; the Scene Explorer surfaces it alongside other
+  // region content.
+  // The region id is used verbatim as the filename (see
+  // `${REGIONS_DIR}/${regionId}.json` below and in loadProjectFromHandle),
+  // so it must be filesystem-safe. Colons / slashes / etc. get rejected by
+  // the File System Access API's getFileHandle.
+  const defaultRegion = createDefaultRegion({
+    regionId: "default",
+    displayName: "Default Region",
+    defaultEnvironmentId:
+      contentLibrary.environmentDefinitions[0]?.definitionId ?? null
+  });
+  const project: GameProject = {
+    ...baseProject,
+    regionRegistry: [{ regionId: defaultRegion.identity.id }]
+  };
 
   await ensureDirectory(handle, REGIONS_DIR);
   await ensureDirectory(handle, "assets");
   await writeJsonFile(handle, [PROJECT_FILE], project);
   await writeJsonFile(handle, [CONTENT_LIBRARY_FILE], contentLibrary);
+  await writeJsonFile(
+    handle,
+    [REGIONS_DIR, `${defaultRegion.identity.id}.json`],
+    defaultRegion
+  );
 
   await storeProjectHandle(input.slug, handle);
 
@@ -111,7 +137,7 @@ export async function createProjectInDirectory(
     },
     gameProject: project,
     contentLibrary,
-    regions: []
+    regions: [defaultRegion]
   };
 }
 

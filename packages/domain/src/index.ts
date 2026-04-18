@@ -8,6 +8,7 @@ export * from "./dialogue-definition/index";
 export * from "./game-project/index";
 export * from "./gameplay-authoring/index";
 export * from "./history/index";
+export * from "./io/index";
 export * from "./item-definition/index";
 export * from "./npc-definition/index";
 export * from "./plugins/index";

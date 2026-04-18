@@ -25,7 +25,12 @@ export interface PlacedAssetInstance {
   displayName: string;
   parentFolderId: string | null;
   inspectable: RegionInspectableBehavior | null;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /**
+   * @deprecated Legacy single-binding field. Normalization upgrades this into
+   * shaderOverrides; new code should only use shaderOverrides.
+   */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: {
     position: [number, number, number];
@@ -48,7 +53,9 @@ export interface RegionPlayerPresence {
 export interface RegionNPCPresence {
   presenceId: string;
   npcDefinitionId: string;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /** @deprecated Legacy single-binding field. */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
@@ -57,7 +64,9 @@ export interface RegionItemPresence {
   presenceId: string;
   itemDefinitionId: string;
   quantity: number;
-  shaderOverride: ShaderBindingOverride | null;
+  shaderOverrides?: ShaderBindingOverride[];
+  /** @deprecated Legacy single-binding field. */
+  shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
 }
@@ -209,7 +218,15 @@ export interface RegionDocument {
 export const DEFAULT_REGION_LANDSCAPE_SIZE = 100;
 export const DEFAULT_REGION_LANDSCAPE_SUBDIVISIONS = 160;
 export const DEFAULT_REGION_LANDSCAPE_RESOLUTION = 512;
-export const DEFAULT_REGION_LANDSCAPE_BASE_COLOR = 0x7f8ea3;
+/**
+ * Editor-wide "neutral clay" tone. Single source for anywhere the
+ * authoring tools want a warm neutral placeholder color — unpainted
+ * landscape, unshaded fallback meshes, etc. Fiddle with this one value
+ * to retune the whole editor's default look.
+ */
+export const EDITOR_NEUTRAL_CLAY_COLOR = 0xc9c4bd;
+
+export const DEFAULT_REGION_LANDSCAPE_BASE_COLOR = EDITOR_NEUTRAL_CLAY_COLOR;
 export const DEFAULT_REGION_LANDSCAPE_GRASS_COLOR = 0x5c8a5a;
 
 export const LANDSCAPE_BASE_CHANNEL_ID = "base";
@@ -346,7 +363,8 @@ export function createPlacedAssetInstance(
     displayName: overrides.displayName ?? "Placed Asset",
     parentFolderId: overrides.parentFolderId ?? null,
     inspectable: overrides.inspectable ?? null,
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: {
       position: overrides.transform?.position ?? [0, 0, 0],
@@ -397,7 +415,8 @@ export function createRegionNPCPresence(
   return {
     presenceId: overrides.presenceId ?? createNPCPresenceId(),
     npcDefinitionId: overrides.npcDefinitionId,
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };
@@ -411,7 +430,8 @@ export function createRegionItemPresence(
     presenceId: overrides.presenceId ?? createItemPresenceId(),
     itemDefinitionId: overrides.itemDefinitionId,
     quantity: Math.max(1, Math.floor(overrides.quantity ?? 1)),
-    shaderOverride: overrides.shaderOverride ?? null,
+    shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: createRegionSceneTransform(overrides.transform)
   };
@@ -435,19 +455,18 @@ export function createRegionLandscapeChannelDefinition(
 export function createDefaultRegionLandscapeChannels(
   baseColor = DEFAULT_REGION_LANDSCAPE_BASE_COLOR
 ): RegionLandscapeChannelDefinition[] {
+  // New landscapes start with just the Base channel so the ground reads as
+  // a clean clay canvas. Authors add additional channels (grass, sand,
+  // etc.) explicitly from the landscape inspector when they need them —
+  // the old auto-included "Grass" channel was initializing with a black
+  // color swatch on new regions and making the default viewport look
+  // broken.
   return [
     {
       channelId: LANDSCAPE_BASE_CHANNEL_ID,
       displayName: "Base",
       mode: "color",
       color: baseColor,
-      materialDefinitionId: null
-    },
-    {
-      channelId: LANDSCAPE_DEFAULT_CHANNEL_ID,
-      displayName: "Grass",
-      mode: "color",
-      color: DEFAULT_REGION_LANDSCAPE_GRASS_COLOR,
       materialDefinitionId: null
     }
   ];
@@ -468,5 +487,41 @@ export function createDefaultRegionLandscapeState(
     ...overrides,
     channels,
     paintPayload: overrides.paintPayload ?? null
+  };
+}
+
+/**
+ * Single factory for producing a blank-but-usable region document.
+ *
+ * Used by both the project bootstrap path (a new project creates a
+ * "Default Region" automatically so every freshly-created project opens
+ * into a usable scene) and the in-session "New Region" command. Keeping
+ * the shape here means there's one place to change if the region schema's
+ * default state evolves — no divergence between the two entry points.
+ */
+export function createDefaultRegion(options: {
+  regionId: string;
+  displayName: string;
+  defaultEnvironmentId?: string | null;
+}): RegionDocument {
+  return {
+    identity: { id: options.regionId, schema: "RegionDocument", version: 1 },
+    displayName: options.displayName,
+    placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
+    scene: {
+      folders: [],
+      placedAssets: [],
+      playerPresence: null,
+      npcPresences: [],
+      itemPresences: []
+    },
+    environmentBinding: {
+      defaultEnvironmentId: options.defaultEnvironmentId ?? null
+    },
+    areas: [],
+    behaviors: [],
+    landscape: createDefaultRegionLandscapeState(),
+    markers: [],
+    gameplayPlacements: []
   };
 }

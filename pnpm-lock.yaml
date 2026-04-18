@@ -220,6 +220,9 @@ importers:
       '@mantine/hooks':
         specifier: ^9.0.0
         version: 9.0.0(react@19.2.4)
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../domain
       react:
         specifier: '>=18'
         version: 19.2.4

@@ -4,7 +4,9 @@ import {
   executeCommand,
   pushTransaction,
   createEmptyHistory,
-  createDefaultRegionLandscapeState
+  createDefaultRegionLandscapeState,
+  createEmptyContentLibrarySnapshot,
+  normalizeRegionDocumentForLoad
 } from "@sugarmagic/domain";
 
 function makeTestRegion(): RegionDocument {
@@ -133,5 +135,29 @@ describe("first authored loop", () => {
     expect(region.scene.placedAssets[0].transform.position).toEqual(
       originalPosition
     );
+  });
+
+  it("migrates legacy shaderOverride fields into shaderOverrides at load time", () => {
+    const region = makeTestRegion();
+    region.scene.placedAssets[0] = {
+      ...region.scene.placedAssets[0],
+      shaderOverride: {
+        shaderDefinitionId: "project:shader:legacy-surface",
+        slot: "surface"
+      }
+    };
+
+    const normalized = normalizeRegionDocumentForLoad(
+      region,
+      createEmptyContentLibrarySnapshot("project")
+    );
+
+    expect(normalized.scene.placedAssets[0].shaderOverrides).toEqual([
+      {
+        shaderDefinitionId: "project:shader:legacy-surface",
+        slot: "surface"
+      }
+    ]);
+    expect(normalized.scene.placedAssets[0].shaderOverride).toBeUndefined();
   });
 });

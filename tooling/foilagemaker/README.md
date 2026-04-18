@@ -9,7 +9,56 @@ Status: active
 
 # FoilageMaker
 
-Current add-on version: `0.11.1`
+Current add-on version: `0.17.0`
+
+## 0.17.0 — custom canopy collections
+
+Replaces the single-mesh picker in 0.16.0 with a **Collection** picker.
+Drop any number of meshes into a Blender collection, point the tree at
+that collection, and leaves scatter across every mesh in it at once
+(weighted by surface area, so big meshes get proportionally more
+leaves). Nested sub-collections count too.
+
+Each mesh in the collection keeps its own world transform — move /
+rotate / scale any piece independently and the canopy tracks. Add or
+remove meshes from the collection in the outliner and the tree rebuilds
+from whatever's currently inside.
+
+Non-mesh objects in the collection are silently ignored. FoilageMaker
+trees in the same collection are filtered out, so a tree sharing a
+collection with its canopy shapes doesn't accidentally scatter leaves on
+its own trunk.
+
+## 0.16.0 — custom canopy meshes (single)
+
+Initial "scatter on an authored mesh" support. Single-mesh picker only
+— superseded by the collection picker in 0.17.0.
+
+## 0.15.0 canopy rewrite
+
+The canopy generation pipeline was rewritten around a "scatter leaves on a
+procedural base shape" model inspired by the Stylized Tree Generator
+reference. Instead of placing N cluster-blobs at branch tips and hoping
+they add up to the right silhouette, FoilageMaker now builds an explicit
+silhouette mesh (sphere, cone, or teardrop), scatters leaf cards across
+its surface, and discards the staging mesh — only the leaves end up in
+the exported GLB.
+
+**Why this matters for authoring:**
+- A triangular tree is literally "pick Cone." No tuning cluster count vs.
+  taper vs. vertical scale trying to approximate a shape.
+- Silhouette is guaranteed to match the chosen canopy shape.
+- Branches are now structural only — the canopy doesn't depend on where
+  they happen to end.
+
+**Breaking property changes** (0.14.x trees will not round-trip cleanly):
+- Removed: `canopy_cluster_count`, `canopy_radius`, `canopy_taper`,
+  `canopy_density_multiplier`, `display_leaf_blocks`, `add_outer_leaves`,
+  `outer_leaf_offset`, `leaf_density`, `leaf_jitter`.
+- Added: `canopy_shape`, `canopy_size`, `canopy_base_offset`, `leaf_count`.
+- Kept: `canopy_vertical_scale`, all leaf-card geometry props
+  (`leaf_size`, `leaf_width`, `leaf_height`, `leaf_card_count`),
+  `leaf_texture_variant`.
 
 FoilageMaker is a Sugarmagic-owned Blender add-on for authoring stylized,
 export-safe foliage assets.
@@ -25,6 +74,30 @@ This first slice is intentionally focused on the Blender side only:
 The add-on does **not** make Blender procedural graphs part of Sugarmagic's
 runtime. The runtime should consume exported foliage GLBs, not live Blender
 semantics.
+
+## Leaf alpha mode: currently overridden in Sugarmagic
+
+Heads-up for anyone touching the export leaf material here: the glTF
+`alphaMode` that this add-on produces is **not** the source of truth for
+how foliage renders in Sugarmagic today. The Sugarmagic web shader runtime
+(`packages/render-web/src/ShaderRuntime.ts`, `applyIRToMaterial`) forces
+any shader graph with an opacity output into MASK-mode cutout rendering
+(`transparent: false`, `alphaTest: 0.5`, `depthWrite: true`) regardless of
+the GLB's authored alphaMode. That's what fixed the "see through the front
+leaves to the trunk / inner branches" artifact we were fighting for a
+while.
+
+So: keep the CLIP / `alpha_threshold = 0.5` setup in `generator.py` — it
+keeps Blender's viewport preview honest and keeps the GLB self-describing
+for any future non-Sugarmagic consumer — but don't burn time tuning it
+for Sugarmagic rendering. The authoritative knobs for cutout threshold
+live in ShaderRuntime, not here.
+
+TODO: revisit once Sugarmagic grows a per-shader alpha-mode control
+(BLEND for glass / soft edges, MASK for foliage, OPAQUE for solid). At
+that point the GLB's authored alphaMode becomes authoritative again and
+FoilageMaker's export material choice starts mattering. Until then, tune
+alpha behavior in Sugarmagic's ShaderRuntime, not here.
 
 ## Install
 

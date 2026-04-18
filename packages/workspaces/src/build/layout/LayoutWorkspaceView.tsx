@@ -187,13 +187,30 @@ function buildSceneTree(
     visible: true
   }));
 
+  // Landscape is a singular field on the region document. Surfacing it as
+  // the first scene-explorer entry under the region root makes it a visible
+  // part of the authored scene rather than an invisible implicit plane
+  // hiding in the viewport.
+  const landscapeNode = {
+    type: "landscape" as const,
+    landscapeId: `${region.identity.id}:landscape`,
+    displayName: "Landscape",
+    enabled: region.landscape?.enabled ?? false
+  };
+
   return [
     {
       type: "folder" as const,
       folderId: SCENE_ROOT_FOLDER_ID,
       displayName: region.displayName,
       isRoot: true,
-      children: [...playerNode, ...npcNodes, ...itemNodes, ...buildChildren(null)]
+      children: [
+        landscapeNode,
+        ...playerNode,
+        ...npcNodes,
+        ...itemNodes,
+        ...buildChildren(null)
+      ]
     }
   ];
 }

@@ -4,18 +4,22 @@ import { ShaderRuntime } from "@sugarmagic/render-web";
 import {
   resolveSceneObjects,
   resolveEffectivePostProcessShaderBindings,
+  resolveAssetDefinitionShaderBindings,
   compileShaderGraph,
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
 import {
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultEnvironmentDefinition,
+  createDefaultFogTintPostProcessShaderGraph,
+  createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
   createDefaultShaderGraphDocument,
   createDefaultVignettePostProcessShaderGraph,
   createPlacedAssetInstance,
   createRegionPlayerPresence,
+  normalizeContentLibrarySnapshot,
   type ContentLibrarySnapshot,
   type RegionDocument
 } from "@sugarmagic/domain";
@@ -39,7 +43,7 @@ function createContentLibrary(): ContentLibrarySnapshot {
     ]
   };
 
-  return {
+  return normalizeContentLibrarySnapshot({
     identity: {
       id: "project:content-library",
       schema: "ContentLibrarySnapshot",
@@ -66,7 +70,7 @@ function createContentLibrary(): ContentLibrarySnapshot {
       })
     ],
     shaderDefinitions: [foliageShader, postProcessShader]
-  };
+  }, "project");
 }
 
 function createRegion(): RegionDocument {
@@ -108,15 +112,50 @@ function createRegion(): RegionDocument {
 }
 
 describe("shader runtime contracts", () => {
-  it("resolves the built-in foliage wind shader for foliage assets without an explicit default", () => {
+  it("resolves the built-in foliage surface and wind shaders for foliage assets without explicit defaults", () => {
     const contentLibrary = createContentLibrary();
     const sceneObjects = resolveSceneObjects(createRegion(), { contentLibrary });
     const treeObject = sceneObjects.find((object) => object.instanceId === "placed:tree");
 
-    expect(treeObject?.effectiveShader?.shaderDefinitionId).toBe(
+    expect(treeObject?.effectiveShaders.surface?.shaderDefinitionId).toBe(
+      "project:shader:foliage-surface"
+    );
+    expect(treeObject?.effectiveShaders.surface?.targetKind).toBe("mesh-surface");
+    expect(treeObject?.effectiveShaders.deform?.shaderDefinitionId).toBe(
       "project:shader:foliage-wind"
     );
-    expect(treeObject?.effectiveShader?.targetKind).toBe("mesh-deform");
+    expect(treeObject?.effectiveShaders.deform?.targetKind).toBe("mesh-deform");
+  });
+
+  it("emits a loud diagnostic when a slot points at the wrong shader target kind", () => {
+    const contentLibrary = createContentLibrary();
+    const brokenAsset = {
+      ...contentLibrary.assetDefinitions[0]!,
+      defaultShaderBindings: {
+        surface: "project:shader:foliage-wind",
+        deform: null
+      },
+      defaultShaderParameterOverrides: []
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const resolution = resolveAssetDefinitionShaderBindings(brokenAsset, contentLibrary);
+
+      expect(resolution.bindings.surface).toBeNull();
+      expect(resolution.diagnostics).toEqual([
+        expect.objectContaining({
+          severity: "error",
+          slot: "surface",
+          shaderDefinitionId: "project:shader:foliage-wind"
+        })
+      ]);
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.stringContaining(`slot "surface" requires "mesh-surface"`)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("resolves post-process defaults plus parameter overrides before the web host applies them", () => {
@@ -164,8 +203,35 @@ describe("shader runtime contracts", () => {
     ).toEqual([]);
   });
 
+  it("compiles the shipped foliage surface graph into fragment IR with texture-aware outputs", () => {
+    const shader = createDefaultFoliageSurfaceShaderGraph("project");
+    const compiled = compileShaderGraph(shader, {
+      compileProfile: "authoring-preview"
+    });
+
+    expect(compiled.targetKind).toBe("mesh-surface");
+    expect(compiled.outputs.fragmentColor).toBeDefined();
+    expect(compiled.outputs.fragmentAlpha).toBeDefined();
+    expect(
+      compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    ).toEqual([]);
+  });
+
   it("compiles the shipped color grade graph without validation errors", () => {
     const shader = createDefaultColorGradePostProcessShaderGraph("project");
+    const compiled = compileShaderGraph(shader, {
+      compileProfile: "authoring-preview"
+    });
+
+    expect(compiled.targetKind).toBe("post-process");
+    expect(compiled.outputs.postProcessColor).toBeDefined();
+    expect(
+      compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    ).toEqual([]);
+  });
+
+  it("compiles the shipped fog tint graph without validation errors", () => {
+    const shader = createDefaultFogTintPostProcessShaderGraph("project");
     const compiled = compileShaderGraph(shader, {
       compileProfile: "authoring-preview"
     });

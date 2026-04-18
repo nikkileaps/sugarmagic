@@ -44,6 +44,7 @@ import {
   resolveAmbientLighting
 } from "@sugarmagic/runtime-core";
 import { buildSkyMaterial } from "./skyMaterial";
+import { sunPositionDirectionFromAngles } from "./sunVectors";
 
 export interface EnvironmentSceneController {
   apply: (
@@ -62,20 +63,6 @@ export interface EnvironmentSceneController {
   dispose: () => void;
 }
 
-function directionFromAngles(
-  azimuthDeg: number,
-  elevationDeg: number
-): THREE.Vector3 {
-  const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
-  const elevation = THREE.MathUtils.degToRad(elevationDeg);
-  const horizontal = Math.cos(elevation);
-  return new THREE.Vector3(
-    Math.sin(azimuth) * horizontal,
-    Math.sin(elevation),
-    Math.cos(azimuth) * horizontal
-  ).normalize();
-}
-
 /**
  * Directional light + attached CSM rig for the sun. The rig is tracked so we
  * can update cheap parameters (distance, strength, softness, bias) in place
@@ -88,7 +75,7 @@ interface SunShadowRig {
 
 function createSunLight(sun: SunLight): THREE.DirectionalLight {
   const light = new THREE.DirectionalLight(sun.color, sun.intensity);
-  const direction = directionFromAngles(sun.azimuthDeg, sun.elevationDeg);
+  const direction = sunPositionDirectionFromAngles(sun.azimuthDeg, sun.elevationDeg);
   light.position.copy(direction.multiplyScalar(24));
   light.target.position.set(0, 0, 0);
   return light;
@@ -98,7 +85,7 @@ function createNonShadowingDirectionalLight(
   definition: Pick<SunLight, "azimuthDeg" | "elevationDeg" | "color" | "intensity">
 ): THREE.DirectionalLight {
   const light = new THREE.DirectionalLight(definition.color, definition.intensity);
-  const direction = directionFromAngles(
+  const direction = sunPositionDirectionFromAngles(
     definition.azimuthDeg,
     definition.elevationDeg
   );
@@ -307,7 +294,7 @@ export function createEnvironmentSceneController(
       scene.add(sunLight.target);
       return;
     }
-    const direction = directionFromAngles(sun.azimuthDeg, sun.elevationDeg);
+    const direction = sunPositionDirectionFromAngles(sun.azimuthDeg, sun.elevationDeg);
     sunLight.position.copy(direction.multiplyScalar(24));
     sunLight.color.setHex(sun.color);
     sunLight.intensity = sun.intensity;
@@ -347,7 +334,7 @@ export function createEnvironmentSceneController(
       scene.add(rimLight.target);
       return;
     }
-    const direction = directionFromAngles(rim.azimuthDeg, rim.elevationDeg);
+    const direction = sunPositionDirectionFromAngles(rim.azimuthDeg, rim.elevationDeg);
     rimLight.position.copy(direction.multiplyScalar(24));
     rimLight.color.setHex(rim.color);
     rimLight.intensity = rim.intensity;

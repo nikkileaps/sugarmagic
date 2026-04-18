@@ -23,6 +23,16 @@ def _update_tree(self, context: bpy.types.Context):
     generator.rebuild_tree_object(obj)
 
 
+def _canopy_custom_collection_poll(self, collection: bpy.types.Collection) -> bool:
+    """Accept any collection. Filtering of individual objects (mesh-only,
+    no self-reference to the tree itself) happens at extraction time in
+    generator._extract_custom_shape_mesh, so authors can freely use a
+    mixed collection and the non-mesh / self-referential objects are
+    simply ignored during scatter.
+    """
+    return collection is not None
+
+
 class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
     random_seed: bpy.props.IntProperty(
         name="Random Seed",
@@ -209,37 +219,106 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         update=_update_tree,
     )
 
-    display_leaf_blocks: bpy.props.BoolProperty(
-        name="Display Blocks",
-        default=False,
+    # ── Canopy shape (0.15.0) ────────────────────────────────────────────
+    # Replaces the 0.14-and-earlier cluster-blob + taper system. The new
+    # model builds a procedural canopy silhouette (sphere / cone / teardrop),
+    # scatters leaf cards across its SURFACE, and lets the shape itself
+    # define the outline — so a triangular tree is literally "pick the
+    # cone" rather than "tune seven sliders until the blobs happen to look
+    # triangular." The shape mesh is a staging structure; only the leaf
+    # cards it generates end up in the exported GLB.
+    canopy_shape: bpy.props.EnumProperty(
+        name="Shape",
+        description=(
+            "Silhouette of the canopy. Leaves are scattered across this "
+            "shape's surface, so the outline is guaranteed to match."
+        ),
+        items=[
+            ("sphere", "Sphere", "Round blob — classic deciduous look"),
+            ("cone", "Cone", "Triangular / pine-ish silhouette"),
+            (
+                "teardrop",
+                "Teardrop",
+                "Rounded base, pointed top — stylized triangular deciduous",
+            ),
+            (
+                "custom",
+                "Custom Mesh",
+                (
+                    "Scatter leaves on a mesh you author yourself. Pick "
+                    "any mesh object from the scene (sculpted, modeled, or "
+                    "a primitive). The chosen mesh is used only as a "
+                    "scatter surface; it doesn't end up in the exported "
+                    "GLB — only the leaves do."
+                ),
+            ),
+        ],
+        default="sphere",
         update=_update_tree,
     )
-    canopy_cluster_count: bpy.props.IntProperty(
-        name="Cluster Count",
-        default=4,
-        min=1,
-        soft_max=12,
+    canopy_custom_collection: bpy.props.PointerProperty(
+        name="Custom Shape Collection",
+        description=(
+            "Collection whose mesh objects are combined into the canopy "
+            "scatter surface when Shape is set to Custom Mesh. Leaves are "
+            "distributed across every mesh in the collection (including "
+            "nested sub-collections), weighted by surface area so larger "
+            "pieces get proportionally more leaves. Non-mesh objects in "
+            "the collection are ignored. Move, rotate, or scale each "
+            "mesh in the viewport and the canopy tracks — each mesh's "
+            "own world transform is honored. Add or remove meshes from "
+            "the collection in the outliner at any time; the tree "
+            "rebuilds from whatever's currently in the collection."
+        ),
+        type=bpy.types.Collection,
+        poll=_canopy_custom_collection_poll,
         update=_update_tree,
     )
-    canopy_radius: bpy.props.FloatProperty(
-        name="Cluster Radius",
-        default=1.04,
+    canopy_size: bpy.props.FloatProperty(
+        name="Size",
+        description="Horizontal radius of the canopy shape at its widest point.",
+        default=1.1,
         min=0.1,
         soft_max=4.0,
         update=_update_tree,
     )
     canopy_vertical_scale: bpy.props.FloatProperty(
         name="Vertical Scale",
-        default=1.05,
+        description=(
+            "Vertical extent relative to canopy Size. 1.0 = as tall as wide "
+            "(sphere reads as a ball). 2.0 = elongated upward. Controls "
+            "cone / teardrop height as well."
+        ),
+        default=1.2,
         min=0.2,
-        soft_max=2.5,
+        soft_max=3.5,
         update=_update_tree,
     )
-    canopy_density_multiplier: bpy.props.FloatProperty(
-        name="Density Multiplier",
-        default=24.5,
-        min=1.0,
-        soft_max=80.0,
+    canopy_base_offset: bpy.props.FloatProperty(
+        name="Base Offset",
+        description=(
+            "Vertical position of the canopy's base relative to the top "
+            "of the trunk, in Blender units. 0 = canopy sits right at the "
+            "trunk top. Negative values push it DOWN — set it negative "
+            "enough to reach the height where branches start and the "
+            "canopy will cover the branched portion of the tree. Positive "
+            "values float the canopy above the trunk top."
+        ),
+        default=-0.2,
+        soft_min=-20.0,
+        soft_max=5.0,
+        update=_update_tree,
+    )
+    leaf_count: bpy.props.IntProperty(
+        name="Leaf Count",
+        description=(
+            "Total number of leaf sprays scattered across the canopy "
+            "surface. Each spray produces leaf_card_count cards, so the "
+            "rendered leaf-card count is roughly Leaf Count × Cards."
+        ),
+        default=140,
+        min=8,
+        soft_max=600,
         update=_update_tree,
     )
     leaf_card_count: bpy.props.IntProperty(
@@ -270,30 +349,31 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         soft_max=2.0,
         update=_update_tree,
     )
-    leaf_density: bpy.props.IntProperty(
-        name="Density",
-        default=5,
-        min=1,
-        soft_max=12,
-        update=_update_tree,
-    )
-    leaf_jitter: bpy.props.FloatProperty(
-        name="Scatter",
-        default=0.98,
-        min=0.0,
-        soft_max=2.0,
-        update=_update_tree,
-    )
-    add_outer_leaves: bpy.props.BoolProperty(
-        name="Add Outer Leaves",
-        default=True,
-        update=_update_tree,
-    )
-    outer_leaf_offset: bpy.props.FloatProperty(
-        name="Outer Offset",
-        default=0.95,
-        min=0.0,
-        soft_max=3.0,
+    # Leaf texture library is bundled in `foilagemaker/textures/`. The "mixed"
+    # option atlases the first four `_transparency.png` files into a 2x2 grid
+    # so each leaf card variant samples a different one (variety). Picking a
+    # specific leavesTexture0N uses just that texture for every leaf card
+    # (uniform look). Changing this triggers a tree rebuild which re-bakes
+    # the Blender leaf image and re-runs the material assignment.
+    leaf_texture_variant: bpy.props.EnumProperty(
+        name="Leaf Texture",
+        description="Which bundled leaf texture to bake into the canopy",
+        items=[
+            ("mixed", "Mixed Atlas (01–04)", "Atlas the first four bundled textures"),
+            ("leavesTexture01", "Leaves 01", ""),
+            ("leavesTexture02", "Leaves 02", ""),
+            ("leavesTexture03", "Leaves 03", ""),
+            ("leavesTexture04", "Leaves 04", ""),
+            ("leavesTexture05", "Leaves 05", ""),
+            ("leavesTexture06", "Leaves 06", ""),
+            ("leavesTexture07", "Leaves 07", ""),
+            ("leavesTexture08", "Leaves 08", ""),
+            ("leavesTexture09", "Leaves 09", ""),
+            ("leavesTexture10", "Leaves 10", ""),
+            ("leavesTexture11", "Leaves 11", ""),
+            ("leavesTexture12", "Leaves 12", ""),
+        ],
+        default="leavesTexture01",
         update=_update_tree,
     )
 

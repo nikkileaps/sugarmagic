@@ -40,13 +40,31 @@ export type ShaderParameterValue =
   | string
   | boolean;
 
+export type ShaderSlotKind = "surface" | "deform";
+
+export const SHADER_SLOT_KINDS: readonly ShaderSlotKind[] = [
+  "surface",
+  "deform"
+] as const;
+
+export type ShaderSlotBindingMap = Record<ShaderSlotKind, string | null>;
+
+export function createEmptyShaderSlotBindingMap(): ShaderSlotBindingMap {
+  return {
+    surface: null,
+    deform: null
+  };
+}
+
 export interface ShaderParameterOverride {
   parameterId: string;
+  slot?: ShaderSlotKind;
   value: ShaderParameterValue;
 }
 
 export interface ShaderBindingOverride {
   shaderDefinitionId: string;
+  slot: ShaderSlotKind;
 }
 
 export interface ShaderPortDefinition {
@@ -100,6 +118,7 @@ export interface ShaderParameter {
   displayName: string;
   dataType: Exclude<ShaderDataType, "texture2d"> | "texture2d";
   defaultValue: ShaderParameterValue;
+  colorSpace?: "sdr" | "hdr";
 }
 
 export interface ShaderGraphDocument {
@@ -274,6 +293,57 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     validTargetKinds: ["mesh-surface", "mesh-deform", "billboard-surface"],
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    nodeType: "input.sun-direction",
+    displayName: "Sun Direction",
+    category: "input",
+    // Incoming light direction, pointing from the sun toward the scene.
+    // This is the vector shader graphs should dot against normals when they
+    // want the lit hemisphere to match the actual directional light rig.
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    // Fake sphere normal baked into the FoilageMaker export's _SPHERE_NORMAL
+    // vertex attribute (normalize(vertex - clusterCenter)). Replaces the
+    // leaf-card normal for lighting purposes so each leaf cluster shades as
+    // a smooth volumetric orb rather than a pile of flat cards. Trunk
+    // vertices have (0,0,0) here and the foliage shader blends against
+    // world-normal accordingly.
+    nodeType: "input.sphere-normal",
+    displayName: "Sphere Normal",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    // Normalized 0..1 altitude within the tree (0 at trunk base, 1 at the
+    // highest canopy vertex), baked into the _TREE_HEIGHT vertex attribute
+    // by FoilageMaker. Drives the tree-wide top-warm / bottom-cool gradient.
+    nodeType: "input.tree-height",
+    displayName: "Tree Height",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "input.material-texture",
+    displayName: "Material Texture",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "billboard-surface"],
+    inputPorts: [],
+    outputPorts: [
+      outputPort("color", "Color", "color"),
+      outputPort("alpha", "Alpha", "float")
+    ],
     settings: []
   },
   {
@@ -622,13 +692,15 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Split Vector",
     category: "math",
     validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
-    // Input is vec3 — the common case (positions, normals, colors). Add
-    // math.split-vec4 later if vec4 splitting becomes a real use case.
+    // Accept vec3 or vec4 inputs. Many built-ins (world position, world
+    // normal, vertex color RGB-only sources) are naturally vec3 and should
+    // not require a synthetic widen node just to expose x/y/z channels.
     inputPorts: [inputPort("input", "Input", "vec3")],
     outputPorts: [
       outputPort("x", "X", "float"),
       outputPort("y", "Y", "float"),
-      outputPort("z", "Z", "float")
+      outputPort("z", "Z", "float"),
+      outputPort("w", "W", "float")
     ],
     settings: []
   },
@@ -1017,6 +1089,833 @@ export function createDefaultFoliageTintShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "foliage-tint"
+    }
+  };
+}
+
+/**
+ * Minimal surface shader used to isolate alpha-cutout behavior. Samples the
+ * material base color texture and routes color + alpha straight to the
+ * fragment output. Apply this to simple_alpha_test.glb (tooling/simple-alpha-test/)
+ * to distinguish shader-graph problems from GLB/Three loader problems.
+ */
+export function createSimpleAlphaTestShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:simple-alpha-test`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Simple Alpha Test",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 384, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-color-output", "base-texture", "color", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: {
+      builtIn: true,
+      builtInKey: "simple-alpha-test"
+    }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: gives artists and engineers a one-knob proof that shader
+ * application and parameter propagation are still working in a live scene.
+ * What replaces it: nothing today; this is the minimal canonical debug graph
+ * for "is the shader bound and are parameters reaching the GPU?"
+ * When to remove it: only once Sugarmagic has a richer built-in shader
+ * debugger or material-inspector workflow that covers the same verification.
+ *
+ * Debug shader: outputs a single authored color (parameter "debugColor")
+ * multiplied by texture alpha for cutout. Used to verify both
+ * (a) that the shader is being applied at all, and
+ * (b) that parameter edits reach the GPU — if changing debugColor in the
+ *     inspector doesn't visibly change the object, parameter propagation
+ *     is broken.
+ */
+export function createDebugParameterColorShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-parameter-color`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Parameter Color",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      {
+        nodeId: "debug-color",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 300 },
+        settings: { parameterId: "debugColor" }
+      },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 384, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-debug-output", "debug-color", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "debugColor",
+        displayName: "Debug Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.0, 0.0, 1.0]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "debug-parameter-color"
+    }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: isolates the warm-term math from the rest of the foliage
+ * graph so authors can tell whether failures come from the warm term itself
+ * or from later masking/bias logic.
+ * What replaces it: nothing today; this is the canonical narrow probe for the
+ * warm-color × warm-strength path.
+ * When to remove it: only once graph debugging can selectively preview
+ * intermediate nodes/branches inside authored shaders.
+ *
+ * Debug shader to isolate whether warmColor + warmStrength multiplication
+ * itself works, independent of sun-mask / exterior-bias. Emits
+ * warmColor × warmStrength directly as fragment color. If cranking warmStrength
+ * in the inspector makes the tree visibly brighter with this shader but the
+ * Foliage Surface shader stays unchanged, the problem is downstream — the
+ * sun-mask or exterior-bias-strength path is zeroing out warm-term.
+ */
+export function createDebugWarmIsolatedShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-warm-isolated`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Warm Isolated",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      {
+        nodeId: "warm-color",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 300 },
+        settings: { parameterId: "warmColor" }
+      },
+      {
+        nodeId: "warm-strength",
+        nodeType: "input.parameter",
+        position: { x: 48, y: 400 },
+        settings: { parameterId: "warmStrength" }
+      },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 280, y: 340 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 520, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-warm-a", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("edge-warm-b", "warm-strength", "value", "warm-term", "b"),
+      createShaderEdge("edge-color-output", "warm-term", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.55
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "debug-warm-isolated"
+    }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the exact sun-direction/normal mask the foliage
+ * shaders depend on without the rest of the surface graph obscuring it.
+ * What replaces it: nothing today; this is the canonical sun-mask probe.
+ * When to remove it: only once authored shaders support built-in intermediate
+ * visualization of directional-light terms.
+ *
+ * Debug shader: outputs sun-mask (saturate(worldNormal · sunDirection)) as
+ * grayscale. If the tree renders black, sunDirection is zero or worldNormal
+ * is wrong — which kills the warm term in the foliage shader.
+ */
+export function createDebugSunMaskShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-sun-mask`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Sun Mask",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 400 }, settings: {} },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 280, y: 350 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 520, y: 350 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 760, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-n", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-s", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-d", "sun-dot", "value", "sun-mask", "input"),
+      createShaderEdge("e-mc", "sun-mask", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-sun-mask" }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the packed vertex-alpha / exterior-bias channel
+ * independently from the rest of the foliage shading stack.
+ * What replaces it: nothing today; this is the canonical COLOR_0.w probe.
+ * When to remove it: only once the asset/material inspector can preview
+ * authored vertex channels directly.
+ *
+ * Debug shader: outputs vertex-color .w (the FoilageMaker sun_exterior_bias
+ * channel) as grayscale. Black means the COLOR_0 attribute's .w is always 0,
+ * which zeroes out exterior-bias-strength and kills the warm term.
+ */
+export function createDebugVertexAlphaShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-vertex-alpha`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Vertex Alpha",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "split", nodeType: "math.split-vector", position: { x: 280, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 520, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-split", "vertex-color", "value", "split", "input"),
+      createShaderEdge("e-c", "split", "w", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-vertex-alpha" }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: provides a trivial falsification shader so teams can prove a
+ * rendering problem is downstream of shader inputs rather than in the graph.
+ * What replaces it: nothing today; this is the minimal "constant output"
+ * sanity check for the surface path.
+ * When to remove it: only once Sugarmagic ships an equivalent built-in
+ * material/shader bypass diagnostic.
+ *
+ * Debug shader: outputs a literal constant red. No inputs, no math.
+ * Falsification test for "sphere-normal is the culprit": if the tree renders
+ * red at ALL presets, the sphere-normal path works and the noon-dark-leaves
+ * bug is downstream (Three's lighting pipeline crushing the albedo for
+ * transparent materials under HemisphereLight). If the tree's leaves go
+ * black at noon even with THIS shader, we can rule in "it's not about the
+ * shader inputs at all — it's downstream".
+ */
+export function createDebugConstantRedShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-constant-red`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Constant Red",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "red", nodeType: "input.constant-color", position: { x: 48, y: 300 }, settings: { color: [1, 0, 0] } },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "red", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-constant-red" }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the custom sphere-normal attribute path directly so
+ * foliage exports can be diagnosed without touching production shaders.
+ * What replaces it: nothing today; this remains the canonical sphere-normal
+ * attribute probe.
+ * When to remove it: only once asset inspection can preview custom vertex
+ * attributes or the foliage toolchain no longer emits sphere normals.
+ *
+ * Debug shader: outputs sphereNormal.xyz directly as color. Components in
+ * [-1,1] get clamped to [0,1] at output, so a normal of (1,0,0) appears red,
+ * (0,1,0) green, (0,0,1) blue; negative components show as black. If the
+ * tree renders a varied gradient of colors (rainbow-ish across leaf
+ * clusters) the sphere-normal attribute is being read correctly; if it
+ * renders a single flat color or black, the custom-attribute +
+ * modelNormalMatrix path is broken.
+ */
+export function createDebugSphereNormalShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-sphere-normal`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Sphere Normal",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "sphere-normal", nodeType: "input.sphere-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "sphere-normal", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-sphere-normal" }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: verifies the baked tree-height attribute independently from
+ * all lighting math so foliage gradients can be debugged at the source.
+ * What replaces it: nothing today; this is the canonical tree-height probe.
+ * When to remove it: only once asset inspection can preview custom vertex
+ * attributes or the foliage stack stops depending on tree-height.
+ *
+ * Debug shader: outputs treeHeight (custom vertex attribute) as grayscale.
+ * Should show a gradient from black (base) to white (top) of the tree.
+ * If the tree renders a flat color, the _tree_height attribute isn't being
+ * read correctly.
+ */
+export function createDebugTreeHeightShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-tree-height`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Tree Height",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "tree-height", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-tree-height" }
+  };
+}
+
+/**
+ * Permanent authoring aid — keep.
+ * Why it exists: isolates the view-direction/fresnel branch used by painterly
+ * foliage rims so teams can test that term without the rest of the graph.
+ * What replaces it: nothing today; this is the canonical fresnel probe.
+ * When to remove it: only once authored shaders support intermediate-node
+ * previews or a built-in rim/fresnel debugger.
+ *
+ * Debug shader: outputs the fresnel rim-intensity as grayscale. Edges of the
+ * geometry should glow white; facing surfaces should be black. If it renders
+ * flat black at non-default presets but correctly at default, the
+ * fresnel/viewDirection path is the culprit.
+ */
+export function createDebugFresnelShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:debug-fresnel`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Debug Fresnel",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 400 }, settings: {} },
+      { nodeId: "white", nodeType: "input.constant-color", position: { x: 48, y: 500 }, settings: { color: [1, 1, 1] } },
+      {
+        nodeId: "fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 320, y: 350 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 600, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-n", "world-normal", "value", "fresnel", "normal"),
+      createShaderEdge("e-v", "view-direction", "value", "fresnel", "viewDirection"),
+      createShaderEdge("e-col", "white", "value", "fresnel", "color"),
+      createShaderEdge("e-c", "fresnel", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "debug-fresnel" }
+  };
+}
+
+/**
+ * Foliage Surface 2: the authoritative painterly foliage surface shader
+ * going forward. Built around the tree-height gradient (base → top), which
+ * evaluates consistently across ALL lighting presets because it only reads
+ * a vertex attribute — no TSL matrix math.
+ *
+ * This replaces the original `createDefaultFoliageSurfaceShaderGraph`
+ * (which depended on `sphereNormal`) because of a bug we hit where TSL
+ * matrix-math builtins applied to custom vertex attributes collapse to
+ * zero when the scene uses HemisphereLight-based ambient (any non-default
+ * preset). See the `sphereNormal` case in `ShaderRuntime.ts` for the full
+ * investigation trail and where to pick it back up.
+ *
+ * Starting point cloned from the Debug Tree Height shader. Iterate here as
+ * the foliage shading model evolves.
+ */
+export function createDefaultFoliageSurface2ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface-2`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface 2",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-c", "tree-height", "value", "output", "color"),
+      createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [],
+    metadata: { builtIn: true, builtInKey: "foliage-surface-2" }
+  };
+}
+
+/**
+ * Foliage Surface 3: FS2's smooth tree-height base + FS's warm-sun and
+ * rim-fresnel highlight terms, driven off `world-normal` instead of the
+ * broken `sphere-normal` path. Keeps the soft in-shade blending the FS2
+ * gradient gives you, but adds bloom-catchable pops on sunlit leaf tops
+ * and silhouette edges.
+ *
+ * Graph shape:
+ *   base      = tree-height                               (float, splats to greyscale vec3)
+ *   warmTerm  = warmColor * saturate(dot(worldNormal, sunDir)) * warmStrength
+ *   rimTerm   = fresnel(worldNormal, viewDir, rimColor, power=2.4, strength=1.2) * rimStrength
+ *   color     = base + warmTerm + rimTerm
+ *   alpha     = leafTexture.alpha
+ *
+ * Tune warmStrength / rimStrength from the inspector to taste. Default
+ * values are deliberately modest — the intent is "a little more pop than
+ * FS2," not "as much pop as FS original."
+ */
+export function createDefaultFoliageSurface3ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface-3`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface 3",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+
+      // Shared inputs for lighting math
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 440 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 540 }, settings: {} },
+
+      // Warm sun term: warmColor * saturate(worldNormal · sunDirection) * warmStrength
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 48, y: 240 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 256, y: 240 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 380 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 380 }, settings: {} },
+      { nodeId: "warm-scalar", nodeType: "math.multiply", position: { x: 640, y: 310 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 832, y: 260 }, settings: {} },
+
+      // Rim term: fresnel(worldNormal, viewDir, rimColor) * rimStrength
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 48, y: 640 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 256, y: 640 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 448, y: 540 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 640, y: 620 }, settings: {} },
+
+      // Combine: base (tree-height) + warm + rim
+      { nodeId: "warm-plus-rim", nodeType: "color.add", position: { x: 1024, y: 440 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1216, y: 260 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1440, y: 260 }, settings: {} }
+    ],
+    edges: [
+      // Sun dot / sun mask
+      createShaderEdge("e-n-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+
+      // Warm scalar = warmStrength * sun-mask
+      createShaderEdge("e-warmstrength-scalar", "warm-strength", "value", "warm-scalar", "a"),
+      createShaderEdge("e-sunmask-scalar", "sun-mask", "value", "warm-scalar", "b"),
+
+      // Warm term = warmColor * warmScalar  (scalar splats to vec3)
+      createShaderEdge("e-warmcolor-term", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("e-warmscalar-term", "warm-scalar", "value", "warm-term", "b"),
+
+      // Rim fresnel
+      createShaderEdge("e-n-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("e-v-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("e-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+
+      // Rim term = rimFresnel * rimStrength  (scalar splats)
+      createShaderEdge("e-rimfresnel-term", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("e-rimstrength-term", "rim-strength", "value", "rim-term", "b"),
+
+      // Combine warm + rim, then add the tree-height base
+      createShaderEdge("e-warm-plus-rim-a", "warm-term", "value", "warm-plus-rim", "a"),
+      createShaderEdge("e-warm-plus-rim-b", "rim-term", "value", "warm-plus-rim", "b"),
+      createShaderEdge("e-base-final", "tree-height", "value", "final-color", "a"),
+      createShaderEdge("e-warmrim-final", "warm-plus-rim", "value", "final-color", "b"),
+
+      // Output
+      createShaderEdge("e-final-output", "final-color", "value", "output", "color"),
+      createShaderEdge("e-alpha-output", "base-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.45, 1.15, 0.72]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.4
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.82, 0.95, 0.78]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.3
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "foliage-surface-3"
+    }
+  };
+}
+
+export function createDefaultFoliageSurfaceShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface`;
+
+  // Painterly foliage shader. Three stacked effects combine to produce the
+  // soft volumetric look from the reference:
+  //   1. Tree-wide top-warm / bottom-cool gradient driven by the
+  //      FoilageMaker-baked _TREE_HEIGHT vertex attribute (0..1 along the
+  //      tree). Multiplies into base color so the whole canopy shades
+  //      warm at top and cool at bottom.
+  //   2. Per-cluster volumetric lighting using the _SPHERE_NORMAL attribute
+  //      baked at export — each leaf cluster lights as if it were a smooth
+  //      sphere, not a cloud of flat cards. Blended with the real leaf
+  //      world-normal via individualNormalsFactor so a hint of card
+  //      silhouette remains.
+  //   3. Warm-sun-term + rim-fresnel (unchanged in spirit from v1) both now
+  //      driven off the blended sphere/leaf normal, giving smoother
+  //      highlight falloff across each cluster.
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Foliage Surface",
+    targetKind: "mesh-surface",
+    revision: 3,
+    nodes: [
+      { nodeId: "leaf-texture", nodeType: "input.material-texture", position: { x: 48, y: 156 }, settings: {} },
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 248, y: 340 }, settings: {} },
+      { nodeId: "canopy-tint", nodeType: "math.combine-vector", position: { x: 448, y: 232 }, settings: {} },
+      // Canopy tint acts as a brightness modulator only, not a hue source.
+      // This lets the tree-wide gradient provide the dominant hue (warm top,
+      // cool bottom) while preserving FoilageMaker's interior-darker /
+      // exterior-brighter per-cluster shading.
+      { nodeId: "canopy-luminance", nodeType: "color.luminance", position: { x: 656, y: 232 }, settings: {} },
+
+      // Tree-wide height gradient: mix(bottomColor, topColor, treeHeight)
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+      { nodeId: "top-color", nodeType: "input.parameter", position: { x: 48, y: 0 }, settings: { parameterId: "topColor" } },
+      { nodeId: "bottom-color", nodeType: "input.parameter", position: { x: 248, y: 0 }, settings: { parameterId: "bottomColor" } },
+      { nodeId: "height-gradient", nodeType: "math.lerp", position: { x: 448, y: 40 }, settings: {} },
+      // gradient * canopyLuminance gives us the painterly hue gradient
+      // multiplied by per-cluster brightness. Leaf texture is then multiplied
+      // in for leaf silhouette texture (mostly white where opaque, so this is
+      // a near-no-op for color but keeps any in-leaf detail).
+      { nodeId: "gradient-times-lum", nodeType: "color.multiply", position: { x: 656, y: 60 }, settings: {} },
+      { nodeId: "base-color", nodeType: "color.multiply", position: { x: 864, y: 160 }, settings: {} },
+
+      // Blended sphere/leaf normal for painterly volumetric shading.
+      { nodeId: "sphere-normal", nodeType: "input.sphere-normal", position: { x: 48, y: 480 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 556 }, settings: {} },
+      { nodeId: "individual-normals-factor", nodeType: "input.parameter", position: { x: 48, y: 420 }, settings: { parameterId: "individualNormalsFactor" } },
+      { nodeId: "blended-normal", nodeType: "math.lerp", position: { x: 256, y: 480 }, settings: {} },
+
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 652 }, settings: {} },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 448, y: 604 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 640, y: 604 }, settings: {} },
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 656, y: 460 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 656, y: 556 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "exterior-bias-strength", nodeType: "math.multiply", position: { x: 656, y: 652 }, settings: {} },
+      { nodeId: "warm-mask", nodeType: "math.multiply", position: { x: 864, y: 652 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 1088, y: 540 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 656, y: 780 }, settings: {} },
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 656, y: 876 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 1088, y: 876 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 880, y: 780 },
+        settings: { power: 2.4, strength: 1.2 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 1296, y: 780 }, settings: {} },
+      { nodeId: "base-plus-warm", nodeType: "color.add", position: { x: 1296, y: 268 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1504, y: 420 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1728, y: 420 }, settings: {} }
+    ],
+    edges: [
+      // Canopy tint from vertex color RGB → luminance (brightness modulator)
+      createShaderEdge("edge-vertex-split", "vertex-color", "value", "split-vertex-color", "input"),
+      createShaderEdge("edge-split-x-tint", "split-vertex-color", "x", "canopy-tint", "x"),
+      createShaderEdge("edge-split-y-tint", "split-vertex-color", "y", "canopy-tint", "y"),
+      createShaderEdge("edge-split-z-tint", "split-vertex-color", "z", "canopy-tint", "z"),
+      createShaderEdge("edge-canopy-luminance", "canopy-tint", "vec3", "canopy-luminance", "input"),
+
+      // Tree-wide height gradient: mix(bottomColor, topColor, treeHeight)
+      createShaderEdge("edge-bottomcolor-gradient", "bottom-color", "value", "height-gradient", "a"),
+      createShaderEdge("edge-topcolor-gradient", "top-color", "value", "height-gradient", "b"),
+      createShaderEdge("edge-treeheight-gradient", "tree-height", "value", "height-gradient", "alpha"),
+
+      // Gradient hue × canopy luminance → leaf-texture rgb → base-color
+      createShaderEdge("edge-gradient-times-lum-a", "height-gradient", "value", "gradient-times-lum", "a"),
+      createShaderEdge("edge-gradient-times-lum-b", "canopy-luminance", "value", "gradient-times-lum", "b"),
+      createShaderEdge("edge-texture-base", "leaf-texture", "color", "base-color", "a"),
+      createShaderEdge("edge-gradient-lum-base", "gradient-times-lum", "value", "base-color", "b"),
+
+      // Blended normal: mix(sphereNormal, worldNormal, individualNormalsFactor)
+      createShaderEdge("edge-spherenormal-blended", "sphere-normal", "value", "blended-normal", "a"),
+      createShaderEdge("edge-worldnormal-blended", "world-normal", "value", "blended-normal", "b"),
+      createShaderEdge("edge-individualfactor-blended", "individual-normals-factor", "value", "blended-normal", "alpha"),
+
+      // Sun dot using blended normal (was: world-normal)
+      createShaderEdge("edge-normal-sundot", "blended-normal", "value", "sun-dot", "a"),
+      createShaderEdge("edge-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("edge-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+      createShaderEdge("edge-vertex-a-bias", "split-vertex-color", "w", "exterior-bias-strength", "a"),
+      createShaderEdge("edge-strength-bias", "warm-strength", "value", "exterior-bias-strength", "b"),
+      createShaderEdge("edge-bias-mask", "exterior-bias-strength", "value", "warm-mask", "a"),
+      createShaderEdge("edge-sunmask-warmmask", "sun-mask", "value", "warm-mask", "b"),
+      createShaderEdge("edge-warmcolor-warmterm", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("edge-warmmask-warmterm", "warm-mask", "value", "warm-term", "b"),
+
+      // Rim fresnel also uses the blended (smoothed) normal
+      createShaderEdge("edge-normal-rim", "blended-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("edge-view-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("edge-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("edge-rimfresnel-rimterm", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("edge-rimstrength-rimterm", "rim-strength", "value", "rim-term", "b"),
+
+      createShaderEdge("edge-base-basepluswarm", "base-color", "value", "base-plus-warm", "a"),
+      createShaderEdge("edge-warm-basepluswarm", "warm-term", "value", "base-plus-warm", "b"),
+      createShaderEdge("edge-basepluswarm-final", "base-plus-warm", "value", "final-color", "a"),
+      createShaderEdge("edge-rimterm-final", "rim-term", "value", "final-color", "b"),
+      createShaderEdge("edge-final-output", "final-color", "value", "output", "color"),
+      createShaderEdge("edge-alpha-output", "leaf-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "topColor",
+        displayName: "Top Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.8, 1.5, 0.7]
+      },
+      {
+        parameterId: "bottomColor",
+        displayName: "Bottom Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.8, 1.3, 1.2]
+      },
+      {
+        parameterId: "individualNormalsFactor",
+        displayName: "Individual Leaf Normals",
+        dataType: "float",
+        defaultValue: 0.2
+      },
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.45, 1.15, 0.72]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 1.1
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.82, 0.95, 0.78]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.6
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "foliage-surface"
     }
   };
 }
@@ -1484,6 +2383,49 @@ function isParameterValueCompatible(
   }
 }
 
+function areShaderPortTypesCompatible(
+  source: ShaderDataType,
+  target: ShaderDataType
+): boolean {
+  if (source === target) {
+    return true;
+  }
+
+  const isDirectAlias =
+    (source === "vec3" && target === "color") ||
+    (source === "color" && target === "vec3");
+  if (isDirectAlias) {
+    return true;
+  }
+
+  const isFloatSplat =
+    source === "float" &&
+    (target === "vec2" ||
+      target === "vec3" ||
+      target === "vec4" ||
+      target === "color");
+  if (isFloatSplat) {
+    return true;
+  }
+
+  const isVectorTruncate =
+    (source === "vec4" && target === "vec3") ||
+    (source === "vec3" && target === "vec2");
+  if (isVectorTruncate) {
+    return true;
+  }
+
+  const isVectorWiden =
+    (source === "vec3" && target === "vec4") ||
+    (source === "vec2" && (target === "vec3" || target === "vec4")) ||
+    (source === "color" && target === "vec4");
+  if (isVectorWiden) {
+    return true;
+  }
+
+  return false;
+}
+
 function validateSettingValue(
   value: unknown,
   definition: ShaderSettingDefinition
@@ -1617,24 +2559,12 @@ export function validateShaderGraphDocument(
           sourcePort.dataType
         : sourcePort.dataType;
 
-    if (effectiveSourceDataType !== targetPort.dataType) {
-      const isDirectAlias =
-        (effectiveSourceDataType === "vec3" && targetPort.dataType === "color") ||
-        (effectiveSourceDataType === "color" && targetPort.dataType === "vec3");
-      const isFloatSplat =
-        effectiveSourceDataType === "float" &&
-        (targetPort.dataType === "vec2" ||
-          targetPort.dataType === "vec3" ||
-          targetPort.dataType === "vec4" ||
-          targetPort.dataType === "color");
-
-      if (!isDirectAlias && !isFloatSplat) {
-        issues.push({
-          severity: "error",
-          edgeId: edge.edgeId,
-          message: `Port type mismatch: ${effectiveSourceDataType} cannot connect to ${targetPort.dataType}.`
-        });
-      }
+    if (!areShaderPortTypesCompatible(effectiveSourceDataType, targetPort.dataType)) {
+      issues.push({
+        severity: "error",
+        edgeId: edge.edgeId,
+        message: `Port type mismatch: ${effectiveSourceDataType} cannot connect to ${targetPort.dataType}.`
+      });
     }
   }
 

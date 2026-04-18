@@ -37,7 +37,7 @@ import {
   removeAssetDefinitionFromSession,
   assetDefinitionHasSceneReferences,
   createDefaultEnvironmentDefinition,
-  createDefaultRegionLandscapeState
+  createDefaultRegion
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -53,7 +53,6 @@ import {
   createProjectInDirectory,
   openProject,
   pickDirectory,
-  readBlobFile,
   saveProject,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
@@ -95,6 +94,7 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
+import { useAssetSources } from "./asset-sources";
 import {
   getStudioPluginWorkspaceDefinition,
   listStudioPluginWorkspaceDefinitions
@@ -102,30 +102,6 @@ import {
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
 import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
-
-function revokeAssetSources(assetSources: Record<string, string>) {
-  for (const url of Object.values(assetSources)) {
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function createAssetSourceMap(
-  handle: FileSystemDirectoryHandle,
-  assetDefinitions: ReturnType<typeof getAllAssetDefinitions>
-): Promise<Record<string, string>> {
-  const nextSources: Record<string, string> = {};
-
-  for (const definition of assetDefinitions) {
-    const pathSegments = definition.source.relativeAssetPath
-      .split("/")
-      .filter(Boolean);
-    const blob = await readBlobFile(handle, ...pathSegments);
-    if (!blob) continue;
-    nextSources[definition.source.relativeAssetPath] = URL.createObjectURL(blob);
-  }
-
-  return nextSources;
-}
 
 function renderPluginSectionGroup(
   sections: ReturnType<typeof collectPluginShellContributions>["designSections"],
@@ -375,39 +351,18 @@ function handleStartPreview(
   // Wait for preview ready, then send boot data
   const capturedSession = session;
   const capturedWindow = previewWindow;
+  const capturedAssetSources = assetSources;
+  const capturedInstalledPluginIds = installedPluginIds;
+  const capturedSnapshot = snapshot;
   async function onMessage(event: MessageEvent) {
     if (event.data?.type === "PREVIEW_READY") {
       window.removeEventListener("message", onMessage);
-      const regions = getAllRegions(capturedSession);
-      capturedWindow.postMessage(
-        {
-          type: "PREVIEW_BOOT",
-          regions,
-          activeRegionId: capturedSession.activeRegionId,
-          activeEnvironmentId: snapshot.activeEnvironmentId,
-          installedPluginIds,
-          pluginRuntimeEnvironment: readStudioPluginRuntimeEnvironment(),
-          pluginConfigurations: capturedSession.gameProject.pluginConfigurations,
-          contentLibrary: capturedSession.contentLibrary,
-          playerDefinition: capturedSession.gameProject.playerDefinition,
-          spellDefinitions: capturedSession.gameProject.spellDefinitions,
-          itemDefinitions: capturedSession.gameProject.itemDefinitions,
-          documentDefinitions: capturedSession.gameProject.documentDefinitions,
-          npcDefinitions: capturedSession.gameProject.npcDefinitions,
-          dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
-          questDefinitions: capturedSession.gameProject.questDefinitions,
-          assetSources,
-          pluginBootPayloads: {
-            sugarlang:
-              (await buildSugarlangPreviewBootPayloadForSession(
-                capturedSession,
-                snapshot.activeWorkspaceId ??
-                  capturedSession.gameProject.identity.id,
-                readStudioPluginRuntimeEnvironment()
-              )) ?? undefined
-          }
-        },
-        "*"
+      await postPreviewBootMessage(
+        capturedWindow,
+        capturedSession,
+        capturedSnapshot,
+        capturedAssetSources,
+        capturedInstalledPluginIds
       );
     }
   }
@@ -445,6 +400,50 @@ function handleStopPreview() {
   shell.setSelection(snapshot.selectedEntityIds);
 }
 
+async function postPreviewBootMessage(
+  previewWindow: Window,
+  session: ReturnType<typeof projectStore.getState>["session"],
+  snapshot: AuthoringContextSnapshot,
+  assetSources: Record<string, string>,
+  installedPluginIds: string[]
+) {
+  if (!session || previewWindow.closed) {
+    return;
+  }
+
+  const regions = getAllRegions(session);
+  const runtimeEnvironment = readStudioPluginRuntimeEnvironment();
+  previewWindow.postMessage(
+    {
+      type: "PREVIEW_BOOT",
+      regions,
+      activeRegionId: session.activeRegionId,
+      activeEnvironmentId: snapshot.activeEnvironmentId,
+      installedPluginIds,
+      pluginRuntimeEnvironment: runtimeEnvironment,
+      pluginConfigurations: session.gameProject.pluginConfigurations,
+      contentLibrary: session.contentLibrary,
+      playerDefinition: session.gameProject.playerDefinition,
+      spellDefinitions: session.gameProject.spellDefinitions,
+      itemDefinitions: session.gameProject.itemDefinitions,
+      documentDefinitions: session.gameProject.documentDefinitions,
+      npcDefinitions: session.gameProject.npcDefinitions,
+      dialogueDefinitions: session.gameProject.dialogueDefinitions,
+      questDefinitions: session.gameProject.questDefinitions,
+      assetSources,
+      pluginBootPayloads: {
+        sugarlang:
+          (await buildSugarlangPreviewBootPayloadForSession(
+            session,
+            snapshot.activeWorkspaceId ?? session.gameProject.identity.id,
+            runtimeEnvironment
+          )) ?? undefined
+      }
+    },
+    "*"
+  );
+}
+
 // --- App ---
 
 export function App() {
@@ -460,6 +459,7 @@ export function App() {
   const phase = useStore(projectStore, (s) => s.phase);
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
+  const previewWindow = useStore(previewStore, (s) => s.previewWindow);
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
@@ -479,7 +479,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [assetSources, setAssetSources] = useState<Record<string, string>>({});
   const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
@@ -492,6 +491,11 @@ export function App() {
       shell.setActiveDesignWorkspaceKind("quests");
       return;
     }
+    if (target.kind === "shader-graph") {
+      shell.setActiveProductMode("render");
+      shell.setActiveRenderWorkspaceKind("shaders");
+      return;
+    }
 
     shell.setActiveProductMode("build");
     shell.setActiveRegionId(target.regionId);
@@ -500,27 +504,12 @@ export function App() {
 
   function handleCreateRegion(input: { displayName: string; regionId: string }) {
     if (!session) return;
-    const newRegion: RegionDocument = {
-      identity: { id: input.regionId, schema: "RegionDocument", version: 1 },
+    const newRegion = createDefaultRegion({
+      regionId: input.regionId,
       displayName: input.displayName,
-      placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-      scene: {
-        folders: [],
-        placedAssets: [],
-        playerPresence: null,
-        npcPresences: [],
-        itemPresences: []
-      },
-      environmentBinding: {
-        defaultEnvironmentId:
-          session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
-      },
-      areas: [],
-      behaviors: [],
-      landscape: createDefaultRegionLandscapeState(),
-      markers: [],
-      gameplayPlacements: []
-    };
+      defaultEnvironmentId:
+        session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
+    });
     projectStore.getState().updateSession(addRegionToSession(session, newRegion));
     shellStore.getState().setActiveRegionId(input.regionId);
     setCreateRegionOpen(false);
@@ -530,6 +519,7 @@ export function App() {
     if (!session) return [];
     return getAllAssetDefinitions(session);
   }, [session]);
+  const assetSources = useAssetSources(projectHandle, assetDefinitions);
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -584,6 +574,45 @@ export function App() {
     () => pluginConfigurations.map((configuration) => configuration.pluginId),
     [pluginConfigurations]
   );
+
+  useEffect(() => {
+    if (!isPreviewRunning || !previewWindow || previewWindow.closed || !session) {
+      return;
+    }
+
+    const snapshot: AuthoringContextSnapshot = {
+      activeProductMode,
+      activeBuildWorkspaceKind: activeBuildKind,
+      activeDesignWorkspaceKind: activeDesignKind,
+      activeRenderWorkspaceKind: activeRenderKind,
+      activeRegionId,
+      activeEnvironmentId,
+      activeWorkspaceId,
+      selectedEntityIds: selectedIds
+    };
+
+    void postPreviewBootMessage(
+      previewWindow,
+      session,
+      snapshot,
+      assetSources,
+      installedPluginIds
+    );
+  }, [
+    activeBuildKind,
+    activeDesignKind,
+    activeEnvironmentId,
+    activeProductMode,
+    activeRegionId,
+    activeRenderKind,
+    activeWorkspaceId,
+    assetSources,
+    installedPluginIds,
+    isPreviewRunning,
+    previewWindow,
+    selectedIds,
+    session
+  ]);
 
   const discoveredPlugins = useMemo(() => listDiscoveredPluginDefinitions(), []);
   const installedPlugins = useMemo(
@@ -748,36 +777,6 @@ export function App() {
       }
     });
   }
-
-  useEffect(() => {
-    let disposed = false;
-    let generatedSources: Record<string, string> = {};
-
-    if (!projectHandle || assetDefinitions.length === 0) {
-      void Promise.resolve().then(() => {
-        if (!disposed) {
-          setAssetSources({});
-        }
-      });
-      return undefined;
-    }
-
-    void createAssetSourceMap(projectHandle, assetDefinitions).then(
-      (nextSources) => {
-        if (disposed) {
-          revokeAssetSources(nextSources);
-          return;
-        }
-        generatedSources = nextSources;
-        setAssetSources(nextSources);
-      }
-    );
-
-    return () => {
-      disposed = true;
-      revokeAssetSources(generatedSources);
-    };
-  }, [assetDefinitions, projectHandle]);
 
   const handleImportAsset = useCallback(async () => {
     const { handle, descriptor, session: currentSession } = projectStore.getState();
@@ -991,7 +990,7 @@ export function App() {
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
-    onSetAssetDefaultShader: (definitionId, shaderDefinitionId) =>
+    onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
       dispatchCommand({
         kind: "SetAssetDefaultShader",
         target: {
@@ -1004,7 +1003,42 @@ export function App() {
         },
         payload: {
           definitionId,
+          slot,
           shaderDefinitionId: shaderDefinitionId ?? null
+        }
+      }),
+    onSetAssetDefaultShaderParameterOverride: (definitionId, slot, override) =>
+      dispatchCommand({
+        kind: "SetAssetDefaultShaderParameterOverride",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          override
+        }
+      }),
+    onClearAssetDefaultShaderParameterOverride: (definitionId, slot, parameterId) =>
+      dispatchCommand({
+        kind: "ClearAssetDefaultShaderParameterOverride",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          parameterId
         }
       }),
     onRemoveAssetDefinition: handleRemoveAssetDefinition,
@@ -1099,7 +1133,9 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     shaderDefinitions,
     onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
-    onCommand: dispatchCommand
+    onCommand: dispatchCommand,
+    navigationTarget: workspaceNavigationTarget,
+    onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
   const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
     activeDesignKind

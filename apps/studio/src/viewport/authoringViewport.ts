@@ -1,14 +1,20 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
-  applyShaderToRenderable,
+  createCapsuleFallback,
+  createFallbackMesh,
+  createRenderableShaderApplicationState,
   createWebRenderHost,
-  releaseShadersFromObjectTree,
+  disposeRenderableObject,
+  ensureShaderSetAppliedToRenderable,
+  normalizeModelScale,
+  type RenderableShaderApplicationState,
   type ShaderRuntime,
   type WebRenderHost
 } from "@sugarmagic/render-web";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
+  EDITOR_NEUTRAL_CLAY_COLOR,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
@@ -21,15 +27,16 @@ import type {
   ViewportSceneState
 } from "@sugarmagic/workspaces";
 
-const CUBE_COLOR = 0x89b4fa;
 const GRID_COLOR = 0x45475a;
 
 const gltfLoader = new GLTFLoader();
 
 interface SceneObjectEntry {
   root: THREE.Group;
-  assetSourceUrl: string | null;
+  object: SceneObject;
   representationKey: string;
+  loadedWithAsset: boolean;
+  shaderApplication: RenderableShaderApplicationState;
 }
 
 interface LandscapeGridSpec {
@@ -62,34 +69,62 @@ function disposeGrid(grid: THREE.GridHelper) {
   grid.geometry.dispose();
 }
 
-function createFallbackMesh(): THREE.Mesh {
+/**
+ * Visibly distinct "something went wrong" mesh — bright magenta with rough
+ * emissive glow so authors can tell an error fallback apart from an
+ * asset-not-yet-loaded placeholder cube. Pair with a console error + alert
+ * explaining why it's here.
+ */
+function createErrorFallbackMesh(): THREE.Mesh {
   return new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshStandardMaterial({ color: CUBE_COLOR })
+    new THREE.MeshStandardMaterial({
+      color: 0xff00ff,
+      emissive: 0xff00ff,
+      emissiveIntensity: 0.6,
+      roughness: 1,
+      metalness: 0
+    })
   );
 }
 
-function createCapsuleFallback(object: SceneObject): THREE.Mesh {
-  const capsule = object.capsule;
-  if (!capsule) {
-    return createFallbackMesh();
+// Dedupe key → last-seen error message. Prevents an alert-storm when the
+// per-frame shader-ensure loop re-fires a broken shader every frame.
+const alertedRenderableErrors = new Map<string, string>();
+
+function reportRenderableError(
+  object: SceneObject,
+  phase: string,
+  error: unknown,
+  extra?: Record<string, unknown>
+): void {
+  const message =
+    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  const payload = {
+    instanceId: object.instanceId,
+    kind: object.kind,
+    displayName: object.displayName,
+    modelSourcePath: object.modelSourcePath ?? null,
+    representationKey: object.representationKey,
+    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null,
+    phase,
+    error,
+    ...extra
+  };
+  console.error(`[authoring-viewport:renderable:${phase}] ${message}`, payload);
+  if (error instanceof Error && error.stack) {
+    console.error(error.stack);
   }
 
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(
-      capsule.radius,
-      Math.max(0.05, capsule.height - capsule.radius * 2),
-      8,
-      16
-    ),
-    new THREE.MeshStandardMaterial({
-      color: capsule.color,
-      roughness: 0.38,
-      metalness: 0.04
-    })
+  const dedupeKey = `${object.instanceId}|${phase}`;
+  if (alertedRenderableErrors.get(dedupeKey) === message) {
+    return;
+  }
+  alertedRenderableErrors.set(dedupeKey, message);
+  window.alert(
+    `Renderable failed (${phase}) for "${object.displayName}" (${object.instanceId}).\n\n${message}\n\nSee console for full details.`
   );
-  mesh.position.y = capsule.height / 2;
-  return mesh;
 }
 
 function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
@@ -110,35 +145,12 @@ function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
   );
 }
 
-function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y <= 0) return;
-
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
-  box.setFromObject(root);
-  root.position.y -= box.min.y;
-}
-
-function disposeObject(root: THREE.Object3D) {
-  const runtimeManagedMaterials = releaseShadersFromObjectTree(root);
-  root.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    child.geometry.dispose();
-    if (Array.isArray(child.material)) {
-      for (const material of child.material) {
-        if (!runtimeManagedMaterials.has(material)) {
-          material.dispose();
-        }
-      }
-    } else {
-      if (!runtimeManagedMaterials.has(child.material)) {
-        child.material.dispose();
-      }
-    }
-  });
+function assetSourceAvailable(
+  object: SceneObject,
+  assetSources: Record<string, string>
+): boolean {
+  if (!object.modelSourcePath) return false;
+  return Boolean(assetSources[object.modelSourcePath]);
 }
 
 async function createRenderableRoot(
@@ -155,23 +167,85 @@ async function createRenderableRoot(
     object.modelSourcePath ? assetSources[object.modelSourcePath] ?? null : null;
 
   if (!assetSourceUrl) {
-    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
-    return { root, assetSourceUrl: null, representationKey: object.representationKey };
+    root.add(
+      object.kind === "asset"
+        ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
+        : createCapsuleFallback(object, {
+            fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
+          })
+    );
+    return {
+      root,
+      object,
+      representationKey: object.representationKey,
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
+    };
   }
 
+  let gltf: Awaited<ReturnType<typeof gltfLoader.loadAsync>>;
   try {
-    const gltf = await gltfLoader.loadAsync(assetSourceUrl);
-    const renderable = gltf.scene.clone(true);
-    if (object.targetModelHeight) {
-      normalizeModelScale(renderable, object.targetModelHeight);
-    }
-    host.enableShadowsOnObject(renderable);
-    applyShaderToRenderable(renderable, object, shaderRuntime);
-    root.add(renderable);
-    return { root, assetSourceUrl, representationKey: object.representationKey };
-  } catch {
-    root.add(object.kind === "asset" ? createFallbackMesh() : createCapsuleFallback(object));
-    return { root, assetSourceUrl, representationKey: object.representationKey };
+    gltf = await gltfLoader.loadAsync(assetSourceUrl);
+  } catch (error) {
+    reportRenderableError(object, "gltf-load", error, { assetSourceUrl });
+    root.add(createErrorFallbackMesh());
+    return {
+      root,
+      object,
+      representationKey: object.representationKey,
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
+    };
+  }
+
+  const renderable = gltf.scene.clone(true);
+  if (object.targetModelHeight) {
+    normalizeModelScale(renderable, object.targetModelHeight);
+  }
+  host.enableShadowsOnObject(renderable);
+  const shaderApplication = createRenderableShaderApplicationState();
+  try {
+    ensureShaderSetAppliedToRenderable(
+      renderable,
+      object,
+      shaderRuntime,
+      shaderApplication
+    );
+  } catch (error) {
+    reportRenderableError(object, "shader-apply", error);
+    root.add(createErrorFallbackMesh());
+    return {
+      root,
+      object,
+      representationKey: object.representationKey,
+      loadedWithAsset: false,
+      shaderApplication: createRenderableShaderApplicationState()
+    };
+  }
+  root.add(renderable);
+  return {
+    root,
+    object,
+    representationKey: object.representationKey,
+    loadedWithAsset: true,
+    shaderApplication
+  };
+}
+
+function ensureRenderableShadersApplied(
+  entry: SceneObjectEntry,
+  object: SceneObject,
+  shaderRuntime: ShaderRuntime | null
+) {
+  try {
+    ensureShaderSetAppliedToRenderable(
+      entry.root,
+      object,
+      shaderRuntime,
+      entry.shaderApplication
+    );
+  } catch (error) {
+    reportRenderableError(object, "shader-ensure", error);
   }
 }
 
@@ -234,15 +308,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
         if (generation !== renderGeneration) {
-          disposeObject(entry.root);
+          disposeRenderableObject(entry.root);
           return;
         }
         const existing = objectMap.get(object.instanceId);
         if (existing) {
           authoredRoot.remove(existing.root);
-          disposeObject(existing.root);
+          disposeRenderableObject(existing.root);
         }
         authoredRoot.add(entry.root);
+        ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
         objectMap.set(object.instanceId, entry);
       })
       .catch(() => {
@@ -306,6 +381,19 @@ export function createAuthoringViewport(): WorkspaceViewport {
       // gameplay loop) does NOT opt into this; it calls host.render() from
       // its own loop instead.
       host.startRenderLoop();
+      // Match runtime host behavior: re-ensure every scene object's shader
+      // application each frame. Diagnostic — isolating whether the bug is
+      // "authoring lacks this step" or something else.
+      host.subscribeFrame(() => {
+        for (const entry of objectMap.values()) {
+          ensureShaderSetAppliedToRenderable(
+            entry.root,
+            entry.object,
+            host.shaderRuntime,
+            entry.shaderApplication
+          );
+        }
+      });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);
@@ -316,7 +404,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
-        disposeObject(entry.root);
+        disposeRenderableObject(entry.root);
       }
       objectMap.clear();
       pendingRenderableLoads.clear();
@@ -353,7 +441,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
         const entry = objectMap.get(id);
         if (!entry) continue;
         authoredRoot.remove(entry.root);
-        disposeObject(entry.root);
+        disposeRenderableObject(entry.root);
         objectMap.delete(id);
       }
 
@@ -363,20 +451,20 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of delta.updated) {
         const existing = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.modelSourcePath
-          ? assetSources[object.modelSourcePath] ?? null
-          : null;
+        const assetAvailable = assetSourceAvailable(object, assetSources);
         if (
           existing &&
-          existing.assetSourceUrl === nextAssetSourceUrl &&
-          existing.representationKey === object.representationKey
+          existing.representationKey === object.representationKey &&
+          existing.loadedWithAsset === assetAvailable
         ) {
+          existing.object = object;
           applyObjectTransform(existing.root, object);
+          ensureRenderableShadersApplied(existing, object, host.shaderRuntime);
           continue;
         }
         if (existing) {
           authoredRoot.remove(existing.root);
-          disposeObject(existing.root);
+          disposeRenderableObject(existing.root);
           objectMap.delete(object.instanceId);
         }
 
@@ -385,12 +473,10 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
       for (const object of currentObjects) {
         const entry = objectMap.get(object.instanceId);
-        const nextAssetSourceUrl = object.modelSourcePath
-          ? assetSources[object.modelSourcePath] ?? null
-          : null;
-        if (entry && entry.assetSourceUrl !== nextAssetSourceUrl) {
+        const assetAvailable = assetSourceAvailable(object, assetSources);
+        if (entry && entry.loadedWithAsset !== assetAvailable) {
           authoredRoot.remove(entry.root);
-          disposeObject(entry.root);
+          disposeRenderableObject(entry.root);
           objectMap.delete(object.instanceId);
 
           scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
@@ -400,7 +486,9 @@ export function createAuthoringViewport(): WorkspaceViewport {
           scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
           continue;
         }
+        entry.object = object;
         applyObjectTransform(entry.root, object);
+        ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
       }
 
       previousObjects = currentObjects;

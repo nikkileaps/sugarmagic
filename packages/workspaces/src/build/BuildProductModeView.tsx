@@ -16,6 +16,7 @@ import type {
   EnvironmentDefinition,
   NPCDefinition,
   QuestDefinition,
+  ShaderParameterOverride,
   ShaderGraphDocument,
   RegionDocument
 } from "@sugarmagic/domain";
@@ -82,7 +83,18 @@ export interface BuildProductModeViewProps {
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
+    slot: "surface" | "deform",
     shaderDefinitionId: string | null
+  ) => void;
+  onSetAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: "surface" | "deform",
+    override: ShaderParameterOverride
+  ) => void;
+  onClearAssetDefaultShaderParameterOverride?: (
+    definitionId: string,
+    slot: "surface" | "deform",
+    parameterId: string
   ) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   renderLayoutInspectorSections?: (context: {
@@ -131,6 +143,8 @@ export function useBuildProductModeView(
     onImportAsset,
     onUpdateAssetDefinition,
     onSetAssetDefaultShader,
+    onSetAssetDefaultShaderParameterOverride,
+    onClearAssetDefaultShaderParameterOverride,
     onRemoveAssetDefinition,
     renderLayoutInspectorSections
   } = props;
@@ -340,6 +354,12 @@ export function useBuildProductModeView(
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
+    contentLibrary: session?.contentLibrary ?? {
+      identity: { id: "empty:content-library", schema: "ContentLibrary", version: 1 },
+      assetDefinitions: [],
+      environmentDefinitions: [],
+      shaderDefinitions: []
+    },
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
@@ -371,6 +391,10 @@ export function useBuildProductModeView(
     },
     onUpdateAssetDefinition,
     onSetAssetDefaultShader,
+    onSetAssetDefaultShaderParameterOverride,
+    onClearAssetDefaultShaderParameterOverride,
+    onEditShaderGraph: (shaderDefinitionId) =>
+      onNavigateToTarget?.({ kind: "shader-graph", shaderDefinitionId }),
     onRemoveAssetDefinition,
     hasSceneReferences: (definitionId) =>
       session

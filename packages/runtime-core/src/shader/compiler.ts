@@ -144,6 +144,22 @@ function coerceValue(
     return referenceValue(targetType, opId);
   }
 
+  if (
+    (value.dataType === "vec3" && targetType === "vec4") ||
+    (value.dataType === "vec2" && (targetType === "vec3" || targetType === "vec4")) ||
+    (value.dataType === "color" && targetType === "vec4")
+  ) {
+    const opId = nextOpId(context, "widen");
+    context.currentOps.push({
+      opId,
+      opKind: "widen",
+      dataType: targetType,
+      nodeId,
+      inputs: { input: value }
+    });
+    return referenceValue(targetType, opId);
+  }
+
   context.diagnostics.push({
     severity: "error",
     nodeId,
@@ -269,6 +285,12 @@ function builtinForNodeType(
       return asBuiltin("cameraPosition", "vec3");
     case "input.view-direction":
       return asBuiltin("viewDirection", "vec3");
+    case "input.sun-direction":
+      return asBuiltin("sunDirection", "vec3");
+    case "input.sphere-normal":
+      return asBuiltin("sphereNormal", "vec3");
+    case "input.tree-height":
+      return asBuiltin("treeHeight", "float");
     case "input.screen-uv":
       return asBuiltin("screenUV", "vec2");
     case "input.scene-color":
@@ -282,27 +304,22 @@ function builtinForNodeType(
 
 function compileOutputNode(
   context: CompileContext,
-  node: ShaderNodeInstance
+  node: ShaderNodeInstance,
+  requestedPortId: string
 ): ShaderIRValue | null {
   const definition = getShaderNodeDefinition(node.nodeType);
   if (!definition) {
     return null;
   }
 
-  if (node.nodeType === "output.vertex") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.fragment") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.emissive") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
-  }
-  if (node.nodeType === "output.post-process") {
-    return incomingValue(context, node, definition.inputPorts[0]!);
+  const port =
+    definition.inputPorts.find((candidate) => candidate.portId === requestedPortId) ??
+    null;
+  if (!port) {
+    return null;
   }
 
-  return null;
+  return incomingValue(context, node, port);
 }
 
 function compileNodePort(
@@ -349,6 +366,15 @@ function compileNodePort(
     return value;
   }
 
+  if (node.nodeType === "input.material-texture") {
+    const value =
+      requestedPortId === "alpha"
+        ? asBuiltin("materialTextureAlpha", "float")
+        : asBuiltin("materialTextureColor", "color");
+    context.valuesByNodePort.set(cacheKey, value);
+    return value;
+  }
+
   if (node.nodeType === "input.constant-float") {
     const value =
       typeof node.settings.value === "number" && Number.isFinite(node.settings.value)
@@ -370,7 +396,7 @@ function compileNodePort(
   }
 
   if (node.nodeType.startsWith("output.")) {
-    const outputValue = compileOutputNode(context, node);
+    const outputValue = compileOutputNode(context, node, requestedPortId);
     if (outputValue) {
       context.valuesByNodePort.set(cacheKey, outputValue);
     }
