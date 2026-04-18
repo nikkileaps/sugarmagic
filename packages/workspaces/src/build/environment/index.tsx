@@ -842,6 +842,101 @@ export function useEnvironmentWorkspaceView(
               </Stack>
             </PanelSection>
 
+            <PanelSection title="Sky" icon="🌌">
+              <Stack gap="md">
+                <Switch
+                  label="Enable Sky"
+                  checked={selectedEnvironment.atmosphere.sky.enabled}
+                  onChange={(event) =>
+                    updateDefinition((definition) => ({
+                      ...definition,
+                      atmosphere: {
+                        ...definition.atmosphere,
+                        sky: {
+                          ...definition.atmosphere.sky,
+                          enabled: event.currentTarget.checked
+                        }
+                      }
+                    }))
+                  }
+                />
+                <ColorField
+                  label="Top Color"
+                  value={selectedEnvironment.atmosphere.sky.topColor}
+                  onChange={(value) =>
+                    updateDefinition((definition) => ({
+                      ...definition,
+                      atmosphere: {
+                        ...definition.atmosphere,
+                        sky: {
+                          ...definition.atmosphere.sky,
+                          topColor: value
+                        }
+                      }
+                    }))
+                  }
+                  swatches={ENVIRONMENT_SWATCHES}
+                />
+                <ColorField
+                  label="Bottom Color"
+                  value={selectedEnvironment.atmosphere.sky.bottomColor}
+                  onChange={(value) =>
+                    updateDefinition((definition) => ({
+                      ...definition,
+                      atmosphere: {
+                        ...definition.atmosphere,
+                        sky: {
+                          ...definition.atmosphere.sky,
+                          bottomColor: value
+                        }
+                      }
+                    }))
+                  }
+                  swatches={ENVIRONMENT_SWATCHES}
+                />
+                <SliderNumberField
+                  label="Horizon Blend"
+                  value={selectedEnvironment.atmosphere.sky.horizonBlend}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  precision={2}
+                  onChange={(value) =>
+                    updateDefinition((definition) => ({
+                      ...definition,
+                      atmosphere: {
+                        ...definition.atmosphere,
+                        sky: {
+                          ...definition.atmosphere.sky,
+                          horizonBlend: value
+                        }
+                      }
+                    }))
+                  }
+                />
+                <SliderNumberField
+                  label="Saturation"
+                  value={selectedEnvironment.atmosphere.sky.saturation}
+                  min={0}
+                  max={2}
+                  step={0.01}
+                  precision={2}
+                  onChange={(value) =>
+                    updateDefinition((definition) => ({
+                      ...definition,
+                      atmosphere: {
+                        ...definition.atmosphere,
+                        sky: {
+                          ...definition.atmosphere.sky,
+                          saturation: value
+                        }
+                      }
+                    }))
+                  }
+                />
+              </Stack>
+            </PanelSection>
+
             <PanelSection title="Post Process Stack" icon="🎞️">
               <Stack gap="md">
                 <Select

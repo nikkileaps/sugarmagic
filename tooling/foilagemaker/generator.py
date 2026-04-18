@@ -17,7 +17,7 @@ from pathlib import Path
 import bpy
 from mathutils import Quaternion, Vector
 
-ADDON_VERSION = "0.11.2"
+ADDON_VERSION = "0.12.1"
 TREE_KIND = "tree"
 OBJECT_KIND_KEY = "foilagemaker_kind"
 ASSET_KIND_KEY = "sugarmagic_asset_kind"
@@ -25,6 +25,12 @@ VERSION_KEY = "foilagemaker_version"
 SUPPRESS_UPDATE_KEY = "_foilagemaker_suppress_update"
 LEAF_IMAGE_NAME = "FoilageMakerLeafSprite"
 LEAF_COLOR_ATTRIBUTE = "FoilageMakerLeafColor"
+# Custom glTF vertex attributes. The glTF 2.0 spec requires custom (user-defined)
+# attribute names to start with an underscore. Blender's glTF exporter preserves
+# attribute names exactly when they already start with "_", so these string
+# constants must match the TSL `attribute()` calls in ShaderRuntime.ts.
+SPHERE_NORMAL_ATTRIBUTE = "_SPHERE_NORMAL"
+TREE_HEIGHT_ATTRIBUTE = "_TREE_HEIGHT"
 DEFAULT_TREE_PRESET = "clustered_stylized"
 _TREE_PRESET_LABELS = {
     "clustered_stylized": "Clustered Stylized Canopy",
@@ -76,8 +82,11 @@ def rebuild_tree_object(obj: bpy.types.Object) -> None:
         if index < len(buffers.face_smooth):
             polygon.use_smooth = buffers.face_smooth[index]
 
+    _finalize_tree_height(buffers)
     _apply_uvs(mesh, buffers)
     _apply_vertex_colors(mesh, buffers)
+    _apply_sphere_normal_attribute(mesh, buffers)
+    _apply_tree_height_attribute(mesh, buffers)
     _apply_custom_normals(mesh, buffers)
 
     obj[ASSET_KIND_KEY] = "foliage"
@@ -301,6 +310,15 @@ class _MeshBuffers:
     verts: list[tuple[float, float, float]] = field(default_factory=list)
     vertex_colors: list[tuple[float, float, float, float]] = field(default_factory=list)
     vertex_normal_overrides: list[Vector | None] = field(default_factory=list)
+    # Fake per-cluster "sphere normal" for painterly lighting. Leaf-card vertices
+    # store normalize(vertexPos - clusterCenter); trunk vertices keep (0,0,0)
+    # (sampled via lerp against world-normal in the shader so the trunk falls
+    # through to using its real surface normal).
+    vertex_sphere_normals: list[tuple[float, float, float]] = field(default_factory=list)
+    # Post-pass 0..1 altitude within the tree. 0 at base of trunk, 1 at top
+    # of highest canopy cluster. Drives the tree-wide top-warm / bottom-cool
+    # color gradient in the foliage-surface shader.
+    vertex_tree_height: list[float] = field(default_factory=list)
     faces: list[tuple[int, ...]] = field(default_factory=list)
     face_materials: list[int] = field(default_factory=list)
     face_smooth: list[bool] = field(default_factory=list)
@@ -655,6 +673,7 @@ def _add_canopy_cluster(
             buffers=buffers,
             center=point,
             normal=normal,
+            cluster_center=cluster.center,
             leaf_size=props.leaf_size * rng.uniform(0.72, 1.2),
             leaf_width_bias=props.leaf_width * rng.uniform(0.9, 1.1),
             leaf_height_bias=props.leaf_height * rng.uniform(0.9, 1.1),
@@ -672,6 +691,7 @@ def _add_canopy_cluster(
             buffers=buffers,
             center=point,
             normal=normal.lerp(Vector((0.0, 0.0, 1.0)), 0.2).normalized(),
+            cluster_center=cluster.center,
             leaf_size=props.leaf_size * rng.uniform(0.55, 0.9),
             leaf_width_bias=props.leaf_width * rng.uniform(0.9, 1.1),
             leaf_height_bias=props.leaf_height * rng.uniform(0.9, 1.1),
@@ -833,6 +853,7 @@ def _add_leaf_spray(
     buffers: _MeshBuffers,
     center: Vector,
     normal: Vector,
+    cluster_center: Vector,
     leaf_size: float,
     leaf_width_bias: float,
     leaf_height_bias: float,
@@ -854,6 +875,7 @@ def _add_leaf_spray(
             buffers=buffers,
             center=card_center,
             normal=card_normal,
+            cluster_center=cluster_center,
             height=leaf_size * _resolve_leaf_dimension_scale(leaf_height_bias) * scale,
             width=leaf_size * _resolve_leaf_dimension_scale(leaf_width_bias) * scale,
             rotation=rotation,
@@ -939,6 +961,7 @@ def _add_leaf_card(
     buffers: _MeshBuffers,
     center: Vector,
     normal: Vector,
+    cluster_center: Vector,
     height: float,
     width: float,
     rotation: float,
@@ -955,29 +978,37 @@ def _add_leaf_card(
 
     half_width = width * 0.5
     half_height = height * 0.5
+    p0 = center - right * half_width - up * half_height
+    p1 = center + right * half_width - up * half_height
+    p2 = center + right * half_width + up * half_height
+    p3 = center - right * half_width + up * half_height
     v0 = _append_vertex(
         buffers,
-        center - right * half_width - up * half_height,
+        p0,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p0, cluster_center),
     )
     v1 = _append_vertex(
         buffers,
-        center + right * half_width - up * half_height,
+        p1,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p1, cluster_center),
     )
     v2 = _append_vertex(
         buffers,
-        center + right * half_width + up * half_height,
+        p2,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p2, cluster_center),
     )
     v3 = _append_vertex(
         buffers,
-        center - right * half_width + up * half_height,
+        p3,
         color_hint,
         normal_override=normal,
+        sphere_normal=_sphere_normal_for(p3, cluster_center),
     )
     uv_u0, uv_v0, uv_u1, uv_v1 = uv_rect
     buffers.add_face(
@@ -998,11 +1029,27 @@ def _append_vertex(
     position: Vector,
     color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     normal_override: Vector | None = None,
+    sphere_normal: tuple[float, float, float] | None = None,
 ) -> int:
     buffers.verts.append((position.x, position.y, position.z))
     buffers.vertex_colors.append(color)
     buffers.vertex_normal_overrides.append(normal_override.copy() if normal_override else None)
+    # (0,0,0) signals "no sphere normal for this vertex" — the foliage shader
+    # falls back to the real world-normal for trunk/branch vertices via a
+    # length check so the painterly look stays on leaves only.
+    buffers.vertex_sphere_normals.append(sphere_normal or (0.0, 0.0, 0.0))
+    buffers.vertex_tree_height.append(0.0)  # filled in by post-pass
     return len(buffers.verts) - 1
+
+
+def _sphere_normal_for(
+    position: Vector, cluster_center: Vector
+) -> tuple[float, float, float]:
+    offset = position - cluster_center
+    if offset.length < 1e-5:
+        return (0.0, 0.0, 1.0)
+    n = offset.normalized()
+    return (n.x, n.y, n.z)
 
 
 def _apply_uvs(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
@@ -1028,6 +1075,77 @@ def _apply_vertex_colors(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
     )
     for index, color in enumerate(buffers.vertex_colors):
         attribute.data[index].color = color
+
+
+def _finalize_tree_height(buffers: _MeshBuffers) -> None:
+    """Post-pass: fill vertex_tree_height with 0..1 altitude along the tree.
+
+    Leaf vertices (identified by their non-zero sphere_normal) are normalized
+    against the CANOPY-only Z range so a leaf at the bottom of the canopy
+    gets tree_height=0 and a leaf at the top of the canopy gets 1. This is
+    what makes the painterly top-warm / bottom-cool gradient separate
+    visually — if we used the whole-tree range instead, canopy leaves would
+    only cover the top half of the gradient and never reach bottomColor.
+
+    Trunk vertices fall back to whole-tree normalization so the trunk
+    itself also shows a subtle bottom-to-top hue shift.
+    """
+    if not buffers.verts:
+        return
+
+    leaf_indices = [
+        i for i, sn in enumerate(buffers.vertex_sphere_normals)
+        if (sn[0] * sn[0] + sn[1] * sn[1] + sn[2] * sn[2]) > 1e-8
+    ]
+    tree_min_z = min(v[2] for v in buffers.verts)
+    tree_max_z = max(v[2] for v in buffers.verts)
+    tree_span = max(tree_max_z - tree_min_z, 1e-5)
+
+    if leaf_indices:
+        leaf_min_z = min(buffers.verts[i][2] for i in leaf_indices)
+        leaf_max_z = max(buffers.verts[i][2] for i in leaf_indices)
+        leaf_span = max(leaf_max_z - leaf_min_z, 1e-5)
+    else:
+        leaf_min_z = tree_min_z
+        leaf_span = tree_span
+
+    leaf_set = set(leaf_indices)
+    heights: list[float] = []
+    for i, vertex in enumerate(buffers.verts):
+        if i in leaf_set:
+            h = (vertex[2] - leaf_min_z) / leaf_span
+        else:
+            h = (vertex[2] - tree_min_z) / tree_span
+        heights.append(max(0.0, min(1.0, h)))
+    buffers.vertex_tree_height = heights
+
+
+def _apply_sphere_normal_attribute(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
+    _remove_attribute_if_present(mesh, SPHERE_NORMAL_ATTRIBUTE)
+    attribute = mesh.attributes.new(
+        name=SPHERE_NORMAL_ATTRIBUTE,
+        type="FLOAT_VECTOR",
+        domain="POINT",
+    )
+    for index, vec in enumerate(buffers.vertex_sphere_normals):
+        attribute.data[index].vector = vec
+
+
+def _apply_tree_height_attribute(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:
+    _remove_attribute_if_present(mesh, TREE_HEIGHT_ATTRIBUTE)
+    attribute = mesh.attributes.new(
+        name=TREE_HEIGHT_ATTRIBUTE,
+        type="FLOAT",
+        domain="POINT",
+    )
+    for index, value in enumerate(buffers.vertex_tree_height):
+        attribute.data[index].value = value
+
+
+def _remove_attribute_if_present(mesh: bpy.types.Mesh, name: str) -> None:
+    existing = mesh.attributes.get(name)
+    if existing is not None:
+        mesh.attributes.remove(existing)
 
 
 def _apply_custom_normals(mesh: bpy.types.Mesh, buffers: _MeshBuffers) -> None:

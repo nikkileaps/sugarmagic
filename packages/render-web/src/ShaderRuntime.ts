@@ -23,9 +23,12 @@ import {
   cameraWorldMatrix,
   clamp,
   cos,
+  attribute as tslAttribute,
   dot,
   exp,
   float,
+  modelNormalMatrix,
+  select,
   length,
   luminance,
   max,
@@ -420,6 +423,49 @@ function materializeBuiltin(
       return positionViewDirection;
     case "sunDirection":
       return context.sunDirectionUniform;
+    case "sphereNormal": {
+      // Sample the FoilageMaker-baked local-space sphere normal and rotate
+      // it into world space for lighting math. Trunk vertices (and any
+      // mesh with no sphere-normal attribute) have a zero vector here — we
+      // fall back to the real world normal so the trunk/branch geometry
+      // keeps its usual surface shading.
+      //
+      // NOTE on naming: Three's GLTFLoader lowercases all non-standard
+      // attribute names when loading (see loader source near line 4789),
+      // so the glTF attribute `_SPHERE_NORMAL` ends up on the geometry as
+      // `_sphere_normal`. TSL `attribute()` reads BufferGeometry attributes
+      // by their in-memory name, which is the lowercased form.
+      const localSphereNormal = (tslAttribute as unknown as (
+        name: string,
+        type: string
+      ) => unknown)("_sphere_normal", "vec3");
+      const localDot = (localSphereNormal as { dot: (other: unknown) => unknown }).dot(
+        localSphereNormal
+      );
+      const worldSphereNormal = (
+        (modelNormalMatrix as { mul: (other: unknown) => unknown }).mul(
+          localSphereNormal
+        ) as { normalize: () => unknown }
+      ).normalize();
+      return (select as unknown as (
+        cond: unknown,
+        a: unknown,
+        b: unknown
+      ) => unknown)(
+        (localDot as { greaterThan: (other: unknown) => unknown }).greaterThan(
+          float(0.01)
+        ),
+        worldSphereNormal,
+        normalWorld
+      );
+    }
+    case "treeHeight":
+      // Three's GLTFLoader lowercases custom attribute names — see note
+      // on sphereNormal above.
+      return (tslAttribute as unknown as (
+        name: string,
+        type: string
+      ) => unknown)("_tree_height", "float");
     case "materialTextureColor":
       if (
         context.target.targetKind !== "mesh-surface" &&
@@ -1046,6 +1092,10 @@ export class ShaderRuntime {
       direction.y,
       direction.z
     ).normalize();
+  }
+
+  getCompileProfile(): RuntimeCompileProfile {
+    return this.compileProfile;
   }
 
   applyShader(

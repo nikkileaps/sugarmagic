@@ -9,7 +9,7 @@ Status: active
 bl_info = {
     "name": "FoilageMaker",
     "author": "Sugarmagic",
-    "version": (0, 11, 2),
+    "version": (0, 12, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > FoilageMaker",
     "description": "Create export-safe stylized procedural trees for Sugarmagic.",

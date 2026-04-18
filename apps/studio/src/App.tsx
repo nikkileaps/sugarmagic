@@ -375,39 +375,18 @@ function handleStartPreview(
   // Wait for preview ready, then send boot data
   const capturedSession = session;
   const capturedWindow = previewWindow;
+  const capturedAssetSources = assetSources;
+  const capturedInstalledPluginIds = installedPluginIds;
+  const capturedSnapshot = snapshot;
   async function onMessage(event: MessageEvent) {
     if (event.data?.type === "PREVIEW_READY") {
       window.removeEventListener("message", onMessage);
-      const regions = getAllRegions(capturedSession);
-      capturedWindow.postMessage(
-        {
-          type: "PREVIEW_BOOT",
-          regions,
-          activeRegionId: capturedSession.activeRegionId,
-          activeEnvironmentId: snapshot.activeEnvironmentId,
-          installedPluginIds,
-          pluginRuntimeEnvironment: readStudioPluginRuntimeEnvironment(),
-          pluginConfigurations: capturedSession.gameProject.pluginConfigurations,
-          contentLibrary: capturedSession.contentLibrary,
-          playerDefinition: capturedSession.gameProject.playerDefinition,
-          spellDefinitions: capturedSession.gameProject.spellDefinitions,
-          itemDefinitions: capturedSession.gameProject.itemDefinitions,
-          documentDefinitions: capturedSession.gameProject.documentDefinitions,
-          npcDefinitions: capturedSession.gameProject.npcDefinitions,
-          dialogueDefinitions: capturedSession.gameProject.dialogueDefinitions,
-          questDefinitions: capturedSession.gameProject.questDefinitions,
-          assetSources,
-          pluginBootPayloads: {
-            sugarlang:
-              (await buildSugarlangPreviewBootPayloadForSession(
-                capturedSession,
-                snapshot.activeWorkspaceId ??
-                  capturedSession.gameProject.identity.id,
-                readStudioPluginRuntimeEnvironment()
-              )) ?? undefined
-          }
-        },
-        "*"
+      await postPreviewBootMessage(
+        capturedWindow,
+        capturedSession,
+        capturedSnapshot,
+        capturedAssetSources,
+        capturedInstalledPluginIds
       );
     }
   }
@@ -445,6 +424,50 @@ function handleStopPreview() {
   shell.setSelection(snapshot.selectedEntityIds);
 }
 
+async function postPreviewBootMessage(
+  previewWindow: Window,
+  session: ReturnType<typeof projectStore.getState>["session"],
+  snapshot: AuthoringContextSnapshot,
+  assetSources: Record<string, string>,
+  installedPluginIds: string[]
+) {
+  if (!session || previewWindow.closed) {
+    return;
+  }
+
+  const regions = getAllRegions(session);
+  const runtimeEnvironment = readStudioPluginRuntimeEnvironment();
+  previewWindow.postMessage(
+    {
+      type: "PREVIEW_BOOT",
+      regions,
+      activeRegionId: session.activeRegionId,
+      activeEnvironmentId: snapshot.activeEnvironmentId,
+      installedPluginIds,
+      pluginRuntimeEnvironment: runtimeEnvironment,
+      pluginConfigurations: session.gameProject.pluginConfigurations,
+      contentLibrary: session.contentLibrary,
+      playerDefinition: session.gameProject.playerDefinition,
+      spellDefinitions: session.gameProject.spellDefinitions,
+      itemDefinitions: session.gameProject.itemDefinitions,
+      documentDefinitions: session.gameProject.documentDefinitions,
+      npcDefinitions: session.gameProject.npcDefinitions,
+      dialogueDefinitions: session.gameProject.dialogueDefinitions,
+      questDefinitions: session.gameProject.questDefinitions,
+      assetSources,
+      pluginBootPayloads: {
+        sugarlang:
+          (await buildSugarlangPreviewBootPayloadForSession(
+            session,
+            snapshot.activeWorkspaceId ?? session.gameProject.identity.id,
+            runtimeEnvironment
+          )) ?? undefined
+      }
+    },
+    "*"
+  );
+}
+
 // --- App ---
 
 export function App() {
@@ -460,6 +483,7 @@ export function App() {
   const phase = useStore(projectStore, (s) => s.phase);
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
+  const previewWindow = useStore(previewStore, (s) => s.previewWindow);
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
@@ -589,6 +613,45 @@ export function App() {
     () => pluginConfigurations.map((configuration) => configuration.pluginId),
     [pluginConfigurations]
   );
+
+  useEffect(() => {
+    if (!isPreviewRunning || !previewWindow || previewWindow.closed || !session) {
+      return;
+    }
+
+    const snapshot: AuthoringContextSnapshot = {
+      activeProductMode,
+      activeBuildWorkspaceKind: activeBuildKind,
+      activeDesignWorkspaceKind: activeDesignKind,
+      activeRenderWorkspaceKind: activeRenderKind,
+      activeRegionId,
+      activeEnvironmentId,
+      activeWorkspaceId,
+      selectedEntityIds: selectedIds
+    };
+
+    void postPreviewBootMessage(
+      previewWindow,
+      session,
+      snapshot,
+      assetSources,
+      installedPluginIds
+    );
+  }, [
+    activeBuildKind,
+    activeDesignKind,
+    activeEnvironmentId,
+    activeProductMode,
+    activeRegionId,
+    activeRenderKind,
+    activeWorkspaceId,
+    assetSources,
+    installedPluginIds,
+    isPreviewRunning,
+    previewWindow,
+    selectedIds,
+    session
+  ]);
 
   const discoveredPlugins = useMemo(() => listDiscoveredPluginDefinitions(), []);
   const installedPlugins = useMemo(

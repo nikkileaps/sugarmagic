@@ -52,17 +52,35 @@ export function applyShaderToRenderable(
     !shaderRuntime ||
     (!object.effectiveShaders.surface && !object.effectiveShaders.deform)
   ) {
+    console.warn("[shader-apply:skip]", {
+      instanceId: object.instanceId,
+      compileProfile:
+        shaderRuntime?.getCompileProfile?.() ?? null,
+      hasShaderRuntime: shaderRuntime !== null,
+      surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+      deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
+    });
     return;
   }
+
+  console.warn("[shader-apply:start]", {
+    instanceId: object.instanceId,
+    compileProfile: shaderRuntime.getCompileProfile(),
+    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
+  });
 
   const previousManagedMaterials = releaseShadersFromRenderable(renderable);
   const nextLeases: ShaderMaterialLease[] = [];
   const replacedBaseMaterials = new Set<THREE.Material>();
+  let meshCount = 0;
+  let finalizedCount = 0;
 
   renderable.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) {
       return;
     }
+    meshCount += 1;
 
     const applyMaterial = (material: THREE.Material): THREE.Material => {
       const finalized = shaderRuntime.applyShaderSet(object.effectiveShaders, {
@@ -74,6 +92,7 @@ export function applyShaderToRenderable(
         return material;
       }
 
+      finalizedCount += 1;
       nextLeases.push({ runtime: shaderRuntime, material: finalized });
       if (finalized !== material && !previousManagedMaterials.has(material)) {
         replacedBaseMaterials.add(material);
@@ -95,4 +114,13 @@ export function applyShaderToRenderable(
   for (const material of replacedBaseMaterials) {
     material.dispose();
   }
+
+  console.warn("[shader-apply:done]", {
+    instanceId: object.instanceId,
+    compileProfile: shaderRuntime.getCompileProfile(),
+    meshCount,
+    finalizedCount,
+    leasedMaterialCount: nextLeases.length,
+    replacedBaseMaterialCount: replacedBaseMaterials.size
+  });
 }

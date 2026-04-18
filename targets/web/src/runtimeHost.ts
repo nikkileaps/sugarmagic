@@ -846,6 +846,17 @@ export function createWebRuntimeHost(
         npcDefinitions: state.npcDefinitions,
         includePlayerPresence: false
       });
+      console.warn("[web-runtime:resolved-objects]", {
+        regionId: region.identity.id,
+        count: objects.length,
+        objects: objects.map((object) => ({
+          instanceId: object.instanceId,
+          kind: object.kind,
+          assetKind: object.assetKind ?? null,
+          surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+          deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
+        }))
+      });
       for (const object of objects) {
         const rootObject = new THREE.Group();
         rootObject.name = object.instanceId;
@@ -881,6 +892,13 @@ export function createWebRuntimeHost(
               }
               host?.enableShadowsOnObject(renderable);
               applyShaderToRenderable(renderable, object, host?.shaderRuntime ?? null);
+              console.warn("[web-runtime:renderable:loaded]", {
+                instanceId: object.instanceId,
+                assetSourceUrl,
+                hasShaderRuntimeAtLoad: host?.shaderRuntime !== null,
+                surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+                deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null
+              });
               rootObject.add(renderable);
             })
             .catch((error) => {

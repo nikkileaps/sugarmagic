@@ -25,6 +25,8 @@ export type ShaderIRBuiltinName =
   | "cameraPosition"
   | "viewDirection"
   | "sunDirection"
+  | "sphereNormal"
+  | "treeHeight"
   | "materialTextureColor"
   | "materialTextureAlpha"
   | "screenUV"
@@ -101,6 +103,8 @@ const BUILTIN_TYPES: Record<ShaderIRBuiltinName, ShaderDataType> = {
   cameraPosition: "vec3",
   viewDirection: "vec3",
   sunDirection: "vec3",
+  sphereNormal: "vec3",
+  treeHeight: "float",
   materialTextureColor: "color",
   materialTextureAlpha: "float",
   screenUV: "vec2",

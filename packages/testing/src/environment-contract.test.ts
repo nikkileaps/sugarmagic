@@ -13,6 +13,7 @@ import {
   createDefaultRegionLandscapeState,
   createEmptyContentLibrarySnapshot,
   getShaderDefinition,
+  synchronizeEnvironmentDefinition,
   type ContentLibrarySnapshot,
   type RegionDocument
 } from "@sugarmagic/domain";
@@ -164,6 +165,35 @@ describe("environment contract", () => {
       (edge) => edge.targetNodeId === "one-minus-exp" && edge.targetPortId === "a"
     );
     expect(subtractInput?.sourceNodeId).toBe("one");
+  });
+
+  it("synchronizes the built-in fog binding enable state from authored fog", () => {
+    const definition = createDefaultEnvironmentDefinition("project", {
+      definitionId: "project:environment:default",
+      displayName: "Default",
+      preset: "default"
+    });
+    const synced = synchronizeEnvironmentDefinition(
+      {
+        ...definition,
+        atmosphere: {
+          ...definition.atmosphere,
+          fog: {
+            ...definition.atmosphere.fog,
+            enabled: false
+          }
+        }
+      },
+      "project"
+    );
+
+    const fogBinding = synced.postProcessShaders.find(
+      (binding) => binding.shaderDefinitionId === createBuiltInFogTintShaderId("project")
+    );
+
+    expect(synced.atmosphere.fog.enabled).toBe(false);
+    expect(fogBinding).not.toBeUndefined();
+    expect(fogBinding?.enabled).toBe(false);
   });
 
   // Story 3 (shadows): authored shadow quality maps to concrete GPU-facing

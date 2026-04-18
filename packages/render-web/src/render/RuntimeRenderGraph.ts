@@ -31,6 +31,21 @@ export interface RuntimeRenderGraph {
   dispose: () => void;
 }
 
+/**
+ * Three's WebGPU RenderPipeline does not react to outputNode swaps by itself.
+ * Callers must mark the pipeline dirty so the fullscreen quad material gets
+ * rebuilt on the next render. Without this, live post-process edits can leave
+ * the previous output graph visually stuck until the host remounts.
+ */
+export function assignRenderPipelineOutputNode(
+  pipeline: RenderPipeline,
+  node: unknown | null,
+  baseOutputNode: unknown
+): void {
+  pipeline.outputNode = (((node as typeof baseOutputNode | null) ?? baseOutputNode) as never);
+  pipeline.needsUpdate = true;
+}
+
 export function createRuntimeRenderGraph(options: {
   renderer: WebGPURenderer;
   scene: THREE.Scene;
@@ -90,7 +105,7 @@ export function createRuntimeRenderGraph(options: {
       if (!pipeline) {
         return;
       }
-      pipeline.outputNode = (node as typeof baseOutputNode | null) ?? baseOutputNode;
+      assignRenderPipelineOutputNode(pipeline, node, baseOutputNode);
     },
     resize() {
       // The TSL graph pulls the drawing buffer size from the renderer.

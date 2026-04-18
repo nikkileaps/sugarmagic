@@ -11,6 +11,7 @@ import {
 import {
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultEnvironmentDefinition,
+  createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -218,6 +219,19 @@ describe("shader runtime contracts", () => {
 
   it("compiles the shipped color grade graph without validation errors", () => {
     const shader = createDefaultColorGradePostProcessShaderGraph("project");
+    const compiled = compileShaderGraph(shader, {
+      compileProfile: "authoring-preview"
+    });
+
+    expect(compiled.targetKind).toBe("post-process");
+    expect(compiled.outputs.postProcessColor).toBeDefined();
+    expect(
+      compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+    ).toEqual([]);
+  });
+
+  it("compiles the shipped fog tint graph without validation errors", () => {
+    const shader = createDefaultFogTintPostProcessShaderGraph("project");
     const compiled = compileShaderGraph(shader, {
       compileProfile: "authoring-preview"
     });

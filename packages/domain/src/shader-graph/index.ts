@@ -299,9 +299,39 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     nodeType: "input.sun-direction",
     displayName: "Sun Direction",
     category: "input",
+    // Incoming light direction, pointing from the sun toward the scene.
+    // This is the vector shader graphs should dot against normals when they
+    // want the lit hemisphere to match the actual directional light rig.
     validTargetKinds: ["mesh-surface", "mesh-deform"],
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    // Fake sphere normal baked into the FoilageMaker export's _SPHERE_NORMAL
+    // vertex attribute (normalize(vertex - clusterCenter)). Replaces the
+    // leaf-card normal for lighting purposes so each leaf cluster shades as
+    // a smooth volumetric orb rather than a pile of flat cards. Trunk
+    // vertices have (0,0,0) here and the foliage shader blends against
+    // world-normal accordingly.
+    nodeType: "input.sphere-normal",
+    displayName: "Sphere Normal",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    // Normalized 0..1 altitude within the tree (0 at trunk base, 1 at the
+    // highest canopy vertex), baked into the _TREE_HEIGHT vertex attribute
+    // by FoilageMaker. Drives the tree-wide top-warm / bottom-cool gradient.
+    nodeType: "input.tree-height",
+    displayName: "Tree Height",
+    category: "input",
+    validTargetKinds: ["mesh-surface", "mesh-deform"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
     settings: []
   },
   {
@@ -662,7 +692,10 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Split Vector",
     category: "math",
     validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
-    inputPorts: [inputPort("input", "Input", "vec4")],
+    // Accept vec3 or vec4 inputs. Many built-ins (world position, world
+    // normal, vertex color RGB-only sources) are naturally vec3 and should
+    // not require a synthetic widen node just to expose x/y/z channels.
+    inputPorts: [inputPort("input", "Input", "vec3")],
     outputPorts: [
       outputPort("x", "X", "float"),
       outputPort("y", "Y", "float"),
@@ -1309,22 +1342,58 @@ export function createDefaultFoliageSurfaceShaderGraph(
   const shaderDefinitionId =
     options.shaderDefinitionId ?? `${projectId}:shader:foliage-surface`;
 
+  // Painterly foliage shader. Three stacked effects combine to produce the
+  // soft volumetric look from the reference:
+  //   1. Tree-wide top-warm / bottom-cool gradient driven by the
+  //      FoilageMaker-baked _TREE_HEIGHT vertex attribute (0..1 along the
+  //      tree). Multiplies into base color so the whole canopy shades
+  //      warm at top and cool at bottom.
+  //   2. Per-cluster volumetric lighting using the _SPHERE_NORMAL attribute
+  //      baked at export — each leaf cluster lights as if it were a smooth
+  //      sphere, not a cloud of flat cards. Blended with the real leaf
+  //      world-normal via individualNormalsFactor so a hint of card
+  //      silhouette remains.
+  //   3. Warm-sun-term + rim-fresnel (unchanged in spirit from v1) both now
+  //      driven off the blended sphere/leaf normal, giving smoother
+  //      highlight falloff across each cluster.
   return {
     shaderDefinitionId,
     definitionKind: "shader",
     displayName: options.displayName ?? "Foliage Surface",
     targetKind: "mesh-surface",
-    revision: 1,
+    revision: 3,
     nodes: [
       { nodeId: "leaf-texture", nodeType: "input.material-texture", position: { x: 48, y: 156 }, settings: {} },
       { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 340 }, settings: {} },
       { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 248, y: 340 }, settings: {} },
       { nodeId: "canopy-tint", nodeType: "math.combine-vector", position: { x: 448, y: 232 }, settings: {} },
-      { nodeId: "base-color", nodeType: "color.multiply", position: { x: 656, y: 160 }, settings: {} },
+      // Canopy tint acts as a brightness modulator only, not a hue source.
+      // This lets the tree-wide gradient provide the dominant hue (warm top,
+      // cool bottom) while preserving FoilageMaker's interior-darker /
+      // exterior-brighter per-cluster shading.
+      { nodeId: "canopy-luminance", nodeType: "color.luminance", position: { x: 656, y: 232 }, settings: {} },
+
+      // Tree-wide height gradient: mix(bottomColor, topColor, treeHeight)
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+      { nodeId: "top-color", nodeType: "input.parameter", position: { x: 48, y: 0 }, settings: { parameterId: "topColor" } },
+      { nodeId: "bottom-color", nodeType: "input.parameter", position: { x: 248, y: 0 }, settings: { parameterId: "bottomColor" } },
+      { nodeId: "height-gradient", nodeType: "math.lerp", position: { x: 448, y: 40 }, settings: {} },
+      // gradient * canopyLuminance gives us the painterly hue gradient
+      // multiplied by per-cluster brightness. Leaf texture is then multiplied
+      // in for leaf silhouette texture (mostly white where opaque, so this is
+      // a near-no-op for color but keeps any in-leaf detail).
+      { nodeId: "gradient-times-lum", nodeType: "color.multiply", position: { x: 656, y: 60 }, settings: {} },
+      { nodeId: "base-color", nodeType: "color.multiply", position: { x: 864, y: 160 }, settings: {} },
+
+      // Blended sphere/leaf normal for painterly volumetric shading.
+      { nodeId: "sphere-normal", nodeType: "input.sphere-normal", position: { x: 48, y: 480 }, settings: {} },
       { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 556 }, settings: {} },
+      { nodeId: "individual-normals-factor", nodeType: "input.parameter", position: { x: 48, y: 420 }, settings: { parameterId: "individualNormalsFactor" } },
+      { nodeId: "blended-normal", nodeType: "math.lerp", position: { x: 256, y: 480 }, settings: {} },
+
       { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 652 }, settings: {} },
-      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 604 }, settings: {} },
-      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 604 }, settings: {} },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 448, y: 604 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 640, y: 604 }, settings: {} },
       { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 656, y: 460 }, settings: { parameterId: "warmColor" } },
       { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 656, y: 556 }, settings: { parameterId: "warmStrength" } },
       { nodeId: "exterior-bias-strength", nodeType: "math.multiply", position: { x: 656, y: 652 }, settings: {} },
@@ -1345,13 +1414,31 @@ export function createDefaultFoliageSurfaceShaderGraph(
       { nodeId: "output", nodeType: "output.fragment", position: { x: 1728, y: 420 }, settings: {} }
     ],
     edges: [
+      // Canopy tint from vertex color RGB → luminance (brightness modulator)
       createShaderEdge("edge-vertex-split", "vertex-color", "value", "split-vertex-color", "input"),
       createShaderEdge("edge-split-x-tint", "split-vertex-color", "x", "canopy-tint", "x"),
       createShaderEdge("edge-split-y-tint", "split-vertex-color", "y", "canopy-tint", "y"),
       createShaderEdge("edge-split-z-tint", "split-vertex-color", "z", "canopy-tint", "z"),
+      createShaderEdge("edge-canopy-luminance", "canopy-tint", "vec3", "canopy-luminance", "input"),
+
+      // Tree-wide height gradient: mix(bottomColor, topColor, treeHeight)
+      createShaderEdge("edge-bottomcolor-gradient", "bottom-color", "value", "height-gradient", "a"),
+      createShaderEdge("edge-topcolor-gradient", "top-color", "value", "height-gradient", "b"),
+      createShaderEdge("edge-treeheight-gradient", "tree-height", "value", "height-gradient", "alpha"),
+
+      // Gradient hue × canopy luminance → leaf-texture rgb → base-color
+      createShaderEdge("edge-gradient-times-lum-a", "height-gradient", "value", "gradient-times-lum", "a"),
+      createShaderEdge("edge-gradient-times-lum-b", "canopy-luminance", "value", "gradient-times-lum", "b"),
       createShaderEdge("edge-texture-base", "leaf-texture", "color", "base-color", "a"),
-      createShaderEdge("edge-tint-base", "canopy-tint", "vec3", "base-color", "b"),
-      createShaderEdge("edge-normal-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("edge-gradient-lum-base", "gradient-times-lum", "value", "base-color", "b"),
+
+      // Blended normal: mix(sphereNormal, worldNormal, individualNormalsFactor)
+      createShaderEdge("edge-spherenormal-blended", "sphere-normal", "value", "blended-normal", "a"),
+      createShaderEdge("edge-worldnormal-blended", "world-normal", "value", "blended-normal", "b"),
+      createShaderEdge("edge-individualfactor-blended", "individual-normals-factor", "value", "blended-normal", "alpha"),
+
+      // Sun dot using blended normal (was: world-normal)
+      createShaderEdge("edge-normal-sundot", "blended-normal", "value", "sun-dot", "a"),
       createShaderEdge("edge-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
       createShaderEdge("edge-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
       createShaderEdge("edge-vertex-a-bias", "split-vertex-color", "w", "exterior-bias-strength", "a"),
@@ -1360,11 +1447,14 @@ export function createDefaultFoliageSurfaceShaderGraph(
       createShaderEdge("edge-sunmask-warmmask", "sun-mask", "value", "warm-mask", "b"),
       createShaderEdge("edge-warmcolor-warmterm", "warm-color", "value", "warm-term", "a"),
       createShaderEdge("edge-warmmask-warmterm", "warm-mask", "value", "warm-term", "b"),
-      createShaderEdge("edge-normal-rim", "world-normal", "value", "rim-fresnel", "normal"),
+
+      // Rim fresnel also uses the blended (smoothed) normal
+      createShaderEdge("edge-normal-rim", "blended-normal", "value", "rim-fresnel", "normal"),
       createShaderEdge("edge-view-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
       createShaderEdge("edge-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
       createShaderEdge("edge-rimfresnel-rimterm", "rim-fresnel", "value", "rim-term", "a"),
       createShaderEdge("edge-rimstrength-rimterm", "rim-strength", "value", "rim-term", "b"),
+
       createShaderEdge("edge-base-basepluswarm", "base-color", "value", "base-plus-warm", "a"),
       createShaderEdge("edge-warm-basepluswarm", "warm-term", "value", "base-plus-warm", "b"),
       createShaderEdge("edge-basepluswarm-final", "base-plus-warm", "value", "final-color", "a"),
@@ -1374,17 +1464,37 @@ export function createDefaultFoliageSurfaceShaderGraph(
     ],
     parameters: [
       {
+        parameterId: "topColor",
+        displayName: "Top Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.8, 1.5, 0.7]
+      },
+      {
+        parameterId: "bottomColor",
+        displayName: "Bottom Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.8, 1.3, 1.2]
+      },
+      {
+        parameterId: "individualNormalsFactor",
+        displayName: "Individual Leaf Normals",
+        dataType: "float",
+        defaultValue: 0.2
+      },
+      {
         parameterId: "warmColor",
         displayName: "Warm Sun Color",
         dataType: "color",
         colorSpace: "hdr",
-        defaultValue: [1.35, 1.08, 0.68]
+        defaultValue: [1.45, 1.15, 0.72]
       },
       {
         parameterId: "warmStrength",
         displayName: "Warm Sun Strength",
         dataType: "float",
-        defaultValue: 0.55
+        defaultValue: 1.1
       },
       {
         parameterId: "rimColor",
@@ -1397,7 +1507,7 @@ export function createDefaultFoliageSurfaceShaderGraph(
         parameterId: "rimStrength",
         displayName: "Rim Strength",
         dataType: "float",
-        defaultValue: 0.24
+        defaultValue: 0.6
       }
     ],
     metadata: {
@@ -1870,6 +1980,49 @@ function isParameterValueCompatible(
   }
 }
 
+function areShaderPortTypesCompatible(
+  source: ShaderDataType,
+  target: ShaderDataType
+): boolean {
+  if (source === target) {
+    return true;
+  }
+
+  const isDirectAlias =
+    (source === "vec3" && target === "color") ||
+    (source === "color" && target === "vec3");
+  if (isDirectAlias) {
+    return true;
+  }
+
+  const isFloatSplat =
+    source === "float" &&
+    (target === "vec2" ||
+      target === "vec3" ||
+      target === "vec4" ||
+      target === "color");
+  if (isFloatSplat) {
+    return true;
+  }
+
+  const isVectorTruncate =
+    (source === "vec4" && target === "vec3") ||
+    (source === "vec3" && target === "vec2");
+  if (isVectorTruncate) {
+    return true;
+  }
+
+  const isVectorWiden =
+    (source === "vec3" && target === "vec4") ||
+    (source === "vec2" && (target === "vec3" || target === "vec4")) ||
+    (source === "color" && target === "vec4");
+  if (isVectorWiden) {
+    return true;
+  }
+
+  return false;
+}
+
 function validateSettingValue(
   value: unknown,
   definition: ShaderSettingDefinition
@@ -2003,24 +2156,12 @@ export function validateShaderGraphDocument(
           sourcePort.dataType
         : sourcePort.dataType;
 
-    if (effectiveSourceDataType !== targetPort.dataType) {
-      const isDirectAlias =
-        (effectiveSourceDataType === "vec3" && targetPort.dataType === "color") ||
-        (effectiveSourceDataType === "color" && targetPort.dataType === "vec3");
-      const isFloatSplat =
-        effectiveSourceDataType === "float" &&
-        (targetPort.dataType === "vec2" ||
-          targetPort.dataType === "vec3" ||
-          targetPort.dataType === "vec4" ||
-          targetPort.dataType === "color");
-
-      if (!isDirectAlias && !isFloatSplat) {
-        issues.push({
-          severity: "error",
-          edgeId: edge.edgeId,
-          message: `Port type mismatch: ${effectiveSourceDataType} cannot connect to ${targetPort.dataType}.`
-        });
-      }
+    if (!areShaderPortTypesCompatible(effectiveSourceDataType, targetPort.dataType)) {
+      issues.push({
+        severity: "error",
+        edgeId: edge.edgeId,
+        message: `Port type mismatch: ${effectiveSourceDataType} cannot connect to ${targetPort.dataType}.`
+      });
     }
   }
 

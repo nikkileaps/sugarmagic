@@ -287,6 +287,10 @@ function builtinForNodeType(
       return asBuiltin("viewDirection", "vec3");
     case "input.sun-direction":
       return asBuiltin("sunDirection", "vec3");
+    case "input.sphere-normal":
+      return asBuiltin("sphereNormal", "vec3");
+    case "input.tree-height":
+      return asBuiltin("treeHeight", "float");
     case "input.screen-uv":
       return asBuiltin("screenUV", "vec2");
     case "input.scene-color":

@@ -8,3 +8,4 @@
 export * from "./EnvironmentSceneController";
 export * from "./applyPostProcessStack";
 export * from "./skyMaterial";
+export * from "./sunVectors";

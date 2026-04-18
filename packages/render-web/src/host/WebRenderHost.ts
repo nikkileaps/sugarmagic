@@ -40,6 +40,7 @@ import {
   type EnvironmentSceneController
 } from "../environment/EnvironmentSceneController";
 import { applyPostProcessStack } from "../environment/applyPostProcessStack";
+import { sunIncomingDirectionFromAngles } from "../environment/sunVectors";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
 import { ShaderRuntime } from "../ShaderRuntime";
 
@@ -166,16 +167,6 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
   const environmentController = createEnvironmentSceneController(scene);
   const landscapeController = createLandscapeSceneController(scene);
 
-  function directionFromAngles(azimuthDeg: number, elevationDeg: number): THREE.Vector3 {
-    const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
-    const elevation = THREE.MathUtils.degToRad(elevationDeg);
-    return new THREE.Vector3(
-      Math.cos(elevation) * Math.sin(azimuth),
-      Math.sin(elevation),
-      Math.cos(elevation) * Math.cos(azimuth)
-    ).normalize();
-  }
-
   function configureRenderer(next: WebGPURenderer): void {
     // Single canonical renderer configuration — consumed by both Studio and
     // the published web runtime so they cannot drift.
@@ -184,6 +175,21 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     next.toneMapping = THREE.ACESFilmicToneMapping;
     next.toneMappingExposure = 1;
     next.outputColorSpace = THREE.SRGBColorSpace;
+  }
+
+  function serializePostProcessChain(
+    chain: Array<{
+      shaderDefinitionId: string;
+      enabled?: boolean;
+      order?: number;
+    }>
+  ): string {
+    return chain
+      .map(
+        (binding) =>
+          `${binding.shaderDefinitionId}:${binding.enabled === false ? "off" : "on"}@${binding.order ?? "?"}`
+      )
+      .join(", ");
   }
 
   function runPendingEnvironment(): void {
@@ -206,13 +212,69 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       contentLibrary,
       environmentOverrideId
     );
+    const fogShaderIds = new Set(
+      contentLibrary.shaderDefinitions
+        .filter((definition) => definition.metadata.builtInKey === "fog-tint")
+        .map((definition) => definition.shaderDefinitionId)
+    );
+    const authoredFogBinding =
+      resolved.definition?.postProcessShaders.find((binding) =>
+        fogShaderIds.has(binding.shaderDefinitionId)
+      ) ?? null;
+    const effectiveFogBindingEnabled = resolved.effectivePostProcessChain.some((binding) =>
+      fogShaderIds.has(binding.shaderDefinitionId)
+    );
+    console.warn("[render-host:environment]", {
+      compileProfile,
+      environmentDefinitionId: resolved.definition?.definitionId ?? null,
+      environmentOverrideId,
+      regionEnvironmentId: region?.environmentBinding.defaultEnvironmentId ?? null,
+      preset: resolved.definition?.lighting.preset ?? null,
+      skyEnabled: resolved.definition?.atmosphere.sky.enabled ?? null,
+      fogEnabled: resolved.definition?.atmosphere.fog.enabled ?? null,
+      fogBindingEnabled: authoredFogBinding?.enabled ?? null,
+      effectiveFogBindingEnabled,
+      sun: resolved.definition
+        ? {
+            azimuthDeg: resolved.definition.lighting.sun.azimuthDeg,
+            elevationDeg: resolved.definition.lighting.sun.elevationDeg,
+            color: resolved.definition.lighting.sun.color,
+            intensity: resolved.definition.lighting.sun.intensity
+          }
+        : null,
+      postProcessChain: resolved.effectivePostProcessChain.map((binding) => ({
+        shaderDefinitionId: binding.shaderDefinitionId,
+        enabled: binding.enabled,
+        order: binding.order
+      })),
+      chainSummary: serializePostProcessChain(resolved.effectivePostProcessChain)
+    });
+    console.warn(
+      `[render-host:environment:summary] profile=${compileProfile} env=${resolved.definition?.definitionId ?? "none"} override=${environmentOverrideId ?? "none"} regionEnv=${region?.environmentBinding.defaultEnvironmentId ?? "none"} sky=${String(resolved.definition?.atmosphere.sky.enabled ?? null)} fog=${String(resolved.definition?.atmosphere.fog.enabled ?? null)} fogBinding=${String(authoredFogBinding?.enabled ?? null)} effectiveFog=${String(effectiveFogBindingEnabled)} chain=[${serializePostProcessChain(resolved.effectivePostProcessChain)}]`
+    );
+    if (
+      resolved.definition &&
+      authoredFogBinding &&
+      resolved.definition.atmosphere.fog.enabled !== authoredFogBinding.enabled
+    ) {
+      console.error(
+        `[render-host:environment:mismatch] env=${resolved.definition.definitionId} fogEnabled=${resolved.definition.atmosphere.fog.enabled} fogBindingEnabled=${authoredFogBinding.enabled}`
+      );
+    }
     if (resolved.definition) {
-      shaderRuntime.setSunDirection(
-        directionFromAngles(
+      const incomingSunDirection = sunIncomingDirectionFromAngles(
           resolved.definition.lighting.sun.azimuthDeg,
           resolved.definition.lighting.sun.elevationDeg
-        )
-      );
+        );
+      console.warn("[render-host:sun-direction]", {
+        compileProfile,
+        incomingSunDirection: {
+          x: incomingSunDirection.x,
+          y: incomingSunDirection.y,
+          z: incomingSunDirection.z
+        }
+      });
+      shaderRuntime.setSunDirection(incomingSunDirection);
     }
     renderPipeline.applyEnvironment(resolved.definition);
     applyPostProcessStack({
