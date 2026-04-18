@@ -28,7 +28,25 @@ export interface SceneExplorerFolder {
   isRoot?: boolean;
 }
 
-export type SceneExplorerNode = SceneExplorerEntity | SceneExplorerFolder;
+/**
+ * Landscape surface of a region. Rendered as a first-class scene entry
+ * under its region's root so authors can see what the viewport is showing
+ * at a glance. Selecting it is expected to focus the landscape inspector.
+ * Identity is synthetic (the landscape is a singular field on the region
+ * document, not a collection with per-instance IDs); the synthetic id
+ * lets the explorer's selection flow stay uniform across node types.
+ */
+export interface SceneExplorerLandscape {
+  type: "landscape";
+  landscapeId: string;
+  displayName: string;
+  enabled: boolean;
+}
+
+export type SceneExplorerNode =
+  | SceneExplorerEntity
+  | SceneExplorerFolder
+  | SceneExplorerLandscape;
 
 export interface SceneExplorerProps {
   roots: SceneExplorerNode[];
@@ -82,6 +100,46 @@ function getKindIcon(assetKind: string): string {
 // --- Tree node components ---
 
 const INDENT_PX = 16;
+
+function LandscapeRow({
+  node,
+  depth,
+  isSelected,
+  onSelect
+}: {
+  node: SceneExplorerLandscape;
+  depth: number;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Box
+      onClick={() => onSelect(node.landscapeId)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sm-space-sm)",
+        padding: `4px var(--sm-space-sm)`,
+        paddingLeft: depth * INDENT_PX + 8,
+        fontSize: "var(--sm-font-size-sm)",
+        color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)",
+        background: isSelected ? "var(--sm-active-bg)" : "transparent",
+        transition: "var(--sm-transition-fast)",
+        cursor: "pointer",
+        opacity: node.enabled ? 1 : 0.5
+      }}
+    >
+      <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+        <Text component="span" size="xs">
+          🟫
+        </Text>
+        <Text size="xs" truncate fw={isSelected ? 600 : 400}>
+          {node.displayName}
+        </Text>
+      </Group>
+    </Box>
+  );
+}
 
 function EntityRow({
   node,
@@ -254,7 +312,7 @@ function FolderRow({
       {isExpanded &&
         node.children.map((child) => (
           <TreeNode
-            key={child.type === "entity" ? child.instanceId : child.folderId}
+            key={nodeKey(child)}
             node={child}
             depth={depth + 1}
             selectedIds={selectedIds}
@@ -299,6 +357,17 @@ function TreeNode({
         onSelect={onSelect}
         onToggleVisibility={onToggleVisibility}
         onOpenContextMenu={onOpenContextMenu}
+      />
+    );
+  }
+
+  if (node.type === "landscape") {
+    return (
+      <LandscapeRow
+        node={node}
+        depth={depth}
+        isSelected={selectedIds.includes(node.landscapeId)}
+        onSelect={onSelect}
       />
     );
   }
@@ -355,7 +424,7 @@ export function SceneExplorer({
     <Stack gap={0} onClick={closeContextMenu}>
       {roots.map((node) => (
         <TreeNode
-          key={node.type === "entity" ? node.instanceId : node.folderId}
+          key={nodeKey(node)}
           node={node}
           depth={0}
           selectedIds={selectedIds}
@@ -445,10 +514,16 @@ export function SceneExplorer({
   );
 }
 
+function nodeKey(node: SceneExplorerNode): string {
+  if (node.type === "entity") return node.instanceId;
+  if (node.type === "landscape") return node.landscapeId;
+  return node.folderId;
+}
+
 function countEntities(nodes: SceneExplorerNode[]): number {
   let count = 0;
   for (const node of nodes) {
-    if (node.type === "entity") count++;
+    if (node.type === "entity" || node.type === "landscape") count++;
     else count += countEntities(node.children);
   }
   return count;
@@ -477,6 +552,7 @@ function findEntityById(
       if (node.instanceId === instanceId) return node;
       continue;
     }
+    if (node.type === "landscape") continue;
 
     const child = findEntityById(node.children, instanceId);
     if (child) return child;

@@ -282,7 +282,7 @@ function normalizeAssetShaderBindings(
 }
 
 export const DEFAULT_FOG_SETTINGS: FogSettings = {
-  enabled: true,
+  enabled: false,
   density: 0.008,
   color: 0x879bb4,
   heightFalloff: 1
@@ -992,7 +992,8 @@ export function normalizeContentLibrarySnapshot(
         lighting: migrateLightingFromLegacy(legacyDefinition, preset),
         atmosphere: {
           fog: {
-            enabled: legacyDefinition.atmosphere?.fog?.enabled ?? true,
+            enabled:
+              legacyDefinition.atmosphere?.fog?.enabled ?? DEFAULT_FOG_SETTINGS.enabled,
             density:
               legacyDefinition.atmosphere?.fog?.density ??
               getDefaultFogDensityForPreset(preset),

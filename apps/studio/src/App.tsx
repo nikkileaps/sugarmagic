@@ -37,7 +37,7 @@ import {
   removeAssetDefinitionFromSession,
   assetDefinitionHasSceneReferences,
   createDefaultEnvironmentDefinition,
-  createDefaultRegionLandscapeState
+  createDefaultRegion
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -504,27 +504,12 @@ export function App() {
 
   function handleCreateRegion(input: { displayName: string; regionId: string }) {
     if (!session) return;
-    const newRegion: RegionDocument = {
-      identity: { id: input.regionId, schema: "RegionDocument", version: 1 },
+    const newRegion = createDefaultRegion({
+      regionId: input.regionId,
       displayName: input.displayName,
-      placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-      scene: {
-        folders: [],
-        placedAssets: [],
-        playerPresence: null,
-        npcPresences: [],
-        itemPresences: []
-      },
-      environmentBinding: {
-        defaultEnvironmentId:
-          session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
-      },
-      areas: [],
-      behaviors: [],
-      landscape: createDefaultRegionLandscapeState(),
-      markers: [],
-      gameplayPlacements: []
-    };
+      defaultEnvironmentId:
+        session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
+    });
     projectStore.getState().updateSession(addRegionToSession(session, newRegion));
     shellStore.getState().setActiveRegionId(input.regionId);
     setCreateRegionOpen(false);

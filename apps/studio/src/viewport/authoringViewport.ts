@@ -11,6 +11,7 @@ import {
 } from "@sugarmagic/render-web";
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
+  EDITOR_NEUTRAL_CLAY_COLOR,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
@@ -23,7 +24,7 @@ import type {
   ViewportSceneState
 } from "@sugarmagic/workspaces";
 
-const CUBE_COLOR = 0x89b4fa;
+const CUBE_COLOR = EDITOR_NEUTRAL_CLAY_COLOR;
 const GRID_COLOR = 0x45475a;
 
 const gltfLoader = new GLTFLoader();
