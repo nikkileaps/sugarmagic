@@ -123,6 +123,8 @@ class VIEW3D_PT_foilagemaker(bpy.types.Panel):
         leaves.prop(props, "leaf_jitter")
         leaves.prop(props, "add_outer_leaves")
         leaves.prop(props, "outer_leaf_offset")
+        leaves.separator()
+        leaves.prop(props, "leaf_texture_variant")
 
         wind = layout.box()
         wind.label(text="Wind Metadata")

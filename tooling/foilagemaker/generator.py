@@ -37,9 +37,13 @@ _TREE_PRESET_LABELS = {
     "round_deciduous": "Round Deciduous",
     "tall_pine_ish": "Tall Pine-ish",
 }
-PROTOTYPE_TEXTURE_ROOT = Path(
-    "/Users/nikki/projects/sugarmagic/tooling/.foilagemaker-prototype-textures/textures"
-)
+_PLUGIN_DIR = Path(__file__).resolve().parent
+# Bundled leaf texture library. Ships with the add-on zip under
+# `foilagemaker/textures/`. Each authored tree picks which texture to use
+# via its `leaf_texture_variant` property (see props.py). `mixed` mode
+# atlases the first four `_transparency.png` files; a specific variant
+# (`leavesTexture03` etc.) uses just that single file as the leaf sprite.
+LEAF_TEXTURE_DIR = _PLUGIN_DIR / "textures"
 VERTEX_WARNING_THRESHOLD = 12_000
 VERTEX_ERROR_THRESHOLD = 30_000
 POLYGON_WARNING_THRESHOLD = 4_000
@@ -1424,10 +1428,52 @@ def _ensure_canopy_material():
 
 
 def _ensure_leaf_sprite_image():
-    prototype_paths = _get_prototype_leaf_paths()
-    if prototype_paths:
-        return _ensure_prototype_leaf_atlas(prototype_paths)
+    variant = _get_active_leaf_texture_variant()
+    if variant == "mixed":
+        prototype_paths = _get_mixed_atlas_leaf_paths()
+        if prototype_paths:
+            return _ensure_prototype_leaf_atlas(prototype_paths)
+    elif variant:
+        single_path = _get_single_leaf_texture_path(variant)
+        if single_path is not None:
+            return _ensure_single_leaf_image(single_path)
     return _ensure_generated_leaf_sprite()
+
+
+def _ensure_single_leaf_image(path: "Path"):
+    """Load a specific bundled leaf texture as the one-and-only leaf sprite.
+
+    Replaces any existing `LEAF_IMAGE_NAME` image so the leaf material's
+    image reference stays stable across texture swaps. The image is packed
+    so the .blend file stays self-contained after the user saves, matching
+    the behavior of the atlas / generated paths.
+    """
+    existing = bpy.data.images.get(LEAF_IMAGE_NAME)
+    if existing is not None:
+        bpy.data.images.remove(existing)
+    image = bpy.data.images.load(str(path))
+    image.name = LEAF_IMAGE_NAME
+    image.pack()
+    image.use_fake_user = True
+    return image
+
+
+def _get_active_leaf_texture_variant() -> str | None:
+    """Return the active tree's `leaf_texture_variant`, or None if no foliage
+    tree is currently the context's active object.
+
+    Reads from bpy.context rather than taking an explicit parameter because
+    the leaf-material / leaf-sprite code path is shared across several
+    entry points (initial creation, rebuild, validation, export) and
+    threading the tree object through every call is more churn than it's
+    worth — the rebuild path that actually matters always runs with the
+    tree selected as the active object.
+    """
+    context = getattr(bpy, "context", None)
+    obj = getattr(context, "active_object", None) if context else None
+    if not is_foilagemaker_tree(obj):
+        return None
+    return getattr(obj.foilagemaker_tree, "leaf_texture_variant", None)
 
 
 def _ensure_generated_leaf_sprite():
@@ -1499,14 +1545,42 @@ def _ensure_prototype_leaf_atlas(prototype_paths: list[Path]):
     return atlas
 
 
-def _get_prototype_leaf_paths() -> list[Path]:
-    if not PROTOTYPE_TEXTURE_ROOT.exists():
+def _get_mixed_atlas_leaf_paths() -> list[Path]:
+    """First four `_transparency.png` files in the bundled textures dir, for
+    the "mixed" variant that atlases multiple leaf textures into one image.
+    """
+    if not LEAF_TEXTURE_DIR.exists():
         return []
-    return sorted(PROTOTYPE_TEXTURE_ROOT.glob("leavesTexture*_transparency.png"))[:4]
+    return sorted(LEAF_TEXTURE_DIR.glob("leavesTexture*_transparency.png"))[:4]
+
+
+def _get_single_leaf_texture_path(variant: str) -> Path | None:
+    """Path to the bundled `<variant>_transparency.png`, or None if missing.
+
+    `variant` is an identifier like "leavesTexture03". Returning None makes
+    the caller fall through to the procedural-atlas fallback so a missing
+    bundled texture degrades gracefully rather than crashing the add-on.
+    """
+    if not LEAF_TEXTURE_DIR.exists():
+        return None
+    path = LEAF_TEXTURE_DIR / f"{variant}_transparency.png"
+    if not path.exists():
+        return None
+    return path
 
 
 def _get_leaf_variant_count() -> int:
-    return max(1, len(_get_prototype_leaf_paths()[:4]))
+    """How many leaf-card UV cells the atlas exposes. The cell layout below
+    (see `_resolve_leaf_uv_rect`) uses this to pick which quadrant of the
+    atlas a given leaf-card instance samples.
+
+    In "mixed" mode we expose up to 4 cells (one per atlased texture). In
+    single-texture mode there's exactly 1 cell covering the full UV range,
+    so every card samples the same texture.
+    """
+    if _get_active_leaf_texture_variant() == "mixed":
+        return max(1, len(_get_mixed_atlas_leaf_paths()[:4]))
+    return 1
 
 
 def _resolve_leaf_uv_rect(

@@ -297,6 +297,34 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         update=_update_tree,
     )
 
+    # Leaf texture library is bundled in `foilagemaker/textures/`. The "mixed"
+    # option atlases the first four `_transparency.png` files into a 2x2 grid
+    # so each leaf card variant samples a different one (variety). Picking a
+    # specific leavesTexture0N uses just that texture for every leaf card
+    # (uniform look). Changing this triggers a tree rebuild which re-bakes
+    # the Blender leaf image and re-runs the material assignment.
+    leaf_texture_variant: bpy.props.EnumProperty(
+        name="Leaf Texture",
+        description="Which bundled leaf texture to bake into the canopy",
+        items=[
+            ("mixed", "Mixed Atlas (01–04)", "Atlas the first four bundled textures"),
+            ("leavesTexture01", "Leaves 01", ""),
+            ("leavesTexture02", "Leaves 02", ""),
+            ("leavesTexture03", "Leaves 03", ""),
+            ("leavesTexture04", "Leaves 04", ""),
+            ("leavesTexture05", "Leaves 05", ""),
+            ("leavesTexture06", "Leaves 06", ""),
+            ("leavesTexture07", "Leaves 07", ""),
+            ("leavesTexture08", "Leaves 08", ""),
+            ("leavesTexture09", "Leaves 09", ""),
+            ("leavesTexture10", "Leaves 10", ""),
+            ("leavesTexture11", "Leaves 11", ""),
+            ("leavesTexture12", "Leaves 12", ""),
+        ],
+        default="leavesTexture01",
+        update=_update_tree,
+    )
+
     wind_scale: bpy.props.FloatProperty(
         name="Wind Scale",
         default=2.5,

@@ -9,7 +9,7 @@ Status: active
 
 # FoilageMaker
 
-Current add-on version: `0.12.1`
+Current add-on version: `0.13.0`
 
 FoilageMaker is a Sugarmagic-owned Blender add-on for authoring stylized,
 export-safe foliage assets.
