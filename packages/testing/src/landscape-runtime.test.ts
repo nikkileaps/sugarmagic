@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import type { RegionDocument } from "@sugarmagic/domain";
+import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
-  createDefaultRegionLandscapeState
+  createDefaultStandardPbrShaderGraph,
+  createDefaultRegionLandscapeState,
+  createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import {
-  createLandscapeSceneController,
   resolveLandscapeDescriptor
 } from "@sugarmagic/runtime-core";
+import { createLandscapeSceneController } from "@sugarmagic/render-web";
 
 function makeRegion(enabled = true): RegionDocument {
   return {
@@ -21,6 +23,70 @@ function makeRegion(enabled = true): RegionDocument {
     landscape: createDefaultRegionLandscapeState({ enabled }),
     markers: [],
     gameplayPlacements: []
+  };
+}
+
+function makeLandscapeMaterialLibrary(): ContentLibrarySnapshot {
+  const snapshot = createEmptyContentLibrarySnapshot("wordlark");
+  return {
+    ...snapshot,
+    shaderDefinitions: [createDefaultStandardPbrShaderGraph("wordlark")],
+    textureDefinitions: [
+      {
+        definitionId: "wordlark:texture:grass-base",
+        definitionKind: "texture",
+        displayName: "Grass Base",
+        source: {
+          relativeAssetPath: "assets/textures/grass-base.png",
+          fileName: "grass-base.png",
+          mimeType: "image/png"
+        },
+        colorSpace: "srgb",
+        packing: "rgba"
+      },
+      {
+        definitionId: "wordlark:texture:grass-normal",
+        definitionKind: "texture",
+        displayName: "Grass Normal",
+        source: {
+          relativeAssetPath: "assets/textures/grass-normal.png",
+          fileName: "grass-normal.png",
+          mimeType: "image/png"
+        },
+        colorSpace: "linear",
+        packing: "normal"
+      },
+      {
+        definitionId: "wordlark:texture:grass-orm",
+        definitionKind: "texture",
+        displayName: "Grass ORM",
+        source: {
+          relativeAssetPath: "assets/textures/grass-orm.png",
+          fileName: "grass-orm.png",
+          mimeType: "image/png"
+        },
+        colorSpace: "linear",
+        packing: "orm"
+      }
+    ],
+    materialDefinitions: [
+      {
+        definitionId: "wordlark:material:grass",
+        definitionKind: "material",
+        displayName: "Grass",
+        shaderDefinitionId: "wordlark:shader:standard-pbr",
+        parameterValues: {
+          tiling: [2, 2],
+          roughness_scale: 0.9,
+          metallic_scale: 0
+        },
+        textureBindings: {
+          basecolor_texture: "wordlark:texture:grass-base",
+          normal_texture: "wordlark:texture:grass-normal",
+          orm_texture: "wordlark:texture:grass-orm"
+        }
+      }
+    ]
   };
 }
 
@@ -83,5 +149,45 @@ describe("landscape runtime controller", () => {
 
     firstController.dispose();
     secondController.dispose();
+  });
+
+  it("realizes material-mode landscape channels through the shared render-web mesh", () => {
+    const scene = new THREE.Scene();
+    const controller = createLandscapeSceneController(scene);
+    const contentLibrary = makeLandscapeMaterialLibrary();
+    const region = makeRegion(true);
+
+    region.landscape.channels.push({
+      channelId: "landscape-channel:grass",
+      displayName: "Grass",
+      mode: "material",
+      color: 0x5c8a5a,
+      materialDefinitionId: "wordlark:material:grass"
+    });
+
+    const result = controller.apply(region, contentLibrary, {
+      "assets/textures/grass-base.png": "blob:grass-base",
+      "assets/textures/grass-normal.png": "blob:grass-normal",
+      "assets/textures/grass-orm.png": "blob:grass-orm"
+    });
+
+    expect(result.descriptor?.enabled).toBe(true);
+    const landscapeMesh = controller.root.children[0] as THREE.Mesh | undefined;
+    expect(landscapeMesh).toBeTruthy();
+
+    const material = landscapeMesh?.material as THREE.Material & {
+      colorNode?: unknown;
+      normalNode?: unknown;
+      roughnessNode?: unknown;
+      metalnessNode?: unknown;
+      aoNode?: unknown;
+    };
+    expect(material.colorNode).toBeTruthy();
+    expect(material.normalNode).toBeTruthy();
+    expect(material.roughnessNode).toBeTruthy();
+    expect(material.metalnessNode).toBeTruthy();
+    expect(material.aoNode).toBeTruthy();
+
+    controller.dispose();
   });
 });

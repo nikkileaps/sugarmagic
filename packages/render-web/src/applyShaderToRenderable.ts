@@ -20,16 +20,26 @@ const shaderMaterialLeases = new WeakMap<THREE.Object3D, ShaderMaterialLease[]>(
 
 export interface RenderableShaderApplicationState {
   appliedShaderSignature: string | null;
+  appliedFileSources: Record<string, string> | null;
 }
 
 export function createRenderableShaderApplicationState(): RenderableShaderApplicationState {
   return {
-    appliedShaderSignature: null
+    appliedShaderSignature: null,
+    appliedFileSources: null
   };
 }
 
+function hasMaterialSlotSurfaceBinding(object: SceneObject): boolean {
+  return (object.effectiveMaterialSlots ?? []).some((slot) => slot.surface !== null);
+}
+
 function getRenderableShaderSignature(object: SceneObject): string | null {
-  if (!object.effectiveShaders.surface && !object.effectiveShaders.deform) {
+  if (
+    !object.effectiveShaders.surface &&
+    !object.effectiveShaders.deform &&
+    !hasMaterialSlotSurfaceBinding(object)
+  ) {
     return null;
   }
 
@@ -65,11 +75,16 @@ export function releaseShadersFromObjectTree(root: THREE.Object3D): Set<THREE.Ma
 export function applyShaderToRenderable(
   renderable: THREE.Object3D,
   object: SceneObject,
-  shaderRuntime: ShaderRuntime | null
+  shaderRuntime: ShaderRuntime | null,
+  fileSources: Record<string, string> = {}
 ): boolean {
   if (
     !shaderRuntime ||
-    (!object.effectiveShaders.surface && !object.effectiveShaders.deform)
+    (
+      !object.effectiveShaders.surface &&
+      !object.effectiveShaders.deform &&
+      !hasMaterialSlotSurfaceBinding(object)
+    )
   ) {
     return false;
   }
@@ -79,6 +94,23 @@ export function applyShaderToRenderable(
   const replacedBaseMaterials = new Set<THREE.Material>();
   let meshCount = 0;
   let finalizedCount = 0;
+  const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
+
+  // eslint-disable-next-line no-console
+  console.debug("[trace:apply-shader-to-renderable] entry", {
+    representationKey: object.representationKey,
+    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
+    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null,
+    materialSlotCount: effectiveMaterialSlots.length,
+    materialSlots: effectiveMaterialSlots.map((slot) => ({
+      slotName: slot.slotName,
+      slotIndex: slot.slotIndex,
+      materialDefinitionId: slot.materialDefinitionId,
+      surfaceShader: slot.surface?.shaderDefinitionId ?? null
+    })),
+    renderableName: renderable.name || "(unnamed)",
+    renderableType: renderable.type
+  });
 
   renderable.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) {
@@ -86,11 +118,39 @@ export function applyShaderToRenderable(
     }
     meshCount += 1;
 
-    const applyMaterial = (material: THREE.Material): THREE.Material => {
-      const finalized = shaderRuntime.applyShaderSet(object.effectiveShaders, {
+    const resolveSurfaceBinding = (
+      material: THREE.Material,
+      slotIndex: number
+    ) =>
+      effectiveMaterialSlots.find(
+        (slot) => slot.slotName === material.name || slot.slotIndex === slotIndex
+      )?.surface ?? object.effectiveShaders.surface;
+
+    const applyMaterial = (material: THREE.Material, slotIndex: number): THREE.Material => {
+      const surfaceBinding = resolveSurfaceBinding(material, slotIndex);
+      const finalized = shaderRuntime.applyShaderSet(
+        {
+          surface: surfaceBinding,
+          deform: object.effectiveShaders.deform
+        },
+        {
           material,
-          geometry: child.geometry
-        }) as THREE.Material | undefined;
+          geometry: child.geometry,
+          fileSources
+        }
+      ) as THREE.Material | undefined;
+
+      // eslint-disable-next-line no-console
+      console.debug("[trace:apply-material-to-mesh]", {
+        meshName: child.name || "(unnamed)",
+        meshUuid: child.uuid,
+        slotIndex,
+        slotMaterialName: material.name || "(unnamed)",
+        fromMaterialUuid: material.uuid,
+        toMaterialUuid: finalized?.uuid ?? null,
+        sameMaterial: finalized === material,
+        surfaceShader: surfaceBinding?.shaderDefinitionId ?? null
+      });
 
       if (!finalized) {
         return material;
@@ -105,11 +165,13 @@ export function applyShaderToRenderable(
     };
 
     if (Array.isArray(child.material)) {
-      child.material = child.material.map(applyMaterial);
+      child.material = child.material.map((material, slotIndex) =>
+        applyMaterial(material, slotIndex)
+      );
       return;
     }
 
-    child.material = applyMaterial(child.material);
+    child.material = applyMaterial(child.material, 0);
   });
 
   if (nextLeases.length > 0) {
@@ -125,25 +187,48 @@ export function ensureShaderSetAppliedToRenderable(
   renderable: THREE.Object3D,
   object: SceneObject,
   shaderRuntime: ShaderRuntime | null,
-  state: RenderableShaderApplicationState
+  state: RenderableShaderApplicationState,
+  fileSources: Record<string, string> = {}
 ) {
   if (!shaderRuntime) {
+    // eslint-disable-next-line no-console
+    console.debug("[trace:ensure-shader-applied] skip (no shader runtime)", {
+      representationKey: object.representationKey
+    });
     return;
   }
 
   const nextSignature = getRenderableShaderSignature(object);
   if (!nextSignature) {
     state.appliedShaderSignature = null;
+    state.appliedFileSources = null;
     return;
   }
-  if (state.appliedShaderSignature === nextSignature) {
+  if (
+    state.appliedShaderSignature === nextSignature &&
+    state.appliedFileSources === fileSources
+  ) {
     return;
   }
 
-  const applied = applyShaderToRenderable(renderable, object, shaderRuntime);
+  // eslint-disable-next-line no-console
+  console.debug("[trace:ensure-shader-applied] applying", {
+    representationKey: object.representationKey,
+    previousSignature: state.appliedShaderSignature,
+    nextSignature,
+    fileSourcesChanged: state.appliedFileSources !== fileSources
+  });
+
+  const applied = applyShaderToRenderable(renderable, object, shaderRuntime, fileSources);
   if (!applied) {
+    // eslint-disable-next-line no-console
+    console.debug("[trace:ensure-shader-applied] apply returned false (no meshes yet)", {
+      representationKey: object.representationKey,
+      renderableType: renderable.type
+    });
     return;
   }
 
   state.appliedShaderSignature = nextSignature;
+  state.appliedFileSources = fileSources;
 }

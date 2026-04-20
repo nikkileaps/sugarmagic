@@ -29,6 +29,10 @@ export type ShaderIRBuiltinName =
   | "treeHeight"
   | "materialTextureColor"
   | "materialTextureAlpha"
+  | "materialTextureR"
+  | "materialTextureG"
+  | "materialTextureB"
+  | "materialTextureA"
   | "screenUV"
   | "sceneColor"
   | "sceneDepth";
@@ -73,6 +77,16 @@ export interface ShaderIROutputs {
   vertex?: ShaderIRValue;
   fragmentColor?: ShaderIRValue;
   fragmentAlpha?: ShaderIRValue;
+  /**
+   * Tangent-space normal read from a normal map (RGB in [0, 1], to be
+   * unpacked to [-1, 1] at the target). Left undefined when the graph
+   * does not author a normal output — the runtime leaves the
+   * material's default normal alone in that case.
+   */
+  fragmentNormal?: ShaderIRValue;
+  fragmentRoughness?: ShaderIRValue;
+  fragmentMetalness?: ShaderIRValue;
+  fragmentAo?: ShaderIRValue;
   emissive?: ShaderIRValue;
   postProcessColor?: ShaderIRValue;
 }
@@ -107,6 +121,10 @@ const BUILTIN_TYPES: Record<ShaderIRBuiltinName, ShaderDataType> = {
   treeHeight: "float",
   materialTextureColor: "color",
   materialTextureAlpha: "float",
+  materialTextureR: "float",
+  materialTextureG: "float",
+  materialTextureB: "float",
+  materialTextureA: "float",
   screenUV: "vec2",
   sceneColor: "vec3",
   sceneDepth: "float"

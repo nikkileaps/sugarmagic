@@ -22,6 +22,9 @@ describe("Build navigation model", () => {
     expect(deriveBuildWorkspaceId("environment", "env_default")).toBe(
       "build:environment:env_default"
     );
+    expect(deriveBuildWorkspaceId("materials", "ignored")).toBe(
+      "build:materials:library"
+    );
     expect(deriveBuildWorkspaceId("assets", "cave_01")).toBe(
       "build:assets:cave_01"
     );
@@ -60,6 +63,14 @@ describe("Build navigation model", () => {
     expect(store.getState().activeBuildWorkspaceKind).toBe("environment");
     expect(store.getState().activeEnvironmentId).toBe("env_night");
     expect(store.getState().activeWorkspaceId).toBe("build:environment:env_night");
+  });
+
+  it("project-scoped material workspace uses its shared library context", () => {
+    const store = createShellStore("build");
+    store.getState().setActiveBuildWorkspaceKind("materials");
+
+    expect(store.getState().activeBuildWorkspaceKind).toBe("materials");
+    expect(store.getState().activeWorkspaceId).toBe("build:materials:library");
   });
 
   it("changing region preserves workspace kind and updates workspace ID for region-scoped workspaces", () => {

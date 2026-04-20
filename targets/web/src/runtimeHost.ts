@@ -51,6 +51,7 @@ import {
   createFallbackMesh,
   createRenderableShaderApplicationState,
   createWebRenderHost,
+  createLandscapeSceneController,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
   normalizeModelScale,
@@ -77,7 +78,6 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
-  createLandscapeSceneController,
   createPlayerVisualController,
   spawnRuntimePlayerEntity,
   resolveEnvironmentWithPostProcessChain,
@@ -498,6 +498,7 @@ export function createWebRuntimeHost(
   // uses the same host, so renderer config + pipeline setup cannot drift
   // between the two callers.
   let host: WebRenderHost | null = null;
+  let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
@@ -581,6 +582,7 @@ export function createWebRuntimeHost(
     host.resize(width, height);
   }
 
+  let frameTickCount = 0;
   function renderFrame(now: number) {
     if (
       !world ||
@@ -592,6 +594,20 @@ export function createWebRuntimeHost(
       !inputManager
     ) {
       return;
+    }
+
+    frameTickCount += 1;
+    if (frameTickCount <= 3 || frameTickCount % 60 === 0) {
+      let meshCount = 0;
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) meshCount += 1;
+      });
+      console.debug("[trace:runtime-host] render-frame-tick", {
+        frame: frameTickCount,
+        hasShaderRuntime: Boolean(host.shaderRuntime),
+        sceneMeshCount: meshCount,
+        sceneChildCount: scene.children.length
+      });
     }
 
     const delta = Math.min((now - lastTime) / 1000, 0.1);
@@ -667,7 +683,8 @@ export function createWebRuntimeHost(
         entry.root,
         entry.object,
         host.shaderRuntime,
-        entry.shaderApplication
+        entry.shaderApplication,
+        currentAssetSources
       );
     }
 
@@ -689,6 +706,7 @@ export function createWebRuntimeHost(
     }
 
     disposeRuntime();
+    currentAssetSources = state.assetSources;
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -737,7 +755,8 @@ export function createWebRuntimeHost(
       explicitEnvironmentId: state.activeEnvironmentId
     });
 
-    for (const region of state.regions) {
+    if (activeRegion) {
+      const region = activeRegion;
       const objects = resolveSceneObjects(region, {
         contentLibrary: state.contentLibrary,
         playerDefinition: state.playerDefinition,
@@ -759,11 +778,26 @@ export function createWebRuntimeHost(
           : null;
 
         if (assetSourceUrl) {
+          console.debug("[trace:runtime-host] gltf load begin", {
+            instanceId: object.instanceId,
+            assetDefinitionId: object.assetDefinitionId,
+            url: assetSourceUrl
+          });
           void gltfLoader
             .loadAsync(assetSourceUrl)
             .then((gltf) => {
               if (!scene) return;
               const renderable = gltf.scene.clone(true);
+              let loadedMeshCount = 0;
+              renderable.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  loadedMeshCount += 1;
+                }
+              });
+              console.debug("[trace:runtime-host] gltf load end", {
+                instanceId: object.instanceId,
+                meshCount: loadedMeshCount
+              });
               const validationError = validateRenderableAsset(object, renderable);
               if (validationError) {
                 console.error("[web-runtime] invalid-asset-payload", {
@@ -780,11 +814,16 @@ export function createWebRuntimeHost(
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
               host?.enableShadowsOnObject(renderable);
+              console.debug("[trace:runtime-host] post-load ensure-shader-applied", {
+                instanceId: object.instanceId,
+                shaderRuntimeAvailable: Boolean(host?.shaderRuntime)
+              });
               ensureShaderSetAppliedToRenderable(
                 renderable,
                 object,
                 host?.shaderRuntime ?? null,
-                shaderApplication
+                shaderApplication,
+                state.assetSources
               );
               rootObject.add(renderable);
             })
@@ -956,7 +995,8 @@ export function createWebRuntimeHost(
     host.applyEnvironment(
       activeRegion,
       state.contentLibrary,
-      runtimeEnvironmentState?.activeEnvironmentId ?? null
+      runtimeEnvironmentState?.activeEnvironmentId ?? null,
+      state.assetSources
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay
     // then calls host.render()). We wait one tick so the host's async init

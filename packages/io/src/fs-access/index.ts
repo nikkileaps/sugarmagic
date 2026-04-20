@@ -29,6 +29,37 @@ export async function pickFile(options?: {
   return fileHandle;
 }
 
+export async function listFilesInDirectory(
+  dirHandle: FileSystemDirectoryHandle,
+  options: {
+    extensions?: string[];
+  } = {}
+): Promise<File[]> {
+  const extensions = new Set(
+    (options.extensions ?? []).map((extension) => extension.toLowerCase())
+  );
+  const files: File[] = [];
+
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind !== "file") {
+      continue;
+    }
+    const file = await (entry as FileSystemFileHandle).getFile();
+    if (extensions.size > 0) {
+      const lowerName = file.name.toLowerCase();
+      const matchesExtension = [...extensions].some((extension) =>
+        lowerName.endsWith(extension)
+      );
+      if (!matchesExtension) {
+        continue;
+      }
+    }
+    files.push(file);
+  }
+
+  return files;
+}
+
 export async function readJsonFile<T>(
   dirHandle: FileSystemDirectoryHandle,
   ...pathSegments: string[]

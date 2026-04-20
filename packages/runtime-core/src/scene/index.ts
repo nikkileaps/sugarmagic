@@ -11,10 +11,15 @@ import {
   type RegionNPCPresence,
   type RegionPlayerPresence
 } from "@sugarmagic/domain";
-import type { EffectiveShaderBinding } from "../shader";
+import type {
+  EffectiveMaterialSlotBinding,
+  EffectiveShaderBinding
+} from "../shader";
 import {
   type EffectiveShaderBindingSet,
+  resolveEffectiveAssetMaterialSlotBindings,
   resolveEffectiveAssetShaderBindings,
+  resolveEffectivePresenceMaterialSlotBindings,
   resolveEffectivePresenceShaderBindings
 } from "../shader";
 
@@ -62,6 +67,7 @@ export interface SceneObject {
   modelSourcePath: string | null;
   targetModelHeight: number | null;
   effectiveShaders: EffectiveShaderBindingSet;
+  effectiveMaterialSlots: EffectiveMaterialSlotBinding[];
   /**
    * @deprecated Legacy singular shader view retained as a shim while hosts and
    * tests move to effectiveShaders.
@@ -179,11 +185,15 @@ export function computeSceneDelta(
 
 function shaderRepresentationKey(
   effectiveShaders: EffectiveShaderBindingSet,
+  effectiveMaterialSlots: EffectiveMaterialSlotBinding[],
   _parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" }[]
 ): string {
   return [
     shaderSlotRepresentation("surface", effectiveShaders.surface),
-    shaderSlotRepresentation("deform", effectiveShaders.deform)
+    shaderSlotRepresentation("deform", effectiveShaders.deform),
+    ...effectiveMaterialSlots.map((slot) =>
+      `material:${slot.slotIndex}:${slot.slotName}:${slot.materialDefinitionId ?? "none"}:${shaderSlotRepresentation("surface", slot.surface)}`
+    )
   ].join(":");
 }
 
@@ -212,6 +222,9 @@ function createPlacedAssetSceneObject(
   const effectiveShaders = contentLibrary
     ? resolveEffectiveAssetShaderBindings(asset, contentLibrary)
     : { surface: null, deform: null };
+  const effectiveMaterialSlots = contentLibrary
+    ? resolveEffectiveAssetMaterialSlotBindings(asset, contentLibrary)
+    : [];
 
   return {
     instanceId: asset.instanceId,
@@ -222,13 +235,14 @@ function createPlacedAssetSceneObject(
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: null,
     effectiveShaders,
+    effectiveMaterialSlots,
     effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
       scale: asset.transform.scale
     },
-    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, asset.shaderParameterOverrides)}`,
+    representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, asset.shaderParameterOverrides)}`,
     capsule: null
   };
 }
@@ -258,13 +272,30 @@ function createPlayerSceneObject(
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     effectiveShaders: { surface: null, deform: null },
+    effectiveMaterialSlots: contentLibrary && assetDescriptor.definition
+      ? resolveEffectivePresenceMaterialSlotBindings(
+          { shaderOverrides: [], shaderParameterOverrides: [] },
+          assetDescriptor.definition,
+          contentLibrary
+        )
+      : [],
     effectiveShader: null,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `player:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}`,
+    representationKey: `player:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${shaderRepresentationKey(
+      { surface: null, deform: null },
+      contentLibrary && assetDescriptor.definition
+        ? resolveEffectivePresenceMaterialSlotBindings(
+            { shaderOverrides: [], shaderParameterOverrides: [] },
+            assetDescriptor.definition,
+            contentLibrary
+          )
+        : [],
+      []
+    )}`,
     capsule: {
       height,
       radius,
@@ -288,6 +319,13 @@ function createNPCSceneObject(
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
     : { surface: null, deform: null };
+  const effectiveMaterialSlots = contentLibrary
+    ? resolveEffectivePresenceMaterialSlotBindings(
+        presence,
+        assetDescriptor.definition,
+        contentLibrary
+      )
+    : [];
 
   return {
     instanceId: presence.presenceId,
@@ -298,13 +336,14 @@ function createNPCSceneObject(
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     effectiveShaders,
+    effectiveMaterialSlots,
     effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${shaderRepresentationKey(effectiveShaders, presence.shaderParameterOverrides)}`,
+    representationKey: `npc:${presence.npcDefinitionId}:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
     capsule: {
       height,
       radius,
@@ -327,6 +366,13 @@ function createItemSceneObject(
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
     : { surface: null, deform: null };
+  const effectiveMaterialSlots = contentLibrary
+    ? resolveEffectivePresenceMaterialSlotBindings(
+        presence,
+        assetDescriptor.definition,
+        contentLibrary
+      )
+    : [];
 
   return {
     instanceId: presence.presenceId,
@@ -337,13 +383,14 @@ function createItemSceneObject(
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
     effectiveShaders,
+    effectiveMaterialSlots,
     effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, presence.shaderParameterOverrides)}`,
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
     capsule: null
   };
 }

@@ -1,3 +1,11 @@
+/**
+ * Build-mode landscape workspace.
+ *
+ * Owns editor tooling for region landscape painting and channel authoring on
+ * top of the shared runtime landscape semantics. Rendering still lives in the
+ * shared viewport/render-web path; this module only exposes authoring controls.
+ */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
@@ -9,6 +17,7 @@ import {
   NumberInput,
   Paper,
   Popover,
+  Select,
   Slider,
   Stack,
   Switch,
@@ -17,6 +26,7 @@ import {
   Tooltip
 } from "@mantine/core";
 import type {
+  MaterialDefinition,
   RegionDocument,
   SemanticCommand,
   RegionLandscapeChannelDefinition
@@ -28,6 +38,7 @@ import {
 import { PanelSection } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import type { WorkspaceViewport } from "../../viewport";
+import { MaterialDefinitionSelect } from "../MaterialDefinitionSelect";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
 import {
   createLandscapeWorkspace,
@@ -41,6 +52,7 @@ export interface LandscapeWorkspaceViewProps {
   viewportReadyVersion: number;
   getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
+  materialDefinitions: MaterialDefinition[];
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
@@ -269,6 +281,7 @@ export function useLandscapeWorkspaceView(
     viewportReadyVersion,
     getViewport,
     getViewportElement,
+    materialDefinitions,
     region,
     onCommand
   } = props;
@@ -608,6 +621,74 @@ export function useLandscapeWorkspaceView(
                   </Text>
                 ) : null}
               </Stack>
+              {activeChannel ? (
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+                    Active Channel Surface
+                  </Text>
+                  <Select
+                    label="Mode"
+                    size="xs"
+                    data={[
+                      { value: "color", label: "Color" },
+                      { value: "material", label: "Material" }
+                    ]}
+                    value={activeChannel.mode}
+                    onChange={(value) => {
+                      if (!region || !value) return;
+                      onCommand({
+                        kind: "UpdateLandscapeChannel",
+                        target: {
+                          aggregateKind: "region-document",
+                          aggregateId: region.identity.id
+                        },
+                        subject: {
+                          subjectKind: "region-landscape",
+                          subjectId: region.identity.id
+                        },
+                        payload: {
+                          channelId: activeChannel.channelId,
+                          mode: value as RegionLandscapeChannelDefinition["mode"]
+                        }
+                      });
+                    }}
+                  />
+                  {activeChannel.mode === "material" ? (
+                    <MaterialDefinitionSelect
+                      label="Material"
+                      materials={materialDefinitions}
+                      value={activeChannel.materialDefinitionId}
+                      onChange={(materialDefinitionId) => {
+                        if (!region) return;
+                        onCommand({
+                          kind: "UpdateLandscapeChannel",
+                          target: {
+                            aggregateKind: "region-document",
+                            aggregateId: region.identity.id
+                          },
+                          subject: {
+                            subjectKind: "region-landscape",
+                            subjectId: region.identity.id
+                          },
+                          payload: {
+                            channelId: activeChannel.channelId,
+                            materialDefinitionId
+                          }
+                        });
+                      }}
+                      description={
+                        materialDefinitions.length === 0
+                          ? "Import or create a material in the Material Library first."
+                          : "Bind a reusable project material to this channel."
+                      }
+                    />
+                  ) : (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      Color mode uses the authored channel swatch directly.
+                    </Text>
+                  )}
+                </Stack>
+              ) : null}
             </Stack>
           ) : (
             <Text size="xs" c="var(--sm-color-overlay0)">

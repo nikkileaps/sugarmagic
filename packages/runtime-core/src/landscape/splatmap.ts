@@ -1,8 +1,20 @@
-import * as THREE from "three";
+/**
+ * Landscape splatmap byte-buffer model.
+ *
+ * Owns the canonical painted-weight data for region landscapes. This module
+ * is intentionally renderer-free: it stores paint layers as raw Uint8Array
+ * buffers, handles paint/load/serialize logic, and leaves GPU upload to the
+ * render-web landscape realization.
+ */
+
 import type { RegionLandscapePaintPayload } from "@sugarmagic/domain";
 
 function bytesToBase64(bytes: Uint8Array): string {
-  const bufferApi = (globalThis as { Buffer?: { from: (value: Uint8Array) => { toString: (encoding: string) => string } } }).Buffer;
+  const bufferApi = (
+    globalThis as {
+      Buffer?: { from: (value: Uint8Array) => { toString: (encoding: string) => string } };
+    }
+  ).Buffer;
   if (bufferApi) {
     return bufferApi.from(bytes).toString("base64");
   }
@@ -15,7 +27,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 function base64ToBytes(encoded: string): Uint8Array {
-  const bufferApi = (globalThis as { Buffer?: { from: (value: string, encoding: string) => Uint8Array } }).Buffer;
+  const bufferApi = (
+    globalThis as { Buffer?: { from: (value: string, encoding: string) => Uint8Array } }
+  ).Buffer;
   if (bufferApi) {
     return new Uint8Array(bufferApi.from(encoded, "base64"));
   }
@@ -39,7 +53,6 @@ export interface LandscapePaintSample {
 
 export class LandscapeSplatmap {
   private buffers: Uint8Array[] = [];
-  private textures: THREE.DataTexture[] = [];
   private channelCount = 0;
   readonly resolution: number;
 
@@ -48,8 +61,8 @@ export class LandscapeSplatmap {
     this.ensureTextureCount(1);
   }
 
-  getTextures(): THREE.DataTexture[] {
-    return this.textures;
+  getBuffers(): readonly Uint8Array[] {
+    return this.buffers;
   }
 
   ensureChannelCount(channelCount: number): void {
@@ -62,9 +75,6 @@ export class LandscapeSplatmap {
   clear(): void {
     for (const buffer of this.buffers) {
       buffer.fill(0);
-    }
-    for (const texture of this.textures) {
-      texture.needsUpdate = true;
     }
   }
 
@@ -79,7 +89,6 @@ export class LandscapeSplatmap {
     for (let index = 0; index < Math.min(payload.layers.length, this.buffers.length); index += 1) {
       const bytes = base64ToBytes(payload.layers[index]!);
       this.buffers[index]!.set(bytes.subarray(0, this.buffers[index]!.length));
-      this.textures[index]!.needsUpdate = true;
     }
   }
 
@@ -118,12 +127,16 @@ export class LandscapeSplatmap {
         const pixelIndex = (py * resolution + px) * 4;
 
         const current = targetBuffer[pixelIndex + componentIndex]! / 255;
-        const next = THREE.MathUtils.clamp(current + delta, 0, 1);
+        const next = Math.max(0, Math.min(1, current + delta));
         targetBuffer[pixelIndex + componentIndex] = Math.round(next * 255);
 
         if (delta > 0) {
           let paintedSum = 0;
-          const componentRefs: Array<{ buffer: Uint8Array; offset: number; channelIndex: number }> = [];
+          const componentRefs: Array<{
+            buffer: Uint8Array;
+            offset: number;
+            channelIndex: number;
+          }> = [];
           for (let channelIndex = 1; channelIndex < this.channelCount; channelIndex += 1) {
             const storedIndex = channelIndex - 1;
             const layerTextureIndex = Math.floor(storedIndex / 4);
@@ -147,11 +160,6 @@ export class LandscapeSplatmap {
           }
         }
       }
-    }
-
-    this.textures[textureIndex]!.needsUpdate = true;
-    for (const texture of this.textures) {
-      texture.needsUpdate = true;
     }
   }
 
@@ -225,29 +233,12 @@ export class LandscapeSplatmap {
   }
 
   dispose(): void {
-    for (const texture of this.textures) {
-      texture.dispose();
-    }
     this.buffers = [];
-    this.textures = [];
   }
 
   private ensureTextureCount(count: number): void {
     while (this.buffers.length < count) {
-      const buffer = new Uint8Array(this.resolution * this.resolution * 4);
-      const texture = new THREE.DataTexture(
-        buffer,
-        this.resolution,
-        this.resolution,
-        THREE.RGBAFormat
-      );
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.needsUpdate = true;
-      this.buffers.push(buffer);
-      this.textures.push(texture);
+      this.buffers.push(new Uint8Array(this.resolution * this.resolution * 4));
     }
   }
 }

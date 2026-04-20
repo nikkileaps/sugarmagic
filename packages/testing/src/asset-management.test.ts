@@ -83,6 +83,8 @@ function makeContentLibrary(): ContentLibrarySnapshot {
       version: 1
     },
     assetDefinitions: [],
+    materialDefinitions: [],
+    textureDefinitions: [],
     environmentDefinitions: [
       createDefaultEnvironmentDefinition("wordlark", {
         definitionId: "wordlark:environment:default",
@@ -137,6 +139,68 @@ describe("asset management loop", () => {
     expect(getAllAssetDefinitions(updated)[0]?.definitionId).toBe(
       "asset:station-building"
     );
+  });
+
+  it("preserves material slot bindings across asset reimport by slot name", () => {
+    let session = createAuthoringSession(
+      makeProject(),
+      [makeRegion()],
+      makeContentLibrary()
+    );
+    session = addAssetDefinitionToSession(session, {
+      ...makeAssetDefinition(),
+      materialSlotBindings: [
+        {
+          slotName: "Wall",
+          slotIndex: 0,
+          materialDefinitionId: "wordlark:material:brick"
+        },
+        {
+          slotName: "Roof",
+          slotIndex: 1,
+          materialDefinitionId: "wordlark:material:tile"
+        }
+      ]
+    });
+
+    session = addAssetDefinitionToSession(session, {
+      ...makeAssetDefinition(),
+      materialSlotBindings: [
+        {
+          slotName: "Roof",
+          slotIndex: 0,
+          materialDefinitionId: null
+        },
+        {
+          slotName: "Wall",
+          slotIndex: 1,
+          materialDefinitionId: null
+        },
+        {
+          slotName: "Trim",
+          slotIndex: 2,
+          materialDefinitionId: null
+        }
+      ]
+    });
+
+    expect(getAllAssetDefinitions(session)[0]?.materialSlotBindings).toEqual([
+      {
+        slotName: "Roof",
+        slotIndex: 0,
+        materialDefinitionId: "wordlark:material:tile"
+      },
+      {
+        slotName: "Wall",
+        slotIndex: 1,
+        materialDefinitionId: "wordlark:material:brick"
+      },
+      {
+        slotName: "Trim",
+        slotIndex: 2,
+        materialDefinitionId: null
+      }
+    ]);
   });
 
   it("places, folders, reparents, duplicates, and removes placed assets canonically", () => {

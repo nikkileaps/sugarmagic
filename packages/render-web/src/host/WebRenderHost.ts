@@ -25,15 +25,14 @@
 
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
-import type {
-  ContentLibrarySnapshot,
-  RegionDocument
-} from "@sugarmagic/domain";
-import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core";
 import {
-  createLandscapeSceneController,
+  createEmptyContentLibrarySnapshot,
+  type ContentLibrarySnapshot,
+  type RegionDocument
+} from "@sugarmagic/domain";
+import {
   resolveEnvironmentWithPostProcessChain,
-  type LandscapeSceneController
+  type RuntimeCompileProfile
 } from "@sugarmagic/runtime-core";
 import {
   createEnvironmentSceneController,
@@ -41,8 +40,16 @@ import {
 } from "../environment/EnvironmentSceneController";
 import { applyPostProcessStack } from "../environment/applyPostProcessStack";
 import { sunIncomingDirectionFromAngles } from "../environment/sunVectors";
+import {
+  createLandscapeSceneController,
+  type LandscapeSceneController
+} from "../landscape";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
 import { ShaderRuntime } from "../ShaderRuntime";
+import {
+  createAuthoredAssetResolver,
+  type AuthoredAssetResolver
+} from "../authoredAssetResolver";
 
 export interface WebRenderHostLogger {
   warn: (message: string, payload?: Record<string, unknown>) => void;
@@ -78,6 +85,14 @@ export interface WebRenderHost {
   readonly shaderRuntime: ShaderRuntime | null;
   readonly environmentController: EnvironmentSceneController;
   readonly landscapeController: LandscapeSceneController;
+  /**
+   * Single shared resolver between "authored asset identity" and GPU
+   * artifacts. Callers needing to fetch a GLB URL should go through
+   * `assetResolver.resolveAssetUrl(path)` rather than looking up a raw
+   * `fileSources` map — the resolver surfaces misses explicitly instead
+   * of silently returning the raw relative path.
+   */
+  readonly assetResolver: AuthoredAssetResolver;
 
   /**
    * Mount to a DOM element. Creates the renderer, kicks off async
@@ -127,7 +142,8 @@ export interface WebRenderHost {
   applyEnvironment(
     region: RegionDocument | null,
     contentLibrary: ContentLibrarySnapshot,
-    environmentOverrideId?: string | null
+    environmentOverrideId?: string | null,
+    fileSources?: Record<string, string>
   ): void;
 
   /** Subscribe to per-frame updates. Returns an unsubscribe function. */
@@ -162,10 +178,61 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     region: RegionDocument | null;
     contentLibrary: ContentLibrarySnapshot;
     environmentOverrideId: string | null;
+    fileSources: Record<string, string>;
   } | null = null;
 
+  // Single resolver owned for the host's lifetime. Survives mount cycles
+  // so any already-cached textures outlive a renderer re-init. Both the
+  // landscape controller and the shader runtime consume this — never
+  // their own private caches — so studio and preview cannot drift in
+  // how an authored texture becomes a GPU artifact.
+  //
+  // onTextureUpdated: when the resolver finishes loading (or reloads) a
+  // cached texture's backing image, Three's WebGPU node material path
+  // does NOT auto-refresh the bind groups of materials that were
+  // compiled with that texture in a placeholder state. Setting
+  // `texture.needsUpdate = true` is enough to re-upload pixels to the
+  // GPU; it is NOT enough to repoint the material's compiled shader at
+  // the new resource. We also need `material.needsUpdate = true` on
+  // every material that might reference this texture. Since the
+  // resolver doesn't know which materials use which textures, we
+  // conservatively mark every mesh material in the scene dirty — the
+  // cost is one-shader-recompile-per-material on the frame following a
+  // texture load, which is cheap and rare.
+  const assetResolver = createAuthoredAssetResolver({
+    logger,
+    onTextureUpdated: (texture) => {
+      let meshCount = 0;
+      let materialCount = 0;
+      scene.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) {
+          return;
+        }
+        meshCount += 1;
+        if (Array.isArray(child.material)) {
+          for (const material of child.material) {
+            material.needsUpdate = true;
+            materialCount += 1;
+          }
+          return;
+        }
+        if (child.material) {
+          child.material.needsUpdate = true;
+          materialCount += 1;
+        }
+      });
+      // eslint-disable-next-line no-console
+      console.debug("[web-render-host] texture-updated invalidate-materials", {
+        textureUuid: texture.uuid,
+        meshCount,
+        materialCount,
+        sceneChildCount: scene.children.length
+      });
+    }
+  });
+
   const environmentController = createEnvironmentSceneController(scene);
-  const landscapeController = createLandscapeSceneController(scene);
+  const landscapeController = createLandscapeSceneController(scene, assetResolver);
 
   function configureRenderer(next: WebGPURenderer): void {
     // Single canonical renderer configuration — consumed by both Studio and
@@ -181,7 +248,13 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     if (!pendingEnvironmentState || !renderPipeline || !shaderRuntime) {
       return;
     }
-    const { region, contentLibrary, environmentOverrideId } = pendingEnvironmentState;
+    const { region, contentLibrary, environmentOverrideId, fileSources } = pendingEnvironmentState;
+
+    // Push the latest content library + asset source map into the shared
+    // resolver BEFORE any downstream code resolves textures. This is the
+    // only code path that mutates resolver state, so inner render code
+    // can treat the resolver as already-current.
+    assetResolver.sync(contentLibrary, fileSources);
 
     // Keep the shader runtime's content library in sync without disposing
     // and recreating the runtime (which would destroy the post-process node
@@ -190,7 +263,7 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     shaderRuntime.setContentLibrary(contentLibrary);
 
     environmentController.apply(region, contentLibrary, environmentOverrideId);
-    landscapeController.apply(region);
+    landscapeController.apply(region, contentLibrary, fileSources);
 
     const resolved = resolveEnvironmentWithPostProcessChain(
       region,
@@ -262,6 +335,7 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
     },
     environmentController,
     landscapeController,
+    assetResolver,
 
     mount(element) {
       container = element;
@@ -309,7 +383,8 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
               pendingEnvironmentState?.contentLibrary ??
               createEmptyPlaceholderContentLibrary(),
             compileProfile,
-            logger
+            logger,
+            assetResolver
           });
 
           runPendingEnvironment();
@@ -338,6 +413,8 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
 
       shaderRuntime?.dispose();
       shaderRuntime = null;
+
+      assetResolver.dispose();
 
       if (renderer && container && renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -370,11 +447,17 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
       renderPipeline?.setCamera(camera);
     },
 
-    applyEnvironment(region, contentLibrary, environmentOverrideId = null) {
+    applyEnvironment(
+      region,
+      contentLibrary,
+      environmentOverrideId = null,
+      fileSources: Record<string, string> = {}
+    ) {
       pendingEnvironmentState = {
         region,
         contentLibrary,
-        environmentOverrideId: environmentOverrideId ?? null
+        environmentOverrideId: environmentOverrideId ?? null,
+        fileSources
       };
       runPendingEnvironment();
     },
@@ -403,14 +486,5 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
  * applyEnvironment call via setContentLibrary.
  */
 function createEmptyPlaceholderContentLibrary(): ContentLibrarySnapshot {
-  return {
-    identity: {
-      id: "render-host:placeholder",
-      schema: "ContentLibrary",
-      version: 2
-    },
-    assetDefinitions: [],
-    environmentDefinitions: [],
-    shaderDefinitions: []
-  };
+  return createEmptyContentLibrarySnapshot("render-host:placeholder");
 }

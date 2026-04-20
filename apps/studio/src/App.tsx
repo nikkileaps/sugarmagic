@@ -24,20 +24,28 @@ import {
   getAllDocumentDefinitions,
   getAllEnvironmentDefinitions,
   getAllItemDefinitions,
+  getAllMaterialDefinitions,
   getAllNPCDefinitions,
   getAllShaderDefinitions,
   getAllPluginConfigurations,
   getPluginConfiguration,
   getAllQuestDefinitions,
   getAllSpellDefinitions,
+  getAllTextureDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
+  addMaterialDefinitionToSession,
+  addTextureDefinitionToSession,
   updateAssetDefinitionInSession,
+  updateMaterialDefinitionInSession,
   removeAssetDefinitionFromSession,
+  removeMaterialDefinitionFromSession,
   assetDefinitionHasSceneReferences,
+  materialDefinitionHasReferences,
   createDefaultEnvironmentDefinition,
-  createDefaultRegion
+  createDefaultRegion,
+  createScopedId
 } from "@sugarmagic/domain";
 import {
   buildSugarlangPreviewBootPayloadForSession,
@@ -56,6 +64,8 @@ import {
   saveProject,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
+  importPbrTextureSet,
+  importTextureDefinition,
   reloadProject,
   importSourceAsset
 } from "@sugarmagic/io";
@@ -519,7 +529,15 @@ export function App() {
     if (!session) return [];
     return getAllAssetDefinitions(session);
   }, [session]);
-  const assetSources = useAssetSources(projectHandle, assetDefinitions);
+  const materialDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllMaterialDefinitions(session);
+  }, [session]);
+  const textureDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllTextureDefinitions(session);
+  }, [session]);
+  const assetSources = useAssetSources(projectHandle, session?.contentLibrary ?? null);
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -819,6 +837,41 @@ export function App() {
     []
   );
 
+  const handleSetAssetMaterialSlotBinding = useCallback(
+    (
+      definitionId: string,
+      slotName: string,
+      slotIndex: number,
+      materialDefinitionId: string | null
+    ) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      const assetDefinition =
+        currentSession.contentLibrary.assetDefinitions.find(
+          (definition) => definition.definitionId === definitionId
+        ) ?? null;
+      if (!assetDefinition) return;
+
+      const nextBindings = (assetDefinition.materialSlotBindings ?? []).map((binding) =>
+        binding.slotName === slotName && binding.slotIndex === slotIndex
+          ? {
+              ...binding,
+              materialDefinitionId
+            }
+          : binding
+      );
+
+      projectStore
+        .getState()
+        .updateSession(
+          updateAssetDefinitionInSession(currentSession, definitionId, {
+            materialSlotBindings: nextBindings
+          })
+        );
+    },
+    []
+  );
+
   const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -834,6 +887,137 @@ export function App() {
     projectStore
       .getState()
       .updateSession(removeAssetDefinitionFromSession(currentSession, definitionId));
+  }, []);
+
+  const handleCreateMaterialDefinition = useCallback(
+    (shaderDefinitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return null;
+
+      const nextIndex = currentSession.contentLibrary.materialDefinitions.length + 1;
+      const materialDefinition = {
+        definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
+        definitionKind: "material" as const,
+        displayName: `Material ${nextIndex}`,
+        shaderDefinitionId,
+        parameterValues: {},
+        textureBindings: {}
+      };
+
+      projectStore
+        .getState()
+        .updateSession(addMaterialDefinitionToSession(currentSession, materialDefinition));
+      return materialDefinition;
+    },
+    []
+  );
+
+  const handleImportTextureDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importTextureDefinition({
+        projectHandle: handle,
+        descriptor
+      });
+      projectStore
+        .getState()
+        .updateSession(addTextureDefinitionToSession(currentSession, result.textureDefinition));
+      return result.textureDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Texture import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleImportPbrMaterial = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    const standardPbrShaderId =
+      currentSession.contentLibrary.shaderDefinitions.find(
+        (definition) => definition.metadata.builtInKey === "standard-pbr"
+      )?.shaderDefinitionId ?? null;
+    if (!standardPbrShaderId) {
+      window.alert("The built-in Standard PBR shader is missing from the content library.");
+      return null;
+    }
+
+    try {
+      const result = await importPbrTextureSet({
+        projectHandle: handle,
+        descriptor
+      });
+      let nextSession = currentSession;
+      for (const textureDefinition of result.textures) {
+        nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
+      }
+
+      const materialDefinition = {
+        definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
+        definitionKind: "material" as const,
+        displayName: result.suggestedMaterialDisplayName,
+        shaderDefinitionId: standardPbrShaderId,
+        parameterValues: {},
+        textureBindings: result.textureBindings
+      };
+      nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
+      projectStore.getState().updateSession(nextSession);
+      if (result.warnings.length > 0) {
+        window.alert(`PBR import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`);
+      }
+      return materialDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `PBR texture-set import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleUpdateMaterialDefinition = useCallback(
+    (definitionId: string, patch: Parameters<typeof updateMaterialDefinitionInSession>[2]) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateMaterialDefinitionInSession(currentSession, definitionId, patch)
+        );
+    },
+    []
+  );
+
+  const handleRemoveMaterialDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    if (materialDefinitionHasReferences(currentSession, definitionId)) {
+      window.alert(
+        "Remove this material from all landscape channels and asset slots before deleting it."
+      );
+      return;
+    }
+
+    if (!window.confirm("Remove this material from the project?")) {
+      return;
+    }
+
+    projectStore
+      .getState()
+      .updateSession(removeMaterialDefinitionFromSession(currentSession, definitionId));
   }, []);
 
   const handleCreateEnvironment = useCallback(() => {
@@ -969,6 +1153,8 @@ export function App() {
     selectedIds,
     session,
     assetDefinitions,
+    materialDefinitions,
+    textureDefinitions,
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
@@ -990,6 +1176,7 @@ export function App() {
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
+    onSetAssetMaterialSlotBinding: handleSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
       dispatchCommand({
         kind: "SetAssetDefaultShader",
@@ -1042,6 +1229,13 @@ export function App() {
         }
       }),
     onRemoveAssetDefinition: handleRemoveAssetDefinition,
+    onCreateMaterialDefinition: handleCreateMaterialDefinition,
+    onImportPbrMaterial: handleImportPbrMaterial,
+    onImportTextureDefinition: handleImportTextureDefinition,
+    onUpdateMaterialDefinition: handleUpdateMaterialDefinition,
+    onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
+    isMaterialReferenced: (definitionId) =>
+      session ? materialDefinitionHasReferences(session, definitionId) : false,
     renderLayoutInspectorSections: ({ activeRegion: layoutRegion }) =>
       renderPluginSectionGroup(
         pluginShellContributions.designSections.filter(

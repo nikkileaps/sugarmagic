@@ -7,9 +7,24 @@
  * runtime foliage behavior or editor-owned sidecar metadata.
  */
 
-import type { AssetDefinition } from "@sugarmagic/domain";
-import { writeBlobFile, pickFile } from "../fs-access";
+import type {
+  AssetDefinition,
+  MaterialSlotBinding,
+  TextureDefinition
+} from "@sugarmagic/domain";
+import { listFilesInDirectory, pickDirectory, pickFile, writeBlobFile } from "../fs-access";
 import type { GameRootDescriptor } from "../game-root";
+import {
+  colorSpaceForPbrTextureRole,
+  discoverPbrTextureSet,
+  labelForPbrTextureRole,
+  materialParameterIdForPbrTextureRole,
+  packingForPbrTextureRole,
+  type PbrTextureRole,
+  type StandardPbrTextureParameterId
+} from "./pbr-texture-set";
+
+export * from "./pbr-texture-set";
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK_TYPE = 0x4e4f534a;
@@ -27,6 +42,7 @@ interface GlbMeshDocument {
 }
 
 interface GlbMaterialDocument {
+  name?: string;
   pbrMetallicRoughness?: {
     baseColorTexture?: {
       index?: number;
@@ -55,6 +71,25 @@ export interface ImportSourceAssetRequest {
 
 export interface ImportSourceAssetResult {
   assetDefinition: AssetDefinition;
+}
+
+export interface ImportTextureDefinitionRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  defaultDisplayName?: string;
+  packing?: TextureDefinition["packing"];
+  colorSpace?: TextureDefinition["colorSpace"];
+}
+
+export interface ImportTextureDefinitionResult {
+  textureDefinition: TextureDefinition;
+}
+
+export interface ImportPbrTextureSetResult {
+  textures: TextureDefinition[];
+  textureBindings: Partial<Record<StandardPbrTextureParameterId, string>>;
+  suggestedMaterialDisplayName: string;
+  warnings: string[];
 }
 
 export interface SourceAssetAnalysis {
@@ -159,6 +194,66 @@ function hasEmbeddedTextureReference(document: GlbDocument): boolean {
   });
 }
 
+function collectMaterialSlotBindings(document: GlbDocument): MaterialSlotBinding[] {
+  return (document.materials ?? []).map((material, slotIndex) => {
+    const rawName =
+      typeof material.name === "string" && material.name.trim().length > 0
+        ? material.name.trim()
+        : `Material ${slotIndex + 1}`;
+    return {
+      slotName: rawName,
+      slotIndex,
+      materialDefinitionId: null
+    };
+  });
+}
+
+async function importTextureDefinitionFromFile(
+  sourceFile: File,
+  request: ImportTextureDefinitionRequest
+): Promise<ImportTextureDefinitionResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  const safeStem = sanitizeFileNameSegment(stem);
+  const targetFileName = `${safeStem}${ext}`;
+  const relativeAssetPath = `${request.descriptor.authoredAssetsPath}/textures/${targetFileName}`;
+
+  await writeBlobFile(
+    request.projectHandle,
+    [request.descriptor.authoredAssetsPath, "textures", targetFileName],
+    sourceFile
+  );
+
+  return {
+    textureDefinition: {
+      definitionId: `texture:${safeStem}`,
+      definitionKind: "texture",
+      displayName: request.defaultDisplayName ?? stem,
+      source: {
+        relativeAssetPath,
+        fileName: sourceFile.name,
+        mimeType: sourceFile.type || null
+      },
+      packing: request.packing ?? "rgba",
+      colorSpace: request.colorSpace ?? "srgb"
+    }
+  };
+}
+
+async function pickImageFile(): Promise<File> {
+  const fileHandle = await pickFile({
+    types: [
+      {
+        description: "Image Textures",
+        accept: {
+          "image/png": [".png"],
+          "image/jpeg": [".jpg", ".jpeg"]
+        }
+      }
+    ]
+  });
+  return fileHandle.getFile();
+}
+
 function validateFoilageMakerFoliageDocument(
   document: GlbDocument,
   extras: Record<string, unknown>
@@ -246,6 +341,51 @@ export async function analyzeSourceAssetFile(
   };
 }
 
+export async function importTextureDefinition(
+  request: ImportTextureDefinitionRequest
+): Promise<ImportTextureDefinitionResult> {
+  const sourceFile = await pickImageFile();
+  return importTextureDefinitionFromFile(sourceFile, request);
+}
+
+export async function importPbrTextureSet(
+  request: ImportTextureDefinitionRequest
+): Promise<ImportPbrTextureSetResult> {
+  const sourceDirectory = await pickDirectory();
+  const sourceFiles = await listFilesInDirectory(sourceDirectory, {
+    extensions: [".png", ".jpg", ".jpeg"]
+  });
+  const discoveredSet = discoverPbrTextureSet(sourceFiles);
+  const textures: TextureDefinition[] = [];
+  const textureBindings: Partial<Record<StandardPbrTextureParameterId, string>> = {};
+
+  for (const [role, sourceFile] of Object.entries(discoveredSet.filesByRole) as Array<
+    [PbrTextureRole, File]
+  >) {
+    const parameterId = materialParameterIdForPbrTextureRole(role);
+    const imported = (
+      await importTextureDefinitionFromFile(sourceFile, {
+        ...request,
+        defaultDisplayName: `${request.defaultDisplayName ?? getFileNameParts(sourceFile.name).stem} ${labelForPbrTextureRole(role)}`,
+        packing: packingForPbrTextureRole(role),
+        colorSpace: colorSpaceForPbrTextureRole(role)
+      })
+    ).textureDefinition;
+    textures.push(imported);
+    if (parameterId) {
+      textureBindings[parameterId] = imported.definitionId;
+    }
+  }
+
+  return {
+    textures,
+    textureBindings,
+    suggestedMaterialDisplayName:
+      request.defaultDisplayName ?? discoveredSet.suggestedMaterialDisplayName,
+    warnings: discoveredSet.warnings
+  };
+}
+
 export async function importSourceAsset(
   request: ImportSourceAssetRequest
 ): Promise<ImportSourceAssetResult> {
@@ -280,6 +420,12 @@ export async function importSourceAsset(
       definitionKind: "asset",
       displayName: stem,
       assetKind: analysis.assetKind,
+      materialSlotBindings:
+        ext.toLowerCase() === ".glb"
+          ? collectMaterialSlotBindings(
+              readGlbJsonChunk(await sourceFile.arrayBuffer()) ?? {}
+            )
+          : [],
       defaultShaderDefinitionId: null,
       source: {
         relativeAssetPath,
