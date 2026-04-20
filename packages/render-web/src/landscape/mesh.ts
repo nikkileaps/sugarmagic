@@ -4,6 +4,14 @@
  * Binds the runtime-core landscape splatmap buffers into Three/WebGPU
  * textures and material nodes. This is the single render-web enforcer for the
  * authored landscape surface seen in both Studio and Preview.
+ *
+ * Per Story 32.12 the landscape no longer owns a hand-rolled PBR TSL
+ * implementation. Instead, each Material-bound channel is evaluated
+ * through the shared ShaderRuntime.evaluateMeshSurfaceBinding — the
+ * same entry point mesh surfaces use — producing a ShaderSurfaceNodeSet
+ * per channel. N sets are then blended by splatmap weights into the
+ * final landscape material. One rendering math, two projection
+ * strategies (mesh-local UV vs. world-projected UV).
  */
 
 import * as THREE from "three";
@@ -11,28 +19,65 @@ import { MeshStandardNodeMaterial } from "three/webgpu";
 import { float, max, normalMap, positionWorld, texture, vec2, vec3 } from "three/tsl";
 import type {
   ContentLibrarySnapshot,
-  MaterialDefinition,
-  RegionLandscapeState,
-  TextureDefinition
+  RegionLandscapeChannelDefinition,
+  RegionLandscapeState
 } from "@sugarmagic/domain";
 import { MAX_REGION_LANDSCAPE_CHANNELS } from "@sugarmagic/domain";
-import { LandscapeSplatmap } from "@sugarmagic/runtime-core";
+import {
+  LandscapeSplatmap,
+  resolveMaterialEffectiveShaderBinding,
+  type EffectiveShaderBinding
+} from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
+import type {
+  ShaderRuntime,
+  ShaderSurfaceNodeSet
+} from "../ShaderRuntime";
+
+type TslNode = ReturnType<typeof vec3>;
+type TslFloat = ReturnType<typeof float>;
 
 export class RuntimeLandscapeMesh {
   readonly mesh: THREE.Mesh;
   readonly splatmap: LandscapeSplatmap;
-  private readonly material: MeshStandardNodeMaterial;
+  /**
+   * The currently-active surface material. Replaced wholesale by
+   * `rebuildMaterialNodes` on every binding change (not mutated in
+   * place) — Three's WebGPU NodeMaterial doesn't reliably pick up a
+   * replaced `colorNode` / `normalNode` / etc. even with
+   * `material.needsUpdate = true`, so the only way to guarantee the
+   * compiled shader reflects the new bindings is to hand Three a
+   * fresh material. The old material is disposed on swap.
+   */
+  private material: MeshStandardNodeMaterial;
   private readonly geometry: THREE.PlaneGeometry;
   private placeholder: THREE.DataTexture | null = null;
   private readonly channelColors: THREE.Color[] = [];
   private readonly splatTextures: THREE.DataTexture[] = [];
+  /**
+   * Signature of the last-applied material state. Paint strokes
+   * mutate splat textures in place and don't change the TSL node
+   * structure, so we skip material rebuilds when the signature
+   * hasn't changed. This keeps per-stroke cost down to the splat
+   * texture upload (which Three handles correctly for DataTextures).
+   */
+  private lastMaterialSignature: string | null = null;
+  /**
+   * A reusable carrier material handed to ShaderRuntime.evaluate-
+   * MeshSurfaceBinding as the `carrierMaterial` argument. The runtime
+   * needs a material with a `.map` field for the legacy fallback path
+   * in sampleMaterialTextureNode; we supply a bare MeshStandardMaterial
+   * that has no .map set, so the resolver-returned texture always
+   * wins.
+   */
+  private readonly carrierForEvaluation = new THREE.MeshStandardMaterial();
 
   constructor(
     private readonly size: number,
     private readonly subdivisions: number,
     resolution: number,
-    private readonly assetResolver: AuthoredAssetResolver
+    private readonly assetResolver: AuthoredAssetResolver,
+    private readonly getShaderRuntime: () => ShaderRuntime | null
   ) {
     this.geometry = new THREE.PlaneGeometry(size, size, subdivisions, subdivisions);
     this.geometry.rotateX(-Math.PI / 2);
@@ -114,6 +159,7 @@ export class RuntimeLandscapeMesh {
   dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.carrierForEvaluation.dispose();
     this.splatmap.dispose();
     this.placeholder?.dispose();
     for (const texture of this.splatTextures) {
@@ -165,51 +211,170 @@ export class RuntimeLandscapeMesh {
     return this.placeholder;
   }
 
-  private loadExternalTexture(
-    definition: TextureDefinition | null
-  ): THREE.Texture | null {
-    if (!definition) {
-      return null;
-    }
-    return this.assetResolver.resolveTextureDefinition(definition);
-  }
-
-  private materialTextureForChannel(
-    material: MaterialDefinition | null,
-    parameterId: string,
+  /**
+   * Build the per-channel ShaderSurfaceNodeSet:
+   *
+   *   - Material-bound channel: resolve its EffectiveShaderBinding and
+   *     hand it to ShaderRuntime.evaluateMeshSurfaceBinding with the
+   *     landscape world-projected UV as uvOverride. The graph's tiling
+   *     math multiplies uvOverride by the Material's tiling parameter,
+   *     so tiling still honors the authored value — just applied to
+   *     world-UV instead of mesh-local UV.
+   *   - Color-mode / unbound channel: synthesize a flat set with the
+   *     channel's color and neutral PBR defaults (roughness=1,
+   *     metalness=0, ao=1, tangent-space-up normal). This is what the
+   *     pre-32.12 hand-rolled code did implicitly; encoding it as a
+   *     node set keeps the blend loop homogeneous.
+   */
+  private surfaceNodesForChannel(
+    channel: RegionLandscapeChannelDefinition | null,
+    channelColor: THREE.Color,
+    worldUv: unknown,
     contentLibrary: ContentLibrarySnapshot | null
-  ): THREE.Texture | null {
-    if (!material || !contentLibrary) {
-      return null;
+  ): ShaderSurfaceNodeSet {
+    const shaderRuntime = this.getShaderRuntime();
+    const binding =
+      channel?.mode === "material" &&
+      channel.materialDefinitionId &&
+      contentLibrary
+        ? resolveMaterialEffectiveShaderBinding(
+            contentLibrary,
+            channel.materialDefinitionId
+          )
+        : null;
+
+    // eslint-disable-next-line no-console
+    console.debug("[landscape-trace] surfaceNodesForChannel", {
+      channelId: channel?.channelId ?? null,
+      mode: channel?.mode ?? "(no channel)",
+      materialDefinitionId: channel?.materialDefinitionId ?? null,
+      shaderRuntimeAvailable: Boolean(shaderRuntime),
+      bindingResolved: Boolean(binding),
+      bindingShaderId: binding?.shaderDefinitionId ?? null
+    });
+
+    if (shaderRuntime && binding) {
+      const evaluated = shaderRuntime.evaluateMeshSurfaceBinding(binding, {
+        geometry: this.geometry,
+        carrierMaterial: this.carrierForEvaluation,
+        uvOverride: worldUv
+      });
+      // eslint-disable-next-line no-console
+      console.debug("[landscape-trace] evaluateMeshSurfaceBinding result", {
+        channelId: channel?.channelId ?? null,
+        evaluated: Boolean(evaluated),
+        hasColorNode: Boolean(evaluated?.colorNode),
+        hasNormalNode: Boolean(evaluated?.normalNode),
+        hasRoughnessNode: Boolean(evaluated?.roughnessNode)
+      });
+      if (evaluated) {
+        return this.fillSurfaceNodeDefaults(evaluated, channelColor, binding);
+      }
     }
-    const textureDefinitionId = material.textureBindings[parameterId] ?? null;
-    if (!textureDefinitionId) {
-      return null;
-    }
-    const textureDefinition =
-      contentLibrary.textureDefinitions.find(
-        (definition) => definition.definitionId === textureDefinitionId
-      ) ?? null;
-    return this.loadExternalTexture(textureDefinition);
+
+    return this.flatSurfaceNodeSet(channelColor);
   }
 
-  private channelTilingNode(materialDefinition: MaterialDefinition | null) {
-    const tilingValue = materialDefinition?.parameterValues.tiling;
-    return Array.isArray(tilingValue) && tilingValue.length >= 2
-      ? vec2(Number(tilingValue[0]) || 1, Number(tilingValue[1]) || 1)
-      : vec2(1, 1);
+  /**
+   * Fill in neutral defaults for any PBR channel the graph didn't wire
+   * so the downstream weighted blend has a scalar for every slot.
+   */
+  private fillSurfaceNodeDefaults(
+    evaluated: ShaderSurfaceNodeSet,
+    channelColor: THREE.Color,
+    _binding: EffectiveShaderBinding
+  ): ShaderSurfaceNodeSet {
+    return {
+      colorNode:
+        evaluated.colorNode ??
+        (vec3(channelColor.r, channelColor.g, channelColor.b) as unknown),
+      alphaNode: evaluated.alphaNode,
+      normalNode: evaluated.normalNode ?? (vec3(0.5, 0.5, 1) as unknown),
+      roughnessNode: evaluated.roughnessNode ?? (float(1) as unknown),
+      metalnessNode: evaluated.metalnessNode ?? (float(0) as unknown),
+      aoNode: evaluated.aoNode ?? (float(1) as unknown),
+      emissiveNode: evaluated.emissiveNode,
+      vertexNode: evaluated.vertexNode
+    };
+  }
+
+  /**
+   * No material bound (or ShaderRuntime not available yet): use the
+   * channel's authored color and neutral PBR defaults. This mirrors
+   * how the pre-32.12 hand-rolled path rendered color-mode channels.
+   */
+  private flatSurfaceNodeSet(channelColor: THREE.Color): ShaderSurfaceNodeSet {
+    return {
+      colorNode: vec3(channelColor.r, channelColor.g, channelColor.b) as unknown,
+      alphaNode: null,
+      normalNode: vec3(0.5, 0.5, 1) as unknown,
+      roughnessNode: float(1) as unknown,
+      metalnessNode: float(0) as unknown,
+      aoNode: float(1) as unknown,
+      emissiveNode: null,
+      vertexNode: null
+    };
+  }
+
+  /**
+   * Stable string signature of the inputs that actually change the TSL
+   * node structure. Splatmap contents (paint) are NOT included — those
+   * flow through splat texture data updates, not the TSL graph. Only
+   * channel bindings (material id, color, mode) change the graph.
+   */
+  private computeMaterialSignature(
+    landscape: RegionLandscapeState | null,
+    contentLibrary: ContentLibrarySnapshot | null
+  ): string {
+    const parts: string[] = [];
+    const channels = landscape?.channels ?? [];
+    for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
+      const channel = channels[index] ?? null;
+      const color = this.channelColors[index]?.getHex() ?? 0;
+      parts.push(
+        `${channel?.mode ?? "color"}:${channel?.materialDefinitionId ?? ""}:${color.toString(16)}`
+      );
+    }
+    parts.push(contentLibrary?.identity.id ?? "no-library");
+    const shaderRuntime = this.getShaderRuntime();
+    parts.push(shaderRuntime ? "runtime" : "no-runtime");
+    return parts.join("|");
   }
 
   private rebuildMaterialNodes(
     contentLibrary: ContentLibrarySnapshot | null,
     landscape: RegionLandscapeState | null = null
   ): void {
+    const signature = this.computeMaterialSignature(landscape, contentLibrary);
+    // eslint-disable-next-line no-console
+    console.debug("[landscape-trace] rebuildMaterialNodes entry", {
+      signature,
+      lastSignature: this.lastMaterialSignature,
+      signatureChanged: signature !== this.lastMaterialSignature,
+      shaderRuntimeAvailable: Boolean(this.getShaderRuntime())
+    });
+    if (signature === this.lastMaterialSignature) {
+      // Nothing material-relevant changed (e.g. paint stroke only
+      // mutated the splatmap). The existing compiled shader continues
+      // to sample the updated splat textures correctly via their
+      // in-place needsUpdate flag.
+      return;
+    }
+    this.lastMaterialSignature = signature;
+
     const placeholder = this.getPlaceholder();
-    const worldUv = vec2(positionWorld.x, positionWorld.z);
-    const normalizedUv = worldUv.div(float(this.size)).add(vec2(0.5, 0.5));
+    // World-projected UV normalized to [0, 1] across the landscape
+    // plane. We pass this as `uvOverride` to the shader graph so the
+    // graph's material-texture `uv` input (after tiling math) samples
+    // at world-space positions rather than mesh-local UV. This is what
+    // makes the same `standard-pbr` graph work for both meshes (where
+    // `uv()` is the primary UV attribute) and landscape (where there
+    // is no meaningful mesh-local UV).
+    const worldXz = vec2(positionWorld.x, positionWorld.z);
+    const worldUv = worldXz.div(float(this.size)).add(vec2(0.5, 0.5));
     const textures = this.splatTextures;
-    const splat0 = texture(textures[0] ?? placeholder, normalizedUv);
-    const splat1 = texture(textures[1] ?? placeholder, normalizedUv);
+    const splat0 = texture(textures[0] ?? placeholder, worldUv);
+    const splat1 = texture(textures[1] ?? placeholder, worldUv);
 
     const weights = [
       max(
@@ -227,107 +392,70 @@ export class RuntimeLandscapeMesh {
       splat1.b
     ];
 
-    let blendedColor: ReturnType<typeof vec3> = vec3(0, 0, 0) as ReturnType<typeof vec3>;
-    let blendedRoughness: ReturnType<typeof float> = float(0) as ReturnType<typeof float>;
-    let blendedMetalness: ReturnType<typeof float> = float(0) as ReturnType<typeof float>;
-    let blendedAo: ReturnType<typeof float> = float(0) as ReturnType<typeof float>;
-    let blendedNormalSample: ReturnType<typeof vec3> = vec3(0, 0, 0) as ReturnType<
-      typeof vec3
-    >;
+    let blendedColor: TslNode = vec3(0, 0, 0);
+    let blendedNormal: TslNode = vec3(0, 0, 0);
+    let blendedRoughness: TslFloat = float(0);
+    let blendedMetalness: TslFloat = float(0);
+    let blendedAo: TslFloat = float(0);
 
     for (let index = 0; index < this.channelColors.length; index += 1) {
       const color = this.channelColors[index]!;
       const channel = landscape?.channels[index] ?? null;
-      const materialDefinition =
-        channel?.mode === "material" && channel.materialDefinitionId && contentLibrary
-          ? contentLibrary.materialDefinitions.find(
-              (definition) => definition.definitionId === channel.materialDefinitionId
-            ) ?? null
-          : null;
-      const tiling = this.channelTilingNode(materialDefinition);
-      const tiledUv = vec2(worldUv.x.mul(tiling.x), worldUv.y.mul(tiling.y));
       const weight = weights[index]!;
-
-      const baseTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "basecolor_texture",
-        contentLibrary
-      );
-      const ormTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "orm_texture",
-        contentLibrary
-      );
-      const roughnessTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "roughness_texture",
-        contentLibrary
-      );
-      const metallicTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "metallic_texture",
-        contentLibrary
-      );
-      const aoTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "ao_texture",
-        contentLibrary
-      );
-      const normalTexture = this.materialTextureForChannel(
-        materialDefinition,
-        "normal_texture",
+      const nodeSet = this.surfaceNodesForChannel(
+        channel,
+        color,
+        worldUv,
         contentLibrary
       );
 
-      const roughnessScale =
-        typeof materialDefinition?.parameterValues.roughness_scale === "number"
-          ? materialDefinition.parameterValues.roughness_scale
-          : 1;
-      const metallicScale =
-        typeof materialDefinition?.parameterValues.metallic_scale === "number"
-          ? materialDefinition.parameterValues.metallic_scale
-          : 0;
-
-      const colorNode = baseTexture
-        ? texture(baseTexture, tiledUv).rgb
-        : vec3(color.r, color.g, color.b);
-      const roughnessNode = roughnessTexture
-        ? texture(roughnessTexture, tiledUv).r.mul(float(roughnessScale))
-        : ormTexture
-        ? texture(ormTexture, tiledUv).g.mul(float(roughnessScale))
-        : float(1);
-      const metalnessNode = metallicTexture
-        ? texture(metallicTexture, tiledUv).r.mul(float(metallicScale))
-        : ormTexture
-        ? texture(ormTexture, tiledUv).b.mul(float(metallicScale))
-        : float(0);
-      const aoNode = aoTexture
-        ? texture(aoTexture, tiledUv).r
-        : ormTexture
-        ? texture(ormTexture, tiledUv).r
-        : float(1);
-      const normalNode = normalTexture
-        ? texture(normalTexture, tiledUv).rgb
-        : vec3(0.5, 0.5, 1);
-
-      blendedColor = blendedColor.add(colorNode.mul(weight)) as ReturnType<typeof vec3>;
-      blendedRoughness = blendedRoughness.add(roughnessNode.mul(weight)) as ReturnType<
-        typeof float
-      >;
-      blendedMetalness = blendedMetalness.add(metalnessNode.mul(weight)) as ReturnType<
-        typeof float
-      >;
-      blendedAo = blendedAo.add(aoNode.mul(weight)) as ReturnType<typeof float>;
-      blendedNormalSample = blendedNormalSample.add(normalNode.mul(weight)) as ReturnType<
-        typeof vec3
-      >;
+      // Each channel contributes weight × its node to the blend. Null
+      // fallbacks were filled in by surfaceNodesForChannel so every
+      // slot is guaranteed non-null here.
+      blendedColor = blendedColor.add(
+        (nodeSet.colorNode as TslNode).mul(weight)
+      ) as TslNode;
+      blendedNormal = blendedNormal.add(
+        (nodeSet.normalNode as TslNode).mul(weight)
+      ) as TslNode;
+      blendedRoughness = blendedRoughness.add(
+        (nodeSet.roughnessNode as TslFloat).mul(weight)
+      ) as TslFloat;
+      blendedMetalness = blendedMetalness.add(
+        (nodeSet.metalnessNode as TslFloat).mul(weight)
+      ) as TslFloat;
+      blendedAo = blendedAo.add(
+        (nodeSet.aoNode as TslFloat).mul(weight)
+      ) as TslFloat;
     }
 
-    this.material.colorNode = blendedColor;
-    this.material.roughnessNode = blendedRoughness;
-    this.material.metalnessNode = blendedMetalness;
-    this.material.aoNode = blendedAo;
-    this.material.normalNode = normalMap(blendedNormalSample);
-    this.material.needsUpdate = true;
+    // Fresh material per binding change (see field docs). We swap it
+    // onto the mesh and dispose the old one. This sidesteps a Three
+    // WebGPU NodeMaterial quirk where reassigning `colorNode` etc. on
+    // an already-compiled material doesn't reliably cause the
+    // compiled shader / bind groups to pick up the new nodes, even
+    // with `material.needsUpdate = true`.
+    const nextMaterial = new MeshStandardNodeMaterial({
+      roughness: 0.95,
+      metalness: 0
+    });
+    nextMaterial.colorNode = blendedColor;
+    nextMaterial.roughnessNode = blendedRoughness;
+    nextMaterial.metalnessNode = blendedMetalness;
+    nextMaterial.aoNode = blendedAo;
+    // Wrap the blended tangent-space normal once at the end. Doing the
+    // tangent-to-world reconstruction after blending keeps the weighted
+    // sum in tangent space, which is the correct space for weighted
+    // normal blending (blending in world space produces skewed
+    // normals when the blend boundary isn't aligned with a surface
+    // that shares tangent frames).
+    nextMaterial.normalNode = normalMap(blendedNormal);
+
+    const previous = this.material;
+    this.material = nextMaterial;
+    if (this.mesh) {
+      this.mesh.material = nextMaterial;
+    }
+    previous.dispose();
   }
 }

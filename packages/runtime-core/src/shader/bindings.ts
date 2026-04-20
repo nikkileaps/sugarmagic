@@ -228,6 +228,28 @@ function resolveSlotBinding(
   };
 }
 
+/**
+ * Public wrapper around the material-surface resolver. Returns the
+ * EffectiveShaderBinding for a landscape-channel- or future-slot-level
+ * material reference. Exposed (vs. the private in-context variant) so
+ * consumers that don't own an asset or placement (landscape, material-
+ * preview, etc.) can resolve a material directly. Diagnostics are
+ * accumulated into the caller-provided array; callers not interested
+ * in them can pass a fresh `[]`.
+ */
+export function resolveMaterialEffectiveShaderBinding(
+  contentLibrary: ContentLibrarySnapshot,
+  materialDefinitionId: string,
+  diagnostics: ShaderBindingResolutionDiagnostic[] = []
+): EffectiveShaderBinding | null {
+  return resolveMaterialSurfaceBinding(
+    contentLibrary,
+    materialDefinitionId,
+    [],
+    diagnostics
+  );
+}
+
 function resolveMaterialSurfaceBinding(
   contentLibrary: ContentLibrarySnapshot,
   materialDefinitionId: string,

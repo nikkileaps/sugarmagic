@@ -434,6 +434,19 @@ export function createAuthoringViewport(): WorkspaceViewport {
         environmentOverrideId = null
       } = state;
       currentAssetSources = assetSources;
+
+      // eslint-disable-next-line no-console
+      console.debug("[landscape-trace] authoringViewport.updateFromRegion", {
+        regionId: region?.identity.id,
+        regionSchemaVersion: region?.identity.version,
+        landscapeEnabled: region?.landscape?.enabled,
+        landscapeChannels: (region?.landscape?.channels ?? []).map((channel) => ({
+          channelId: channel.channelId,
+          mode: channel.mode,
+          materialDefinitionId: channel.materialDefinitionId ?? null,
+          color: channel.color.toString(16)
+        }))
+      });
       // Host handles environment + post-process apply, and keeps the shader
       // runtime's content library in sync without dispose/recreate.
       host.applyEnvironment(region, contentLibrary, environmentOverrideId, assetSources);
@@ -517,7 +530,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     previewLandscape(landscape) {
       if (!currentState) return;
-      host.landscapeController.applyLandscape(landscape);
+      // Pass the current content library and asset sources — without
+      // them the landscape controller can't resolve material-bound
+      // channels and falls back to flat-color rendering, which would
+      // clobber any real material that had just been applied via a
+      // full state update.
+      host.landscapeController.applyLandscape(
+        landscape,
+        currentState.contentLibrary,
+        currentState.assetSources
+      );
       syncLandscapeGrid(landscape);
     },
 

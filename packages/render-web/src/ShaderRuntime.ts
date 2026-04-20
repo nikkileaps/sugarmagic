@@ -101,6 +101,36 @@ export type ShaderApplyTarget =
       previousOutputNode?: unknown | null;
     };
 
+/**
+ * Output TSL nodes produced by evaluating a mesh-surface shader
+ * binding against the Standard PBR output shape. Consumers assemble
+ * these onto their material (single mesh-surface apply) or blend them
+ * per channel before assembly (landscape multi-channel apply).
+ *
+ * Each field is null when the authoring graph did not wire that
+ * output. Callers decide how to default missing channels — the
+ * landscape path supplies neutral constants; mesh-slot application
+ * simply leaves the MeshStandardNodeMaterial's existing node
+ * unchanged.
+ *
+ * `normalNode` is the raw tangent-space normal sample (RGB in [0, 1])
+ * before `normalMap()` tangent-to-world reconstruction. The caller
+ * wraps it: the mesh path wraps each sample individually; the
+ * landscape path wraps once after splatmap-weighted blending so the
+ * blend math runs in tangent space (the correct space for weighted
+ * normal blending).
+ */
+export interface ShaderSurfaceNodeSet {
+  colorNode: unknown | null;
+  alphaNode: unknown | null;
+  normalNode: unknown | null;
+  roughnessNode: unknown | null;
+  metalnessNode: unknown | null;
+  aoNode: unknown | null;
+  emissiveNode: unknown | null;
+  vertexNode: unknown | null;
+}
+
 interface ShaderRuntimeOptions {
   contentLibrary: ContentLibrarySnapshot;
   compileProfile: RuntimeCompileProfile;
@@ -136,6 +166,15 @@ interface FinalizationContext {
   opNodeCache: Map<string, unknown>;
   builtinSceneColorNode: unknown | null;
   builtinSceneDepthNode: unknown | null;
+  /**
+   * Optional override for the `uv` builtin. When set, graphs that
+   * reference `input.uv` see this TSL node instead of Three's default
+   * `uv()` attribute. Landscape rendering uses this to feed a
+   * world-projected UV into the same standard-pbr graph that
+   * mesh-surface rendering uses — keeps one rendering math, two
+   * projection strategies.
+   */
+  uvOverride?: unknown;
   /**
    * Per-binding cache of uniform TSL nodes for parameters. Keyed by
    * parameterId. Reused across applyShader calls for the same binding so that
@@ -442,7 +481,7 @@ function resolveMaterialTextureUv(
   if (uvValue && typeof uvValue === "object" && "kind" in uvValue) {
     return materializeValue(uvValue, context);
   }
-  return uv();
+  return context.uvOverride ?? uv();
 }
 
 function materializeBuiltin(
@@ -473,7 +512,7 @@ function materializeBuiltin(
     case "localNormal":
       return normalLocal;
     case "uv":
-      return uv();
+      return context.uvOverride ?? uv();
     case "vertexColor":
       return getVertexColorNode(
         "geometry" in context.target ? context.target.geometry : null,
@@ -1066,18 +1105,24 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
   return result;
 }
 
-function applyIRToMaterial(
+/**
+ * Pure materialization: build the full ShaderSurfaceNodeSet for a
+ * compiled IR against a specific binding + target context. No
+ * mutation of any material — the caller decides how to assemble the
+ * result. This is the single implementation of "IR → TSL nodes" that
+ * both single-material apply (applyIRToMaterial) and multi-channel
+ * landscape evaluation share, so landscape and mesh can never drift
+ * in what `standard-pbr` actually means.
+ */
+function evaluateIRToSurfaceNodes(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
   target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
   sunDirectionUniform: UniformNodeLike,
-  effectNodes: Map<string, EffectNodeCacheEntry>
-): THREE.Material {
-  const material =
-    target.targetKind === "billboard-surface"
-      ? target.material
-      : toMeshStandardNodeMaterial(target.material);
+  effectNodes: Map<string, EffectNodeCacheEntry>,
+  uvOverride?: unknown
+): ShaderSurfaceNodeSet {
   const allOps =
     ir.targetKind === "mesh-deform"
       ? ir.vertexOps
@@ -1092,20 +1137,70 @@ function applyIRToMaterial(
     opNodeCache: new Map(),
     builtinSceneColorNode: null,
     builtinSceneDepthNode: null,
-    parameterUniforms: parameterUniforms,
+    parameterUniforms,
     sunDirectionUniform,
-    effectNodes: effectNodes
+    effectNodes,
+    uvOverride
   };
 
-  if (ir.outputs.vertex) {
+  return {
+    colorNode: ir.outputs.fragmentColor
+      ? materializeValue(ir.outputs.fragmentColor, context)
+      : null,
+    alphaNode: ir.outputs.fragmentAlpha
+      ? materializeValue(ir.outputs.fragmentAlpha, context)
+      : null,
+    normalNode: ir.outputs.fragmentNormal
+      ? materializeValue(ir.outputs.fragmentNormal, context)
+      : null,
+    roughnessNode: ir.outputs.fragmentRoughness
+      ? materializeValue(ir.outputs.fragmentRoughness, context)
+      : null,
+    metalnessNode: ir.outputs.fragmentMetalness
+      ? materializeValue(ir.outputs.fragmentMetalness, context)
+      : null,
+    aoNode: ir.outputs.fragmentAo
+      ? materializeValue(ir.outputs.fragmentAo, context)
+      : null,
+    emissiveNode: ir.outputs.emissive
+      ? materializeValue(ir.outputs.emissive, context)
+      : null,
+    vertexNode: ir.outputs.vertex
+      ? materializeValue(ir.outputs.vertex, context)
+      : null
+  };
+}
+
+function applyIRToMaterial(
+  ir: ShaderIR,
+  binding: EffectiveShaderBinding,
+  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
+  parameterUniforms: Map<string, UniformNodeLike>,
+  sunDirectionUniform: UniformNodeLike,
+  effectNodes: Map<string, EffectNodeCacheEntry>
+): THREE.Material {
+  const material =
+    target.targetKind === "billboard-surface"
+      ? target.material
+      : toMeshStandardNodeMaterial(target.material);
+  const nodeSet = evaluateIRToSurfaceNodes(
+    ir,
+    binding,
+    target,
+    parameterUniforms,
+    sunDirectionUniform,
+    effectNodes
+  );
+
+  if (nodeSet.vertexNode) {
     (material as MeshStandardNodeMaterial | MeshBasicNodeMaterial).positionNode =
-      materializeValue(ir.outputs.vertex, context) as never;
+      nodeSet.vertexNode as never;
   }
-  if (ir.outputs.fragmentColor && "colorNode" in material) {
-    material.colorNode = materializeValue(ir.outputs.fragmentColor, context) as never;
+  if (nodeSet.colorNode && "colorNode" in material) {
+    material.colorNode = nodeSet.colorNode as never;
   }
-  if (ir.outputs.fragmentAlpha && "opacityNode" in material) {
-    material.opacityNode = materializeValue(ir.outputs.fragmentAlpha, context) as never;
+  if (nodeSet.alphaNode && "opacityNode" in material) {
+    material.opacityNode = nodeSet.alphaNode as never;
     // An authored shader writing an opacity output is opting into MASK-mode
     // cutout rendering: opaque where alpha passes the threshold, discarded
     // below it, and (critically) writing to the depth buffer on the opaque
@@ -1129,8 +1224,8 @@ function applyIRToMaterial(
       (material as { depthWrite: boolean }).depthWrite = true;
     }
   }
-  if (ir.outputs.emissive && material instanceof MeshStandardNodeMaterial) {
-    material.emissiveNode = materializeValue(ir.outputs.emissive, context) as never;
+  if (nodeSet.emissiveNode && material instanceof MeshStandardNodeMaterial) {
+    material.emissiveNode = nodeSet.emissiveNode as never;
   }
   if (material instanceof MeshStandardNodeMaterial) {
     // PBR-channel outputs: only wired when the authoring graph actually
@@ -1139,30 +1234,23 @@ function applyIRToMaterial(
     // preserves the material's existing node / scalar defaults, which
     // is what legacy graphs (Foliage Surface 1/2/3, debug shaders) rely
     // on when they only author color+alpha.
-    if (ir.outputs.fragmentNormal) {
-      const normalSample = materializeValue(ir.outputs.fragmentNormal, context);
+    if (nodeSet.normalNode) {
       // The graph authors tangent-space normal sample in [0, 1] RGB;
       // `normalMap()` does the [-1, 1] unpack + tangent-to-world
       // reconstruction that Three's MeshStandardMaterial would do if
       // you assigned a legacy `.normalMap`. Doing this wrap here (not
       // in the graph) spares authors from having to know about
       // tangent frames.
-      material.normalNode = normalMap(normalSample as never) as never;
+      material.normalNode = normalMap(nodeSet.normalNode as never) as never;
     }
-    if (ir.outputs.fragmentRoughness) {
-      material.roughnessNode = materializeValue(
-        ir.outputs.fragmentRoughness,
-        context
-      ) as never;
+    if (nodeSet.roughnessNode) {
+      material.roughnessNode = nodeSet.roughnessNode as never;
     }
-    if (ir.outputs.fragmentMetalness) {
-      material.metalnessNode = materializeValue(
-        ir.outputs.fragmentMetalness,
-        context
-      ) as never;
+    if (nodeSet.metalnessNode) {
+      material.metalnessNode = nodeSet.metalnessNode as never;
     }
-    if (ir.outputs.fragmentAo) {
-      material.aoNode = materializeValue(ir.outputs.fragmentAo, context) as never;
+    if (nodeSet.aoNode) {
+      material.aoNode = nodeSet.aoNode as never;
     }
   }
 
@@ -1403,6 +1491,69 @@ export class ShaderRuntime {
         this.sunDirectionUniform,
         effectNodes
       )
+    );
+  }
+
+  /**
+   * Evaluate an EffectiveShaderBinding as a ShaderSurfaceNodeSet
+   * WITHOUT assigning anything to a material. This is the public
+   * entry point for callers that need to compose multiple binding
+   * evaluations before emitting a final material — landscape is the
+   * canonical example: each channel's material gets evaluated to a
+   * node set, then N sets get blended by splatmap weights into one
+   * final set that drives the landscape's MeshStandardNodeMaterial.
+   *
+   * The mesh-slot apply path (applyShaderSet) uses the same IR
+   * materialization internally, so there is exactly one
+   * implementation of "what `standard-pbr` means" across every
+   * surface that consumes the shader graph system.
+   *
+   * Returns null if the shader graph is missing, targets the wrong
+   * kind, or has error-level compilation diagnostics. In that case
+   * the caller is responsible for its fallback (e.g. constant color
+   * for the landscape channel).
+   */
+  evaluateMeshSurfaceBinding(
+    binding: EffectiveShaderBinding,
+    options: {
+      geometry: THREE.BufferGeometry | null;
+      carrierMaterial: THREE.Material;
+      uvOverride?: unknown;
+    }
+  ): ShaderSurfaceNodeSet | null {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+
+    const shaderDefinition = getShaderDefinition(
+      this.contentLibrary,
+      binding.shaderDefinitionId
+    );
+    if (!shaderDefinition || shaderDefinition.targetKind !== "mesh-surface") {
+      return null;
+    }
+    const ir = this.getCompiledIR(shaderDefinition);
+    if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+      return null;
+    }
+
+    const surfaceTextures = this.resolveTextureBindings(binding);
+    const geometry = options.geometry ?? new THREE.BufferGeometry();
+    const target = {
+      targetKind: "mesh-surface" as const,
+      material: options.carrierMaterial,
+      geometry,
+      materialTextures: surfaceTextures
+    };
+
+    return evaluateIRToSurfaceNodes(
+      ir,
+      binding,
+      target,
+      this.getOrCreateParameterUniformCache(binding.shaderDefinitionId),
+      this.sunDirectionUniform,
+      this.getOrCreateEffectNodeCache(binding.shaderDefinitionId),
+      options.uvOverride
     );
   }
 

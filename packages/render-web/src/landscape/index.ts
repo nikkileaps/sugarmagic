@@ -25,6 +25,7 @@ import {
   createAuthoredAssetResolver,
   type AuthoredAssetResolver
 } from "../authoredAssetResolver";
+import type { ShaderRuntime } from "../ShaderRuntime";
 import { RuntimeLandscapeMesh } from "./mesh";
 
 export interface LandscapeSceneController {
@@ -52,7 +53,17 @@ export interface LandscapeSceneController {
 
 export function createLandscapeSceneController(
   scene: THREE.Scene,
-  assetResolver?: AuthoredAssetResolver
+  assetResolver?: AuthoredAssetResolver,
+  /**
+   * Getter returning the currently-mounted ShaderRuntime, or null if
+   * the host isn't mounted yet. Landscape uses this to evaluate the
+   * Material-bound channels' shader graphs through the same
+   * ShaderRuntime that mesh-surface slots use — one implementation
+   * of "what standard-pbr means," never a parallel hand-rolled TSL
+   * fork. When null, landscape falls back to flat per-channel color
+   * (no PBR sampling), which is the pre-Material-binding behavior.
+   */
+  getShaderRuntime?: () => ShaderRuntime | null
 ): LandscapeSceneController {
   const root = new THREE.Group();
   root.name = "runtime-landscape-root";
@@ -87,7 +98,8 @@ export function createLandscapeSceneController(
       descriptor.size,
       descriptor.subdivisions,
       descriptor.paintResolution,
-      resolver
+      resolver,
+      getShaderRuntime ?? (() => null)
     );
     root.add(currentLandscapeMesh.mesh);
     currentDescriptor = descriptor;
@@ -98,6 +110,18 @@ export function createLandscapeSceneController(
     contentLibrary: ContentLibrarySnapshot | null = null,
     fileSources: Record<string, string> = {}
   ): LandscapeSceneApplyResult {
+    // eslint-disable-next-line no-console
+    console.debug("[landscape-trace] applyLandscape called", {
+      enabled: landscape?.enabled,
+      channels: (landscape?.channels ?? []).map((channel) => ({
+        channelId: channel.channelId,
+        mode: channel.mode,
+        materialDefinitionId: channel.materialDefinitionId ?? null
+      })),
+      hasContentLibrary: Boolean(contentLibrary),
+      hasCurrentMesh: Boolean(currentLandscapeMesh)
+    });
+
     const descriptor = resolveLandscapeDescriptorFromState(landscape);
     const warnings: LandscapeSceneWarning[] = [];
     currentContentLibrary = contentLibrary;

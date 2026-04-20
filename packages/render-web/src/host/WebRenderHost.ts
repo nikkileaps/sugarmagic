@@ -220,7 +220,16 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
   });
 
   const environmentController = createEnvironmentSceneController(scene);
-  const landscapeController = createLandscapeSceneController(scene, assetResolver);
+  // Lazy getter: the landscape controller exists before the renderer's
+  // async init creates the ShaderRuntime, but rebuildMaterialNodes
+  // doesn't run until applyLandscape is called (which only happens
+  // inside runPendingEnvironment, after init). By that point
+  // shaderRuntime is populated.
+  const landscapeController = createLandscapeSceneController(
+    scene,
+    assetResolver,
+    () => shaderRuntime
+  );
 
   function configureRenderer(next: WebGPURenderer): void {
     // Single canonical renderer configuration — consumed by both Studio and
