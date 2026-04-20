@@ -11,7 +11,6 @@ import * as THREE from "three";
 import {
   ActionIcon,
   Box,
-  ColorPicker,
   ColorSwatch,
   Group,
   NumberInput,
@@ -22,8 +21,7 @@ import {
   Stack,
   Switch,
   Text,
-  TextInput,
-  Tooltip
+  TextInput
 } from "@mantine/core";
 import type {
   MaterialDefinition,
@@ -35,10 +33,9 @@ import {
   MAX_REGION_LANDSCAPE_CHANNELS,
   createRegionLandscapeChannelDefinition
 } from "@sugarmagic/domain";
-import { PanelSection } from "@sugarmagic/ui";
+import { PanelSection, SurfacePicker, type Surface } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import type { WorkspaceViewport } from "../../viewport";
-import { MaterialDefinitionSelect } from "../MaterialDefinitionSelect";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
 import {
   createLandscapeWorkspace,
@@ -110,9 +107,10 @@ function ChannelCard(props: {
   isActive: boolean;
   getViewport: () => WorkspaceViewport | null;
   maskVersion: number;
+  materials: MaterialDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
-  onColorChange: (color: number) => void;
+  onSurfaceChange: (surface: Surface) => void;
 }) {
   const {
     channel,
@@ -120,15 +118,34 @@ function ChannelCard(props: {
     isActive,
     getViewport,
     maskVersion,
+    materials,
     onSelect,
     onRename,
-    onColorChange
+    onSurfaceChange
   } = props;
 
   const isBase = channelIndex === 0;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(channel.displayName);
+
+  const surfaceValue: Surface =
+    channel.mode === "material"
+      ? {
+          kind: "material",
+          materialDefinitionId: channel.materialDefinitionId,
+          tilingScale: channel.tilingScale
+        }
+      : { kind: "color", value: channel.color };
+
+  const materialOptions = useMemo(
+    () =>
+      materials.map((material) => ({
+        value: material.definitionId,
+        label: material.displayName
+      })),
+    [materials]
+  );
 
   return (
     <Paper
@@ -169,16 +186,10 @@ function ChannelCard(props: {
               />
             </Popover.Target>
             <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
-              <ColorPicker
-                value={formatHexColor(channel.color)}
-                onChange={(hex) => {
-                  const value = parseHexColor(hex);
-                  if (!Number.isNaN(value)) {
-                    onColorChange(value);
-                  }
-                }}
-                format="hex"
-                swatches={[
+              <SurfacePicker
+                value={surfaceValue}
+                materials={materialOptions}
+                colorSwatches={[
                   "#7f8ea3",
                   "#5c8a5a",
                   "#6b5b3a",
@@ -192,6 +203,12 @@ function ChannelCard(props: {
                   "#a0522d",
                   "#696969"
                 ]}
+                onApply={(next) => {
+                  onSurfaceChange(next);
+                  setPickerOpen(false);
+                }}
+                title={`${channel.displayName} surface`}
+                emptyMaterialsHint="Create a material in the Material Library to bind it here."
               />
             </Popover.Dropdown>
           </Popover>
@@ -253,21 +270,6 @@ function ChannelCard(props: {
           )}
         </Group>
 
-        <Tooltip label="Color channel" withArrow>
-          <ActionIcon
-            variant="subtle"
-            color={isActive ? "blue" : "gray"}
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!isBase) {
-                onSelect();
-              }
-            }}
-          >
-            ●
-          </ActionIcon>
-        </Tooltip>
       </Group>
     </Paper>
   );
@@ -449,6 +451,7 @@ export function useLandscapeWorkspaceView(
           isActive={channelIndex === effectiveActiveChannelIndex}
           getViewport={getViewport}
           maskVersion={maskVersion}
+          materials={materialDefinitions}
           onSelect={() => setActiveChannelIndex(channelIndex)}
           onRename={(displayName) => {
             if (!region || channelIndex === 0) return;
@@ -468,8 +471,27 @@ export function useLandscapeWorkspaceView(
               }
             });
           }}
-          onColorChange={(color) => {
+          onSurfaceChange={(surface) => {
             if (!region) return;
+            // Atomic surface commit: one command captures mode +
+            // color/material + tilingScale so the channel transitions
+            // between modes in a single canonical step, not through
+            // half-applied intermediate states.
+            const payload =
+              surface.kind === "color"
+                ? {
+                    channelId: channel.channelId,
+                    mode: "color" as const,
+                    color: surface.value,
+                    materialDefinitionId: null,
+                    tilingScale: null
+                  }
+                : {
+                    channelId: channel.channelId,
+                    mode: "material" as const,
+                    materialDefinitionId: surface.materialDefinitionId,
+                    tilingScale: surface.tilingScale
+                  };
             onCommand({
               kind: "UpdateLandscapeChannel",
               target: {
@@ -480,15 +502,20 @@ export function useLandscapeWorkspaceView(
                 subjectKind: "region-landscape",
                 subjectId: region.identity.id
               },
-              payload: {
-                channelId: channel.channelId,
-                color
-              }
+              payload
             });
           }}
         />
       )),
-    [channels, effectiveActiveChannelIndex, getViewport, maskVersion, onCommand, region]
+    [
+      channels,
+      effectiveActiveChannelIndex,
+      getViewport,
+      maskVersion,
+      materialDefinitions,
+      onCommand,
+      region
+    ]
   );
 
   const setBrushMode = (mode: LandscapeBrushSettings["mode"]) => {
@@ -502,39 +529,7 @@ export function useLandscapeWorkspaceView(
     leftPanel: null,
     rightPanel: (
       <Stack gap={0} h="100%">
-        <PanelSection
-          title="Landscape"
-          icon="⛰️"
-          actions={
-            canAddChannel && region ? (
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                aria-label="Add channel"
-                onClick={() => {
-                  onCommand({
-                    kind: "CreateLandscapeChannel",
-                    target: {
-                      aggregateKind: "region-document",
-                      aggregateId: region.identity.id
-                    },
-                    subject: {
-                      subjectKind: "region-landscape",
-                      subjectId: region.identity.id
-                    },
-                    payload: {
-                      channel: createRegionLandscapeChannelDefinition({
-                        displayName: nextLandscapeChannelName(region.landscape.channels)
-                      })
-                    }
-                  });
-                }}
-              >
-                +
-              </ActionIcon>
-            ) : null
-          }
-        >
+        <PanelSection title="Landscape" icon="⛰️">
           {region ? (
             <Stack gap="md">
               <Switch
@@ -611,166 +606,40 @@ export function useLandscapeWorkspaceView(
               </Group>
 
               <Stack gap="xs">
-                <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
-                  Channels
-                </Text>
-                <Stack gap="xs">{channelCards}</Stack>
-                {activeChannel ? (
-                  <Text size="xs" c="var(--sm-color-overlay0)">
-                    Active paint channel: {effectiveActiveChannelIndex === 0 ? "Base (inspect only)" : activeChannel.displayName}
-                  </Text>
-                ) : null}
-              </Stack>
-              {activeChannel ? (
-                <Stack gap="xs">
+                <Group justify="space-between" align="center" wrap="nowrap">
                   <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
-                    Active Channel Surface
+                    Channels
                   </Text>
-                  <Select
-                    label="Mode"
-                    size="xs"
-                    data={[
-                      { value: "color", label: "Color" },
-                      { value: "material", label: "Material" }
-                    ]}
-                    value={activeChannel.mode}
-                    onChange={(value) => {
-                      if (!region || !value) return;
-                      onCommand({
-                        kind: "UpdateLandscapeChannel",
-                        target: {
-                          aggregateKind: "region-document",
-                          aggregateId: region.identity.id
-                        },
-                        subject: {
-                          subjectKind: "region-landscape",
-                          subjectId: region.identity.id
-                        },
-                        payload: {
-                          channelId: activeChannel.channelId,
-                          mode: value as RegionLandscapeChannelDefinition["mode"]
-                        }
-                      });
-                    }}
-                  />
-                  {activeChannel.mode === "material" ? (
-                    <>
-                      <MaterialDefinitionSelect
-                        label="Material"
-                        materials={materialDefinitions}
-                        value={activeChannel.materialDefinitionId}
-                        onChange={(materialDefinitionId) => {
-                          if (!region) return;
-                          onCommand({
-                            kind: "UpdateLandscapeChannel",
-                            target: {
-                              aggregateKind: "region-document",
-                              aggregateId: region.identity.id
-                            },
-                            subject: {
-                              subjectKind: "region-landscape",
-                              subjectId: region.identity.id
-                            },
-                            payload: {
-                              channelId: activeChannel.channelId,
-                              materialDefinitionId
-                            }
-                          });
-                        }}
-                        description={
-                          materialDefinitions.length === 0
-                            ? "Import or create a material in the Material Library first."
-                            : "Bind a reusable project material to this channel."
-                        }
-                      />
-                      <Stack gap="xs">
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          Tiling (this channel)
-                        </Text>
-                        <Group gap="xs" grow>
-                          <NumberInput
-                            label="X"
-                            size="xs"
-                            min={0.01}
-                            step={0.5}
-                            decimalScale={2}
-                            value={activeChannel.tilingScale?.[0] ?? 1}
-                            onChange={(value) => {
-                              if (!region) return;
-                              const nextX =
-                                typeof value === "number" && Number.isFinite(value) && value > 0
-                                  ? value
-                                  : 1;
-                              const nextY = activeChannel.tilingScale?.[1] ?? 1;
-                              onCommand({
-                                kind: "UpdateLandscapeChannel",
-                                target: {
-                                  aggregateKind: "region-document",
-                                  aggregateId: region.identity.id
-                                },
-                                subject: {
-                                  subjectKind: "region-landscape",
-                                  subjectId: region.identity.id
-                                },
-                                payload: {
-                                  channelId: activeChannel.channelId,
-                                  tilingScale:
-                                    nextX === 1 && nextY === 1
-                                      ? null
-                                      : [nextX, nextY]
-                                }
-                              });
-                            }}
-                          />
-                          <NumberInput
-                            label="Y"
-                            size="xs"
-                            min={0.01}
-                            step={0.5}
-                            decimalScale={2}
-                            value={activeChannel.tilingScale?.[1] ?? 1}
-                            onChange={(value) => {
-                              if (!region) return;
-                              const nextX = activeChannel.tilingScale?.[0] ?? 1;
-                              const nextY =
-                                typeof value === "number" && Number.isFinite(value) && value > 0
-                                  ? value
-                                  : 1;
-                              onCommand({
-                                kind: "UpdateLandscapeChannel",
-                                target: {
-                                  aggregateKind: "region-document",
-                                  aggregateId: region.identity.id
-                                },
-                                subject: {
-                                  subjectKind: "region-landscape",
-                                  subjectId: region.identity.id
-                                },
-                                payload: {
-                                  channelId: activeChannel.channelId,
-                                  tilingScale:
-                                    nextX === 1 && nextY === 1
-                                      ? null
-                                      : [nextX, nextY]
-                                }
-                              });
-                            }}
-                          />
-                        </Group>
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          Multiplies the Material's own tiling when it's applied to this
-                          landscape channel. Higher = smaller pattern (more repeats across
-                          the landscape).
-                        </Text>
-                      </Stack>
-                    </>
-                  ) : (
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      Color mode uses the authored channel swatch directly.
-                    </Text>
-                  )}
-                </Stack>
-              ) : null}
+                  {canAddChannel && region ? (
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label="Add channel"
+                      onClick={() => {
+                        onCommand({
+                          kind: "CreateLandscapeChannel",
+                          target: {
+                            aggregateKind: "region-document",
+                            aggregateId: region.identity.id
+                          },
+                          subject: {
+                            subjectKind: "region-landscape",
+                            subjectId: region.identity.id
+                          },
+                          payload: {
+                            channel: createRegionLandscapeChannelDefinition({
+                              displayName: nextLandscapeChannelName(region.landscape.channels)
+                            })
+                          }
+                        });
+                      }}
+                    >
+                      +
+                    </ActionIcon>
+                  ) : null}
+                </Group>
+                <Stack gap="xs">{channelCards}</Stack>
+              </Stack>
             </Stack>
           ) : (
             <Text size="xs" c="var(--sm-color-overlay0)">
