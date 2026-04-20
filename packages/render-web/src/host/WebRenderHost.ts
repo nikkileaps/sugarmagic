@@ -53,6 +53,7 @@ import {
 
 export interface WebRenderHostLogger {
   warn: (message: string, payload?: Record<string, unknown>) => void;
+  debug?: (message: string, payload?: Record<string, unknown>) => void;
 }
 
 export interface WebRenderHostOptions {
@@ -160,7 +161,14 @@ export interface WebRenderHost {
 
 export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHost {
   const { scene, compileProfile } = options;
-  const logger = options.logger ?? { warn() {} };
+  const logger = options.logger ?? {
+    warn(message: string, payload?: Record<string, unknown>) {
+      console.warn("[render-web]", { message, ...(payload ?? {}) });
+    },
+    debug(message: string, payload?: Record<string, unknown>) {
+      console.debug("[render-web]", { message, ...(payload ?? {}) });
+    }
+  };
 
   let activeCamera: THREE.Camera = options.camera;
   let renderer: WebGPURenderer | null = null;

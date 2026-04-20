@@ -35,6 +35,7 @@ import {
   createDebugFresnelShaderGraph,
   createDebugConstantRedShaderGraph,
   createDefaultStandardPbrShaderGraph,
+  createDefaultStandardPbrSeparateShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -1175,7 +1176,11 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     }),
     createDefaultStandardPbrShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:standard-pbr`,
-      displayName: "Standard PBR"
+      displayName: "Standard PBR (ORM)"
+    }),
+    createDefaultStandardPbrSeparateShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:standard-pbr-separate`,
+      displayName: "Standard PBR (Separate)"
     }),
     createDebugParameterColorShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:debug-parameter-color`,

@@ -725,6 +725,9 @@ export function createWebRuntimeHost(
       logger: {
         warn(message: string, payload?: Record<string, unknown>) {
           console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        },
+        debug(message: string, payload?: Record<string, unknown>) {
+          console.debug("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
         }
       }
     });

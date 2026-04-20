@@ -33,9 +33,10 @@
  *   - sync(contentLibrary, assetSources) is how upstream (WebRenderHost)
  *     pushes fresh state. Idempotent and cheap to call on every frame
  *     budget; usually called on every applyEnvironment.
- *   - Debug logging (console.debug / console.warn) fires on cache
- *     state changes so Preview-vs-editor divergence can be diagnosed
- *     by scrolling the console instead of by guessing.
+ *   - Debug logging fires on cache state changes so Preview-vs-editor
+ *     divergence can be diagnosed by scrolling the console instead of by
+ *     guessing. The resolver routes those diagnostics through the
+ *     host-injected logger rather than bypassing the shared logging path.
  */
 
 import * as THREE from "three";
@@ -142,12 +143,7 @@ function debugLog(
   message: string,
   payload?: Record<string, unknown>
 ): void {
-  if (logger.debug) {
-    logger.debug(`${LOG_PREFIX} ${message}`, payload);
-    return;
-  }
-  // eslint-disable-next-line no-console
-  console.debug(`${LOG_PREFIX} ${message}`, payload ?? {});
+  logger.debug?.(`${LOG_PREFIX} ${message}`, payload);
 }
 
 function warnLog(
@@ -162,10 +158,8 @@ export function createAuthoredAssetResolver(
   options: ResolverOptions = {}
 ): AuthoredAssetResolver {
   const logger: AuthoredAssetResolverLogger = options.logger ?? {
-    warn(message, payload) {
-      // eslint-disable-next-line no-console
-      console.warn(message, payload ?? {});
-    }
+    warn() {},
+    debug() {}
   };
   const onTextureUpdated = options.onTextureUpdated;
 

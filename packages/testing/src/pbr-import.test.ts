@@ -55,3 +55,72 @@ describe("PBR texture-set discovery", () => {
     ).toThrow(/requires a basecolor texture/i);
   });
 });
+
+describe("Standard PBR shader graph variants", () => {
+  it("registers both ORM and Separate variants as built-in mesh-surface shaders", async () => {
+    const { createEmptyContentLibrarySnapshot, normalizeContentLibrarySnapshot } =
+      await import("@sugarmagic/domain");
+    const library = normalizeContentLibrarySnapshot(
+      createEmptyContentLibrarySnapshot("project"),
+      "project"
+    );
+
+    const orm = library.shaderDefinitions.find(
+      (definition) => definition.metadata.builtInKey === "standard-pbr"
+    );
+    const separate = library.shaderDefinitions.find(
+      (definition) => definition.metadata.builtInKey === "standard-pbr-separate"
+    );
+
+    expect(orm).toBeTruthy();
+    expect(orm?.targetKind).toBe("mesh-surface");
+    expect(separate).toBeTruthy();
+    expect(separate?.targetKind).toBe("mesh-surface");
+
+    // ORM variant declares the ORM-pack parameter but NOT separate
+    // channels — so authors can't accidentally bind a roughness map
+    // to a graph that never samples it.
+    const ormParameterIds = orm!.parameters.map((p) => p.parameterId);
+    expect(ormParameterIds).toContain("orm_texture");
+    expect(ormParameterIds).not.toContain("roughness_texture");
+    expect(ormParameterIds).not.toContain("metallic_texture");
+    expect(ormParameterIds).not.toContain("ao_texture");
+
+    // Separate variant declares the three per-channel parameters and
+    // does NOT declare ORM.
+    const separateParameterIds = separate!.parameters.map((p) => p.parameterId);
+    expect(separateParameterIds).toContain("roughness_texture");
+    expect(separateParameterIds).toContain("metallic_texture");
+    expect(separateParameterIds).toContain("ao_texture");
+    expect(separateParameterIds).not.toContain("orm_texture");
+  });
+
+  it("compiles both variants with PBR outputs wired", async () => {
+    const {
+      createDefaultStandardPbrShaderGraph,
+      createDefaultStandardPbrSeparateShaderGraph
+    } = await import("@sugarmagic/domain");
+    const { compileShaderGraph } = await import("@sugarmagic/runtime-core");
+
+    for (const document of [
+      createDefaultStandardPbrShaderGraph("project"),
+      createDefaultStandardPbrSeparateShaderGraph("project")
+    ]) {
+      const ir = compileShaderGraph(document, {
+        compileProfile: "authoring-preview"
+      });
+      // No error-level diagnostics — graph shape is internally valid.
+      expect(
+        ir.diagnostics.filter((d) => d.severity === "error")
+      ).toEqual([]);
+      // Every PBR surface output is driven by the graph, not left as
+      // a compile-time literal default the runtime would stomp on.
+      expect(ir.outputs.fragmentColor).toBeTruthy();
+      expect(ir.outputs.fragmentAlpha).toBeTruthy();
+      expect(ir.outputs.fragmentNormal).toBeTruthy();
+      expect(ir.outputs.fragmentRoughness).toBeTruthy();
+      expect(ir.outputs.fragmentMetalness).toBeTruthy();
+      expect(ir.outputs.fragmentAo).toBeTruthy();
+    }
+  });
+});

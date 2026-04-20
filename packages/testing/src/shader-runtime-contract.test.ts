@@ -401,6 +401,61 @@ describe("shader runtime contracts", () => {
     expect(nodeMaterial.normalNode).toBeTruthy();
   });
 
+  it("does not fall back to the carrier material map when no material texture binding exists", () => {
+    const shader = createDefaultStandardPbrShaderGraph("project");
+    const runtime = new ShaderRuntime({
+      contentLibrary: normalizeContentLibrarySnapshot(
+        {
+          identity: {
+            id: "project:content-library",
+            schema: "ContentLibrarySnapshot",
+            version: 1
+          },
+          assetDefinitions: [],
+          materialDefinitions: [],
+          textureDefinitions: [],
+          environmentDefinitions: [],
+          shaderDefinitions: [shader]
+        },
+        "project"
+      ),
+      compileProfile: "authoring-preview"
+    });
+    const carrierMaterial = new THREE.MeshStandardMaterial();
+    carrierMaterial.map = new THREE.Texture();
+
+    const finalized = runtime.applyShaderSet(
+      {
+        surface: {
+          shaderDefinitionId: shader.shaderDefinitionId,
+          targetKind: "mesh-surface",
+          documentRevision: shader.revision,
+          parameterValues: {},
+          textureBindings: {},
+          parameterOverrides: []
+        },
+        deform: null
+      },
+      {
+        material: carrierMaterial,
+        geometry: new THREE.BoxGeometry(1, 1, 1)
+      }
+    ) as unknown as {
+      colorNode: {
+        type?: string;
+        node?: {
+          type?: string;
+          isTextureNode?: boolean;
+        };
+      };
+    };
+
+    expect(finalized.colorNode).toBeTruthy();
+    expect(finalized.colorNode.type).toBe("VarNode");
+    expect(finalized.colorNode.node?.isTextureNode).not.toBe(true);
+    expect(finalized.colorNode.node?.type).not.toBe("TextureNode");
+  });
+
   it("reuses the finalized material across blob URL churn for the same TextureDefinition", () => {
     const shader = createDefaultStandardPbrShaderGraph("project");
     const runtime = new ShaderRuntime({

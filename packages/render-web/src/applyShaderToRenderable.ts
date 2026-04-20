@@ -104,16 +104,34 @@ export function applyShaderToRenderable(
 
     const resolveSurfaceBinding = (
       material: THREE.Material,
-      slotIndex: number
-    ) =>
-      effectiveMaterialSlots.find(
-        (slot) => slot.slotName === material.name || slot.slotIndex === slotIndex
-      )?.surface ?? object.effectiveShaders.surface;
+      slotIndex: number,
+      allowSlotIndexFallback: boolean
+    ) => {
+      const byName = effectiveMaterialSlots.find(
+        (slot) => slot.slotName === material.name
+      );
+      if (byName) {
+        return byName.surface;
+      }
 
-    const applyMaterial = (material: THREE.Material, slotIndex: number): THREE.Material => {
+      if (allowSlotIndexFallback) {
+        return (
+          effectiveMaterialSlots.find((slot) => slot.slotIndex === slotIndex)?.surface ??
+          object.effectiveShaders.surface
+        );
+      }
+
+      return object.effectiveShaders.surface;
+    };
+
+    const applyMaterial = (
+      material: THREE.Material,
+      slotIndex: number,
+      allowSlotIndexFallback: boolean
+    ): THREE.Material => {
       const finalized = shaderRuntime.applyShaderSet(
         {
-          surface: resolveSurfaceBinding(material, slotIndex),
+          surface: resolveSurfaceBinding(material, slotIndex, allowSlotIndexFallback),
           deform: object.effectiveShaders.deform
         },
         {
@@ -137,12 +155,12 @@ export function applyShaderToRenderable(
 
     if (Array.isArray(child.material)) {
       child.material = child.material.map((material, slotIndex) =>
-        applyMaterial(material, slotIndex)
+        applyMaterial(material, slotIndex, true)
       );
       return;
     }
 
-    child.material = applyMaterial(child.material, 0);
+    child.material = applyMaterial(child.material, 0, false);
   });
 
   if (nextLeases.length > 0) {

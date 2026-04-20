@@ -14,28 +14,11 @@ import {
   MeshStandardNodeMaterial
 } from "three/webgpu";
 import {
-  acesFilmicToneMapping,
-  abs,
-  cameraFar,
-  cameraNear,
   cameraPosition,
   cameraProjectionMatrixInverse,
   cameraWorldMatrix,
-  clamp,
-  cos,
   attribute as tslAttribute,
-  dot,
-  exp,
   float,
-  modelWorldMatrix,
-  select,
-  transformDirection,
-  transformNormal,
-  length,
-  luminance,
-  max,
-  min,
-  mix,
   normalLocal,
   normalMap,
   normalWorld,
@@ -43,7 +26,6 @@ import {
   positionViewDirection,
   positionWorld,
   screenUV,
-  sin,
   time,
   deltaTime,
   uv,
@@ -51,16 +33,10 @@ import {
   vec3,
   vec4,
   vertexColor,
-  normalize,
-  pow,
-  reinhardToneMapping,
-  saturate,
-  smoothstep,
   texture as textureNode,
   uniform,
   viewportLinearDepth
 } from "three/tsl";
-import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import type {
   ContentLibrarySnapshot,
   ShaderGraphDocument
@@ -81,6 +57,17 @@ import {
 } from "./authoredAssetResolver";
 import { compileShaderGraph } from "@sugarmagic/runtime-core";
 import type { RuntimeRenderPipeline } from "./render";
+import {
+  materializeEffectOp
+} from "./materialize/effect";
+import {
+  materializeMathOp
+} from "./materialize/math";
+import type {
+  EffectNodeCacheEntry,
+  EffectMaterializeContext,
+  MaterializeInputResolver
+} from "./materialize/types";
 
 export type ShaderApplyTarget =
   | {
@@ -207,11 +194,6 @@ interface FinalizationContext {
 
 interface UniformNodeLike {
   value: unknown;
-}
-
-interface EffectNodeCacheEntry {
-  node: unknown;
-  kind: "bloom";
 }
 
 interface MeshShaderSetApplyTarget {
@@ -365,32 +347,6 @@ function toMeshStandardNodeMaterial(
   return target;
 }
 
-function toMeshBasicNodeMaterial(
-  material: THREE.Material
-): MeshBasicNodeMaterial {
-  if (material instanceof MeshBasicNodeMaterial) {
-    return material;
-  }
-
-  const target = new MeshBasicNodeMaterial();
-  copySharedMaterialProps(material, target);
-
-  if (material instanceof THREE.MeshBasicMaterial) {
-    target.color.copy(material.color);
-    target.map = material.map;
-    target.alphaMap = material.alphaMap;
-    target.vertexColors = material.vertexColors;
-  } else if (material instanceof THREE.MeshStandardMaterial) {
-    target.color.copy(material.color);
-    target.map = material.map;
-    target.alphaMap = material.alphaMap;
-    target.vertexColors = material.vertexColors;
-  }
-
-  target.needsUpdate = true;
-  return target;
-}
-
 function literalNode(dataType: ShaderIRValue["dataType"], value: unknown): unknown {
   switch (dataType) {
     case "float":
@@ -440,18 +396,14 @@ function sampleMaterialTextureNode(
     parameterId && target.materialTextures
       ? target.materialTextures[parameterId] ?? null
       : null;
-  // The fallback to material.map covers legacy shader graphs authored
-  // before the Material layer (Foliage Surface 1/2/3, debug shaders)
-  // that sampled "THE texture" keyed to parameterId `baseColor` —
-  // those still resolve to the GLB carrier material's embedded map.
-  const fallbackMap = "map" in target.material ? target.material.map : null;
-  const sourceTexture = parameterTexture ?? fallbackMap;
-  if (!sourceTexture) {
+  if (!parameterTexture) {
     // Neutral defaults per channel so downstream math doesn't collapse:
+    // authored graphs must bind material textures explicitly; the
+    // carrier GLB material is no longer a hidden fallback source.
     // color sample fails open to white, alpha/channels fail open to 1.
     return output === "color" ? vec3(1, 1, 1) : float(1);
   }
-  const sample = textureNode(sourceTexture, uvNode as never) as {
+  const sample = textureNode(parameterTexture, uvNode as never) as {
     rgb: unknown;
     r: unknown;
     g: unknown;
@@ -685,28 +637,6 @@ function materializeValue(value: ShaderIRValue, context: FinalizationContext): u
 }
 
 /**
- * Extract the current numeric value from a materialized TSL input.
- *
- * Used by effect helpers like bloom() whose underlying Three function takes
- * JS primitives (not TSL nodes) for scalar parameters. Our parameter inputs
- * are stored as uniform nodes with a .value property (see
- * uniformForParameter) — reading .value at finalization time gets the
- * current parameter value, which the effect then bakes into its own
- * internal uniforms. Falls back to `fallback` when the input is not a
- * uniform-like node with an accessible numeric value (e.g., disconnected
- * optional input).
- */
-function readNumericFromInput(input: unknown, fallback: number): number {
-  if (input && typeof input === "object" && "value" in input) {
-    const raw = (input as { value: unknown }).value;
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-      return raw;
-    }
-  }
-  return fallback;
-}
-
-/**
  * Reconstruct the fragment's world position inside a post-process pass from
  * screen UV and scene depth. Standard inverse-projection math:
  *
@@ -831,278 +761,19 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
     return float(0);
   }
 
-  const input = (portId: string): unknown =>
+  const input: MaterializeInputResolver = (portId: string): unknown =>
     materializeValue(op.inputs[portId] ?? { kind: "literal", dataType: "float", value: 0 }, context);
 
-  let result: unknown;
-  switch (op.opKind) {
-    case "math.add":
-      result = (input("a") as { add: (other: unknown) => unknown }).add(input("b"));
-      break;
-    case "math.subtract":
-      result = (input("a") as { sub: (other: unknown) => unknown }).sub(input("b"));
-      break;
-    case "math.multiply":
-      result = (input("a") as { mul: (other: unknown) => unknown }).mul(input("b"));
-      break;
-    case "math.divide":
-      result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
-      break;
-    case "math.pow":
-      result = pow(input("a") as never, input("b") as never);
-      break;
-    case "math.exp":
-      result = exp(input("input") as never);
-      break;
-    case "math.min":
-      result = min(input("a") as never, input("b") as never);
-      break;
-    case "math.max":
-      result = max(input("a") as never, input("b") as never);
-      break;
-    case "math.saturate":
-      result = saturate(input("input") as never);
-      break;
-    case "math.smoothstep":
-      result = smoothstep(
-        input("edge0") as never,
-        input("edge1") as never,
-        input("x") as never
-      );
-      break;
-    case "math.distance":
-      result = length(
-        (input("a") as { sub: (other: unknown) => unknown }).sub(input("b")) as never
-      );
-      break;
-    case "math.sin":
-      result = sin(input("input") as never);
-      break;
-    case "math.cos":
-      result = cos(input("input") as never);
-      break;
-    case "math.abs":
-      result = abs(input("input") as never);
-      break;
-    case "math.clamp":
-      result = clamp(input("input") as never, input("min") as never, input("max") as never);
-      break;
-    case "math.lerp":
-      result = mix(input("a") as never, input("b") as never, input("alpha") as never);
-      break;
-    case "color.luminance":
-      result = luminance(input("input") as never);
-      break;
-    case "color.add":
-      result = (input("a") as { add: (other: unknown) => unknown }).add(input("b"));
-      break;
-    case "color.multiply":
-      result = (input("a") as { mul: (other: unknown) => unknown }).mul(input("b"));
-      break;
-    case "color.divide":
-      result = (input("a") as { div: (other: unknown) => unknown }).div(input("b"));
-      break;
-    case "color.pow":
-      result = pow(input("a") as never, input("b") as never);
-      break;
-    case "math.dot":
-      result = dot(input("a") as never, input("b") as never);
-      break;
-    case "math.normalize":
-      result = normalize(input("input") as never);
-      break;
-    case "math.length":
-      result = length(input("input") as never);
-      break;
-    case "math.combine-vector":
-      result =
-        op.dataType === "vec2"
-          ? vec2(input("x") as never, input("y") as never)
-          : op.dataType === "vec3"
-            ? vec3(input("x") as never, input("y") as never, input("z") as never)
-            : vec4(
-                input("x") as never,
-                input("y") as never,
-                input("z") as never,
-                input("w") as never
-              );
-      break;
-    case "math.split-vector": {
-      const vector = input("input") as { x: unknown; y: unknown; z: unknown; w?: unknown };
-      const outputPortId = String(op.settings?.outputPortId ?? "x");
-      result =
-        outputPortId === "y"
-          ? vector.y
-          : outputPortId === "z"
-            ? vector.z
-            : outputPortId === "w"
-              ? (vector.w ?? float(1))
-            : vector.x;
-      break;
-    }
-    case "effect.height-falloff": {
-      const position = input("position") as { y: unknown };
-      const baseHeight = float(Number(op.settings?.baseHeight ?? 0));
-      const topHeight = float(Number(op.settings?.topHeight ?? 1));
-      const range = (topHeight as { sub: (other: unknown) => unknown }).sub(baseHeight);
-      const normalizedHeight = ((position.y as { sub: (other: unknown) => unknown }).sub(
-        baseHeight
-      ) as { div: (other: unknown) => unknown }).div(range);
-      result = clamp(normalizedHeight as never, float(0), float(1));
-      break;
-    }
-    case "effect.fresnel": {
-      const normal = normalize(input("normal") as never);
-      const viewDirection = normalize(input("viewDirection") as never);
-      const facing = clamp(dot(normal as never, viewDirection as never), float(0), float(1));
-      const rim = float(1)
-        .sub(facing as never)
-        .pow(float(Number(op.settings?.power ?? 2)))
-        .mul(float(Number(op.settings?.strength ?? 1)));
-      result = (input("color") as { mul: (other: unknown) => unknown }).mul(rim);
-      break;
-    }
-    case "effect.bloom-pass": {
-      const strength = readNumericFromInput(input("strength"), 0.4);
-      const radius = readNumericFromInput(input("radius"), 0.4);
-      const threshold = readNumericFromInput(input("threshold"), 0.9);
-      const inputNode = input("input");
-      // Reuse a cached BloomNode across applyShader calls so parameter edits
-      // flow as GPU uniform updates. Creating a fresh bloom() each call
-      // produces a new node, but Three's TSL compiled-shader cache keys by
-      // graph structure and reuses the first compile — so the updated values
-      // never reach the GPU in a long-lived pipeline (bloom worked in
-      // fresh-compiled preview but not in the live authoring viewport).
-      //
-      // Both bloom's internal uniforms AND its inputNode reference are
-      // mutated in place so the cached node stays wired to the latest
-      // upstream graph (e.g., updated fog-tint output).
-      const cached = context.effectNodes.get(op.opId);
-      if (cached && cached.kind === "bloom") {
-        const node = cached.node as {
-          inputNode: unknown;
-          strength: { value: unknown };
-          radius: { value: unknown };
-          threshold: { value: unknown };
-        };
-        node.inputNode = inputNode;
-        node.strength.value = strength;
-        node.radius.value = radius;
-        node.threshold.value = threshold;
-        result = cached.node;
-      } else {
-        const node = bloom(inputNode as never, strength, radius, threshold);
-        context.effectNodes.set(op.opId, { node, kind: "bloom" });
-        result = node;
-      }
-      break;
-    }
-    case "effect.tonemap-aces": {
-      // The graph pre-multiplies scene color by exposure before feeding the
-      // tonemap node, so the tonemap helper itself takes exposure = 1 as
-      // its second arg (not doubling exposure). Matches the graph shape in
-      // createDefaultTonemapAcesPostProcessShaderGraph.
-      result = acesFilmicToneMapping(input("input") as never, float(1));
-      break;
-    }
-    case "effect.tonemap-reinhard": {
-      result = reinhardToneMapping(input("input") as never, float(1));
-      break;
-    }
-    case "effect.wind-gust": {
-      const gustStrength = float(Number(op.settings?.gustStrength ?? 0.25));
-      const gustInterval = float(Number(op.settings?.gustInterval ?? 3));
-      const gustDuration = float(Number(op.settings?.gustDuration ?? 0.8));
-      const phase = ((input("time") as { div: (other: unknown) => unknown }).div(
-        gustInterval
-      ) as { mul: (other: unknown) => unknown }).mul(float(Math.PI * 2));
-      const pulse = clamp(sin(phase as never), float(0), float(1));
-      result = pulse.mul(gustStrength).mul(gustDuration);
-      break;
-    }
-    case "effect.wind-sway": {
-      const position = input("position") as { x: unknown; z: unknown; y: unknown; add: (other: unknown) => unknown };
-      const direction = normalize(input("direction") as never) as { x: unknown; y: unknown };
-      const frequency =
-        input("frequency") ??
-        float(Number(op.settings?.frequency ?? 1.6));
-      const strength =
-        input("strength") ??
-        float(Number(op.settings?.strength ?? 0.3));
-      const spatialScale =
-        input("spatialScale") ??
-        float(Number(op.settings?.spatialScale ?? 0.35));
-      const heightScale =
-        input("heightScale") ??
-        float(Number(op.settings?.heightScale ?? 1));
-      const timedPhase = (input("time") as { mul: (other: unknown) => unknown }).mul(
-        frequency
-      ) as {
-        add: (other: unknown) => unknown;
-      };
-      const phase = (timedPhase
-        .add((position.x as { mul: (other: unknown) => unknown }).mul(spatialScale)) as {
-        add: (other: unknown) => unknown;
-      }).add((position.z as { mul: (other: unknown) => unknown }).mul(spatialScale));
-      const heightMask = clamp(
-        ((position.y as { mul: (other: unknown) => unknown }).mul(heightScale) as never),
-        float(0),
-        float(1)
-      );
-      const sway = sin(phase as never)
-        .mul(strength as never)
-        .mul(input("mask") as never)
-        .mul(heightMask);
-      result = position.add(
-        vec3(
-          ((direction.x as { mul: (other: unknown) => unknown }).mul(sway) as never),
-          0,
-          ((direction.y as { mul: (other: unknown) => unknown }).mul(sway) as never)
-        )
-      );
-      break;
-    }
-    case "splat": {
-      const scalar = input("input") as never;
-      result =
-        op.dataType === "vec2"
-          ? vec2(scalar, scalar)
-          : op.dataType === "vec3" || op.dataType === "color"
-            ? vec3(scalar, scalar, scalar)
-            : vec4(scalar, scalar, scalar, scalar);
-      break;
-    }
-    case "truncate": {
-      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
-      result =
-        op.dataType === "vec2"
-          ? vec2(source.x as never, source.y as never)
-          : vec3(source.x as never, source.y as never, source.z as never);
-      break;
-    }
-    case "widen": {
-      const source = input("input") as { x: unknown; y: unknown; z?: unknown };
-      if (op.dataType === "vec4") {
-        result = vec4(
-          source.x as never,
-          source.y as never,
-          (source.z ?? float(0)) as never,
-          float(0) as never
-        );
-      } else if (op.dataType === "vec3" || op.dataType === "color") {
-        result = vec3(source.x as never, source.y as never, float(0) as never);
-      } else {
-        result = vec2(source.x as never, source.y as never);
-      }
-      break;
-    }
-    default:
-      result = float(0);
-      break;
+  let result = materializeMathOp({ op, input });
+  if (!result.handled) {
+    result = materializeEffectOp({ op, input }, context as EffectMaterializeContext);
+  }
+  if (!result.handled) {
+    result = { handled: true, value: float(0) };
   }
 
-  context.opNodeCache.set(opId, result);
-  return result;
+  context.opNodeCache.set(opId, result.value);
+  return result.value;
 }
 
 /**

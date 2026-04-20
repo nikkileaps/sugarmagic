@@ -2058,6 +2058,14 @@ export function createDefaultStandardPbrShaderGraph(
   // corresponding tiling component, recombined into a vec2. The
   // compiler's coerce layer widens vec2 → vec3 on input to split-vector,
   // so we can consume the builtin uv and the tiling parameter directly.
+  // ORM-packed PBR graph: a single ORM texture's R/G/B channels drive
+  // AO / roughness / metalness. For the "separate-files" workflow use
+  // `createDefaultStandardPbrSeparateShaderGraph` instead — that
+  // variant has its own simple graph with one texture per channel.
+  // Keeping each variant as a dedicated graph (rather than one fused
+  // graph with runtime branching) means both paths stay legible on
+  // their own and the GPU only samples what a given material actually
+  // uses.
   const nodes: ShaderNodeInstance[] = [
     { nodeId: "uv", nodeType: "input.uv", position: { x: 0, y: 0 }, settings: {} },
     {
@@ -2154,12 +2162,10 @@ export function createDefaultStandardPbrShaderGraph(
     createShaderEdge("e-tiled-x", "tile-x", "value", "tiled-uv", "x"),
     createShaderEdge("e-tiled-y", "tile-y", "value", "tiled-uv", "y"),
 
-    // Feed tiled UV into all three texture samplers.
     createShaderEdge("e-uv-basecolor", "tiled-uv", "vec2", "basecolor-texture", "uv"),
     createShaderEdge("e-uv-normal", "tiled-uv", "vec2", "normal-texture", "uv"),
     createShaderEdge("e-uv-orm", "tiled-uv", "vec2", "orm-texture", "uv"),
 
-    // Color + alpha from basecolor.
     createShaderEdge(
       "e-basecolor-color",
       "basecolor-texture",
@@ -2194,9 +2200,9 @@ export function createDefaultStandardPbrShaderGraph(
   return {
     shaderDefinitionId,
     definitionKind: "shader",
-    displayName: options.displayName ?? "Standard PBR",
+    displayName: options.displayName ?? "Standard PBR (ORM)",
     targetKind: "mesh-surface",
-    revision: 3,
+    revision: 4,
     nodes,
     edges,
     parameters: [
@@ -2219,6 +2225,219 @@ export function createDefaultStandardPbrShaderGraph(
         displayName: "ORM Texture",
         dataType: "texture2d",
         textureRole: "data",
+        defaultValue: null
+      },
+      {
+        parameterId: "tiling",
+        displayName: "Tiling",
+        dataType: "vec2",
+        defaultValue: [1, 1]
+      },
+      {
+        parameterId: "roughness_scale",
+        displayName: "Roughness Scale",
+        dataType: "float",
+        defaultValue: 1
+      },
+      {
+        parameterId: "metallic_scale",
+        displayName: "Metallic Scale",
+        dataType: "float",
+        defaultValue: 0
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "standard-pbr"
+    }
+  };
+}
+
+/**
+ * Standard PBR shader graph for the "separate channels" workflow:
+ * roughness, metallic, and AO each supplied as their own texture,
+ * not channel-packed into an ORM pack. Use this when the author is
+ * working from a Substance / Painter export with individual roughness
+ * / metallic / AO PNGs, or when authoring a material from scratch
+ * where each channel was produced by a different artist / pass.
+ *
+ * Mirrors `createDefaultStandardPbrShaderGraph` (ORM) in everything
+ * except how the scalar channels are sourced: instead of splitting
+ * ORM.r / .g / .b, we sample dedicated `roughness_texture`,
+ * `metallic_texture`, and `ao_texture` and read their red channel.
+ * The two variants are kept as separate graphs (rather than fused
+ * with runtime branching) so each stays legible on its own and the
+ * GPU only samples what the bound Material supplies.
+ */
+export function createDefaultStandardPbrSeparateShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ??
+    `${projectId}:shader:standard-pbr-separate`;
+
+  const nodes: ShaderNodeInstance[] = [
+    { nodeId: "uv", nodeType: "input.uv", position: { x: 0, y: 0 }, settings: {} },
+    {
+      nodeId: "tiling",
+      nodeType: "input.parameter",
+      position: { x: 0, y: 80 },
+      settings: { parameterId: "tiling" }
+    },
+    {
+      nodeId: "uv-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tiling-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 80 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-x",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-y",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 60 },
+      settings: {}
+    },
+    {
+      nodeId: "tiled-uv",
+      nodeType: "math.combine-vector",
+      position: { x: 520, y: 30 },
+      settings: {}
+    },
+
+    createMaterialTextureNode("basecolor-texture", "basecolor_texture", {
+      x: 700,
+      y: 0
+    }),
+    createMaterialTextureNode("normal-texture", "normal_texture", {
+      x: 700,
+      y: 130
+    }),
+    createMaterialTextureNode("roughness-texture", "roughness_texture", {
+      x: 700,
+      y: 260
+    }),
+    createMaterialTextureNode("metallic-texture", "metallic_texture", {
+      x: 700,
+      y: 400
+    }),
+    createMaterialTextureNode("ao-texture", "ao_texture", {
+      x: 700,
+      y: 540
+    }),
+
+    {
+      nodeId: "roughness-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 680 },
+      settings: { parameterId: "roughness_scale" }
+    },
+    {
+      nodeId: "metallic-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 740 },
+      settings: { parameterId: "metallic_scale" }
+    },
+    {
+      nodeId: "roughness-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 330 },
+      settings: {}
+    },
+    {
+      nodeId: "metallic-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 400 },
+      settings: {}
+    },
+
+    {
+      nodeId: "output",
+      nodeType: "output.fragment",
+      position: { x: 1120, y: 120 },
+      settings: {}
+    }
+  ];
+
+  const edges: ShaderEdge[] = [
+    createShaderEdge("e-uv-split", "uv", "value", "uv-split", "input"),
+    createShaderEdge("e-tiling-split", "tiling", "value", "tiling-split", "input"),
+    createShaderEdge("e-uvx-a", "uv-split", "x", "tile-x", "a"),
+    createShaderEdge("e-tilingx-b", "tiling-split", "x", "tile-x", "b"),
+    createShaderEdge("e-uvy-a", "uv-split", "y", "tile-y", "a"),
+    createShaderEdge("e-tilingy-b", "tiling-split", "y", "tile-y", "b"),
+    createShaderEdge("e-tiled-x", "tile-x", "value", "tiled-uv", "x"),
+    createShaderEdge("e-tiled-y", "tile-y", "value", "tiled-uv", "y"),
+
+    createShaderEdge("e-uv-basecolor", "tiled-uv", "vec2", "basecolor-texture", "uv"),
+    createShaderEdge("e-uv-normal", "tiled-uv", "vec2", "normal-texture", "uv"),
+    createShaderEdge("e-uv-roughness", "tiled-uv", "vec2", "roughness-texture", "uv"),
+    createShaderEdge("e-uv-metallic", "tiled-uv", "vec2", "metallic-texture", "uv"),
+    createShaderEdge("e-uv-ao", "tiled-uv", "vec2", "ao-texture", "uv"),
+
+    createShaderEdge(
+      "e-basecolor-color",
+      "basecolor-texture",
+      "color",
+      "output",
+      "color"
+    ),
+    createShaderEdge(
+      "e-basecolor-alpha",
+      "basecolor-texture",
+      "alpha",
+      "output",
+      "alpha"
+    ),
+
+    createShaderEdge("e-normal", "normal-texture", "color", "output", "normal"),
+
+    createShaderEdge("e-r-src", "roughness-texture", "r", "roughness-mul", "a"),
+    createShaderEdge("e-r-scale", "roughness-scale", "value", "roughness-mul", "b"),
+    createShaderEdge("e-roughness", "roughness-mul", "value", "output", "roughness"),
+
+    createShaderEdge("e-m-src", "metallic-texture", "r", "metallic-mul", "a"),
+    createShaderEdge("e-m-scale", "metallic-scale", "value", "metallic-mul", "b"),
+    createShaderEdge("e-metallic", "metallic-mul", "value", "output", "metalness"),
+
+    createShaderEdge("e-ao", "ao-texture", "r", "output", "ao")
+  ];
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Standard PBR (Separate)",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes,
+    edges,
+    parameters: [
+      {
+        parameterId: "basecolor_texture",
+        displayName: "Basecolor Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
+        parameterId: "normal_texture",
+        displayName: "Normal Texture",
+        dataType: "texture2d",
+        textureRole: "normal",
         defaultValue: null
       },
       {
@@ -2263,7 +2482,7 @@ export function createDefaultStandardPbrShaderGraph(
     ],
     metadata: {
       builtIn: true,
-      builtInKey: "standard-pbr"
+      builtInKey: "standard-pbr-separate"
     }
   };
 }

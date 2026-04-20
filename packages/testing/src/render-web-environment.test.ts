@@ -282,4 +282,76 @@ describe("render-web environment", () => {
     expect(state.appliedShaderSignature).toBe("asset:cube:textured");
     expect(state.appliedFileSources).toBe(secondSources);
   });
+
+  it("does not match a single-material mesh to slot 0 unless the material name matches", () => {
+    const shaderRuntime = {
+      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material)
+    } as unknown as ShaderRuntime;
+    const state = createRenderableShaderApplicationState();
+    const root = new THREE.Group();
+    root.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, name: "Leaf Material" })
+      )
+    );
+    const object = {
+      representationKey: "asset:tree:single-material-slot-resolution",
+      effectiveShaders: {
+        surface: {
+          shaderDefinitionId: "project:shader:fallback-surface",
+          targetKind: "mesh-surface",
+          documentRevision: 1,
+          parameterValues: {},
+          textureBindings: {},
+          parameterOverrides: []
+        },
+        deform: null
+      },
+      effectiveMaterialSlots: [
+        {
+          slotName: "Trunk Material",
+          slotIndex: 0,
+          materialDefinitionId: "project:material:trunk",
+          surface: {
+            shaderDefinitionId: "project:shader:trunk-surface",
+            targetKind: "mesh-surface",
+            documentRevision: 2,
+            parameterValues: {},
+            textureBindings: {},
+            parameterOverrides: []
+          }
+        },
+        {
+          slotName: "Leaf Material",
+          slotIndex: 1,
+          materialDefinitionId: "project:material:leaves",
+          surface: {
+            shaderDefinitionId: "project:shader:leaf-surface",
+            targetKind: "mesh-surface",
+            documentRevision: 3,
+            parameterValues: {},
+            textureBindings: {
+              baseColorTexture: "project:texture:leaves"
+            },
+            parameterOverrides: []
+          }
+        }
+      ]
+    } as never;
+
+    ensureShaderSetAppliedToRenderable(root, object, shaderRuntime, state);
+
+    expect(shaderRuntime.applyShaderSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: expect.objectContaining({
+          shaderDefinitionId: "project:shader:leaf-surface"
+        })
+      }),
+      expect.objectContaining({
+        material: expect.any(THREE.Material),
+        geometry: expect.any(THREE.BufferGeometry)
+      })
+    );
+  });
 });

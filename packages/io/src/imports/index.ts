@@ -9,6 +9,7 @@
 
 import type {
   AssetDefinition,
+  MaterialDefinition,
   MaterialSlotBinding,
   TextureDefinition
 } from "@sugarmagic/domain";
@@ -23,54 +24,28 @@ import {
   type PbrTextureRole,
   type StandardPbrTextureParameterId
 } from "./pbr-texture-set";
+import {
+  deriveFoliageEmbeddedMaterialImport,
+  type GlbDocument
+} from "./foliage-embedded-materials";
 
 export * from "./pbr-texture-set";
+export * from "./foliage-embedded-materials";
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK_TYPE = 0x4e4f534a;
 
-interface GlbNodeDocument {
-  extras?: Record<string, unknown>;
-}
-
-interface GlbPrimitiveDocument {
-  attributes?: Record<string, unknown>;
-}
-
-interface GlbMeshDocument {
-  primitives?: GlbPrimitiveDocument[];
-}
-
-interface GlbMaterialDocument {
-  name?: string;
-  pbrMetallicRoughness?: {
-    baseColorTexture?: {
-      index?: number;
-    };
-  };
-  normalTexture?: {
-    index?: number;
-  };
-  emissiveTexture?: {
-    index?: number;
-  };
-}
-
-interface GlbDocument {
-  nodes?: GlbNodeDocument[];
-  meshes?: GlbMeshDocument[];
-  materials?: GlbMaterialDocument[];
-  images?: unknown[];
-  textures?: unknown[];
-}
-
 export interface ImportSourceAssetRequest {
   projectHandle: FileSystemDirectoryHandle;
   descriptor: GameRootDescriptor;
+  projectId: string;
 }
 
 export interface ImportSourceAssetResult {
   assetDefinition: AssetDefinition;
+  textureDefinitions: TextureDefinition[];
+  materialDefinitions: MaterialDefinition[];
+  warnings: string[];
 }
 
 export interface ImportTextureDefinitionRequest {
@@ -85,9 +60,26 @@ export interface ImportTextureDefinitionResult {
   textureDefinition: TextureDefinition;
 }
 
+/**
+ * Which built-in Standard PBR shader variant to bind the imported
+ * material to. "orm" when the folder includes an ORM-packed texture
+ * (one file encoding AO/roughness/metallic across R/G/B);
+ * "separate" when the folder has dedicated roughness / metallic / ao
+ * files instead. Selection is made based on which files were
+ * actually discovered — authors don't have to pick.
+ */
+export type StandardPbrShaderVariant = "orm" | "separate";
+
 export interface ImportPbrTextureSetResult {
   textures: TextureDefinition[];
   textureBindings: Partial<Record<StandardPbrTextureParameterId, string>>;
+  /**
+   * Which standard-pbr variant the imported bindings are intended
+   * for. Callers use this to resolve the built-in shader by
+   * `metadata.builtInKey`: "standard-pbr" for orm, "standard-pbr-
+   * separate" for separate.
+   */
+  suggestedShaderVariant: StandardPbrShaderVariant;
   suggestedMaterialDisplayName: string;
   warnings: string[];
 }
@@ -124,6 +116,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readGlbJsonChunk(buffer: ArrayBuffer): GlbDocument | null {
+  return readGlbChunks(buffer)?.document ?? null;
+}
+
+function readGlbChunks(
+  buffer: ArrayBuffer
+): { document: GlbDocument; binaryChunk: Uint8Array | null } | null {
   if (buffer.byteLength < 20) return null;
 
   const view = new DataView(buffer);
@@ -132,6 +130,8 @@ function readGlbJsonChunk(buffer: ArrayBuffer): GlbDocument | null {
   const declaredLength = view.getUint32(8, true);
   const totalLength = Math.min(declaredLength, buffer.byteLength);
   let offset = 12;
+  let document: GlbDocument | null = null;
+  let binaryChunk: Uint8Array | null = null;
 
   while (offset + 8 <= totalLength) {
     const chunkLength = view.getUint32(offset, true);
@@ -144,18 +144,29 @@ function readGlbJsonChunk(buffer: ArrayBuffer): GlbDocument | null {
 
     if (chunkType === GLB_JSON_CHUNK_TYPE) {
       const bytes = new Uint8Array(buffer, chunkStart, chunkLength);
-      const text = new TextDecoder().decode(bytes).replace(/\u0000+$/u, "");
+      const rawText = new TextDecoder().decode(bytes);
+      let end = rawText.length;
+      while (end > 0 && rawText.charCodeAt(end - 1) === 0) {
+        end -= 1;
+      }
+      const text = rawText.slice(0, end);
       try {
-        return JSON.parse(text) as GlbDocument;
+        document = JSON.parse(text) as GlbDocument;
       } catch {
         return null;
       }
+    } else {
+      binaryChunk = new Uint8Array(buffer, chunkStart, chunkLength);
     }
 
     offset = chunkEnd;
   }
 
-  return null;
+  if (!document) {
+    return null;
+  }
+
+  return { document, binaryChunk };
 }
 
 function getFoilageMakerExtras(document: GlbDocument): Record<string, unknown> | null {
@@ -377,9 +388,28 @@ export async function importPbrTextureSet(
     }
   }
 
+  // Decide which standard-pbr variant to bind. ORM wins when the
+  // import contains a packed ORM file — it's a strong signal the
+  // author already packed for efficiency and the Material should
+  // sample the packed version. Otherwise, when any of the separate
+  // channels arrived (roughness / metallic / ao), bind to the
+  // separate variant. The no-scalar case (just basecolor + normal)
+  // is bound to ORM as a conservative default since it costs one
+  // less sample and either variant would render the same scalar
+  // defaults anyway.
+  const hasOrm = Boolean(textureBindings.orm_texture);
+  const hasAnySeparateChannel = Boolean(
+    textureBindings.roughness_texture ||
+      textureBindings.metallic_texture ||
+      textureBindings.ao_texture
+  );
+  const suggestedShaderVariant: StandardPbrShaderVariant =
+    hasOrm ? "orm" : hasAnySeparateChannel ? "separate" : "orm";
+
   return {
     textures,
     textureBindings,
+    suggestedShaderVariant,
     suggestedMaterialDisplayName:
       request.defaultDisplayName ?? discoveredSet.suggestedMaterialDisplayName,
     warnings: discoveredSet.warnings
@@ -407,6 +437,9 @@ export async function importSourceAsset(
   const safeStem = sanitizeFileNameSegment(stem);
   const targetFileName = `${safeStem}${ext}`;
   const relativeAssetPath = `${request.descriptor.authoredAssetsPath}/imported/${targetFileName}`;
+  const sourceBuffer = await sourceFile.arrayBuffer();
+  const glbChunks =
+    ext.toLowerCase() === ".glb" ? readGlbChunks(sourceBuffer) : null;
 
   await writeBlobFile(
     request.projectHandle,
@@ -414,24 +447,47 @@ export async function importSourceAsset(
     sourceFile
   );
 
+  const embeddedFoliageImport =
+    analysis.contract === "foilagemaker-foliage" && glbChunks
+      ? deriveFoliageEmbeddedMaterialImport({
+          projectId: request.projectId,
+          assetStem: safeStem,
+          assetDisplayName: stem,
+          authoredAssetsPath: request.descriptor.authoredAssetsPath,
+          document: glbChunks.document,
+          binaryChunk: glbChunks.binaryChunk
+        })
+      : {
+          textureDefinitions: [],
+          materialDefinitions: [],
+          materialSlotBindings:
+            ext.toLowerCase() === ".glb"
+              ? collectMaterialSlotBindings(glbChunks?.document ?? {})
+              : [],
+          files: [],
+          warnings: []
+        };
+
+  for (const file of embeddedFoliageImport.files) {
+    await writeBlobFile(request.projectHandle, file.pathSegments, file.blob);
+  }
+
   return {
     assetDefinition: {
       definitionId: `asset:${safeStem}`,
       definitionKind: "asset",
       displayName: stem,
       assetKind: analysis.assetKind,
-      materialSlotBindings:
-        ext.toLowerCase() === ".glb"
-          ? collectMaterialSlotBindings(
-              readGlbJsonChunk(await sourceFile.arrayBuffer()) ?? {}
-            )
-          : [],
+      materialSlotBindings: embeddedFoliageImport.materialSlotBindings,
       defaultShaderDefinitionId: null,
       source: {
         relativeAssetPath,
         fileName: sourceFile.name,
         mimeType: sourceFile.type || null
       }
-    }
+    },
+    textureDefinitions: embeddedFoliageImport.textureDefinitions,
+    materialDefinitions: embeddedFoliageImport.materialDefinitions,
+    warnings: embeddedFoliageImport.warnings
   };
 }

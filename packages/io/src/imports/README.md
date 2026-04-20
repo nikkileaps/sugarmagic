@@ -17,6 +17,9 @@ Non-responsibilities:
 Relationship to Epic 032:
 - GLB material-slot discovery lives here because the source file is the authority
   for which slots exist.
+- FoliageMaker embedded GLB textures are extracted here into explicit
+  `TextureDefinition` + `MaterialDefinition` records so fresh foliage imports do
+  not depend on carrier-material runtime fallbacks.
 - Texture import lives here because this is the canonical file-copy boundary.
 - PBR texture-set discovery also lives here because filename inference is an
   import-time concern, not a runtime/material-resolution concern.
