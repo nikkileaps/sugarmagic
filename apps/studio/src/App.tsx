@@ -803,11 +803,21 @@ export function App() {
     try {
       const result = await importSourceAsset({
         projectHandle: handle,
-        descriptor
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
       });
-      projectStore
-        .getState()
-        .updateSession(addAssetDefinitionToSession(currentSession, result.assetDefinition));
+      let nextSession = currentSession;
+      for (const textureDefinition of result.textureDefinitions) {
+        nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
+      }
+      for (const materialDefinition of result.materialDefinitions) {
+        nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
+      }
+      nextSession = addAssetDefinitionToSession(nextSession, result.assetDefinition);
+      projectStore.getState().updateSession(nextSession);
+      if (result.warnings.length > 0) {
+        window.alert(`Asset import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`);
+      }
       return result.assetDefinition;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -942,20 +952,32 @@ export function App() {
     const { handle, descriptor, session: currentSession } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
-    const standardPbrShaderId =
-      currentSession.contentLibrary.shaderDefinitions.find(
-        (definition) => definition.metadata.builtInKey === "standard-pbr"
-      )?.shaderDefinitionId ?? null;
-    if (!standardPbrShaderId) {
-      window.alert("The built-in Standard PBR shader is missing from the content library.");
-      return null;
-    }
-
     try {
       const result = await importPbrTextureSet({
         projectHandle: handle,
         descriptor
       });
+
+      // Pick the right built-in PBR shader variant based on which
+      // files the importer found. "orm" → Standard PBR (ORM);
+      // "separate" → Standard PBR (Separate). Each variant's graph
+      // is authored to sample exactly the textures its workflow
+      // supplies — no runtime branching required on the shader side.
+      const targetBuiltInKey =
+        result.suggestedShaderVariant === "separate"
+          ? "standard-pbr-separate"
+          : "standard-pbr";
+      const targetShaderId =
+        currentSession.contentLibrary.shaderDefinitions.find(
+          (definition) => definition.metadata.builtInKey === targetBuiltInKey
+        )?.shaderDefinitionId ?? null;
+      if (!targetShaderId) {
+        window.alert(
+          `The built-in "${targetBuiltInKey}" shader is missing from the content library.`
+        );
+        return null;
+      }
+
       let nextSession = currentSession;
       for (const textureDefinition of result.textures) {
         nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
@@ -965,7 +987,7 @@ export function App() {
         definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
         definitionKind: "material" as const,
         displayName: result.suggestedMaterialDisplayName,
-        shaderDefinitionId: standardPbrShaderId,
+        shaderDefinitionId: targetShaderId,
         parameterValues: {},
         textureBindings: result.textureBindings
       };
