@@ -29,6 +29,7 @@ export type BuildWorkspaceKind =
   | "spatial"
   | "behavior"
   | "environment"
+  | "materials"
   | "assets";
 export type CoreDesignWorkspaceKind =
   | "player"
@@ -116,6 +117,9 @@ export function deriveBuildWorkspaceId(
   kind: BuildWorkspaceKind,
   contextId: string | null
 ): string | null {
+  if (kind === "materials") {
+    return "build:materials:library";
+  }
   if (!contextId) return null;
   return `build:${kind}:${contextId}`;
 }
@@ -138,6 +142,9 @@ function getBuildContextId(
 ): string | null {
   if (kind === "environment") {
     return state.activeEnvironmentId;
+  }
+  if (kind === "materials") {
+    return "library";
   }
   return state.activeRegionId;
 }

@@ -14,13 +14,16 @@ import type {
   AssetDefinition,
   DocumentDefinition,
   EnvironmentDefinition,
+  MaterialDefinition,
   NPCDefinition,
   QuestDefinition,
   ShaderParameterOverride,
   ShaderGraphDocument,
+  TextureDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
 import {
+  createEmptyContentLibrarySnapshot,
   getActiveRegion,
   createPlacedAssetInstanceId,
   type AuthoringSession
@@ -43,6 +46,7 @@ import { useSpatialWorkspaceView } from "./spatial";
 import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
+import { useMaterialsWorkspaceView } from "./materials";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "layout", label: "Layout", icon: "🏗️" },
@@ -50,6 +54,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "spatial", label: "Spatial", icon: "🗺️" },
   { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
+  { id: "materials", label: "Materials", icon: "🧱" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
 
@@ -61,6 +66,8 @@ export interface BuildProductModeViewProps {
   selectedIds: string[];
   session: AuthoringSession | null;
   assetDefinitions: AssetDefinition[];
+  materialDefinitions: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
   documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
@@ -81,6 +88,12 @@ export interface BuildProductModeViewProps {
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  onSetAssetMaterialSlotBinding: (
+    definitionId: string,
+    slotName: string,
+    slotIndex: number,
+    materialDefinitionId: string | null
+  ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
     slot: "surface" | "deform",
@@ -97,6 +110,15 @@ export interface BuildProductModeViewProps {
     parameterId: string
   ) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
+  onCreateMaterialDefinition: (shaderDefinitionId: string) => MaterialDefinition | null;
+  onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
+  onImportTextureDefinition: () => Promise<TextureDefinition | null>;
+  onUpdateMaterialDefinition: (
+    definitionId: string,
+    patch: Partial<MaterialDefinition>
+  ) => void;
+  onRemoveMaterialDefinition: (definitionId: string) => void;
+  isMaterialReferenced: (definitionId: string) => boolean;
   renderLayoutInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
   }) => ReactNode;
@@ -122,6 +144,8 @@ export function useBuildProductModeView(
     selectedIds,
     session,
     assetDefinitions,
+    materialDefinitions,
+    textureDefinitions,
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
@@ -142,10 +166,17 @@ export function useBuildProductModeView(
     onNavigateToTarget,
     onImportAsset,
     onUpdateAssetDefinition,
+    onSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
     onRemoveAssetDefinition,
+    onCreateMaterialDefinition,
+    onImportPbrMaterial,
+    onImportTextureDefinition,
+    onUpdateMaterialDefinition,
+    onRemoveMaterialDefinition,
+    isMaterialReferenced,
     renderLayoutInspectorSections
   } = props;
 
@@ -159,6 +190,15 @@ export function useBuildProductModeView(
     )
       ? selectedAssetDefinitionIdState
       : assetDefinitions[0]?.definitionId ?? null;
+  const [selectedMaterialDefinitionIdState, setSelectedMaterialDefinitionId] =
+    useState<string | null>(materialDefinitions[0]?.definitionId ?? null);
+  const selectedMaterialDefinitionId =
+    selectedMaterialDefinitionIdState &&
+    materialDefinitions.some(
+      (definition) => definition.definitionId === selectedMaterialDefinitionIdState
+    )
+      ? selectedMaterialDefinitionIdState
+      : materialDefinitions[0]?.definitionId ?? null;
 
   const selectedEnvironment = useMemo(() => {
     if (environmentDefinitions.length === 0) return null;
@@ -327,6 +367,7 @@ export function useBuildProductModeView(
     getViewport: activeBuildKind === "landscape" ? getViewport : () => null,
     getViewportElement:
       activeBuildKind === "landscape" ? getViewportElement : () => null,
+    materialDefinitions,
     region: activeRegion,
     onCommand
   });
@@ -354,12 +395,9 @@ export function useBuildProductModeView(
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     activeRegion,
-    contentLibrary: session?.contentLibrary ?? {
-      identity: { id: "empty:content-library", schema: "ContentLibrary", version: 1 },
-      assetDefinitions: [],
-      environmentDefinitions: [],
-      shaderDefinitions: []
-    },
+    contentLibrary:
+      session?.contentLibrary ?? createEmptyContentLibrarySnapshot("empty:content-library"),
+    materialDefinitions,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
@@ -390,6 +428,7 @@ export function useBuildProductModeView(
       onSelectKind("layout");
     },
     onUpdateAssetDefinition,
+    onSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
@@ -406,6 +445,20 @@ export function useBuildProductModeView(
         : false
   });
 
+  const materialsView = useMaterialsWorkspaceView({
+    materialDefinitions,
+    textureDefinitions,
+    shaderDefinitions,
+    selectedMaterialDefinitionId,
+    onSelectMaterialDefinition: setSelectedMaterialDefinitionId,
+    onCreateMaterialDefinition,
+    onImportPbrMaterial,
+    onImportTextureDefinition,
+    onUpdateMaterialDefinition,
+    onRemoveMaterialDefinition,
+    isMaterialReferenced
+  });
+
   const activeView: WorkspaceViewContribution =
     activeBuildKind === "layout"
       ? layoutView
@@ -414,10 +467,12 @@ export function useBuildProductModeView(
         : activeBuildKind === "spatial"
           ? spatialView
           : activeBuildKind === "behavior"
-            ? behaviorView
-      : activeBuildKind === "environment"
-        ? environmentView
-        : assetsView;
+          ? behaviorView
+          : activeBuildKind === "environment"
+            ? environmentView
+            : activeBuildKind === "materials"
+              ? materialsView
+              : assetsView;
 
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||

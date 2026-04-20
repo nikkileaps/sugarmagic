@@ -29,7 +29,6 @@ import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
-  DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
   type DocumentDefinition,
   type DialogueDefinition,
@@ -39,8 +38,7 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type SpellDefinition,
-  type RegionDocument,
-  type RegionLandscapeState
+  type RegionDocument
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
@@ -77,10 +75,8 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createRuntimeEnvironmentState,
-  createLandscapeSceneController,
   createPlayerVisualController,
   spawnRuntimePlayerEntity,
-  resolveEnvironmentWithPostProcessChain,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -498,6 +494,7 @@ export function createWebRuntimeHost(
   // uses the same host, so renderer config + pipeline setup cannot drift
   // between the two callers.
   let host: WebRenderHost | null = null;
+  let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
@@ -667,7 +664,8 @@ export function createWebRuntimeHost(
         entry.root,
         entry.object,
         host.shaderRuntime,
-        entry.shaderApplication
+        entry.shaderApplication,
+        currentAssetSources
       );
     }
 
@@ -689,6 +687,7 @@ export function createWebRuntimeHost(
     }
 
     disposeRuntime();
+    currentAssetSources = state.assetSources;
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -726,6 +725,9 @@ export function createWebRuntimeHost(
       logger: {
         warn(message: string, payload?: Record<string, unknown>) {
           console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        },
+        debug(message: string, payload?: Record<string, unknown>) {
+          console.debug("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
         }
       }
     });
@@ -737,7 +739,8 @@ export function createWebRuntimeHost(
       explicitEnvironmentId: state.activeEnvironmentId
     });
 
-    for (const region of state.regions) {
+    if (activeRegion) {
+      const region = activeRegion;
       const objects = resolveSceneObjects(region, {
         contentLibrary: state.contentLibrary,
         playerDefinition: state.playerDefinition,
@@ -784,7 +787,8 @@ export function createWebRuntimeHost(
                 renderable,
                 object,
                 host?.shaderRuntime ?? null,
-                shaderApplication
+                shaderApplication,
+                state.assetSources
               );
               rootObject.add(renderable);
             })
@@ -956,7 +960,8 @@ export function createWebRuntimeHost(
     host.applyEnvironment(
       activeRegion,
       state.contentLibrary,
-      runtimeEnvironmentState?.activeEnvironmentId ?? null
+      runtimeEnvironmentState?.activeEnvironmentId ?? null,
+      state.assetSources
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay
     // then calls host.render()). We wait one tick so the host's async init

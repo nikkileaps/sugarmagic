@@ -13,3 +13,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 007: Execution and Concurrency Model](/Users/nikki/projects/sugarmagic/docs/adr/007-execution-and-concurrency-model.md)
 - [ADR 008: Material Semantics and Compile Profiles](/Users/nikki/projects/sugarmagic/docs/adr/008-material-semantics-and-compile-profiles.md)
 - [ADR 009: Game Root Contract](/Users/nikki/projects/sugarmagic/docs/adr/009-game-root-contract.md)
+- [ADR 010: Asset Pipeline Layers](/Users/nikki/projects/sugarmagic/docs/adr/010-asset-pipeline-layers.md)

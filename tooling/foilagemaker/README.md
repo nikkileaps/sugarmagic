@@ -147,6 +147,10 @@ falls back to generated textures when those local prototype sources are absent.
   - custom normals for softer canopy shading
 - Runtime-facing metadata stays inside GLB-safe object extras and attributes,
   not a Blender-owned sidecar file.
+- Imported glTF material names are the stable match key for Sugarmagic
+  asset-slot bindings. If you author multi-material meshes, name those
+  materials intentionally in Blender before export. See
+  [docs/authoring/blender-material-slots.md](/Users/nikki/projects/sugarmagic/docs/authoring/blender-material-slots.md).
 - Export uses simplified carrier materials so the authored GLB can embed textures
   without making Blender preview materials part of runtime truth.
 - Export validation blocks obvious contract failures such as missing UVs,

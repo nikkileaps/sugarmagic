@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { analyzeSourceAssetFile } from "@sugarmagic/io";
+import { deriveFoliageEmbeddedMaterialImport } from "../../io/src/imports/foliage-embedded-materials";
 
 function createGlbFromJson(json: unknown): ArrayBuffer {
   const encoder = new TextEncoder();
@@ -148,5 +149,77 @@ describe("foliage GLB import analysis", () => {
     await expect(analyzeSourceAssetFile(invalidFile)).rejects.toThrow(
       /missing COLOR_0 primitive attribute/
     );
+  });
+
+  it("derives explicit foliage textures and materials from embedded GLB carriers", () => {
+    const derived = deriveFoliageEmbeddedMaterialImport({
+      projectId: "wordlark",
+      assetStem: "tree-aspen-1",
+      assetDisplayName: "tree_aspen_1",
+      authoredAssetsPath: "assets",
+      binaryChunk: null,
+      document: {
+        materials: [
+          {
+            name: "FoilageMaker Export Trunk",
+            pbrMetallicRoughness: {
+              baseColorTexture: { index: 0 }
+            }
+          },
+          {
+            name: "FoilageMaker Export Leaves",
+            pbrMetallicRoughness: {
+              baseColorTexture: { index: 1 }
+            }
+          }
+        ],
+        textures: [{ source: 0 }, { source: 1 }],
+        images: [
+          {
+            name: "trunk_base",
+            mimeType: "image/png",
+            uri: "data:image/png;base64,AA=="
+          },
+          {
+            name: "leaves_base",
+            mimeType: "image/png",
+            uri: "data:image/png;base64,AA=="
+          }
+        ]
+      }
+    });
+
+    expect(derived.warnings).toEqual([]);
+    expect(derived.textureDefinitions).toHaveLength(2);
+    expect(derived.materialDefinitions).toHaveLength(2);
+    expect(derived.files).toHaveLength(2);
+    expect(derived.materialSlotBindings).toEqual([
+      {
+        slotName: "FoilageMaker Export Trunk",
+        slotIndex: 0,
+        materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0"
+      },
+      {
+        slotName: "FoilageMaker Export Leaves",
+        slotIndex: 1,
+        materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1"
+      }
+    ]);
+    expect(derived.materialDefinitions).toEqual([
+      expect.objectContaining({
+        definitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0",
+        shaderDefinitionId: "wordlark:shader:standard-pbr",
+        textureBindings: {
+          basecolor_texture: "texture:tree-aspen-1:image-1"
+        }
+      }),
+      expect.objectContaining({
+        definitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1",
+        shaderDefinitionId: "wordlark:shader:foliage-surface-3",
+        textureBindings: {
+          baseColorTexture: "texture:tree-aspen-1:image-2"
+        }
+      })
+    ]);
   });
 });

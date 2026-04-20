@@ -20,16 +20,26 @@ const shaderMaterialLeases = new WeakMap<THREE.Object3D, ShaderMaterialLease[]>(
 
 export interface RenderableShaderApplicationState {
   appliedShaderSignature: string | null;
+  appliedFileSources: Record<string, string> | null;
 }
 
 export function createRenderableShaderApplicationState(): RenderableShaderApplicationState {
   return {
-    appliedShaderSignature: null
+    appliedShaderSignature: null,
+    appliedFileSources: null
   };
 }
 
+function hasMaterialSlotSurfaceBinding(object: SceneObject): boolean {
+  return (object.effectiveMaterialSlots ?? []).some((slot) => slot.surface !== null);
+}
+
 function getRenderableShaderSignature(object: SceneObject): string | null {
-  if (!object.effectiveShaders.surface && !object.effectiveShaders.deform) {
+  if (
+    !object.effectiveShaders.surface &&
+    !object.effectiveShaders.deform &&
+    !hasMaterialSlotSurfaceBinding(object)
+  ) {
     return null;
   }
 
@@ -65,11 +75,16 @@ export function releaseShadersFromObjectTree(root: THREE.Object3D): Set<THREE.Ma
 export function applyShaderToRenderable(
   renderable: THREE.Object3D,
   object: SceneObject,
-  shaderRuntime: ShaderRuntime | null
+  shaderRuntime: ShaderRuntime | null,
+  fileSources: Record<string, string> = {}
 ): boolean {
   if (
     !shaderRuntime ||
-    (!object.effectiveShaders.surface && !object.effectiveShaders.deform)
+    (
+      !object.effectiveShaders.surface &&
+      !object.effectiveShaders.deform &&
+      !hasMaterialSlotSurfaceBinding(object)
+    )
   ) {
     return false;
   }
@@ -79,6 +94,7 @@ export function applyShaderToRenderable(
   const replacedBaseMaterials = new Set<THREE.Material>();
   let meshCount = 0;
   let finalizedCount = 0;
+  const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
 
   renderable.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) {
@@ -86,11 +102,44 @@ export function applyShaderToRenderable(
     }
     meshCount += 1;
 
-    const applyMaterial = (material: THREE.Material): THREE.Material => {
-      const finalized = shaderRuntime.applyShaderSet(object.effectiveShaders, {
+    const resolveSurfaceBinding = (
+      material: THREE.Material,
+      slotIndex: number,
+      allowSlotIndexFallback: boolean
+    ) => {
+      const byName = effectiveMaterialSlots.find(
+        (slot) => slot.slotName === material.name
+      );
+      if (byName) {
+        return byName.surface;
+      }
+
+      if (allowSlotIndexFallback) {
+        return (
+          effectiveMaterialSlots.find((slot) => slot.slotIndex === slotIndex)?.surface ??
+          object.effectiveShaders.surface
+        );
+      }
+
+      return object.effectiveShaders.surface;
+    };
+
+    const applyMaterial = (
+      material: THREE.Material,
+      slotIndex: number,
+      allowSlotIndexFallback: boolean
+    ): THREE.Material => {
+      const finalized = shaderRuntime.applyShaderSet(
+        {
+          surface: resolveSurfaceBinding(material, slotIndex, allowSlotIndexFallback),
+          deform: object.effectiveShaders.deform
+        },
+        {
           material,
-          geometry: child.geometry
-        }) as THREE.Material | undefined;
+          geometry: child.geometry,
+          fileSources
+        }
+      ) as THREE.Material | undefined;
 
       if (!finalized) {
         return material;
@@ -105,11 +154,13 @@ export function applyShaderToRenderable(
     };
 
     if (Array.isArray(child.material)) {
-      child.material = child.material.map(applyMaterial);
+      child.material = child.material.map((material, slotIndex) =>
+        applyMaterial(material, slotIndex, true)
+      );
       return;
     }
 
-    child.material = applyMaterial(child.material);
+    child.material = applyMaterial(child.material, 0, false);
   });
 
   if (nextLeases.length > 0) {
@@ -125,7 +176,8 @@ export function ensureShaderSetAppliedToRenderable(
   renderable: THREE.Object3D,
   object: SceneObject,
   shaderRuntime: ShaderRuntime | null,
-  state: RenderableShaderApplicationState
+  state: RenderableShaderApplicationState,
+  fileSources: Record<string, string> = {}
 ) {
   if (!shaderRuntime) {
     return;
@@ -134,16 +186,21 @@ export function ensureShaderSetAppliedToRenderable(
   const nextSignature = getRenderableShaderSignature(object);
   if (!nextSignature) {
     state.appliedShaderSignature = null;
+    state.appliedFileSources = null;
     return;
   }
-  if (state.appliedShaderSignature === nextSignature) {
+  if (
+    state.appliedShaderSignature === nextSignature &&
+    state.appliedFileSources === fileSources
+  ) {
     return;
   }
 
-  const applied = applyShaderToRenderable(renderable, object, shaderRuntime);
+  const applied = applyShaderToRenderable(renderable, object, shaderRuntime, fileSources);
   if (!applied) {
     return;
   }
 
   state.appliedShaderSignature = nextSignature;
+  state.appliedFileSources = fileSources;
 }

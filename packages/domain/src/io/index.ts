@@ -14,6 +14,7 @@ import {
   createPlacedAssetInstance,
   createRegionAreaDefinition,
   createRegionItemPresence,
+  createRegionLandscapeChannelDefinition,
   createRegionNPCBehaviorDefinition,
   createRegionNPCBehaviorTask,
   createRegionNPCPresence,
@@ -214,9 +215,15 @@ export function normalizeRegionDocumentForLoad(
     landscape: createDefaultRegionLandscapeState({
       ...defaultLandscape,
       ...(legacyLandscape ?? {}),
+      // Run every channel through the factory so older persisted
+      // shapes (missing tilingScale, etc.) get defaulted to current
+      // canonical shape on load. Cheap and keeps the rest of the
+      // runtime from having to handle partial channel objects.
       channels:
         legacyLandscape?.channels && legacyLandscape.channels.length > 0
-          ? legacyLandscape.channels
+          ? legacyLandscape.channels.map((channel) =>
+              createRegionLandscapeChannelDefinition(channel)
+            )
           : defaultLandscape.channels,
       paintPayload: legacyLandscape?.paintPayload ?? null
     })

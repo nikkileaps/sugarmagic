@@ -319,6 +319,23 @@ function compileOutputNode(
     return null;
   }
 
+  // Optional ports that no edge reaches must produce no IR output, not
+  // a literal-default output. Otherwise a legacy graph that never wired
+  // `normal` / `roughness` / etc. would ship a literal [0,0,1] / 1.0
+  // through the IR, which the runtime would then slam onto the target
+  // material's normalNode / roughnessNode — overriding whatever the
+  // GLB / imported carrier material already had. By returning null on
+  // optional-and-unwired we tell the finalizer "the author did not
+  // author this channel," and the runtime leaves the material alone.
+  if (port.optional) {
+    const hasEdge = context.incomingEdgesByPort.has(
+      `${node.nodeId}:${port.portId}`
+    );
+    if (!hasEdge) {
+      return null;
+    }
+  }
+
   return incomingValue(context, node, port);
 }
 
@@ -367,10 +384,38 @@ function compileNodePort(
   }
 
   if (node.nodeType === "input.material-texture") {
-    const value =
-      requestedPortId === "alpha"
-        ? asBuiltin("materialTextureAlpha", "float")
-        : asBuiltin("materialTextureColor", "color");
+    const parameterId = String(node.settings.parameterId ?? "").trim();
+    // When the author wired the `uv` input port, capture the compiled
+    // uv value in the builtin's settings so the runtime can sample
+    // with it instead of falling back to the primary uv channel. The
+    // IR value is serializable (kind / dataType / …), so nesting it
+    // under `settings.uvValue` is safe for IR validation and
+    // round-trip tests.
+    const uvEdge = context.incomingEdgesByPort.get(`${node.nodeId}:uv`) ?? null;
+    const uvValue = uvEdge
+      ? compileNodePort(context, uvEdge.sourceNodeId, uvEdge.sourcePortId)
+      : null;
+    const baseSettings: Record<string, unknown> = { parameterId };
+    if (uvValue) {
+      baseSettings.uvValue = uvValue;
+    }
+    const value = (() => {
+      switch (requestedPortId) {
+        case "alpha":
+          return asBuiltin("materialTextureAlpha", "float", baseSettings);
+        case "r":
+          return asBuiltin("materialTextureR", "float", baseSettings);
+        case "g":
+          return asBuiltin("materialTextureG", "float", baseSettings);
+        case "b":
+          return asBuiltin("materialTextureB", "float", baseSettings);
+        case "a":
+          return asBuiltin("materialTextureA", "float", baseSettings);
+        case "color":
+        default:
+          return asBuiltin("materialTextureColor", "color", baseSettings);
+      }
+    })();
     context.valuesByNodePort.set(cacheKey, value);
     return value;
   }
@@ -542,6 +587,12 @@ export function compileShaderGraph(
     } else if (node.nodeType === "output.fragment") {
       outputs.fragmentColor = compileNodePort(context, node.nodeId, "color") ?? undefined;
       outputs.fragmentAlpha = compileNodePort(context, node.nodeId, "alpha") ?? undefined;
+      outputs.fragmentNormal = compileNodePort(context, node.nodeId, "normal") ?? undefined;
+      outputs.fragmentRoughness =
+        compileNodePort(context, node.nodeId, "roughness") ?? undefined;
+      outputs.fragmentMetalness =
+        compileNodePort(context, node.nodeId, "metalness") ?? undefined;
+      outputs.fragmentAo = compileNodePort(context, node.nodeId, "ao") ?? undefined;
       fragmentOps.push(...context.currentOps);
     } else if (node.nodeType === "output.emissive") {
       outputs.emissive = compileNodePort(context, node.nodeId, "color") ?? undefined;

@@ -17,6 +17,7 @@ import {
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  MaterialDefinition,
   RegionDocument,
   ShaderGraphDocument,
   ShaderParameterOverride,
@@ -26,18 +27,26 @@ import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
 import { PanelSection, Inspector } from "@sugarmagic/ui";
 import { resolveAssetDefinitionShaderBindings } from "@sugarmagic/runtime-core";
 import type { WorkspaceViewContribution } from "../../workspace-view";
+import { MaterialSlotBindingsEditor } from "../MaterialSlotBindingsEditor";
 import { ShaderSlotEditor } from "../ShaderSlotEditor";
 
 export interface AssetsWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   activeRegion: RegionDocument | null;
   contentLibrary: ContentLibrarySnapshot;
+  materialDefinitions: MaterialDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onPlaceAsset: (assetDefinition: AssetDefinition) => void;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  onSetAssetMaterialSlotBinding: (
+    definitionId: string,
+    slotName: string,
+    slotIndex: number,
+    materialDefinitionId: string | null
+  ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
     slot: ShaderSlotKind,
@@ -73,12 +82,14 @@ export function useAssetsWorkspaceView(
     assetDefinitions,
     activeRegion,
     contentLibrary,
+    materialDefinitions,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
     onImportAsset,
     onPlaceAsset,
     onUpdateAssetDefinition,
+    onSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
@@ -163,9 +174,11 @@ export function useAssetsWorkspaceView(
             contentLibrary={contentLibrary}
             canPlace={Boolean(activeRegion)}
             canRemove={!hasSceneReferences(selectedAsset.definitionId)}
+            materialDefinitions={materialDefinitions}
             shaderDefinitions={shaderDefinitions}
             onPlaceAsset={onPlaceAsset}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
+            onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
             onSetAssetDefaultShader={onSetAssetDefaultShader}
             onSetAssetDefaultShaderParameterOverride={
               onSetAssetDefaultShaderParameterOverride
@@ -192,9 +205,11 @@ function AssetInspectorPanel({
   contentLibrary,
   canPlace,
   canRemove,
+  materialDefinitions,
   shaderDefinitions,
   onPlaceAsset,
   onUpdateAssetDefinition,
+  onSetAssetMaterialSlotBinding,
   onSetAssetDefaultShader,
   onSetAssetDefaultShaderParameterOverride,
   onClearAssetDefaultShaderParameterOverride,
@@ -205,9 +220,16 @@ function AssetInspectorPanel({
   contentLibrary: ContentLibrarySnapshot;
   canPlace: boolean;
   canRemove: boolean;
+  materialDefinitions: MaterialDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   onPlaceAsset: (assetDefinition: AssetDefinition) => void;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  onSetAssetMaterialSlotBinding: (
+    definitionId: string,
+    slotName: string,
+    slotIndex: number,
+    materialDefinitionId: string | null
+  ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
     slot: ShaderSlotKind,
@@ -288,6 +310,23 @@ function AssetInspectorPanel({
         <Text size="xs" c="var(--sm-color-overlay0)">
           {assetDefinition.source.relativeAssetPath}
         </Text>
+      </Stack>
+      <Stack gap={4}>
+        <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+          Materials
+        </Text>
+        <MaterialSlotBindingsEditor
+          bindings={assetDefinition.materialSlotBindings ?? []}
+          materialDefinitions={materialDefinitions}
+          onChangeBinding={(slotName, slotIndex, materialDefinitionId) =>
+            onSetAssetMaterialSlotBinding(
+              assetDefinition.definitionId,
+              slotName,
+              slotIndex,
+              materialDefinitionId
+            )
+          }
+        />
       </Stack>
       <ShaderSlotEditor
         bindings={{

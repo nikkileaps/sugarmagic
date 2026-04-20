@@ -209,7 +209,8 @@ async function createRenderableRoot(
       renderable,
       object,
       shaderRuntime,
-      shaderApplication
+      shaderApplication,
+      assetSources
     );
   } catch (error) {
     reportRenderableError(object, "shader-apply", error);
@@ -235,14 +236,16 @@ async function createRenderableRoot(
 function ensureRenderableShadersApplied(
   entry: SceneObjectEntry,
   object: SceneObject,
-  shaderRuntime: ShaderRuntime | null
+  shaderRuntime: ShaderRuntime | null,
+  assetSources: Record<string, string>
 ) {
   try {
     ensureShaderSetAppliedToRenderable(
       entry.root,
       object,
       shaderRuntime,
-      entry.shaderApplication
+      entry.shaderApplication,
+      assetSources
     );
   } catch (error) {
     reportRenderableError(object, "shader-ensure", error);
@@ -291,6 +294,7 @@ export function createAuthoringViewport(): WorkspaceViewport {
   const pendingRenderableLoads = new Set<string>();
   let previousObjects: SceneObject[] = [];
   let currentState: ViewportSceneState | null = null;
+  let currentAssetSources: Record<string, string> = {};
   let renderGeneration = 0;
 
   function scheduleRenderableLoad(
@@ -317,7 +321,12 @@ export function createAuthoringViewport(): WorkspaceViewport {
           disposeRenderableObject(existing.root);
         }
         authoredRoot.add(entry.root);
-        ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
+        ensureRenderableShadersApplied(
+          entry,
+          object,
+          host.shaderRuntime,
+          assetSources
+        );
         objectMap.set(object.instanceId, entry);
       })
       .catch(() => {
@@ -390,7 +399,8 @@ export function createAuthoringViewport(): WorkspaceViewport {
             entry.root,
             entry.object,
             host.shaderRuntime,
-            entry.shaderApplication
+            entry.shaderApplication,
+            currentAssetSources
           );
         }
       });
@@ -423,9 +433,10 @@ export function createAuthoringViewport(): WorkspaceViewport {
         assetSources,
         environmentOverrideId = null
       } = state;
+      currentAssetSources = assetSources;
       // Host handles environment + post-process apply, and keeps the shader
       // runtime's content library in sync without dispose/recreate.
-      host.applyEnvironment(region, contentLibrary, environmentOverrideId);
+      host.applyEnvironment(region, contentLibrary, environmentOverrideId, assetSources);
       syncLandscapeGrid(region.landscape);
 
       const currentObjects = resolveSceneObjects(region, {
@@ -459,7 +470,12 @@ export function createAuthoringViewport(): WorkspaceViewport {
         ) {
           existing.object = object;
           applyObjectTransform(existing.root, object);
-          ensureRenderableShadersApplied(existing, object, host.shaderRuntime);
+          ensureRenderableShadersApplied(
+            existing,
+            object,
+            host.shaderRuntime,
+            assetSources
+          );
           continue;
         }
         if (existing) {
@@ -488,7 +504,12 @@ export function createAuthoringViewport(): WorkspaceViewport {
         }
         entry.object = object;
         applyObjectTransform(entry.root, object);
-        ensureRenderableShadersApplied(entry, object, host.shaderRuntime);
+        ensureRenderableShadersApplied(
+          entry,
+          object,
+          host.shaderRuntime,
+          assetSources
+        );
       }
 
       previousObjects = currentObjects;
@@ -496,7 +517,16 @@ export function createAuthoringViewport(): WorkspaceViewport {
 
     previewLandscape(landscape) {
       if (!currentState) return;
-      host.landscapeController.applyLandscape(landscape);
+      // Pass the current content library and asset sources — without
+      // them the landscape controller can't resolve material-bound
+      // channels and falls back to flat-color rendering, which would
+      // clobber any real material that had just been applied via a
+      // full state update.
+      host.landscapeController.applyLandscape(
+        landscape,
+        currentState.contentLibrary,
+        currentState.assetSources
+      );
       syncLandscapeGrid(landscape);
     },
 

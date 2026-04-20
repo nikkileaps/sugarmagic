@@ -34,6 +34,8 @@ import {
   createDebugTreeHeightShaderGraph,
   createDebugFresnelShaderGraph,
   createDebugConstantRedShaderGraph,
+  createDefaultStandardPbrShaderGraph,
+  createDefaultStandardPbrSeparateShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
   createDefaultVignettePostProcessShaderGraph
@@ -42,6 +44,7 @@ import {
 export type ContentDefinitionKind =
   | "asset"
   | "material"
+  | "texture"
   | "npc"
   | "dialogue"
   | "quest"
@@ -59,11 +62,18 @@ export interface ContentDefinitionReference {
 
 export type AssetKind = "model" | "foliage";
 
+export interface MaterialSlotBinding {
+  slotName: string;
+  slotIndex: number;
+  materialDefinitionId: string | null;
+}
+
 export interface AssetDefinition {
   definitionId: string;
   definitionKind: "asset";
   displayName: string;
   assetKind: AssetKind;
+  materialSlotBindings?: MaterialSlotBinding[];
   defaultShaderBindings?: ShaderSlotBindingMap;
   defaultShaderParameterOverrides?: ShaderParameterOverride[];
   /**
@@ -76,6 +86,28 @@ export interface AssetDefinition {
     fileName: string;
     mimeType: string | null;
   };
+}
+
+export interface TextureDefinition {
+  definitionId: string;
+  definitionKind: "texture";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+  colorSpace: "linear" | "srgb";
+  packing: "rgba" | "orm" | "normal" | "roughness" | "metallic" | "ao" | "height";
+}
+
+export interface MaterialDefinition {
+  definitionId: string;
+  definitionKind: "material";
+  displayName: string;
+  shaderDefinitionId: string;
+  parameterValues: Record<string, unknown>;
+  textureBindings: Record<string, string>;
 }
 
 export type LightingPreset =
@@ -203,6 +235,8 @@ export interface EnvironmentDefinition {
 export interface ContentLibrarySnapshot {
   identity: DocumentIdentity;
   assetDefinitions: AssetDefinition[];
+  materialDefinitions: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
 }
@@ -280,6 +314,28 @@ function normalizeAssetShaderBindings(
   }
 
   return next;
+}
+
+function normalizeMaterialSlotBindings(
+  bindings: MaterialSlotBinding[] | null | undefined
+): MaterialSlotBinding[] {
+  if (!bindings?.length) {
+    return [];
+  }
+
+  return bindings
+    .map((binding, index) => ({
+      slotName: String(binding.slotName ?? "").trim(),
+      slotIndex:
+        typeof binding.slotIndex === "number" && Number.isFinite(binding.slotIndex)
+          ? binding.slotIndex
+          : index,
+      materialDefinitionId:
+        typeof binding.materialDefinitionId === "string"
+          ? binding.materialDefinitionId
+          : null
+    }))
+    .filter((binding) => binding.slotName.length > 0);
 }
 
 export const DEFAULT_FOG_SETTINGS: FogSettings = {
@@ -910,9 +966,11 @@ export function createEmptyContentLibrarySnapshot(
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 2
+      version: 3
     },
     assetDefinitions: [],
+    materialDefinitions: [],
+    textureDefinitions: [],
     environmentDefinitions: [
       createDefaultEnvironmentDefinition(projectId, {
         definitionId: `${projectId}:environment:default`,
@@ -969,10 +1027,11 @@ export function normalizeContentLibrarySnapshot(
   return {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 2)
+      version: Math.max(contentLibrary.identity.version ?? 1, 3)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
+      materialSlotBindings: normalizeMaterialSlotBindings(definition.materialSlotBindings),
       defaultShaderBindings: normalizeAssetShaderBindings(
         definition,
         shaderTargetKinds,
@@ -981,6 +1040,19 @@ export function normalizeContentLibrarySnapshot(
       ),
       defaultShaderParameterOverrides: [...(definition.defaultShaderParameterOverrides ?? [])],
       defaultShaderDefinitionId: definition.defaultShaderDefinitionId ?? null
+    })),
+    materialDefinitions: (contentLibrary.materialDefinitions ?? []).map((definition) => ({
+      ...definition,
+      parameterValues: { ...(definition.parameterValues ?? {}) },
+      textureBindings: { ...(definition.textureBindings ?? {}) }
+    })),
+    textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
+      ...definition,
+      source: {
+        relativeAssetPath: definition.source.relativeAssetPath,
+        fileName: definition.source.fileName,
+        mimeType: definition.source.mimeType
+      }
     })),
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
       const legacyDefinition = definition as LegacyEnvironmentDefinition;
@@ -1102,6 +1174,14 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
       shaderDefinitionId: `${projectId}:shader:simple-alpha-test`,
       displayName: "Simple Alpha Test"
     }),
+    createDefaultStandardPbrShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:standard-pbr`,
+      displayName: "Standard PBR (ORM)"
+    }),
+    createDefaultStandardPbrSeparateShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:standard-pbr-separate`,
+      displayName: "Standard PBR (Separate)"
+    }),
     createDebugParameterColorShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:debug-parameter-color`,
       displayName: "Debug Parameter Color"
@@ -1207,6 +1287,40 @@ export function listAssetDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): AssetDefinition[] {
   return [...contentLibrary.assetDefinitions];
+}
+
+export function getMaterialDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): MaterialDefinition | null {
+  return (
+    contentLibrary.materialDefinitions.find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listMaterialDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): MaterialDefinition[] {
+  return [...contentLibrary.materialDefinitions];
+}
+
+export function getTextureDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): TextureDefinition | null {
+  return (
+    contentLibrary.textureDefinitions.find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listTextureDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): TextureDefinition[] {
+  return [...contentLibrary.textureDefinitions];
 }
 
 export function getEnvironmentDefinition(

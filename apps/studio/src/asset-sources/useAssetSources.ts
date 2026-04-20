@@ -27,7 +27,7 @@
  * stable across regenerations — only across identical path sets).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AssetDefinition } from "@sugarmagic/domain";
+import type { ContentLibrarySnapshot } from "@sugarmagic/domain";
 import { readBlobFile } from "@sugarmagic/io";
 
 function revokeAssetSources(assetSources: Record<string, string>): void {
@@ -38,10 +38,14 @@ function revokeAssetSources(assetSources: Record<string, string>): void {
 
 async function createAssetSourceMap(
   handle: FileSystemDirectoryHandle,
-  assetDefinitions: AssetDefinition[]
+  contentLibrary: ContentLibrarySnapshot
 ): Promise<Record<string, string>> {
   const nextSources: Record<string, string> = {};
-  for (const definition of assetDefinitions) {
+  const sourceDefinitions = [
+    ...contentLibrary.assetDefinitions,
+    ...contentLibrary.textureDefinitions
+  ];
+  for (const definition of sourceDefinitions) {
     const pathSegments = definition.source.relativeAssetPath
       .split("/")
       .filter(Boolean);
@@ -54,7 +58,7 @@ async function createAssetSourceMap(
 
 export function useAssetSources(
   projectHandle: FileSystemDirectoryHandle | null,
-  assetDefinitions: AssetDefinition[]
+  contentLibrary: ContentLibrarySnapshot | null
 ): Record<string, string> {
   const [assetSources, setAssetSources] = useState<Record<string, string>>({});
 
@@ -64,24 +68,31 @@ export function useAssetSources(
   // that may still be feeding in-flight GLTF loads.
   const assetSourcePathsKey = useMemo(
     () =>
-      assetDefinitions
+      [
+        ...(contentLibrary?.assetDefinitions ?? []),
+        ...(contentLibrary?.textureDefinitions ?? [])
+      ]
         .map((definition) => definition.source.relativeAssetPath)
         .sort()
         .join("|"),
-    [assetDefinitions]
+    [contentLibrary]
   );
 
   // The effect only re-fires when the path-set changes, but it needs the
   // current `assetDefinitions` list at fire time. Ref keeps the latest
   // value accessible without re-subscribing on every session mutation.
-  const assetDefinitionsRef = useRef(assetDefinitions);
-  assetDefinitionsRef.current = assetDefinitions;
+  const contentLibraryRef = useRef(contentLibrary);
+  contentLibraryRef.current = contentLibrary;
 
   useEffect(() => {
     let disposed = false;
     let generatedSources: Record<string, string> = {};
 
-    if (!projectHandle || assetDefinitionsRef.current.length === 0) {
+    if (
+      !projectHandle ||
+      !contentLibraryRef.current ||
+      assetSourcePathsKey.length === 0
+    ) {
       void Promise.resolve().then(() => {
         if (!disposed) {
           setAssetSources({});
@@ -90,7 +101,7 @@ export function useAssetSources(
       return undefined;
     }
 
-    void createAssetSourceMap(projectHandle, assetDefinitionsRef.current).then(
+    void createAssetSourceMap(projectHandle, contentLibraryRef.current).then(
       (nextSources) => {
         if (disposed) {
           revokeAssetSources(nextSources);

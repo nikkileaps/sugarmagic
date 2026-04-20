@@ -68,7 +68,9 @@ import type {
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
-  EnvironmentDefinition
+  EnvironmentDefinition,
+  MaterialDefinition,
+  TextureDefinition
 } from "../content-library";
 import {
   normalizeNPCDefinitionForWrite,
@@ -89,7 +91,9 @@ import {
   createEmptyContentLibrarySnapshot,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
+  listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
+  listTextureDefinitions as listTextureDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot,
   synchronizeEnvironmentDefinition
 } from "../content-library";
@@ -180,6 +184,18 @@ export function getAllEnvironmentDefinitions(
   session: AuthoringSession
 ): EnvironmentDefinition[] {
   return listEnvironmentDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllMaterialDefinitions(
+  session: AuthoringSession
+): MaterialDefinition[] {
+  return listMaterialDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllTextureDefinitions(
+  session: AuthoringSession
+): TextureDefinition[] {
+  return listTextureDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllShaderDefinitions(
@@ -1781,16 +1797,27 @@ export function addAssetDefinitionToSession(
   const existingIndex = session.contentLibrary.assetDefinitions.findIndex(
     (definition) => definition.definitionId === assetDefinition.definitionId
   );
+  const existingDefinition =
+    existingIndex >= 0 ? session.contentLibrary.assetDefinitions[existingIndex] ?? null : null;
+  const nextMaterialSlotBindings = (assetDefinition.materialSlotBindings ?? []).map((binding) => ({
+    ...binding,
+    materialDefinitionId:
+      existingDefinition?.materialSlotBindings?.find(
+        (candidate) => candidate.slotName === binding.slotName
+      )?.materialDefinitionId ?? binding.materialDefinitionId ?? null
+  }));
 
   const nextDefinitions = [...session.contentLibrary.assetDefinitions];
   if (existingIndex >= 0) {
     nextDefinitions[existingIndex] = {
       ...assetDefinition,
+      materialSlotBindings: nextMaterialSlotBindings,
       defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
     };
   } else {
     nextDefinitions.push({
       ...assetDefinition,
+      materialSlotBindings: nextMaterialSlotBindings,
       defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
     });
   }
@@ -1833,7 +1860,7 @@ export function addEnvironmentDefinitionToSession(
 export function updateAssetDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
-  patch: Partial<Pick<AssetDefinition, "displayName">>
+  patch: Partial<Pick<AssetDefinition, "displayName" | "materialSlotBindings">>
 ): AuthoringSession {
   return {
     ...session,
@@ -1868,6 +1895,92 @@ export function removeAssetDefinitionFromSession(
   };
 }
 
+export function addTextureDefinitionToSession(
+  session: AuthoringSession,
+  textureDefinition: TextureDefinition
+): AuthoringSession {
+  const existingIndex = session.contentLibrary.textureDefinitions.findIndex(
+    (definition) => definition.definitionId === textureDefinition.definitionId
+  );
+  const nextDefinitions = [...session.contentLibrary.textureDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = textureDefinition;
+  } else {
+    nextDefinitions.push(textureDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      textureDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function addMaterialDefinitionToSession(
+  session: AuthoringSession,
+  materialDefinition: MaterialDefinition
+): AuthoringSession {
+  const existingIndex = session.contentLibrary.materialDefinitions.findIndex(
+    (definition) => definition.definitionId === materialDefinition.definitionId
+  );
+  const nextDefinitions = [...session.contentLibrary.materialDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = materialDefinition;
+  } else {
+    nextDefinitions.push(materialDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      materialDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateMaterialDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<MaterialDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      materialDefinitions: session.contentLibrary.materialDefinitions.map((definition) =>
+        definition.definitionId === definitionId
+          ? {
+              ...definition,
+              ...patch
+            }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeMaterialDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      materialDefinitions: session.contentLibrary.materialDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
 export function assetDefinitionHasSceneReferences(
   session: AuthoringSession,
   definitionId: string
@@ -1885,6 +1998,26 @@ export function environmentDefinitionHasRegionBindings(
 ): boolean {
   return getAllRegions(session).some(
     (region) => region.environmentBinding.defaultEnvironmentId === definitionId
+  );
+}
+
+export function materialDefinitionHasReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  const boundInAssets = session.contentLibrary.assetDefinitions.some((assetDefinition) =>
+    (assetDefinition.materialSlotBindings ?? []).some(
+      (binding) => binding.materialDefinitionId === definitionId
+    )
+  );
+  if (boundInAssets) {
+    return true;
+  }
+
+  return getAllRegions(session).some((region) =>
+    region.landscape.channels.some(
+      (channel) => channel.materialDefinitionId === definitionId
+    )
   );
 }
 

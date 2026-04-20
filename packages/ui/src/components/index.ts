@@ -34,6 +34,12 @@ export {
   type SceneExplorerProps
 } from "./SceneExplorer";
 export {
+  SurfacePicker,
+  type Surface,
+  type SurfaceMaterialOption,
+  type SurfacePickerProps
+} from "./SurfacePicker";
+export {
   Inspector,
   type InspectorProps
 } from "./Inspector";

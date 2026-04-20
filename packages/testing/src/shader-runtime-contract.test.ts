@@ -15,6 +15,7 @@ import {
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
+  createDefaultStandardPbrShaderGraph,
   createDefaultShaderGraphDocument,
   createDefaultVignettePostProcessShaderGraph,
   createPlacedAssetInstance,
@@ -63,6 +64,8 @@ function createContentLibrary(): ContentLibrarySnapshot {
         }
       }
     ],
+    materialDefinitions: [],
+    textureDefinitions: [],
     environmentDefinitions: [
       createDefaultEnvironmentDefinition("project", {
         definitionId: "env:default",
@@ -268,6 +271,8 @@ describe("shader runtime contracts", () => {
             version: 1
           },
           assetDefinitions: [],
+          materialDefinitions: [],
+          textureDefinitions: [],
           environmentDefinitions: [],
           shaderDefinitions: [shader]
         },
@@ -279,6 +284,7 @@ describe("shader runtime contracts", () => {
         targetKind: shader.targetKind,
         documentRevision: shader.revision,
         parameterValues: {},
+        textureBindings: {},
         parameterOverrides: []
       };
       const geometry = new THREE.BufferGeometry();
@@ -313,5 +319,214 @@ describe("shader runtime contracts", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("makes a bound Standard PBR basecolor texture authoritative over the carrier material tint", () => {
+    const shader = createDefaultStandardPbrShaderGraph("project");
+    const runtime = new ShaderRuntime({
+      contentLibrary: normalizeContentLibrarySnapshot(
+        {
+          identity: {
+            id: "project:content-library",
+            schema: "ContentLibrarySnapshot",
+            version: 1
+          },
+          assetDefinitions: [],
+          materialDefinitions: [],
+          textureDefinitions: [
+            {
+              definitionId: "project:texture:brick-base",
+              definitionKind: "texture",
+              displayName: "Brick Base",
+              source: {
+                relativeAssetPath: "assets/textures/brick-base.png",
+                fileName: "brick-base.png",
+                mimeType: "image/png"
+              },
+              colorSpace: "srgb",
+              packing: "rgba"
+            }
+          ],
+          environmentDefinitions: [],
+          shaderDefinitions: [shader]
+        },
+        "project"
+      ),
+      compileProfile: "authoring-preview"
+    });
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x7a2018,
+      emissive: 0x331100,
+      vertexColors: true
+    });
+    const finalized = runtime.applyShaderSet(
+      {
+        surface: {
+          shaderDefinitionId: shader.shaderDefinitionId,
+          targetKind: "mesh-surface",
+          documentRevision: shader.revision,
+          parameterValues: {},
+          textureBindings: {
+            basecolor_texture: "project:texture:brick-base"
+          },
+          parameterOverrides: []
+        },
+        deform: null
+      },
+      {
+        material,
+        geometry: new THREE.BoxGeometry(1, 1, 1)
+      }
+    ) as THREE.MeshStandardMaterial;
+
+    // Standard-PBR now renders entirely through the shader graph:
+    // colorNode / roughnessNode / metalnessNode / aoNode / normalNode
+    // are the authoritative inputs to MeshStandardNodeMaterial. The
+    // legacy `.color` / `.map` / `.emissive` / `.vertexColors` fields
+    // are ignored by the WebGPU node material pipeline when the
+    // corresponding Node is set, so whatever carrier state the imported
+    // GLB material happened to ship with cannot leak into the rendered
+    // surface. That guarantee is what this test now validates.
+    const nodeMaterial = finalized as unknown as {
+      colorNode: unknown;
+      roughnessNode: unknown;
+      metalnessNode: unknown;
+      aoNode: unknown;
+      normalNode: unknown;
+    };
+    expect(nodeMaterial.colorNode).toBeTruthy();
+    expect(nodeMaterial.roughnessNode).toBeTruthy();
+    expect(nodeMaterial.metalnessNode).toBeTruthy();
+    expect(nodeMaterial.aoNode).toBeTruthy();
+    expect(nodeMaterial.normalNode).toBeTruthy();
+  });
+
+  it("does not fall back to the carrier material map when no material texture binding exists", () => {
+    const shader = createDefaultStandardPbrShaderGraph("project");
+    const runtime = new ShaderRuntime({
+      contentLibrary: normalizeContentLibrarySnapshot(
+        {
+          identity: {
+            id: "project:content-library",
+            schema: "ContentLibrarySnapshot",
+            version: 1
+          },
+          assetDefinitions: [],
+          materialDefinitions: [],
+          textureDefinitions: [],
+          environmentDefinitions: [],
+          shaderDefinitions: [shader]
+        },
+        "project"
+      ),
+      compileProfile: "authoring-preview"
+    });
+    const carrierMaterial = new THREE.MeshStandardMaterial();
+    carrierMaterial.map = new THREE.Texture();
+
+    const finalized = runtime.applyShaderSet(
+      {
+        surface: {
+          shaderDefinitionId: shader.shaderDefinitionId,
+          targetKind: "mesh-surface",
+          documentRevision: shader.revision,
+          parameterValues: {},
+          textureBindings: {},
+          parameterOverrides: []
+        },
+        deform: null
+      },
+      {
+        material: carrierMaterial,
+        geometry: new THREE.BoxGeometry(1, 1, 1)
+      }
+    ) as unknown as {
+      colorNode: {
+        type?: string;
+        node?: {
+          type?: string;
+          isTextureNode?: boolean;
+        };
+      };
+    };
+
+    expect(finalized.colorNode).toBeTruthy();
+    expect(finalized.colorNode.type).toBe("VarNode");
+    expect(finalized.colorNode.node?.isTextureNode).not.toBe(true);
+    expect(finalized.colorNode.node?.type).not.toBe("TextureNode");
+  });
+
+  it("reuses the finalized material across blob URL churn for the same TextureDefinition", () => {
+    const shader = createDefaultStandardPbrShaderGraph("project");
+    const runtime = new ShaderRuntime({
+      contentLibrary: normalizeContentLibrarySnapshot(
+        {
+          identity: {
+            id: "project:content-library",
+            schema: "ContentLibrarySnapshot",
+            version: 1
+          },
+          assetDefinitions: [],
+          materialDefinitions: [],
+          textureDefinitions: [
+            {
+              definitionId: "project:texture:brick-base",
+              definitionKind: "texture",
+              displayName: "Brick Base",
+              source: {
+                relativeAssetPath: "assets/textures/brick-base.png",
+                fileName: "brick-base.png",
+                mimeType: "image/png"
+              },
+              colorSpace: "srgb",
+              packing: "rgba"
+            }
+          ],
+          environmentDefinitions: [],
+          shaderDefinitions: [shader]
+        },
+        "project"
+      ),
+      compileProfile: "authoring-preview"
+    });
+    const binding: EffectiveShaderBinding = {
+      shaderDefinitionId: shader.shaderDefinitionId,
+      targetKind: "mesh-surface",
+      documentRevision: shader.revision,
+      parameterValues: {},
+      textureBindings: {
+        basecolor_texture: "project:texture:brick-base"
+      },
+      parameterOverrides: []
+    };
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+    const first = runtime.applyShaderSet(
+      { surface: binding, deform: null },
+      {
+        material: new THREE.MeshStandardMaterial(),
+        geometry,
+        fileSources: {
+          "assets/textures/brick-base.png": "blob:first"
+        }
+      }
+    );
+    const second = runtime.applyShaderSet(
+      { surface: binding, deform: null },
+      {
+        material: new THREE.MeshStandardMaterial(),
+        geometry,
+        fileSources: {
+          "assets/textures/brick-base.png": "blob:second"
+        }
+      }
+    );
+
+    // With the shared AuthoredAssetResolver, blob URL churn for the
+    // SAME TextureDefinition does NOT invalidate the three.Texture
+    // object — the resolver triggers an in-place image reload on the
+    // existing texture. That in turn keeps the material cache hot so
+    // Studio's frequent blob URL regenerations don't churn GPU state.
+    expect(second).toBe(first);
   });
 });

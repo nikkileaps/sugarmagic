@@ -186,6 +186,7 @@ export type UpdateLandscapeChannelCommand = SemanticCommandBase<
     mode?: RegionLandscapeChannelDefinition["mode"];
     color?: number;
     materialDefinitionId?: string | null;
+    tilingScale?: [number, number] | null;
   }
 >;
 

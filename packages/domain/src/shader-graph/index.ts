@@ -38,7 +38,8 @@ export type ShaderParameterValue =
   | [number, number, number]
   | [number, number, number, number]
   | string
-  | boolean;
+  | boolean
+  | null;
 
 export type ShaderSlotKind = "surface" | "deform";
 
@@ -119,6 +120,7 @@ export interface ShaderParameter {
   dataType: Exclude<ShaderDataType, "texture2d"> | "texture2d";
   defaultValue: ShaderParameterValue;
   colorSpace?: "sdr" | "hdr";
+  textureRole?: "color" | "normal" | "data";
 }
 
 export interface ShaderGraphDocument {
@@ -339,12 +341,21 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Material Texture",
     category: "input",
     validTargetKinds: ["mesh-surface", "billboard-surface"],
-    inputPorts: [],
+    inputPorts: [inputPort("uv", "UV", "vec2", { optional: true })],
     outputPorts: [
       outputPort("color", "Color", "color"),
-      outputPort("alpha", "Alpha", "float")
+      outputPort("alpha", "Alpha", "float"),
+      // Individual channels make ORM-style channel-packed textures
+      // authorable inside a graph: `orm.g` → roughness, `orm.b` →
+      // metallic, `orm.r` → AO. Without these the only way to pull a
+      // single channel would be a swizzle/math node — adding the ports
+      // here keeps standard-pbr's authoring surface tight.
+      outputPort("r", "Red", "float"),
+      outputPort("g", "Green", "float"),
+      outputPort("b", "Blue", "float"),
+      outputPort("a", "Alpha Channel", "float")
     ],
-    settings: []
+    settings: [setting("parameterId", "Parameter", "string", "")]
   },
   {
     nodeType: "input.screen-uv",
@@ -837,7 +848,28 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     validTargetKinds: ["mesh-surface", "billboard-surface"],
     inputPorts: [
       inputPort("color", "Color", "vec3"),
-      inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 })
+      inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 }),
+      // The remaining PBR channels are optional. When unwired, the
+      // runtime leaves the corresponding MeshStandardNodeMaterial node
+      // alone — meaning the material's default scalar (roughness=1,
+      // metalness=0, ao=1) and default tangent-space normal come
+      // through. Authored graphs opt into each channel by wiring it.
+      inputPort("normal", "Normal", "vec3", {
+        optional: true,
+        defaultValue: [0, 0, 1]
+      }),
+      inputPort("roughness", "Roughness", "float", {
+        optional: true,
+        defaultValue: 1
+      }),
+      inputPort("metalness", "Metalness", "float", {
+        optional: true,
+        defaultValue: 0
+      }),
+      inputPort("ao", "Ambient Occlusion", "float", {
+        optional: true,
+        defaultValue: 1
+      })
     ],
     outputPorts: [],
     settings: []
@@ -1116,14 +1148,22 @@ export function createSimpleAlphaTestShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "output", nodeType: "output.fragment", position: { x: 384, y: 160 }, settings: {} }
     ],
     edges: [
       createShaderEdge("edge-color-output", "base-texture", "color", "output", "color"),
       createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: {
       builtIn: true,
       builtInKey: "simple-alpha-test"
@@ -1164,7 +1204,7 @@ export function createDebugParameterColorShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       {
         nodeId: "debug-color",
         nodeType: "input.parameter",
@@ -1178,6 +1218,13 @@ export function createDebugParameterColorShaderGraph(
       createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
     ],
     parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
       {
         parameterId: "debugColor",
         displayName: "Debug Color",
@@ -1227,7 +1274,7 @@ export function createDebugWarmIsolatedShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       {
         nodeId: "warm-color",
         nodeType: "input.parameter",
@@ -1250,6 +1297,13 @@ export function createDebugWarmIsolatedShaderGraph(
       createShaderEdge("edge-alpha-output", "base-texture", "alpha", "output", "alpha")
     ],
     parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
       {
         parameterId: "warmColor",
         displayName: "Warm Sun Color",
@@ -1300,7 +1354,7 @@ export function createDebugSunMaskShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 400 }, settings: {} },
       { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 280, y: 350 }, settings: {} },
@@ -1314,7 +1368,15 @@ export function createDebugSunMaskShaderGraph(
       createShaderEdge("e-mc", "sun-mask", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-sun-mask" }
   };
 }
@@ -1348,7 +1410,7 @@ export function createDebugVertexAlphaShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "split", nodeType: "math.split-vector", position: { x: 280, y: 300 }, settings: {} },
       { nodeId: "output", nodeType: "output.fragment", position: { x: 520, y: 160 }, settings: {} }
@@ -1358,7 +1420,15 @@ export function createDebugVertexAlphaShaderGraph(
       createShaderEdge("e-c", "split", "w", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-vertex-alpha" }
   };
 }
@@ -1397,7 +1467,7 @@ export function createDebugConstantRedShaderGraph(
     targetKind: "mesh-surface",
     revision: 2,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "red", nodeType: "input.constant-color", position: { x: 48, y: 300 }, settings: { color: [1, 0, 0] } },
       { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
     ],
@@ -1405,7 +1475,15 @@ export function createDebugConstantRedShaderGraph(
       createShaderEdge("e-c", "red", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-constant-red" }
   };
 }
@@ -1444,7 +1522,7 @@ export function createDebugSphereNormalShaderGraph(
     targetKind: "mesh-surface",
     revision: 2,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "sphere-normal", nodeType: "input.sphere-normal", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
     ],
@@ -1452,7 +1530,15 @@ export function createDebugSphereNormalShaderGraph(
       createShaderEdge("e-c", "sphere-normal", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-sphere-normal" }
   };
 }
@@ -1487,7 +1573,7 @@ export function createDebugTreeHeightShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
     ],
@@ -1495,7 +1581,15 @@ export function createDebugTreeHeightShaderGraph(
       createShaderEdge("e-c", "tree-height", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-tree-height" }
   };
 }
@@ -1530,7 +1624,7 @@ export function createDebugFresnelShaderGraph(
     targetKind: "mesh-surface",
     revision: 2,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 400 }, settings: {} },
       { nodeId: "white", nodeType: "input.constant-color", position: { x: 48, y: 500 }, settings: { color: [1, 1, 1] } },
@@ -1549,7 +1643,15 @@ export function createDebugFresnelShaderGraph(
       createShaderEdge("e-c", "fresnel", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "debug-fresnel" }
   };
 }
@@ -1587,7 +1689,7 @@ export function createDefaultFoliageSurface2ShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 300 }, settings: {} },
       { nodeId: "output", nodeType: "output.fragment", position: { x: 380, y: 160 }, settings: {} }
     ],
@@ -1595,7 +1697,15 @@ export function createDefaultFoliageSurface2ShaderGraph(
       createShaderEdge("e-c", "tree-height", "value", "output", "color"),
       createShaderEdge("e-a", "base-texture", "alpha", "output", "alpha")
     ],
-    parameters: [],
+    parameters: [
+      {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      }
+    ],
     metadata: { builtIn: true, builtInKey: "foliage-surface-2" }
   };
 }
@@ -1635,7 +1745,7 @@ export function createDefaultFoliageSurface3ShaderGraph(
     targetKind: "mesh-surface",
     revision: 1,
     nodes: [
-      { nodeId: "base-texture", nodeType: "input.material-texture", position: { x: 48, y: 160 }, settings: {} },
+      createMaterialTextureNode("base-texture", "baseColorTexture", { x: 48, y: 160 }),
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
 
       // Shared inputs for lighting math
@@ -1702,6 +1812,13 @@ export function createDefaultFoliageSurface3ShaderGraph(
     ],
     parameters: [
       {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
         parameterId: "warmColor",
         displayName: "Warm Sun Color",
         dataType: "color",
@@ -1766,7 +1883,7 @@ export function createDefaultFoliageSurfaceShaderGraph(
     targetKind: "mesh-surface",
     revision: 3,
     nodes: [
-      { nodeId: "leaf-texture", nodeType: "input.material-texture", position: { x: 48, y: 156 }, settings: {} },
+      createMaterialTextureNode("leaf-texture", "baseColorTexture", { x: 48, y: 156 }),
       { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 340 }, settings: {} },
       { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 248, y: 340 }, settings: {} },
       { nodeId: "canopy-tint", nodeType: "math.combine-vector", position: { x: 448, y: 232 }, settings: {} },
@@ -1867,6 +1984,13 @@ export function createDefaultFoliageSurfaceShaderGraph(
     ],
     parameters: [
       {
+        parameterId: "baseColorTexture",
+        displayName: "Base Color Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
         parameterId: "topColor",
         displayName: "Top Color",
         dataType: "color",
@@ -1920,6 +2044,449 @@ export function createDefaultFoliageSurfaceShaderGraph(
   };
 }
 
+export function createDefaultStandardPbrShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:standard-pbr`;
+
+  // Tiling math: primary UV split into x/y, each multiplied by the
+  // corresponding tiling component, recombined into a vec2. The
+  // compiler's coerce layer widens vec2 → vec3 on input to split-vector,
+  // so we can consume the builtin uv and the tiling parameter directly.
+  // ORM-packed PBR graph: a single ORM texture's R/G/B channels drive
+  // AO / roughness / metalness. For the "separate-files" workflow use
+  // `createDefaultStandardPbrSeparateShaderGraph` instead — that
+  // variant has its own simple graph with one texture per channel.
+  // Keeping each variant as a dedicated graph (rather than one fused
+  // graph with runtime branching) means both paths stay legible on
+  // their own and the GPU only samples what a given material actually
+  // uses.
+  const nodes: ShaderNodeInstance[] = [
+    { nodeId: "uv", nodeType: "input.uv", position: { x: 0, y: 0 }, settings: {} },
+    {
+      nodeId: "tiling",
+      nodeType: "input.parameter",
+      position: { x: 0, y: 80 },
+      settings: { parameterId: "tiling" }
+    },
+    {
+      nodeId: "uv-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tiling-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 80 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-x",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-y",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 60 },
+      settings: {}
+    },
+    {
+      nodeId: "tiled-uv",
+      nodeType: "math.combine-vector",
+      position: { x: 520, y: 30 },
+      settings: {}
+    },
+
+    createMaterialTextureNode("basecolor-texture", "basecolor_texture", {
+      x: 700,
+      y: 0
+    }),
+    createMaterialTextureNode("normal-texture", "normal_texture", {
+      x: 700,
+      y: 130
+    }),
+    createMaterialTextureNode("orm-texture", "orm_texture", {
+      x: 700,
+      y: 260
+    }),
+
+    {
+      nodeId: "roughness-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 400 },
+      settings: { parameterId: "roughness_scale" }
+    },
+    {
+      nodeId: "metallic-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 460 },
+      settings: { parameterId: "metallic_scale" }
+    },
+    {
+      nodeId: "roughness-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 330 },
+      settings: {}
+    },
+    {
+      nodeId: "metallic-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 400 },
+      settings: {}
+    },
+
+    {
+      nodeId: "output",
+      nodeType: "output.fragment",
+      position: { x: 1120, y: 120 },
+      settings: {}
+    }
+  ];
+
+  const edges: ShaderEdge[] = [
+    // Tiled-UV construction.
+    createShaderEdge("e-uv-split", "uv", "value", "uv-split", "input"),
+    createShaderEdge("e-tiling-split", "tiling", "value", "tiling-split", "input"),
+    createShaderEdge("e-uvx-a", "uv-split", "x", "tile-x", "a"),
+    createShaderEdge("e-tilingx-b", "tiling-split", "x", "tile-x", "b"),
+    createShaderEdge("e-uvy-a", "uv-split", "y", "tile-y", "a"),
+    createShaderEdge("e-tilingy-b", "tiling-split", "y", "tile-y", "b"),
+    createShaderEdge("e-tiled-x", "tile-x", "value", "tiled-uv", "x"),
+    createShaderEdge("e-tiled-y", "tile-y", "value", "tiled-uv", "y"),
+
+    createShaderEdge("e-uv-basecolor", "tiled-uv", "vec2", "basecolor-texture", "uv"),
+    createShaderEdge("e-uv-normal", "tiled-uv", "vec2", "normal-texture", "uv"),
+    createShaderEdge("e-uv-orm", "tiled-uv", "vec2", "orm-texture", "uv"),
+
+    createShaderEdge(
+      "e-basecolor-color",
+      "basecolor-texture",
+      "color",
+      "output",
+      "color"
+    ),
+    createShaderEdge(
+      "e-basecolor-alpha",
+      "basecolor-texture",
+      "alpha",
+      "output",
+      "alpha"
+    ),
+
+    // Normal map (tangent-space; the runtime wraps with normalMap()
+    // for tangent-to-world reconstruction).
+    createShaderEdge("e-normal", "normal-texture", "color", "output", "normal"),
+
+    // ORM channel splits feed roughness / metalness / AO.
+    createShaderEdge("e-orm-g", "orm-texture", "g", "roughness-mul", "a"),
+    createShaderEdge("e-rs-b", "roughness-scale", "value", "roughness-mul", "b"),
+    createShaderEdge("e-roughness", "roughness-mul", "value", "output", "roughness"),
+
+    createShaderEdge("e-orm-b", "orm-texture", "b", "metallic-mul", "a"),
+    createShaderEdge("e-ms-b", "metallic-scale", "value", "metallic-mul", "b"),
+    createShaderEdge("e-metallic", "metallic-mul", "value", "output", "metalness"),
+
+    createShaderEdge("e-orm-r", "orm-texture", "r", "output", "ao")
+  ];
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Standard PBR (ORM)",
+    targetKind: "mesh-surface",
+    revision: 4,
+    nodes,
+    edges,
+    parameters: [
+      {
+        parameterId: "basecolor_texture",
+        displayName: "Basecolor Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
+        parameterId: "normal_texture",
+        displayName: "Normal Texture",
+        dataType: "texture2d",
+        textureRole: "normal",
+        defaultValue: null
+      },
+      {
+        parameterId: "orm_texture",
+        displayName: "ORM Texture",
+        dataType: "texture2d",
+        textureRole: "data",
+        defaultValue: null
+      },
+      {
+        parameterId: "tiling",
+        displayName: "Tiling",
+        dataType: "vec2",
+        defaultValue: [1, 1]
+      },
+      {
+        parameterId: "roughness_scale",
+        displayName: "Roughness Scale",
+        dataType: "float",
+        defaultValue: 1
+      },
+      {
+        parameterId: "metallic_scale",
+        displayName: "Metallic Scale",
+        dataType: "float",
+        defaultValue: 0
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "standard-pbr"
+    }
+  };
+}
+
+/**
+ * Standard PBR shader graph for the "separate channels" workflow:
+ * roughness, metallic, and AO each supplied as their own texture,
+ * not channel-packed into an ORM pack. Use this when the author is
+ * working from a Substance / Painter export with individual roughness
+ * / metallic / AO PNGs, or when authoring a material from scratch
+ * where each channel was produced by a different artist / pass.
+ *
+ * Mirrors `createDefaultStandardPbrShaderGraph` (ORM) in everything
+ * except how the scalar channels are sourced: instead of splitting
+ * ORM.r / .g / .b, we sample dedicated `roughness_texture`,
+ * `metallic_texture`, and `ao_texture` and read their red channel.
+ * The two variants are kept as separate graphs (rather than fused
+ * with runtime branching) so each stays legible on its own and the
+ * GPU only samples what the bound Material supplies.
+ */
+export function createDefaultStandardPbrSeparateShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ??
+    `${projectId}:shader:standard-pbr-separate`;
+
+  const nodes: ShaderNodeInstance[] = [
+    { nodeId: "uv", nodeType: "input.uv", position: { x: 0, y: 0 }, settings: {} },
+    {
+      nodeId: "tiling",
+      nodeType: "input.parameter",
+      position: { x: 0, y: 80 },
+      settings: { parameterId: "tiling" }
+    },
+    {
+      nodeId: "uv-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tiling-split",
+      nodeType: "math.split-vector",
+      position: { x: 180, y: 80 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-x",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 0 },
+      settings: {}
+    },
+    {
+      nodeId: "tile-y",
+      nodeType: "math.multiply",
+      position: { x: 360, y: 60 },
+      settings: {}
+    },
+    {
+      nodeId: "tiled-uv",
+      nodeType: "math.combine-vector",
+      position: { x: 520, y: 30 },
+      settings: {}
+    },
+
+    createMaterialTextureNode("basecolor-texture", "basecolor_texture", {
+      x: 700,
+      y: 0
+    }),
+    createMaterialTextureNode("normal-texture", "normal_texture", {
+      x: 700,
+      y: 130
+    }),
+    createMaterialTextureNode("roughness-texture", "roughness_texture", {
+      x: 700,
+      y: 260
+    }),
+    createMaterialTextureNode("metallic-texture", "metallic_texture", {
+      x: 700,
+      y: 400
+    }),
+    createMaterialTextureNode("ao-texture", "ao_texture", {
+      x: 700,
+      y: 540
+    }),
+
+    {
+      nodeId: "roughness-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 680 },
+      settings: { parameterId: "roughness_scale" }
+    },
+    {
+      nodeId: "metallic-scale",
+      nodeType: "input.parameter",
+      position: { x: 700, y: 740 },
+      settings: { parameterId: "metallic_scale" }
+    },
+    {
+      nodeId: "roughness-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 330 },
+      settings: {}
+    },
+    {
+      nodeId: "metallic-mul",
+      nodeType: "math.multiply",
+      position: { x: 900, y: 400 },
+      settings: {}
+    },
+
+    {
+      nodeId: "output",
+      nodeType: "output.fragment",
+      position: { x: 1120, y: 120 },
+      settings: {}
+    }
+  ];
+
+  const edges: ShaderEdge[] = [
+    createShaderEdge("e-uv-split", "uv", "value", "uv-split", "input"),
+    createShaderEdge("e-tiling-split", "tiling", "value", "tiling-split", "input"),
+    createShaderEdge("e-uvx-a", "uv-split", "x", "tile-x", "a"),
+    createShaderEdge("e-tilingx-b", "tiling-split", "x", "tile-x", "b"),
+    createShaderEdge("e-uvy-a", "uv-split", "y", "tile-y", "a"),
+    createShaderEdge("e-tilingy-b", "tiling-split", "y", "tile-y", "b"),
+    createShaderEdge("e-tiled-x", "tile-x", "value", "tiled-uv", "x"),
+    createShaderEdge("e-tiled-y", "tile-y", "value", "tiled-uv", "y"),
+
+    createShaderEdge("e-uv-basecolor", "tiled-uv", "vec2", "basecolor-texture", "uv"),
+    createShaderEdge("e-uv-normal", "tiled-uv", "vec2", "normal-texture", "uv"),
+    createShaderEdge("e-uv-roughness", "tiled-uv", "vec2", "roughness-texture", "uv"),
+    createShaderEdge("e-uv-metallic", "tiled-uv", "vec2", "metallic-texture", "uv"),
+    createShaderEdge("e-uv-ao", "tiled-uv", "vec2", "ao-texture", "uv"),
+
+    createShaderEdge(
+      "e-basecolor-color",
+      "basecolor-texture",
+      "color",
+      "output",
+      "color"
+    ),
+    createShaderEdge(
+      "e-basecolor-alpha",
+      "basecolor-texture",
+      "alpha",
+      "output",
+      "alpha"
+    ),
+
+    createShaderEdge("e-normal", "normal-texture", "color", "output", "normal"),
+
+    createShaderEdge("e-r-src", "roughness-texture", "r", "roughness-mul", "a"),
+    createShaderEdge("e-r-scale", "roughness-scale", "value", "roughness-mul", "b"),
+    createShaderEdge("e-roughness", "roughness-mul", "value", "output", "roughness"),
+
+    createShaderEdge("e-m-src", "metallic-texture", "r", "metallic-mul", "a"),
+    createShaderEdge("e-m-scale", "metallic-scale", "value", "metallic-mul", "b"),
+    createShaderEdge("e-metallic", "metallic-mul", "value", "output", "metalness"),
+
+    createShaderEdge("e-ao", "ao-texture", "r", "output", "ao")
+  ];
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Standard PBR (Separate)",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes,
+    edges,
+    parameters: [
+      {
+        parameterId: "basecolor_texture",
+        displayName: "Basecolor Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
+        parameterId: "normal_texture",
+        displayName: "Normal Texture",
+        dataType: "texture2d",
+        textureRole: "normal",
+        defaultValue: null
+      },
+      {
+        parameterId: "roughness_texture",
+        displayName: "Roughness Texture",
+        dataType: "texture2d",
+        textureRole: "data",
+        defaultValue: null
+      },
+      {
+        parameterId: "metallic_texture",
+        displayName: "Metallic Texture",
+        dataType: "texture2d",
+        textureRole: "data",
+        defaultValue: null
+      },
+      {
+        parameterId: "ao_texture",
+        displayName: "Ambient Occlusion Texture",
+        dataType: "texture2d",
+        textureRole: "data",
+        defaultValue: null
+      },
+      {
+        parameterId: "tiling",
+        displayName: "Tiling",
+        dataType: "vec2",
+        defaultValue: [1, 1]
+      },
+      {
+        parameterId: "roughness_scale",
+        displayName: "Roughness Scale",
+        dataType: "float",
+        defaultValue: 1
+      },
+      {
+        parameterId: "metallic_scale",
+        displayName: "Metallic Scale",
+        dataType: "float",
+        defaultValue: 0
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "standard-pbr-separate"
+    }
+  };
+}
+
 function createFloatConstantNode(
   nodeId: string,
   value: number,
@@ -1959,6 +2526,19 @@ function createParameterNode(
   };
 }
 
+function createMaterialTextureNode(
+  nodeId: string,
+  parameterId: string,
+  position: { x: number; y: number }
+): ShaderNodeInstance {
+  return {
+    nodeId,
+    nodeType: "input.material-texture",
+    position,
+    settings: { parameterId }
+  };
+}
+
 function createShaderEdge(
   edgeId: string,
   sourceNodeId: string,
@@ -1973,6 +2553,20 @@ function createShaderEdge(
     targetNodeId,
     targetPortId
   };
+}
+
+function requestedMaterialTextureOutputType(portId: string): ShaderDataType {
+  switch (portId) {
+    case "alpha":
+    case "r":
+    case "g":
+    case "b":
+    case "a":
+      return "float";
+    case "color":
+    default:
+      return "color";
+  }
 }
 
 export function createDefaultColorGradePostProcessShaderGraph(
@@ -2377,7 +2971,7 @@ function isParameterValueCompatible(
     case "vec4":
       return isVector(value, 4);
     case "texture2d":
-      return typeof value === "string";
+      return value === null || typeof value === "string";
     default:
       return false;
   }
@@ -2526,6 +3120,22 @@ export function validateShaderGraphDocument(
         });
       }
     }
+
+    if (node.nodeType === "input.material-texture") {
+      const parameterId =
+        typeof node.settings.parameterId === "string"
+          ? node.settings.parameterId.trim()
+          : "";
+      const parameter = parameterId ? parameterMap.get(parameterId) ?? null : null;
+      if (!parameter || parameter.dataType !== "texture2d") {
+        issues.push({
+          severity: "error",
+          nodeId: node.nodeId,
+          message:
+            "Material Texture nodes must reference an existing texture2d shader parameter."
+        });
+      }
+    }
   }
 
   for (const edge of document.edges) {
@@ -2557,7 +3167,9 @@ export function validateShaderGraphDocument(
       source.nodeType === "input.parameter"
         ? parameterMap.get(String(source.settings.parameterId ?? "").trim())?.dataType ??
           sourcePort.dataType
-        : sourcePort.dataType;
+        : source.nodeType === "input.material-texture"
+          ? requestedMaterialTextureOutputType(edge.sourcePortId)
+          : sourcePort.dataType;
 
     if (!areShaderPortTypesCompatible(effectiveSourceDataType, targetPort.dataType)) {
       issues.push({

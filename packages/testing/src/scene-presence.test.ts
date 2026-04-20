@@ -66,6 +66,8 @@ describe("layout scene presences", () => {
           version: 1
         },
         assetDefinitions: [],
+        materialDefinitions: [],
+        textureDefinitions: [],
         environmentDefinitions: [
           createDefaultEnvironmentDefinition("project", {
             definitionId: "project:environment:default"

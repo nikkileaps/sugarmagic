@@ -25,6 +25,12 @@ interface FileSystemDirectoryHandle {
     name: string,
     options?: { create?: boolean }
   ): Promise<FileSystemFileHandle>;
+  values(): AsyncIterable<FileSystemHandle>;
+}
+
+interface FileSystemHandle {
+  readonly kind: "file" | "directory";
+  readonly name: string;
 }
 
 interface FileSystemFileHandle {

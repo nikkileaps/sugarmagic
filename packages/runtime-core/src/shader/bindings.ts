@@ -10,6 +10,7 @@
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  MaterialSlotBinding,
   PlacedAssetInstance,
   PostProcessShaderBinding,
   RegionItemPresence,
@@ -22,6 +23,7 @@ import type {
 import {
   createEmptyShaderSlotBindingMap,
   getAssetDefinition,
+  getMaterialDefinition,
   getShaderDefinition
 } from "@sugarmagic/domain";
 
@@ -30,7 +32,15 @@ export interface EffectiveShaderBinding {
   targetKind: ShaderGraphDocument["targetKind"];
   documentRevision: number;
   parameterValues: Record<string, unknown>;
+  textureBindings: Record<string, string>;
   parameterOverrides: ShaderParameterOverride[];
+}
+
+export interface EffectiveMaterialSlotBinding {
+  slotName: string;
+  slotIndex: number;
+  materialDefinitionId: string | null;
+  surface: EffectiveShaderBinding | null;
 }
 
 export interface ShaderBindingResolutionDiagnostic {
@@ -54,6 +64,7 @@ export type EffectiveShaderBindingSet = {
 
 export interface EffectiveShaderBindingResolution {
   bindings: EffectiveShaderBindingSet;
+  materialSlots: EffectiveMaterialSlotBinding[];
   diagnostics: ShaderBindingResolutionDiagnostic[];
 }
 
@@ -67,12 +78,19 @@ function createEmptyEffectiveShaderBindingSet(): EffectiveShaderBindingSet {
 function mergeParameters(
   definition: ShaderGraphDocument,
   overrides: ShaderParameterOverride[],
-  slot: ShaderSlotKind
+  slot: ShaderSlotKind,
+  baseValues: Record<string, unknown> = {}
 ): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   const knownParameterIds = new Set(definition.parameters.map((parameter) => parameter.parameterId));
   for (const parameter of definition.parameters) {
     values[parameter.parameterId] = parameter.defaultValue;
+  }
+  for (const [parameterId, value] of Object.entries(baseValues)) {
+    if (!knownParameterIds.has(parameterId)) {
+      continue;
+    }
+    values[parameterId] = value;
   }
   for (const override of overrides) {
     if (override.slot && override.slot !== slot) {
@@ -84,6 +102,33 @@ function mergeParameters(
     values[override.parameterId] = override.value;
   }
   return values;
+}
+
+function mergeTextureBindings(
+  definition: ShaderGraphDocument,
+  baseBindings: Record<string, string> = {}
+): Record<string, string> {
+  const merged: Record<string, string> = {};
+  for (const parameter of definition.parameters) {
+    if (parameter.dataType !== "texture2d") {
+      continue;
+    }
+
+    const boundTextureId = baseBindings[parameter.parameterId];
+    if (typeof boundTextureId === "string" && boundTextureId.trim().length > 0) {
+      merged[parameter.parameterId] = boundTextureId;
+      continue;
+    }
+
+    if (
+      typeof parameter.defaultValue === "string" &&
+      parameter.defaultValue.trim().length > 0
+    ) {
+      merged[parameter.parameterId] = parameter.defaultValue;
+    }
+  }
+
+  return merged;
 }
 
 function selectParameterOverrides(
@@ -132,7 +177,11 @@ function resolveSlotBinding(
   slot: ShaderSlotKind,
   shaderDefinitionId: string | null,
   parameterOverrides: ShaderParameterOverride[],
-  diagnostics: ShaderBindingResolutionDiagnostic[]
+  diagnostics: ShaderBindingResolutionDiagnostic[],
+  options: {
+    baseParameterValues?: Record<string, unknown>;
+    textureBindings?: Record<string, string>;
+  } = {}
 ): EffectiveShaderBinding | null {
   if (!shaderDefinitionId) {
     return null;
@@ -169,8 +218,68 @@ function resolveSlotBinding(
     targetKind: shaderDefinition.targetKind,
     documentRevision: shaderDefinition.revision,
     parameterOverrides: slotOverrides,
-    parameterValues: mergeParameters(shaderDefinition, parameterOverrides, slot)
+    parameterValues: mergeParameters(
+      shaderDefinition,
+      parameterOverrides,
+      slot,
+      options.baseParameterValues
+    ),
+    textureBindings: mergeTextureBindings(shaderDefinition, options.textureBindings)
   };
+}
+
+/**
+ * Public wrapper around the material-surface resolver. Returns the
+ * EffectiveShaderBinding for a landscape-channel- or future-slot-level
+ * material reference. Exposed (vs. the private in-context variant) so
+ * consumers that don't own an asset or placement (landscape, material-
+ * preview, etc.) can resolve a material directly. Diagnostics are
+ * accumulated into the caller-provided array; callers not interested
+ * in them can pass a fresh `[]`.
+ */
+export function resolveMaterialEffectiveShaderBinding(
+  contentLibrary: ContentLibrarySnapshot,
+  materialDefinitionId: string,
+  diagnostics: ShaderBindingResolutionDiagnostic[] = []
+): EffectiveShaderBinding | null {
+  return resolveMaterialSurfaceBinding(
+    contentLibrary,
+    materialDefinitionId,
+    [],
+    diagnostics
+  );
+}
+
+function resolveMaterialSurfaceBinding(
+  contentLibrary: ContentLibrarySnapshot,
+  materialDefinitionId: string,
+  parameterOverrides: ShaderParameterOverride[],
+  diagnostics: ShaderBindingResolutionDiagnostic[]
+): EffectiveShaderBinding | null {
+  const materialDefinition = getMaterialDefinition(contentLibrary, materialDefinitionId);
+  if (!materialDefinition) {
+    const diagnostic: ShaderBindingResolutionDiagnostic = {
+      severity: "error",
+      slot: "surface",
+      shaderDefinitionId: null,
+      message: `Material slot references missing material "${materialDefinitionId}".`
+    };
+    diagnostics.push(diagnostic);
+    console.error(`[ShaderBindings] ${diagnostic.message}`);
+    return null;
+  }
+
+  return resolveSlotBinding(
+    contentLibrary,
+    "surface",
+    materialDefinition.shaderDefinitionId,
+    parameterOverrides,
+    diagnostics,
+    {
+      baseParameterValues: materialDefinition.parameterValues,
+      textureBindings: materialDefinition.textureBindings
+    }
+  );
 }
 
 function resolveBindingSetForOwner(
@@ -205,10 +314,50 @@ function resolveBindingSetForOwner(
     );
   }
 
+  const materialSlots = resolveMaterialSlotBindings(
+    contentLibrary,
+    ownerAssetDefinition?.materialSlotBindings ?? [],
+    bindingSet.surface,
+    overrides.shaderParameterOverrides,
+    diagnostics
+  );
+
   return {
     bindings: bindingSet,
+    materialSlots,
     diagnostics
   };
+}
+
+function resolveMaterialSlotBindings(
+  contentLibrary: ContentLibrarySnapshot,
+  slotBindings: MaterialSlotBinding[],
+  fallbackSurface: EffectiveShaderBinding | null,
+  parameterOverrides: ShaderParameterOverride[],
+  diagnostics: ShaderBindingResolutionDiagnostic[]
+): EffectiveMaterialSlotBinding[] {
+  return slotBindings.map((slotBinding) => {
+    if (!slotBinding.materialDefinitionId) {
+      return {
+        slotName: slotBinding.slotName,
+        slotIndex: slotBinding.slotIndex,
+        materialDefinitionId: null,
+        surface: fallbackSurface
+      };
+    }
+
+    return {
+      slotName: slotBinding.slotName,
+      slotIndex: slotBinding.slotIndex,
+      materialDefinitionId: slotBinding.materialDefinitionId,
+      surface: resolveMaterialSurfaceBinding(
+        contentLibrary,
+        slotBinding.materialDefinitionId,
+        parameterOverrides,
+        diagnostics
+      )
+    };
+  });
 }
 
 export function resolveAssetDefinitionShaderBindings(
@@ -232,6 +381,17 @@ export function resolveEffectiveAssetShaderBindings(
   }).bindings;
 }
 
+export function resolveEffectiveAssetMaterialSlotBindings(
+  asset: PlacedAssetInstance,
+  contentLibrary: ContentLibrarySnapshot
+): EffectiveMaterialSlotBinding[] {
+  const definition = getAssetDefinition(contentLibrary, asset.assetDefinitionId);
+  return resolveBindingSetForOwner(contentLibrary, definition, {
+    shaderOverrides: asset.shaderOverrides ?? [],
+    shaderParameterOverrides: asset.shaderParameterOverrides
+  }).materialSlots;
+}
+
 export function resolveEffectivePresenceShaderBindings(
   presence: Pick<
     RegionNPCPresence | RegionItemPresence,
@@ -244,6 +404,20 @@ export function resolveEffectivePresenceShaderBindings(
     shaderOverrides: presence.shaderOverrides ?? [],
     shaderParameterOverrides: presence.shaderParameterOverrides
   }).bindings;
+}
+
+export function resolveEffectivePresenceMaterialSlotBindings(
+  presence: Pick<
+    RegionNPCPresence | RegionItemPresence,
+    "shaderOverrides" | "shaderParameterOverrides"
+  >,
+  assetDefinition: AssetDefinition | null,
+  contentLibrary: ContentLibrarySnapshot
+): EffectiveMaterialSlotBinding[] {
+  return resolveBindingSetForOwner(contentLibrary, assetDefinition, {
+    shaderOverrides: presence.shaderOverrides ?? [],
+    shaderParameterOverrides: presence.shaderParameterOverrides
+  }).materialSlots;
 }
 
 export function resolveEffectiveAssetShaderBinding(
@@ -288,6 +462,7 @@ export function resolveEffectivePostProcessShaderBindings(
         targetKind: shaderDefinition.targetKind,
         documentRevision: shaderDefinition.revision,
         parameterOverrides: binding.parameterOverrides,
+        textureBindings: {},
         parameterValues: mergeParameters(
           shaderDefinition,
           binding.parameterOverrides,

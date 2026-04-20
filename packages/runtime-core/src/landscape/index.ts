@@ -1,13 +1,14 @@
-import * as THREE from "three";
-import type {
-  RegionDocument,
-  RegionLandscapeState,
-  RegionLandscapePaintPayload
-} from "@sugarmagic/domain";
-import {
-  DEFAULT_REGION_LANDSCAPE_RESOLUTION
-} from "@sugarmagic/domain";
-import { RuntimeLandscapeMesh } from "./mesh";
+/**
+ * Landscape runtime semantics.
+ *
+ * Owns the pure landscape descriptor and paint contracts that every runtime
+ * target shares. GPU realization lives in `@sugarmagic/render-web`; this
+ * module intentionally stays free of Three.js so runtime-core remains the
+ * source of truth for meaning, not rendering details.
+ */
+
+import type { RegionDocument, RegionLandscapeState } from "@sugarmagic/domain";
+import { DEFAULT_REGION_LANDSCAPE_RESOLUTION } from "@sugarmagic/domain";
 
 export interface LandscapeRuntimeDescriptor {
   owner: "runtime-core";
@@ -35,17 +36,6 @@ export interface LandscapeBrushStroke {
   radius: number;
   strength: number;
   falloff: number;
-}
-
-export interface LandscapeSceneController {
-  readonly root: THREE.Group;
-  readonly surfaceRoot: THREE.Group;
-  apply: (region: RegionDocument | null) => LandscapeSceneApplyResult;
-  applyLandscape: (landscape: RegionLandscapeState | null) => LandscapeSceneApplyResult;
-  paintStroke: (stroke: LandscapeBrushStroke) => boolean;
-  renderMaskToCanvas: (channelIndex: number, canvas: HTMLCanvasElement) => void;
-  serializePaintPayload: () => RegionLandscapePaintPayload | null;
-  dispose: () => void;
 }
 
 export function resolveLandscapeDescriptor(
@@ -80,120 +70,4 @@ export function resolveLandscapeDescriptorFromState(
   };
 }
 
-export function createLandscapeSceneController(
-  scene: THREE.Scene
-): LandscapeSceneController {
-  const root = new THREE.Group();
-  root.name = "runtime-landscape-root";
-  scene.add(root);
-
-  let currentDescriptor: LandscapeRuntimeDescriptor | null = null;
-  let currentLandscapeState: RegionLandscapeState | null = null;
-  let currentLandscapeMesh: RuntimeLandscapeMesh | null = null;
-
-  function rebuildMesh(descriptor: LandscapeRuntimeDescriptor | null) {
-    if (currentLandscapeMesh) {
-      root.remove(currentLandscapeMesh.mesh);
-      currentLandscapeMesh.dispose();
-      currentLandscapeMesh = null;
-    }
-
-    if (!descriptor) {
-      currentDescriptor = descriptor;
-      return;
-    }
-
-    currentLandscapeMesh = new RuntimeLandscapeMesh(
-      descriptor.size,
-      descriptor.subdivisions,
-      descriptor.paintResolution
-    );
-    root.add(currentLandscapeMesh.mesh);
-    currentDescriptor = descriptor;
-  }
-
-  function applyLandscape(landscape: RegionLandscapeState | null): LandscapeSceneApplyResult {
-    const descriptor = resolveLandscapeDescriptorFromState(landscape);
-    const warnings: LandscapeSceneWarning[] = [];
-
-    if (!landscape) {
-      rebuildMesh(null);
-      currentLandscapeState = null;
-      return { descriptor: null, warnings };
-    }
-
-    if (!descriptor) {
-      warnings.push({
-        code: "landscape-invalid",
-        message: "Landscape settings were invalid; the runtime skipped landscape generation."
-      });
-      rebuildMesh(null);
-      currentLandscapeState = landscape;
-      return { descriptor: null, warnings };
-    }
-
-    if (!descriptor.enabled) {
-      warnings.push({
-        code: "landscape-disabled",
-        message: "Landscape is disabled for this region."
-      });
-      rebuildMesh(null);
-      currentLandscapeState = landscape;
-      currentDescriptor = descriptor;
-      return { descriptor, warnings };
-    }
-
-    const meshShapeChanged =
-      !currentDescriptor ||
-      currentDescriptor.enabled !== descriptor.enabled ||
-      currentDescriptor.size !== descriptor.size ||
-      currentDescriptor.subdivisions !== descriptor.subdivisions ||
-      currentDescriptor.paintResolution !== descriptor.paintResolution;
-
-    if (meshShapeChanged) {
-      rebuildMesh(descriptor);
-    }
-
-    currentLandscapeMesh?.applyLandscapeState(landscape);
-    currentLandscapeState = landscape;
-    currentDescriptor = descriptor;
-    return { descriptor, warnings };
-  }
-
-  return {
-    root,
-    surfaceRoot: root,
-    apply(region) {
-      return applyLandscape(region?.landscape ?? null);
-    },
-    applyLandscape,
-    paintStroke(stroke) {
-      if (!currentLandscapeMesh || !currentLandscapeState?.enabled) {
-        return false;
-      }
-
-      currentLandscapeMesh.paintAtWorldPoint(
-        stroke.channelIndex,
-        stroke.worldX,
-        stroke.worldZ,
-        stroke.radius,
-        stroke.strength,
-        stroke.falloff
-      );
-      return true;
-    },
-    renderMaskToCanvas(channelIndex, canvas) {
-      currentLandscapeMesh?.renderMaskToCanvas(channelIndex, canvas);
-    },
-    serializePaintPayload() {
-      return currentLandscapeMesh?.serializePaintPayload() ?? null;
-    },
-    dispose() {
-      rebuildMesh(null);
-      scene.remove(root);
-    }
-  };
-}
-
-export { RuntimeLandscapeMesh } from "./mesh";
 export { LandscapeSplatmap } from "./splatmap";
