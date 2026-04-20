@@ -96,22 +96,6 @@ export function applyShaderToRenderable(
   let finalizedCount = 0;
   const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
 
-  // eslint-disable-next-line no-console
-  console.debug("[trace:apply-shader-to-renderable] entry", {
-    representationKey: object.representationKey,
-    surfaceShader: object.effectiveShaders.surface?.shaderDefinitionId ?? null,
-    deformShader: object.effectiveShaders.deform?.shaderDefinitionId ?? null,
-    materialSlotCount: effectiveMaterialSlots.length,
-    materialSlots: effectiveMaterialSlots.map((slot) => ({
-      slotName: slot.slotName,
-      slotIndex: slot.slotIndex,
-      materialDefinitionId: slot.materialDefinitionId,
-      surfaceShader: slot.surface?.shaderDefinitionId ?? null
-    })),
-    renderableName: renderable.name || "(unnamed)",
-    renderableType: renderable.type
-  });
-
   renderable.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) {
       return;
@@ -127,10 +111,9 @@ export function applyShaderToRenderable(
       )?.surface ?? object.effectiveShaders.surface;
 
     const applyMaterial = (material: THREE.Material, slotIndex: number): THREE.Material => {
-      const surfaceBinding = resolveSurfaceBinding(material, slotIndex);
       const finalized = shaderRuntime.applyShaderSet(
         {
-          surface: surfaceBinding,
+          surface: resolveSurfaceBinding(material, slotIndex),
           deform: object.effectiveShaders.deform
         },
         {
@@ -139,18 +122,6 @@ export function applyShaderToRenderable(
           fileSources
         }
       ) as THREE.Material | undefined;
-
-      // eslint-disable-next-line no-console
-      console.debug("[trace:apply-material-to-mesh]", {
-        meshName: child.name || "(unnamed)",
-        meshUuid: child.uuid,
-        slotIndex,
-        slotMaterialName: material.name || "(unnamed)",
-        fromMaterialUuid: material.uuid,
-        toMaterialUuid: finalized?.uuid ?? null,
-        sameMaterial: finalized === material,
-        surfaceShader: surfaceBinding?.shaderDefinitionId ?? null
-      });
 
       if (!finalized) {
         return material;
@@ -191,10 +162,6 @@ export function ensureShaderSetAppliedToRenderable(
   fileSources: Record<string, string> = {}
 ) {
   if (!shaderRuntime) {
-    // eslint-disable-next-line no-console
-    console.debug("[trace:ensure-shader-applied] skip (no shader runtime)", {
-      representationKey: object.representationKey
-    });
     return;
   }
 
@@ -211,21 +178,8 @@ export function ensureShaderSetAppliedToRenderable(
     return;
   }
 
-  // eslint-disable-next-line no-console
-  console.debug("[trace:ensure-shader-applied] applying", {
-    representationKey: object.representationKey,
-    previousSignature: state.appliedShaderSignature,
-    nextSignature,
-    fileSourcesChanged: state.appliedFileSources !== fileSources
-  });
-
   const applied = applyShaderToRenderable(renderable, object, shaderRuntime, fileSources);
   if (!applied) {
-    // eslint-disable-next-line no-console
-    console.debug("[trace:ensure-shader-applied] apply returned false (no meshes yet)", {
-      representationKey: object.representationKey,
-      renderableType: renderable.type
-    });
     return;
   }
 

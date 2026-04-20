@@ -582,7 +582,6 @@ export function createWebRuntimeHost(
     host.resize(width, height);
   }
 
-  let frameTickCount = 0;
   function renderFrame(now: number) {
     if (
       !world ||
@@ -594,20 +593,6 @@ export function createWebRuntimeHost(
       !inputManager
     ) {
       return;
-    }
-
-    frameTickCount += 1;
-    if (frameTickCount <= 3 || frameTickCount % 60 === 0) {
-      let meshCount = 0;
-      scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) meshCount += 1;
-      });
-      console.debug("[trace:runtime-host] render-frame-tick", {
-        frame: frameTickCount,
-        hasShaderRuntime: Boolean(host.shaderRuntime),
-        sceneMeshCount: meshCount,
-        sceneChildCount: scene.children.length
-      });
     }
 
     const delta = Math.min((now - lastTime) / 1000, 0.1);
@@ -778,26 +763,11 @@ export function createWebRuntimeHost(
           : null;
 
         if (assetSourceUrl) {
-          console.debug("[trace:runtime-host] gltf load begin", {
-            instanceId: object.instanceId,
-            assetDefinitionId: object.assetDefinitionId,
-            url: assetSourceUrl
-          });
           void gltfLoader
             .loadAsync(assetSourceUrl)
             .then((gltf) => {
               if (!scene) return;
               const renderable = gltf.scene.clone(true);
-              let loadedMeshCount = 0;
-              renderable.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                  loadedMeshCount += 1;
-                }
-              });
-              console.debug("[trace:runtime-host] gltf load end", {
-                instanceId: object.instanceId,
-                meshCount: loadedMeshCount
-              });
               const validationError = validateRenderableAsset(object, renderable);
               if (validationError) {
                 console.error("[web-runtime] invalid-asset-payload", {
@@ -814,10 +784,6 @@ export function createWebRuntimeHost(
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
               host?.enableShadowsOnObject(renderable);
-              console.debug("[trace:runtime-host] post-load ensure-shader-applied", {
-                instanceId: object.instanceId,
-                shaderRuntimeAvailable: Boolean(host?.shaderRuntime)
-              });
               ensureShaderSetAppliedToRenderable(
                 renderable,
                 object,

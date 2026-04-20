@@ -112,34 +112,12 @@ interface ResolverOptions {
    *
    * Without this invalidation, Preview (which applies environment only
    * once at boot) ends up with materials whose compiled shaders keep
-   * sampling the original placeholder texture resource even after the
-   * real image is uploaded. The Editor accidentally worked because
-   * Studio pushes state many times, each of which marks every
-   * material dirty inside runPendingEnvironment.
+   * sampling an empty/stale GPU texture resource even after the real
+   * image is uploaded. The Editor accidentally worked because Studio
+   * pushes state many times, each of which marks every material dirty
+   * inside runPendingEnvironment.
    */
   onTextureUpdated?: (texture: THREE.Texture) => void;
-}
-
-function placeholderPixelForPacking(
-  packing: TextureDefinition["packing"]
-): [number, number, number, number] {
-  switch (packing) {
-    case "normal":
-      return [128, 128, 255, 255];
-    case "orm":
-      return [255, 255, 0, 255];
-    case "roughness":
-      return [255, 255, 255, 255];
-    case "metallic":
-      return [0, 0, 0, 255];
-    case "ao":
-      return [255, 255, 255, 255];
-    case "height":
-      return [0, 0, 0, 255];
-    case "rgba":
-    default:
-      return [255, 255, 255, 255];
-  }
 }
 
 function colorSpaceForDefinition(
@@ -148,38 +126,6 @@ function colorSpaceForDefinition(
   return definition.colorSpace === "srgb"
     ? THREE.SRGBColorSpace
     : THREE.LinearSRGBColorSpace;
-}
-
-function createPlaceholderTexture(
-  definition: TextureDefinition
-): THREE.Texture {
-  const pixel = placeholderPixelForPacking(definition.packing);
-  const colorSpace = colorSpaceForDefinition(definition);
-
-  if (typeof document === "undefined") {
-    const data = new THREE.DataTexture(
-      new Uint8Array(pixel),
-      1,
-      1,
-      THREE.RGBAFormat
-    );
-    data.needsUpdate = true;
-    data.colorSpace = colorSpace;
-    return data;
-  }
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  const context = canvas.getContext("2d");
-  if (context) {
-    context.fillStyle = `rgba(${pixel[0]}, ${pixel[1]}, ${pixel[2]}, ${pixel[3] / 255})`;
-    context.fillRect(0, 0, 1, 1);
-  }
-  const texture = new THREE.Texture(canvas);
-  texture.needsUpdate = true;
-  texture.colorSpace = colorSpace;
-  return texture;
 }
 
 function cacheKeyFor(
@@ -233,8 +179,8 @@ export function createAuthoredAssetResolver(
     resolvedUrl: string
   ): void {
     if (typeof document === "undefined") {
-      // SSR / test env — keep the placeholder data texture; nothing to
-      // load from a URL since we have no DOM ImageLoader.
+      // SSR / test env — no DOM ImageLoader; rendering never happens,
+      // so the texture sitting without an image is harmless.
       return;
     }
 
@@ -245,100 +191,50 @@ export function createAuthoredAssetResolver(
       url: resolvedUrl
     });
 
-    // Re-fetch the URL's bytes and mint a blob URL in THIS window's
-    // context before handing it to the ImageLoader. This matters in
-    // the Preview window: Studio creates blob URLs in its own window's
-    // blob store and passes them through postMessage. Chrome allows
-    // cross-window ImageLoader reads of these URLs (decode succeeds),
-    // but the resulting HTMLImageElement is flagged as cross-window
-    // for `copyExternalImageToTexture` purposes — the GPU upload
-    // silently does nothing, and the compiled shader keeps sampling
-    // the 1x1 placeholder. Fetching + re-creating the URL in the
-    // current window produces a locally-sourced image that Chrome
-    // treats as same-window for GPU upload.
-    //
-    // In Studio this is a no-op hop (fetch the same-window URL, mint
-    // a new same-window URL); harmless.
-    void (async () => {
-      let localUrl: string | null = null;
-      try {
-        const response = await fetch(resolvedUrl);
-        if (!response.ok) {
-          throw new Error(`fetch ${resolvedUrl} → ${response.status}`);
-        }
-        const blob = await response.blob();
-        localUrl = URL.createObjectURL(blob);
-      } catch (fetchError) {
-        entry.loadInFlight = false;
-        warnLog(logger, "texture refetch failed", {
-          definitionId: entry.definitionId,
-          relativeAssetPath: entry.relativeAssetPath,
-          url: resolvedUrl,
-          error:
-            fetchError instanceof Error
-              ? { name: fetchError.name, message: fetchError.message }
-              : { value: String(fetchError) }
-        });
-        return;
-      }
-
-      const imageLoader = new THREE.ImageLoader();
-      imageLoader.load(
-        localUrl,
-        (image) => {
+    const imageLoader = new THREE.ImageLoader();
+    imageLoader.load(
+      resolvedUrl,
+      (image) => {
         entry.loadInFlight = false;
         // The entry might have been disposed while we were loading.
         if (!cache.has(entry.cacheKey)) {
           return;
         }
-          // Dispose the texture BEFORE swapping the image. This fires
-          // Three's internal dispose event which tells the WebGPU
-          // backend to release the 1x1 GPU resource it allocated for
-          // the canvas placeholder. Without this, Three keeps the
-          // GPU texture sized to the placeholder; setting `image` and
-          // `needsUpdate` uploads new pixel data but the destination
-          // GPU texture stays 1x1, so the bind group samples a single
-          // placeholder pixel forever. `dispose()` only releases GPU
-          // state — the Three.Texture JS object and its identity
-          // (uuid, source uuid) are preserved, so downstream material
-          // bind groups still reference the same Three.Texture. On
-          // next render, `needsUpdate: true` causes Three to allocate
-          // a fresh GPU texture sized to the real image.
-          entry.texture.dispose();
-          entry.texture.image = image;
-          entry.texture.colorSpace = entry.colorSpace;
-          entry.texture.needsUpdate = true;
-          debugLog(logger, "texture load completed", {
-            definitionId: entry.definitionId,
-            cacheKey: entry.cacheKey,
-            url: resolvedUrl,
-            imageWidth: (image as { width?: number }).width ?? null,
-            imageHeight: (image as { height?: number }).height ?? null,
-            textureUuid: entry.texture.uuid
-          });
-          onTextureUpdated?.(entry.texture);
-          if (localUrl) {
-            URL.revokeObjectURL(localUrl);
-          }
-        },
-        undefined,
-        (error) => {
-          entry.loadInFlight = false;
-          warnLog(logger, "texture load failed", {
-            definitionId: entry.definitionId,
-            relativeAssetPath: entry.relativeAssetPath,
-            url: resolvedUrl,
-            error:
-              error instanceof Error
-                ? { name: error.name, message: error.message }
-                : { value: String(error) }
-          });
-          if (localUrl) {
-            URL.revokeObjectURL(localUrl);
-          }
-        }
-      );
-    })();
+        // Dispose the texture before swapping its image. This tells
+        // Three's WebGPU backend to release any GPU resource already
+        // allocated for this texture (which, if the backend
+        // auto-allocated a fallback at material-compile time, would
+        // be locked at a default size). After `needsUpdate = true`
+        // on the next render, Three allocates a fresh GPU texture
+        // sized to the real image. `dispose()` only touches GPU
+        // state — the Three.Texture JS object and its identity
+        // (uuid, source uuid) are preserved, so downstream material
+        // bind groups still reference the same Three.Texture.
+        entry.texture.dispose();
+        entry.texture.image = image;
+        entry.texture.colorSpace = entry.colorSpace;
+        entry.texture.needsUpdate = true;
+        debugLog(logger, "texture load completed", {
+          definitionId: entry.definitionId,
+          cacheKey: entry.cacheKey,
+          url: resolvedUrl
+        });
+        onTextureUpdated?.(entry.texture);
+      },
+      undefined,
+      (error) => {
+        entry.loadInFlight = false;
+        warnLog(logger, "texture load failed", {
+          definitionId: entry.definitionId,
+          relativeAssetPath: entry.relativeAssetPath,
+          url: resolvedUrl,
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : { value: String(error) }
+        });
+      }
+    );
   }
 
   function maybeReloadForUrlChange(
@@ -349,9 +245,9 @@ export function createAuthoredAssetResolver(
       return;
     }
     if (!resolvedUrl) {
-      // Previously had a URL, now do not — keep the placeholder / last
-      // loaded bytes visible and warn; the caller's sync pushed an
-      // assetSources map without this path in it.
+      // Previously had a URL, now do not — keep the last loaded bytes
+      // visible and warn; the caller's sync pushed an assetSources
+      // map without this path in it.
       warnLog(logger, "texture source url dropped after load", {
         definitionId: entry.definitionId,
         relativeAssetPath: entry.relativeAssetPath,
@@ -398,14 +294,22 @@ export function createAuthoredAssetResolver(
         return existing.texture;
       }
 
-      const texture = createPlaceholderTexture(definition);
+      // Create a bare Three.Texture with no image yet. The material
+      // graph compiles against this identity; the image arrives later
+      // via loadTextureBytes. We intentionally do NOT pre-populate a
+      // small placeholder image: a 1x1 canvas/data source locks the
+      // GPU texture to 1x1 in Three's WebGPU backend, and a later
+      // image swap won't resize it. Starting empty + disposing on
+      // swap gives Three a clean slate to size the GPU resource
+      // against the real image.
+      const texture = new THREE.Texture();
+      texture.colorSpace = colorSpaceForDefinition(definition);
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(
         textureOptions?.repeatX ?? 1,
         textureOptions?.repeatY ?? 1
       );
-      texture.needsUpdate = true;
 
       const entry: CachedTextureEntry = {
         definitionId: definition.definitionId,

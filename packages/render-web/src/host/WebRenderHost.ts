@@ -201,32 +201,20 @@ export function createWebRenderHost(options: WebRenderHostOptions): WebRenderHos
   // texture load, which is cheap and rare.
   const assetResolver = createAuthoredAssetResolver({
     logger,
-    onTextureUpdated: (texture) => {
-      let meshCount = 0;
-      let materialCount = 0;
+    onTextureUpdated: () => {
       scene.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) {
           return;
         }
-        meshCount += 1;
         if (Array.isArray(child.material)) {
           for (const material of child.material) {
             material.needsUpdate = true;
-            materialCount += 1;
           }
           return;
         }
         if (child.material) {
           child.material.needsUpdate = true;
-          materialCount += 1;
         }
-      });
-      // eslint-disable-next-line no-console
-      console.debug("[web-render-host] texture-updated invalidate-materials", {
-        textureUuid: texture.uuid,
-        meshCount,
-        materialCount,
-        sceneChildCount: scene.children.length
       });
     }
   });

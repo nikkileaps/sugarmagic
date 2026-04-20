@@ -1097,48 +1097,6 @@ function applyIRToMaterial(
     effectNodes: effectNodes
   };
 
-  // Diagnostic: emits one line per applyIRToMaterial call so Editor vs
-  // Preview side-by-side comparison can show which outputs the graph
-  // produced and which textures are visible to the shader at compile
-  // time. Filter on [shader-runtime:apply] in DevTools to see this.
-  // eslint-disable-next-line no-console
-  console.debug("[shader-runtime:apply]", {
-    shaderDefinitionId: ir.shaderDefinitionId,
-    targetKind: ir.targetKind,
-    outputs: {
-      fragmentColor: Boolean(ir.outputs.fragmentColor),
-      fragmentAlpha: Boolean(ir.outputs.fragmentAlpha),
-      fragmentNormal: Boolean(ir.outputs.fragmentNormal),
-      fragmentRoughness: Boolean(ir.outputs.fragmentRoughness),
-      fragmentMetalness: Boolean(ir.outputs.fragmentMetalness),
-      fragmentAo: Boolean(ir.outputs.fragmentAo)
-    },
-    textureBindings: Object.fromEntries(
-      Object.entries(binding.textureBindings).map(([paramId, defId]) => [
-        paramId,
-        defId
-      ])
-    ),
-    materialTextures:
-      "materialTextures" in target && target.materialTextures
-        ? Object.fromEntries(
-            Object.entries(target.materialTextures).map(([paramId, texture]) => [
-              paramId,
-              texture
-                ? {
-                    hasImage: Boolean(texture.image),
-                    imageWidth:
-                      (texture.image as { width?: number } | null)?.width ?? null,
-                    imageHeight:
-                      (texture.image as { height?: number } | null)?.height ?? null,
-                    uuid: texture.uuid
-                  }
-                : null
-            ])
-          )
-        : null
-  });
-
   if (ir.outputs.vertex) {
     (material as MeshStandardNodeMaterial | MeshBasicNodeMaterial).positionNode =
       materializeValue(ir.outputs.vertex, context) as never;
@@ -1508,30 +1466,6 @@ export class ShaderRuntime {
 
     const surfaceTextures = this.resolveTextureBindings(surface, target.fileSources);
     const deformTextures = this.resolveTextureBindings(deform, target.fileSources);
-
-    // eslint-disable-next-line no-console
-    console.debug("[trace:apply-shader-set] entry", {
-      surfaceShader: surface?.shaderDefinitionId ?? null,
-      deformShader: deform?.shaderDefinitionId ?? null,
-      surfaceTextureBindings: Object.fromEntries(
-        Object.entries(surface?.textureBindings ?? {})
-      ),
-      surfaceTextureState: Object.fromEntries(
-        Object.entries(surfaceTextures).map(([paramId, texture]) => [
-          paramId,
-          texture
-            ? {
-                uuid: texture.uuid,
-                imageWidth: (texture.image as { width?: number } | null)?.width ?? null,
-                imageHeight:
-                  (texture.image as { height?: number } | null)?.height ?? null
-              }
-            : null
-        ])
-      ),
-      carrierMaterialUuid: target.material.uuid,
-      carrierMaterialType: target.material.type
-    });
     const cacheKey = [
       "shader-set",
       surface?.shaderDefinitionId ?? "no-surface",
@@ -1547,14 +1481,6 @@ export class ShaderRuntime {
       this.compileProfile,
       materialCarrierSignature(target.material, target.geometry)
     ].join("|");
-
-    const cached = this.materialCache.get(cacheKey);
-    // eslint-disable-next-line no-console
-    console.debug("[trace:apply-shader-set] cache", {
-      cacheKey,
-      cacheHit: Boolean(cached),
-      cachedMaterialUuid: cached?.material.uuid ?? null
-    });
 
     return this.acquireMaterial(cacheKey, surface?.shaderDefinitionId ?? deform!.shaderDefinitionId, () => {
       let material = toMeshStandardNodeMaterial(target.material);
