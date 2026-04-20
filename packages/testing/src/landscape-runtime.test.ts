@@ -162,7 +162,8 @@ describe("landscape runtime controller", () => {
       displayName: "Grass",
       mode: "material",
       color: 0x5c8a5a,
-      materialDefinitionId: "wordlark:material:grass"
+      materialDefinitionId: "wordlark:material:grass",
+      tilingScale: null
     });
 
     const result = controller.apply(region, contentLibrary, {
@@ -189,5 +190,75 @@ describe("landscape runtime controller", () => {
     expect(material.aoNode).toBeTruthy();
 
     controller.dispose();
+  });
+
+  it("defaults tilingScale to null on freshly-created channels", async () => {
+    const { createRegionLandscapeChannelDefinition } = await import(
+      "@sugarmagic/domain"
+    );
+    const channel = createRegionLandscapeChannelDefinition({
+      displayName: "Brick",
+      mode: "material",
+      materialDefinitionId: "wordlark:material:brick"
+    });
+    expect(channel.tilingScale).toBeNull();
+  });
+
+  it("preserves explicit tilingScale passed to the factory", async () => {
+    const { createRegionLandscapeChannelDefinition } = await import(
+      "@sugarmagic/domain"
+    );
+    const channel = createRegionLandscapeChannelDefinition({
+      mode: "material",
+      materialDefinitionId: "wordlark:material:brick",
+      tilingScale: [8, 4]
+    });
+    expect(channel.tilingScale).toEqual([8, 4]);
+  });
+
+  it("normalizes legacy persisted channels missing tilingScale", async () => {
+    const { normalizeRegionDocumentForLoad, createEmptyContentLibrarySnapshot } =
+      await import("@sugarmagic/domain");
+    const contentLibrary = createEmptyContentLibrarySnapshot("wordlark");
+    const legacyRegion = {
+      identity: { id: "region-legacy", schema: "RegionDocument", version: 1 },
+      displayName: "Legacy",
+      placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
+      scene: {
+        folders: [],
+        playerPresence: null,
+        npcPresences: [],
+        itemPresences: [],
+        placedAssets: []
+      },
+      environmentBinding: { defaultEnvironmentId: null },
+      areas: [],
+      behaviors: [],
+      markers: [],
+      gameplayPlacements: [],
+      landscape: {
+        enabled: true,
+        size: 64,
+        subdivisions: 64,
+        paintPayload: null,
+        channels: [
+          {
+            channelId: "landscape-legacy-channel",
+            displayName: "Dirt",
+            mode: "material",
+            color: 0x7a2018,
+            materialDefinitionId: "wordlark:material:dirt"
+            // NOTE: no tilingScale — simulates a saved-project shape
+            // from before this field existed.
+          }
+        ]
+      }
+    } as never;
+    const normalized = normalizeRegionDocumentForLoad(legacyRegion, contentLibrary);
+    const channel = normalized.landscape.channels.find(
+      (c) => c.channelId === "landscape-legacy-channel"
+    );
+    expect(channel).toBeTruthy();
+    expect(channel?.tilingScale).toBeNull();
   });
 });

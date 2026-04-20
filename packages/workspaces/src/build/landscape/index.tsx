@@ -654,34 +654,116 @@ export function useLandscapeWorkspaceView(
                     }}
                   />
                   {activeChannel.mode === "material" ? (
-                    <MaterialDefinitionSelect
-                      label="Material"
-                      materials={materialDefinitions}
-                      value={activeChannel.materialDefinitionId}
-                      onChange={(materialDefinitionId) => {
-                        if (!region) return;
-                        onCommand({
-                          kind: "UpdateLandscapeChannel",
-                          target: {
-                            aggregateKind: "region-document",
-                            aggregateId: region.identity.id
-                          },
-                          subject: {
-                            subjectKind: "region-landscape",
-                            subjectId: region.identity.id
-                          },
-                          payload: {
-                            channelId: activeChannel.channelId,
-                            materialDefinitionId
-                          }
-                        });
-                      }}
-                      description={
-                        materialDefinitions.length === 0
-                          ? "Import or create a material in the Material Library first."
-                          : "Bind a reusable project material to this channel."
-                      }
-                    />
+                    <>
+                      <MaterialDefinitionSelect
+                        label="Material"
+                        materials={materialDefinitions}
+                        value={activeChannel.materialDefinitionId}
+                        onChange={(materialDefinitionId) => {
+                          if (!region) return;
+                          onCommand({
+                            kind: "UpdateLandscapeChannel",
+                            target: {
+                              aggregateKind: "region-document",
+                              aggregateId: region.identity.id
+                            },
+                            subject: {
+                              subjectKind: "region-landscape",
+                              subjectId: region.identity.id
+                            },
+                            payload: {
+                              channelId: activeChannel.channelId,
+                              materialDefinitionId
+                            }
+                          });
+                        }}
+                        description={
+                          materialDefinitions.length === 0
+                            ? "Import or create a material in the Material Library first."
+                            : "Bind a reusable project material to this channel."
+                        }
+                      />
+                      <Stack gap="xs">
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          Tiling (this channel)
+                        </Text>
+                        <Group gap="xs" grow>
+                          <NumberInput
+                            label="X"
+                            size="xs"
+                            min={0.01}
+                            step={0.5}
+                            decimalScale={2}
+                            value={activeChannel.tilingScale?.[0] ?? 1}
+                            onChange={(value) => {
+                              if (!region) return;
+                              const nextX =
+                                typeof value === "number" && Number.isFinite(value) && value > 0
+                                  ? value
+                                  : 1;
+                              const nextY = activeChannel.tilingScale?.[1] ?? 1;
+                              onCommand({
+                                kind: "UpdateLandscapeChannel",
+                                target: {
+                                  aggregateKind: "region-document",
+                                  aggregateId: region.identity.id
+                                },
+                                subject: {
+                                  subjectKind: "region-landscape",
+                                  subjectId: region.identity.id
+                                },
+                                payload: {
+                                  channelId: activeChannel.channelId,
+                                  tilingScale:
+                                    nextX === 1 && nextY === 1
+                                      ? null
+                                      : [nextX, nextY]
+                                }
+                              });
+                            }}
+                          />
+                          <NumberInput
+                            label="Y"
+                            size="xs"
+                            min={0.01}
+                            step={0.5}
+                            decimalScale={2}
+                            value={activeChannel.tilingScale?.[1] ?? 1}
+                            onChange={(value) => {
+                              if (!region) return;
+                              const nextX = activeChannel.tilingScale?.[0] ?? 1;
+                              const nextY =
+                                typeof value === "number" && Number.isFinite(value) && value > 0
+                                  ? value
+                                  : 1;
+                              onCommand({
+                                kind: "UpdateLandscapeChannel",
+                                target: {
+                                  aggregateKind: "region-document",
+                                  aggregateId: region.identity.id
+                                },
+                                subject: {
+                                  subjectKind: "region-landscape",
+                                  subjectId: region.identity.id
+                                },
+                                payload: {
+                                  channelId: activeChannel.channelId,
+                                  tilingScale:
+                                    nextX === 1 && nextY === 1
+                                      ? null
+                                      : [nextX, nextY]
+                                }
+                              });
+                            }}
+                          />
+                        </Group>
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          Multiplies the Material's own tiling when it's applied to this
+                          landscape channel. Higher = smaller pattern (more repeats across
+                          the landscape).
+                        </Text>
+                      </Stack>
+                    </>
                   ) : (
                     <Text size="xs" c="var(--sm-color-overlay0)">
                       Color mode uses the authored channel swatch directly.

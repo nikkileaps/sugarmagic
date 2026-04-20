@@ -331,8 +331,12 @@ export class RuntimeLandscapeMesh {
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
       const channel = channels[index] ?? null;
       const color = this.channelColors[index]?.getHex() ?? 0;
+      const tilingScale = channel?.tilingScale;
+      const tilingPart = tilingScale
+        ? `${tilingScale[0]},${tilingScale[1]}`
+        : "1,1";
       parts.push(
-        `${channel?.mode ?? "color"}:${channel?.materialDefinitionId ?? ""}:${color.toString(16)}`
+        `${channel?.mode ?? "color"}:${channel?.materialDefinitionId ?? ""}:${color.toString(16)}:${tilingPart}`
       );
     }
     parts.push(contentLibrary?.identity.id ?? "no-library");
@@ -402,10 +406,25 @@ export class RuntimeLandscapeMesh {
       const color = this.channelColors[index]!;
       const channel = landscape?.channels[index] ?? null;
       const weight = weights[index]!;
+      // Per-channel tiling: multiply the landscape world-UV by the
+      // channel's tilingScale (when set) BEFORE it enters the Material's
+      // shader graph. The graph's own `tiling` parameter then multiplies
+      // on top. Effective repeat across the landscape = channel.tilingScale
+      // × material.tiling. Channels without an override (or non-material
+      // mode) pass the raw worldUv through.
+      const tilingScale =
+        channel?.mode === "material" && channel.tilingScale
+          ? channel.tilingScale
+          : null;
+      const channelUv = tilingScale
+        ? (worldUv as ReturnType<typeof vec2>).mul(
+            vec2(tilingScale[0], tilingScale[1])
+          )
+        : worldUv;
       const nodeSet = this.surfaceNodesForChannel(
         channel,
         color,
-        worldUv,
+        channelUv,
         contentLibrary
       );
 

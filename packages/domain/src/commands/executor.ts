@@ -1055,7 +1055,10 @@ function updateLandscapeChannel(
       : { color: command.payload.color }),
     ...(command.payload.materialDefinitionId === undefined
       ? {}
-      : { materialDefinitionId: command.payload.materialDefinitionId })
+      : { materialDefinitionId: command.payload.materialDefinitionId }),
+    ...(command.payload.tilingScale === undefined
+      ? {}
+      : { tilingScale: command.payload.tilingScale })
   };
 }
 
