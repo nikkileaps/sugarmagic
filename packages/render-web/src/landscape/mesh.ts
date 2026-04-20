@@ -243,29 +243,11 @@ export class RuntimeLandscapeMesh {
           )
         : null;
 
-    // eslint-disable-next-line no-console
-    console.debug("[landscape-trace] surfaceNodesForChannel", {
-      channelId: channel?.channelId ?? null,
-      mode: channel?.mode ?? "(no channel)",
-      materialDefinitionId: channel?.materialDefinitionId ?? null,
-      shaderRuntimeAvailable: Boolean(shaderRuntime),
-      bindingResolved: Boolean(binding),
-      bindingShaderId: binding?.shaderDefinitionId ?? null
-    });
-
     if (shaderRuntime && binding) {
       const evaluated = shaderRuntime.evaluateMeshSurfaceBinding(binding, {
         geometry: this.geometry,
         carrierMaterial: this.carrierForEvaluation,
         uvOverride: worldUv
-      });
-      // eslint-disable-next-line no-console
-      console.debug("[landscape-trace] evaluateMeshSurfaceBinding result", {
-        channelId: channel?.channelId ?? null,
-        evaluated: Boolean(evaluated),
-        hasColorNode: Boolean(evaluated?.colorNode),
-        hasNormalNode: Boolean(evaluated?.normalNode),
-        hasRoughnessNode: Boolean(evaluated?.roughnessNode)
       });
       if (evaluated) {
         return this.fillSurfaceNodeDefaults(evaluated, channelColor, binding);
@@ -350,13 +332,6 @@ export class RuntimeLandscapeMesh {
     landscape: RegionLandscapeState | null = null
   ): void {
     const signature = this.computeMaterialSignature(landscape, contentLibrary);
-    // eslint-disable-next-line no-console
-    console.debug("[landscape-trace] rebuildMaterialNodes entry", {
-      signature,
-      lastSignature: this.lastMaterialSignature,
-      signatureChanged: signature !== this.lastMaterialSignature,
-      shaderRuntimeAvailable: Boolean(this.getShaderRuntime())
-    });
     if (signature === this.lastMaterialSignature) {
       // Nothing material-relevant changed (e.g. paint stroke only
       // mutated the splatmap). The existing compiled shader continues

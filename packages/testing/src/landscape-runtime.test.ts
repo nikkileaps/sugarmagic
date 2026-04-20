@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
@@ -9,7 +9,11 @@ import {
 import {
   resolveLandscapeDescriptor
 } from "@sugarmagic/runtime-core";
-import { createLandscapeSceneController } from "@sugarmagic/render-web";
+import {
+  createAuthoredAssetResolver,
+  createLandscapeSceneController,
+  ShaderRuntime
+} from "@sugarmagic/render-web";
 
 function makeRegion(enabled = true): RegionDocument {
   return {
@@ -153,8 +157,25 @@ describe("landscape runtime controller", () => {
 
   it("realizes material-mode landscape channels through the shared render-web mesh", () => {
     const scene = new THREE.Scene();
-    const controller = createLandscapeSceneController(scene);
     const contentLibrary = makeLandscapeMaterialLibrary();
+    const assetResolver = createAuthoredAssetResolver();
+    const fileSources = {
+      "assets/textures/grass-base.png": "blob:grass-base",
+      "assets/textures/grass-normal.png": "blob:grass-normal",
+      "assets/textures/grass-orm.png": "blob:grass-orm"
+    };
+    assetResolver.sync(contentLibrary, fileSources);
+    const shaderRuntime = new ShaderRuntime({
+      contentLibrary,
+      compileProfile: "authoring-preview",
+      assetResolver
+    });
+    const evaluateSurfaceBindingSpy = vi.spyOn(shaderRuntime, "evaluateMeshSurfaceBinding");
+    const controller = createLandscapeSceneController(
+      scene,
+      assetResolver,
+      () => shaderRuntime
+    );
     const region = makeRegion(true);
 
     region.landscape.channels.push({
@@ -166,13 +187,15 @@ describe("landscape runtime controller", () => {
       tilingScale: null
     });
 
-    const result = controller.apply(region, contentLibrary, {
-      "assets/textures/grass-base.png": "blob:grass-base",
-      "assets/textures/grass-normal.png": "blob:grass-normal",
-      "assets/textures/grass-orm.png": "blob:grass-orm"
-    });
+    const result = controller.apply(region, contentLibrary, fileSources);
 
     expect(result.descriptor?.enabled).toBe(true);
+    expect(evaluateSurfaceBindingSpy).toHaveBeenCalledTimes(1);
+    expect(evaluateSurfaceBindingSpy.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        shaderDefinitionId: "wordlark:shader:standard-pbr"
+      })
+    );
     const landscapeMesh = controller.root.children[0] as THREE.Mesh | undefined;
     expect(landscapeMesh).toBeTruthy();
 
@@ -189,6 +212,7 @@ describe("landscape runtime controller", () => {
     expect(material.metalnessNode).toBeTruthy();
     expect(material.aoNode).toBeTruthy();
 
+    shaderRuntime.dispose();
     controller.dispose();
   });
 

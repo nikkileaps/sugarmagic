@@ -29,7 +29,6 @@ import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
-  DEFAULT_REGION_LANDSCAPE_SIZE,
   type ContentLibrarySnapshot,
   type DocumentDefinition,
   type DialogueDefinition,
@@ -39,8 +38,7 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type SpellDefinition,
-  type RegionDocument,
-  type RegionLandscapeState
+  type RegionDocument
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
@@ -51,7 +49,6 @@ import {
   createFallbackMesh,
   createRenderableShaderApplicationState,
   createWebRenderHost,
-  createLandscapeSceneController,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
   normalizeModelScale,
@@ -80,7 +77,6 @@ import {
   createRuntimeEnvironmentState,
   createPlayerVisualController,
   spawnRuntimePlayerEntity,
-  resolveEnvironmentWithPostProcessChain,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,

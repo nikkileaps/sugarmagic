@@ -110,18 +110,6 @@ export function createLandscapeSceneController(
     contentLibrary: ContentLibrarySnapshot | null = null,
     fileSources: Record<string, string> = {}
   ): LandscapeSceneApplyResult {
-    // eslint-disable-next-line no-console
-    console.debug("[landscape-trace] applyLandscape called", {
-      enabled: landscape?.enabled,
-      channels: (landscape?.channels ?? []).map((channel) => ({
-        channelId: channel.channelId,
-        mode: channel.mode,
-        materialDefinitionId: channel.materialDefinitionId ?? null
-      })),
-      hasContentLibrary: Boolean(contentLibrary),
-      hasCurrentMesh: Boolean(currentLandscapeMesh)
-    });
-
     const descriptor = resolveLandscapeDescriptorFromState(landscape);
     const warnings: LandscapeSceneWarning[] = [];
     currentContentLibrary = contentLibrary;
