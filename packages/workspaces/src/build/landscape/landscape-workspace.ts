@@ -266,9 +266,12 @@ export function createLandscapeWorkspace(
         attachedOverlayRoot = null;
       }
       brushCursor.visible = false;
-      if (canonicalLandscape) {
-        config.previewLandscape(cloneLandscape(canonicalLandscape));
-      }
+      // Do NOT write `canonicalLandscape` back through previewLandscape on
+      // detach. Under the Epic 033 store model, previewLandscape writes to
+      // viewportStore.landscapeDraft — leaving a stale clone here would
+      // shadow the real region.landscape in the React view every time the
+      // overlay detaches (workspace switch), hiding subsequent canonical
+      // updates like CreateLandscapeChannel. Detach is purely teardown.
       strokeBounds = null;
       lastStrokePoint = null;
     },

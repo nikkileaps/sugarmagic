@@ -1,4 +1,9 @@
 export {
+  createLayoutCameraController,
+  type LayoutCameraController
+} from "./layout-camera-controller";
+
+export {
   createLayoutWorkspace,
   type LayoutWorkspaceConfig,
   type LayoutWorkspaceInstance
@@ -17,3 +22,8 @@ export {
   useLayoutWorkspaceView,
   type LayoutWorkspaceViewProps
 } from "./LayoutWorkspaceView";
+
+export {
+  getLayoutWorkspaceForViewport,
+  setLayoutWorkspaceForViewport
+} from "./layout-interaction-access";

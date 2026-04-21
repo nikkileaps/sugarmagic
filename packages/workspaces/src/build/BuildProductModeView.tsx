@@ -33,12 +33,11 @@ import {
   type BuildWorkspaceKindItem,
   type BuildContextSelector
 } from "@sugarmagic/ui";
-import type { BuildWorkspaceKind } from "@sugarmagic/shell";
+import type { BuildWorkspaceKind, ViewportStore } from "@sugarmagic/shell";
 import type {
   WorkspaceNavigationTarget,
   WorkspaceViewContribution
 } from "../workspace-view";
-import type { WorkspaceViewport } from "../viewport";
 import { applyLightingPresetTemplate } from "@sugarmagic/runtime-core";
 import { useLayoutWorkspaceView } from "./layout/LayoutWorkspaceView";
 import { useLandscapeWorkspaceView } from "./landscape";
@@ -60,7 +59,6 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
 
 export interface BuildProductModeViewProps {
   activeBuildKind: BuildWorkspaceKind;
-  viewportReadyVersion: number;
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   selectedIds: string[];
@@ -73,8 +71,8 @@ export interface BuildProductModeViewProps {
   shaderDefinitions: ShaderGraphDocument[];
   npcDefinitions: NPCDefinition[];
   questDefinitions: QuestDefinition[];
-  getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
+  viewportStore: ViewportStore;
   regions: { id: string; displayName: string }[];
   onSelectKind: (kind: BuildWorkspaceKind) => void;
   onSelectRegion: (regionId: string) => void;
@@ -138,7 +136,6 @@ export function useBuildProductModeView(
 ): BuildProductModeViewResult {
   const {
     activeBuildKind,
-    viewportReadyVersion,
     activeRegionId,
     activeEnvironmentId,
     selectedIds,
@@ -151,8 +148,8 @@ export function useBuildProductModeView(
     shaderDefinitions,
     npcDefinitions,
     questDefinitions,
-    getViewport,
     getViewportElement,
+    viewportStore,
     regions,
     onSelectKind,
     onSelectRegion,
@@ -211,13 +208,11 @@ export function useBuildProductModeView(
 
   const layoutView = useLayoutWorkspaceView({
     isActive: activeBuildKind === "layout",
-    viewportReadyVersion,
-    getViewport: activeBuildKind === "layout" ? getViewport : () => null,
     getViewportElement: activeBuildKind === "layout" ? getViewportElement : () => null,
+    viewportStore,
     selectedIds,
     onSelect,
     onCommand,
-    getSelectedId: () => selectedIds[0] ?? null,
     getRegion: () => (session ? getActiveRegion(session) : null),
     assetDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
@@ -363,10 +358,7 @@ export function useBuildProductModeView(
 
   const landscapeView = useLandscapeWorkspaceView({
     isActive: activeBuildKind === "landscape",
-    viewportReadyVersion,
-    getViewport: activeBuildKind === "landscape" ? getViewport : () => null,
-    getViewportElement:
-      activeBuildKind === "landscape" ? getViewportElement : () => null,
+    viewportStore,
     materialDefinitions,
     region: activeRegion,
     onCommand
@@ -374,10 +366,11 @@ export function useBuildProductModeView(
 
   const spatialView = useSpatialWorkspaceView({
     isActive: activeBuildKind === "spatial",
-    viewportReadyVersion,
-    getViewport: activeBuildKind === "spatial" ? getViewport : () => null,
     getViewportElement:
       activeBuildKind === "spatial" ? getViewportElement : () => null,
+    viewportStore,
+    selectedIds,
+    onSelect,
     region: activeRegion,
     onCommand
   });

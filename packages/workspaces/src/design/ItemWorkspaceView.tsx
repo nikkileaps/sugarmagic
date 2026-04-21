@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -16,33 +16,33 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
-  ContentLibrarySnapshot,
   DocumentDefinition,
   ItemCategory,
   ItemDefinition,
   ItemViewKind,
   SemanticCommand
 } from "@sugarmagic/domain";
+import type {
+  DesignPreviewState,
+  DesignPreviewStore
+} from "@sugarmagic/shell";
 import { createDefaultItemDefinition } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import type { ItemWorkspaceViewport } from "../viewport";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
-import { createItemCameraController } from "./item-camera-controller";
+import { useVanillaStoreSelector } from "../use-vanilla-store";
 
 export interface ItemWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
   gameProjectId: string | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
-  contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
-  assetSources: Record<string, string>;
-  getViewport: () => ItemWorkspaceViewport | null;
-  getViewportElement: () => HTMLElement | null;
+  designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
 }
+
+const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
 
 function toAssetOptions(assetDefinitions: AssetDefinition[]) {
   return assetDefinitions.map((definition) => ({
@@ -77,15 +77,11 @@ export function useItemWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     isActive,
-    viewportReadyVersion,
     gameProjectId,
     itemDefinitions,
     documentDefinitions,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand
   } = props;
 
@@ -98,16 +94,11 @@ export function useItemWorkspaceView(
     y: number;
     definitionId: string;
   } | null>(null);
-  const [cameraQuaternion, setCameraQuaternion] =
-    useState<[number, number, number, number]>([0, 0, 0, 1]);
-  const cameraControllerRef = useRef(createItemCameraController());
-  const getViewportRef = useRef(getViewport);
-  const getViewportElementRef = useRef(getViewportElement);
-
-  useEffect(() => {
-    getViewportRef.current = getViewport;
-    getViewportElementRef.current = getViewportElement;
-  }, [getViewport, getViewportElement]);
+  const cameraQuaternion = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) =>
+      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
+  );
 
   const effectiveSelectedItemId = useMemo(() => {
     if (itemDefinitions.length === 0) return null;
@@ -127,6 +118,14 @@ export function useItemWorkspaceView(
       ) ?? null,
     [effectiveSelectedItemId, itemDefinitions]
   );
+
+  useEffect(() => {
+    if (!isActive || !selectedItem) return;
+    designPreviewStore.getState().beginPreview(selectedItem.definitionId);
+    return () => {
+      designPreviewStore.getState().endPreview();
+    };
+  }, [designPreviewStore, isActive, selectedItem]);
 
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -206,60 +205,6 @@ export function useItemWorkspaceView(
       setSelectedItemId(remaining[0]?.definitionId ?? null);
     }
   }
-
-  useEffect(() => {
-    if (!isActive || !selectedItem) return;
-
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement) return;
-
-    const targetY = Math.max(selectedItem.presentation.modelHeight * 0.5, 0.2);
-    const cameraController = cameraControllerRef.current;
-    cameraController.attach(
-      viewport.camera,
-      viewportElement,
-      viewport.subscribeFrame,
-      targetY
-    );
-
-    return () => {
-      cameraController.detach();
-    };
-  }, [isActive, viewportReadyVersion, selectedItem]);
-
-  useEffect(() => {
-    if (!isActive || !selectedItem) return;
-    cameraControllerRef.current.updateTarget(
-      Math.max(selectedItem.presentation.modelHeight * 0.5, 0.2)
-    );
-  }, [isActive, selectedItem]);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
-
-  useEffect(() => {
-    if (!isActive || !selectedItem || !contentLibrary) return;
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    viewport.updateFromItem({
-      itemDefinition: selectedItem,
-      contentLibrary,
-      assetSources
-    });
-  }, [assetSources, contentLibrary, isActive, selectedItem]);
 
   return {
     leftPanel: (

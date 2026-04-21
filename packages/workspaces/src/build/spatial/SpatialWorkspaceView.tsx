@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+/**
+ * SpatialWorkspaceView: the React view for Build > Spatial.
+ *
+ * Owns the authored-area list, inspector, and tool chrome. Spatial visuals,
+ * hit testing, and draw interactions live in the Studio viewport overlay layer
+ * and are accessed through a narrow registry seam.
+ */
+
+import { useEffect, useMemo, useCallback } from "react";
 import {
   ActionIcon,
   Button,
@@ -16,7 +24,6 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
-  createRegionAreaBounds,
   createRegionAreaDefinition,
   createRegionAreaId
 } from "@sugarmagic/domain";
@@ -26,12 +33,11 @@ import {
   ViewportToolbar,
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
+import type { ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
-import type { WorkspaceViewport } from "../../viewport";
+import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
-import { createSpatialWorkspace, type SpatialWorkspaceInstance } from "./spatial-workspace";
-import { createSpatialCameraController } from "./spatial-camera-controller";
-import * as THREE from "three";
+import { getSpatialWorkspaceForViewport } from "./spatial-interaction-access";
 
 const AREA_KIND_OPTIONS: Array<{ value: RegionAreaKind; label: string }> = [
   { value: "zone", label: "Zone" },
@@ -52,9 +58,10 @@ const spatialTools: ViewportToolbarItem[] = [
 
 export interface SpatialWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
-  getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
+  viewportStore: ViewportStore;
+  selectedIds: string[];
+  onSelect: (ids: string[]) => void;
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
@@ -72,135 +79,44 @@ function toAreaParentOptions(region: RegionDocument, selectedAreaId: string | nu
 export function useSpatialWorkspaceView(
   props: SpatialWorkspaceViewProps
 ): WorkspaceViewContribution {
-  const { isActive, viewportReadyVersion, getViewport, getViewportElement, region, onCommand } = props;
-  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
-  const [activeTool, setActiveTool] = useState<SpatialTool>("select");
-  const [cameraQuaternion, setCameraQuaternion] = useState<[number, number, number, number]>([0, 0, 0, 1]);
-  const workspaceRef = useRef<SpatialWorkspaceInstance | null>(null);
-  const cameraControllerRef = useRef(createSpatialCameraController());
-  const getViewportRef = useRef(getViewport);
-  const getViewportElementRef = useRef(getViewportElement);
-  const regionRef = useRef(region);
-  const selectedAreaIdRef = useRef<string | null>(null);
-  const onCommandRef = useRef(onCommand);
-  const drawingEnabledRef = useRef(false);
-
-  useEffect(() => {
-    getViewportRef.current = getViewport;
-    getViewportElementRef.current = getViewportElement;
-  }, [getViewport, getViewportElement]);
-
-  useEffect(() => {
-    regionRef.current = region;
-    onCommandRef.current = onCommand;
-  }, [onCommand, region]);
-
-  useEffect(() => {
-    drawingEnabledRef.current = activeTool === "draw-rect";
-  }, [activeTool]);
+  const {
+    isActive,
+    getViewportElement,
+    viewportStore,
+    selectedIds,
+    onSelect,
+    region,
+    onCommand
+  } = props;
+  const activeTool = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.activeSpatialTool
+  );
+  const cameraQuaternion = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.cameraQuaternion
+  );
 
   const effectiveSelectedAreaId = useMemo(() => {
     if (!region) return null;
+    const selectedAreaId = selectedIds[0] ?? null;
     if (selectedAreaId && region.areas.some((area) => area.areaId === selectedAreaId)) {
       return selectedAreaId;
     }
     return region.areas[0]?.areaId ?? null;
-  }, [region, selectedAreaId]);
-
-  useEffect(() => {
-    selectedAreaIdRef.current = effectiveSelectedAreaId;
-  }, [effectiveSelectedAreaId]);
+  }, [region, selectedIds]);
 
   useEffect(() => {
     if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement) return;
-
-    viewport.setProjectionMode("orthographic-top");
-
-    const workspace = createSpatialWorkspace({
-      getAreas: () => regionRef.current?.areas ?? [],
-      getSelectedAreaId: () => selectedAreaIdRef.current,
-      onCreateAreaRectangle: ({ minX, minZ, maxX, maxZ }) => {
-        const activeRegion = regionRef.current;
-        const activeAreaId = selectedAreaIdRef.current;
-        if (!activeRegion || !activeAreaId) return;
-        const activeArea = activeRegion.areas.find((area) => area.areaId === activeAreaId);
-        if (!activeArea) return;
-        const width = maxX - minX;
-        const depth = maxZ - minZ;
-        const centerX = minX + width / 2;
-        const centerZ = minZ + depth / 2;
-        onCommandRef.current({
-          kind: "UpdateRegionArea",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: activeRegion.identity.id
-          },
-          subject: {
-            subjectKind: "region-area",
-            subjectId: activeAreaId
-          },
-          payload: {
-            areaId: activeAreaId,
-            bounds: createRegionAreaBounds({
-              center: [centerX, activeArea.bounds.center[1], centerZ],
-              size: [width, activeArea.bounds.size[1], depth]
-            })
-          }
-        });
-      }
-    });
-
-    workspace.attach(
-      viewportElement,
-      viewport.camera,
-      viewport.authoredRoot,
-      viewport.overlayRoot,
-      viewport.surfaceRoot
+    getSpatialWorkspaceForViewport(getViewportElement())?.setDrawingEnabled(
+      activeTool === "draw-rect"
     );
-    workspace.setDrawingEnabled(drawingEnabledRef.current);
-    workspace.syncAreas();
-    workspaceRef.current = workspace;
-
-    const cameraController = cameraControllerRef.current;
-    cameraController.attach(viewport.camera, viewportElement, viewport.subscribeFrame);
-
-    return () => {
-      cameraController.detach();
-      workspace.detach();
-      viewport.setProjectionMode("perspective");
-      workspaceRef.current = null;
-    };
-  }, [isActive, viewportReadyVersion]);
+  }, [activeTool, getViewportElement, isActive]);
 
   useEffect(() => {
     if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const lastQuaternion = new THREE.Quaternion();
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      if (lastQuaternion.angleTo(current) < 0.0001) return;
-      lastQuaternion.copy(current);
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
-
-  useEffect(() => {
-    workspaceRef.current?.setDrawingEnabled(activeTool === "draw-rect");
-  }, [activeTool]);
-
-  useEffect(() => {
-    workspaceRef.current?.syncAreas();
-  }, [effectiveSelectedAreaId, region]);
+    getSpatialWorkspaceForViewport(getViewportElement())?.syncAreas();
+  }, [effectiveSelectedAreaId, getViewportElement, isActive, region]);
 
   const selectedArea = useMemo(() => {
     if (!region || !effectiveSelectedAreaId) return null;
@@ -251,8 +167,8 @@ export function useSpatialWorkspaceView(
         bounds: area.bounds
       }
     });
-    setSelectedAreaId(area.areaId);
-  }, [onCommand, region]);
+    onSelect([area.areaId]);
+  }, [onCommand, onSelect, region]);
 
   return {
     leftPanel: region ? (
@@ -291,7 +207,7 @@ export function useSpatialWorkspaceView(
                 <UnstyledButton
                   key={area.areaId}
                   onClick={() => {
-                    setSelectedAreaId(area.areaId);
+                    onSelect([area.areaId]);
                   }}
                   style={{
                     border: "1px solid var(--sm-panel-border)",
@@ -422,8 +338,8 @@ export function useSpatialWorkspaceView(
             <Button
               color="red"
               variant="light"
-              onClick={() => {
-                onCommand({
+                onClick={() => {
+                  onCommand({
                   kind: "DeleteRegionArea",
                   target: {
                     aggregateKind: "region-document",
@@ -434,10 +350,10 @@ export function useSpatialWorkspaceView(
                     subjectId: selectedArea.areaId
                   },
                   payload: {
-                    areaId: selectedArea.areaId
-                  }
-                });
-                setSelectedAreaId(null);
+                      areaId: selectedArea.areaId
+                    }
+                  });
+                onSelect([]);
               }}
             >
               Delete Area
@@ -455,7 +371,9 @@ export function useSpatialWorkspaceView(
         <ViewportToolbar
           items={spatialTools}
           activeId={activeTool}
-          onSelect={(id) => setActiveTool(id as SpatialTool)}
+          onSelect={(id) =>
+            viewportStore.getState().setActiveSpatialTool(id as SpatialTool)
+          }
         />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
       </>

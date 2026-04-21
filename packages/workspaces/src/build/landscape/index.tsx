@@ -7,7 +7,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
 import {
   ActionIcon,
   Box,
@@ -16,7 +15,6 @@ import {
   NumberInput,
   Paper,
   Popover,
-  Select,
   Slider,
   Stack,
   Switch,
@@ -27,41 +25,47 @@ import type {
   MaterialDefinition,
   RegionDocument,
   SemanticCommand,
-  RegionLandscapeChannelDefinition
+  RegionLandscapeChannelDefinition,
+  RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS,
-  createRegionLandscapeChannelDefinition
+  createRegionLandscapeChannelDefinition,
+  renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
+import type { ViewportStore } from "@sugarmagic/shell";
 import { PanelSection, SurfacePicker, type Surface } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
-import type { WorkspaceViewport } from "../../viewport";
+import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
-import {
+import type { LandscapeBrushSettings } from "./landscape-workspace";
+
+export { createLandscapeCameraController, type LandscapeCameraController } from "./landscape-camera-controller";
+export {
   createLandscapeWorkspace,
   type LandscapeBrushSettings,
+  type LandscapeWorkspaceConfig,
   type LandscapeWorkspaceInstance
 } from "./landscape-workspace";
-import { createLandscapeCameraController } from "./landscape-camera-controller";
 
 export interface LandscapeWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
-  getViewport: () => WorkspaceViewport | null;
-  getViewportElement: () => HTMLElement | null;
+  viewportStore: ViewportStore;
   materialDefinitions: MaterialDefinition[];
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
 
 const EMPTY_CHANNELS: RegionLandscapeChannelDefinition[] = [];
+const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
+  radius: 4,
+  strength: 0.25,
+  falloff: 0.7,
+  mode: "paint"
+};
 
 function formatHexColor(value: number): string {
   return `#${value.toString(16).padStart(6, "0")}`;
-}
-
-function parseHexColor(value: string): number {
-  return Number.parseInt(value.replace(/^#/, ""), 16);
 }
 
 function nextLandscapeChannelName(channels: RegionLandscapeChannelDefinition[]): string {
@@ -70,18 +74,16 @@ function nextLandscapeChannelName(channels: RegionLandscapeChannelDefinition[]):
 
 function MaskThumbnail(props: {
   channelIndex: number;
-  getViewport: () => WorkspaceViewport | null;
-  version: number;
+  landscape: RegionLandscapeState | null;
 }) {
-  const { channelIndex, getViewport, version } = props;
+  const { channelIndex, landscape } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const viewport = getViewport();
-    if (!canvas || !viewport) return;
-    viewport.renderLandscapeMask(channelIndex, canvas);
-  }, [channelIndex, getViewport, version]);
+    if (!canvas || !landscape) return;
+    renderLandscapeMaskToCanvas(landscape, channelIndex, canvas);
+  }, [channelIndex, landscape]);
 
   return (
     <canvas
@@ -105,8 +107,7 @@ function ChannelCard(props: {
   channel: RegionLandscapeChannelDefinition;
   channelIndex: number;
   isActive: boolean;
-  getViewport: () => WorkspaceViewport | null;
-  maskVersion: number;
+  landscape: RegionLandscapeState | null;
   materials: MaterialDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
@@ -116,8 +117,7 @@ function ChannelCard(props: {
     channel,
     channelIndex,
     isActive,
-    getViewport,
-    maskVersion,
+    landscape,
     materials,
     onSelect,
     onRename,
@@ -164,8 +164,7 @@ function ChannelCard(props: {
         <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <MaskThumbnail
             channelIndex={channelIndex}
-            getViewport={getViewport}
-            version={maskVersion}
+            landscape={landscape}
           />
           <Popover
             opened={pickerOpen}
@@ -280,167 +279,36 @@ export function useLandscapeWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     isActive,
-    viewportReadyVersion,
-    getViewport,
-    getViewportElement,
+    viewportStore,
     materialDefinitions,
     region,
     onCommand
   } = props;
 
-  const [activeChannelIndex, setActiveChannelIndex] = useState(1);
-  const [maskVersion, setMaskVersion] = useState(0);
-  const [cameraQuaternion, setCameraQuaternion] = useState<[number, number, number, number]>([0, 0, 0, 1]);
   const [brushMenuOpen, setBrushMenuOpen] = useState(false);
-  const [brushSettings, setBrushSettings] = useState<LandscapeBrushSettings>({
-    radius: 4,
-    strength: 0.25,
-    falloff: 0.7,
-    mode: "paint"
-  });
+  const activeChannelIndex = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.activeLandscapeChannelIndex
+  );
+  const brushSettings =
+    useVanillaStoreSelector(viewportStore, (state) => state.brushSettings) ??
+    DEFAULT_BRUSH_SETTINGS;
+  const landscapeDraft = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.landscapeDraft
+  );
+  const cameraQuaternion = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.cameraQuaternion
+  );
+  const displayedLandscape = landscapeDraft ?? region?.landscape ?? null;
 
-  const landscapeRef = useRef<LandscapeWorkspaceInstance | null>(null);
-  const cameraControllerRef = useRef(createLandscapeCameraController());
-  const getViewportRef = useRef(getViewport);
-  const getViewportElementRef = useRef(getViewportElement);
-  const regionRef = useRef(region);
-  const onCommandRef = useRef(onCommand);
-  const activeChannelIndexRef = useRef(activeChannelIndex);
-  const brushSettingsRef = useRef(brushSettings);
-  const maskFrameRef = useRef<number | null>(null);
-
-  const scheduleMaskRefresh = () => {
-    if (maskFrameRef.current !== null) return;
-    maskFrameRef.current = window.requestAnimationFrame(() => {
-      maskFrameRef.current = null;
-      setMaskVersion((value) => value + 1);
-    });
-  };
-
-  useEffect(() => {
-    getViewportRef.current = getViewport;
-    getViewportElementRef.current = getViewportElement;
-    regionRef.current = region;
-    onCommandRef.current = onCommand;
-  }, [getViewport, getViewportElement, region, onCommand]);
-
-  useEffect(() => {
-    activeChannelIndexRef.current = activeChannelIndex;
-  }, [activeChannelIndex]);
-
-  useEffect(() => {
-    brushSettingsRef.current = brushSettings;
-  }, [brushSettings]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const cameraController = cameraControllerRef.current;
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement || !regionRef.current) return;
-
-    viewport.setProjectionMode("perspective");
-
-    const landscapeWorkspace = createLandscapeWorkspace({
-      getLandscape: () => regionRef.current?.landscape ?? null,
-      previewLandscape: (landscape) => viewport.previewLandscape(landscape),
-      paintLandscapeAt: (options) => viewport.paintLandscapeAt(options),
-      serializePaintPayload: () => viewport.serializeLandscapePaintPayload(),
-      commitPaint: (paintPayload, affectedBounds) => {
-        const currentRegion = regionRef.current;
-        if (!currentRegion) return;
-        onCommandRef.current({
-          kind: "PaintLandscape",
-          target: {
-            aggregateKind: "region-document",
-            aggregateId: currentRegion.identity.id
-          },
-          subject: {
-            subjectKind: "region-landscape",
-            subjectId: currentRegion.identity.id
-          },
-          payload: {
-            paintPayload,
-            affectedBounds
-          }
-        });
-      },
-      onPreviewTick: scheduleMaskRefresh
-    });
-
-    landscapeWorkspace.attach(
-      viewportElement,
-      viewport.camera,
-      viewport.authoredRoot,
-      viewport.overlayRoot,
-      viewport.surfaceRoot
-    );
-    landscapeWorkspace.setActiveChannelIndex(activeChannelIndexRef.current);
-    landscapeWorkspace.setBrushSettings(brushSettingsRef.current);
-    landscapeWorkspace.syncLandscape();
-    landscapeRef.current = landscapeWorkspace;
-
-    cameraController.attach(
-      viewport.camera,
-      viewportElement,
-      viewport.subscribeFrame
-    );
-
-    return () => {
-      if (maskFrameRef.current !== null) {
-        window.cancelAnimationFrame(maskFrameRef.current);
-        maskFrameRef.current = null;
-      }
-      cameraController.detach();
-      landscapeWorkspace.detach();
-      landscapeRef.current = null;
-    };
-  }, [isActive, viewportReadyVersion]);
-
-  useEffect(() => {
-    landscapeRef.current?.setActiveChannelIndex(activeChannelIndex);
-  }, [activeChannelIndex]);
-
-  useEffect(() => {
-    landscapeRef.current?.setBrushSettings(brushSettings);
-  }, [brushSettings]);
-
-  useEffect(() => {
-    if (!isActive || !region) return;
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-    viewport.previewLandscape(region.landscape);
-    landscapeRef.current?.syncLandscape();
-    scheduleMaskRefresh();
-  }, [isActive, region]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const lastQuaternion = new THREE.Quaternion();
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      if (lastQuaternion.angleTo(current) < 0.0001) return;
-      lastQuaternion.copy(current);
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
-
-  const channels = region?.landscape.channels ?? EMPTY_CHANNELS;
+  const channels = displayedLandscape?.channels ?? EMPTY_CHANNELS;
   const effectiveActiveChannelIndex =
     activeChannelIndex < channels.length
       ? activeChannelIndex
       : Math.min(1, Math.max(0, channels.length - 1));
   const canAddChannel = channels.length < MAX_REGION_LANDSCAPE_CHANNELS;
-  const activeChannel = channels[effectiveActiveChannelIndex] ?? null;
-
   const channelCards = useMemo(
     () =>
       channels.map((channel, channelIndex) => (
@@ -449,10 +317,11 @@ export function useLandscapeWorkspaceView(
           channel={channel}
           channelIndex={channelIndex}
           isActive={channelIndex === effectiveActiveChannelIndex}
-          getViewport={getViewport}
-          maskVersion={maskVersion}
+          landscape={displayedLandscape}
           materials={materialDefinitions}
-          onSelect={() => setActiveChannelIndex(channelIndex)}
+          onSelect={() =>
+            viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
+          }
           onRename={(displayName) => {
             if (!region || channelIndex === 0) return;
             onCommand({
@@ -510,19 +379,19 @@ export function useLandscapeWorkspaceView(
     [
       channels,
       effectiveActiveChannelIndex,
-      getViewport,
-      maskVersion,
+      displayedLandscape,
       materialDefinitions,
       onCommand,
-      region
+      region,
+      viewportStore
     ]
   );
 
   const setBrushMode = (mode: LandscapeBrushSettings["mode"]) => {
-    setBrushSettings((current) => ({
-      ...current,
+    viewportStore.getState().setBrushSettings({
+      ...brushSettings,
       mode
-    }));
+    });
   };
 
   return {
@@ -729,7 +598,10 @@ export function useLandscapeWorkspaceView(
                     step={0.5}
                     value={brushSettings.radius}
                     onChange={(value) =>
-                      setBrushSettings((current) => ({ ...current, radius: value }))
+                      viewportStore.getState().setBrushSettings({
+                        ...brushSettings,
+                        radius: value
+                      })
                     }
                   />
                 </Stack>
@@ -748,7 +620,10 @@ export function useLandscapeWorkspaceView(
                     step={0.01}
                     value={brushSettings.strength}
                     onChange={(value) =>
-                      setBrushSettings((current) => ({ ...current, strength: value }))
+                      viewportStore.getState().setBrushSettings({
+                        ...brushSettings,
+                        strength: value
+                      })
                     }
                   />
                 </Stack>
@@ -767,7 +642,10 @@ export function useLandscapeWorkspaceView(
                     step={0.01}
                     value={brushSettings.falloff}
                     onChange={(value) =>
-                      setBrushSettings((current) => ({ ...current, falloff: value }))
+                      viewportStore.getState().setBrushSettings({
+                        ...brushSettings,
+                        falloff: value
+                      })
                     }
                   />
                 </Stack>

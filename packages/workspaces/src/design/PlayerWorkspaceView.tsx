@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ActionIcon,
   Group,
@@ -11,29 +11,29 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
-  ContentLibrarySnapshot,
   PlayerAnimationSlot,
   PlayerDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
+import type {
+  DesignPreviewState,
+  DesignPreviewStore
+} from "@sugarmagic/shell";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import type { PlayerWorkspaceViewport } from "../viewport";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
-import { createPlayerCameraController } from "./player-camera-controller";
+import { useVanillaStoreSelector } from "../use-vanilla-store";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
-  contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
-  assetSources: Record<string, string>;
-  getViewport: () => PlayerWorkspaceViewport | null;
-  getViewportElement: () => HTMLElement | null;
+  designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
 }
+
+const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
 
 function toAssetOptions(assetDefinitions: AssetDefinition[]) {
   return assetDefinitions.map((definition) => ({
@@ -73,30 +73,35 @@ export function usePlayerWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     isActive,
-    viewportReadyVersion,
     gameProjectId,
     playerDefinition,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand
   } = props;
 
-  const [activeAnimationSlot, setActiveAnimationSlot] =
-    useState<PlayerAnimationSlot | null>("idle");
-  const [isAnimationPlaying, setIsAnimationPlaying] = useState(true);
-  const [cameraQuaternion, setCameraQuaternion] =
-    useState<[number, number, number, number]>([0, 0, 0, 1]);
-  const cameraControllerRef = useRef(createPlayerCameraController());
-  const getViewportRef = useRef(getViewport);
-  const getViewportElementRef = useRef(getViewportElement);
+  const activeAnimationSlot = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) =>
+      state.activeAnimationSlot as PlayerAnimationSlot | null
+  );
+  const isAnimationPlaying = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) => state.isAnimationPlaying
+  );
+  const cameraQuaternion = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) =>
+      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
+  );
 
   useEffect(() => {
-    getViewportRef.current = getViewport;
-    getViewportElementRef.current = getViewportElement;
-  }, [getViewport, getViewportElement]);
+    if (!isActive || !playerDefinition) return;
+    designPreviewStore.getState().beginPreview(playerDefinition.definitionId);
+    return () => {
+      designPreviewStore.getState().endPreview();
+    };
+  }, [designPreviewStore, isActive, playerDefinition]);
 
   const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
   const animationSlotOptions = useMemo(
@@ -114,77 +119,6 @@ export function usePlayerWorkspaceView(
 
     return (animationSlotOptions[0]?.value as PlayerAnimationSlot | undefined) ?? null;
   }, [activeAnimationSlot, animationSlotOptions, playerDefinition]);
-
-  useEffect(() => {
-    if (!isActive || !playerDefinition) return;
-
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement) return;
-    const cameraController = cameraControllerRef.current;
-
-    const targetY = Math.max(
-      playerDefinition.physicalProfile.eyeHeight * 0.7,
-      playerDefinition.physicalProfile.height * 0.5
-    );
-
-    cameraController.attach(
-      viewport.camera,
-      viewportElement,
-      viewport.subscribeFrame,
-      targetY
-    );
-
-    return () => {
-      cameraController.detach();
-    };
-  }, [isActive, viewportReadyVersion, playerDefinition]);
-
-  useEffect(() => {
-    if (!isActive || !playerDefinition) return;
-    cameraControllerRef.current.updateTarget(
-      Math.max(
-        playerDefinition.physicalProfile.eyeHeight * 0.7,
-        playerDefinition.physicalProfile.height * 0.5
-      )
-    );
-  }, [isActive, playerDefinition]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
-
-  useEffect(() => {
-    if (!isActive || !playerDefinition || !contentLibrary) return;
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    viewport.updateFromPlayer({
-      playerDefinition,
-      contentLibrary,
-      assetSources,
-      activeAnimationSlot: effectiveAnimationSlot,
-      isAnimationPlaying
-    });
-  }, [
-    assetSources,
-    contentLibrary,
-    effectiveAnimationSlot,
-    isActive,
-    isAnimationPlaying,
-    playerDefinition
-  ]);
 
   function updatePlayerDefinition(nextDefinition: PlayerDefinition) {
     if (!gameProjectId) return;
@@ -229,7 +163,7 @@ export function usePlayerWorkspaceView(
           ]}
           value={effectiveAnimationSlot ?? "__none__"}
           onChange={(value) =>
-            setActiveAnimationSlot(
+            designPreviewStore.getState().setAnimationSlot(
               value && value !== "__none__"
                 ? (value as PlayerAnimationSlot)
                 : null
@@ -251,7 +185,11 @@ export function usePlayerWorkspaceView(
           <ActionIcon
             variant="subtle"
             color="blue"
-            onClick={() => setIsAnimationPlaying((value) => !value)}
+            onClick={() =>
+              designPreviewStore
+                .getState()
+                .setAnimationPlaying(!isAnimationPlaying)
+            }
             aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
           >
             {isAnimationPlaying ? "❚❚" : "▶"}

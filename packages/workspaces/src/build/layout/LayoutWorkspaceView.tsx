@@ -1,13 +1,15 @@
 /**
  * LayoutWorkspaceView: the React view for Build > Layout.
  *
- * Owns: gizmo lifecycle, input routing, scene explorer, inspector,
- * viewport toolbar. Plugs into the shell via WorkspaceViewContribution.
+ * Owns: scene explorer, inspector, viewport toolbar, and layout-specific
+ * context menus. The transform gizmo and camera controller now live inside
+ * the Studio viewport overlay layer instead of this React view.
+ *
+ * Plugs into the shell via WorkspaceViewContribution.
  * Accepts plugin-owned inspector sections so build-side shell contributions can extend the region inspector without duplicating layout state.
  */
 
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
-import * as THREE from "three";
 import {
   ActionIcon,
   Box,
@@ -48,15 +50,12 @@ import {
   type SceneExplorerNode,
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
+import type { ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
-import type { WorkspaceViewport } from "../../viewport";
-import {
-  createLayoutWorkspace,
-  type LayoutWorkspaceInstance
-} from "./layout-workspace";
-import { createLayoutCameraController } from "./layout-camera-controller";
+import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
 import type { TransformTool } from "../../interaction/tool-state";
+import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 
 const transformTools: ViewportToolbarItem[] = [
   { id: "move", label: "Move", icon: "✥", shortcut: "G" },
@@ -66,13 +65,11 @@ const transformTools: ViewportToolbarItem[] = [
 
 export interface LayoutWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
-  getViewport: () => WorkspaceViewport | null;
   getViewportElement: () => HTMLElement | null;
+  viewportStore: ViewportStore;
   selectedIds: string[];
   onSelect: (ids: string[]) => void;
   onCommand: (command: SemanticCommand) => void;
-  getSelectedId: () => string | null;
   getRegion: () => ReturnType<typeof getActiveRegion>;
   assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
@@ -220,13 +217,11 @@ export function useLayoutWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     isActive,
-    viewportReadyVersion,
-    getViewport,
     getViewportElement,
+    viewportStore,
     selectedIds,
     onSelect,
     onCommand,
-    getSelectedId,
     getRegion,
     assetDefinitions,
     playerDefinition,
@@ -238,7 +233,6 @@ export function useLayoutWorkspaceView(
     renderInspectorSections
   } = props;
 
-  const [activeTool, setActiveTool] = useState<TransformTool>("move");
   const [selectedFolderState, setSelectedFolderState] = useState<{
     regionId: string | null;
     folderId: string;
@@ -246,7 +240,6 @@ export function useLayoutWorkspaceView(
     regionId: null,
     folderId: SCENE_ROOT_FOLDER_ID
   });
-  const [cameraQuaternion, setCameraQuaternion] = useState<[number, number, number, number]>([0, 0, 0, 1]);
   const [contextMenu, setContextMenu] = useState<{
     instanceId: string;
     x: number;
@@ -258,102 +251,28 @@ export function useLayoutWorkspaceView(
   const [itemQuery, setItemQuery] = useState("");
 
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const layoutRef = useRef<LayoutWorkspaceInstance | null>(null);
-  const cameraControllerRef = useRef(createLayoutCameraController());
-  const getViewportRef = useRef(getViewport);
   const getViewportElementRef = useRef(getViewportElement);
-  const onCommandRef = useRef(onCommand);
   const onSelectRef = useRef(onSelect);
-  const getSelectedIdRef = useRef(getSelectedId);
-  const getRegionRef = useRef(getRegion);
+  const activeTool = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.activeTransformTool
+  );
+  const cameraQuaternion = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.cameraQuaternion
+  );
 
   useEffect(() => {
-    getViewportRef.current = getViewport;
     getViewportElementRef.current = getViewportElement;
-    onCommandRef.current = onCommand;
     onSelectRef.current = onSelect;
-    getSelectedIdRef.current = getSelectedId;
-    getRegionRef.current = getRegion;
-  }, [
-    getViewport,
-    getViewportElement,
-    onCommand,
-    onSelect,
-    getSelectedId,
-    getRegion
-  ]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const cameraController = cameraControllerRef.current;
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement) return;
-
-    viewport.setProjectionMode("perspective");
-
-    const layout = createLayoutWorkspace({
-      onCommand: (command) => onCommandRef.current(command),
-      onSelect: (ids) => onSelectRef.current(ids),
-      onPreviewTransform: (id, pos, rot, scl) =>
-        viewport.previewTransform(id, pos, rot, scl),
-      getSelectedId: () => getSelectedIdRef.current(),
-      getRegion: () => getRegionRef.current()
-    });
-
-    layout.attach(
-      viewportElement,
-      viewport.camera,
-      viewport.authoredRoot,
-      viewport.overlayRoot
-    );
-    cameraController.attach(
-      viewport.camera,
-      viewportElement,
-      viewport.subscribeFrame
-    );
-    layout.syncOverlays();
-    layoutRef.current = layout;
-
-    const unsubTool = layout.toolState.subscribe((state) => {
-      setActiveTool(state.activeTool);
-    });
-
-    return () => {
-      unsubTool();
-      cameraController.detach();
-      layout.detach();
-      layoutRef.current = null;
-    };
-  }, [isActive, viewportReadyVersion]);
+  }, [getViewportElement, onSelect]);
 
   const region = getRegion();
 
   useEffect(() => {
     if (!isActive) return;
-    layoutRef.current?.syncOverlays();
+    getLayoutWorkspaceForViewport(getViewportElementRef.current())?.syncOverlays();
   }, [isActive, selectedIds, region]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const lastQuaternion = new THREE.Quaternion();
-
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      if (lastQuaternion.angleTo(current) < 0.0001) return;
-
-      lastQuaternion.copy(current);
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -363,7 +282,7 @@ export function useLayoutWorkspaceView(
     const element = viewportElement;
 
     function handleContextMenu(event: MouseEvent) {
-      const layout = layoutRef.current;
+      const layout = getLayoutWorkspaceForViewport(element);
       if (!layout) return;
 
       const rect = element.getBoundingClientRect();
@@ -418,7 +337,7 @@ export function useLayoutWorkspaceView(
       window.removeEventListener("pointerdown", handleCloseMenu);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isActive, viewportReadyVersion, selectedIds]);
+  }, [isActive, selectedIds]);
 
   const selectedFolderId =
     selectedFolderState.regionId === (region?.identity.id ?? null)
@@ -1473,8 +1392,7 @@ export function useLayoutWorkspaceView(
           activeId={activeTool}
           onSelect={(id) => {
             const tool = id as TransformTool;
-            setActiveTool(tool);
-            layoutRef.current?.toolState.setActiveTool(tool);
+            viewportStore.getState().setActiveTransformTool(tool);
           }}
         />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />

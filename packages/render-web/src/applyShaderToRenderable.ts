@@ -23,6 +23,12 @@ export interface RenderableShaderApplicationState {
   appliedFileSources: Record<string, string> | null;
 }
 
+export interface ShaderManagedRenderableEntry {
+  root: THREE.Object3D;
+  object: SceneObject;
+  shaderApplication: RenderableShaderApplicationState;
+}
+
 export function createRenderableShaderApplicationState(): RenderableShaderApplicationState {
   return {
     appliedShaderSignature: null,
@@ -93,7 +99,6 @@ export function applyShaderToRenderable(
   const nextLeases: ShaderMaterialLease[] = [];
   const replacedBaseMaterials = new Set<THREE.Material>();
   let meshCount = 0;
-  let finalizedCount = 0;
   const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
 
   renderable.traverse((child) => {
@@ -145,7 +150,6 @@ export function applyShaderToRenderable(
         return material;
       }
 
-      finalizedCount += 1;
       nextLeases.push({ runtime: shaderRuntime, material: finalized });
       if (finalized !== material && !previousManagedMaterials.has(material)) {
         replacedBaseMaterials.add(material);
@@ -203,4 +207,20 @@ export function ensureShaderSetAppliedToRenderable(
 
   state.appliedShaderSignature = nextSignature;
   state.appliedFileSources = fileSources;
+}
+
+export function ensureShaderSetsAppliedToRenderables(
+  entries: Iterable<ShaderManagedRenderableEntry>,
+  shaderRuntime: ShaderRuntime | null,
+  fileSources: Record<string, string> = {}
+) {
+  for (const entry of entries) {
+    ensureShaderSetAppliedToRenderable(
+      entry.root,
+      entry.object,
+      shaderRuntime,
+      entry.shaderApplication,
+      fileSources
+    );
+  }
 }

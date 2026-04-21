@@ -7,8 +7,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { analyzeSourceAssetFile } from "@sugarmagic/io";
-import { deriveFoliageEmbeddedMaterialImport } from "../../io/src/imports/foliage-embedded-materials";
+import {
+  analyzeSourceAssetFile,
+  deriveFoliageEmbeddedMaterialImport
+} from "@sugarmagic/io";
 
 function createGlbFromJson(json: unknown): ArrayBuffer {
   const encoder = new TextEncoder();

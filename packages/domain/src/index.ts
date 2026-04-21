@@ -10,6 +10,8 @@ export * from "./gameplay-authoring/index";
 export * from "./history/index";
 export * from "./io/index";
 export * from "./item-definition/index";
+export * from "./landscape-mask";
+export * from "./landscape-splatmap";
 export * from "./npc-definition/index";
 export * from "./plugins/index";
 export * from "./player-definition/index";

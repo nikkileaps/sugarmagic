@@ -20,7 +20,6 @@
 import type { ReactNode } from "react";
 import type {
   AssetDefinition,
-  ContentLibrarySnapshot,
   DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
@@ -34,13 +33,8 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
-import type { DesignWorkspaceKind } from "@sugarmagic/shell";
+import type { DesignPreviewStore, DesignWorkspaceKind } from "@sugarmagic/shell";
 import type { WorkspaceNavigationTarget } from "../workspace-view";
-import type {
-  ItemWorkspaceViewport,
-  NPCWorkspaceViewport,
-  PlayerWorkspaceViewport
-} from "../viewport";
 import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
 import { useDocumentWorkspaceView } from "./DocumentWorkspaceView";
 import { useItemWorkspaceView } from "./ItemWorkspaceView";
@@ -61,7 +55,6 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
 
 export interface DesignProductModeViewProps {
   activeDesignKind: DesignWorkspaceKind;
-  viewportReadyVersion: number;
   gameProjectId: string | null;
   regions: RegionDocument[];
   playerDefinition: PlayerDefinition | null;
@@ -81,13 +74,8 @@ export interface DesignProductModeViewProps {
     label: string;
     description?: string;
   }>;
-  contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
-  assetSources: Record<string, string>;
-  getPlayerViewport: () => PlayerWorkspaceViewport | null;
-  getItemViewport: () => ItemWorkspaceViewport | null;
-  getNPCViewport: () => NPCWorkspaceViewport | null;
-  getViewportElement: () => HTMLElement | null;
+  designPreviewStore: DesignPreviewStore;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
   navigationTarget?: WorkspaceNavigationTarget | null;
@@ -117,7 +105,6 @@ export function useDesignProductModeView(
 ): DesignProductModeViewResult {
   const {
     activeDesignKind,
-    viewportReadyVersion,
     gameProjectId,
     regions,
     playerDefinition,
@@ -129,13 +116,8 @@ export function useDesignProductModeView(
     questDefinitions,
     extraWorkspaceItems,
     npcInteractionOptions,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getPlayerViewport,
-    getItemViewport,
-    getNPCViewport,
-    getViewportElement,
+    designPreviewStore,
     onSelectKind,
     onCommand,
     navigationTarget,
@@ -147,43 +129,31 @@ export function useDesignProductModeView(
 
   const playerView = usePlayerWorkspaceView({
     isActive: activeDesignKind === "player",
-    viewportReadyVersion,
     gameProjectId,
     playerDefinition,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport: getPlayerViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand
   });
 
   const npcView = useNPCWorkspaceView({
     isActive: activeDesignKind === "npcs",
-    viewportReadyVersion,
     gameProjectId,
     npcDefinitions,
     interactionModeOptions: npcInteractionOptions,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport: getNPCViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand,
     renderInspectorSections: renderNPCInspectorSections
   });
 
   const itemView = useItemWorkspaceView({
     isActive: activeDesignKind === "items",
-    viewportReadyVersion,
     gameProjectId,
     itemDefinitions,
     documentDefinitions,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport: getItemViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand
   });
 
@@ -299,3 +269,16 @@ export function useDesignProductModeView(
             : playerView.viewportOverlay
   };
 }
+
+export {
+  createPlayerCameraController,
+  type PlayerCameraController
+} from "./player-camera-controller";
+export {
+  createNPCCameraController,
+  type NPCCameraController
+} from "./npc-camera-controller";
+export {
+  createItemCameraController,
+  type ItemCameraController
+} from "./item-camera-controller";

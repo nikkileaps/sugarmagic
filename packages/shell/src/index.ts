@@ -14,12 +14,16 @@ import type { ViewportHostModel } from "./viewport-host";
 import type { WorkspaceHostModel } from "./workspace-host";
 
 export * from "./app-frame";
+export * from "./asset-sources";
 export * from "./commands";
+export * from "./design-preview";
 export * from "./inspector-host";
 export * from "./navigation";
 export * from "./preview";
+export * from "./projection";
 export * from "./project";
 export * from "./status";
+export * from "./viewport";
 export * from "./viewport-host";
 export * from "./workspace-host";
 

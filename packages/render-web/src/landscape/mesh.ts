@@ -1,7 +1,7 @@
 /**
  * Web landscape mesh realization.
  *
- * Binds the runtime-core landscape splatmap buffers into Three/WebGPU
+ * Binds the canonical landscape splatmap buffers into Three/WebGPU
  * textures and material nodes. This is the single render-web enforcer for the
  * authored landscape surface seen in both Studio and Preview.
  *
@@ -22,9 +22,11 @@ import type {
   RegionLandscapeChannelDefinition,
   RegionLandscapeState
 } from "@sugarmagic/domain";
-import { MAX_REGION_LANDSCAPE_CHANNELS } from "@sugarmagic/domain";
 import {
   LandscapeSplatmap,
+  MAX_REGION_LANDSCAPE_CHANNELS
+} from "@sugarmagic/domain";
+import {
   resolveMaterialEffectiveShaderBinding,
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
