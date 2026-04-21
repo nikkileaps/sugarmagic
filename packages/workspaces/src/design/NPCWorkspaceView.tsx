@@ -16,7 +16,7 @@
  * Status: active
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActionIcon,
   Box,
@@ -33,22 +33,23 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
-  ContentLibrarySnapshot,
   NPCAnimationSlot,
   NPCDefinition,
   NPCInteractionMode,
   SemanticCommand
 } from "@sugarmagic/domain";
+import type {
+  DesignPreviewState,
+  DesignPreviewStore
+} from "@sugarmagic/shell";
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import type { NPCWorkspaceViewport } from "../viewport";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
-import { createNPCCameraController } from "./npc-camera-controller";
+import { useVanillaStoreSelector } from "../use-vanilla-store";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
-  viewportReadyVersion: number;
   gameProjectId: string | null;
   npcDefinitions: NPCDefinition[];
   interactionModeOptions: Array<{
@@ -56,17 +57,16 @@ export interface NPCWorkspaceViewProps {
     label: string;
     description?: string;
   }>;
-  contentLibrary: ContentLibrarySnapshot | null;
   assetDefinitions: AssetDefinition[];
-  assetSources: Record<string, string>;
-  getViewport: () => NPCWorkspaceViewport | null;
-  getViewportElement: () => HTMLElement | null;
+  designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
   renderInspectorSections?: (context: {
     selectedNPC: NPCDefinition | null;
     updateNPC: (definition: NPCDefinition) => void;
   }) => ReactNode;
 }
+
+const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
 
 function toAssetOptions(assetDefinitions: AssetDefinition[]) {
   return assetDefinitions.map((definition) => ({
@@ -99,15 +99,11 @@ export function useNPCWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     isActive,
-    viewportReadyVersion,
     gameProjectId,
     npcDefinitions,
     interactionModeOptions,
-    contentLibrary,
     assetDefinitions,
-    assetSources,
-    getViewport,
-    getViewportElement,
+    designPreviewStore,
     onCommand,
     renderInspectorSections
   } = props;
@@ -121,19 +117,20 @@ export function useNPCWorkspaceView(
     y: number;
     definitionId: string;
   } | null>(null);
-  const [activeAnimationSlot, setActiveAnimationSlot] =
-    useState<NPCAnimationSlot | null>("idle");
-  const [isAnimationPlaying, setIsAnimationPlaying] = useState(true);
-  const [cameraQuaternion, setCameraQuaternion] =
-    useState<[number, number, number, number]>([0, 0, 0, 1]);
-  const cameraControllerRef = useRef(createNPCCameraController());
-  const getViewportRef = useRef(getViewport);
-  const getViewportElementRef = useRef(getViewportElement);
-
-  useEffect(() => {
-    getViewportRef.current = getViewport;
-    getViewportElementRef.current = getViewportElement;
-  }, [getViewport, getViewportElement]);
+  const activeAnimationSlot = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) =>
+      state.activeAnimationSlot as NPCAnimationSlot | null
+  );
+  const isAnimationPlaying = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) => state.isAnimationPlaying
+  );
+  const cameraQuaternion = useVanillaStoreSelector(
+    designPreviewStore,
+    (state: DesignPreviewState) =>
+      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
+  );
 
   const effectiveSelectedNpcId = useMemo(() => {
     if (npcDefinitions.length === 0) return null;
@@ -153,6 +150,14 @@ export function useNPCWorkspaceView(
       ) ?? null,
     [effectiveSelectedNpcId, npcDefinitions]
   );
+
+  useEffect(() => {
+    if (!isActive || !selectedNPC) return;
+    designPreviewStore.getState().beginPreview(selectedNPC.definitionId);
+    return () => {
+      designPreviewStore.getState().endPreview();
+    };
+  }, [designPreviewStore, isActive, selectedNPC]);
   const filteredNPCs = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return npcDefinitions;
@@ -258,70 +263,6 @@ export function useNPCWorkspaceView(
     }
   }
 
-  useEffect(() => {
-    if (!isActive || !selectedNPC) return;
-
-    const viewport = getViewportRef.current();
-    const viewportElement = getViewportElementRef.current();
-    if (!viewport || !viewportElement) return;
-
-    const targetY = Math.max(selectedNPC.presentation.modelHeight * 0.55, 0.85);
-    const cameraController = cameraControllerRef.current;
-    cameraController.attach(
-      viewport.camera,
-      viewportElement,
-      viewport.subscribeFrame,
-      targetY
-    );
-
-    return () => {
-      cameraController.detach();
-    };
-  }, [isActive, viewportReadyVersion, selectedNPC]);
-
-  useEffect(() => {
-    if (!isActive || !selectedNPC) return;
-    cameraControllerRef.current.updateTarget(
-      Math.max(selectedNPC.presentation.modelHeight * 0.55, 0.85)
-    );
-  }, [isActive, selectedNPC]);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    const syncOrientation = () => {
-      const current = viewport.camera.quaternion;
-      setCameraQuaternion([current.x, current.y, current.z, current.w]);
-    };
-
-    syncOrientation();
-    return viewport.subscribeFrame(syncOrientation);
-  }, [isActive, viewportReadyVersion]);
-
-  useEffect(() => {
-    if (!isActive || !selectedNPC || !contentLibrary) return;
-    const viewport = getViewportRef.current();
-    if (!viewport) return;
-
-    viewport.updateFromNPC({
-      npcDefinition: selectedNPC,
-      contentLibrary,
-      assetSources,
-      activeAnimationSlot: effectiveAnimationSlot,
-      isAnimationPlaying
-    });
-  }, [
-    assetSources,
-    contentLibrary,
-    effectiveAnimationSlot,
-    isActive,
-    isAnimationPlaying,
-    selectedNPC
-  ]);
-
   const previewOverlay = (
     <>
       <Group
@@ -347,7 +288,7 @@ export function useNPCWorkspaceView(
           ]}
           value={effectiveAnimationSlot ?? "__none__"}
           onChange={(value) =>
-            setActiveAnimationSlot(
+            designPreviewStore.getState().setAnimationSlot(
               value && value !== "__none__"
                 ? (value as NPCAnimationSlot)
                 : null
@@ -369,7 +310,11 @@ export function useNPCWorkspaceView(
           <ActionIcon
             variant="subtle"
             color="green"
-            onClick={() => setIsAnimationPlaying((value) => !value)}
+            onClick={() =>
+              designPreviewStore
+                .getState()
+                .setAnimationPlaying(!isAnimationPlaying)
+            }
             aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
           >
             {isAnimationPlaying ? "❚❚" : "▶"}

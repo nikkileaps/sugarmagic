@@ -4,7 +4,17 @@ import {
   createItemPreviewController,
   type ItemPreviewWarning
 } from "@sugarmagic/runtime-core";
-import type { ItemWorkspaceViewport } from "@sugarmagic/workspaces";
+import {
+  selectItemPreviewProjection,
+  shallowEqual,
+  subscribeToProjection,
+  type ProjectionStores
+} from "@sugarmagic/shell";
+import {
+  createItemCameraController,
+  type ItemWorkspaceViewport
+} from "@sugarmagic/workspaces";
+import { syncDesignPreviewCameraFraming } from "./design-preview-camera-framing";
 
 const GRID_COLOR = 0x45475a;
 
@@ -32,7 +42,13 @@ function createStagePlane(): THREE.Mesh {
   return plane;
 }
 
-export function createItemViewport(): ItemWorkspaceViewport {
+export interface ItemViewportOptions {
+  stores: ProjectionStores;
+}
+
+export function createItemViewport(
+  options: ItemViewportOptions
+): ItemWorkspaceViewport {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1e1e2e);
 
@@ -60,15 +76,17 @@ export function createItemViewport(): ItemWorkspaceViewport {
   scene.add(grid);
 
   const previewController = createItemPreviewController(scene);
+  const cameraController = createItemCameraController();
   const frameListeners = new Set<() => void>();
   let renderer: WebGPURenderer | null = null;
   let container: HTMLElement | null = null;
   let animationFrameId: number | null = null;
   let warnings: ItemPreviewWarning[] = [];
+  let unsubscribeProjection: (() => void) | null = null;
+  let cameraSyncUnsubscribe: (() => void) | null = null;
 
   return {
-    scene,
-    camera,
+    setProjectionMode() {},
     mount(element) {
       container = element;
       const nextRenderer = new WebGPURenderer({ antialias: true });
@@ -92,6 +110,58 @@ export function createItemViewport(): ItemWorkspaceViewport {
           nextRenderer.setSize(width, height, false);
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
+          const syncCameraFraming = () => {
+            syncDesignPreviewCameraFraming(
+              options.stores.designPreviewStore,
+              camera,
+              0.2
+            );
+          };
+          cameraController.attach(camera, element, (listener) => {
+            frameListeners.add(listener);
+            return () => {
+              frameListeners.delete(listener);
+            };
+          }, 0.2);
+          cameraSyncUnsubscribe = () => {
+            frameListeners.delete(syncCameraFraming);
+          };
+          frameListeners.add(syncCameraFraming);
+          unsubscribeProjection = subscribeToProjection(
+            options.stores,
+            ({ project, shell, designPreview, assetSources }) => {
+              const projection = selectItemPreviewProjection(
+                project,
+                shell,
+                designPreview,
+                assetSources
+              );
+              return {
+                itemDefinition: projection.itemDefinition,
+                contentLibrary: projection.contentLibrary,
+                assetSources: projection.assetSources
+              };
+            },
+            (projection) => {
+              if (!projection.itemDefinition || !projection.contentLibrary) {
+                return;
+              }
+              cameraController.updateTarget(
+                Math.max(projection.itemDefinition.presentation.modelHeight * 0.5, 0.2)
+              );
+              void previewController.apply({
+                itemDefinition: projection.itemDefinition,
+                contentLibrary: projection.contentLibrary,
+                assetSources: projection.assetSources
+              }).then((result) => {
+                warnings = result.warnings;
+                if (warnings.length > 0) {
+                  console.warn("[sugarmagic] Item preview warnings", warnings);
+                }
+              });
+            },
+            { equalityFn: shallowEqual }
+          );
           const loop = () => {
             for (const listener of frameListeners) {
               listener();
@@ -111,7 +181,12 @@ export function createItemViewport(): ItemWorkspaceViewport {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
       }
+      cameraSyncUnsubscribe?.();
+      cameraSyncUnsubscribe = null;
+      cameraController.detach();
       previewController.dispose();
+      unsubscribeProjection?.();
+      unsubscribeProjection = null;
       scene.remove(grid);
 
       if (container && renderer?.domElement.parentElement === container) {
@@ -122,14 +197,6 @@ export function createItemViewport(): ItemWorkspaceViewport {
       renderer = null;
       container = null;
       disposeGrid(grid);
-    },
-    updateFromItem(state) {
-      void previewController.apply(state).then((result) => {
-        warnings = result.warnings;
-        if (warnings.length > 0) {
-          console.warn("[sugarmagic] Item preview warnings", warnings);
-        }
-      });
     },
     resize(width, height) {
       if (width <= 0 || height <= 0) return;

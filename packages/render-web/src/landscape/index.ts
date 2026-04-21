@@ -211,3 +211,7 @@ export function createLandscapeSceneController(
 }
 
 export { RuntimeLandscapeMesh } from "./mesh";
+export {
+  renderLandscapeMaskToCanvas,
+  serializeLandscapePaintPayload
+} from "./mask";

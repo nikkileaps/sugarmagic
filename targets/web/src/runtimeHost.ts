@@ -51,6 +51,7 @@ import {
   createWebRenderHost,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
+  ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
   type RenderableShaderApplicationState,
   type WebRenderHost
@@ -659,15 +660,11 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
-    for (const entry of sceneObjectEntries.values()) {
-      ensureShaderSetAppliedToRenderable(
-        entry.root,
-        entry.object,
-        host.shaderRuntime,
-        entry.shaderApplication,
-        currentAssetSources
-      );
-    }
+    ensureShaderSetsAppliedToRenderables(
+      sceneObjectEntries.values(),
+      host.shaderRuntime,
+      currentAssetSources
+    );
 
     host.setCamera(camera);
     host.render();

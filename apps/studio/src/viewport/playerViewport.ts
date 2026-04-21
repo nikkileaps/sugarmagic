@@ -4,7 +4,17 @@ import {
   createPlayerPreviewController,
   type PlayerPreviewWarning
 } from "@sugarmagic/runtime-core";
-import type { PlayerWorkspaceViewport } from "@sugarmagic/workspaces";
+import {
+  selectPlayerPreviewProjection,
+  shallowEqual,
+  subscribeToProjection,
+  type ProjectionStores
+} from "@sugarmagic/shell";
+import {
+  createPlayerCameraController,
+  type PlayerWorkspaceViewport
+} from "@sugarmagic/workspaces";
+import { syncDesignPreviewCameraFraming } from "./design-preview-camera-framing";
 
 const GRID_COLOR = 0x45475a;
 
@@ -32,7 +42,13 @@ function createStagePlane(): THREE.Mesh {
   return plane;
 }
 
-export function createPlayerViewport(): PlayerWorkspaceViewport {
+export interface PlayerViewportOptions {
+  stores: ProjectionStores;
+}
+
+export function createPlayerViewport(
+  options: PlayerViewportOptions
+): PlayerWorkspaceViewport {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1e1e2e);
 
@@ -61,12 +77,15 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
   scene.add(grid);
 
   const previewController = createPlayerPreviewController(scene);
+  const cameraController = createPlayerCameraController();
   const frameListeners = new Set<() => void>();
   let renderer: WebGPURenderer | null = null;
   let animationFrameId: number | null = null;
   let container: HTMLElement | null = null;
   let lastFrameTime = 0;
   let warnings: PlayerPreviewWarning[] = [];
+  let unsubscribeProjection: (() => void) | null = null;
+  let cameraSyncUnsubscribe: (() => void) | null = null;
 
   function renderLoop(timestamp: number) {
     const deltaSeconds =
@@ -83,8 +102,7 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
   }
 
   return {
-    scene,
-    camera,
+    setProjectionMode() {},
     mount(element) {
       container = element;
       const nextRenderer = new WebGPURenderer({ antialias: true });
@@ -108,8 +126,68 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
           nextRenderer.setSize(width, height, false);
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
+          const syncCameraFraming = () => {
+            syncDesignPreviewCameraFraming(
+              options.stores.designPreviewStore,
+              camera,
+              previewController.stageTargetHeight
+            );
+          };
+          cameraController.attach(camera, element, (listener) => {
+            frameListeners.add(listener);
+            return () => {
+              frameListeners.delete(listener);
+            };
+          }, 1);
+          cameraSyncUnsubscribe = () => {
+            frameListeners.delete(syncCameraFraming);
+          };
+          frameListeners.add(syncCameraFraming);
           lastFrameTime = 0;
           animationFrameId = requestAnimationFrame(renderLoop);
+          unsubscribeProjection = subscribeToProjection(
+            options.stores,
+            ({ project, shell, designPreview, assetSources }) => {
+              const projection = selectPlayerPreviewProjection(
+                project,
+                shell,
+                designPreview,
+                assetSources
+              );
+              return {
+                playerDefinition: projection.playerDefinition,
+                contentLibrary: projection.contentLibrary,
+                assetSources: projection.assetSources,
+                animationSlot: projection.animationSlot,
+                isAnimationPlaying: projection.isAnimationPlaying
+              };
+            },
+            (projection) => {
+              if (!projection.playerDefinition || !projection.contentLibrary) {
+                return;
+              }
+              const targetY = Math.max(
+                projection.playerDefinition.physicalProfile.eyeHeight * 0.7,
+                projection.playerDefinition.physicalProfile.height * 0.5
+              );
+              cameraController.updateTarget(targetY);
+              void previewController
+                .apply({
+                  playerDefinition: projection.playerDefinition,
+                  contentLibrary: projection.contentLibrary,
+                  assetSources: projection.assetSources,
+                  activeAnimationSlot: projection.animationSlot as never,
+                  isPlaying: projection.isAnimationPlaying
+                })
+                .then((result) => {
+                  warnings = result.warnings;
+                  if (warnings.length > 0) {
+                    console.warn("[sugarmagic] Player preview warnings", warnings);
+                  }
+                });
+            },
+            { equalityFn: shallowEqual }
+          );
         })
         .catch((error) => {
           console.error("[sugarmagic] Failed to initialize player preview viewport.", error);
@@ -123,7 +201,12 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
         animationFrameId = null;
       }
 
+      cameraSyncUnsubscribe?.();
+      cameraSyncUnsubscribe = null;
+      cameraController.detach();
       previewController.dispose();
+      unsubscribeProjection?.();
+      unsubscribeProjection = null;
       scene.remove(grid);
 
       if (container && renderer?.domElement.parentElement === container) {
@@ -135,21 +218,6 @@ export function createPlayerViewport(): PlayerWorkspaceViewport {
       container = null;
       disposeGrid(grid);
     },
-
-    updateFromPlayer(state) {
-      void previewController
-        .apply({
-          ...state,
-          isPlaying: state.isAnimationPlaying
-        })
-        .then((result) => {
-          warnings = result.warnings;
-          if (warnings.length > 0) {
-            console.warn("[sugarmagic] Player preview warnings", warnings);
-          }
-        });
-    },
-
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
       renderer?.setSize(width, height, false);

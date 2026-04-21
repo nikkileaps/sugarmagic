@@ -7,6 +7,7 @@ import {
   createWebRenderHost,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
+  ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
   type RenderableShaderApplicationState,
   type ShaderRuntime,
@@ -15,17 +16,35 @@ import {
 import {
   DEFAULT_REGION_LANDSCAPE_SIZE,
   EDITOR_NEUTRAL_CLAY_COLOR,
+  type AuthoringSession,
+  getActiveRegion,
+  type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
+import {
+  selectViewportProjection,
+  shallowEqual,
+  subscribeToProjection,
+  type TransformDraft,
+  type ProjectionStores,
+  type ViewportProjection,
+  type LandscapePaintStroke
+} from "@sugarmagic/shell";
 import {
   resolveSceneObjects,
   computeSceneDelta,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import type {
-  WorkspaceViewport,
-  ViewportSceneState
+  WorkspaceViewport
 } from "@sugarmagic/workspaces";
+import type { ViewportOverlayFactory } from "./overlay-context";
+import {
+  asAuthoredViewportRoot,
+  asOverlayViewportRoot,
+  asSurfaceViewportRoot,
+  type ViewportOverlayContext
+} from "./overlay-context";
 
 const GRID_COLOR = 0x45475a;
 
@@ -42,6 +61,11 @@ interface SceneObjectEntry {
 interface LandscapeGridSpec {
   size: number;
   divisions: number;
+}
+
+interface AuthoringViewportOptions {
+  stores: ProjectionStores;
+  overlays?: ViewportOverlayFactory[];
 }
 
 function resolveLandscapeGridSpec(
@@ -143,6 +167,28 @@ function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
     object.transform.scale[1],
     object.transform.scale[2]
   );
+}
+
+function applyTransformOverride(
+  object: SceneObject,
+  transformOverride: {
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+  } | undefined
+): SceneObject {
+  if (!transformOverride) {
+    return object;
+  }
+
+  return {
+    ...object,
+    transform: {
+      position: [...transformOverride.position] as [number, number, number],
+      rotation: [...transformOverride.rotation] as [number, number, number],
+      scale: [...transformOverride.scale] as [number, number, number]
+    }
+  };
 }
 
 function assetSourceAvailable(
@@ -252,7 +298,9 @@ function ensureRenderableShadersApplied(
   }
 }
 
-export function createAuthoringViewport(): WorkspaceViewport {
+export function createAuthoringViewport(
+  options: AuthoringViewportOptions
+): WorkspaceViewport {
   const scene = new THREE.Scene();
 
   const perspectiveCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
@@ -282,20 +330,22 @@ export function createAuthoringViewport(): WorkspaceViewport {
   let grid = createLandscapeGrid(currentGridSpec);
   scene.add(grid);
 
-  const authoredRoot = new THREE.Group();
+  const authoredRoot = asAuthoredViewportRoot(new THREE.Group());
   authoredRoot.name = "authoring-authored-root";
   scene.add(authoredRoot);
 
-  const overlayRoot = new THREE.Group();
+  const overlayRoot = asOverlayViewportRoot(new THREE.Group());
   overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
 
   const objectMap = new Map<string, SceneObjectEntry>();
   const pendingRenderableLoads = new Set<string>();
   let previousObjects: SceneObject[] = [];
-  let currentState: ViewportSceneState | null = null;
   let currentAssetSources: Record<string, string> = {};
   let renderGeneration = 0;
+  let unsubscribeProjection: (() => void) | null = null;
+  let unsubscribeShaderEnsureFrame: (() => void) | null = null;
+  let overlayTeardowns: Array<() => void> = [];
 
   function scheduleRenderableLoad(
     object: SceneObject,
@@ -366,14 +416,118 @@ export function createAuthoringViewport(): WorkspaceViewport {
     currentGridSpec = nextSpec;
   }
 
+  function applyProjection(projection: ViewportProjection) {
+    currentAssetSources = projection.assetSources;
+
+    if (!projection.region || !projection.contentLibrary) {
+      renderGeneration += 1;
+      previousObjects = [];
+      for (const entry of objectMap.values()) {
+        authoredRoot.remove(entry.root);
+        disposeRenderableObject(entry.root);
+      }
+      objectMap.clear();
+      pendingRenderableLoads.clear();
+      return;
+    }
+
+    const { region, contentLibrary, playerDefinition, itemDefinitions, npcDefinitions } =
+      projection;
+    const landscape = projection.landscapeOverride ?? region.landscape;
+    host.applyEnvironment(
+      region,
+      contentLibrary,
+      projection.environmentOverrideId ?? null,
+      projection.assetSources
+    );
+    host.landscapeController.applyLandscape(
+      landscape,
+      contentLibrary,
+      projection.assetSources
+    );
+    syncLandscapeGrid(landscape);
+
+    const resolvedObjects = resolveSceneObjects(region, {
+      contentLibrary,
+      playerDefinition,
+      itemDefinitions,
+      npcDefinitions
+    });
+    const currentObjects = resolvedObjects.map((object) =>
+      applyTransformOverride(
+        object,
+        projection.transformOverrides[object.instanceId]
+      )
+    );
+    const delta = computeSceneDelta(previousObjects, currentObjects);
+    const generation = ++renderGeneration;
+
+    for (const id of delta.removed) {
+      const entry = objectMap.get(id);
+      if (!entry) continue;
+      authoredRoot.remove(entry.root);
+      disposeRenderableObject(entry.root);
+      objectMap.delete(id);
+    }
+
+    for (const object of delta.added) {
+      scheduleRenderableLoad(object, projection.assetSources, host.shaderRuntime, generation);
+    }
+
+    for (const object of delta.updated) {
+      const existing = objectMap.get(object.instanceId);
+      const assetAvailable = assetSourceAvailable(object, projection.assetSources);
+      if (
+        existing &&
+        existing.representationKey === object.representationKey &&
+        existing.loadedWithAsset === assetAvailable
+      ) {
+        existing.object = object;
+        applyObjectTransform(existing.root, object);
+        ensureRenderableShadersApplied(
+          existing,
+          object,
+          host.shaderRuntime,
+          projection.assetSources
+        );
+        continue;
+      }
+      if (existing) {
+        authoredRoot.remove(existing.root);
+        disposeRenderableObject(existing.root);
+        objectMap.delete(object.instanceId);
+      }
+      scheduleRenderableLoad(object, projection.assetSources, host.shaderRuntime, generation);
+    }
+
+    for (const object of currentObjects) {
+      const entry = objectMap.get(object.instanceId);
+      const assetAvailable = assetSourceAvailable(object, projection.assetSources);
+      if (entry && entry.loadedWithAsset !== assetAvailable) {
+        authoredRoot.remove(entry.root);
+        disposeRenderableObject(entry.root);
+        objectMap.delete(object.instanceId);
+        scheduleRenderableLoad(object, projection.assetSources, host.shaderRuntime, generation);
+        continue;
+      }
+      if (!entry) {
+        scheduleRenderableLoad(object, projection.assetSources, host.shaderRuntime, generation);
+        continue;
+      }
+      entry.object = object;
+      applyObjectTransform(entry.root, object);
+      ensureRenderableShadersApplied(
+        entry,
+        object,
+        host.shaderRuntime,
+        projection.assetSources
+      );
+    }
+
+    previousObjects = currentObjects;
+  }
+
   return {
-    scene,
-    get camera() {
-      return activeCamera;
-    },
-    authoredRoot,
-    overlayRoot,
-    surfaceRoot: host.landscapeController.surfaceRoot,
     setProjectionMode(mode) {
       projectionMode = mode;
       activeCamera =
@@ -390,23 +544,99 @@ export function createAuthoringViewport(): WorkspaceViewport {
       // gameplay loop) does NOT opt into this; it calls host.render() from
       // its own loop instead.
       host.startRenderLoop();
-      // Match runtime host behavior: re-ensure every scene object's shader
-      // application each frame. Diagnostic — isolating whether the bug is
-      // "authoring lacks this step" or something else.
-      host.subscribeFrame(() => {
-        for (const entry of objectMap.values()) {
-          ensureShaderSetAppliedToRenderable(
-            entry.root,
-            entry.object,
-            host.shaderRuntime,
-            entry.shaderApplication,
-            currentAssetSources
-          );
-        }
+      // Maintain the same late-load shader-application invariant as runtime:
+      // shared render-web logic must eventually re-apply the effective shader
+      // set if a renderable subtree or authored file source becomes ready
+      // after first mount, without depending on host-specific load order.
+      unsubscribeShaderEnsureFrame = host.subscribeFrame(() => {
+        ensureShaderSetsAppliedToRenderables(
+          objectMap.values(),
+          host.shaderRuntime,
+          currentAssetSources
+        );
       });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);
+      const overlayContext: ViewportOverlayContext = {
+        overlayRoot,
+        authoredRoot,
+        surfaceRoot: asSurfaceViewportRoot(host.landscapeController.surfaceRoot),
+        domElement: element,
+        stateAccess: {
+          getSession(): AuthoringSession | null {
+            return options.stores.projectStore.getState().session;
+          },
+          getActiveRegion(): RegionDocument | null {
+            const session = options.stores.projectStore.getState().session;
+            return session ? getActiveRegion(session) : null;
+          },
+          updateSession(session: AuthoringSession) {
+            options.stores.projectStore.getState().updateSession(session);
+          },
+          getSelectionIds(): string[] {
+            return options.stores.shellStore.getState().selection.entityIds;
+          },
+          setSelection(entityIds: string[]) {
+            options.stores.shellStore.getState().setSelection(entityIds);
+          },
+          setTransformDraft(instanceId: string, transform: TransformDraft) {
+            options.stores.viewportStore.getState().setTransformDraft(
+              instanceId,
+              transform
+            );
+          },
+          getLandscapeDraft(): RegionLandscapeState | null {
+            return options.stores.viewportStore.getState().landscapeDraft;
+          },
+          setLandscapeDraft(landscape: RegionLandscapeState | null) {
+            options.stores.viewportStore.getState().setLandscapeDraft(landscape);
+          },
+          paintLandscape(
+            canonicalLandscape: RegionLandscapeState,
+            stroke: LandscapePaintStroke
+          ): boolean {
+            return options.stores.viewportStore
+              .getState()
+              .paintLandscape(canonicalLandscape, stroke);
+          },
+          clearLandscapeDraft() {
+            options.stores.viewportStore.getState().clearLandscapeDraft();
+          },
+          setCameraQuaternion(quaternion: [number, number, number, number]) {
+            options.stores.viewportStore.getState().setCameraQuaternion(quaternion);
+          }
+        },
+        getCamera() {
+          return activeCamera;
+        },
+        setProjectionMode(mode: "perspective" | "orthographic-top") {
+          projectionMode = mode;
+          activeCamera =
+            projectionMode === "orthographic-top"
+              ? orthographicCamera
+              : perspectiveCamera;
+          host.setCamera(activeCamera);
+        },
+        subscribeToProjection<T>(
+          selector: Parameters<typeof subscribeToProjection<T>>[1],
+          listener: Parameters<typeof subscribeToProjection<T>>[2],
+          opts?: Parameters<typeof subscribeToProjection<T>>[3]
+        ) {
+          return subscribeToProjection(options.stores, selector, listener, opts);
+        },
+        subscribeFrame: host.subscribeFrame
+      };
+      overlayTeardowns = (options.overlays ?? []).map((overlay) =>
+        overlay(overlayContext)
+      );
+      unsubscribeProjection = subscribeToProjection(
+        options.stores,
+        ({ project, shell, viewport, assetSources }) =>
+          selectViewportProjection(project, shell, viewport, assetSources),
+        applyProjection,
+        { equalityFn: shallowEqual }
+      );
     },
 
     unmount() {
@@ -418,144 +648,15 @@ export function createAuthoringViewport(): WorkspaceViewport {
       }
       objectMap.clear();
       pendingRenderableLoads.clear();
-      currentState = null;
+      for (const teardown of overlayTeardowns) {
+        teardown();
+      }
+      overlayTeardowns = [];
+      unsubscribeShaderEnsureFrame?.();
+      unsubscribeShaderEnsureFrame = null;
+      unsubscribeProjection?.();
+      unsubscribeProjection = null;
       host.unmount();
-    },
-
-    updateFromRegion(state: ViewportSceneState) {
-      currentState = state;
-      const {
-        region,
-        contentLibrary,
-        playerDefinition,
-        itemDefinitions,
-        npcDefinitions,
-        assetSources,
-        environmentOverrideId = null
-      } = state;
-      currentAssetSources = assetSources;
-      // Host handles environment + post-process apply, and keeps the shader
-      // runtime's content library in sync without dispose/recreate.
-      host.applyEnvironment(region, contentLibrary, environmentOverrideId, assetSources);
-      syncLandscapeGrid(region.landscape);
-
-      const currentObjects = resolveSceneObjects(region, {
-        contentLibrary,
-        playerDefinition,
-        itemDefinitions,
-        npcDefinitions
-      });
-      const delta = computeSceneDelta(previousObjects, currentObjects);
-      const generation = ++renderGeneration;
-
-      for (const id of delta.removed) {
-        const entry = objectMap.get(id);
-        if (!entry) continue;
-        authoredRoot.remove(entry.root);
-        disposeRenderableObject(entry.root);
-        objectMap.delete(id);
-      }
-
-      for (const object of delta.added) {
-        scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
-      }
-
-      for (const object of delta.updated) {
-        const existing = objectMap.get(object.instanceId);
-        const assetAvailable = assetSourceAvailable(object, assetSources);
-        if (
-          existing &&
-          existing.representationKey === object.representationKey &&
-          existing.loadedWithAsset === assetAvailable
-        ) {
-          existing.object = object;
-          applyObjectTransform(existing.root, object);
-          ensureRenderableShadersApplied(
-            existing,
-            object,
-            host.shaderRuntime,
-            assetSources
-          );
-          continue;
-        }
-        if (existing) {
-          authoredRoot.remove(existing.root);
-          disposeRenderableObject(existing.root);
-          objectMap.delete(object.instanceId);
-        }
-
-        scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
-      }
-
-      for (const object of currentObjects) {
-        const entry = objectMap.get(object.instanceId);
-        const assetAvailable = assetSourceAvailable(object, assetSources);
-        if (entry && entry.loadedWithAsset !== assetAvailable) {
-          authoredRoot.remove(entry.root);
-          disposeRenderableObject(entry.root);
-          objectMap.delete(object.instanceId);
-
-          scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
-          continue;
-        }
-        if (!entry) {
-          scheduleRenderableLoad(object, assetSources, host.shaderRuntime, generation);
-          continue;
-        }
-        entry.object = object;
-        applyObjectTransform(entry.root, object);
-        ensureRenderableShadersApplied(
-          entry,
-          object,
-          host.shaderRuntime,
-          assetSources
-        );
-      }
-
-      previousObjects = currentObjects;
-    },
-
-    previewLandscape(landscape) {
-      if (!currentState) return;
-      // Pass the current content library and asset sources — without
-      // them the landscape controller can't resolve material-bound
-      // channels and falls back to flat-color rendering, which would
-      // clobber any real material that had just been applied via a
-      // full state update.
-      host.landscapeController.applyLandscape(
-        landscape,
-        currentState.contentLibrary,
-        currentState.assetSources
-      );
-      syncLandscapeGrid(landscape);
-    },
-
-    paintLandscapeAt(options) {
-      return host.landscapeController.paintStroke({
-        channelIndex: options.channelIndex,
-        worldX: options.worldX,
-        worldZ: options.worldZ,
-        radius: options.radius,
-        strength: options.strength,
-        falloff: options.falloff
-      });
-    },
-
-    renderLandscapeMask(channelIndex, canvas) {
-      host.landscapeController.renderMaskToCanvas(channelIndex, canvas);
-    },
-
-    serializeLandscapePaintPayload() {
-      return host.landscapeController.serializePaintPayload();
-    },
-
-    previewTransform(instanceId, position, rotation, scale) {
-      const entry = objectMap.get(instanceId);
-      if (!entry) return;
-
-      entry.root.position.set(position[0], position[1], position[2]);
-      entry.root.rotation.set(rotation[0], rotation[1], rotation[2]);
-      entry.root.scale.set(scale[0], scale[1], scale[2]);
     },
 
     resize(width, height) {

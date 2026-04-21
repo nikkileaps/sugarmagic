@@ -9,3 +9,4 @@ Current checks include:
 - `check-package-boundaries.mjs`: package-layer dependency boundaries
 - `check-shell-tokens.mjs`: shell token and shared UI usage
 - `check-filename-conventions.mjs`: filename convention enforcement for selected source areas
+- `check-viewport-imperative.mjs`: prevents legacy viewport mutation methods from reappearing on the shared workspace viewport contract

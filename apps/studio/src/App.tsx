@@ -73,6 +73,9 @@ import {
   createShellStore,
   createProjectStore,
   createPreviewStore,
+  createAssetSourceStore,
+  createDesignPreviewStore,
+  createViewportStore,
   CORE_DESIGN_WORKSPACE_KINDS,
   designWorkspaceRequiresViewport,
   type AuthoringContextSnapshot
@@ -81,11 +84,7 @@ import {
   useBuildProductModeView,
   useDesignProductModeView,
   useRenderProductModeView,
-  type ItemWorkspaceViewport,
-  type NPCWorkspaceViewport,
-  type WorkspaceNavigationTarget,
-  type WorkspaceViewport,
-  type PlayerWorkspaceViewport
+  type WorkspaceNavigationTarget
 } from "@sugarmagic/workspaces";
 import {
   ActionStripe,
@@ -104,7 +103,10 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
-import { useAssetSources } from "./asset-sources";
+import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
+import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
+import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
+import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
 import {
   getStudioPluginWorkspaceDefinition,
   listStudioPluginWorkspaceDefinitions
@@ -133,6 +135,9 @@ function renderPluginSectionGroup(
 const shellStore = createShellStore("build");
 const projectStore = createProjectStore();
 const previewStore = createPreviewStore();
+const viewportStore = createViewportStore();
+const assetSourceStore = createAssetSourceStore();
+const designPreviewStore = createDesignPreviewStore();
 
 const modeBarItems: ModeBarItem[] = productModes.map((mode) => ({
   id: mode.id,
@@ -489,7 +494,6 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [viewportReadyVersion, setViewportReadyVersion] = useState(0);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -537,7 +541,7 @@ export function App() {
     if (!session) return [];
     return getAllTextureDefinitions(session);
   }, [session]);
-  const assetSources = useAssetSources(projectHandle, session?.contentLibrary ?? null);
+  const assetSources = useStore(assetSourceStore, (state) => state.sources);
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -592,6 +596,18 @@ export function App() {
     () => pluginConfigurations.map((configuration) => configuration.pluginId),
     [pluginConfigurations]
   );
+
+  useEffect(() => {
+    if (!projectHandle || phase !== "active") {
+      assetSourceStore.getState().stop();
+      return;
+    }
+
+    assetSourceStore.getState().start(projectHandle, projectStore);
+    return () => {
+      assetSourceStore.getState().stop();
+    };
+  }, [phase, projectHandle]);
 
   useEffect(() => {
     if (!isPreviewRunning || !previewWindow || previewWindow.closed || !session) {
@@ -712,11 +728,6 @@ export function App() {
     if (availableDesignWorkspaceKinds.has(activeDesignKind)) return;
     shellStore.getState().setActiveDesignWorkspaceKind("player");
   }, [activeDesignKind, activeProductMode, renderablePluginWorkspaceItems]);
-
-  const environmentViewportOverrideId =
-    activeBuildKind === "environment"
-      ? activeEnvironmentId ?? environmentDefinitions[0]?.definitionId ?? null
-      : null;
 
   useEffect(() => {
     if (!session) return;
@@ -1067,10 +1078,6 @@ export function App() {
 
   // --- Viewport lifecycle (tied to project phase) ---
   const viewportRef = useRef<HTMLDivElement>(null);
-  const buildViewportRef = useRef<WorkspaceViewport | null>(null);
-  const playerViewportRef = useRef<PlayerWorkspaceViewport | null>(null);
-  const itemViewportRef = useRef<ItemWorkspaceViewport | null>(null);
-  const npcViewportRef = useRef<NPCWorkspaceViewport | null>(null);
 
   useEffect(() => {
     if (phase !== "active") return;
@@ -1079,97 +1086,74 @@ export function App() {
       (activeProductMode === "design" &&
         !designWorkspaceRequiresViewport(activeDesignKind))
     ) {
-      buildViewportRef.current = null;
-      playerViewportRef.current = null;
-      itemViewportRef.current = null;
-      npcViewportRef.current = null;
-      const readyFrame = window.requestAnimationFrame(() => {
-        setViewportReadyVersion((version) => version + 1);
-      });
-      return () => {
-        window.cancelAnimationFrame(readyFrame);
-      };
+      return;
     }
     if (!viewportRef.current) return;
     const viewport =
       activeProductMode === "design"
         ? activeDesignKind === "npcs"
-          ? createNPCViewport()
+          ? createNPCViewport({
+              stores: {
+                projectStore,
+                shellStore,
+                viewportStore,
+                assetSourceStore,
+                designPreviewStore
+              }
+            })
           : activeDesignKind === "items"
-            ? createItemViewport()
-            : createPlayerViewport()
-        : createAuthoringViewport();
+            ? createItemViewport({
+                stores: {
+                  projectStore,
+                  shellStore,
+                  viewportStore,
+                  assetSourceStore,
+                  designPreviewStore
+                }
+              })
+            : createPlayerViewport({
+                stores: {
+                  projectStore,
+                  shellStore,
+                  viewportStore,
+                  assetSourceStore,
+                  designPreviewStore
+                }
+              })
+        : createAuthoringViewport({
+            stores: {
+              projectStore,
+              shellStore,
+              viewportStore,
+              assetSourceStore,
+              designPreviewStore
+            },
+            overlays: [
+              mountAuthoringCameraOverlay,
+              mountLandscapeAuthoringOverlay,
+              mountTransformGizmoOverlay,
+              mountSpatialAuthoringOverlay
+            ]
+          });
     viewport.mount(viewportRef.current);
-    if (activeProductMode === "design") {
-      if (activeDesignKind === "npcs") {
-        npcViewportRef.current = viewport as NPCWorkspaceViewport;
-        playerViewportRef.current = null;
-        itemViewportRef.current = null;
-      } else if (activeDesignKind === "items") {
-        itemViewportRef.current = viewport as ItemWorkspaceViewport;
-        playerViewportRef.current = null;
-        npcViewportRef.current = null;
-      } else {
-        playerViewportRef.current = viewport as PlayerWorkspaceViewport;
-        itemViewportRef.current = null;
-        npcViewportRef.current = null;
-      }
-      buildViewportRef.current = null;
-    } else {
-      buildViewportRef.current = viewport as WorkspaceViewport;
-      playerViewportRef.current = null;
-      npcViewportRef.current = null;
-    }
-    const readyFrame = window.requestAnimationFrame(() => {
-      setViewportReadyVersion((version) => version + 1);
-    });
-
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) viewport.resize(entry.contentRect.width, entry.contentRect.height);
     });
     observer.observe(viewportRef.current);
 
     return () => {
-      window.cancelAnimationFrame(readyFrame);
       observer.disconnect();
       viewport.unmount();
-      buildViewportRef.current = null;
-      playerViewportRef.current = null;
-      itemViewportRef.current = null;
-      npcViewportRef.current = null;
     };
   }, [activeDesignKind, activeProductMode, phase]);
 
-  // --- Sync viewport with active region ---
+  // --- Active region remains shell/project truth; the authoring viewport now
+  // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
-
-  useEffect(() => {
-    if (isBuild && buildViewportRef.current && activeRegion && session?.contentLibrary) {
-      buildViewportRef.current.updateFromRegion({
-        region: activeRegion,
-        contentLibrary: session.contentLibrary,
-        playerDefinition: session.gameProject.playerDefinition,
-        itemDefinitions: session.gameProject.itemDefinitions,
-        npcDefinitions: session.gameProject.npcDefinitions,
-        assetSources,
-        environmentOverrideId: environmentViewportOverrideId
-      });
-    }
-  }, [
-    activeRegion,
-    assetSources,
-    environmentViewportOverrideId,
-    isBuild,
-    session?.contentLibrary,
-    session?.gameProject.itemDefinitions,
-    session?.gameProject.npcDefinitions,
-    session?.gameProject.playerDefinition
-  ]);
 
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
     activeBuildKind,
-    viewportReadyVersion,
     activeRegionId,
     activeEnvironmentId,
     selectedIds,
@@ -1182,8 +1166,8 @@ export function App() {
     shaderDefinitions,
     npcDefinitions,
     questDefinitions,
-    getViewport: () => buildViewportRef.current,
     getViewportElement: () => viewportRef.current,
+    viewportStore,
     regions,
     onSelectKind: (kind) => shellStore.getState().setActiveBuildWorkspaceKind(kind),
     onSelectRegion: handleRegionSelect,
@@ -1278,7 +1262,6 @@ export function App() {
 
   const designView = useDesignProductModeView({
     activeDesignKind,
-    viewportReadyVersion,
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
     playerDefinition,
@@ -1290,13 +1273,8 @@ export function App() {
     questDefinitions,
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
-    contentLibrary: session?.contentLibrary ?? null,
     assetDefinitions,
-    assetSources,
-    getPlayerViewport: () => playerViewportRef.current,
-    getItemViewport: () => itemViewportRef.current,
-    getNPCViewport: () => npcViewportRef.current,
-    getViewportElement: () => viewportRef.current,
+    designPreviewStore,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,
@@ -1367,8 +1345,7 @@ export function App() {
   }, [
     activePluginWorkspaceDefinition,
     pluginConfigurations,
-    session?.gameProject,
-    session?.gameProject.identity.id
+    session?.gameProject
   ]);
   const genericPluginView = useMemo(() => {
     if (activePluginWorkspaceDefinition) {
@@ -1436,7 +1413,6 @@ export function App() {
     regionDocuments,
     renderablePluginWorkspaceItems,
     session?.gameProject,
-    session?.gameProject.identity.id,
     sugarlangTargetLanguage
   ]);
 
