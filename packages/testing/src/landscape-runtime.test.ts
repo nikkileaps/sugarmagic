@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
+  createLandscapeSurfaceSlot,
+  createMaterialSurface,
   createDefaultStandardPbrShaderGraph,
   createDefaultRegionLandscapeState,
   createEmptyContentLibrarySnapshot
@@ -178,14 +180,14 @@ describe("landscape runtime controller", () => {
     );
     const region = makeRegion(true);
 
-    region.landscape.channels.push({
-      channelId: "landscape-channel:grass",
-      displayName: "Grass",
-      mode: "material",
-      color: 0x5c8a5a,
-      materialDefinitionId: "wordlark:material:grass",
-      tilingScale: null
-    });
+    region.landscape.surfaceSlots.push(
+      createLandscapeSurfaceSlot({
+        channelId: "landscape-channel:grass",
+        displayName: "Grass",
+        surface: createMaterialSurface("wordlark:material:grass"),
+        tilingScale: null
+      })
+    );
 
     const result = controller.apply(region, contentLibrary, fileSources);
 
@@ -217,24 +219,22 @@ describe("landscape runtime controller", () => {
   });
 
   it("defaults tilingScale to null on freshly-created channels", async () => {
-    const { createRegionLandscapeChannelDefinition } = await import(
+    const { createLandscapeSurfaceSlot, createMaterialSurface } = await import(
       "@sugarmagic/domain"
     );
-    const channel = createRegionLandscapeChannelDefinition({
+    const channel = createLandscapeSurfaceSlot({
       displayName: "Brick",
-      mode: "material",
-      materialDefinitionId: "wordlark:material:brick"
+      surface: createMaterialSurface("wordlark:material:brick")
     });
     expect(channel.tilingScale).toBeNull();
   });
 
   it("preserves explicit tilingScale passed to the factory", async () => {
-    const { createRegionLandscapeChannelDefinition } = await import(
+    const { createLandscapeSurfaceSlot, createMaterialSurface } = await import(
       "@sugarmagic/domain"
     );
-    const channel = createRegionLandscapeChannelDefinition({
-      mode: "material",
-      materialDefinitionId: "wordlark:material:brick",
+    const channel = createLandscapeSurfaceSlot({
+      surface: createMaterialSurface("wordlark:material:brick"),
       tilingScale: [8, 4]
     });
     expect(channel.tilingScale).toEqual([8, 4]);
@@ -265,13 +265,15 @@ describe("landscape runtime controller", () => {
         size: 64,
         subdivisions: 64,
         paintPayload: null,
-        channels: [
+        surfaceSlots: [
           {
             channelId: "landscape-legacy-channel",
             displayName: "Dirt",
-            mode: "material",
-            color: 0x7a2018,
-            materialDefinitionId: "wordlark:material:dirt"
+            slotName: "Dirt",
+            surface: {
+              kind: "material",
+              materialDefinitionId: "wordlark:material:dirt"
+            }
             // NOTE: no tilingScale — simulates a saved-project shape
             // from before this field existed.
           }
@@ -279,7 +281,7 @@ describe("landscape runtime controller", () => {
       }
     } as never;
     const normalized = normalizeRegionDocumentForLoad(legacyRegion, contentLibrary);
-    const channel = normalized.landscape.channels.find(
+    const channel = normalized.landscape.surfaceSlots.find(
       (c) => c.channelId === "landscape-legacy-channel"
     );
     expect(channel).toBeTruthy();

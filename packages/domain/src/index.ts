@@ -21,4 +21,5 @@ export * from "./region-authoring/index";
 export * from "./shader-graph/index";
 export * from "./shared/index";
 export * from "./spell-definition/index";
+export * from "./surface/index";
 export * from "./transactions/index";

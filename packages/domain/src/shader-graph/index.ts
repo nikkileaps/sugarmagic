@@ -12,6 +12,7 @@ import { createScopedId } from "../shared/identity";
 export type ShaderTargetKind =
   | "mesh-surface"
   | "mesh-deform"
+  | "mesh-effect"
   | "post-process"
   | "billboard-surface";
 
@@ -41,7 +42,7 @@ export type ShaderParameterValue =
   | boolean
   | null;
 
-export type ShaderSlotKind = "surface" | "deform";
+export type ShaderSlotKind = "surface" | "deform" | "effect";
 
 export const SHADER_SLOT_KINDS: readonly ShaderSlotKind[] = [
   "surface",
@@ -53,7 +54,8 @@ export type ShaderSlotBindingMap = Record<ShaderSlotKind, string | null>;
 export function createEmptyShaderSlotBindingMap(): ShaderSlotBindingMap {
   return {
     surface: null,
-    deform: null
+    deform: null,
+    effect: null
   };
 }
 
@@ -380,6 +382,60 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     displayName: "Scene Depth",
     category: "input",
     validTargetKinds: ["post-process"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.color",
+    displayName: "Accumulator Color",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.normal",
+    displayName: "Accumulator Normal",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.roughness",
+    displayName: "Accumulator Roughness",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.metalness",
+    displayName: "Accumulator Metalness",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.ao",
+    displayName: "Accumulator AO",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: []
+  },
+  {
+    nodeType: "input.accumulator.alpha",
+    displayName: "Accumulator Alpha",
+    category: "input",
+    validTargetKinds: ["mesh-effect"],
     inputPorts: [],
     outputPorts: [outputPort("value", "Value", "float")],
     settings: []
@@ -842,6 +898,15 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: []
   },
   {
+    nodeType: "output.deform",
+    displayName: "Deform Output",
+    category: "output",
+    validTargetKinds: ["mesh-deform"],
+    inputPorts: [inputPort("value", "Value", "vec3")],
+    outputPorts: [],
+    settings: []
+  },
+  {
     nodeType: "output.fragment",
     displayName: "Fragment Output",
     category: "output",
@@ -875,11 +940,67 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: []
   },
   {
+    nodeType: "output.surface",
+    displayName: "Surface Output",
+    category: "output",
+    validTargetKinds: ["mesh-surface"],
+    inputPorts: [
+      inputPort("color", "Color", "vec3"),
+      inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 }),
+      inputPort("normal", "Normal", "vec3", {
+        optional: true,
+        defaultValue: [0, 0, 1]
+      }),
+      inputPort("roughness", "Roughness", "float", {
+        optional: true,
+        defaultValue: 1
+      }),
+      inputPort("metalness", "Metalness", "float", {
+        optional: true,
+        defaultValue: 0
+      }),
+      inputPort("ao", "Ambient Occlusion", "float", {
+        optional: true,
+        defaultValue: 1
+      })
+    ],
+    outputPorts: [],
+    settings: []
+  },
+  {
     nodeType: "output.emissive",
     displayName: "Emissive Output",
     category: "output",
     validTargetKinds: ["mesh-surface"],
     inputPorts: [inputPort("color", "Color", "vec3")],
+    outputPorts: [],
+    settings: []
+  },
+  {
+    nodeType: "output.effect",
+    displayName: "Effect Output",
+    category: "output",
+    validTargetKinds: ["mesh-effect"],
+    inputPorts: [
+      inputPort("color", "Color", "vec3"),
+      inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 }),
+      inputPort("normal", "Normal", "vec3", {
+        optional: true,
+        defaultValue: [0, 0, 1]
+      }),
+      inputPort("roughness", "Roughness", "float", {
+        optional: true,
+        defaultValue: 1
+      }),
+      inputPort("metalness", "Metalness", "float", {
+        optional: true,
+        defaultValue: 0
+      }),
+      inputPort("ao", "Ambient Occlusion", "float", {
+        optional: true,
+        defaultValue: 1
+      })
+    ],
     outputPorts: [],
     settings: []
   },
@@ -904,12 +1025,45 @@ export function createShaderGraphDefinitionId(projectId: string): string {
 
 function requiredOutputNodeTypeForTargetKind(
   targetKind: ShaderTargetKind
-): "output.vertex" | "output.post-process" | "output.fragment" {
+): "output.deform" | "output.post-process" | "output.surface" | "output.effect" {
   return targetKind === "mesh-deform"
-    ? "output.vertex"
+    ? "output.deform"
     : targetKind === "post-process"
       ? "output.post-process"
-      : "output.fragment";
+      : targetKind === "mesh-effect"
+        ? "output.effect"
+        : "output.surface";
+}
+
+function allowedOutputNodeTypesForTargetKind(
+  targetKind: ShaderTargetKind
+): string[] {
+  if (targetKind === "mesh-deform") {
+    return ["output.deform", "output.vertex"];
+  }
+  if (targetKind === "post-process") {
+    return ["output.post-process"];
+  }
+  if (targetKind === "mesh-effect") {
+    return ["output.effect"];
+  }
+  return ["output.surface", "output.fragment"];
+}
+
+function nodeSupportsTargetKind(
+  definition: ShaderNodeDefinition,
+  targetKind: ShaderTargetKind
+): boolean {
+  if (definition.validTargetKinds.includes(targetKind)) {
+    return true;
+  }
+  if (targetKind === "mesh-effect") {
+    return (
+      definition.validTargetKinds.includes("mesh-surface") ||
+      definition.validTargetKinds.includes("post-process")
+    );
+  }
+  return false;
 }
 
 export function createDefaultShaderGraphDocument(
@@ -1167,6 +1321,136 @@ export function createSimpleAlphaTestShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "simple-alpha-test"
+    }
+  };
+}
+
+export function createBuiltInFlatColorShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:flat-color`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Flat Color",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      createParameterNode("color", "color", { x: 48, y: 160 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 360, y: 160 }, settings: {} }
+    ],
+    edges: [createShaderEdge("edge-color-output", "color", "value", "output", "color")],
+    parameters: [
+      {
+        parameterId: "color",
+        displayName: "Color",
+        dataType: "color",
+        defaultValue: [0.5, 0.5, 0.5]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "flat-color"
+    }
+  };
+}
+
+export function createBuiltInFlatTextureShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:flat-texture`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Flat Texture",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
+      createParameterNode("tiling", "tiling", { x: 48, y: 304 }),
+      { nodeId: "scale-uv", nodeType: "math.multiply", position: { x: 320, y: 224 }, settings: {} },
+      createMaterialTextureNode("texture", "texture", { x: 608, y: 160 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-uv-scale", "uv", "value", "scale-uv", "a"),
+      createShaderEdge("edge-tiling-scale", "tiling", "value", "scale-uv", "b"),
+      createShaderEdge("edge-scale-texture-uv", "scale-uv", "value", "texture", "uv"),
+      createShaderEdge("edge-texture-output", "texture", "color", "output", "color"),
+      createShaderEdge("edge-texture-alpha-output", "texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "texture",
+        displayName: "Texture",
+        dataType: "texture2d",
+        defaultValue: null,
+        textureRole: "color"
+      },
+      {
+        parameterId: "tiling",
+        displayName: "Tiling",
+        dataType: "vec2",
+        defaultValue: [1, 1]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "flat-texture"
+    }
+  };
+}
+
+export function createBuiltInCloudShadowEffectShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:cloud-shadow-demo`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Cloud Shadow Demo",
+    targetKind: "mesh-effect",
+    revision: 1,
+    nodes: [
+      { nodeId: "accum", nodeType: "input.accumulator.color", position: { x: 48, y: 160 }, settings: {} },
+      createParameterNode("tint", "tint", { x: 48, y: 304 }),
+      { nodeId: "multiply", nodeType: "color.multiply", position: { x: 352, y: 224 }, settings: {} },
+      { nodeId: "output", nodeType: "output.effect", position: { x: 656, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-accum-multiply", "accum", "value", "multiply", "a"),
+      createShaderEdge("edge-tint-multiply", "tint", "value", "multiply", "b"),
+      createShaderEdge("edge-multiply-output", "multiply", "value", "output", "color")
+    ],
+    parameters: [
+      {
+        parameterId: "tint",
+        displayName: "Tint",
+        dataType: "color",
+        defaultValue: [0.8, 0.8, 0.8]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "cloud-shadow-demo"
     }
   };
 }
@@ -3076,7 +3360,7 @@ export function validateShaderGraphDocument(
       continue;
     }
 
-    if (!definition.validTargetKinds.includes(document.targetKind)) {
+    if (!nodeSupportsTargetKind(definition, document.targetKind)) {
       issues.push({
         severity: "error",
         nodeId: node.nodeId,
@@ -3180,11 +3464,11 @@ export function validateShaderGraphDocument(
     }
   }
 
-  const outputNodeType = requiredOutputNodeTypeForTargetKind(document.targetKind);
-  if (!document.nodes.some((node) => node.nodeType === outputNodeType)) {
+  const outputNodeTypes = allowedOutputNodeTypesForTargetKind(document.targetKind);
+  if (!document.nodes.some((node) => outputNodeTypes.includes(node.nodeType))) {
     issues.push({
       severity: "error",
-      message: `Graph is missing a required ${outputNodeType} node.`
+      message: `Graph is missing a required ${requiredOutputNodeTypeForTargetKind(document.targetKind)} node.`
     });
   }
 

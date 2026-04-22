@@ -195,16 +195,22 @@ describe("foliage GLB import analysis", () => {
     expect(derived.textureDefinitions).toHaveLength(2);
     expect(derived.materialDefinitions).toHaveLength(2);
     expect(derived.files).toHaveLength(2);
-    expect(derived.materialSlotBindings).toEqual([
+    expect(derived.surfaceSlots).toEqual([
       {
         slotName: "FoilageMaker Export Trunk",
         slotIndex: 0,
-        materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0"
+        surface: {
+          kind: "material",
+          materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0"
+        }
       },
       {
         slotName: "FoilageMaker Export Leaves",
         slotIndex: 1,
-        materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1"
+        surface: {
+          kind: "material",
+          materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1"
+        }
       }
     ]);
     expect(derived.materialDefinitions).toEqual([

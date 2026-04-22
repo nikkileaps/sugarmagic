@@ -10,18 +10,18 @@
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
-  MaterialSlotBinding,
+  AssetSurfaceSlot,
   PlacedAssetInstance,
   PostProcessShaderBinding,
   RegionItemPresence,
   RegionNPCPresence,
+  ShaderOrMaterial,
   ShaderGraphDocument,
   ShaderParameterOverride,
-  ShaderSlotBindingMap,
+  Surface,
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
-  createEmptyShaderSlotBindingMap,
   getAssetDefinition,
   getMaterialDefinition,
   getShaderDefinition
@@ -50,12 +50,20 @@ export interface ShaderBindingResolutionDiagnostic {
   message: string;
 }
 
+export interface SurfaceResolverDiagnostic {
+  severity: "error";
+  expectedTargetKind: ShaderGraphDocument["targetKind"];
+  shaderDefinitionId: string | null;
+  message: string;
+}
+
 export const SHADER_SLOT_TARGET_KINDS: Record<
   ShaderSlotKind,
   ShaderGraphDocument["targetKind"]
 > = {
   surface: "mesh-surface",
-  deform: "mesh-deform"
+  deform: "mesh-deform",
+  effect: "mesh-effect"
 };
 
 export type EffectiveShaderBindingSet = {
@@ -71,7 +79,8 @@ export interface EffectiveShaderBindingResolution {
 function createEmptyEffectiveShaderBindingSet(): EffectiveShaderBindingSet {
   return {
     surface: null,
-    deform: null
+    deform: null,
+    effect: null
   };
 }
 
@@ -145,31 +154,15 @@ function selectParameterOverrides(
   });
 }
 
-function selectDefaultSlotBindings(
-  assetDefinition: AssetDefinition | null,
-  contentLibrary: ContentLibrarySnapshot
-): ShaderSlotBindingMap {
-  const defaults = {
-    ...createEmptyShaderSlotBindingMap(),
-    ...(assetDefinition?.defaultShaderBindings ?? {})
-  };
-
-  if (assetDefinition?.assetKind === "foliage") {
-    defaults.surface =
-      defaults.surface ??
-      contentLibrary.shaderDefinitions.find(
-        (definition) => definition.metadata.builtInKey === "foliage-surface"
-      )?.shaderDefinitionId ??
-      null;
-    defaults.deform =
-      defaults.deform ??
-      contentLibrary.shaderDefinitions.find(
-        (definition) => definition.metadata.builtInKey === "foliage-wind"
-      )?.shaderDefinitionId ??
-      null;
-  }
-
-  return defaults;
+function builtInShaderIdForKey(
+  contentLibrary: ContentLibrarySnapshot,
+  builtInKey: string
+): string | null {
+  return (
+    contentLibrary.shaderDefinitions.find(
+      (definition) => definition.metadata.builtInKey === builtInKey
+    )?.shaderDefinitionId ?? null
+  );
 }
 
 function resolveSlotBinding(
@@ -250,6 +243,126 @@ export function resolveMaterialEffectiveShaderBinding(
   );
 }
 
+export type ResolveSurfaceResult =
+  | { ok: true; binding: EffectiveShaderBinding }
+  | { ok: false; diagnostic: SurfaceResolverDiagnostic };
+
+function surfaceDiagnostic(
+  expectedTargetKind: ShaderGraphDocument["targetKind"],
+  shaderDefinitionId: string | null,
+  message: string
+): ResolveSurfaceResult {
+  return {
+    ok: false,
+    diagnostic: {
+      severity: "error",
+      expectedTargetKind,
+      shaderDefinitionId,
+      message
+    }
+  };
+}
+
+function validateResolvedSurfaceTarget(
+  binding: EffectiveShaderBinding | null,
+  expectedTargetKind: ShaderGraphDocument["targetKind"]
+): ResolveSurfaceResult {
+  if (!binding) {
+    return surfaceDiagnostic(expectedTargetKind, null, "Surface slot could not be resolved.");
+  }
+  if (binding.targetKind !== expectedTargetKind) {
+    return surfaceDiagnostic(
+      expectedTargetKind,
+      binding.shaderDefinitionId,
+      `Shader "${binding.shaderDefinitionId}" targets "${binding.targetKind}" but this slot requires "${expectedTargetKind}".`
+    );
+  }
+  return { ok: true, binding };
+}
+
+export function resolveSurface(
+  surface: Surface,
+  contentLibrary: ContentLibrarySnapshot,
+  expectedTargetKind: ShaderGraphDocument["targetKind"]
+): ResolveSurfaceResult {
+  if (surface.kind === "color") {
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic(expectedTargetKind, null, 'Missing built-in "flat-color" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(
+        contentLibrary,
+        "surface",
+        shaderDefinitionId,
+        [],
+        [],
+        { baseParameterValues: { color: [(surface.color >> 16 & 0xff) / 255, (surface.color >> 8 & 0xff) / 255, (surface.color & 0xff) / 255] } }
+      ),
+      expectedTargetKind
+    );
+  }
+
+  if (surface.kind === "texture") {
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-texture");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic(expectedTargetKind, null, 'Missing built-in "flat-texture" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(
+        contentLibrary,
+        "surface",
+        shaderDefinitionId,
+        [],
+        [],
+        {
+          baseParameterValues: { tiling: surface.tiling },
+          textureBindings: { texture: surface.textureDefinitionId }
+        }
+      ),
+      expectedTargetKind
+    );
+  }
+
+  if (surface.kind === "material") {
+    return validateResolvedSurfaceTarget(
+      resolveMaterialEffectiveShaderBinding(contentLibrary, surface.materialDefinitionId, []),
+      expectedTargetKind
+    );
+  }
+
+  const definition = getShaderDefinition(contentLibrary, surface.shaderDefinitionId);
+  if (!definition) {
+    return surfaceDiagnostic(
+      expectedTargetKind,
+      surface.shaderDefinitionId,
+      `Surface references missing shader "${surface.shaderDefinitionId}".`
+    );
+  }
+
+  const slot =
+    expectedTargetKind === "mesh-deform"
+      ? "deform"
+      : expectedTargetKind === "mesh-effect"
+        ? "effect"
+        : "surface";
+
+  return validateResolvedSurfaceTarget(
+    resolveSlotBinding(
+      contentLibrary,
+      slot,
+      surface.shaderDefinitionId,
+      [],
+      [],
+      {
+        baseParameterValues: surface.parameterValues,
+        textureBindings: surface.textureBindings
+      }
+    ),
+    expectedTargetKind
+  );
+}
+
 function resolveMaterialSurfaceBinding(
   contentLibrary: ContentLibrarySnapshot,
   materialDefinitionId: string,
@@ -292,31 +405,52 @@ function resolveBindingSetForOwner(
 ): EffectiveShaderBindingResolution {
   const bindingSet = createEmptyEffectiveShaderBindingSet();
   const diagnostics: ShaderBindingResolutionDiagnostic[] = [];
-  const defaultBindings = selectDefaultSlotBindings(ownerAssetDefinition, contentLibrary);
   const overrideBySlot = new Map(
     overrides.shaderOverrides.map((override) => [override.slot, override.shaderDefinitionId])
   );
 
-  const combinedParameterOverrides = [
-    ...(ownerAssetDefinition?.defaultShaderParameterOverrides ?? []),
-    ...overrides.shaderParameterOverrides
-  ];
-
   for (const slot of Object.keys(SHADER_SLOT_TARGET_KINDS) as ShaderSlotKind[]) {
-    const shaderDefinitionId =
-      overrideBySlot.get(slot) ?? defaultBindings[slot] ?? null;
-    bindingSet[slot] = resolveSlotBinding(
+    const overrideShaderDefinitionId = overrideBySlot.get(slot) ?? null;
+    if (overrideShaderDefinitionId) {
+      bindingSet[slot] = resolveSlotBinding(
+        contentLibrary,
+        slot,
+        overrideShaderDefinitionId,
+        overrides.shaderParameterOverrides,
+        diagnostics
+      );
+      continue;
+    }
+
+    const hostSurface: Surface | ShaderOrMaterial | null =
+      slot === "deform"
+        ? ownerAssetDefinition?.deform ?? null
+        : slot === "effect"
+          ? ownerAssetDefinition?.effect ?? null
+          : null;
+    if (!hostSurface) {
+      bindingSet[slot] = null;
+      continue;
+    }
+    const result = resolveSurface(
+      hostSurface,
       contentLibrary,
-      slot,
-      shaderDefinitionId,
-      combinedParameterOverrides,
-      diagnostics
+      SHADER_SLOT_TARGET_KINDS[slot]
     );
+    bindingSet[slot] = result.ok ? result.binding : null;
+    if (!result.ok) {
+      diagnostics.push({
+        severity: "error",
+        slot,
+        shaderDefinitionId: result.diagnostic.shaderDefinitionId,
+        message: result.diagnostic.message
+      });
+    }
   }
 
-  const materialSlots = resolveMaterialSlotBindings(
+  const materialSlots = resolveSurfaceSlotBindings(
     contentLibrary,
-    ownerAssetDefinition?.materialSlotBindings ?? [],
+    ownerAssetDefinition?.surfaceSlots ?? [],
     bindingSet.surface,
     overrides.shaderParameterOverrides,
     diagnostics
@@ -329,15 +463,15 @@ function resolveBindingSetForOwner(
   };
 }
 
-function resolveMaterialSlotBindings(
+function resolveSurfaceSlotBindings(
   contentLibrary: ContentLibrarySnapshot,
-  slotBindings: MaterialSlotBinding[],
+  slotBindings: AssetSurfaceSlot[],
   fallbackSurface: EffectiveShaderBinding | null,
   parameterOverrides: ShaderParameterOverride[],
   diagnostics: ShaderBindingResolutionDiagnostic[]
 ): EffectiveMaterialSlotBinding[] {
   return slotBindings.map((slotBinding) => {
-    if (!slotBinding.materialDefinitionId) {
+    if (!slotBinding.surface) {
       return {
         slotName: slotBinding.slotName,
         slotIndex: slotBinding.slotIndex,
@@ -346,13 +480,31 @@ function resolveMaterialSlotBindings(
       };
     }
 
+    if (slotBinding.surface.kind !== "material") {
+      const result = resolveSurface(slotBinding.surface, contentLibrary, "mesh-surface");
+      if (!result.ok) {
+        diagnostics.push({
+          severity: "error",
+          slot: "surface",
+          shaderDefinitionId: result.diagnostic.shaderDefinitionId,
+          message: result.diagnostic.message
+        });
+      }
+      return {
+        slotName: slotBinding.slotName,
+        slotIndex: slotBinding.slotIndex,
+        materialDefinitionId: null,
+        surface: result.ok ? result.binding : fallbackSurface
+      };
+    }
+
     return {
       slotName: slotBinding.slotName,
       slotIndex: slotBinding.slotIndex,
-      materialDefinitionId: slotBinding.materialDefinitionId,
+      materialDefinitionId: slotBinding.surface.materialDefinitionId,
       surface: resolveMaterialSurfaceBinding(
         contentLibrary,
-        slotBinding.materialDefinitionId,
+        slotBinding.surface.materialDefinitionId,
         parameterOverrides,
         diagnostics
       )

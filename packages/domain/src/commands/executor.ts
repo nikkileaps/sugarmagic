@@ -15,11 +15,11 @@ import type {
   PlacedAssetInstance,
   RegionInspectableBehavior,
   RegionSceneFolder,
-  RegionLandscapeChannelDefinition,
   RegionNPCPresence,
   RegionPlayerPresence,
   RegionItemPresence
 } from "../region-authoring";
+import type { LandscapeSurfaceSlot } from "../surface";
 import type { TransactionBoundary } from "../transactions";
 import type { AuthoringHistory } from "../history";
 import type { TimestampIso } from "../shared";
@@ -1025,7 +1025,7 @@ function applyCreateLandscapeChannel(
   region: RegionDocument,
   command: CreateLandscapeChannelCommand
 ): RegionDocument {
-  if (region.landscape.channels.length >= MAX_REGION_LANDSCAPE_CHANNELS) {
+  if (region.landscape.surfaceSlots.length >= MAX_REGION_LANDSCAPE_CHANNELS) {
     return region;
   }
 
@@ -1033,29 +1033,25 @@ function applyCreateLandscapeChannel(
     ...region,
     landscape: {
       ...region.landscape,
-      channels: [...region.landscape.channels, command.payload.channel]
+      surfaceSlots: [...region.landscape.surfaceSlots, command.payload.channel]
     }
   };
 }
 
 function updateLandscapeChannel(
-  channel: RegionLandscapeChannelDefinition,
+  channel: LandscapeSurfaceSlot,
   command: UpdateLandscapeChannelCommand
-): RegionLandscapeChannelDefinition {
+): LandscapeSurfaceSlot {
   return {
     ...channel,
     ...(command.payload.displayName === undefined
       ? {}
-      : { displayName: command.payload.displayName }),
-    ...(command.payload.mode === undefined
-      ? {}
-      : { mode: command.payload.mode }),
-    ...(command.payload.color === undefined
-      ? {}
-      : { color: command.payload.color }),
-    ...(command.payload.materialDefinitionId === undefined
-      ? {}
-      : { materialDefinitionId: command.payload.materialDefinitionId }),
+      : {
+          displayName: command.payload.displayName,
+          slotName: command.payload.slotName ?? command.payload.displayName
+        }),
+    ...(command.payload.slotName === undefined ? {} : { slotName: command.payload.slotName }),
+    ...(command.payload.surface === undefined ? {} : { surface: command.payload.surface }),
     ...(command.payload.tilingScale === undefined
       ? {}
       : { tilingScale: command.payload.tilingScale })
@@ -1070,7 +1066,7 @@ function applyUpdateLandscapeChannel(
     ...region,
     landscape: {
       ...region.landscape,
-      channels: region.landscape.channels.map((channel) =>
+      surfaceSlots: region.landscape.surfaceSlots.map((channel) =>
         channel.channelId === command.payload.channelId
           ? updateLandscapeChannel(channel, command)
           : channel

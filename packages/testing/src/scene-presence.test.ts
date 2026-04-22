@@ -31,7 +31,9 @@ function makeRegion(): RegionDocument {
       enabled: false,
       size: 100,
       subdivisions: 160,
-      channels: [],
+      surfaceSlots: [],
+      deform: null,
+      effect: null,
       paintPayload: null
     },
     markers: [],

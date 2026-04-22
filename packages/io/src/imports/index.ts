@@ -10,7 +10,6 @@
 import type {
   AssetDefinition,
   MaterialDefinition,
-  MaterialSlotBinding,
   TextureDefinition
 } from "@sugarmagic/domain";
 import { listFilesInDirectory, pickDirectory, pickFile, writeBlobFile } from "../fs-access";
@@ -205,7 +204,7 @@ function hasEmbeddedTextureReference(document: GlbDocument): boolean {
   });
 }
 
-function collectMaterialSlotBindings(document: GlbDocument): MaterialSlotBinding[] {
+function collectSurfaceSlots(document: GlbDocument): AssetDefinition["surfaceSlots"] {
   return (document.materials ?? []).map((material, slotIndex) => {
     const rawName =
       typeof material.name === "string" && material.name.trim().length > 0
@@ -214,7 +213,7 @@ function collectMaterialSlotBindings(document: GlbDocument): MaterialSlotBinding
     return {
       slotName: rawName,
       slotIndex,
-      materialDefinitionId: null
+      surface: null
     };
   });
 }
@@ -460,9 +459,9 @@ export async function importSourceAsset(
       : {
           textureDefinitions: [],
           materialDefinitions: [],
-          materialSlotBindings:
+          surfaceSlots:
             ext.toLowerCase() === ".glb"
-              ? collectMaterialSlotBindings(glbChunks?.document ?? {})
+              ? collectSurfaceSlots(glbChunks?.document ?? {})
               : [],
           files: [],
           warnings: []
@@ -478,8 +477,9 @@ export async function importSourceAsset(
       definitionKind: "asset",
       displayName: stem,
       assetKind: analysis.assetKind,
-      materialSlotBindings: embeddedFoliageImport.materialSlotBindings,
-      defaultShaderDefinitionId: null,
+      surfaceSlots: embeddedFoliageImport.surfaceSlots,
+      deform: null,
+      effect: null,
       source: {
         relativeAssetPath,
         fileName: sourceFile.name,

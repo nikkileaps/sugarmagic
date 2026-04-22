@@ -82,7 +82,20 @@ export interface ViewportActions {
 function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
   return {
     ...landscape,
-    channels: landscape.channels.map((channel) => ({ ...channel })),
+    surfaceSlots: landscape.surfaceSlots.map((slot) => ({
+      ...slot,
+      surface: slot.surface
+        ? slot.surface.kind === "texture"
+          ? { ...slot.surface, tiling: [...slot.surface.tiling] as [number, number] }
+          : slot.surface.kind === "shader"
+            ? {
+                ...slot.surface,
+                parameterValues: { ...slot.surface.parameterValues },
+                textureBindings: { ...slot.surface.textureBindings }
+              }
+            : { ...slot.surface }
+        : null
+    })),
     paintPayload: landscape.paintPayload
       ? {
           ...landscape.paintPayload,
@@ -100,7 +113,7 @@ function paintLandscapeDraft(
   const splatmap = new LandscapeSplatmap(
     nextLandscape.paintPayload?.resolution ?? 256
   );
-  splatmap.load(nextLandscape.paintPayload, nextLandscape.channels.length);
+  splatmap.load(nextLandscape.paintPayload, nextLandscape.surfaceSlots.length);
   const size = Math.max(1, nextLandscape.size);
   const halfSize = size / 2;
   const centerU = (stroke.worldX + halfSize) / size;

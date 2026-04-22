@@ -9,14 +9,15 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
 import type {
+  AssetSurfaceSlot,
+  ShaderOrMaterial
+} from "../surface";
+import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
-  ShaderParameterOverride,
-  ShaderSlotBindingMap,
   ShaderTargetKind
 } from "../shader-graph";
 import {
-  createEmptyShaderSlotBindingMap,
   createDefaultBloomPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
@@ -38,7 +39,10 @@ import {
   createDefaultStandardPbrSeparateShaderGraph,
   createDefaultTonemapAcesPostProcessShaderGraph,
   createDefaultTonemapReinhardPostProcessShaderGraph,
-  createDefaultVignettePostProcessShaderGraph
+  createDefaultVignettePostProcessShaderGraph,
+  createBuiltInFlatColorShaderGraph,
+  createBuiltInFlatTextureShaderGraph,
+  createBuiltInCloudShadowEffectShaderGraph
 } from "../shader-graph";
 
 export type ContentDefinitionKind =
@@ -62,25 +66,14 @@ export interface ContentDefinitionReference {
 
 export type AssetKind = "model" | "foliage";
 
-export interface MaterialSlotBinding {
-  slotName: string;
-  slotIndex: number;
-  materialDefinitionId: string | null;
-}
-
 export interface AssetDefinition {
   definitionId: string;
   definitionKind: "asset";
   displayName: string;
   assetKind: AssetKind;
-  materialSlotBindings?: MaterialSlotBinding[];
-  defaultShaderBindings?: ShaderSlotBindingMap;
-  defaultShaderParameterOverrides?: ShaderParameterOverride[];
-  /**
-   * @deprecated Legacy single-binding field migrated into defaultShaderBindings
-   * during normalization. New code should only read/write defaultShaderBindings.
-   */
-  defaultShaderDefinitionId?: string | null;
+  surfaceSlots: AssetSurfaceSlot[];
+  deform: ShaderOrMaterial | null;
+  effect: ShaderOrMaterial | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -272,70 +265,46 @@ export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
 
-function slotForTargetKind(
-  targetKind: ShaderTargetKind | null | undefined
-): "surface" | "deform" | null {
-  if (targetKind === "mesh-surface") {
-    return "surface";
-  }
-  if (targetKind === "mesh-deform") {
-    return "deform";
-  }
-  return null;
-}
-
-function normalizeAssetShaderBindings(
-  definition: AssetDefinition,
-  shaderTargetKinds: ReadonlyMap<string, ShaderTargetKind>,
-  builtInFoliageSurfaceId: string,
-  builtInFoliageWindId: string
-): ShaderSlotBindingMap {
-  const next = {
-    ...createEmptyShaderSlotBindingMap(),
-    ...(definition.defaultShaderBindings ?? {})
-  };
-
-  if (definition.defaultShaderDefinitionId) {
-    const slot = slotForTargetKind(
-      shaderTargetKinds.get(definition.defaultShaderDefinitionId) ?? null
-    );
-    if (slot) {
-      next[slot] = definition.defaultShaderDefinitionId;
-    } else if (definition.assetKind === "foliage") {
-      next.deform = definition.defaultShaderDefinitionId;
-    } else {
-      next.surface = definition.defaultShaderDefinitionId;
-    }
-  }
-
-  if (definition.assetKind === "foliage") {
-    next.surface = next.surface ?? builtInFoliageSurfaceId;
-    next.deform = next.deform ?? builtInFoliageWindId;
-  }
-
-  return next;
-}
-
-function normalizeMaterialSlotBindings(
-  bindings: MaterialSlotBinding[] | null | undefined
-): MaterialSlotBinding[] {
-  if (!bindings?.length) {
+function normalizeAssetSurfaceSlots(
+  surfaceSlots: AssetSurfaceSlot[] | null | undefined
+): AssetSurfaceSlot[] {
+  if (!surfaceSlots?.length) {
     return [];
   }
 
-  return bindings
-    .map((binding, index) => ({
-      slotName: String(binding.slotName ?? "").trim(),
+  return surfaceSlots
+    .map((slot, index) => ({
+      slotName: String(slot.slotName ?? "").trim(),
       slotIndex:
-        typeof binding.slotIndex === "number" && Number.isFinite(binding.slotIndex)
-          ? binding.slotIndex
+        typeof slot.slotIndex === "number" && Number.isFinite(slot.slotIndex)
+          ? slot.slotIndex
           : index,
-      materialDefinitionId:
-        typeof binding.materialDefinitionId === "string"
-          ? binding.materialDefinitionId
-          : null
+      surface: slot.surface ?? null
     }))
-    .filter((binding) => binding.slotName.length > 0);
+    .filter((slot) => slot.slotName.length > 0);
+}
+
+function normalizeShaderOrMaterial(
+  value: ShaderOrMaterial | null | undefined
+): ShaderOrMaterial | null {
+  if (!value) {
+    return null;
+  }
+  if (value.kind === "material") {
+    return {
+      kind: "material",
+      materialDefinitionId: value.materialDefinitionId
+    };
+  }
+  if (value.kind === "shader") {
+    return {
+      kind: "shader",
+      shaderDefinitionId: value.shaderDefinitionId,
+      parameterValues: { ...(value.parameterValues ?? {}) },
+      textureBindings: { ...(value.textureBindings ?? {}) }
+    };
+  }
+  return null;
 }
 
 export const DEFAULT_FOG_SETTINGS: FogSettings = {
@@ -1004,12 +973,6 @@ export function normalizeContentLibrarySnapshot(
     authoredShaderDefinitions.length > 0
       ? mergeBuiltInShaderDefinitions(authoredShaderDefinitions, builtInShaderDefinitions)
       : builtInShaderDefinitions;
-  const shaderTargetKinds = new Map(
-    mergedShaderDefinitions.map((definition) => [
-      definition.shaderDefinitionId,
-      definition.targetKind
-    ])
-  );
   const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions?.length
     ? [...contentLibrary.environmentDefinitions]
     : [
@@ -1019,10 +982,7 @@ export function normalizeContentLibrarySnapshot(
           preset: "default"
         })
       ];
-
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
-  const foliageSurfaceShaderDefinitionId = `${projectId}:shader:foliage-surface`;
-  const foliageWindShaderDefinitionId = `${projectId}:shader:foliage-wind`;
 
   return {
     identity: {
@@ -1031,15 +991,9 @@ export function normalizeContentLibrarySnapshot(
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
-      materialSlotBindings: normalizeMaterialSlotBindings(definition.materialSlotBindings),
-      defaultShaderBindings: normalizeAssetShaderBindings(
-        definition,
-        shaderTargetKinds,
-        foliageSurfaceShaderDefinitionId,
-        foliageWindShaderDefinitionId
-      ),
-      defaultShaderParameterOverrides: [...(definition.defaultShaderParameterOverrides ?? [])],
-      defaultShaderDefinitionId: definition.defaultShaderDefinitionId ?? null
+      surfaceSlots: normalizeAssetSurfaceSlots(definition.surfaceSlots),
+      deform: normalizeShaderOrMaterial(definition.deform),
+      effect: normalizeShaderOrMaterial(definition.effect)
     })),
     materialDefinitions: (contentLibrary.materialDefinitions ?? []).map((definition) => ({
       ...definition,
@@ -1150,6 +1104,14 @@ export function normalizeContentLibrarySnapshot(
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
   return [
+    createBuiltInFlatColorShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:flat-color`,
+      displayName: "Flat Color"
+    }),
+    createBuiltInFlatTextureShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:flat-texture`,
+      displayName: "Flat Texture"
+    }),
     createDefaultFoliageSurfaceShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-surface`,
       displayName: "Foliage Surface"
@@ -1173,6 +1135,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createSimpleAlphaTestShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:simple-alpha-test`,
       displayName: "Simple Alpha Test"
+    }),
+    createBuiltInCloudShadowEffectShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:cloud-shadow-demo`,
+      displayName: "Cloud Shadow Demo"
     }),
     createDefaultStandardPbrShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:standard-pbr`,

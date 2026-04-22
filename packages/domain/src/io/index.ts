@@ -3,24 +3,27 @@
  *
  * Owns canonical load-time upgrades for persisted authored documents. Legacy
  * persisted shapes are normalized here, once, before authoring-session or
- * runtime code consumes them.
+ * runtime code consumes them. This is also the defensive decoder for authored
+ * render traits: malformed deform/effect values fail here instead of leaking
+ * impossible states deeper into the runtime.
  */
 
 import type { ContentLibrarySnapshot } from "../content-library";
 import type { ShaderBindingOverride, ShaderSlotKind } from "../shader-graph";
 import {
-  createDefaultRegionLandscapeChannels,
+  createDefaultRegionLandscapeSurfaceSlots,
   createDefaultRegionLandscapeState,
   createPlacedAssetInstance,
   createRegionAreaDefinition,
   createRegionItemPresence,
-  createRegionLandscapeChannelDefinition,
+  createLandscapeSurfaceSlot,
   createRegionNPCBehaviorDefinition,
   createRegionNPCBehaviorTask,
   createRegionNPCPresence,
   createRegionPlayerPresence,
   type RegionDocument
 } from "../region-authoring";
+import { isShaderOrMaterialSurface, type ShaderOrMaterial } from "../surface";
 
 function defaultEnvironmentId(contentLibrary: ContentLibrarySnapshot): string | null {
   return contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
@@ -85,6 +88,35 @@ function normalizeShaderOverrides(
   return [...nextOverrides.values()];
 }
 
+function normalizeShaderOrMaterialForLoad(
+  ownerLabel: string,
+  field: "deform" | "effect",
+  value: ShaderOrMaterial | null | undefined
+): ShaderOrMaterial | null {
+  if (!value) {
+    return null;
+  }
+  if (!isShaderOrMaterialSurface(value)) {
+    throw new Error(
+      `${ownerLabel}.${field} must be a shader or material surface; received "${String(
+        (value as { kind?: unknown }).kind ?? "unknown"
+      )}".`
+    );
+  }
+  if (value.kind === "material") {
+    return {
+      kind: "material",
+      materialDefinitionId: value.materialDefinitionId
+    };
+  }
+  return {
+    kind: "shader",
+    shaderDefinitionId: value.shaderDefinitionId,
+    parameterValues: { ...(value.parameterValues ?? {}) },
+    textureBindings: { ...(value.textureBindings ?? {}) }
+  };
+}
+
 export function normalizeRegionDocumentForLoad(
   region: RegionDocument,
   contentLibrary: ContentLibrarySnapshot
@@ -95,7 +127,7 @@ export function normalizeRegionDocumentForLoad(
     };
   }).landscape;
   const defaultLandscape = createDefaultRegionLandscapeState({
-    channels: createDefaultRegionLandscapeChannels(legacyLandscape?.baseColor)
+    surfaceSlots: createDefaultRegionLandscapeSurfaceSlots(legacyLandscape?.baseColor)
   });
   const normalizedBinding = (region as RegionDocument & {
     environmentBinding?: { defaultEnvironmentId?: string | null };
@@ -215,16 +247,20 @@ export function normalizeRegionDocumentForLoad(
     landscape: createDefaultRegionLandscapeState({
       ...defaultLandscape,
       ...(legacyLandscape ?? {}),
-      // Run every channel through the factory so older persisted
-      // shapes (missing tilingScale, etc.) get defaulted to current
-      // canonical shape on load. Cheap and keeps the rest of the
-      // runtime from having to handle partial channel objects.
-      channels:
-        legacyLandscape?.channels && legacyLandscape.channels.length > 0
-          ? legacyLandscape.channels.map((channel) =>
-              createRegionLandscapeChannelDefinition(channel)
-            )
-          : defaultLandscape.channels,
+      surfaceSlots:
+        legacyLandscape?.surfaceSlots && legacyLandscape.surfaceSlots.length > 0
+          ? legacyLandscape.surfaceSlots.map((slot) => createLandscapeSurfaceSlot(slot))
+          : defaultLandscape.surfaceSlots,
+      deform: normalizeShaderOrMaterialForLoad(
+        `region:${region.identity.id}:landscape`,
+        "deform",
+        legacyLandscape?.deform ?? null
+      ),
+      effect: normalizeShaderOrMaterialForLoad(
+        `region:${region.identity.id}:landscape`,
+        "effect",
+        legacyLandscape?.effect ?? null
+      ),
       paintPayload: legacyLandscape?.paintPayload ?? null
     })
   };

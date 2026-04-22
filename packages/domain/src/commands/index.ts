@@ -1,7 +1,6 @@
 import type { DocumentDefinition } from "../document-definition";
 import type {
   RegionNPCBehaviorDefinition,
-  RegionLandscapeChannelDefinition,
   RegionLandscapePaintPayload
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
@@ -23,6 +22,7 @@ import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
 import type { DeploymentSettings } from "../deployment";
 import type { DocumentId, SubjectReference } from "../shared/identity";
+import type { LandscapeSurfaceSlot, Surface } from "../surface";
 
 export type AuthoringAggregateKind =
   | "game-project"
@@ -174,7 +174,7 @@ export type DeleteRegionNPCBehaviorCommand = SemanticCommandBase<
 export type CreateLandscapeChannelCommand = SemanticCommandBase<
   "CreateLandscapeChannel",
   {
-    channel: RegionLandscapeChannelDefinition;
+    channel: LandscapeSurfaceSlot;
   }
 >;
 
@@ -183,9 +183,8 @@ export type UpdateLandscapeChannelCommand = SemanticCommandBase<
   {
     channelId: string;
     displayName?: string;
-    mode?: RegionLandscapeChannelDefinition["mode"];
-    color?: number;
-    materialDefinitionId?: string | null;
+    slotName?: string;
+    surface?: Surface | null;
     tilingScale?: [number, number] | null;
   }
 >;

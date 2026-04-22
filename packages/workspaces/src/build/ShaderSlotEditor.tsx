@@ -21,12 +21,14 @@ import type { ShaderBindingResolutionDiagnostic } from "@sugarmagic/runtime-core
 
 const SLOT_LABELS: Record<ShaderSlotKind, string> = {
   surface: "Surface",
-  deform: "Deform"
+  deform: "Deform",
+  effect: "Effect"
 };
 
 const SLOT_TARGET_KINDS: Record<ShaderSlotKind, ShaderGraphDocument["targetKind"]> = {
   surface: "mesh-surface",
-  deform: "mesh-deform"
+  deform: "mesh-deform",
+  effect: "mesh-effect"
 };
 
 function parameterValueForSlot(
@@ -49,6 +51,7 @@ function parameterValueForSlot(
 export interface ShaderSlotEditorProps {
   bindings: ShaderSlotBindingMap;
   shaderDefinitions: ShaderGraphDocument[];
+  slots?: readonly ShaderSlotKind[];
   parameterOverrides?: ShaderParameterOverride[];
   diagnostics?: ShaderBindingResolutionDiagnostic[];
   onChangeBinding: (slot: ShaderSlotKind, shaderDefinitionId: string | null) => void;
@@ -63,6 +66,7 @@ export interface ShaderSlotEditorProps {
 export function ShaderSlotEditor({
   bindings,
   shaderDefinitions,
+  slots = SHADER_SLOT_KINDS,
   parameterOverrides = [],
   diagnostics = [],
   onChangeBinding,
@@ -78,7 +82,7 @@ export function ShaderSlotEditor({
 
   return (
     <Stack gap="md">
-      {SHADER_SLOT_KINDS.map((slot) => {
+      {slots.map((slot) => {
         const currentShaderId = bindings[slot] ?? null;
         const currentShader = currentShaderId ? definitionsById.get(currentShaderId) ?? null : null;
         const availableDefinitions = shaderDefinitions.filter(

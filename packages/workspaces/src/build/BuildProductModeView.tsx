@@ -17,6 +17,7 @@ import type {
   MaterialDefinition,
   NPCDefinition,
   QuestDefinition,
+  Surface,
   ShaderParameterOverride,
   ShaderGraphDocument,
   TextureDefinition,
@@ -25,7 +26,6 @@ import type {
 import {
   createEmptyContentLibrarySnapshot,
   getActiveRegion,
-  createPlacedAssetInstanceId,
   type AuthoringSession
 } from "@sugarmagic/domain";
 import {
@@ -90,24 +90,23 @@ export interface BuildProductModeViewProps {
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    materialDefinitionId: string | null
+    surface: Surface | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
-    slot: "surface" | "deform",
+    slot: "surface" | "deform" | "effect",
     shaderDefinitionId: string | null
   ) => void;
   onSetAssetDefaultShaderParameterOverride?: (
     definitionId: string,
-    slot: "surface" | "deform",
+    slot: "surface" | "deform" | "effect",
     override: ShaderParameterOverride
   ) => void;
   onClearAssetDefaultShaderParameterOverride?: (
     definitionId: string,
-    slot: "surface" | "deform",
+    slot: "surface" | "deform" | "effect",
     parameterId: string
   ) => void;
-  onRemoveAssetDefinition: (definitionId: string) => void;
   onCreateMaterialDefinition: (shaderDefinitionId: string) => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -167,7 +166,6 @@ export function useBuildProductModeView(
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
-    onRemoveAssetDefinition,
     onCreateMaterialDefinition,
     onImportPbrMaterial,
     onImportTextureDefinition,
@@ -387,7 +385,6 @@ export function useBuildProductModeView(
 
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
-    activeRegion,
     contentLibrary:
       session?.contentLibrary ?? createEmptyContentLibrarySnapshot("empty:content-library"),
     materialDefinitions,
@@ -395,47 +392,13 @@ export function useBuildProductModeView(
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
     onImportAsset,
-    onPlaceAsset: (assetDefinition) => {
-      if (!activeRegion) return;
-      const instanceId = createPlacedAssetInstanceId(assetDefinition.displayName);
-      onCommand({
-        kind: "PlaceAssetInstance",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: activeRegion.identity.id
-        },
-        subject: {
-          subjectKind: "placed-asset",
-          subjectId: instanceId
-        },
-        payload: {
-          instanceId,
-          assetDefinitionId: assetDefinition.definitionId,
-          displayName: assetDefinition.displayName,
-          parentFolderId: null,
-          position: [0, 0.5, 0],
-          rotation: [0, 0, 0],
-          scale: [1, 1, 1]
-        }
-      });
-      onSelectKind("layout");
-    },
     onUpdateAssetDefinition,
     onSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
     onEditShaderGraph: (shaderDefinitionId) =>
-      onNavigateToTarget?.({ kind: "shader-graph", shaderDefinitionId }),
-    onRemoveAssetDefinition,
-    hasSceneReferences: (definitionId) =>
-      session
-        ? Array.from(session.regions.values()).some((region) =>
-            region.scene.placedAssets.some(
-              (asset) => asset.assetDefinitionId === definitionId
-            )
-          )
-        : false
+      onNavigateToTarget?.({ kind: "shader-graph", shaderDefinitionId })
   });
 
   const materialsView = useMaterialsWorkspaceView({

@@ -1,6 +1,11 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
 import type {
+  LandscapeSurfaceSlot,
+  ShaderOrMaterial
+} from "../surface";
+import { createColorSurface } from "../surface";
+import type {
   ShaderBindingOverride,
   ShaderParameterOverride
 } from "../shader-graph";
@@ -81,30 +86,6 @@ export interface RegionEnvironmentBinding {
   defaultEnvironmentId: string | null;
 }
 
-export type RegionLandscapeChannelMode = "color" | "material";
-
-export interface RegionLandscapeChannelDefinition {
-  channelId: string;
-  displayName: string;
-  mode: RegionLandscapeChannelMode;
-  color: number;
-  materialDefinitionId: string | null;
-  /**
-   * Per-channel tiling multiplier applied on top of the bound
-   * Material's own `tiling` parameter. null / omitted means [1, 1]
-   * — use the Material's tiling as-is. Non-null values multiply the
-   * landscape's world-projected UV before the shader graph runs its
-   * own tiling math, so the effective repeat count across the
-   * landscape becomes `channel.tilingScale × material.tiling`. This
-   * lets one Material work naturally on both mesh slots (where
-   * Material.tiling defines the per-unit-surface repeat) and
-   * landscape channels (where the author frequently wants many more
-   * repeats across a large ground plane) without forking the
-   * Material itself. Only meaningful when `mode === "material"`.
-   */
-  tilingScale: [number, number] | null;
-}
-
 export interface RegionLandscapePaintPayload {
   version: 1;
   resolution: number;
@@ -115,7 +96,9 @@ export interface RegionLandscapeState {
   enabled: boolean;
   size: number;
   subdivisions: number;
-  channels: RegionLandscapeChannelDefinition[];
+  surfaceSlots: LandscapeSurfaceSlot[];
+  deform: ShaderOrMaterial | null;
+  effect: ShaderOrMaterial | null;
   paintPayload: RegionLandscapePaintPayload | null;
 }
 
@@ -451,26 +434,23 @@ export function createRegionItemPresence(
   };
 }
 
-export function createRegionLandscapeChannelDefinition(
-  overrides: Partial<RegionLandscapeChannelDefinition> = {}
-): RegionLandscapeChannelDefinition {
+export function createLandscapeSurfaceSlot(
+  overrides: Partial<LandscapeSurfaceSlot> = {}
+): LandscapeSurfaceSlot {
   return {
     channelId: overrides.channelId ?? createLandscapeChannelId(),
     displayName: overrides.displayName ?? "Channel",
-    mode: overrides.mode ?? "color",
-    color: overrides.color ?? DEFAULT_REGION_LANDSCAPE_GRASS_COLOR,
-    materialDefinitionId:
-      overrides.materialDefinitionId === undefined
-        ? null
-        : overrides.materialDefinitionId,
+    slotName: overrides.slotName ?? overrides.displayName ?? "Channel",
+    surface:
+      overrides.surface ?? createColorSurface(DEFAULT_REGION_LANDSCAPE_GRASS_COLOR),
     tilingScale:
       overrides.tilingScale === undefined ? null : overrides.tilingScale
   };
 }
 
-export function createDefaultRegionLandscapeChannels(
+export function createDefaultRegionLandscapeSurfaceSlots(
   baseColor = DEFAULT_REGION_LANDSCAPE_BASE_COLOR
-): RegionLandscapeChannelDefinition[] {
+): LandscapeSurfaceSlot[] {
   // New landscapes start with just the Base channel so the ground reads as
   // a clean clay canvas. Authors add additional channels (grass, sand,
   // etc.) explicitly from the landscape inspector when they need them —
@@ -481,9 +461,8 @@ export function createDefaultRegionLandscapeChannels(
     {
       channelId: LANDSCAPE_BASE_CHANNEL_ID,
       displayName: "Base",
-      mode: "color",
-      color: baseColor,
-      materialDefinitionId: null,
+      slotName: "Base",
+      surface: createColorSurface(baseColor),
       tilingScale: null
     }
   ];
@@ -492,17 +471,19 @@ export function createDefaultRegionLandscapeChannels(
 export function createDefaultRegionLandscapeState(
   overrides: Partial<RegionLandscapeState> = {}
 ): RegionLandscapeState {
-  const channels =
-    overrides.channels && overrides.channels.length > 0
-      ? overrides.channels.slice(0, MAX_REGION_LANDSCAPE_CHANNELS)
-      : createDefaultRegionLandscapeChannels();
+  const surfaceSlots =
+    overrides.surfaceSlots && overrides.surfaceSlots.length > 0
+      ? overrides.surfaceSlots.slice(0, MAX_REGION_LANDSCAPE_CHANNELS)
+      : createDefaultRegionLandscapeSurfaceSlots();
 
   return {
     enabled: true,
     size: DEFAULT_REGION_LANDSCAPE_SIZE,
     subdivisions: DEFAULT_REGION_LANDSCAPE_SUBDIVISIONS,
     ...overrides,
-    channels,
+    surfaceSlots,
+    deform: overrides.deform ?? null,
+    effect: overrides.effect ?? null,
     paintPayload: overrides.paintPayload ?? null
   };
 }

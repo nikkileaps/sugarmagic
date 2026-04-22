@@ -21,7 +21,6 @@ import {
   Button,
   ColorPicker,
   Group,
-  NumberInput,
   Select,
   Stack,
   Tabs,
@@ -33,7 +32,6 @@ export type Surface =
   | {
       kind: "material";
       materialDefinitionId: string | null;
-      tilingScale: [number, number] | null;
     };
 
 export interface SurfaceMaterialOption {
@@ -44,9 +42,9 @@ export interface SurfaceMaterialOption {
 }
 
 export interface SurfacePickerProps {
-  value: Surface;
+  value: Surface | null;
   /** Fired when the author commits via the Apply button. */
-  onApply: (next: Surface) => void;
+  onApply: (next: Surface | null) => void;
   /** Project materials available to pick from. */
   materials: SurfaceMaterialOption[];
   /** Preset hex strings for the color-tab swatches row. */
@@ -76,7 +74,6 @@ interface ColorTabState {
 
 interface MaterialTabState {
   materialDefinitionId: string | null;
-  tilingScale: [number, number] | null;
 }
 
 interface DraftState {
@@ -85,12 +82,19 @@ interface DraftState {
   material: MaterialTabState;
 }
 
-function initialDraft(value: Surface): DraftState {
+function initialDraft(value: Surface | null): DraftState {
+  if (!value) {
+    return {
+      activeTab: "material",
+      color: { color: 0x808080 },
+      material: { materialDefinitionId: null }
+    };
+  }
   if (value.kind === "color") {
     return {
       activeTab: "color",
       color: { color: value.value },
-      material: { materialDefinitionId: null, tilingScale: null }
+      material: { materialDefinitionId: null }
     };
   }
   return {
@@ -99,18 +103,8 @@ function initialDraft(value: Surface): DraftState {
     // flips tabs — they shouldn't lose their prior color when they
     // peek at the Color tab. Using mid-grey is neutral.
     color: { color: 0x808080 },
-    material: {
-      materialDefinitionId: value.materialDefinitionId,
-      tilingScale: value.tilingScale
-    }
+    material: { materialDefinitionId: value.materialDefinitionId }
   };
-}
-
-function isNullTiling(tiling: [number, number] | null): boolean {
-  if (!tiling) {
-    return true;
-  }
-  return tiling[0] === 1 && tiling[1] === 1;
 }
 
 export function SurfacePicker({
@@ -149,13 +143,14 @@ export function SurfacePicker({
       onApply({ kind: "color", value: draft.color.color });
       return;
     }
-    onApply({
-      kind: "material",
-      materialDefinitionId: draft.material.materialDefinitionId,
-      tilingScale: isNullTiling(draft.material.tilingScale)
-        ? null
-        : draft.material.tilingScale
-    });
+    onApply(
+      draft.material.materialDefinitionId
+        ? {
+            kind: "material",
+            materialDefinitionId: draft.material.materialDefinitionId
+          }
+        : null
+    );
   }
 
   // Fixed footprint: the picker stays the same size regardless of which
@@ -248,58 +243,6 @@ export function SurfacePicker({
                   }
                 }}
               />
-              <Text size="xs" c="var(--sm-color-subtext)">
-                Tiling (this application)
-              </Text>
-              <Group gap="xs" grow>
-                <NumberInput
-                  label="X"
-                  size="xs"
-                  min={0.01}
-                  step={0.5}
-                  decimalScale={2}
-                  value={draft.material.tilingScale?.[0] ?? 1}
-                  onChange={(value) => {
-                    const nextX =
-                      typeof value === "number" && Number.isFinite(value) && value > 0
-                        ? value
-                        : 1;
-                    const nextY = draft.material.tilingScale?.[1] ?? 1;
-                    setDraft((prev) => ({
-                      ...prev,
-                      material: {
-                        ...prev.material,
-                        tilingScale: [nextX, nextY]
-                      }
-                    }));
-                  }}
-                />
-                <NumberInput
-                  label="Y"
-                  size="xs"
-                  min={0.01}
-                  step={0.5}
-                  decimalScale={2}
-                  value={draft.material.tilingScale?.[1] ?? 1}
-                  onChange={(value) => {
-                    const nextX = draft.material.tilingScale?.[0] ?? 1;
-                    const nextY =
-                      typeof value === "number" && Number.isFinite(value) && value > 0
-                        ? value
-                        : 1;
-                    setDraft((prev) => ({
-                      ...prev,
-                      material: {
-                        ...prev.material,
-                        tilingScale: [nextX, nextY]
-                      }
-                    }));
-                  }}
-                />
-              </Group>
-              <Text size="xs" c="var(--sm-color-overlay0)">
-                Multiplies the Material's own tiling. Higher = more repeats.
-              </Text>
             </Stack>
           </Tabs.Panel>
         </div>

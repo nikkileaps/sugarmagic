@@ -9,6 +9,7 @@ import {
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
 import {
+  createShaderSurface,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultEnvironmentDefinition,
   createDefaultFogTintPostProcessShaderGraph,
@@ -26,6 +27,7 @@ import {
 } from "@sugarmagic/domain";
 
 function createContentLibrary(): ContentLibrarySnapshot {
+  const foliageSurface = createDefaultFoliageSurfaceShaderGraph("project");
   const foliageShader = createDefaultFoliageWindShaderGraph("project");
   const postProcessShader = {
     ...createDefaultShaderGraphDocument("project", {
@@ -56,7 +58,15 @@ function createContentLibrary(): ContentLibrarySnapshot {
         definitionKind: "asset",
         displayName: "Tree",
         assetKind: "foliage",
-        defaultShaderDefinitionId: null,
+        surfaceSlots: [
+          {
+            slotName: "Leaves",
+            slotIndex: 0,
+            surface: createShaderSurface(foliageSurface.shaderDefinitionId)
+          }
+        ],
+        deform: createShaderSurface(foliageShader.shaderDefinitionId),
+        effect: null,
         source: {
           relativeAssetPath: "assets/imported/tree.glb",
           fileName: "tree.glb",
@@ -72,7 +82,7 @@ function createContentLibrary(): ContentLibrarySnapshot {
         displayName: "Default"
       })
     ],
-    shaderDefinitions: [foliageShader, postProcessShader]
+    shaderDefinitions: [foliageSurface, foliageShader, postProcessShader]
   }, "project");
 }
 
@@ -106,7 +116,9 @@ function createRegion(): RegionDocument {
       enabled: false,
       size: 100,
       subdivisions: 32,
-      channels: [],
+      surfaceSlots: [],
+      deform: null,
+      effect: null,
       paintPayload: null
     },
     markers: [],
@@ -115,15 +127,15 @@ function createRegion(): RegionDocument {
 }
 
 describe("shader runtime contracts", () => {
-  it("resolves the built-in foliage surface and wind shaders for foliage assets without explicit defaults", () => {
+  it("resolves explicit foliage surface slots and deform traits for foliage assets", () => {
     const contentLibrary = createContentLibrary();
     const sceneObjects = resolveSceneObjects(createRegion(), { contentLibrary });
     const treeObject = sceneObjects.find((object) => object.instanceId === "placed:tree");
 
-    expect(treeObject?.effectiveShaders.surface?.shaderDefinitionId).toBe(
+    expect(treeObject?.effectiveMaterialSlots[0]?.surface?.shaderDefinitionId).toBe(
       "project:shader:foliage-surface"
     );
-    expect(treeObject?.effectiveShaders.surface?.targetKind).toBe("mesh-surface");
+    expect(treeObject?.effectiveMaterialSlots[0]?.surface?.targetKind).toBe("mesh-surface");
     expect(treeObject?.effectiveShaders.deform?.shaderDefinitionId).toBe(
       "project:shader:foliage-wind"
     );
@@ -134,11 +146,13 @@ describe("shader runtime contracts", () => {
     const contentLibrary = createContentLibrary();
     const brokenAsset = {
       ...contentLibrary.assetDefinitions[0]!,
-      defaultShaderBindings: {
-        surface: "project:shader:foliage-wind",
-        deform: null
-      },
-      defaultShaderParameterOverrides: []
+      surfaceSlots: [
+        {
+          slotName: "Leaves",
+          slotIndex: 0,
+          surface: createShaderSurface("project:shader:foliage-wind")
+        }
+      ]
     };
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -146,11 +160,11 @@ describe("shader runtime contracts", () => {
       const resolution = resolveAssetDefinitionShaderBindings(brokenAsset, contentLibrary);
 
       expect(resolution.bindings.surface).toBeNull();
+      expect(resolution.materialSlots[0]?.surface).toBeNull();
       expect(resolution.diagnostics).toEqual([
         expect.objectContaining({
           severity: "error",
-          slot: "surface",
-          shaderDefinitionId: "project:shader:foliage-wind"
+          slot: "surface"
         })
       ]);
       expect(consoleError).toHaveBeenCalledWith(
@@ -371,7 +385,8 @@ describe("shader runtime contracts", () => {
           },
           parameterOverrides: []
         },
-        deform: null
+        deform: null,
+        effect: null
       },
       {
         material,
@@ -434,7 +449,8 @@ describe("shader runtime contracts", () => {
           textureBindings: {},
           parameterOverrides: []
         },
-        deform: null
+        deform: null,
+        effect: null
       },
       {
         material: carrierMaterial,
@@ -502,7 +518,7 @@ describe("shader runtime contracts", () => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
 
     const first = runtime.applyShaderSet(
-      { surface: binding, deform: null },
+      { surface: binding, deform: null, effect: null },
       {
         material: new THREE.MeshStandardMaterial(),
         geometry,
@@ -512,7 +528,7 @@ describe("shader runtime contracts", () => {
       }
     );
     const second = runtime.applyShaderSet(
-      { surface: binding, deform: null },
+      { surface: binding, deform: null, effect: null },
       {
         material: new THREE.MeshStandardMaterial(),
         geometry,

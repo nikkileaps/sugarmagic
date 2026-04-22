@@ -186,11 +186,12 @@ export function computeSceneDelta(
 function shaderRepresentationKey(
   effectiveShaders: EffectiveShaderBindingSet,
   effectiveMaterialSlots: EffectiveMaterialSlotBinding[],
-  _parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" }[]
+  _parameterOverrides: { parameterId: string; value: unknown; slot?: "surface" | "deform" | "effect" }[]
 ): string {
   return [
     shaderSlotRepresentation("surface", effectiveShaders.surface),
     shaderSlotRepresentation("deform", effectiveShaders.deform),
+    shaderSlotRepresentation("effect", effectiveShaders.effect),
     ...effectiveMaterialSlots.map((slot) =>
       `material:${slot.slotIndex}:${slot.slotName}:${slot.materialDefinitionId ?? "none"}:${shaderSlotRepresentation("surface", slot.surface)}`
     )
@@ -221,7 +222,7 @@ function createPlacedAssetSceneObject(
   );
   const effectiveShaders = contentLibrary
     ? resolveEffectiveAssetShaderBindings(asset, contentLibrary)
-    : { surface: null, deform: null };
+    : { surface: null, deform: null, effect: null };
   const effectiveMaterialSlots = contentLibrary
     ? resolveEffectiveAssetMaterialSlotBindings(asset, contentLibrary)
     : [];
@@ -236,7 +237,7 @@ function createPlacedAssetSceneObject(
     targetModelHeight: null,
     effectiveShaders,
     effectiveMaterialSlots,
-    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform ?? effectiveShaders.effect,
     transform: {
       position: asset.transform.position,
       rotation: asset.transform.rotation,
@@ -271,7 +272,7 @@ function createPlayerSceneObject(
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
     targetModelHeight: height,
-    effectiveShaders: { surface: null, deform: null },
+    effectiveShaders: { surface: null, deform: null, effect: null },
     effectiveMaterialSlots: contentLibrary && assetDescriptor.definition
       ? resolveEffectivePresenceMaterialSlotBindings(
           { shaderOverrides: [], shaderParameterOverrides: [] },
@@ -286,7 +287,7 @@ function createPlayerSceneObject(
       scale: presence.transform.scale
     },
     representationKey: `player:${modelAssetDefinitionId ?? "capsule"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${radius}:${shaderRepresentationKey(
-      { surface: null, deform: null },
+      { surface: null, deform: null, effect: null },
       contentLibrary && assetDescriptor.definition
         ? resolveEffectivePresenceMaterialSlotBindings(
             { shaderOverrides: [], shaderParameterOverrides: [] },
@@ -318,7 +319,7 @@ function createNPCSceneObject(
   const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
-    : { surface: null, deform: null };
+    : { surface: null, deform: null, effect: null };
   const effectiveMaterialSlots = contentLibrary
     ? resolveEffectivePresenceMaterialSlotBindings(
         presence,
@@ -337,7 +338,7 @@ function createNPCSceneObject(
     targetModelHeight: height,
     effectiveShaders,
     effectiveMaterialSlots,
-    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform ?? effectiveShaders.effect,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
@@ -365,7 +366,7 @@ function createItemSceneObject(
   const height = Math.max(itemDefinition?.presentation.modelHeight ?? 0.45, 0.1);
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
-    : { surface: null, deform: null };
+    : { surface: null, deform: null, effect: null };
   const effectiveMaterialSlots = contentLibrary
     ? resolveEffectivePresenceMaterialSlotBindings(
         presence,
@@ -384,7 +385,7 @@ function createItemSceneObject(
     targetModelHeight: height,
     effectiveShaders,
     effectiveMaterialSlots,
-    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform,
+    effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform ?? effectiveShaders.effect,
     transform: {
       position: presence.transform.position,
       rotation: presence.transform.rotation,
