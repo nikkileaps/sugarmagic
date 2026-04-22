@@ -24,7 +24,8 @@ import {
   createDefaultPlayerDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState,
-  createDefaultFoliageWindShaderGraph
+  createDefaultFoliageWindShaderGraph,
+  createMaterialSurface
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -101,7 +102,9 @@ function makeAssetDefinition(): AssetDefinition {
     definitionKind: "asset",
     displayName: "Station Building",
     assetKind: "model",
-    defaultShaderDefinitionId: null,
+    surfaceSlots: [],
+    deform: null,
+    effect: null,
     source: {
       relativeAssetPath: "assets/imported/station-building.glb",
       fileName: "station-building.glb",
@@ -116,7 +119,9 @@ function makeFoliageAssetDefinition(): AssetDefinition {
     definitionKind: "asset",
     displayName: "Stylized Tree",
     assetKind: "foliage",
-    defaultShaderDefinitionId: null,
+    surfaceSlots: [],
+    deform: null,
+    effect: null,
     source: {
       relativeAssetPath: "assets/imported/stylized-tree.glb",
       fileName: "stylized-tree.glb",
@@ -149,56 +154,56 @@ describe("asset management loop", () => {
     );
     session = addAssetDefinitionToSession(session, {
       ...makeAssetDefinition(),
-      materialSlotBindings: [
+      surfaceSlots: [
         {
           slotName: "Wall",
           slotIndex: 0,
-          materialDefinitionId: "wordlark:material:brick"
+          surface: createMaterialSurface("wordlark:material:brick")
         },
         {
           slotName: "Roof",
           slotIndex: 1,
-          materialDefinitionId: "wordlark:material:tile"
+          surface: createMaterialSurface("wordlark:material:tile")
         }
       ]
     });
 
     session = addAssetDefinitionToSession(session, {
       ...makeAssetDefinition(),
-      materialSlotBindings: [
+      surfaceSlots: [
         {
           slotName: "Roof",
           slotIndex: 0,
-          materialDefinitionId: null
+          surface: null
         },
         {
           slotName: "Wall",
           slotIndex: 1,
-          materialDefinitionId: null
+          surface: null
         },
         {
           slotName: "Trim",
           slotIndex: 2,
-          materialDefinitionId: null
+          surface: null
         }
       ]
     });
 
-    expect(getAllAssetDefinitions(session)[0]?.materialSlotBindings).toEqual([
+    expect(getAllAssetDefinitions(session)[0]?.surfaceSlots).toEqual([
       {
         slotName: "Roof",
         slotIndex: 0,
-        materialDefinitionId: "wordlark:material:tile"
+        surface: createMaterialSurface("wordlark:material:tile")
       },
       {
         slotName: "Wall",
         slotIndex: 1,
-        materialDefinitionId: "wordlark:material:brick"
+        surface: createMaterialSurface("wordlark:material:brick")
       },
       {
         slotName: "Trim",
         slotIndex: 2,
-        materialDefinitionId: null
+        surface: null
       }
     ]);
   });

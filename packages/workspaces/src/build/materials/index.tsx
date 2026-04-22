@@ -8,7 +8,16 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Group, Select, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import {
+  ActionIcon,
+  Button,
+  Menu,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+  UnstyledButton
+} from "@mantine/core";
 import type {
   MaterialDefinition,
   ShaderGraphDocument,
@@ -104,21 +113,6 @@ export function useMaterialsWorkspaceView(
       null,
     [surfaceShaderDefinitions]
   );
-  const [newMaterialShaderId, setNewMaterialShaderId] = useState<string | null>(
-    defaultNewShaderId
-  );
-
-  useEffect(() => {
-    if (
-      newMaterialShaderId &&
-      surfaceShaderDefinitions.some(
-        (definition) => definition.shaderDefinitionId === newMaterialShaderId
-      )
-    ) {
-      return;
-    }
-    setNewMaterialShaderId(defaultNewShaderId);
-  }, [defaultNewShaderId, newMaterialShaderId, surfaceShaderDefinitions]);
 
   const filteredMaterials = useMemo(() => {
     const search = normalizeSearchValue(searchValue);
@@ -143,9 +137,49 @@ export function useMaterialsWorkspaceView(
       (definition) => definition.shaderDefinitionId === selectedMaterial?.shaderDefinitionId
     ) ?? null;
 
+  function handleCreateMaterial(): void {
+    if (!defaultNewShaderId) {
+      return;
+    }
+    const created = onCreateMaterialDefinition(defaultNewShaderId);
+    if (created) {
+      onSelectMaterialDefinition(created.definitionId);
+    }
+  }
+
+  async function handleImportPbrSet(): Promise<void> {
+    const created = await onImportPbrMaterial();
+    if (created) {
+      onSelectMaterialDefinition(created.definitionId);
+    }
+  }
+
   return {
     leftPanel: (
-      <PanelSection title="Material Library" icon="🧱">
+      <PanelSection
+        title="Material Library"
+        icon="🧱"
+        actions={
+          <Menu shadow="md" withinPortal position="bottom-end">
+            <Menu.Target>
+              <ActionIcon variant="subtle" size="sm" aria-label="Add material thing">
+                ＋
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item disabled={!defaultNewShaderId} onClick={handleCreateMaterial}>
+                New Material
+              </Menu.Item>
+              <Menu.Item onClick={() => void handleImportPbrSet()}>
+                Import PBR Set
+              </Menu.Item>
+              <Menu.Item onClick={() => void onImportTextureDefinition()}>
+                Import Texture
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        }
+      >
         <Stack gap="xs">
           <TextInput
             size="xs"
@@ -160,60 +194,6 @@ export function useMaterialsWorkspaceView(
               }
             }}
           />
-          <Select
-            size="xs"
-            label="New Material Parent"
-            placeholder="Choose parent shader..."
-            data={surfaceShaderDefinitions.map((definition) => ({
-              value: definition.shaderDefinitionId,
-              label: definition.displayName
-            }))}
-            value={newMaterialShaderId}
-            onChange={(value) => setNewMaterialShaderId(value)}
-          />
-          <Group grow>
-            <Button
-              size="xs"
-              variant="light"
-              disabled={!newMaterialShaderId}
-              onClick={() => {
-                if (!newMaterialShaderId) {
-                  return;
-                }
-                const created = onCreateMaterialDefinition(newMaterialShaderId);
-                if (created) {
-                  onSelectMaterialDefinition(created.definitionId);
-                }
-              }}
-            >
-              New Material
-            </Button>
-            <Button
-              size="xs"
-              variant="light"
-              onClick={async () => {
-                const created = await onImportPbrMaterial();
-                if (created) {
-                  onSelectMaterialDefinition(created.definitionId);
-                }
-              }}
-            >
-              Import PBR Set
-            </Button>
-          </Group>
-          <Text size="xs" c="var(--sm-color-overlay0)">
-            Choose an exported texture folder. Sugarmagic infers basecolor,
-            normal, ORM, roughness, metallic, and AO maps from filenames.
-          </Text>
-          <Button
-            size="xs"
-            variant="subtle"
-            onClick={async () => {
-              await onImportTextureDefinition();
-            }}
-          >
-            Import Texture
-          </Button>
           {filteredMaterials.length === 0 ? (
             <Text size="xs" c="var(--sm-color-overlay0)">
               {materialDefinitions.length === 0

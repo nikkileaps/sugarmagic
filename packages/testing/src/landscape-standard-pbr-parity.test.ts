@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
+  createLandscapeSurfaceSlot,
+  createMaterialSurface,
   createDefaultRegionLandscapeState,
   createDefaultStandardPbrShaderGraph,
   createEmptyContentLibrarySnapshot
@@ -132,14 +134,14 @@ describe("landscape standard pbr parity", () => {
       () => shaderRuntime
     );
     const region = makeRegion();
-    region.landscape.channels.push({
-      channelId: "landscape-channel:grass",
-      displayName: "Grass",
-      mode: "material",
-      color: 0x5c8a5a,
-      materialDefinitionId: "wordlark:material:grass",
-      tilingScale: null
-    });
+    region.landscape.surfaceSlots.push(
+      createLandscapeSurfaceSlot({
+        channelId: "landscape-channel:grass",
+        displayName: "Grass",
+        surface: createMaterialSurface("wordlark:material:grass"),
+        tilingScale: null
+      })
+    );
 
     const result = controller.apply(region, contentLibrary, fileSources);
 

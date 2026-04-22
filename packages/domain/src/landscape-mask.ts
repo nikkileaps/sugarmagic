@@ -21,7 +21,7 @@ export function renderLandscapeMaskToCanvas(
   canvas: HTMLCanvasElement
 ): void {
   const splatmap = new LandscapeSplatmap(resolvePaintResolution(landscape));
-  splatmap.load(landscape.paintPayload, landscape.channels.length);
+  splatmap.load(landscape.paintPayload, landscape.surfaceSlots.length);
   splatmap.renderChannelMask(channelIndex, canvas);
   splatmap.dispose();
 }
@@ -30,7 +30,7 @@ export function serializeLandscapePaintPayload(
   landscape: RegionLandscapeState
 ): RegionLandscapePaintPayload | null {
   const splatmap = new LandscapeSplatmap(resolvePaintResolution(landscape));
-  splatmap.load(landscape.paintPayload, landscape.channels.length);
+  splatmap.load(landscape.paintPayload, landscape.surfaceSlots.length);
   const payload = splatmap.serialize();
   splatmap.dispose();
   return payload;

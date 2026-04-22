@@ -19,15 +19,16 @@ import { MeshStandardNodeMaterial } from "three/webgpu";
 import { float, max, normalMap, positionWorld, texture, vec2, vec3 } from "three/tsl";
 import type {
   ContentLibrarySnapshot,
-  RegionLandscapeChannelDefinition,
+  LandscapeSurfaceSlot,
   RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
   LandscapeSplatmap,
-  MAX_REGION_LANDSCAPE_CHANNELS
+  MAX_REGION_LANDSCAPE_CHANNELS,
+  createColorSurface
 } from "@sugarmagic/domain";
 import {
-  resolveMaterialEffectiveShaderBinding,
+  resolveSurface,
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
@@ -113,11 +114,15 @@ export class RuntimeLandscapeMesh {
     contentLibrary: ContentLibrarySnapshot | null
   ): void {
     this.mesh.visible = landscape.enabled;
-    this.splatmap.load(landscape.paintPayload, landscape.channels.length);
+    this.splatmap.load(landscape.paintPayload, landscape.surfaceSlots.length);
 
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
-      const channel = landscape.channels[index];
-      this.channelColors[index].set(channel?.color ?? 0x000000);
+      const slot = landscape.surfaceSlots[index];
+      const color =
+        slot?.surface?.kind === "color"
+          ? slot.surface.color
+          : 0x000000;
+      this.channelColors[index].set(color);
     }
 
     this.rebuildSplatTextures();
@@ -229,30 +234,25 @@ export class RuntimeLandscapeMesh {
    *     node set keeps the blend loop homogeneous.
    */
   private surfaceNodesForChannel(
-    channel: RegionLandscapeChannelDefinition | null,
+    slot: LandscapeSurfaceSlot | null,
     channelColor: THREE.Color,
     worldUv: unknown,
     contentLibrary: ContentLibrarySnapshot | null
   ): ShaderSurfaceNodeSet {
     const shaderRuntime = this.getShaderRuntime();
     const binding =
-      channel?.mode === "material" &&
-      channel.materialDefinitionId &&
-      contentLibrary
-        ? resolveMaterialEffectiveShaderBinding(
-            contentLibrary,
-            channel.materialDefinitionId
-          )
+      slot?.surface && contentLibrary
+        ? resolveSurface(slot.surface, contentLibrary, "mesh-surface")
         : null;
 
-    if (shaderRuntime && binding) {
-      const evaluated = shaderRuntime.evaluateMeshSurfaceBinding(binding, {
+    if (shaderRuntime && binding?.ok) {
+      const evaluated = shaderRuntime.evaluateMeshSurfaceBinding(binding.binding, {
         geometry: this.geometry,
         carrierMaterial: this.carrierForEvaluation,
         uvOverride: worldUv
       });
       if (evaluated) {
-        return this.fillSurfaceNodeDefaults(evaluated, channelColor, binding);
+        return this.fillSurfaceNodeDefaults(evaluated, channelColor, binding.binding);
       }
     }
 
@@ -311,16 +311,19 @@ export class RuntimeLandscapeMesh {
     contentLibrary: ContentLibrarySnapshot | null
   ): string {
     const parts: string[] = [];
-    const channels = landscape?.channels ?? [];
+    const channels = landscape?.surfaceSlots ?? [];
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
       const channel = channels[index] ?? null;
-      const color = this.channelColors[index]?.getHex() ?? 0;
+      const color =
+        channel?.surface?.kind === "color"
+          ? channel.surface.color
+          : this.channelColors[index]?.getHex() ?? 0;
       const tilingScale = channel?.tilingScale;
       const tilingPart = tilingScale
         ? `${tilingScale[0]},${tilingScale[1]}`
         : "1,1";
       parts.push(
-        `${channel?.mode ?? "color"}:${channel?.materialDefinitionId ?? ""}:${color.toString(16)}:${tilingPart}`
+        `${channel?.surface?.kind ?? "none"}:${JSON.stringify(channel?.surface ?? null)}:${color.toString(16)}:${tilingPart}`
       );
     }
     parts.push(contentLibrary?.identity.id ?? "no-library");
@@ -381,7 +384,7 @@ export class RuntimeLandscapeMesh {
 
     for (let index = 0; index < this.channelColors.length; index += 1) {
       const color = this.channelColors[index]!;
-      const channel = landscape?.channels[index] ?? null;
+      const channel = landscape?.surfaceSlots[index] ?? null;
       const weight = weights[index]!;
       // Per-channel tiling: multiply the landscape world-UV by the
       // channel's tilingScale (when set) BEFORE it enters the Material's
@@ -389,10 +392,7 @@ export class RuntimeLandscapeMesh {
       // on top. Effective repeat across the landscape = channel.tilingScale
       // × material.tiling. Channels without an override (or non-material
       // mode) pass the raw worldUv through.
-      const tilingScale =
-        channel?.mode === "material" && channel.tilingScale
-          ? channel.tilingScale
-          : null;
+      const tilingScale = channel?.tilingScale ?? null;
       const channelUv = tilingScale
         ? (worldUv as ReturnType<typeof vec2>).mul(
             vec2(tilingScale[0], tilingScale[1])
@@ -446,6 +446,53 @@ export class RuntimeLandscapeMesh {
     // normals when the blend boundary isn't aligned with a surface
     // that shares tangent frames).
     nextMaterial.normalNode = normalMap(blendedNormal);
+
+    const shaderRuntime = this.getShaderRuntime();
+    if (shaderRuntime && contentLibrary) {
+      if (landscape?.deform) {
+        const deform = resolveSurface(landscape.deform, contentLibrary, "mesh-deform");
+        if (deform.ok) {
+          const deformNodes = shaderRuntime.evaluateMeshDeformBinding(deform.binding, {
+            geometry: this.geometry,
+            carrierMaterial: nextMaterial
+          });
+          if (deformNodes?.vertexNode) {
+            nextMaterial.positionNode = deformNodes.vertexNode as never;
+          }
+        }
+      }
+      if (landscape?.effect) {
+        const effect = resolveSurface(landscape.effect, contentLibrary, "mesh-effect");
+        if (effect.ok) {
+          const effectNodes = shaderRuntime.evaluateMeshEffectBinding(effect.binding, {
+            geometry: this.geometry,
+            carrierMaterial: nextMaterial,
+            accumulator: {
+              colorNode: blendedColor,
+              alphaNode: null,
+              normalNode: blendedNormal,
+              roughnessNode: blendedRoughness,
+              metalnessNode: blendedMetalness,
+              aoNode: blendedAo,
+              emissiveNode: null,
+              vertexNode: null
+            }
+          });
+          if (effectNodes) {
+            nextMaterial.colorNode = (effectNodes.colorNode ?? blendedColor) as never;
+            nextMaterial.opacityNode = (effectNodes.alphaNode ?? nextMaterial.opacityNode) as never;
+            nextMaterial.normalNode = normalMap(
+              (effectNodes.normalNode ?? blendedNormal) as never
+            ) as never;
+            nextMaterial.roughnessNode =
+              (effectNodes.roughnessNode ?? blendedRoughness) as never;
+            nextMaterial.metalnessNode =
+              (effectNodes.metalnessNode ?? blendedMetalness) as never;
+            nextMaterial.aoNode = (effectNodes.aoNode ?? blendedAo) as never;
+          }
+        }
+      }
+    }
 
     const previous = this.material;
     this.material = nextMaterial;

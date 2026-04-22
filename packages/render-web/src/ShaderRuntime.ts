@@ -71,7 +71,7 @@ import type {
 
 export type ShaderApplyTarget =
   | {
-      targetKind: "mesh-surface" | "mesh-deform";
+      targetKind: "mesh-surface" | "mesh-deform" | "mesh-effect";
       material: THREE.Material;
       geometry: THREE.BufferGeometry;
       materialTextures?: Record<string, THREE.Texture | null>;
@@ -190,6 +190,7 @@ interface FinalizationContext {
    * mutate its internal uniforms.
    */
   effectNodes: Map<string, EffectNodeCacheEntry>;
+  accumulator?: ShaderSurfaceNodeSet | null;
 }
 
 interface UniformNodeLike {
@@ -386,7 +387,7 @@ type MaterialTextureChannel = "color" | "alpha" | "r" | "g" | "b" | "a";
 function sampleMaterialTextureNode(
   target: Extract<
     ShaderApplyTarget,
-    { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }
+    { targetKind: "mesh-surface" | "mesh-deform" | "mesh-effect" | "billboard-surface" }
   >,
   output: MaterialTextureChannel,
   parameterId: string | null,
@@ -554,6 +555,7 @@ function materializeBuiltin(
     case "materialTextureColor":
       if (
         context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "mesh-effect" &&
         context.target.targetKind !== "billboard-surface"
       ) {
         return vec3(1, 1, 1);
@@ -567,6 +569,7 @@ function materializeBuiltin(
     case "materialTextureAlpha":
       if (
         context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "mesh-effect" &&
         context.target.targetKind !== "billboard-surface"
       ) {
         return float(1);
@@ -583,6 +586,7 @@ function materializeBuiltin(
     case "materialTextureA": {
       if (
         context.target.targetKind !== "mesh-surface" &&
+        context.target.targetKind !== "mesh-effect" &&
         context.target.targetKind !== "billboard-surface"
       ) {
         return float(1);
@@ -615,6 +619,18 @@ function materializeBuiltin(
       // otherwise-identical code. Falls back to viewportLinearDepth when no
       // explicit depth node was provided (e.g. non-post-process targets).
       return context.builtinSceneDepthNode ?? viewportLinearDepth;
+    case "accumulatorColor":
+      return asColorNode(context.accumulator?.colorNode ?? vec3(1, 1, 1));
+    case "accumulatorNormal":
+      return context.accumulator?.normalNode ?? vec3(0.5, 0.5, 1);
+    case "accumulatorRoughness":
+      return context.accumulator?.roughnessNode ?? float(1);
+    case "accumulatorMetalness":
+      return context.accumulator?.metalnessNode ?? float(0);
+    case "accumulatorAo":
+      return context.accumulator?.aoNode ?? float(1);
+    case "accumulatorAlpha":
+      return context.accumulator?.alphaNode ?? float(1);
     default:
       return float(0);
   }
@@ -788,11 +804,12 @@ function materializeOp(opId: string, context: FinalizationContext): unknown {
 function evaluateIRToSurfaceNodes(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
+  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "mesh-effect" | "billboard-surface" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
   sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>,
-  uvOverride?: unknown
+  uvOverride?: unknown,
+  accumulator?: ShaderSurfaceNodeSet | null
 ): ShaderSurfaceNodeSet {
   const allOps =
     ir.targetKind === "mesh-deform"
@@ -811,27 +828,40 @@ function evaluateIRToSurfaceNodes(
     parameterUniforms,
     sunDirectionUniform,
     effectNodes,
-    uvOverride
+    uvOverride,
+    accumulator
   };
 
   return {
-    colorNode: ir.outputs.fragmentColor
-      ? materializeValue(ir.outputs.fragmentColor, context)
+    colorNode: ir.outputs.effectColor
+      ? materializeValue(ir.outputs.effectColor, context)
+      : ir.outputs.fragmentColor
+        ? materializeValue(ir.outputs.fragmentColor, context)
       : null,
-    alphaNode: ir.outputs.fragmentAlpha
-      ? materializeValue(ir.outputs.fragmentAlpha, context)
+    alphaNode: ir.outputs.effectAlpha
+      ? materializeValue(ir.outputs.effectAlpha, context)
+      : ir.outputs.fragmentAlpha
+        ? materializeValue(ir.outputs.fragmentAlpha, context)
       : null,
-    normalNode: ir.outputs.fragmentNormal
-      ? materializeValue(ir.outputs.fragmentNormal, context)
+    normalNode: ir.outputs.effectNormal
+      ? materializeValue(ir.outputs.effectNormal, context)
+      : ir.outputs.fragmentNormal
+        ? materializeValue(ir.outputs.fragmentNormal, context)
       : null,
-    roughnessNode: ir.outputs.fragmentRoughness
-      ? materializeValue(ir.outputs.fragmentRoughness, context)
+    roughnessNode: ir.outputs.effectRoughness
+      ? materializeValue(ir.outputs.effectRoughness, context)
+      : ir.outputs.fragmentRoughness
+        ? materializeValue(ir.outputs.fragmentRoughness, context)
       : null,
-    metalnessNode: ir.outputs.fragmentMetalness
-      ? materializeValue(ir.outputs.fragmentMetalness, context)
+    metalnessNode: ir.outputs.effectMetalness
+      ? materializeValue(ir.outputs.effectMetalness, context)
+      : ir.outputs.fragmentMetalness
+        ? materializeValue(ir.outputs.fragmentMetalness, context)
       : null,
-    aoNode: ir.outputs.fragmentAo
-      ? materializeValue(ir.outputs.fragmentAo, context)
+    aoNode: ir.outputs.effectAo
+      ? materializeValue(ir.outputs.effectAo, context)
+      : ir.outputs.fragmentAo
+        ? materializeValue(ir.outputs.fragmentAo, context)
       : null,
     emissiveNode: ir.outputs.emissive
       ? materializeValue(ir.outputs.emissive, context)
@@ -845,10 +875,11 @@ function evaluateIRToSurfaceNodes(
 function applyIRToMaterial(
   ir: ShaderIR,
   binding: EffectiveShaderBinding,
-  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "billboard-surface" }>,
+  target: Extract<ShaderApplyTarget, { targetKind: "mesh-surface" | "mesh-deform" | "mesh-effect" | "billboard-surface" }>,
   parameterUniforms: Map<string, UniformNodeLike>,
   sunDirectionUniform: UniformNodeLike,
-  effectNodes: Map<string, EffectNodeCacheEntry>
+  effectNodes: Map<string, EffectNodeCacheEntry>,
+  accumulator?: ShaderSurfaceNodeSet | null
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -860,12 +891,20 @@ function applyIRToMaterial(
     target,
     parameterUniforms,
     sunDirectionUniform,
-    effectNodes
+    effectNodes,
+    undefined,
+    accumulator
   );
 
+  return applyNodeSetToMaterial(material, nodeSet);
+}
+
+function applyNodeSetToMaterial(
+  material: MeshStandardNodeMaterial | MeshBasicNodeMaterial,
+  nodeSet: ShaderSurfaceNodeSet
+): MeshStandardNodeMaterial | MeshBasicNodeMaterial {
   if (nodeSet.vertexNode) {
-    (material as MeshStandardNodeMaterial | MeshBasicNodeMaterial).positionNode =
-      nodeSet.vertexNode as never;
+    material.positionNode = nodeSet.vertexNode as never;
   }
   if (nodeSet.colorNode && "colorNode" in material) {
     material.colorNode = nodeSet.colorNode as never;
@@ -1228,6 +1267,88 @@ export class ShaderRuntime {
     );
   }
 
+  evaluateMeshDeformBinding(
+    binding: EffectiveShaderBinding,
+    options: {
+      geometry: THREE.BufferGeometry | null;
+      carrierMaterial: THREE.Material;
+    }
+  ): ShaderSurfaceNodeSet | null {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+
+    const shaderDefinition = getShaderDefinition(
+      this.contentLibrary,
+      binding.shaderDefinitionId
+    );
+    if (!shaderDefinition || shaderDefinition.targetKind !== "mesh-deform") {
+      return null;
+    }
+    const ir = this.getCompiledIR(shaderDefinition);
+    if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+      return null;
+    }
+
+    const geometry = options.geometry ?? new THREE.BufferGeometry();
+    return evaluateIRToSurfaceNodes(
+      ir,
+      binding,
+      {
+        targetKind: "mesh-deform",
+        material: options.carrierMaterial,
+        geometry,
+        materialTextures: {}
+      },
+      this.getOrCreateParameterUniformCache(binding.shaderDefinitionId),
+      this.sunDirectionUniform,
+      this.getOrCreateEffectNodeCache(binding.shaderDefinitionId)
+    );
+  }
+
+  evaluateMeshEffectBinding(
+    binding: EffectiveShaderBinding,
+    options: {
+      geometry: THREE.BufferGeometry | null;
+      carrierMaterial: THREE.Material;
+      accumulator: ShaderSurfaceNodeSet;
+    }
+  ): ShaderSurfaceNodeSet | null {
+    if (this.disposed) {
+      throw new Error("ShaderRuntime was used after disposal.");
+    }
+
+    const shaderDefinition = getShaderDefinition(
+      this.contentLibrary,
+      binding.shaderDefinitionId
+    );
+    if (!shaderDefinition || shaderDefinition.targetKind !== "mesh-effect") {
+      return null;
+    }
+    const ir = this.getCompiledIR(shaderDefinition);
+    if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+      return null;
+    }
+
+    const effectTextures = this.resolveTextureBindings(binding);
+    const geometry = options.geometry ?? new THREE.BufferGeometry();
+    return evaluateIRToSurfaceNodes(
+      ir,
+      binding,
+      {
+        targetKind: "mesh-effect",
+        material: options.carrierMaterial,
+        geometry,
+        materialTextures: effectTextures
+      },
+      this.getOrCreateParameterUniformCache(binding.shaderDefinitionId),
+      this.sunDirectionUniform,
+      this.getOrCreateEffectNodeCache(binding.shaderDefinitionId),
+      undefined,
+      options.accumulator
+    );
+  }
+
   applyShaderSet(
     bindings: EffectiveShaderBindingSet,
     target: MeshShaderSetApplyTarget
@@ -1238,7 +1359,8 @@ export class ShaderRuntime {
 
     const surface = bindings.surface;
     const deform = bindings.deform;
-    if (!surface && !deform) {
+    const effect = bindings.effect;
+    if (!surface && !deform && !effect) {
       return target.material;
     }
 
@@ -1248,6 +1370,9 @@ export class ShaderRuntime {
     const deformDefinition = deform
       ? getShaderDefinition(this.contentLibrary, deform.shaderDefinitionId)
       : null;
+    const effectDefinition = effect
+      ? getShaderDefinition(this.contentLibrary, effect.shaderDefinitionId)
+      : null;
 
     if (surface && (!surfaceDefinition || surfaceDefinition.targetKind !== "mesh-surface")) {
       throw new Error(`Surface shader "${surface.shaderDefinitionId}" is not a mesh-surface graph.`);
@@ -1255,13 +1380,18 @@ export class ShaderRuntime {
     if (deform && (!deformDefinition || deformDefinition.targetKind !== "mesh-deform")) {
       throw new Error(`Deform shader "${deform.shaderDefinitionId}" is not a mesh-deform graph.`);
     }
+    if (effect && (!effectDefinition || effectDefinition.targetKind !== "mesh-effect")) {
+      throw new Error(`Effect shader "${effect.shaderDefinitionId}" is not a mesh-effect graph.`);
+    }
 
     const surfaceIR = surfaceDefinition ? this.getCompiledIR(surfaceDefinition) : null;
     const deformIR = deformDefinition ? this.getCompiledIR(deformDefinition) : null;
+    const effectIR = effectDefinition ? this.getCompiledIR(effectDefinition) : null;
 
     for (const [binding, ir] of [
       [surface, surfaceIR],
-      [deform, deformIR]
+      [deform, deformIR],
+      [effect, effectIR]
     ] as const) {
       if (!binding || !ir) {
         continue;
@@ -1288,6 +1418,7 @@ export class ShaderRuntime {
 
     const surfaceTextures = this.resolveTextureBindings(surface, target.fileSources);
     const deformTextures = this.resolveTextureBindings(deform, target.fileSources);
+    const effectTextures = this.resolveTextureBindings(effect, target.fileSources);
     const cacheKey = [
       "shader-set",
       surface?.shaderDefinitionId ?? "no-surface",
@@ -1300,14 +1431,23 @@ export class ShaderRuntime {
       stableStringify(deform?.parameterValues ?? {}),
       stableStringify(deform?.textureBindings ?? {}),
       textureBindingSignature(deformTextures),
+      effect?.shaderDefinitionId ?? "no-effect",
+      effect?.documentRevision ?? 0,
+      stableStringify(effect?.parameterValues ?? {}),
+      stableStringify(effect?.textureBindings ?? {}),
+      textureBindingSignature(effectTextures),
       this.compileProfile,
       materialCarrierSignature(target.material, target.geometry)
     ].join("|");
 
-    return this.acquireMaterial(cacheKey, surface?.shaderDefinitionId ?? deform!.shaderDefinitionId, () => {
+    return this.acquireMaterial(
+      cacheKey,
+      surface?.shaderDefinitionId ?? deform?.shaderDefinitionId ?? effect!.shaderDefinitionId,
+      () => {
       let material = toMeshStandardNodeMaterial(target.material);
+      let surfaceNodeSet: ShaderSurfaceNodeSet | null = null;
       if (surface && surfaceIR) {
-        material = applyIRToMaterial(
+        surfaceNodeSet = evaluateIRToSurfaceNodes(
           surfaceIR,
           surface,
           {
@@ -1319,7 +1459,8 @@ export class ShaderRuntime {
           this.getOrCreateParameterUniformCache(surface.shaderDefinitionId),
           this.sunDirectionUniform,
           this.getOrCreateEffectNodeCache(surface.shaderDefinitionId)
-        ) as MeshStandardNodeMaterial;
+        );
+        material = applyNodeSetToMaterial(material, surfaceNodeSet) as MeshStandardNodeMaterial;
       }
       if (deform && deformIR) {
         material = applyIRToMaterial(
@@ -1335,6 +1476,24 @@ export class ShaderRuntime {
           this.sunDirectionUniform,
           this.getOrCreateEffectNodeCache(deform.shaderDefinitionId)
         ) as MeshStandardNodeMaterial;
+      }
+      if (effect && effectIR && surfaceNodeSet) {
+        const effectNodeSet = evaluateIRToSurfaceNodes(
+          effectIR,
+          effect,
+          {
+            targetKind: "mesh-effect",
+            material,
+            geometry: target.geometry,
+            materialTextures: effectTextures
+          },
+          this.getOrCreateParameterUniformCache(effect.shaderDefinitionId),
+          this.sunDirectionUniform,
+          this.getOrCreateEffectNodeCache(effect.shaderDefinitionId),
+          undefined,
+          surfaceNodeSet
+        );
+        material = applyNodeSetToMaterial(material, effectNodeSet) as MeshStandardNodeMaterial;
       }
       return material;
     });

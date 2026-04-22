@@ -44,6 +44,7 @@ function getRenderableShaderSignature(object: SceneObject): string | null {
   if (
     !object.effectiveShaders.surface &&
     !object.effectiveShaders.deform &&
+    !object.effectiveShaders.effect &&
     !hasMaterialSlotSurfaceBinding(object)
   ) {
     return null;
@@ -89,6 +90,7 @@ export function applyShaderToRenderable(
     (
       !object.effectiveShaders.surface &&
       !object.effectiveShaders.deform &&
+      !object.effectiveShaders.effect &&
       !hasMaterialSlotSurfaceBinding(object)
     )
   ) {
@@ -137,7 +139,8 @@ export function applyShaderToRenderable(
       const finalized = shaderRuntime.applyShaderSet(
         {
           surface: resolveSurfaceBinding(material, slotIndex, allowSlotIndexFallback),
-          deform: object.effectiveShaders.deform
+          deform: object.effectiveShaders.deform,
+          effect: object.effectiveShaders.effect
         },
         {
           material,

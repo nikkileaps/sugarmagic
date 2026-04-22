@@ -12,10 +12,11 @@
  */
 
 import type {
+  AssetSurfaceSlot,
   MaterialDefinition,
-  MaterialSlotBinding,
   TextureDefinition
 } from "@sugarmagic/domain";
+import { createMaterialSurface } from "@sugarmagic/domain";
 
 export interface GlbNodeDocument {
   extras?: Record<string, unknown>;
@@ -79,7 +80,7 @@ export interface DerivedImportedFile {
 export interface DerivedFoliageEmbeddedMaterialImport {
   textureDefinitions: TextureDefinition[];
   materialDefinitions: MaterialDefinition[];
-  materialSlotBindings: MaterialSlotBinding[];
+  surfaceSlots: AssetSurfaceSlot[];
   files: DerivedImportedFile[];
   warnings: string[];
 }
@@ -206,7 +207,7 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
 
   const textureDefinitions: TextureDefinition[] = [];
   const materialDefinitions: MaterialDefinition[] = [];
-  const materialSlotBindings: MaterialSlotBinding[] = [];
+  const surfaceSlots: AssetSurfaceSlot[] = [];
   const files: DerivedImportedFile[] = [];
   const warnings: string[] = [];
   const textureDefinitionIdByImageIndex = new Map<number, string>();
@@ -219,10 +220,10 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
       warnings.push(
         `Material slot "${slotName}" has no embedded base-color texture, so no default material was created.`
       );
-      materialSlotBindings.push({
+      surfaceSlots.push({
         slotName,
         slotIndex,
-        materialDefinitionId: null
+        surface: null
       });
       continue;
     }
@@ -232,10 +233,10 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
       warnings.push(
         `Material slot "${slotName}" references texture ${baseColorTextureIndex}, but that texture has no image source.`
       );
-      materialSlotBindings.push({
+      surfaceSlots.push({
         slotName,
         slotIndex,
-        materialDefinitionId: null
+        surface: null
       });
       continue;
     }
@@ -281,17 +282,17 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
         [baseColorParameterIdForSlot(slotName)]: textureDefinitionId
       }
     });
-    materialSlotBindings.push({
+    surfaceSlots.push({
       slotName,
       slotIndex,
-      materialDefinitionId
+      surface: createMaterialSurface(materialDefinitionId)
     });
   }
 
   return {
     textureDefinitions,
     materialDefinitions,
-    materialSlotBindings,
+    surfaceSlots,
     files,
     warnings
   };

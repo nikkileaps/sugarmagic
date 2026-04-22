@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import type { AssetDefinition, ContentLibrarySnapshot, PlacedAssetInstance } from "@sugarmagic/domain";
 import {
+  createMaterialSurface,
   createDefaultStandardPbrShaderGraph,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
@@ -89,18 +90,15 @@ function makeAssetDefinition(): AssetDefinition {
     definitionKind: "asset",
     displayName: "House",
     assetKind: "model",
-    materialSlotBindings: [
+    surfaceSlots: [
       {
         slotName: "Wall",
         slotIndex: 0,
-        materialDefinitionId: "wordlark:material:brick"
+        surface: createMaterialSurface("wordlark:material:brick")
       }
     ],
-    defaultShaderBindings: {
-      surface: null,
-      deform: null
-    },
-    defaultShaderParameterOverrides: [],
+    deform: null,
+    effect: null,
     source: {
       relativeAssetPath: "assets/imported/house.glb",
       fileName: "house.glb",

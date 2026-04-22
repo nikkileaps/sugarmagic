@@ -59,10 +59,23 @@ export interface LandscapeWorkspaceInstance {
 function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
   return {
     ...landscape,
-    channels: landscape.channels.map((channel) => ({ ...channel })),
+    surfaceSlots: landscape.surfaceSlots.map((slot) => ({
+      ...slot,
+      surface: slot.surface
+        ? slot.surface.kind === "texture"
+          ? { ...slot.surface, tiling: [...slot.surface.tiling] as [number, number] }
+          : slot.surface.kind === "shader"
+            ? {
+                ...slot.surface,
+                parameterValues: { ...slot.surface.parameterValues },
+                textureBindings: { ...slot.surface.textureBindings }
+              }
+            : { ...slot.surface }
+        : null
+    })),
     paintPayload: landscape.paintPayload
       ? {
-          ...landscape.paintPayload,
+        ...landscape.paintPayload,
           layers: [...landscape.paintPayload.layers]
         }
       : null

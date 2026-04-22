@@ -482,25 +482,22 @@ function applyDeleteShaderGraphCommand(
       shaderDefinitions: nextDefinitions,
       assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
         ...definition,
-        defaultShaderBindings: {
-          ...createEmptyShaderSlotBindingMap(),
-          ...definition.defaultShaderBindings,
-          surface:
-            definition.defaultShaderBindings?.surface ===
-            command.payload.shaderDefinitionId
-              ? null
-              : definition.defaultShaderBindings?.surface ?? null,
-          deform:
-            definition.defaultShaderBindings?.deform ===
-            command.payload.shaderDefinitionId
-              ? null
-              : definition.defaultShaderBindings?.deform ?? null
-        },
-        defaultShaderDefinitionId:
-          definition.defaultShaderDefinitionId === command.payload.shaderDefinitionId
+        surfaceSlots: definition.surfaceSlots.map((slot) =>
+          slot.surface?.kind === "shader" &&
+          slot.surface.shaderDefinitionId === command.payload.shaderDefinitionId
+            ? { ...slot, surface: null }
+            : slot
+        ),
+        deform:
+          definition.deform?.kind === "shader" &&
+          definition.deform.shaderDefinitionId === command.payload.shaderDefinitionId
             ? null
-            : definition.defaultShaderDefinitionId ?? null,
-        defaultShaderParameterOverrides: []
+            : definition.deform,
+        effect:
+          definition.effect?.kind === "shader" &&
+          definition.effect.shaderDefinitionId === command.payload.shaderDefinitionId
+            ? null
+            : definition.effect
       })),
       environmentDefinitions: session.contentLibrary.environmentDefinitions.map((definition) => ({
         ...definition,
@@ -716,15 +713,28 @@ function applySetAssetDefaultShaderCommand(
     definition.definitionId === command.payload.definitionId
       ? {
           ...definition,
-          defaultShaderBindings: {
-            ...createEmptyShaderSlotBindingMap(),
-            ...definition.defaultShaderBindings,
-            [command.payload.slot]: command.payload.shaderDefinitionId
-          },
-          defaultShaderDefinitionId:
-            command.payload.slot === "surface"
+          deform:
+            command.payload.slot === "deform"
               ? command.payload.shaderDefinitionId
-              : definition.defaultShaderDefinitionId ?? null
+                ? {
+                    kind: "shader" as const,
+                    shaderDefinitionId: command.payload.shaderDefinitionId,
+                    parameterValues: {},
+                    textureBindings: {}
+                  }
+                : null
+              : definition.deform,
+          effect:
+            command.payload.slot === "effect"
+              ? command.payload.shaderDefinitionId
+                ? {
+                    kind: "shader" as const,
+                    shaderDefinitionId: command.payload.shaderDefinitionId,
+                    parameterValues: {},
+                    textureBindings: {}
+                  }
+                : null
+              : definition.effect
         }
       : definition
   );
@@ -747,63 +757,14 @@ function applySetAssetDefaultShaderParameterOverrideCommand(
   session: AuthoringSession,
   command: SetAssetDefaultShaderParameterOverrideCommand
 ): AuthoringSession {
-  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definitionId
-      ? {
-          ...definition,
-          defaultShaderParameterOverrides: upsertShaderParameterOverride(
-            definition.defaultShaderParameterOverrides ?? [],
-            { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
-          )
-        }
-      : definition
-  );
-  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
-
-  return {
-    ...session,
-    contentLibrary: {
-      ...session.contentLibrary,
-      assetDefinitions: nextDefinitions
-    },
-    undoStack: [...session.undoStack, checkpointSession(session)],
-    redoStack: [],
-    history: pushTransaction(session.history, transaction),
-    isDirty: true
-  };
+  return session;
 }
 
 function applyClearAssetDefaultShaderParameterOverrideCommand(
   session: AuthoringSession,
   command: ClearAssetDefaultShaderParameterOverrideCommand
 ): AuthoringSession {
-  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definitionId
-      ? {
-          ...definition,
-          defaultShaderParameterOverrides: (definition.defaultShaderParameterOverrides ?? []).filter(
-            (override) =>
-              !(
-                override.parameterId === command.payload.parameterId &&
-                override.slot === command.payload.slot
-              )
-          )
-        }
-      : definition
-  );
-  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
-
-  return {
-    ...session,
-    contentLibrary: {
-      ...session.contentLibrary,
-      assetDefinitions: nextDefinitions
-    },
-    undoStack: [...session.undoStack, checkpointSession(session)],
-    redoStack: [],
-    history: pushTransaction(session.history, transaction),
-    isDirty: true
-  };
+  return session;
 }
 
 function applyAddPostProcessShaderCommand(
@@ -1799,26 +1760,24 @@ export function addAssetDefinitionToSession(
   );
   const existingDefinition =
     existingIndex >= 0 ? session.contentLibrary.assetDefinitions[existingIndex] ?? null : null;
-  const nextMaterialSlotBindings = (assetDefinition.materialSlotBindings ?? []).map((binding) => ({
+  const nextSurfaceSlots = assetDefinition.surfaceSlots.map((binding) => ({
     ...binding,
-    materialDefinitionId:
-      existingDefinition?.materialSlotBindings?.find(
+    surface:
+      existingDefinition?.surfaceSlots?.find(
         (candidate) => candidate.slotName === binding.slotName
-      )?.materialDefinitionId ?? binding.materialDefinitionId ?? null
+      )?.surface ?? binding.surface ?? null
   }));
 
   const nextDefinitions = [...session.contentLibrary.assetDefinitions];
   if (existingIndex >= 0) {
     nextDefinitions[existingIndex] = {
       ...assetDefinition,
-      materialSlotBindings: nextMaterialSlotBindings,
-      defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
+      surfaceSlots: nextSurfaceSlots
     };
   } else {
     nextDefinitions.push({
       ...assetDefinition,
-      materialSlotBindings: nextMaterialSlotBindings,
-      defaultShaderDefinitionId: assetDefinition.defaultShaderDefinitionId ?? null
+      surfaceSlots: nextSurfaceSlots
     });
   }
 
@@ -1860,7 +1819,7 @@ export function addEnvironmentDefinitionToSession(
 export function updateAssetDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
-  patch: Partial<Pick<AssetDefinition, "displayName" | "materialSlotBindings">>
+  patch: Partial<Pick<AssetDefinition, "displayName" | "surfaceSlots" | "deform" | "effect">>
 ): AuthoringSession {
   return {
     ...session,
@@ -2006,8 +1965,10 @@ export function materialDefinitionHasReferences(
   definitionId: string
 ): boolean {
   const boundInAssets = session.contentLibrary.assetDefinitions.some((assetDefinition) =>
-    (assetDefinition.materialSlotBindings ?? []).some(
-      (binding) => binding.materialDefinitionId === definitionId
+    assetDefinition.surfaceSlots.some(
+      (binding) =>
+        binding.surface?.kind === "material" &&
+        binding.surface.materialDefinitionId === definitionId
     )
   );
   if (boundInAssets) {
@@ -2015,8 +1976,10 @@ export function materialDefinitionHasReferences(
   }
 
   return getAllRegions(session).some((region) =>
-    region.landscape.channels.some(
-      (channel) => channel.materialDefinitionId === definitionId
+    region.landscape.surfaceSlots.some(
+      (channel) =>
+        channel.surface?.kind === "material" &&
+        channel.surface.materialDefinitionId === definitionId
     )
   );
 }

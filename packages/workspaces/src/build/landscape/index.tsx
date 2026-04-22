@@ -22,19 +22,21 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  LandscapeSurfaceSlot,
   MaterialDefinition,
   RegionDocument,
   SemanticCommand,
-  RegionLandscapeChannelDefinition,
   RegionLandscapeState
 } from "@sugarmagic/domain";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS,
-  createRegionLandscapeChannelDefinition,
+  createColorSurface,
+  createMaterialSurface,
+  createLandscapeSurfaceSlot,
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
 import type { ViewportStore } from "@sugarmagic/shell";
-import { PanelSection, SurfacePicker, type Surface } from "@sugarmagic/ui";
+import { PanelSection, SurfacePicker, type Surface as PickerSurface } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
@@ -56,7 +58,7 @@ export interface LandscapeWorkspaceViewProps {
   onCommand: (command: SemanticCommand) => void;
 }
 
-const EMPTY_CHANNELS: RegionLandscapeChannelDefinition[] = [];
+const EMPTY_CHANNELS: LandscapeSurfaceSlot[] = [];
 const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
   radius: 4,
   strength: 0.25,
@@ -68,8 +70,38 @@ function formatHexColor(value: number): string {
   return `#${value.toString(16).padStart(6, "0")}`;
 }
 
-function nextLandscapeChannelName(channels: RegionLandscapeChannelDefinition[]): string {
+function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
+}
+
+function toPickerSurface(surface: LandscapeSurfaceSlot["surface"]): PickerSurface | null {
+  if (!surface) {
+    return null;
+  }
+  if (surface.kind === "color") {
+    return {
+      kind: "color",
+      value: surface.color
+    };
+  }
+  if (surface.kind === "material") {
+    return {
+      kind: "material",
+      materialDefinitionId: surface.materialDefinitionId
+    };
+  }
+  return null;
+}
+
+function fromPickerSurface(surface: PickerSurface | null) {
+  if (!surface) {
+    return null;
+  }
+  return surface.kind === "color"
+    ? createColorSurface(surface.value)
+    : surface.materialDefinitionId
+      ? createMaterialSurface(surface.materialDefinitionId)
+      : null;
 }
 
 function MaskThumbnail(props: {
@@ -104,14 +136,14 @@ function MaskThumbnail(props: {
 }
 
 function ChannelCard(props: {
-  channel: RegionLandscapeChannelDefinition;
+  channel: LandscapeSurfaceSlot;
   channelIndex: number;
   isActive: boolean;
   landscape: RegionLandscapeState | null;
   materials: MaterialDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
-  onSurfaceChange: (surface: Surface) => void;
+  onSurfaceChange: (surface: PickerSurface | null) => void;
 }) {
   const {
     channel,
@@ -129,14 +161,7 @@ function ChannelCard(props: {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(channel.displayName);
 
-  const surfaceValue: Surface =
-    channel.mode === "material"
-      ? {
-          kind: "material",
-          materialDefinitionId: channel.materialDefinitionId,
-          tilingScale: channel.tilingScale
-        }
-      : { kind: "color", value: channel.color };
+  const surfaceValue = toPickerSurface(channel.surface);
 
   const materialOptions = useMemo(
     () =>
@@ -175,7 +200,9 @@ function ChannelCard(props: {
           >
             <Popover.Target>
               <ColorSwatch
-                color={formatHexColor(channel.color)}
+                color={formatHexColor(
+                  channel.surface?.kind === "color" ? channel.surface.color : 0x808080
+                )}
                 size={18}
                 style={{ cursor: "pointer", flexShrink: 0 }}
                 onClick={(event) => {
@@ -303,7 +330,7 @@ export function useLandscapeWorkspaceView(
   );
   const displayedLandscape = landscapeDraft ?? region?.landscape ?? null;
 
-  const channels = displayedLandscape?.channels ?? EMPTY_CHANNELS;
+  const channels = displayedLandscape?.surfaceSlots ?? EMPTY_CHANNELS;
   const effectiveActiveChannelIndex =
     activeChannelIndex < channels.length
       ? activeChannelIndex
@@ -342,25 +369,6 @@ export function useLandscapeWorkspaceView(
           }}
           onSurfaceChange={(surface) => {
             if (!region) return;
-            // Atomic surface commit: one command captures mode +
-            // color/material + tilingScale so the channel transitions
-            // between modes in a single canonical step, not through
-            // half-applied intermediate states.
-            const payload =
-              surface.kind === "color"
-                ? {
-                    channelId: channel.channelId,
-                    mode: "color" as const,
-                    color: surface.value,
-                    materialDefinitionId: null,
-                    tilingScale: null
-                  }
-                : {
-                    channelId: channel.channelId,
-                    mode: "material" as const,
-                    materialDefinitionId: surface.materialDefinitionId,
-                    tilingScale: surface.tilingScale
-                  };
             onCommand({
               kind: "UpdateLandscapeChannel",
               target: {
@@ -371,7 +379,11 @@ export function useLandscapeWorkspaceView(
                 subjectKind: "region-landscape",
                 subjectId: region.identity.id
               },
-              payload
+              payload: {
+                channelId: channel.channelId,
+                surface: fromPickerSurface(surface),
+                tilingScale: channel.tilingScale
+              }
             });
           }}
         />
@@ -496,8 +508,9 @@ export function useLandscapeWorkspaceView(
                             subjectId: region.identity.id
                           },
                           payload: {
-                            channel: createRegionLandscapeChannelDefinition({
-                              displayName: nextLandscapeChannelName(region.landscape.channels)
+                            channel: createLandscapeSurfaceSlot({
+                              displayName: nextLandscapeChannelName(region.landscape.surfaceSlots),
+                              surface: createColorSurface(0x808080)
                             })
                           }
                         });

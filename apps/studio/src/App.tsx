@@ -9,7 +9,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
-import type { SemanticCommand, RegionDocument } from "@sugarmagic/domain";
+import type { SemanticCommand, RegionDocument, Surface } from "@sugarmagic/domain";
 import {
   createAuthoringSession,
   applyCommand,
@@ -39,9 +39,7 @@ import {
   addTextureDefinitionToSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
-  removeAssetDefinitionFromSession,
   removeMaterialDefinitionFromSession,
-  assetDefinitionHasSceneReferences,
   materialDefinitionHasReferences,
   createDefaultEnvironmentDefinition,
   createDefaultRegion,
@@ -863,7 +861,7 @@ export function App() {
       definitionId: string,
       slotName: string,
       slotIndex: number,
-      materialDefinitionId: string | null
+      surface: Surface | null
     ) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
@@ -873,42 +871,25 @@ export function App() {
         ) ?? null;
       if (!assetDefinition) return;
 
-      const nextBindings = (assetDefinition.materialSlotBindings ?? []).map((binding) =>
-        binding.slotName === slotName && binding.slotIndex === slotIndex
+      const nextSurfaceSlots = assetDefinition.surfaceSlots.map((slot) =>
+        slot.slotName === slotName && slot.slotIndex === slotIndex
           ? {
-              ...binding,
-              materialDefinitionId
+              ...slot,
+              surface
             }
-          : binding
+          : slot
       );
 
       projectStore
         .getState()
         .updateSession(
           updateAssetDefinitionInSession(currentSession, definitionId, {
-            materialSlotBindings: nextBindings
+            surfaceSlots: nextSurfaceSlots
           })
         );
     },
     []
   );
-
-  const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
-    const { session: currentSession } = projectStore.getState();
-    if (!currentSession) return;
-    if (assetDefinitionHasSceneReferences(currentSession, definitionId)) {
-      window.alert("Remove all placed instances before deleting this asset from the project.");
-      return;
-    }
-
-    if (!window.confirm("Remove this asset definition from the project?")) {
-      return;
-    }
-
-    projectStore
-      .getState()
-      .updateSession(removeAssetDefinitionFromSession(currentSession, definitionId));
-  }, []);
 
   const handleCreateMaterialDefinition = useCallback(
     (shaderDefinitionId: string) => {
@@ -1234,7 +1215,6 @@ export function App() {
           parameterId
         }
       }),
-    onRemoveAssetDefinition: handleRemoveAssetDefinition,
     onCreateMaterialDefinition: handleCreateMaterialDefinition,
     onImportPbrMaterial: handleImportPbrMaterial,
     onImportTextureDefinition: handleImportTextureDefinition,

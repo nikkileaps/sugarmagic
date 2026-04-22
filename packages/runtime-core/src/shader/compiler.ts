@@ -297,6 +297,18 @@ function builtinForNodeType(
       return asBuiltin("sceneColor", "vec3");
     case "input.scene-depth":
       return asBuiltin("sceneDepth", "float");
+    case "input.accumulator.color":
+      return asBuiltin("accumulatorColor", "color");
+    case "input.accumulator.normal":
+      return asBuiltin("accumulatorNormal", "vec3");
+    case "input.accumulator.roughness":
+      return asBuiltin("accumulatorRoughness", "float");
+    case "input.accumulator.metalness":
+      return asBuiltin("accumulatorMetalness", "float");
+    case "input.accumulator.ao":
+      return asBuiltin("accumulatorAo", "float");
+    case "input.accumulator.alpha":
+      return asBuiltin("accumulatorAlpha", "float");
     default:
       return null;
   }
@@ -581,10 +593,10 @@ export function compileShaderGraph(
     }
 
     context.currentOps = [];
-    if (node.nodeType === "output.vertex") {
+    if (node.nodeType === "output.vertex" || node.nodeType === "output.deform") {
       outputs.vertex = compileNodePort(context, node.nodeId, "value") ?? undefined;
       vertexOps.push(...context.currentOps);
-    } else if (node.nodeType === "output.fragment") {
+    } else if (node.nodeType === "output.fragment" || node.nodeType === "output.surface") {
       outputs.fragmentColor = compileNodePort(context, node.nodeId, "color") ?? undefined;
       outputs.fragmentAlpha = compileNodePort(context, node.nodeId, "alpha") ?? undefined;
       outputs.fragmentNormal = compileNodePort(context, node.nodeId, "normal") ?? undefined;
@@ -601,6 +613,42 @@ export function compileShaderGraph(
       outputs.postProcessColor =
         compileNodePort(context, node.nodeId, "color") ?? undefined;
       postProcessOps.push(...context.currentOps);
+    } else if (node.nodeType === "output.effect") {
+      outputs.effectColor = compileNodePort(context, node.nodeId, "color") ?? undefined;
+      outputs.effectAlpha = compileNodePort(context, node.nodeId, "alpha") ?? undefined;
+      outputs.effectNormal = compileNodePort(context, node.nodeId, "normal") ?? undefined;
+      outputs.effectRoughness =
+        compileNodePort(context, node.nodeId, "roughness") ?? undefined;
+      outputs.effectMetalness =
+        compileNodePort(context, node.nodeId, "metalness") ?? undefined;
+      outputs.effectAo = compileNodePort(context, node.nodeId, "ao") ?? undefined;
+      fragmentOps.push(...context.currentOps);
+    }
+  }
+
+  if (document.targetKind === "mesh-effect") {
+    const usesAccumulator = [
+      ...vertexOps.flatMap((op) => Object.values(op.inputs)),
+      ...fragmentOps.flatMap((op) => Object.values(op.inputs)),
+      ...postProcessOps.flatMap((op) => Object.values(op.inputs)),
+      ...Object.values(outputs)
+    ].some(
+      (value) =>
+        value?.kind === "builtin" &&
+        [
+          "accumulatorColor",
+          "accumulatorNormal",
+          "accumulatorRoughness",
+          "accumulatorMetalness",
+          "accumulatorAo",
+          "accumulatorAlpha"
+        ].includes(value.name)
+    );
+    if (!usesAccumulator) {
+      context.diagnostics.push({
+        severity: "warning",
+        message: "Effect graph does not read any accumulator input."
+      });
     }
   }
 

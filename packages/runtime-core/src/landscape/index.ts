@@ -66,7 +66,7 @@ export function resolveLandscapeDescriptorFromState(
     size,
     subdivisions,
     paintResolution,
-    channelCount: landscape.channels.length
+    channelCount: landscape.surfaceSlots.length
   };
 }
 

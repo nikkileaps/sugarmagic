@@ -35,7 +35,13 @@ export type ShaderIRBuiltinName =
   | "materialTextureA"
   | "screenUV"
   | "sceneColor"
-  | "sceneDepth";
+  | "sceneDepth"
+  | "accumulatorColor"
+  | "accumulatorNormal"
+  | "accumulatorRoughness"
+  | "accumulatorMetalness"
+  | "accumulatorAo"
+  | "accumulatorAlpha";
 
 export interface ShaderIRDiagnostic {
   severity: "error" | "warning";
@@ -89,6 +95,12 @@ export interface ShaderIROutputs {
   fragmentAo?: ShaderIRValue;
   emissive?: ShaderIRValue;
   postProcessColor?: ShaderIRValue;
+  effectColor?: ShaderIRValue;
+  effectAlpha?: ShaderIRValue;
+  effectNormal?: ShaderIRValue;
+  effectRoughness?: ShaderIRValue;
+  effectMetalness?: ShaderIRValue;
+  effectAo?: ShaderIRValue;
 }
 
 export interface ShaderIR {
@@ -127,7 +139,13 @@ const BUILTIN_TYPES: Record<ShaderIRBuiltinName, ShaderDataType> = {
   materialTextureA: "float",
   screenUV: "vec2",
   sceneColor: "vec3",
-  sceneDepth: "float"
+  sceneDepth: "float",
+  accumulatorColor: "color",
+  accumulatorNormal: "vec3",
+  accumulatorRoughness: "float",
+  accumulatorMetalness: "float",
+  accumulatorAo: "float",
+  accumulatorAlpha: "float"
 };
 
 export function validateShaderIR(ir: ShaderIR): ShaderIRDiagnostic[] {

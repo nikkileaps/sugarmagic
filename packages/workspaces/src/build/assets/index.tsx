@@ -18,7 +18,7 @@ import type {
   AssetDefinition,
   ContentLibrarySnapshot,
   MaterialDefinition,
-  RegionDocument,
+  Surface,
   ShaderGraphDocument,
   ShaderParameterOverride,
   ShaderSlotKind
@@ -32,20 +32,18 @@ import { ShaderSlotEditor } from "../ShaderSlotEditor";
 
 export interface AssetsWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
-  activeRegion: RegionDocument | null;
   contentLibrary: ContentLibrarySnapshot;
   materialDefinitions: MaterialDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
-  onPlaceAsset: (assetDefinition: AssetDefinition) => void;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    materialDefinitionId: string | null
+    surface: Surface | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
@@ -63,8 +61,6 @@ export interface AssetsWorkspaceViewProps {
     parameterId: string
   ) => void;
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
-  onRemoveAssetDefinition: (definitionId: string) => void;
-  hasSceneReferences: (definitionId: string) => boolean;
 }
 
 function getAssetKindIcon(assetDefinition: AssetDefinition): string {
@@ -80,22 +76,16 @@ export function useAssetsWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     assetDefinitions,
-    activeRegion,
     contentLibrary,
     materialDefinitions,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
     onImportAsset,
-    onPlaceAsset,
     onUpdateAssetDefinition,
     onSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader,
-    onSetAssetDefaultShaderParameterOverride,
-    onClearAssetDefaultShaderParameterOverride,
     onEditShaderGraph,
-    onRemoveAssetDefinition,
-    hasSceneReferences
   } = props;
 
   const selectedAsset = useMemo(
@@ -172,26 +162,16 @@ export function useAssetsWorkspaceView(
             key={selectedAsset.definitionId}
             assetDefinition={selectedAsset}
             contentLibrary={contentLibrary}
-            canPlace={Boolean(activeRegion)}
-            canRemove={!hasSceneReferences(selectedAsset.definitionId)}
             materialDefinitions={materialDefinitions}
             shaderDefinitions={shaderDefinitions}
-            onPlaceAsset={onPlaceAsset}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
             onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
             onSetAssetDefaultShader={onSetAssetDefaultShader}
-            onSetAssetDefaultShaderParameterOverride={
-              onSetAssetDefaultShaderParameterOverride
-            }
-            onClearAssetDefaultShaderParameterOverride={
-              onClearAssetDefaultShaderParameterOverride
-            }
             onEditShaderGraph={onEditShaderGraph}
-            onRemoveAssetDefinition={onRemoveAssetDefinition}
           />
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
-            Select an imported asset to inspect or place it.
+            Select an imported asset to inspect and edit it.
           </Text>
         )}
       </Inspector>
@@ -203,50 +183,30 @@ export function useAssetsWorkspaceView(
 function AssetInspectorPanel({
   assetDefinition,
   contentLibrary,
-  canPlace,
-  canRemove,
   materialDefinitions,
   shaderDefinitions,
-  onPlaceAsset,
   onUpdateAssetDefinition,
   onSetAssetMaterialSlotBinding,
   onSetAssetDefaultShader,
-  onSetAssetDefaultShaderParameterOverride,
-  onClearAssetDefaultShaderParameterOverride,
-  onEditShaderGraph,
-  onRemoveAssetDefinition
+  onEditShaderGraph
 }: {
   assetDefinition: AssetDefinition;
   contentLibrary: ContentLibrarySnapshot;
-  canPlace: boolean;
-  canRemove: boolean;
   materialDefinitions: MaterialDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
-  onPlaceAsset: (assetDefinition: AssetDefinition) => void;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    materialDefinitionId: string | null
+    surface: Surface | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
     slot: ShaderSlotKind,
     shaderDefinitionId: string | null
   ) => void;
-  onSetAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    override: ShaderParameterOverride
-  ) => void;
-  onClearAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    parameterId: string
-  ) => void;
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
-  onRemoveAssetDefinition: (definitionId: string) => void;
 }) {
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
@@ -313,17 +273,17 @@ function AssetInspectorPanel({
       </Stack>
       <Stack gap={4}>
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
-          Materials
+          Surfaces
         </Text>
         <MaterialSlotBindingsEditor
-          bindings={assetDefinition.materialSlotBindings ?? []}
+          bindings={assetDefinition.surfaceSlots}
           materialDefinitions={materialDefinitions}
-          onChangeBinding={(slotName, slotIndex, materialDefinitionId) =>
+          onChangeBinding={(slotName, slotIndex, surface) =>
             onSetAssetMaterialSlotBinding(
               assetDefinition.definitionId,
               slotName,
               slotIndex,
-              materialDefinitionId
+              surface
             )
           }
         />
@@ -331,60 +291,34 @@ function AssetInspectorPanel({
       <ShaderSlotEditor
         bindings={{
           ...createEmptyShaderSlotBindingMap(),
-          ...(assetDefinition.defaultShaderBindings ?? {})
+          deform:
+            assetDefinition.deform?.kind === "shader"
+              ? assetDefinition.deform.shaderDefinitionId
+              : null,
+          effect:
+            assetDefinition.effect?.kind === "shader"
+              ? assetDefinition.effect.shaderDefinitionId
+              : null
         }}
         shaderDefinitions={
           shaderDefinitions.filter((definition) =>
             assetDefinition.assetKind === "foliage"
               ? definition.targetKind === "mesh-deform" ||
-                definition.targetKind === "mesh-surface"
-              : definition.targetKind === "mesh-surface"
+                definition.targetKind === "mesh-effect"
+              : definition.targetKind === "mesh-deform" ||
+                definition.targetKind === "mesh-effect"
           )
         }
+        slots={["deform", "effect"]}
         onChangeBinding={(slot, shaderDefinitionId) =>
           onSetAssetDefaultShader(assetDefinition.definitionId, slot, shaderDefinitionId)
         }
-        parameterOverrides={assetDefinition.defaultShaderParameterOverrides ?? []}
+        parameterOverrides={[]}
         diagnostics={shaderResolution.diagnostics}
-        onChangeParameterOverride={
-          onSetAssetDefaultShaderParameterOverride
-            ? (slot, override) =>
-                onSetAssetDefaultShaderParameterOverride(
-                  assetDefinition.definitionId,
-                  slot,
-                  override
-                )
-            : undefined
-        }
-        onClearParameterOverride={
-          onClearAssetDefaultShaderParameterOverride
-            ? (slot, parameterId) =>
-                onClearAssetDefaultShaderParameterOverride(
-                  assetDefinition.definitionId,
-                  slot,
-                  parameterId
-                )
-            : undefined
-        }
+        onChangeParameterOverride={undefined}
+        onClearParameterOverride={undefined}
         onEditShaderGraph={onEditShaderGraph}
       />
-      <Button size="xs" disabled={!canPlace} onClick={() => onPlaceAsset(assetDefinition)}>
-        Place In Active Region
-      </Button>
-      <Button
-        size="xs"
-        color="red"
-        variant="subtle"
-        disabled={!canRemove}
-        onClick={() => onRemoveAssetDefinition(assetDefinition.definitionId)}
-      >
-        Remove From Project
-      </Button>
-      {!canRemove && (
-        <Text size="xs" c="var(--sm-color-overlay0)">
-          Remove this asset from all scenes before deleting it from the project.
-        </Text>
-      )}
     </Stack>
   );
 }
