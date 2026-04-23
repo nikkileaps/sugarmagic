@@ -9,7 +9,8 @@
 import * as THREE from "three";
 import type {
   FlowerTypeDefinition,
-  GrassTypeDefinition
+  GrassTypeDefinition,
+  RockTypeDefinition
 } from "@sugarmagic/domain";
 
 function rgbTuple(color: number): [number, number, number] {
@@ -226,5 +227,37 @@ export function createProceduralFlowerGeometry(
     "_tree_height",
     new THREE.Float32BufferAttribute(heights, 1)
   );
+  return geometry;
+}
+
+export function createProceduralRockGeometry(
+  definition: RockTypeDefinition
+): THREE.BufferGeometry {
+  const source =
+    definition.source.kind === "procedural"
+      ? definition.source
+      : {
+          radiusRange: [0.08, 0.18] as [number, number],
+          heightRatioRange: [0.45, 0.9] as [number, number],
+          facetCount: 8
+        };
+  const radius = (source.radiusRange[0] + source.radiusRange[1]) / 2;
+  const heightRatio =
+    (source.heightRatioRange[0] + source.heightRatioRange[1]) / 2;
+  const geometry = new THREE.IcosahedronGeometry(radius, 0);
+  geometry.scale(1, heightRatio, 1);
+  const colorTuple = rgbTuple(definition.color);
+  const vertexCount = geometry.getAttribute("position").count;
+  const colors = new Float32Array(vertexCount * 3);
+  const heights = new Float32Array(vertexCount);
+  const position = geometry.getAttribute("position");
+  for (let index = 0; index < vertexCount; index += 1) {
+    colors[index * 3] = colorTuple[0];
+    colors[index * 3 + 1] = colorTuple[1];
+    colors[index * 3 + 2] = colorTuple[2];
+    heights[index] = position.getY(index) / Math.max(radius * heightRatio * 2, 0.0001);
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("_tree_height", new THREE.BufferAttribute(heights, 1));
   return geometry;
 }

@@ -9,7 +9,6 @@
 import type {
   AppearanceContent,
   Layer,
-  Mask,
   BlendMode,
   ScatterContent,
   EmissionContent
@@ -20,11 +19,18 @@ import {
   createScatterLayer,
   layerUsesLandscapeOnlyMask
 } from "./layer";
+import type { Mask } from "./mask";
+import { cloneMask } from "./mask";
+import type { LayerOverride } from "./layer-override";
 
 export * from "./layer";
+export * from "./mask";
+export * from "./noise";
+export * from "./layer-override";
 export * from "./surface-definition";
 export * from "./grass-type";
 export * from "./flower-type";
+export * from "./rock-type";
 
 export type ShaderOrMaterial = Extract<
   AppearanceContent,
@@ -40,7 +46,11 @@ export interface Surface<C extends SurfaceContext = SurfaceContext> {
 
 export type SurfaceBinding<C extends SurfaceContext = SurfaceContext> =
   | { kind: "inline"; surface: Surface<C> }
-  | { kind: "reference"; surfaceDefinitionId: string };
+  | {
+      kind: "reference";
+      surfaceDefinitionId: string;
+      layerOverrides?: Record<string, LayerOverride>;
+    };
 
 export interface SurfaceSlot<C extends SurfaceContext = SurfaceContext> {
   readonly slotName: string;
@@ -228,7 +238,8 @@ export function createReferenceSurfaceBinding<C extends SurfaceContext = Surface
 ): SurfaceBinding<C> {
   return {
     kind: "reference",
-    surfaceDefinitionId
+    surfaceDefinitionId,
+    layerOverrides: {}
   };
 }
 
@@ -261,7 +272,7 @@ export function cloneSurface<C extends SurfaceContext = SurfaceContext>(
   return {
     layers: surface.layers.map((layer) => ({
       ...layer,
-      mask: { ...layer.mask },
+      mask: cloneMask(layer.mask),
       content: { ...layer.content }
     })) as Layer[],
     context: surface.context
@@ -275,7 +286,20 @@ export function cloneSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
     return null;
   }
   if (binding.kind === "reference") {
-    return { ...binding };
+    return {
+      ...binding,
+      layerOverrides: binding.layerOverrides
+        ? Object.fromEntries(
+            Object.entries(binding.layerOverrides).map(([layerId, override]) => [
+              layerId,
+              {
+                ...override,
+                ...(override.mask ? { mask: cloneMask(override.mask) } : {})
+              }
+            ])
+          )
+        : {}
+    };
   }
   return {
     kind: "inline",

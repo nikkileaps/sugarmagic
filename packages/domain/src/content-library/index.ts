@@ -11,10 +11,12 @@ import { createScopedId } from "../shared/identity";
 import {
   createBuiltInFlowerTypeDefinitions,
   createBuiltInGrassTypeDefinitions,
+  createBuiltInRockTypeDefinitions,
   createBuiltInSurfaceDefinitions
 } from "./builtins";
 import type {
   AssetSurfaceSlot,
+  RockTypeDefinition,
   ShaderOrMaterial,
   SurfaceBinding
 } from "../surface";
@@ -63,9 +65,11 @@ export type ContentDefinitionKind =
   | "asset"
   | "material"
   | "texture"
+  | "mask-texture"
   | "surface"
   | "grass-type"
   | "flower-type"
+  | "rock-type"
   | "npc"
   | "dialogue"
   | "quest"
@@ -109,6 +113,19 @@ export interface TextureDefinition {
   };
   colorSpace: "linear" | "srgb";
   packing: "rgba" | "orm" | "normal" | "roughness" | "metallic" | "ao" | "height";
+}
+
+export interface MaskTextureDefinition {
+  definitionId: string;
+  definitionKind: "mask-texture";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+  format: "r8" | "rgba8";
+  resolution: [number, number];
 }
 
 export interface MaterialDefinition {
@@ -247,9 +264,11 @@ export interface ContentLibrarySnapshot {
   assetDefinitions: AssetDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions?: MaskTextureDefinition[];
   surfaceDefinitions?: SurfaceDefinition[];
   grassTypeDefinitions?: GrassTypeDefinition[];
   flowerTypeDefinitions?: FlowerTypeDefinition[];
+  rockTypeDefinitions?: RockTypeDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
 }
@@ -319,6 +338,20 @@ function normalizeSurfaceDefinitions(
   }));
 }
 
+function normalizeMaskTextureDefinitions(
+  definitions: MaskTextureDefinition[] | null | undefined
+): MaskTextureDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    source: {
+      relativeAssetPath: definition.source.relativeAssetPath,
+      fileName: definition.source.fileName,
+      mimeType: definition.source.mimeType
+    },
+    resolution: [...definition.resolution] as [number, number]
+  }));
+}
+
 function normalizeGrassTypeDefinitions(
   definitions: GrassTypeDefinition[] | null | undefined
 ): GrassTypeDefinition[] {
@@ -335,6 +368,12 @@ function normalizeFlowerTypeDefinitions(
     ...definition,
     wind: normalizeShaderOrMaterial(definition.wind)
   }));
+}
+
+function normalizeRockTypeDefinitions(
+  definitions: RockTypeDefinition[] | null | undefined
+): RockTypeDefinition[] {
+  return [...(definitions ?? [])];
 }
 
 function normalizeShaderOrMaterial(
@@ -986,15 +1025,17 @@ export function createEmptyContentLibrarySnapshot(
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
   const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
+  const rockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
   return {
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 4
+      version: 5
     },
     assetDefinitions: [],
     materialDefinitions: [],
     textureDefinitions: [],
+    maskTextureDefinitions: [],
     surfaceDefinitions: createBuiltInSurfaceDefinitions(
       projectId,
       grassTypeDefinitions,
@@ -1002,6 +1043,7 @@ export function createEmptyContentLibrarySnapshot(
     ),
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     environmentDefinitions: [
       createDefaultEnvironmentDefinition(projectId, {
         definitionId: `${projectId}:environment:default`,
@@ -1020,6 +1062,7 @@ export function normalizeContentLibrarySnapshot(
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
   const builtInGrassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
+  const builtInRockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
   const mergedGrassTypeDefinitions = mergeBuiltInDefinitions(
     normalizeGrassTypeDefinitions(contentLibrary.grassTypeDefinitions),
     builtInGrassTypeDefinitions,
@@ -1028,6 +1071,11 @@ export function normalizeContentLibrarySnapshot(
   const mergedFlowerTypeDefinitions = mergeBuiltInDefinitions(
     normalizeFlowerTypeDefinitions(contentLibrary.flowerTypeDefinitions),
     builtInFlowerTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedRockTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeRockTypeDefinitions(contentLibrary.rockTypeDefinitions),
+    builtInRockTypeDefinitions,
     (definition) => definition.definitionId
   );
   const mergedSurfaceDefinitions = mergeBuiltInDefinitions(
@@ -1070,7 +1118,7 @@ export function normalizeContentLibrarySnapshot(
   const normalizedContentLibrary: ContentLibrarySnapshot = {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 4)
+      version: Math.max(contentLibrary.identity.version ?? 1, 5)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
@@ -1091,9 +1139,13 @@ export function normalizeContentLibrarySnapshot(
         mimeType: definition.source.mimeType
       }
     })),
+    maskTextureDefinitions: normalizeMaskTextureDefinitions(
+      contentLibrary.maskTextureDefinitions
+    ),
     surfaceDefinitions: mergedSurfaceDefinitions,
     grassTypeDefinitions: mergedGrassTypeDefinitions,
     flowerTypeDefinitions: mergedFlowerTypeDefinitions,
+    rockTypeDefinitions: mergedRockTypeDefinitions,
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
       const legacyDefinition = definition as LegacyEnvironmentDefinition;
       const preset = legacyDefinition.lighting?.preset ?? "default";
@@ -1456,6 +1508,23 @@ export function listFlowerTypeDefinitions(
   return [...(contentLibrary.flowerTypeDefinitions ?? [])];
 }
 
+export function getRockTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): RockTypeDefinition | null {
+  return (
+    (contentLibrary.rockTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listRockTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): RockTypeDefinition[] {
+  return [...(contentLibrary.rockTypeDefinitions ?? [])];
+}
+
 export function getTextureDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
@@ -1471,6 +1540,23 @@ export function listTextureDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): TextureDefinition[] {
   return [...contentLibrary.textureDefinitions];
+}
+
+export function getMaskTextureDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): MaskTextureDefinition | null {
+  return (
+    (contentLibrary.maskTextureDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listMaskTextureDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): MaskTextureDefinition[] {
+  return [...(contentLibrary.maskTextureDefinitions ?? [])];
 }
 
 export function getEnvironmentDefinition(

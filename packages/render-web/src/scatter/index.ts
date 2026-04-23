@@ -12,14 +12,23 @@ import type {
   ContentLibrarySnapshot,
   FlowerTypeDefinition,
   GrassTypeDefinition,
-  Mask
+  Mask,
+  MaskTextureDefinition,
+  TextureDefinition,
+  RockTypeDefinition
+} from "@sugarmagic/domain";
+import {
+  getMaskTextureDefinition,
+  getTextureDefinition,
+  samplePerlinNoise2d
 } from "@sugarmagic/domain";
 import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
 import {
   createProceduralFlowerGeometry,
-  createProceduralGrassGeometry
+  createProceduralGrassGeometry,
+  createProceduralRockGeometry
 } from "./procedural";
 
 export interface SurfaceScatterSample {
@@ -45,6 +54,15 @@ export interface SurfaceScatterBuildResult {
   root: THREE.Group;
   dispose: () => void;
 }
+
+interface TextureSampleCacheEntry {
+  version: number;
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
+const textureSampleCache = new WeakMap<THREE.Texture, TextureSampleCacheEntry>();
 
 function smoothstep(min: number, max: number, value: number): number {
   if (max <= min) {
@@ -93,10 +111,103 @@ function jitterColor(
   return base;
 }
 
+function channelIndex(channel: "r" | "g" | "b" | "a"): number {
+  switch (channel) {
+    case "r":
+      return 0;
+    case "g":
+      return 1;
+    case "b":
+      return 2;
+    case "a":
+      return 3;
+  }
+}
+
+function getTextureSampleCacheEntry(
+  texture: THREE.Texture
+): TextureSampleCacheEntry | null {
+  const cached = textureSampleCache.get(texture);
+  if (cached && cached.version === texture.version) {
+    return cached;
+  }
+  const image = texture.image;
+  if (
+    !image ||
+    typeof document === "undefined" ||
+    typeof (image as { width?: unknown }).width !== "number" ||
+    typeof (image as { height?: unknown }).height !== "number"
+  ) {
+    return null;
+  }
+  const width = (image as { width: number }).width;
+  const height = (image as { height: number }).height;
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+  context.clearRect(0, 0, width, height);
+  context.drawImage(image as CanvasImageSource, 0, 0, width, height);
+  const imageData = context.getImageData(0, 0, width, height);
+  const entry: TextureSampleCacheEntry = {
+    version: texture.version,
+    width,
+    height,
+    data: imageData.data
+  };
+  textureSampleCache.set(texture, entry);
+  return entry;
+}
+
+function sampleTextureChannel(
+  texture: THREE.Texture,
+  uv: [number, number],
+  channel: "r" | "g" | "b" | "a"
+): number | null {
+  const entry = getTextureSampleCacheEntry(texture);
+  if (!entry) {
+    return null;
+  }
+  const wrappedU = ((uv[0] % 1) + 1) % 1;
+  const wrappedV = ((uv[1] % 1) + 1) % 1;
+  const pixelX = Math.min(entry.width - 1, Math.max(0, Math.floor(wrappedU * entry.width)));
+  const pixelY = Math.min(
+    entry.height - 1,
+    Math.max(0, Math.floor((1 - wrappedV) * entry.height))
+  );
+  const offset = (pixelY * entry.width + pixelX) * 4;
+  return entry.data[offset + channelIndex(channel)]! / 255;
+}
+
+function sampleDefinitionTextureMask(
+  definition: TextureDefinition,
+  sample: SurfaceScatterSample,
+  options: SurfaceScatterBuildOptions,
+  channel: "r" | "g" | "b" | "a"
+): number | null {
+  const texture = options.assetResolver.resolveTextureDefinition(definition);
+  return sampleTextureChannel(texture, sample.uv, channel);
+}
+
+function samplePaintedMask(
+  definition: MaskTextureDefinition,
+  sample: SurfaceScatterSample,
+  options: SurfaceScatterBuildOptions
+): number | null {
+  const texture = options.assetResolver.resolveMaskTextureDefinition(definition);
+  return sampleTextureChannel(texture, sample.uv, "r");
+}
+
 function evaluateScatterMask(
   mask: Mask,
   sample: SurfaceScatterSample,
-  logger?: SurfaceScatterBuildOptions["logger"],
+  options: SurfaceScatterBuildOptions,
   warnedMaskKinds?: Set<Mask["kind"]>
 ): number {
   switch (mask.kind) {
@@ -110,16 +221,89 @@ function evaluateScatterMask(
       const channelIndex = { r: 0, g: 1, b: 2, a: 3 }[mask.channel];
       return sample.vertexColor?.[channelIndex] ?? 1;
     }
-    case "texture":
-    case "fresnel":
-      if (!warnedMaskKinds?.has(mask.kind)) {
-        warnedMaskKinds?.add(mask.kind);
-        logger?.warn?.("[surface-scatter] Unsupported Stage 1 scatter mask; using full density.", {
-          maskKind: mask.kind
-        });
+    case "perlin-noise": {
+      const noise = samplePerlinNoise2d({
+        x: (sample.uv[0] + mask.offset[0]) * mask.scale,
+        y: (sample.uv[1] + mask.offset[1]) * mask.scale
+      });
+      return smoothstep(mask.threshold - mask.fade, mask.threshold + mask.fade, noise);
+    }
+    case "voronoi": {
+      const x = sample.uv[0] / Math.max(mask.cellSize, 0.001);
+      const y = sample.uv[1] / Math.max(mask.cellSize, 0.001);
+      const fractX = x - Math.floor(x);
+      const fractY = y - Math.floor(y);
+      const edgeDistance = Math.min(
+        Math.min(fractX, 1 - fractX),
+        Math.min(fractY, 1 - fractY)
+      );
+      return 1 - smoothstep(0, Math.max(mask.borderWidth, 0.0001), edgeDistance);
+    }
+    case "world-position-gradient": {
+      const axisValue =
+        mask.axis === "x"
+          ? sample.position[0]
+          : mask.axis === "y"
+            ? sample.position[1]
+            : sample.position[2];
+      return smoothstep(mask.min - mask.fade, mask.max + mask.fade, axisValue);
+    }
+    case "fresnel": {
+      const dotUp = Math.max(
+        0,
+        Math.min(
+          1,
+          sample.normal[0] * 0 + sample.normal[1] * 1 + sample.normal[2] * 0
+        )
+      );
+      return Math.pow(1 - dotUp, Math.max(mask.power, 0.0001)) * mask.strength;
+    }
+    case "texture": {
+      const definition = getTextureDefinition(
+        options.contentLibrary,
+        mask.textureDefinitionId
+      );
+      if (!definition) {
+        return 0;
       }
-      return 1;
+      const sampled = sampleDefinitionTextureMask(
+        definition,
+        sample,
+        options,
+        mask.channel
+      );
+      if (sampled !== null) {
+        return sampled;
+      }
+      break;
+    }
+    case "painted": {
+      if (!mask.maskTextureId) {
+        return 0;
+      }
+      const definition = getMaskTextureDefinition(
+        options.contentLibrary,
+        mask.maskTextureId
+      );
+      if (!definition) {
+        return 0;
+      }
+      const sampled = samplePaintedMask(definition, sample, options);
+      if (sampled !== null) {
+        return sampled;
+      }
+      break;
+    }
+    default:
+      break;
   }
+  if (!warnedMaskKinds?.has(mask.kind)) {
+    warnedMaskKinds?.add(mask.kind);
+    options.logger?.warn?.("[surface-scatter] Unsupported CPU scatter mask; using zero density until the source is ready.", {
+      maskKind: mask.kind
+    });
+  }
+  return 0;
 }
 
 export function buildSurfaceScatterLayer(
@@ -138,15 +322,22 @@ export function buildSurfaceScatterLayer(
   }
 
   const isGrassLayer = layer.contentKind === "grass";
+  const isFlowerLayer = layer.contentKind === "flowers";
   const grassDefinition = isGrassLayer
     ? (layer.definition as GrassTypeDefinition)
     : null;
-  const flowerDefinition = isGrassLayer
-    ? null
-    : (layer.definition as FlowerTypeDefinition);
+  const flowerDefinition = isFlowerLayer
+    ? (layer.definition as FlowerTypeDefinition)
+    : null;
+  const rockDefinition =
+    layer.contentKind === "rocks"
+      ? (layer.definition as RockTypeDefinition)
+      : null;
   const geometry = isGrassLayer
     ? createProceduralGrassGeometry(grassDefinition!)
-    : createProceduralFlowerGeometry(flowerDefinition!);
+    : isFlowerLayer
+      ? createProceduralFlowerGeometry(flowerDefinition!)
+      : createProceduralRockGeometry(rockDefinition!);
 
   const material = new MeshStandardNodeMaterial({
     color: 0xffffff,
@@ -184,7 +375,7 @@ export function buildSurfaceScatterLayer(
           evaluateScatterMask(
             layer.mask,
             sample,
-            options.logger,
+            options,
             warnedMaskKinds
           ) *
           layer.opacity
@@ -272,11 +463,19 @@ export function buildSurfaceScatterLayer(
           hash01(colorSeed) * 2 - 1
         )
       );
-    } else {
+    } else if (isFlowerLayer) {
       instanceColor.copy(
         jitterColor(
           flowerDefinition!.petalColor,
           flowerDefinition!.colorJitter,
+          hash01(colorSeed) * 2 - 1
+        )
+      );
+    } else {
+      instanceColor.copy(
+        jitterColor(
+          rockDefinition!.color,
+          rockDefinition!.colorJitter,
           hash01(colorSeed) * 2 - 1
         )
       );

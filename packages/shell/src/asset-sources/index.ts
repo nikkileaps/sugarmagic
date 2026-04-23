@@ -27,7 +27,10 @@ function collectRelativeAssetPaths(
 
   const sources = [
     ...session.contentLibrary.assetDefinitions.map((definition) => definition.source),
-    ...session.contentLibrary.textureDefinitions.map((definition) => definition.source)
+    ...session.contentLibrary.textureDefinitions.map((definition) => definition.source),
+    ...(session.contentLibrary.maskTextureDefinitions ?? []).map(
+      (definition) => definition.source
+    )
   ];
 
   return sources
@@ -63,6 +66,7 @@ export interface AssetSourceActions {
     handle: FileSystemDirectoryHandle,
     projectStore: ProjectStore
   ) => void;
+  refreshPaths: (relativeAssetPaths: string[]) => Promise<void>;
   stop: () => void;
 }
 
@@ -122,6 +126,46 @@ export function createAssetSourceStore() {
       revokeAssetSources(previousSources);
     }
 
+    async function refreshPaths(relativeAssetPaths: string[]) {
+      const handle = currentHandle;
+      if (!handle) {
+        return;
+      }
+
+      const nextPaths = Array.from(
+        new Set(relativeAssetPaths.map((path) => path.trim()).filter(Boolean))
+      ).sort();
+      if (nextPaths.length === 0) {
+        return;
+      }
+
+      const previousSources = get().sources;
+      const refreshedSources = await createAssetSourceMap(handle, nextPaths);
+      if (handle !== currentHandle) {
+        revokeAssetSources(refreshedSources);
+        return;
+      }
+
+      const mergedSources = { ...previousSources };
+      for (const relativeAssetPath of nextPaths) {
+        const previousUrl = mergedSources[relativeAssetPath];
+        const refreshedUrl = refreshedSources[relativeAssetPath];
+        if (previousUrl && previousUrl !== refreshedUrl) {
+          URL.revokeObjectURL(previousUrl);
+        }
+        if (refreshedUrl) {
+          mergedSources[relativeAssetPath] = refreshedUrl;
+        } else {
+          delete mergedSources[relativeAssetPath];
+        }
+      }
+
+      set((state) => ({
+        sources: mergedSources,
+        syncCount: state.syncCount + 1
+      }));
+    }
+
     return {
       sources: {},
       syncCount: 0,
@@ -145,6 +189,7 @@ export function createAssetSourceStore() {
           void syncFromProject(projectStore, currentHandle);
         });
       },
+      refreshPaths,
       stop() {
         if (unsubscribeProject) {
           unsubscribeProject();

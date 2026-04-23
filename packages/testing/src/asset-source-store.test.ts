@@ -10,17 +10,33 @@ vi.mock("@sugarmagic/io", () => ({
 
 import { createAssetSourceStore, createProjectStore } from "@sugarmagic/shell";
 
-function createSessionWithAssetPath(relativeAssetPath: string) {
+function createSessionWithSources(options: {
+  assetPaths?: string[];
+  texturePaths?: string[];
+  maskPaths?: string[];
+}) {
+  const {
+    assetPaths = [],
+    texturePaths = [],
+    maskPaths = []
+  } = options;
   return {
     contentLibrary: {
-      assetDefinitions: [
-        {
-          source: {
-            relativeAssetPath
-          }
+      assetDefinitions: assetPaths.map((relativeAssetPath) => ({
+        source: {
+          relativeAssetPath
         }
-      ],
-      textureDefinitions: []
+      })),
+      textureDefinitions: texturePaths.map((relativeAssetPath) => ({
+        source: {
+          relativeAssetPath
+        }
+      })),
+      maskTextureDefinitions: maskPaths.map((relativeAssetPath) => ({
+        source: {
+          relativeAssetPath
+        }
+      }))
     }
   } as never;
 }
@@ -55,7 +71,9 @@ describe("asset source store", () => {
     projectStore.getState().setActive(
       firstHandle,
       descriptor,
-      createSessionWithAssetPath("assets/player.glb")
+      createSessionWithSources({
+        assetPaths: ["assets/player.glb"]
+      })
     );
     assetSourceStore.getState().start(firstHandle, projectStore);
     await flushAsyncWork();
@@ -67,7 +85,9 @@ describe("asset source store", () => {
     projectStore.getState().setActive(
       secondHandle,
       descriptor,
-      createSessionWithAssetPath("assets/player.glb")
+      createSessionWithSources({
+        assetPaths: ["assets/player.glb"]
+      })
     );
     assetSourceStore.getState().start(secondHandle, projectStore);
     await flushAsyncWork();
@@ -77,6 +97,46 @@ describe("asset source store", () => {
     );
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(
       "blob:project-one:assets/player.glb"
+    );
+  });
+
+  it("serves mask texture definitions and refreshes blob urls for same-path rewrites", async () => {
+    const assetSourceStore = createAssetSourceStore();
+    const projectStore = createProjectStore();
+    const handle = { name: "paint-project" } as FileSystemDirectoryHandle;
+    const descriptor = { gameRootPath: "." } as never;
+    const pathVersions = new Map<string, string>([
+      ["masks/flower-mask.png", "v1"]
+    ]);
+
+    readBlobFileMock.mockImplementation(
+      async (currentHandle: { name?: string }, ...pathSegments: string[]) => ({
+        mockUrl: `blob:${currentHandle.name ?? "unknown"}:${pathSegments.join("/")}:${pathVersions.get(pathSegments.join("/")) ?? "missing"}`
+      })
+    );
+
+    projectStore.getState().setActive(
+      handle,
+      descriptor,
+      createSessionWithSources({
+        maskPaths: ["masks/flower-mask.png"]
+      })
+    );
+    assetSourceStore.getState().start(handle, projectStore);
+    await flushAsyncWork();
+
+    expect(assetSourceStore.getState().sources["masks/flower-mask.png"]).toBe(
+      "blob:paint-project:masks/flower-mask.png:v1"
+    );
+
+    pathVersions.set("masks/flower-mask.png", "v2");
+    await assetSourceStore.getState().refreshPaths(["masks/flower-mask.png"]);
+
+    expect(assetSourceStore.getState().sources["masks/flower-mask.png"]).toBe(
+      "blob:paint-project:masks/flower-mask.png:v2"
+    );
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(
+      "blob:paint-project:masks/flower-mask.png:v1"
     );
   });
 });

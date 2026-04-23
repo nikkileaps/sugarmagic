@@ -10,6 +10,7 @@
 import type {
   AssetDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
 import { listFilesInDirectory, pickDirectory, pickFile, writeBlobFile } from "../fs-access";
@@ -57,6 +58,17 @@ export interface ImportTextureDefinitionRequest {
 
 export interface ImportTextureDefinitionResult {
   textureDefinition: TextureDefinition;
+}
+
+export interface ImportMaskTextureDefinitionRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  defaultDisplayName?: string;
+  format?: MaskTextureDefinition["format"];
+}
+
+export interface ImportMaskTextureDefinitionResult {
+  maskTextureDefinition: MaskTextureDefinition;
 }
 
 /**
@@ -249,6 +261,37 @@ async function importTextureDefinitionFromFile(
   };
 }
 
+async function importMaskTextureDefinitionFromFile(
+  sourceFile: File,
+  request: ImportMaskTextureDefinitionRequest
+): Promise<ImportMaskTextureDefinitionResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  const safeStem = sanitizeFileNameSegment(stem);
+  const targetFileName = `${safeStem}${ext}`;
+  const relativeAssetPath = `masks/${targetFileName}`;
+
+  await writeBlobFile(request.projectHandle, ["masks", targetFileName], sourceFile);
+
+  const bitmap = await createImageBitmap(sourceFile);
+  const resolution: [number, number] = [bitmap.width, bitmap.height];
+  bitmap.close();
+
+  return {
+    maskTextureDefinition: {
+      definitionId: `mask-texture:${safeStem}`,
+      definitionKind: "mask-texture",
+      displayName: request.defaultDisplayName ?? stem,
+      source: {
+        relativeAssetPath,
+        fileName: sourceFile.name,
+        mimeType: sourceFile.type || null
+      },
+      format: request.format ?? "r8",
+      resolution
+    }
+  };
+}
+
 async function pickImageFile(): Promise<File> {
   const fileHandle = await pickFile({
     types: [
@@ -356,6 +399,13 @@ export async function importTextureDefinition(
 ): Promise<ImportTextureDefinitionResult> {
   const sourceFile = await pickImageFile();
   return importTextureDefinitionFromFile(sourceFile, request);
+}
+
+export async function importMaskTextureDefinition(
+  request: ImportMaskTextureDefinitionRequest
+): Promise<ImportMaskTextureDefinitionResult> {
+  const sourceFile = await pickImageFile();
+  return importMaskTextureDefinitionFromFile(sourceFile, request);
 }
 
 export async function importPbrTextureSet(

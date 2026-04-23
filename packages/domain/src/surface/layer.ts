@@ -7,23 +7,10 @@
  */
 
 import { createUuid } from "../shared/identity";
+import type { Mask } from "./mask";
+import { maskUsesLandscapeOnlyInputs } from "./mask";
 
 export type BlendMode = "base" | "mix" | "multiply" | "add" | "overlay";
-
-export type Mask =
-  | { kind: "always" }
-  | {
-      kind: "texture";
-      textureDefinitionId: string;
-      channel: "r" | "g" | "b" | "a";
-    }
-  | { kind: "splatmap-channel"; channelIndex: number }
-  | { kind: "fresnel"; power: number; strength: number }
-  | {
-      kind: "vertex-color-channel";
-      channel: "r" | "g" | "b" | "a";
-    }
-  | { kind: "height"; min: number; max: number; fade: number };
 
 export type AppearanceContent =
   | { kind: "color"; color: number }
@@ -42,7 +29,8 @@ export type AppearanceContent =
 
 export type ScatterContent =
   | { kind: "grass"; grassTypeId: string }
-  | { kind: "flowers"; flowerTypeId: string };
+  | { kind: "flowers"; flowerTypeId: string }
+  | { kind: "rocks"; rockTypeId: string };
 
 export type EmissionContent =
   | { kind: "color"; color: number; intensity: number }
@@ -119,6 +107,8 @@ function scatterLayerName(content: ScatterContent): string {
       return "Grass";
     case "flowers":
       return "Flowers";
+    case "rocks":
+      return "Rocks";
   }
 }
 
@@ -176,5 +166,5 @@ export function createEmissionLayer(
 }
 
 export function layerUsesLandscapeOnlyMask(layer: Layer): boolean {
-  return layer.mask.kind === "splatmap-channel";
+  return maskUsesLandscapeOnlyInputs(layer.mask);
 }

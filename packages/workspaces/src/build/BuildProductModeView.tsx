@@ -17,8 +17,10 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
   NPCDefinition,
   QuestDefinition,
+  RockTypeDefinition,
   SurfaceDefinition,
   SurfaceBinding,
   ShaderParameterOverride,
@@ -72,8 +74,10 @@ export interface BuildProductModeViewProps {
   surfaceDefinitions: SurfaceDefinition[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
   documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
@@ -118,6 +122,8 @@ export interface BuildProductModeViewProps {
   onCreateMaterialDefinition: (shaderDefinitionId: string) => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
+  onCreateMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
+  onImportMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
   onUpdateMaterialDefinition: (
     definitionId: string,
     patch: Partial<MaterialDefinition>
@@ -131,6 +137,8 @@ export interface BuildProductModeViewProps {
   onRemoveSurfaceDefinition: (definitionId: string) => void;
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string | null) => void;
+  activePaintMaskTextureId: string | null;
+  onSetActivePaintMaskTextureId: (definitionId: string | null) => void;
   surfaceCenterPanel?: ReactNode;
   isMaterialReferenced: (definitionId: string) => boolean;
   renderLayoutInspectorSections?: (context: {
@@ -160,8 +168,10 @@ export function useBuildProductModeView(
     surfaceDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
@@ -189,6 +199,8 @@ export function useBuildProductModeView(
     onCreateMaterialDefinition,
     onImportPbrMaterial,
     onImportTextureDefinition,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
     onUpdateMaterialDefinition,
     onRemoveMaterialDefinition,
     onCreateSurfaceDefinition,
@@ -196,6 +208,8 @@ export function useBuildProductModeView(
     onRemoveSurfaceDefinition,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
+    activePaintMaskTextureId,
+    onSetActivePaintMaskTextureId,
     surfaceCenterPanel,
     isMaterialReferenced,
     renderLayoutInspectorSections
@@ -386,9 +400,13 @@ export function useBuildProductModeView(
     materialDefinitions,
     surfaceDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     region: activeRegion,
     onCommand
   });
@@ -421,8 +439,12 @@ export function useBuildProductModeView(
     surfaceDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
@@ -454,9 +476,15 @@ export function useBuildProductModeView(
     surfaceDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activePaintMaskTextureId,
+    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     onCreateSurfaceDefinition,

@@ -13,6 +13,8 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
+  RockTypeDefinition,
   ShaderGraphDocument,
   SurfaceBinding,
   SurfaceDefinition,
@@ -60,9 +62,13 @@ export interface MaterialSlotBindingsEditorProps {
   surfaceDefinitions: SurfaceDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   onChangeBinding: (
     slotName: string,
     slotIndex: number,
@@ -75,9 +81,13 @@ export function MaterialSlotBindingsEditor({
   surfaceDefinitions,
   materialDefinitions,
   textureDefinitions,
+  maskTextureDefinitions,
+  onCreateMaskTextureDefinition,
+  onImportMaskTextureDefinition,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
+  rockTypeDefinitions,
   onChangeBinding
 }: MaterialSlotBindingsEditorProps) {
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null);
@@ -129,9 +139,13 @@ export function MaterialSlotBindingsEditor({
                     surfaceDefinitions={surfaceDefinitions}
                     materialDefinitions={materialDefinitions}
                     textureDefinitions={textureDefinitions}
+                    maskTextureDefinitions={maskTextureDefinitions}
+                    onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                    onImportMaskTextureDefinition={onImportMaskTextureDefinition}
                     shaderDefinitions={shaderDefinitions}
                     grassTypeDefinitions={grassTypeDefinitions}
                     flowerTypeDefinitions={flowerTypeDefinitions}
+                    rockTypeDefinitions={rockTypeDefinitions}
                     onChange={(next) => {
                       onChangeBinding(binding.slotName, binding.slotIndex, next);
                       setOpenSlotKey(null);

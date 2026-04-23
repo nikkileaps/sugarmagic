@@ -10,6 +10,10 @@
 import * as THREE from "three";
 import type { SceneObject } from "@sugarmagic/runtime-core";
 import { ShaderRuntime } from "./ShaderRuntime";
+import {
+  buildScatterInstancesForAssetSlot
+} from "./asset-scatter";
+import type { SurfaceScatterBuildResult } from "./scatter";
 
 interface ShaderMaterialLease {
   runtime: ShaderRuntime;
@@ -17,6 +21,7 @@ interface ShaderMaterialLease {
 }
 
 const shaderMaterialLeases = new WeakMap<THREE.Object3D, ShaderMaterialLease[]>();
+const scatterBuildLeases = new WeakMap<THREE.Object3D, SurfaceScatterBuildResult[]>();
 
 export interface RenderableShaderApplicationState {
   appliedShaderSignature: string | null;
@@ -63,6 +68,14 @@ export function releaseShadersFromRenderable(
     releasedMaterials.add(lease.material);
   }
   shaderMaterialLeases.delete(renderable);
+  const scatterBuilds = scatterBuildLeases.get(renderable) ?? [];
+  for (const build of scatterBuilds) {
+    if (build.root.parent === renderable) {
+      renderable.remove(build.root);
+    }
+    build.dispose();
+  }
+  scatterBuildLeases.delete(renderable);
   return releasedMaterials;
 }
 
@@ -99,6 +112,7 @@ export function applyShaderToRenderable(
 
   const previousManagedMaterials = releaseShadersFromRenderable(renderable);
   const nextLeases: ShaderMaterialLease[] = [];
+  const nextScatterBuilds: SurfaceScatterBuildResult[] = [];
   let meshCount = 0;
   const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
 
@@ -168,6 +182,27 @@ export function applyShaderToRenderable(
 
   if (nextLeases.length > 0) {
     shaderMaterialLeases.set(renderable, nextLeases);
+  }
+  if (effectiveMaterialSlots.length > 0) {
+    const contentLibrary = shaderRuntime.getContentLibrary();
+    const assetResolver = shaderRuntime.getAssetResolver();
+    for (const slot of effectiveMaterialSlots) {
+      nextScatterBuilds.push(
+        ...buildScatterInstancesForAssetSlot(renderable, slot, {
+          contentLibrary,
+          assetResolver,
+          shaderRuntime,
+          logger: {
+            warn(message, payload) {
+              console.warn("[render-web]", { message, ...(payload ?? {}) });
+            }
+          }
+        })
+      );
+    }
+  }
+  if (nextScatterBuilds.length > 0) {
+    scatterBuildLeases.set(renderable, nextScatterBuilds);
   }
   return meshCount > 0;
 }

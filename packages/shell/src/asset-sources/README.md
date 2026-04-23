@@ -9,3 +9,9 @@ loaders. It is derived state, not authored truth.
 Starting the store for a new project invalidates all previously served
 blob URLs before the next sync so overlapping relative paths cannot
 accidentally keep serving bytes from the old project handle.
+
+The served path set includes authored model assets, regular texture
+definitions, and painted-mask texture definitions. Editor-side file writes
+that keep the same relative path should call `refreshPaths(...)` so the
+store regenerates fresh blob URLs for those paths without waiting for a
+project-shape change.

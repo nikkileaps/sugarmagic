@@ -3,6 +3,7 @@ export * from "./exports";
 export * from "./fs-access";
 export * from "./game-root";
 export * from "./imports";
+export * from "./masks";
 export * from "./migrations";
 export * from "./project-lifecycle";
 export * from "./publish";

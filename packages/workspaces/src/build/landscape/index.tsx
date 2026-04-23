@@ -26,7 +26,9 @@ import type {
   GrassTypeDefinition,
   LandscapeSurfaceSlot,
   MaterialDefinition,
+  MaskTextureDefinition,
   RegionDocument,
+  RockTypeDefinition,
   ShaderGraphDocument,
   SemanticCommand,
   RegionLandscapeState,
@@ -62,9 +64,13 @@ export interface LandscapeWorkspaceViewProps {
   materialDefinitions: MaterialDefinition[];
   surfaceDefinitions: SurfaceDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
@@ -124,12 +130,16 @@ function ChannelCard(props: {
   surfaceDefinitions: SurfaceDefinition[];
   materials: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
   onSurfaceChange: (surface: SurfaceBinding | null) => void;
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
 }) {
   const {
     channel,
@@ -139,12 +149,16 @@ function ChannelCard(props: {
     surfaceDefinitions,
     materials,
     textureDefinitions,
+    maskTextureDefinitions,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     onSelect,
     onRename,
-    onSurfaceChange
+    onSurfaceChange,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition
   } = props;
 
   const isBase = channelIndex === 0;
@@ -196,9 +210,13 @@ function ChannelCard(props: {
                 surfaceDefinitions={surfaceDefinitions}
                 materialDefinitions={materials}
                 textureDefinitions={textureDefinitions}
+                maskTextureDefinitions={maskTextureDefinitions}
+                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
                 shaderDefinitions={shaderDefinitions}
                 grassTypeDefinitions={grassTypeDefinitions}
                 flowerTypeDefinitions={flowerTypeDefinitions}
+                rockTypeDefinitions={rockTypeDefinitions}
                 onChange={(next) => {
                   onSurfaceChange(next);
                   setPickerOpen(false);
@@ -278,9 +296,13 @@ export function useLandscapeWorkspaceView(
     materialDefinitions,
     surfaceDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     region,
     onCommand
   } = props;
@@ -321,9 +343,13 @@ export function useLandscapeWorkspaceView(
           surfaceDefinitions={surfaceDefinitions}
           materials={materialDefinitions}
           textureDefinitions={textureDefinitions}
+          maskTextureDefinitions={maskTextureDefinitions}
+          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}
+          rockTypeDefinitions={rockTypeDefinitions}
           onSelect={() =>
             viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
           }
@@ -373,9 +399,11 @@ export function useLandscapeWorkspaceView(
       materialDefinitions,
       surfaceDefinitions,
       textureDefinitions,
+      maskTextureDefinitions,
       shaderDefinitions,
       grassTypeDefinitions,
       flowerTypeDefinitions,
+      rockTypeDefinitions,
       onCommand,
       region,
       viewportStore

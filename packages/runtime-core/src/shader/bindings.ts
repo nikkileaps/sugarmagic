@@ -16,24 +16,29 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   Layer,
+  LayerOverride,
   Mask,
   PlacedAssetInstance,
   PostProcessShaderBinding,
+  RockTypeDefinition,
   RegionItemPresence,
   RegionNPCPresence,
   ScatterContent,
   ShaderOrMaterial,
   ShaderGraphDocument,
   ShaderParameterOverride,
+  ShaderParameterValue,
   SurfaceBinding,
   SurfaceContext,
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
+  applyLayerOverride,
   getAssetDefinition,
   getFlowerTypeDefinition,
   getGrassTypeDefinition,
   getMaterialDefinition,
+  getRockTypeDefinition,
   getSurfaceDefinition,
   getShaderDefinition
 } from "@sugarmagic/domain";
@@ -80,7 +85,8 @@ export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
   kind: "scatter";
   contentKind: ScatterContent["kind"];
   definitionId: string;
-  definition: GrassTypeDefinition | FlowerTypeDefinition;
+  definition: GrassTypeDefinition | FlowerTypeDefinition | RockTypeDefinition;
+  density: number;
   wind: EffectiveShaderBinding | null;
 }
 
@@ -94,6 +100,7 @@ export interface ResolvedSurfaceStack<
 > {
   context: C;
   layers: ResolvedSurfaceLayer[];
+  diagnostics: SurfaceResolverDiagnostic[];
   shaderDefinitionId?: string | null;
   targetKind?: ShaderGraphDocument["targetKind"] | null;
   parameterValues?: Record<string, unknown>;
@@ -108,7 +115,7 @@ export interface ShaderBindingResolutionDiagnostic {
 }
 
 export interface SurfaceResolverDiagnostic {
-  severity: "error";
+  severity: "error" | "warning";
   expectedTargetKind: ShaderGraphDocument["targetKind"];
   shaderDefinitionId: string | null;
   message: string;
@@ -291,13 +298,15 @@ export function resolveMaterialEffectiveShaderBinding(
   contentLibrary: ContentLibrarySnapshot,
   materialDefinitionId: string,
   parameterOverrides: ShaderParameterOverride[] = [],
-  diagnostics: ShaderBindingResolutionDiagnostic[] = []
+  diagnostics: ShaderBindingResolutionDiagnostic[] = [],
+  textureBindingOverrides: Record<string, string> = {}
 ): EffectiveShaderBinding | null {
   return resolveMaterialSurfaceBinding(
     contentLibrary,
     materialDefinitionId,
     parameterOverrides,
-    diagnostics
+    diagnostics,
+    textureBindingOverrides
   );
 }
 
@@ -342,7 +351,8 @@ export function resolveAppearanceLayer(
   surface: AppearanceContent,
   contentLibrary: ContentLibrarySnapshot,
   expectedTargetKind: ShaderGraphDocument["targetKind"],
-  parameterOverrides: ShaderParameterOverride[] = []
+  parameterOverrides: ShaderParameterOverride[] = [],
+  textureBindingOverrides: Record<string, string> = {}
 ): ResolveAppearanceLayerResult {
   if (surface.kind === "color") {
     const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
@@ -388,7 +398,9 @@ export function resolveAppearanceLayer(
       resolveMaterialEffectiveShaderBinding(
         contentLibrary,
         surface.materialDefinitionId,
-        parameterOverrides
+        parameterOverrides,
+        [],
+        textureBindingOverrides
       ),
       expectedTargetKind
     );
@@ -493,13 +505,19 @@ export function resolveScatterLayer(
   if (content.kind === "grass") {
     return getGrassTypeDefinition(contentLibrary, content.grassTypeId);
   }
-  return getFlowerTypeDefinition(contentLibrary, content.flowerTypeId);
+  if (content.kind === "flowers") {
+    return getFlowerTypeDefinition(contentLibrary, content.flowerTypeId);
+  }
+  return getRockTypeDefinition(contentLibrary, content.rockTypeId);
 }
 
 function resolveScatterWind(
-  definition: GrassTypeDefinition | FlowerTypeDefinition,
+  definition: GrassTypeDefinition | FlowerTypeDefinition | RockTypeDefinition,
   contentLibrary: ContentLibrarySnapshot
 ): EffectiveShaderBinding | null {
+  if (!("wind" in definition)) {
+    return null;
+  }
   if (!definition.wind) {
     return null;
   }
@@ -512,6 +530,7 @@ function surfaceStackFromBinding(
 ): ResolvedSurfaceStack<"universal"> {
   return {
     context: "universal",
+    diagnostics: [],
     shaderDefinitionId: binding.shaderDefinitionId,
     targetKind: binding.targetKind,
     parameterValues: binding.parameterValues,
@@ -530,6 +549,26 @@ function surfaceStackFromBinding(
       }
     ]
   };
+}
+
+function warningDiagnostic(message: string): SurfaceResolverDiagnostic {
+  return {
+    severity: "warning",
+    expectedTargetKind: "mesh-surface",
+    shaderDefinitionId: null,
+    message
+  };
+}
+
+function materialOverrideEntries(
+  overrides: Record<string, unknown> | undefined,
+  slot: ShaderSlotKind
+): ShaderParameterOverride[] {
+  return Object.entries(overrides ?? {}).map(([parameterId, value]) => ({
+    slot,
+    parameterId,
+    value: value as ShaderParameterValue
+  }));
 }
 
 export function resolveSurfaceBinding(
@@ -558,13 +597,44 @@ export function resolveSurfaceBinding(
   }
 
   const resolvedLayers: ResolvedSurfaceLayer[] = [];
+  const diagnostics: SurfaceResolverDiagnostic[] = [];
+  const referenceOverrides =
+    binding.kind === "reference" ? binding.layerOverrides ?? {} : {};
+  const appliedOverrideIds = new Set<string>();
   for (const layer of surface.layers) {
-    if (layer.kind === "appearance") {
+    const override = referenceOverrides[layer.layerId] ?? null;
+    const overrideResult = applyLayerOverride(layer, override);
+    const effectiveLayer = overrideResult.layer;
+    if (override) {
+      appliedOverrideIds.add(layer.layerId);
+    }
+    for (const diagnostic of overrideResult.diagnostics) {
+      diagnostics.push(warningDiagnostic(diagnostic.message));
+    }
+
+    if (effectiveLayer.kind === "appearance") {
+      const mergedParameterOverrides = [...parameterOverrides];
+      let textureBindingOverrides: Record<string, string> = {};
+      if (
+        override?.targetKind === "appearance" &&
+        override.contentTuning?.for === "material"
+      ) {
+        mergedParameterOverrides.push(
+          ...materialOverrideEntries(
+            override.contentTuning.parameterOverrides,
+            "surface"
+          )
+        );
+        textureBindingOverrides = {
+          ...(override.contentTuning.textureBindingOverrides ?? {})
+        };
+      }
       const result = resolveAppearanceLayer(
-        layer.content,
+        effectiveLayer.content,
         contentLibrary,
         "mesh-surface",
-        parameterOverrides
+        mergedParameterOverrides,
+        textureBindingOverrides
       );
       if (!result.ok) {
         return resolvedSurfaceDiagnostic(
@@ -575,20 +645,37 @@ export function resolveSurfaceBinding(
       }
       resolvedLayers.push({
         kind: "appearance",
-        layerId: layer.layerId,
-        displayName: layer.displayName,
-        enabled: layer.enabled,
-        opacity: layer.opacity,
-        mask: layer.mask,
-        blendMode: layer.blendMode,
-        contentKind: layer.content.kind,
+        layerId: effectiveLayer.layerId,
+        displayName: effectiveLayer.displayName,
+        enabled: effectiveLayer.enabled,
+        opacity: effectiveLayer.opacity,
+        mask: effectiveLayer.mask,
+        blendMode: effectiveLayer.blendMode,
+        contentKind: effectiveLayer.content.kind,
         binding: result.binding
       });
       continue;
     }
 
-    if (layer.kind === "emission") {
-      const result = resolveEmissionLayer(layer.content, contentLibrary);
+    if (effectiveLayer.kind === "emission") {
+      const result =
+        effectiveLayer.content.kind === "material" &&
+        override?.targetKind === "emission" &&
+        override.contentTuning?.for === "material"
+          ? validateResolvedSurfaceTarget(
+              resolveMaterialEffectiveShaderBinding(
+                contentLibrary,
+                effectiveLayer.content.materialDefinitionId,
+                materialOverrideEntries(
+                  override.contentTuning.parameterOverrides,
+                  "surface"
+                ),
+                [],
+                override.contentTuning.textureBindingOverrides ?? {}
+              ),
+              "mesh-surface"
+            )
+          : resolveEmissionLayer(effectiveLayer.content, contentLibrary);
       if (!result.ok) {
         return resolvedSurfaceDiagnostic(
           result.diagnostic.message,
@@ -598,39 +685,56 @@ export function resolveSurfaceBinding(
       }
       resolvedLayers.push({
         kind: "emission",
-        layerId: layer.layerId,
-        displayName: layer.displayName,
-        enabled: layer.enabled,
-        opacity: layer.opacity,
-        mask: layer.mask,
-        contentKind: layer.content.kind,
+        layerId: effectiveLayer.layerId,
+        displayName: effectiveLayer.displayName,
+        enabled: effectiveLayer.enabled,
+        opacity: effectiveLayer.opacity,
+        mask: effectiveLayer.mask,
+        contentKind: effectiveLayer.content.kind,
         intensity:
-          layer.content.kind === "material" ? 1 : layer.content.intensity,
+          effectiveLayer.content.kind === "material"
+            ? 1
+            : effectiveLayer.content.intensity,
         binding: result.binding
       });
       continue;
     }
 
-    const definition = resolveScatterLayer(layer.content, contentLibrary);
+    const definition = resolveScatterLayer(effectiveLayer.content, contentLibrary);
     if (!definition) {
       return resolvedSurfaceDiagnostic(
-        layer.content.kind === "grass"
-          ? `Scatter layer references missing GrassTypeDefinition "${layer.content.grassTypeId}".`
-          : `Scatter layer references missing FlowerTypeDefinition "${layer.content.flowerTypeId}".`
+        effectiveLayer.content.kind === "grass"
+          ? `Scatter layer references missing GrassTypeDefinition "${effectiveLayer.content.grassTypeId}".`
+          : effectiveLayer.content.kind === "flowers"
+            ? `Scatter layer references missing FlowerTypeDefinition "${effectiveLayer.content.flowerTypeId}".`
+            : `Scatter layer references missing RockTypeDefinition "${effectiveLayer.content.rockTypeId}".`
       );
     }
     resolvedLayers.push({
       kind: "scatter",
-      layerId: layer.layerId,
-      displayName: layer.displayName,
-      enabled: layer.enabled,
-      opacity: layer.opacity,
-      mask: layer.mask,
-      contentKind: layer.content.kind,
+      layerId: effectiveLayer.layerId,
+      displayName: effectiveLayer.displayName,
+      enabled: effectiveLayer.enabled,
+      opacity: effectiveLayer.opacity,
+      mask: effectiveLayer.mask,
+      contentKind: effectiveLayer.content.kind,
       definitionId: definition.definitionId,
       definition,
+      density: Math.max(
+        0,
+        ("density" in definition ? definition.density : 0) *
+          overrideResult.densityMultiplier
+      ),
       wind: resolveScatterWind(definition, contentLibrary)
     });
+  }
+
+  for (const layerId of Object.keys(referenceOverrides)) {
+    if (!appliedOverrideIds.has(layerId)) {
+      diagnostics.push(
+        warningDiagnostic(`SurfaceBinding layerOverrides references missing layer "${layerId}".`)
+      );
+    }
   }
 
   return {
@@ -638,6 +742,7 @@ export function resolveSurfaceBinding(
     binding: {
       context: surface.context,
       layers: resolvedLayers,
+      diagnostics,
       shaderDefinitionId:
         resolvedLayers.find((layer): layer is ResolvedAppearanceLayer => layer.kind === "appearance")
           ?.binding.shaderDefinitionId ?? null,
@@ -658,7 +763,8 @@ function resolveMaterialSurfaceBinding(
   contentLibrary: ContentLibrarySnapshot,
   materialDefinitionId: string,
   parameterOverrides: ShaderParameterOverride[],
-  diagnostics: ShaderBindingResolutionDiagnostic[]
+  diagnostics: ShaderBindingResolutionDiagnostic[],
+  textureBindingOverrides: Record<string, string> = {}
 ): EffectiveShaderBinding | null {
   const materialDefinition = getMaterialDefinition(contentLibrary, materialDefinitionId);
   if (!materialDefinition) {
@@ -681,7 +787,10 @@ function resolveMaterialSurfaceBinding(
     diagnostics,
     {
       baseParameterValues: materialDefinition.parameterValues,
-      textureBindings: materialDefinition.textureBindings
+      textureBindings: {
+        ...materialDefinition.textureBindings,
+        ...textureBindingOverrides
+      }
     }
   );
 }

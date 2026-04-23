@@ -20,6 +20,8 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
+  RockTypeDefinition,
   SurfaceDefinition,
   SurfaceBinding,
   ShaderGraphDocument,
@@ -40,9 +42,13 @@ export interface AssetsWorkspaceViewProps {
   surfaceDefinitions: SurfaceDefinition[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
@@ -88,9 +94,13 @@ export function useAssetsWorkspaceView(
     surfaceDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
     shaderDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
     onImportAsset,
@@ -177,8 +187,10 @@ export function useAssetsWorkspaceView(
             surfaceDefinitions={surfaceDefinitions}
             grassTypeDefinitions={grassTypeDefinitions}
             flowerTypeDefinitions={flowerTypeDefinitions}
+            rockTypeDefinitions={rockTypeDefinitions}
             materialDefinitions={materialDefinitions}
             textureDefinitions={textureDefinitions}
+            maskTextureDefinitions={maskTextureDefinitions}
             shaderDefinitions={shaderDefinitions}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
             onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
@@ -202,9 +214,13 @@ function AssetInspectorPanel({
   surfaceDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
+  rockTypeDefinitions,
   materialDefinitions,
   textureDefinitions,
+  maskTextureDefinitions,
   shaderDefinitions,
+  onCreateMaskTextureDefinition,
+  onImportMaskTextureDefinition,
   onUpdateAssetDefinition,
   onSetAssetMaterialSlotBinding,
   onSetAssetDefaultShader,
@@ -215,9 +231,13 @@ function AssetInspectorPanel({
   surfaceDefinitions: SurfaceDefinition[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
@@ -304,9 +324,13 @@ function AssetInspectorPanel({
           surfaceDefinitions={surfaceDefinitions}
           materialDefinitions={materialDefinitions}
           textureDefinitions={textureDefinitions}
+          maskTextureDefinitions={maskTextureDefinitions}
+          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}
+          rockTypeDefinitions={rockTypeDefinitions}
           onChangeBinding={(slotName, slotIndex, surface) =>
             onSetAssetMaterialSlotBinding(
               assetDefinition.definitionId,

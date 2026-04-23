@@ -10,6 +10,8 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
+  RockTypeDefinition,
   ShaderGraphDocument,
   SurfaceDefinition,
   TextureDefinition
@@ -22,9 +24,15 @@ export interface SurfaceLibraryViewProps {
   surfaceDefinitions: SurfaceDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activePaintMaskTextureId?: string | null;
+  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string) => void;
   onCreateSurfaceDefinition: () => SurfaceDefinition | null;
@@ -43,9 +51,15 @@ export function useSurfaceLibraryView(
     surfaceDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activePaintMaskTextureId,
+    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     onCreateSurfaceDefinition,
@@ -160,9 +174,15 @@ export function useSurfaceLibraryView(
               surfaceDefinitions={surfaceDefinitions}
               materialDefinitions={materialDefinitions}
               textureDefinitions={textureDefinitions}
+              maskTextureDefinitions={maskTextureDefinitions}
+              onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+              onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+              activePaintMaskTextureId={activePaintMaskTextureId}
+              onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
               shaderDefinitions={shaderDefinitions}
               grassTypeDefinitions={grassTypeDefinitions}
               flowerTypeDefinitions={flowerTypeDefinitions}
+              rockTypeDefinitions={rockTypeDefinitions}
               onChange={(next) => {
                 if (next?.kind === "inline") {
                   onUpdateSurfaceDefinition(selectedDefinition.definitionId, {

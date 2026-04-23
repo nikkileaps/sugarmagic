@@ -1173,6 +1173,14 @@ export class ShaderRuntime {
     return this.compileProfile;
   }
 
+  getContentLibrary(): ContentLibrarySnapshot {
+    return this.contentLibrary;
+  }
+
+  getAssetResolver(): AuthoredAssetResolver {
+    return this.assetResolver;
+  }
+
   applyShader(
     binding: EffectiveShaderBinding,
     target: ShaderApplyTarget

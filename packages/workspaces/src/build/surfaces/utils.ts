@@ -11,7 +11,9 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   Layer,
+  LayerOverride,
   MaterialDefinition,
+  RockTypeDefinition,
   ShaderGraphDocument,
   Surface,
   SurfaceBinding,
@@ -20,6 +22,7 @@ import type {
   TextureDefinition
 } from "@sugarmagic/domain";
 import {
+  cloneMask,
   createAppearanceLayer,
   createColorAppearanceContent,
   createColorEmissionContent,
@@ -33,7 +36,7 @@ export function cloneLayer(layer: Layer): Layer {
   if (layer.kind === "appearance") {
     return {
       ...layer,
-      mask: { ...layer.mask },
+      mask: cloneMask(layer.mask),
       content:
         layer.content.kind === "texture"
           ? { ...layer.content, tiling: [...layer.content.tiling] as [number, number] }
@@ -49,7 +52,7 @@ export function cloneLayer(layer: Layer): Layer {
   if (layer.kind === "emission") {
     return {
       ...layer,
-      mask: { ...layer.mask },
+      mask: cloneMask(layer.mask),
       content:
         layer.content.kind === "texture"
           ? { ...layer.content, tiling: [...layer.content.tiling] as [number, number] }
@@ -58,8 +61,178 @@ export function cloneLayer(layer: Layer): Layer {
   }
   return {
     ...layer,
-    mask: { ...layer.mask },
+    mask: cloneMask(layer.mask),
     content: { ...layer.content }
+  };
+}
+
+export function cloneLayerOverride(override: LayerOverride): LayerOverride {
+  if (override.targetKind === "appearance") {
+    let contentTuning = override.contentTuning;
+    if (contentTuning?.for === "texture" && contentTuning.tiling) {
+      contentTuning = {
+        ...contentTuning,
+        tiling: [...contentTuning.tiling] as [number, number]
+      };
+    } else if (contentTuning?.for === "material") {
+      contentTuning = {
+        ...contentTuning,
+        parameterOverrides: { ...(contentTuning.parameterOverrides ?? {}) },
+        textureBindingOverrides: { ...(contentTuning.textureBindingOverrides ?? {}) }
+      };
+    } else if (contentTuning?.for === "shader") {
+      contentTuning = {
+        ...contentTuning,
+        parameterValues: { ...(contentTuning.parameterValues ?? {}) },
+        textureBindings: { ...(contentTuning.textureBindings ?? {}) }
+      };
+    }
+
+    return {
+      ...override,
+      ...(override.mask ? { mask: cloneMask(override.mask) } : {}),
+      ...(contentTuning ? { contentTuning } : {})
+    };
+  }
+
+  if (override.targetKind === "emission") {
+    let contentTuning = override.contentTuning;
+    if (contentTuning?.for === "texture" && contentTuning.tiling) {
+      contentTuning = {
+        ...contentTuning,
+        tiling: [...contentTuning.tiling] as [number, number]
+      };
+    } else if (contentTuning?.for === "material") {
+      contentTuning = {
+        ...contentTuning,
+        parameterOverrides: { ...(contentTuning.parameterOverrides ?? {}) },
+        textureBindingOverrides: { ...(contentTuning.textureBindingOverrides ?? {}) }
+      };
+    }
+
+    return {
+      ...override,
+      ...(override.mask ? { mask: cloneMask(override.mask) } : {}),
+      ...(contentTuning ? { contentTuning } : {})
+    };
+  }
+
+  return {
+    ...override,
+    ...(override.mask ? { mask: cloneMask(override.mask) } : {})
+  };
+}
+
+export function createSeededLayerOverride(layer: Layer): LayerOverride {
+  if (layer.kind === "appearance") {
+    if (layer.content.kind === "texture") {
+      return {
+        layerId: layer.layerId,
+        targetKind: "appearance",
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: cloneMask(layer.mask),
+        blendMode: layer.blendMode,
+        contentTuning: {
+          for: "texture",
+          tiling: [...layer.content.tiling] as [number, number]
+        }
+      };
+    }
+
+    if (layer.content.kind === "material") {
+      return {
+        layerId: layer.layerId,
+        targetKind: "appearance",
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: cloneMask(layer.mask),
+        blendMode: layer.blendMode,
+        contentTuning: {
+          for: "material",
+          parameterOverrides: {},
+          textureBindingOverrides: {}
+        }
+      };
+    }
+
+    if (layer.content.kind === "shader") {
+      return {
+        layerId: layer.layerId,
+        targetKind: "appearance",
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: cloneMask(layer.mask),
+        blendMode: layer.blendMode,
+        contentTuning: {
+          for: "shader",
+          parameterValues: { ...layer.content.parameterValues },
+          textureBindings: { ...layer.content.textureBindings }
+        }
+      };
+    }
+
+    return {
+      layerId: layer.layerId,
+      targetKind: "appearance",
+      enabled: layer.enabled,
+      opacity: layer.opacity,
+      mask: cloneMask(layer.mask),
+      blendMode: layer.blendMode
+    };
+  }
+
+  if (layer.kind === "scatter") {
+    return {
+      layerId: layer.layerId,
+      targetKind: "scatter",
+      enabled: layer.enabled,
+      opacity: layer.opacity,
+      mask: cloneMask(layer.mask),
+      densityMultiplier: 1
+    };
+  }
+
+  if (layer.content.kind === "color") {
+    return {
+      layerId: layer.layerId,
+      targetKind: "emission",
+      enabled: layer.enabled,
+      opacity: layer.opacity,
+      mask: cloneMask(layer.mask),
+      contentTuning: {
+        for: "color",
+        intensity: layer.content.intensity
+      }
+    };
+  }
+
+  if (layer.content.kind === "texture") {
+    return {
+      layerId: layer.layerId,
+      targetKind: "emission",
+      enabled: layer.enabled,
+      opacity: layer.opacity,
+      mask: cloneMask(layer.mask),
+      contentTuning: {
+        for: "texture",
+        intensity: layer.content.intensity,
+        tiling: [...layer.content.tiling] as [number, number]
+      }
+    };
+  }
+
+  return {
+    layerId: layer.layerId,
+    targetKind: "emission",
+    enabled: layer.enabled,
+    opacity: layer.opacity,
+    mask: cloneMask(layer.mask),
+    contentTuning: {
+      for: "material",
+      parameterOverrides: {},
+      textureBindingOverrides: {}
+    }
   };
 }
 
@@ -132,7 +305,8 @@ export function surfaceDefinitionMatchesContext(
 export function createDefaultLayer(
   kind: Layer["kind"],
   grassTypes: GrassTypeDefinition[],
-  flowerTypes: FlowerTypeDefinition[]
+  flowerTypes: FlowerTypeDefinition[],
+  rockTypes: RockTypeDefinition[]
 ): Layer {
   if (kind === "appearance") {
     return createAppearanceLayer(createColorAppearanceContent(0x6f8f52), {
@@ -146,6 +320,12 @@ export function createDefaultLayer(
       return createScatterLayer(
         { kind: "grass", grassTypeId: grassTypes[0].definitionId },
         { displayName: "Grass" }
+      );
+    }
+    if (rockTypes[0]) {
+      return createScatterLayer(
+        { kind: "rocks", rockTypeId: rockTypes[0].definitionId },
+        { displayName: "Rocks" }
       );
     }
     return createScatterLayer(

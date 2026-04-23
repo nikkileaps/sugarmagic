@@ -12,10 +12,11 @@ import {
 } from "@sugarmagic/domain";
 
 describe("content-library built-ins", () => {
-  it("seeds starter grass, flower, and surface definitions into a fresh snapshot", () => {
+  it("seeds starter grass, flower, rock, and surface definitions into a fresh snapshot", () => {
     const snapshot = createEmptyContentLibrarySnapshot("little-world");
     const grassTypeDefinitions = snapshot.grassTypeDefinitions ?? [];
     const flowerTypeDefinitions = snapshot.flowerTypeDefinitions ?? [];
+    const rockTypeDefinitions = snapshot.rockTypeDefinitions ?? [];
     const surfaceDefinitions = snapshot.surfaceDefinitions ?? [];
 
     expect(grassTypeDefinitions.map((definition) => definition.displayName)).toEqual([
@@ -28,6 +29,9 @@ describe("content-library built-ins", () => {
       "White Meadow",
       "Yellow Buttercup",
       "Purple Wildflower"
+    ]);
+    expect(rockTypeDefinitions.map((definition) => definition.displayName)).toEqual([
+      "Small Field Stones"
     ]);
     expect(surfaceDefinitions.map((definition) => definition.displayName)).toEqual([
       "Wildflower Meadow",
@@ -44,13 +48,15 @@ describe("content-library built-ins", () => {
         ...createEmptyContentLibrarySnapshot("little-world"),
         surfaceDefinitions: [],
         grassTypeDefinitions: [],
-        flowerTypeDefinitions: []
+        flowerTypeDefinitions: [],
+        rockTypeDefinitions: []
       },
       "little-world"
     );
 
     expect(normalized.grassTypeDefinitions).toHaveLength(4);
     expect(normalized.flowerTypeDefinitions).toHaveLength(3);
+    expect(normalized.rockTypeDefinitions).toHaveLength(1);
     expect(normalized.surfaceDefinitions).toHaveLength(5);
   });
 });

@@ -39,15 +39,19 @@ import {
   getAllTextureDefinitions,
   listFlowerTypeDefinitions,
   listGrassTypeDefinitions,
+  listMaskTextureDefinitions,
+  listRockTypeDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
   addMaterialDefinitionToSession,
+  addMaskTextureDefinitionToSession,
   addSurfaceDefinitionToSession,
   addTextureDefinitionToSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
+  removeMaskTextureDefinitionFromSession,
   removeMaterialDefinitionFromSession,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
@@ -74,9 +78,13 @@ import {
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
   importPbrTextureSet,
+  importMaskTextureDefinition,
   importTextureDefinition,
+  readMaskFile,
   reloadProject,
-  importSourceAsset
+  importSourceAsset,
+  createBlankMaskFile,
+  writeMaskFile
 } from "@sugarmagic/io";
 import {
   createShellStore,
@@ -566,9 +574,17 @@ export function App() {
     if (!session) return [];
     return listFlowerTypeDefinitions(session.contentLibrary);
   }, [session]);
+  const rockTypeDefinitions = useMemo(() => {
+    if (!session) return [];
+    return listRockTypeDefinitions(session.contentLibrary);
+  }, [session]);
   const textureDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllTextureDefinitions(session);
+  }, [session]);
+  const maskTextureDefinitions = useMemo(() => {
+    if (!session) return [];
+    return listMaskTextureDefinitions(session.contentLibrary);
   }, [session]);
   const assetSources = useStore(assetSourceStore, (state) => state.sources);
   const editedSurfaceDefinitionId = useStore(
@@ -578,6 +594,10 @@ export function App() {
   const surfacePreviewGeometryKind = useStore(
     surfaceEditingStore,
     (state) => state.previewGeometryKind
+  );
+  const activePaintMaskTextureId = useStore(
+    viewportStore,
+    (state) => state.activePaintMaskTextureId
   );
 
   const environmentDefinitions = useMemo(() => {
@@ -992,6 +1012,114 @@ export function App() {
     }
   }, []);
 
+  const handleCreateMaskTextureDefinition = useCallback(async () => {
+    const { handle, session: currentSession } = projectStore.getState();
+    if (!handle || !currentSession) {
+      return null;
+    }
+
+    const idSuffix = createScopedId("mask");
+    const definitionId = `mask-texture:${idSuffix}`;
+    const relativeAssetPath = `masks/${idSuffix}.png`;
+    const nextIndex =
+      (currentSession.contentLibrary.maskTextureDefinitions?.length ?? 0) + 1;
+
+    try {
+      await createBlankMaskFile(handle, relativeAssetPath, [512, 512], "r8");
+      const definition = {
+        definitionId,
+        definitionKind: "mask-texture" as const,
+        displayName: `Painted Mask ${nextIndex}`,
+        source: {
+          relativeAssetPath,
+          fileName: `${idSuffix}.png`,
+          mimeType: "image/png"
+        },
+        format: "r8" as const,
+        resolution: [512, 512] as [number, number]
+      };
+      projectStore
+        .getState()
+        .updateSession(addMaskTextureDefinitionToSession(currentSession, definition));
+      await assetSourceStore.getState().refreshPaths([relativeAssetPath]);
+      return definition;
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Painted mask creation failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleImportMaskTextureDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importMaskTextureDefinition({
+        projectHandle: handle,
+        descriptor
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addMaskTextureDefinitionToSession(
+            currentSession,
+            result.maskTextureDefinition
+          )
+        );
+      return result.maskTextureDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Mask texture import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleReadMaskTexture = useCallback(async (maskTextureId: string) => {
+    const { handle, session: currentSession } = projectStore.getState();
+    if (!handle || !currentSession) {
+      return null;
+    }
+    const definition =
+      currentSession.contentLibrary.maskTextureDefinitions?.find(
+        (candidate) => candidate.definitionId === maskTextureId
+      ) ?? null;
+    if (!definition) {
+      return null;
+    }
+    return readMaskFile(handle, definition.source.relativeAssetPath);
+  }, []);
+
+  const handleWriteMaskTexture = useCallback(
+    async (maskTextureId: string, imageData: ImageData) => {
+      const { handle, session: currentSession } = projectStore.getState();
+      if (!handle || !currentSession) {
+        return;
+      }
+      const definition =
+        currentSession.contentLibrary.maskTextureDefinitions?.find(
+          (candidate) => candidate.definitionId === maskTextureId
+        ) ?? null;
+      if (!definition) {
+        throw new Error(`Missing painted mask definition "${maskTextureId}".`);
+      }
+      await writeMaskFile(handle, definition.source.relativeAssetPath, imageData);
+      await assetSourceStore
+        .getState()
+        .refreshPaths([definition.source.relativeAssetPath]);
+    },
+    []
+  );
+
   const handleImportPbrMaterial = useCallback(async () => {
     const { handle, descriptor, session: currentSession } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
@@ -1182,8 +1310,10 @@ export function App() {
     surfaceDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
+    rockTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
@@ -1260,6 +1390,8 @@ export function App() {
     onCreateMaterialDefinition: handleCreateMaterialDefinition,
     onImportPbrMaterial: handleImportPbrMaterial,
     onImportTextureDefinition: handleImportTextureDefinition,
+    onCreateMaskTextureDefinition: handleCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
     onUpdateMaterialDefinition: handleUpdateMaterialDefinition,
     onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
     onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
@@ -1268,6 +1400,9 @@ export function App() {
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
+    activePaintMaskTextureId,
+    onSetActivePaintMaskTextureId: (definitionId) =>
+      viewportStore.getState().setActivePaintMaskTextureId(definitionId),
     surfaceCenterPanel: (
       <SurfacePreviewViewport
         engine={studioRenderEngine}
@@ -1278,9 +1413,12 @@ export function App() {
           ) ?? null
         }
         previewGeometryKind={surfacePreviewGeometryKind}
+        activePaintMaskTextureId={activePaintMaskTextureId}
         onChangePreviewGeometryKind={(kind) =>
           surfaceEditingStore.getState().setPreviewGeometryKind(kind)
         }
+        onReadMaskTexture={handleReadMaskTexture}
+        onWriteMaskTexture={handleWriteMaskTexture}
       />
     ),
     isMaterialReferenced: (definitionId) =>

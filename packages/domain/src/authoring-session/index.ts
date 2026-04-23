@@ -70,6 +70,7 @@ import type {
   ContentLibrarySnapshot,
   EnvironmentDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
   TextureDefinition
 } from "../content-library";
 import {
@@ -93,6 +94,7 @@ import {
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
+  listMaskTextureDefinitions as listMaskTextureDefinitionsFromLibrary,
   listSurfaceDefinitions as listSurfaceDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
   listTextureDefinitions as listTextureDefinitionsFromLibrary,
@@ -204,6 +206,12 @@ export function getAllTextureDefinitions(
   session: AuthoringSession
 ): TextureDefinition[] {
   return listTextureDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllMaskTextureDefinitions(
+  session: AuthoringSession
+): MaskTextureDefinition[] {
+  return listMaskTextureDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllShaderDefinitions(
@@ -1891,6 +1899,31 @@ export function addTextureDefinitionToSession(
   };
 }
 
+export function addMaskTextureDefinitionToSession(
+  session: AuthoringSession,
+  maskTextureDefinition: MaskTextureDefinition
+): AuthoringSession {
+  const existingDefinitions = session.contentLibrary.maskTextureDefinitions ?? [];
+  const existingIndex = existingDefinitions.findIndex(
+    (definition) => definition.definitionId === maskTextureDefinition.definitionId
+  );
+  const nextDefinitions = [...existingDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = maskTextureDefinition;
+  } else {
+    nextDefinitions.push(maskTextureDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
 export function addMaterialDefinitionToSession(
   session: AuthoringSession,
   materialDefinition: MaterialDefinition
@@ -2010,6 +2043,45 @@ export function removeMaterialDefinitionFromSession(
     contentLibrary: {
       ...session.contentLibrary,
       materialDefinitions: session.contentLibrary.materialDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function updateMaskTextureDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<MaskTextureDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).map(
+        (definition) =>
+          definition.definitionId === definitionId
+            ? {
+                ...definition,
+                ...patch
+              }
+            : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeMaskTextureDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).filter(
         (definition) => definition.definitionId !== definitionId
       )
     },

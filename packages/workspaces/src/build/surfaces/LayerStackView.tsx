@@ -12,6 +12,8 @@ import type {
   GrassTypeDefinition,
   Layer,
   MaterialDefinition,
+  MaskTextureDefinition,
+  RockTypeDefinition,
   ShaderGraphDocument,
   Surface,
   SurfaceContext,
@@ -26,9 +28,15 @@ export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> 
   allowedContext: C;
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activePaintMaskTextureId?: string | null;
+  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   onChangeSurface: (surface: Surface<C>) => void;
 }
 
@@ -37,9 +45,15 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   allowedContext,
   materialDefinitions,
   textureDefinitions,
+  maskTextureDefinitions,
+  onCreateMaskTextureDefinition,
+  onImportMaskTextureDefinition,
+  activePaintMaskTextureId,
+  onSetActivePaintMaskTextureId,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
+  rockTypeDefinitions,
   onChangeSurface
 }: LayerStackViewProps<C>) {
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
@@ -79,7 +93,8 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                 const layer = createDefaultLayer(
                   "appearance",
                   grassTypeDefinitions,
-                  flowerTypeDefinitions
+                  flowerTypeDefinitions,
+                  rockTypeDefinitions
                 );
                 commitLayers([...surface.layers.map(cloneLayer), layer]);
                 setSelectedLayerId(layer.layerId);
@@ -92,7 +107,8 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                 const layer = createDefaultLayer(
                   "scatter",
                   grassTypeDefinitions,
-                  flowerTypeDefinitions
+                  flowerTypeDefinitions,
+                  rockTypeDefinitions
                 );
                 commitLayers([...surface.layers.map(cloneLayer), layer]);
                 setSelectedLayerId(layer.layerId);
@@ -105,7 +121,8 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                 const layer = createDefaultLayer(
                   "emission",
                   grassTypeDefinitions,
-                  flowerTypeDefinitions
+                  flowerTypeDefinitions,
+                  rockTypeDefinitions
                 );
                 commitLayers([...surface.layers.map(cloneLayer), layer]);
                 setSelectedLayerId(layer.layerId);
@@ -155,7 +172,8 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
             const duplicate = createDefaultLayer(
               existing.kind,
               grassTypeDefinitions,
-              flowerTypeDefinitions
+              flowerTypeDefinitions,
+              rockTypeDefinitions
             );
             const copied = {
               ...cloneLayer(existing),
@@ -184,9 +202,15 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
           allowedContext={allowedContext}
           materialDefinitions={materialDefinitions}
           textureDefinitions={textureDefinitions}
+          maskTextureDefinitions={maskTextureDefinitions}
+          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+          activePaintMaskTextureId={activePaintMaskTextureId}
+          onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}
+          rockTypeDefinitions={rockTypeDefinitions}
           onChange={(nextLayer) =>
             commitLayers(
               surface.layers.map((layer) =>

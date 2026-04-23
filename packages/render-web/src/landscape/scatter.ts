@@ -89,7 +89,7 @@ export function buildLandscapeScatterForSurface(
     if (layer.kind !== "scatter") {
       continue;
     }
-    const density = Math.max(0, layer.definition.density);
+    const density = Math.max(0, layer.density);
     const samples = createLandscapeScatterSamples(
       density,
       size,

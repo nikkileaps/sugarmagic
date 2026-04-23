@@ -13,6 +13,8 @@ import type {
   GrassTypeDefinition,
   Layer,
   MaterialDefinition,
+  MaskTextureDefinition,
+  RockTypeDefinition,
   ScatterLayer,
   ShaderGraphDocument,
   SurfaceContext,
@@ -49,9 +51,15 @@ interface SharedProps {
   allowedContext: SurfaceContext;
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activePaintMaskTextureId?: string | null;
+  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
 }
 
 function AppearanceLayerEditor(
@@ -318,13 +326,20 @@ function ScatterLayerEditor(
     onChange: (next: ScatterLayer) => void;
   }
 ) {
-  const { layer, grassTypeDefinitions, flowerTypeDefinitions, onChange } = props;
+  const {
+    layer,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    rockTypeDefinitions,
+    onChange
+  } = props;
   return (
     <KindTabs
       value={layer.content.kind}
       options={[
         { value: "grass", label: "Grass" },
-        { value: "flowers", label: "Flowers" }
+        { value: "flowers", label: "Flowers" },
+        { value: "rocks", label: "Rocks" }
       ]}
       onChange={(kind) => {
         if (kind === "grass") {
@@ -335,12 +350,20 @@ function ScatterLayerEditor(
               grassTypeId: grassTypeDefinitions[0]?.definitionId ?? ""
             }
           });
-        } else {
+        } else if (kind === "flowers") {
           onChange({
             ...layer,
             content: {
               kind: "flowers",
               flowerTypeId: flowerTypeDefinitions[0]?.definitionId ?? ""
+            }
+          });
+        } else {
+          onChange({
+            ...layer,
+            content: {
+              kind: "rocks",
+              rockTypeId: rockTypeDefinitions[0]?.definitionId ?? ""
             }
           });
         }
@@ -378,6 +401,24 @@ function ScatterLayerEditor(
                 onChange({
                   ...layer,
                   content: { kind: "flowers", flowerTypeId: next }
+                });
+              }
+            }}
+          />
+        ) : kind === "rocks" && layer.content.kind === "rocks" ? (
+          <Select
+            size="xs"
+            label="Rock Type"
+            data={rockTypeDefinitions.map((definition) => ({
+              value: definition.definitionId,
+              label: definition.displayName
+            }))}
+            value={layer.content.rockTypeId}
+            onChange={(next) => {
+              if (next) {
+                onChange({
+                  ...layer,
+                  content: { kind: "rocks", rockTypeId: next }
                 });
               }
             }}
@@ -541,18 +582,30 @@ export function LayerDetailPanel({
   allowedContext,
   materialDefinitions,
   textureDefinitions,
+  maskTextureDefinitions,
+  onCreateMaskTextureDefinition,
+  onImportMaskTextureDefinition,
+  activePaintMaskTextureId,
+  onSetActivePaintMaskTextureId,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
+  rockTypeDefinitions,
   onChange
 }: LayerDetailPanelProps) {
   const sharedProps: SharedProps = {
     allowedContext,
     materialDefinitions,
     textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activePaintMaskTextureId,
+    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
-    flowerTypeDefinitions
+    flowerTypeDefinitions,
+    rockTypeDefinitions
   };
 
   return (
@@ -619,6 +672,11 @@ export function LayerDetailPanel({
         value={layer.mask}
         allowedContext={allowedContext}
         textureDefinitions={textureDefinitions}
+        maskTextureDefinitions={maskTextureDefinitions}
+        onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+        onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+        activePaintMaskTextureId={activePaintMaskTextureId}
+        onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
         onChange={(nextMask) =>
           onChange({
             ...layer,
