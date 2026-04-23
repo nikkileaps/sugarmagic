@@ -5,8 +5,8 @@
  * currently selected layer.
  */
 
-import { ActionIcon, Divider, Menu, Stack, Text } from "@mantine/core";
-import { useEffect, useMemo, useState } from "react";
+import { ActionIcon, Group, Menu, Stack, Text, TextInput } from "@mantine/core";
+import { useState } from "react";
 import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
@@ -20,7 +20,8 @@ import type {
   TextureDefinition
 } from "@sugarmagic/domain";
 import { SortableList } from "@sugarmagic/ui";
-import { LayerDetailPanel } from "./LayerDetailPanel";
+import { LayerMaskPopover } from "./LayerMaskPopover";
+import { LayerSettingsPopover } from "./LayerSettingsPopover";
 import { cloneLayer, createDefaultLayer } from "./utils";
 
 export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> {
@@ -59,23 +60,41 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
     surface.layers[0]?.layerId ?? null
   );
-
-  useEffect(() => {
-    if (!surface.layers.some((layer) => layer.layerId === selectedLayerId)) {
-      setSelectedLayerId(surface.layers[0]?.layerId ?? null);
-    }
-  }, [selectedLayerId, surface.layers]);
-
-  const selectedLayer = useMemo(
-    () => surface.layers.find((layer) => layer.layerId === selectedLayerId) ?? null,
-    [selectedLayerId, surface.layers]
-  );
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const effectiveSelectedLayerId =
+    selectedLayerId &&
+    surface.layers.some((layer) => layer.layerId === selectedLayerId)
+      ? selectedLayerId
+      : surface.layers[0]?.layerId ?? null;
 
   function commitLayers(nextLayers: Layer[]): void {
     onChangeSurface({
       ...surface,
       layers: nextLayers
     });
+  }
+
+  function commitRename(layerId: string): void {
+    const nextValue = editValue.trim();
+    const existing = surface.layers.find((layer) => layer.layerId === layerId);
+    setEditingLayerId(null);
+    if (!existing || !nextValue || nextValue === existing.displayName) {
+      if (existing) {
+        setEditValue(existing.displayName);
+      }
+      return;
+    }
+    commitLayers(
+      surface.layers.map((layer) =>
+        layer.layerId === layerId
+          ? {
+              ...cloneLayer(layer),
+              displayName: nextValue
+            }
+          : cloneLayer(layer)
+      )
+    );
   }
 
   return (
@@ -135,6 +154,7 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
         <SortableList
           items={surface.layers.map((layer) => ({
             id: layer.layerId,
+            layer,
             label: layer.displayName,
             enabled: layer.enabled,
             description:
@@ -144,8 +164,101 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                   ? `Scatter · ${layer.content.kind}`
                   : `Emission · ${layer.content.kind}`
           }))}
-          selectedId={selectedLayerId}
+          selectedId={effectiveSelectedLayerId}
           onSelect={setSelectedLayerId}
+          renderLabel={(item) =>
+            editingLayerId === item.id ? (
+              <TextInput
+                size="xs"
+                value={editValue}
+                onChange={(event) => setEditValue(event.currentTarget.value)}
+                onBlur={() => commitRename(item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                  if (event.key === "Escape") {
+                    setEditingLayerId(null);
+                    setEditValue(item.layer.displayName);
+                  }
+                }}
+                onClick={(event) => event.stopPropagation()}
+                autoFocus
+                styles={{ input: { padding: "0 4px", height: 22 } }}
+              />
+            ) : (
+              <Text
+                size="xs"
+                fw={600}
+                c={item.enabled ? "var(--sm-color-text)" : "var(--sm-color-overlay0)"}
+                truncate
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSelectedLayerId(item.id);
+                  setEditingLayerId(item.id);
+                  setEditValue(item.layer.displayName);
+                }}
+                style={{ cursor: "text" }}
+              >
+                {item.label}
+              </Text>
+            )
+          }
+          renderLeading={(item) => (
+            <Group gap="xs" wrap="nowrap">
+              <LayerMaskPopover
+                value={item.layer.mask}
+                allowedContext={allowedContext}
+                textureDefinitions={textureDefinitions}
+                maskTextureDefinitions={maskTextureDefinitions}
+                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                activePaintMaskTextureId={activePaintMaskTextureId}
+                onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
+                onActivate={() => setSelectedLayerId(item.id)}
+                onApply={(nextMask) =>
+                  commitLayers(
+                    surface.layers.map((layer) =>
+                      layer.layerId === item.id
+                        ? {
+                            ...cloneLayer(layer),
+                            mask: nextMask
+                          }
+                        : cloneLayer(layer)
+                    )
+                  )
+                }
+              />
+              <LayerSettingsPopover
+                layer={item.layer}
+                isBaseLayer={surface.layers[0]?.layerId === item.id}
+                allowedContext={allowedContext}
+                materialDefinitions={materialDefinitions}
+                textureDefinitions={textureDefinitions}
+                maskTextureDefinitions={maskTextureDefinitions}
+                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                activePaintMaskTextureId={activePaintMaskTextureId}
+                onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
+                shaderDefinitions={shaderDefinitions}
+                grassTypeDefinitions={grassTypeDefinitions}
+                flowerTypeDefinitions={flowerTypeDefinitions}
+                rockTypeDefinitions={rockTypeDefinitions}
+                onActivate={() => setSelectedLayerId(item.id)}
+                onChange={(nextLayer) =>
+                  commitLayers(
+                    surface.layers.map((layer) =>
+                      layer.layerId === nextLayer.layerId
+                        ? cloneLayer(nextLayer)
+                        : cloneLayer(layer)
+                    )
+                  )
+                }
+              />
+            </Group>
+          )}
+          canReorderItem={(_, index) => index > 0}
+          canDeleteItem={(_, index) => index > 0 && surface.layers.length > 1}
           onToggle={(id, enabled) => {
             commitLayers(
               surface.layers.map((layer) =>
@@ -153,10 +266,18 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
               )
             );
           }}
-          onMove={(id, direction) => {
-            const currentIndex = surface.layers.findIndex((layer) => layer.layerId === id);
-            const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-            if (currentIndex < 0 || nextIndex <= 0 || nextIndex >= surface.layers.length) {
+          onReorder={(activeId, overId) => {
+            const currentIndex = surface.layers.findIndex(
+              (layer) => layer.layerId === activeId
+            );
+            const nextIndex = surface.layers.findIndex(
+              (layer) => layer.layerId === overId
+            );
+            if (
+              currentIndex <= 0 ||
+              nextIndex <= 0 ||
+              currentIndex === nextIndex
+            ) {
               return;
             }
             const layers = surface.layers.map(cloneLayer);
@@ -191,41 +312,12 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
               .filter((layer) => layer.layerId !== id)
               .map(cloneLayer);
             commitLayers(nextLayers);
+            if (effectiveSelectedLayerId === id) {
+              setSelectedLayerId(nextLayers[0]?.layerId ?? null);
+            }
           }}
         />
       </Stack>
-      <Divider />
-      {selectedLayer ? (
-        <LayerDetailPanel
-          layer={selectedLayer}
-          isBaseLayer={surface.layers[0]?.layerId === selectedLayer.layerId}
-          allowedContext={allowedContext}
-          materialDefinitions={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activePaintMaskTextureId={activePaintMaskTextureId}
-          onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
-          onChange={(nextLayer) =>
-            commitLayers(
-              surface.layers.map((layer) =>
-                layer.layerId === nextLayer.layerId
-                  ? cloneLayer(nextLayer)
-                  : cloneLayer(layer)
-              )
-            )
-          }
-        />
-      ) : (
-        <Text size="xs" c="var(--sm-color-overlay0)">
-          Select a layer to edit it.
-        </Text>
-      )}
     </Stack>
   );
 }

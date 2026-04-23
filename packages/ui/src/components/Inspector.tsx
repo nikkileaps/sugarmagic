@@ -59,10 +59,17 @@ export function Inspector({
               flex: 1,
               minHeight: 0,
               overflowY: "auto",
-              overflowX: "hidden"
+              overflowX: "hidden",
+              scrollbarGutter: "stable"
             }}
           >
-            <Stack gap={0} p="md">
+            <Stack
+              gap={0}
+              p="md"
+              style={{
+                paddingRight: "calc(var(--mantine-spacing-md) + 8px)"
+              }}
+            >
               {children}
             </Stack>
           </Box>

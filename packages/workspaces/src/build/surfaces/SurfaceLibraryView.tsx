@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ActionIcon, Menu, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import { ActionIcon, Button, Menu, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
@@ -191,14 +191,15 @@ export function useSurfaceLibraryView(
                 }
               }}
             />
-            <ActionIcon
+            <Button
+              size="compact-sm"
               variant="subtle"
               color="red"
-              aria-label="Remove surface definition"
+              justify="flex-start"
               onClick={() => onRemoveSurfaceDefinition(selectedDefinition.definitionId)}
             >
               Remove Surface
-            </ActionIcon>
+            </Button>
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">

@@ -9,11 +9,13 @@ import { useEffect, useRef } from "react";
 
 export interface MaskPreviewProps {
   resolution?: number;
+  size?: number;
   sample: (u: number, v: number) => number;
 }
 
 export function MaskPreview({
   resolution = 48,
+  size = 72,
   sample
 }: MaskPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -48,8 +50,8 @@ export function MaskPreview({
       width={resolution}
       height={resolution}
       style={{
-        width: 72,
-        height: 72,
+        width: size,
+        height: size,
         borderRadius: 6,
         border: "1px solid var(--sm-panel-border)",
         background: "var(--sm-color-base)",

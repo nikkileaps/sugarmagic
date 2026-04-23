@@ -12,8 +12,8 @@ import type {
   SurfaceContext,
   TextureDefinition
 } from "@sugarmagic/domain";
-import { samplePerlinNoise2d } from "@sugarmagic/domain";
-import { KindTabs, LabeledSlider, MaskPreview } from "@sugarmagic/ui";
+import { LabeledSlider, MaskPreview } from "@sugarmagic/ui";
+import { sampleMask } from "./maskSampling";
 
 const MASK_KIND_OPTIONS = [
   { value: "always", label: "Always" },
@@ -28,71 +28,8 @@ const MASK_KIND_OPTIONS = [
   { value: "world-position-gradient", label: "Gradient" }
 ] as const;
 
-function sampleMask(mask: Mask, u: number, v: number): number {
-  switch (mask.kind) {
-    case "always":
-      return 1;
-    case "fresnel": {
-      const dx = u - 0.5;
-      const dy = v - 0.5;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      return Math.max(
-        0,
-        Math.min(1, Math.pow(Math.min(1, distance * 2), mask.power) * mask.strength)
-      );
-    }
-    case "height": {
-      const height = 1 - v;
-      if (height <= mask.min) {
-        return 0;
-      }
-      if (height >= mask.max) {
-        return 1;
-      }
-      return Math.max(
-        0,
-        Math.min(1, (height - mask.min) / Math.max(mask.fade, 0.001))
-      );
-    }
-    case "vertex-color-channel":
-      return mask.channel === "r" ? u : mask.channel === "g" ? v : mask.channel === "b" ? 1 - u : 1;
-    case "splatmap-channel":
-      return 1;
-    case "texture":
-    case "painted":
-      return 0.75;
-    case "perlin-noise": {
-      const noise = samplePerlinNoise2d({
-        x: (u + mask.offset[0]) * mask.scale,
-        y: (v + mask.offset[1]) * mask.scale
-      });
-      const start = mask.threshold - mask.fade;
-      const end = mask.threshold + mask.fade;
-      if (noise <= start) return 0;
-      if (noise >= end) return 1;
-      return (noise - start) / Math.max(end - start, 0.001);
-    }
-    case "voronoi": {
-      const cellX = u / Math.max(mask.cellSize, 0.001);
-      const cellY = v / Math.max(mask.cellSize, 0.001);
-      const fractX = cellX - Math.floor(cellX);
-      const fractY = cellY - Math.floor(cellY);
-      const edgeDistance = Math.min(
-        Math.min(fractX, 1 - fractX),
-        Math.min(fractY, 1 - fractY)
-      );
-      return 1 - Math.max(0, Math.min(1, edgeDistance / Math.max(mask.borderWidth, 0.001)));
-    }
-    case "world-position-gradient": {
-      const axisValue = mask.axis === "x" ? u : mask.axis === "y" ? 1 - v : v;
-      if (axisValue <= mask.min - mask.fade) return 0;
-      if (axisValue >= mask.max + mask.fade) return 1;
-      return (axisValue - (mask.min - mask.fade)) / Math.max(mask.max - mask.min + mask.fade * 2, 0.001);
-    }
-  }
-}
-
 export interface MaskEditorProps {
+  showHeading?: boolean;
   value: Mask;
   allowedContext: SurfaceContext;
   textureDefinitions: TextureDefinition[];
@@ -105,6 +42,7 @@ export interface MaskEditorProps {
 }
 
 export function MaskEditor({
+  showHeading = true,
   value,
   allowedContext,
   textureDefinitions,
@@ -122,84 +60,90 @@ export function MaskEditor({
 
   return (
     <Stack gap="xs">
-      <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-        Mask
-      </Text>
-      <KindTabs
-        value={value.kind}
-        options={options}
-        onChange={(kind) => {
-          switch (kind) {
-            case "always":
-              onChange({ kind: "always" });
-              break;
-            case "texture":
-              onChange({
-                kind: "texture",
-                textureDefinitionId: textureDefinitions[0]?.definitionId ?? "",
-                channel: "r"
-              });
-              break;
-            case "painted":
-              onChange({
-                kind: "painted",
-                maskTextureId: null
-              });
-              break;
-            case "splatmap-channel":
-              onChange({ kind: "splatmap-channel", channelIndex: 0 });
-              break;
-            case "fresnel":
-              onChange({ kind: "fresnel", power: 2, strength: 1 });
-              break;
-            case "vertex-color-channel":
-              onChange({ kind: "vertex-color-channel", channel: "r" });
-              break;
-            case "height":
-              onChange({ kind: "height", min: 0.2, max: 0.8, fade: 0.2 });
-              break;
-            case "perlin-noise":
-              onChange({
-                kind: "perlin-noise",
-                scale: 4,
-                offset: [0, 0],
-                threshold: 0.5,
-                fade: 0.15
-              });
-              break;
-            case "voronoi":
-              onChange({
-                kind: "voronoi",
-                cellSize: 0.12,
-                borderWidth: 0.06
-              });
-              break;
-            case "world-position-gradient":
-              onChange({
-                kind: "world-position-gradient",
-                axis: "y",
-                min: 0.2,
-                max: 0.8,
-                fade: 0.15
-              });
-              break;
-          }
-        }}
-        renderPanel={(kind) => (
-          <Stack gap="xs">
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <MaskPreview sample={(u, v) => sampleMask(value, u, v)} />
-              <Stack gap={4} style={{ flex: 1 }}>
-                {kind === "always" ? (
+      {showHeading ? (
+        <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+          Mask
+        </Text>
+      ) : null}
+      <Stack gap="xs">
+        <Select
+          size="xs"
+          label="Mask Type"
+          comboboxProps={{ withinPortal: false }}
+          data={options}
+          value={value.kind}
+          onChange={(kind) => {
+            switch (kind) {
+              case "always":
+                onChange({ kind: "always" });
+                break;
+              case "texture":
+                onChange({
+                  kind: "texture",
+                  textureDefinitionId: textureDefinitions[0]?.definitionId ?? "",
+                  channel: "r"
+                });
+                break;
+              case "painted":
+                onChange({
+                  kind: "painted",
+                  maskTextureId: null
+                });
+                break;
+              case "splatmap-channel":
+                onChange({ kind: "splatmap-channel", channelIndex: 0 });
+                break;
+              case "fresnel":
+                onChange({ kind: "fresnel", power: 2, strength: 1 });
+                break;
+              case "vertex-color-channel":
+                onChange({ kind: "vertex-color-channel", channel: "r" });
+                break;
+              case "height":
+                onChange({ kind: "height", min: 0.2, max: 0.8, fade: 0.2 });
+                break;
+              case "perlin-noise":
+                onChange({
+                  kind: "perlin-noise",
+                  scale: 4,
+                  offset: [0, 0],
+                  threshold: 0.5,
+                  fade: 0.15
+                });
+                break;
+              case "voronoi":
+                onChange({
+                  kind: "voronoi",
+                  cellSize: 0.12,
+                  borderWidth: 0.06
+                });
+                break;
+              case "world-position-gradient":
+                onChange({
+                  kind: "world-position-gradient",
+                  axis: "y",
+                  min: 0.2,
+                  max: 0.8,
+                  fade: 0.15
+                });
+                break;
+            }
+          }}
+        />
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <MaskPreview sample={(u, v) => sampleMask(value, u, v)} />
+          <Stack gap={4} style={{ flex: 1 }}>
+            {value.kind === "always" ? (
                   <Text size="xs" c="var(--sm-color-overlay0)">
                     Applies everywhere.
                   </Text>
                 ) : null}
-                {kind === "texture" && value.kind === "texture" ? (
+                {value.kind === "texture" ? (
                   <>
                     <Select
                       size="xs"
                       label="Texture"
+                      comboboxProps={{ withinPortal: false }}
                       data={textureDefinitions.map((texture) => ({
                         value: texture.definitionId,
                         label: texture.displayName
@@ -214,6 +158,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Channel"
+                      comboboxProps={{ withinPortal: false }}
                       data={[
                         { value: "r", label: "Red" },
                         { value: "g", label: "Green" },
@@ -229,11 +174,12 @@ export function MaskEditor({
                     />
                   </>
                 ) : null}
-                {kind === "painted" && value.kind === "painted" ? (
+                {value.kind === "painted" ? (
                   <>
                     <Select
                       size="xs"
                       label="Mask Texture"
+                      comboboxProps={{ withinPortal: false }}
                       data={maskTextureDefinitions.map((definition) => ({
                         value: definition.definitionId,
                         label: definition.displayName
@@ -304,7 +250,7 @@ export function MaskEditor({
                     </Text>
                   </>
                 ) : null}
-                {kind === "splatmap-channel" && value.kind === "splatmap-channel" ? (
+                {value.kind === "splatmap-channel" ? (
                   <NumberInput
                     size="xs"
                     label="Channel Index"
@@ -318,7 +264,7 @@ export function MaskEditor({
                     }}
                   />
                 ) : null}
-                {kind === "fresnel" && value.kind === "fresnel" ? (
+                {value.kind === "fresnel" ? (
                   <>
                     <LabeledSlider
                       label="Power"
@@ -338,10 +284,11 @@ export function MaskEditor({
                     />
                   </>
                 ) : null}
-                {kind === "vertex-color-channel" && value.kind === "vertex-color-channel" ? (
+                {value.kind === "vertex-color-channel" ? (
                   <Select
                     size="xs"
                     label="Channel"
+                    comboboxProps={{ withinPortal: false }}
                     data={[
                       { value: "r", label: "Red" },
                       { value: "g", label: "Green" },
@@ -356,7 +303,7 @@ export function MaskEditor({
                     }}
                   />
                 ) : null}
-                {kind === "height" && value.kind === "height" ? (
+                {value.kind === "height" ? (
                   <>
                     <LabeledSlider
                       label="Min"
@@ -381,7 +328,7 @@ export function MaskEditor({
                     />
                   </>
                 ) : null}
-                {kind === "perlin-noise" && value.kind === "perlin-noise" ? (
+                {value.kind === "perlin-noise" ? (
                   <>
                     <LabeledSlider
                       label="Scale"
@@ -406,7 +353,7 @@ export function MaskEditor({
                     />
                   </>
                 ) : null}
-                {kind === "voronoi" && value.kind === "voronoi" ? (
+                {value.kind === "voronoi" ? (
                   <>
                     <LabeledSlider
                       label="Cell Size"
@@ -424,14 +371,14 @@ export function MaskEditor({
                     />
                   </>
                 ) : null}
-                {kind === "world-position-gradient" &&
-                value.kind === "world-position-gradient" ? (
+                {value.kind === "world-position-gradient" ? (
                   <>
-                    <Select
-                      size="xs"
-                      label="Axis"
-                      data={[
-                        { value: "x", label: "X" },
+                <Select
+                  size="xs"
+                  label="Axis"
+                  comboboxProps={{ withinPortal: false }}
+                  data={[
+                    { value: "x", label: "X" },
                         { value: "y", label: "Y" },
                         { value: "z", label: "Z" }
                       ]}
@@ -468,8 +415,6 @@ export function MaskEditor({
               </Stack>
             </Group>
           </Stack>
-        )}
-      />
     </Stack>
   );
 }

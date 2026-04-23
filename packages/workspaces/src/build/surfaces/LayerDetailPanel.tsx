@@ -5,7 +5,7 @@
  * mutations cannot accidentally cross content unions.
  */
 
-import { NumberInput, Select, Stack, Switch, TextInput } from "@mantine/core";
+import { NumberInput, Select, Stack } from "@mantine/core";
 import type {
   AppearanceLayer,
   EmissionLayer,
@@ -31,7 +31,6 @@ import {
 } from "@sugarmagic/domain";
 import { ColorField, KindTabs, LabeledSlider } from "@sugarmagic/ui";
 import { MaterialParameterEditor } from "../MaterialParameterEditor";
-import { MaskEditor } from "./MaskEditor";
 
 function mapAppearanceShaderToMaterial(layer: AppearanceLayer): MaterialDefinition | null {
   if (layer.content.kind !== "shader") {
@@ -167,6 +166,7 @@ function AppearanceLayerEditor(
                 <Select
                   size="xs"
                   label="Texture"
+                  comboboxProps={{ withinPortal: false }}
                   data={textureDefinitions.map((texture) => ({
                     value: texture.definitionId,
                     label: texture.displayName
@@ -222,6 +222,7 @@ function AppearanceLayerEditor(
               <Select
                 size="xs"
                 label="Material"
+                comboboxProps={{ withinPortal: false }}
                 data={materialDefinitions.map((material) => ({
                   value: material.definitionId,
                   label: material.displayName
@@ -246,6 +247,7 @@ function AppearanceLayerEditor(
                 <Select
                   size="xs"
                   label="Shader"
+                  comboboxProps={{ withinPortal: false }}
                   data={surfaceShaders.map((shader) => ({
                     value: shader.shaderDefinitionId,
                     label: shader.displayName
@@ -373,6 +375,7 @@ function ScatterLayerEditor(
           <Select
             size="xs"
             label="Grass Type"
+            comboboxProps={{ withinPortal: false }}
             data={grassTypeDefinitions.map((definition) => ({
               value: definition.definitionId,
               label: definition.displayName
@@ -391,6 +394,7 @@ function ScatterLayerEditor(
           <Select
             size="xs"
             label="Flower Type"
+            comboboxProps={{ withinPortal: false }}
             data={flowerTypeDefinitions.map((definition) => ({
               value: definition.definitionId,
               label: definition.displayName
@@ -409,6 +413,7 @@ function ScatterLayerEditor(
           <Select
             size="xs"
             label="Rock Type"
+            comboboxProps={{ withinPortal: false }}
             data={rockTypeDefinitions.map((definition) => ({
               value: definition.definitionId,
               label: definition.displayName
@@ -505,6 +510,7 @@ function EmissionLayerEditor(
               <Select
                 size="xs"
                 label="Texture"
+                comboboxProps={{ withinPortal: false }}
                 data={textureDefinitions.map((texture) => ({
                   value: texture.definitionId,
                   label: texture.displayName
@@ -548,6 +554,7 @@ function EmissionLayerEditor(
             <Select
               size="xs"
               label="Material"
+              comboboxProps={{ withinPortal: false }}
               data={materialDefinitions.map((material) => ({
                 value: material.definitionId,
                 label: material.displayName
@@ -610,28 +617,6 @@ export function LayerDetailPanel({
 
   return (
     <Stack gap="xs">
-      <TextInput
-        size="xs"
-        label="Layer Name"
-        value={layer.displayName}
-        onChange={(event) =>
-          onChange({
-            ...layer,
-            displayName: event.currentTarget.value
-          })
-        }
-      />
-      <Switch
-        size="xs"
-        label="Enabled"
-        checked={layer.enabled}
-        onChange={(event) =>
-          onChange({
-            ...layer,
-            enabled: event.currentTarget.checked
-          })
-        }
-      />
       <LabeledSlider
         label="Opacity"
         min={0}
@@ -667,23 +652,6 @@ export function LayerDetailPanel({
           onChange={onChange}
         />
       ) : null}
-
-      <MaskEditor
-        value={layer.mask}
-        allowedContext={allowedContext}
-        textureDefinitions={textureDefinitions}
-        maskTextureDefinitions={maskTextureDefinitions}
-        onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-        onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-        activePaintMaskTextureId={activePaintMaskTextureId}
-        onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
-        onChange={(nextMask) =>
-          onChange({
-            ...layer,
-            mask: nextMask
-          })
-        }
-      />
     </Stack>
   );
 }

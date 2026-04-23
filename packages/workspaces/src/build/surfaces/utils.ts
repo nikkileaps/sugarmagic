@@ -295,6 +295,49 @@ export function previewColorForBinding(
   }
 }
 
+export function previewColorForLayer(layer: Layer): string {
+  if (layer.kind === "appearance") {
+    return previewColorForLayerContent(layer.content);
+  }
+  if (layer.kind === "scatter") {
+    switch (layer.content.kind) {
+      case "grass":
+        return "#7fb069";
+      case "flowers":
+        return "#d3869b";
+      case "rocks":
+        return "#a89984";
+    }
+  }
+  if (layer.content.kind === "color") {
+    return `#${layer.content.color.toString(16).padStart(6, "0")}`;
+  }
+  if (layer.content.kind === "texture") {
+    return "#f9e2af";
+  }
+  return "#fab387";
+}
+
+function previewColorForLayerContent(content: Layer["content"]): string {
+  switch (content.kind) {
+    case "color":
+      return `#${content.color.toString(16).padStart(6, "0")}`;
+    case "texture":
+      return "#a6e3a1";
+    case "material":
+      return "#89b4fa";
+    case "shader":
+      return "#f9e2af";
+    case "grass":
+      return "#7fb069";
+    case "flowers":
+      return "#d3869b";
+    case "rocks":
+      return "#a89984";
+  }
+  return "#89b4fa";
+}
+
 export function surfaceDefinitionMatchesContext(
   definition: SurfaceDefinition,
   allowedContext: SurfaceContext
