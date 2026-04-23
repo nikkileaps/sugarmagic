@@ -22,24 +22,30 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
   LandscapeSurfaceSlot,
   MaterialDefinition,
   RegionDocument,
+  ShaderGraphDocument,
   SemanticCommand,
-  RegionLandscapeState
+  RegionLandscapeState,
+  SurfaceBinding,
+  SurfaceDefinition,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS,
-  createColorSurface,
-  createMaterialSurface,
   createLandscapeSurfaceSlot,
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
 import type { ViewportStore } from "@sugarmagic/shell";
-import { PanelSection, SurfacePicker, type Surface as PickerSurface } from "@sugarmagic/ui";
+import { PanelSection } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
+import { SurfaceBindingEditor } from "../surfaces";
+import { previewColorForBinding } from "../surfaces/utils";
 import type { LandscapeBrushSettings } from "./landscape-workspace";
 
 export { createLandscapeCameraController, type LandscapeCameraController } from "./landscape-camera-controller";
@@ -54,6 +60,11 @@ export interface LandscapeWorkspaceViewProps {
   isActive: boolean;
   viewportStore: ViewportStore;
   materialDefinitions: MaterialDefinition[];
+  surfaceDefinitions: SurfaceDefinition[];
+  textureDefinitions: TextureDefinition[];
+  shaderDefinitions: ShaderGraphDocument[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
@@ -72,36 +83,6 @@ function formatHexColor(value: number): string {
 
 function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
-}
-
-function toPickerSurface(surface: LandscapeSurfaceSlot["surface"]): PickerSurface | null {
-  if (!surface) {
-    return null;
-  }
-  if (surface.kind === "color") {
-    return {
-      kind: "color",
-      value: surface.color
-    };
-  }
-  if (surface.kind === "material") {
-    return {
-      kind: "material",
-      materialDefinitionId: surface.materialDefinitionId
-    };
-  }
-  return null;
-}
-
-function fromPickerSurface(surface: PickerSurface | null) {
-  if (!surface) {
-    return null;
-  }
-  return surface.kind === "color"
-    ? createColorSurface(surface.value)
-    : surface.materialDefinitionId
-      ? createMaterialSurface(surface.materialDefinitionId)
-      : null;
 }
 
 function MaskThumbnail(props: {
@@ -140,17 +121,27 @@ function ChannelCard(props: {
   channelIndex: number;
   isActive: boolean;
   landscape: RegionLandscapeState | null;
+  surfaceDefinitions: SurfaceDefinition[];
   materials: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
+  shaderDefinitions: ShaderGraphDocument[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
-  onSurfaceChange: (surface: PickerSurface | null) => void;
+  onSurfaceChange: (surface: SurfaceBinding | null) => void;
 }) {
   const {
     channel,
     channelIndex,
     isActive,
     landscape,
+    surfaceDefinitions,
     materials,
+    textureDefinitions,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     onSelect,
     onRename,
     onSurfaceChange
@@ -160,17 +151,6 @@ function ChannelCard(props: {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(channel.displayName);
-
-  const surfaceValue = toPickerSurface(channel.surface);
-
-  const materialOptions = useMemo(
-    () =>
-      materials.map((material) => ({
-        value: material.definitionId,
-        label: material.displayName
-      })),
-    [materials]
-  );
 
   return (
     <Paper
@@ -200,9 +180,7 @@ function ChannelCard(props: {
           >
             <Popover.Target>
               <ColorSwatch
-                color={formatHexColor(
-                  channel.surface?.kind === "color" ? channel.surface.color : 0x808080
-                )}
+                color={previewColorForBinding(channel.surface, surfaceDefinitions)}
                 size={18}
                 style={{ cursor: "pointer", flexShrink: 0 }}
                 onClick={(event) => {
@@ -212,29 +190,19 @@ function ChannelCard(props: {
               />
             </Popover.Target>
             <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
-              <SurfacePicker
-                value={surfaceValue}
-                materials={materialOptions}
-                colorSwatches={[
-                  "#7f8ea3",
-                  "#5c8a5a",
-                  "#6b5b3a",
-                  "#8b7355",
-                  "#556b2f",
-                  "#2e4d2e",
-                  "#5c4033",
-                  "#8fbc8f",
-                  "#d2b48c",
-                  "#deb887",
-                  "#a0522d",
-                  "#696969"
-                ]}
-                onApply={(next) => {
+              <SurfaceBindingEditor
+                value={channel.surface}
+                allowedContext="landscape-only"
+                surfaceDefinitions={surfaceDefinitions}
+                materialDefinitions={materials}
+                textureDefinitions={textureDefinitions}
+                shaderDefinitions={shaderDefinitions}
+                grassTypeDefinitions={grassTypeDefinitions}
+                flowerTypeDefinitions={flowerTypeDefinitions}
+                onChange={(next) => {
                   onSurfaceChange(next);
                   setPickerOpen(false);
                 }}
-                title={`${channel.displayName} surface`}
-                emptyMaterialsHint="Create a material in the Material Library to bind it here."
               />
             </Popover.Dropdown>
           </Popover>
@@ -308,6 +276,11 @@ export function useLandscapeWorkspaceView(
     isActive,
     viewportStore,
     materialDefinitions,
+    surfaceDefinitions,
+    textureDefinitions,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     region,
     onCommand
   } = props;
@@ -345,7 +318,12 @@ export function useLandscapeWorkspaceView(
           channelIndex={channelIndex}
           isActive={channelIndex === effectiveActiveChannelIndex}
           landscape={displayedLandscape}
+          surfaceDefinitions={surfaceDefinitions}
           materials={materialDefinitions}
+          textureDefinitions={textureDefinitions}
+          shaderDefinitions={shaderDefinitions}
+          grassTypeDefinitions={grassTypeDefinitions}
+          flowerTypeDefinitions={flowerTypeDefinitions}
           onSelect={() =>
             viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
           }
@@ -381,7 +359,7 @@ export function useLandscapeWorkspaceView(
               },
               payload: {
                 channelId: channel.channelId,
-                surface: fromPickerSurface(surface),
+                surface,
                 tilingScale: channel.tilingScale
               }
             });
@@ -393,6 +371,11 @@ export function useLandscapeWorkspaceView(
       effectiveActiveChannelIndex,
       displayedLandscape,
       materialDefinitions,
+      surfaceDefinitions,
+      textureDefinitions,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
       onCommand,
       region,
       viewportStore
@@ -509,8 +492,7 @@ export function useLandscapeWorkspaceView(
                           },
                           payload: {
                             channel: createLandscapeSurfaceSlot({
-                              displayName: nextLandscapeChannelName(region.landscape.surfaceSlots),
-                              surface: createColorSurface(0x808080)
+                              displayName: nextLandscapeChannelName(region.landscape.surfaceSlots)
                             })
                           }
                         });

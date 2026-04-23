@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { ShaderRuntime } from "@sugarmagic/render-web";
+import {
+  createAuthoredAssetResolver,
+  ShaderRuntime
+} from "@sugarmagic/render-web";
 import {
   resolveSceneObjects,
   resolveEffectivePostProcessShaderBindings,
@@ -10,6 +13,7 @@ import {
 } from "@sugarmagic/runtime-core";
 import {
   createShaderSurface,
+  createShaderSurfaceBinding,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultEnvironmentDefinition,
   createDefaultFogTintPostProcessShaderGraph,
@@ -62,7 +66,7 @@ function createContentLibrary(): ContentLibrarySnapshot {
           {
             slotName: "Leaves",
             slotIndex: 0,
-            surface: createShaderSurface(foliageSurface.shaderDefinitionId)
+            surface: createShaderSurfaceBinding(foliageSurface.shaderDefinitionId)
           }
         ],
         deform: createShaderSurface(foliageShader.shaderDefinitionId),
@@ -84,6 +88,12 @@ function createContentLibrary(): ContentLibrarySnapshot {
     ],
     shaderDefinitions: [foliageSurface, foliageShader, postProcessShader]
   }, "project");
+}
+
+function createRuntimeAssetResolver(contentLibrary: ContentLibrarySnapshot) {
+  const assetResolver = createAuthoredAssetResolver();
+  assetResolver.sync(contentLibrary, {});
+  return assetResolver;
 }
 
 function createRegion(): RegionDocument {
@@ -127,6 +137,17 @@ function createRegion(): RegionDocument {
 }
 
 describe("shader runtime contracts", () => {
+  it("fails loudly when the shared resolver is not wired", () => {
+    expect(
+      () =>
+        new ShaderRuntime({
+          contentLibrary: createContentLibrary(),
+          compileProfile: "authoring-preview",
+          assetResolver: null as never
+        })
+    ).toThrow(/requires an explicit AuthoredAssetResolver/i);
+  });
+
   it("resolves explicit foliage surface slots and deform traits for foliage assets", () => {
     const contentLibrary = createContentLibrary();
     const sceneObjects = resolveSceneObjects(createRegion(), { contentLibrary });
@@ -150,7 +171,7 @@ describe("shader runtime contracts", () => {
         {
           slotName: "Leaves",
           slotIndex: 0,
-          surface: createShaderSurface("project:shader:foliage-wind")
+          surface: createShaderSurfaceBinding("project:shader:foliage-wind")
         }
       ]
     };
@@ -273,25 +294,27 @@ describe("shader runtime contracts", () => {
     ).toEqual([]);
   });
 
-  it("keeps shared finalized materials alive until all references release and the grace period elapses", () => {
+  it("retires shared finalized materials after release without forcing WebGPU disposal", () => {
     vi.useFakeTimers();
     try {
       const shader = createDefaultFoliageTintShaderGraph("project");
-      const runtime = new ShaderRuntime({
-        contentLibrary: {
-          identity: {
-            id: "project:content-library",
-            schema: "ContentLibrarySnapshot",
-            version: 1
-          },
-          assetDefinitions: [],
-          materialDefinitions: [],
-          textureDefinitions: [],
-          environmentDefinitions: [],
-          shaderDefinitions: [shader]
+      const contentLibrary = {
+        identity: {
+          id: "project:content-library",
+          schema: "ContentLibrarySnapshot",
+          version: 1
         },
+        assetDefinitions: [],
+        materialDefinitions: [],
+        textureDefinitions: [],
+        environmentDefinitions: [],
+        shaderDefinitions: [shader]
+      } satisfies ContentLibrarySnapshot;
+      const runtime = new ShaderRuntime({
+        contentLibrary,
         compileProfile: "authoring-preview",
-        materialDisposalGraceMs: 100
+        materialDisposalGraceMs: 100,
+        assetResolver: createRuntimeAssetResolver(contentLibrary)
       });
       const binding: EffectiveShaderBinding = {
         shaderDefinitionId: shader.shaderDefinitionId,
@@ -328,7 +351,14 @@ describe("shader runtime contracts", () => {
       expect(disposeSpy).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(1);
-      expect(disposeSpy).toHaveBeenCalledTimes(1);
+      expect(disposeSpy).not.toHaveBeenCalled();
+
+      const third = runtime.applyShader(binding, {
+        targetKind: "mesh-surface",
+        material: new THREE.MeshStandardMaterial(),
+        geometry
+      }) as THREE.Material;
+      expect(third).not.toBe(first);
       geometry.dispose();
     } finally {
       vi.useRealTimers();
@@ -337,36 +367,38 @@ describe("shader runtime contracts", () => {
 
   it("makes a bound Standard PBR basecolor texture authoritative over the carrier material tint", () => {
     const shader = createDefaultStandardPbrShaderGraph("project");
-    const runtime = new ShaderRuntime({
-      contentLibrary: normalizeContentLibrarySnapshot(
-        {
-          identity: {
-            id: "project:content-library",
-            schema: "ContentLibrarySnapshot",
-            version: 1
-          },
-          assetDefinitions: [],
-          materialDefinitions: [],
-          textureDefinitions: [
-            {
-              definitionId: "project:texture:brick-base",
-              definitionKind: "texture",
-              displayName: "Brick Base",
-              source: {
-                relativeAssetPath: "assets/textures/brick-base.png",
-                fileName: "brick-base.png",
-                mimeType: "image/png"
-              },
-              colorSpace: "srgb",
-              packing: "rgba"
-            }
-          ],
-          environmentDefinitions: [],
-          shaderDefinitions: [shader]
+    const contentLibrary = normalizeContentLibrarySnapshot(
+      {
+        identity: {
+          id: "project:content-library",
+          schema: "ContentLibrarySnapshot",
+          version: 1
         },
-        "project"
-      ),
-      compileProfile: "authoring-preview"
+        assetDefinitions: [],
+        materialDefinitions: [],
+        textureDefinitions: [
+          {
+            definitionId: "project:texture:brick-base",
+            definitionKind: "texture",
+            displayName: "Brick Base",
+            source: {
+              relativeAssetPath: "assets/textures/brick-base.png",
+              fileName: "brick-base.png",
+              mimeType: "image/png"
+            },
+            colorSpace: "srgb",
+            packing: "rgba"
+          }
+        ],
+        environmentDefinitions: [],
+        shaderDefinitions: [shader]
+      },
+      "project"
+    );
+    const runtime = new ShaderRuntime({
+      contentLibrary,
+      compileProfile: "authoring-preview",
+      assetResolver: createRuntimeAssetResolver(contentLibrary)
     });
     const material = new THREE.MeshStandardMaterial({
       color: 0x7a2018,
@@ -418,23 +450,25 @@ describe("shader runtime contracts", () => {
 
   it("does not fall back to the carrier material map when no material texture binding exists", () => {
     const shader = createDefaultStandardPbrShaderGraph("project");
-    const runtime = new ShaderRuntime({
-      contentLibrary: normalizeContentLibrarySnapshot(
-        {
-          identity: {
-            id: "project:content-library",
-            schema: "ContentLibrarySnapshot",
-            version: 1
-          },
-          assetDefinitions: [],
-          materialDefinitions: [],
-          textureDefinitions: [],
-          environmentDefinitions: [],
-          shaderDefinitions: [shader]
+    const contentLibrary = normalizeContentLibrarySnapshot(
+      {
+        identity: {
+          id: "project:content-library",
+          schema: "ContentLibrarySnapshot",
+          version: 1
         },
-        "project"
-      ),
-      compileProfile: "authoring-preview"
+        assetDefinitions: [],
+        materialDefinitions: [],
+        textureDefinitions: [],
+        environmentDefinitions: [],
+        shaderDefinitions: [shader]
+      },
+      "project"
+    );
+    const runtime = new ShaderRuntime({
+      contentLibrary,
+      compileProfile: "authoring-preview",
+      assetResolver: createRuntimeAssetResolver(contentLibrary)
     });
     const carrierMaterial = new THREE.MeshStandardMaterial();
     carrierMaterial.map = new THREE.Texture();
@@ -474,36 +508,39 @@ describe("shader runtime contracts", () => {
 
   it("reuses the finalized material across blob URL churn for the same TextureDefinition", () => {
     const shader = createDefaultStandardPbrShaderGraph("project");
-    const runtime = new ShaderRuntime({
-      contentLibrary: normalizeContentLibrarySnapshot(
-        {
-          identity: {
-            id: "project:content-library",
-            schema: "ContentLibrarySnapshot",
-            version: 1
-          },
-          assetDefinitions: [],
-          materialDefinitions: [],
-          textureDefinitions: [
-            {
-              definitionId: "project:texture:brick-base",
-              definitionKind: "texture",
-              displayName: "Brick Base",
-              source: {
-                relativeAssetPath: "assets/textures/brick-base.png",
-                fileName: "brick-base.png",
-                mimeType: "image/png"
-              },
-              colorSpace: "srgb",
-              packing: "rgba"
-            }
-          ],
-          environmentDefinitions: [],
-          shaderDefinitions: [shader]
+    const contentLibrary = normalizeContentLibrarySnapshot(
+      {
+        identity: {
+          id: "project:content-library",
+          schema: "ContentLibrarySnapshot",
+          version: 1
         },
-        "project"
-      ),
-      compileProfile: "authoring-preview"
+        assetDefinitions: [],
+        materialDefinitions: [],
+        textureDefinitions: [
+          {
+            definitionId: "project:texture:brick-base",
+            definitionKind: "texture",
+            displayName: "Brick Base",
+            source: {
+              relativeAssetPath: "assets/textures/brick-base.png",
+              fileName: "brick-base.png",
+              mimeType: "image/png"
+            },
+            colorSpace: "srgb",
+            packing: "rgba"
+          }
+        ],
+        environmentDefinitions: [],
+        shaderDefinitions: [shader]
+      },
+      "project"
+    );
+    const assetResolver = createRuntimeAssetResolver(contentLibrary);
+    const runtime = new ShaderRuntime({
+      contentLibrary,
+      compileProfile: "authoring-preview",
+      assetResolver
     });
     const binding: EffectiveShaderBinding = {
       shaderDefinitionId: shader.shaderDefinitionId,

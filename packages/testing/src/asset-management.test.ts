@@ -25,7 +25,7 @@ import {
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState,
   createDefaultFoliageWindShaderGraph,
-  createMaterialSurface
+  createMaterialSurfaceBinding
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -158,12 +158,12 @@ describe("asset management loop", () => {
         {
           slotName: "Wall",
           slotIndex: 0,
-          surface: createMaterialSurface("wordlark:material:brick")
+          surface: createMaterialSurfaceBinding("wordlark:material:brick")
         },
         {
           slotName: "Roof",
           slotIndex: 1,
-          surface: createMaterialSurface("wordlark:material:tile")
+          surface: createMaterialSurfaceBinding("wordlark:material:tile")
         }
       ]
     });
@@ -193,12 +193,12 @@ describe("asset management loop", () => {
       {
         slotName: "Roof",
         slotIndex: 0,
-        surface: createMaterialSurface("wordlark:material:tile")
+        surface: createMaterialSurfaceBinding("wordlark:material:tile")
       },
       {
         slotName: "Wall",
         slotIndex: 1,
-        surface: createMaterialSurface("wordlark:material:brick")
+        surface: createMaterialSurfaceBinding("wordlark:material:brick")
       },
       {
         slotName: "Trim",

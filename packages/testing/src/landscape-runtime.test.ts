@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
   createLandscapeSurfaceSlot,
-  createMaterialSurface,
+  createMaterialSurfaceBinding,
   createDefaultStandardPbrShaderGraph,
   createDefaultRegionLandscapeState,
   createEmptyContentLibrarySnapshot
@@ -12,6 +12,7 @@ import {
   resolveLandscapeDescriptor
 } from "@sugarmagic/runtime-core";
 import {
+  type AuthoredAssetResolver,
   createAuthoredAssetResolver,
   createLandscapeSceneController,
   ShaderRuntime
@@ -97,6 +98,16 @@ function makeLandscapeMaterialLibrary(): ContentLibrarySnapshot {
 }
 
 describe("landscape runtime controller", () => {
+  it("fails loudly when the shared resolver is not wired", () => {
+    const scene = new THREE.Scene();
+    expect(() =>
+      createLandscapeSceneController(
+        scene,
+        null as unknown as AuthoredAssetResolver
+      )
+    ).toThrow(/requires an explicit AuthoredAssetResolver/i);
+  });
+
   it("resolves a runtime descriptor from canonical region landscape state", () => {
     const descriptor = resolveLandscapeDescriptor(makeRegion());
 
@@ -108,7 +119,10 @@ describe("landscape runtime controller", () => {
 
   it("creates and removes the shared landscape plane from the scene", () => {
     const scene = new THREE.Scene();
-    const controller = createLandscapeSceneController(scene);
+    const controller = createLandscapeSceneController(
+      scene,
+      createAuthoredAssetResolver()
+    );
 
     const result = controller.apply(makeRegion(true));
     expect(result.descriptor?.enabled).toBe(true);
@@ -123,7 +137,10 @@ describe("landscape runtime controller", () => {
 
   it("serializes painted splatmap payloads and reapplies them through the same runtime path", () => {
     const firstScene = new THREE.Scene();
-    const firstController = createLandscapeSceneController(firstScene);
+    const firstController = createLandscapeSceneController(
+      firstScene,
+      createAuthoredAssetResolver()
+    );
     const region = makeRegion(true);
 
     firstController.apply(region);
@@ -142,7 +159,10 @@ describe("landscape runtime controller", () => {
     expect(paintPayload?.layers.length).toBeGreaterThan(0);
 
     const secondScene = new THREE.Scene();
-    const secondController = createLandscapeSceneController(secondScene);
+    const secondController = createLandscapeSceneController(
+      secondScene,
+      createAuthoredAssetResolver()
+    );
     secondController.apply({
       ...region,
       landscape: {
@@ -184,7 +204,7 @@ describe("landscape runtime controller", () => {
       createLandscapeSurfaceSlot({
         channelId: "landscape-channel:grass",
         displayName: "Grass",
-        surface: createMaterialSurface("wordlark:material:grass"),
+        surface: createMaterialSurfaceBinding("wordlark:material:grass"),
         tilingScale: null
       })
     );
@@ -198,7 +218,8 @@ describe("landscape runtime controller", () => {
         shaderDefinitionId: "wordlark:shader:standard-pbr"
       })
     );
-    const landscapeMesh = controller.root.children[0] as THREE.Mesh | undefined;
+    const landscapeRoot = controller.root.children[0] as THREE.Group | undefined;
+    const landscapeMesh = landscapeRoot?.children[0] as THREE.Mesh | undefined;
     expect(landscapeMesh).toBeTruthy();
 
     const material = landscapeMesh?.material as THREE.Material & {
@@ -219,22 +240,22 @@ describe("landscape runtime controller", () => {
   });
 
   it("defaults tilingScale to null on freshly-created channels", async () => {
-    const { createLandscapeSurfaceSlot, createMaterialSurface } = await import(
+    const { createLandscapeSurfaceSlot, createMaterialSurfaceBinding } = await import(
       "@sugarmagic/domain"
     );
     const channel = createLandscapeSurfaceSlot({
       displayName: "Brick",
-      surface: createMaterialSurface("wordlark:material:brick")
+      surface: createMaterialSurfaceBinding("wordlark:material:brick")
     });
     expect(channel.tilingScale).toBeNull();
   });
 
   it("preserves explicit tilingScale passed to the factory", async () => {
-    const { createLandscapeSurfaceSlot, createMaterialSurface } = await import(
+    const { createLandscapeSurfaceSlot, createMaterialSurfaceBinding } = await import(
       "@sugarmagic/domain"
     );
     const channel = createLandscapeSurfaceSlot({
-      surface: createMaterialSurface("wordlark:material:brick"),
+      surface: createMaterialSurfaceBinding("wordlark:material:brick"),
       tilingScale: [8, 4]
     });
     expect(channel.tilingScale).toEqual([8, 4]);
@@ -270,10 +291,7 @@ describe("landscape runtime controller", () => {
             channelId: "landscape-legacy-channel",
             displayName: "Dirt",
             slotName: "Dirt",
-            surface: {
-              kind: "material",
-              materialDefinitionId: "wordlark:material:dirt"
-            }
+            surface: createMaterialSurfaceBinding("wordlark:material:dirt")
             // NOTE: no tilingScale — simulates a saved-project shape
             // from before this field existed.
           }

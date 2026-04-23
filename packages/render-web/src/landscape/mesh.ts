@@ -24,24 +24,40 @@ import type {
 } from "@sugarmagic/domain";
 import {
   LandscapeSplatmap,
-  MAX_REGION_LANDSCAPE_CHANNELS,
-  createColorSurface
+  MAX_REGION_LANDSCAPE_CHANNELS
 } from "@sugarmagic/domain";
 import {
-  resolveSurface,
-  type EffectiveShaderBinding
+  resolveAppearanceLayer,
+  resolveSurfaceBinding
 } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
+import type { SurfaceScatterBuildResult } from "../scatter";
 import type {
   ShaderRuntime,
   ShaderSurfaceNodeSet
 } from "../ShaderRuntime";
+import { buildLandscapeScatterForSurface } from "./scatter";
 
 type TslNode = ReturnType<typeof vec3>;
 type TslFloat = ReturnType<typeof float>;
 
+function extractLandscapeSlotColor(
+  slot: LandscapeSurfaceSlot | null | undefined
+): number {
+  if (!slot?.surface || slot.surface.kind !== "inline") {
+    return 0x000000;
+  }
+  const baseLayer = slot.surface.surface.layers[0];
+  if (!baseLayer || baseLayer.kind !== "appearance") {
+    return 0x000000;
+  }
+  return baseLayer.content.kind === "color" ? baseLayer.content.color : 0x000000;
+}
+
 export class RuntimeLandscapeMesh {
+  readonly root: THREE.Group;
   readonly mesh: THREE.Mesh;
+  readonly scatterRoot: THREE.Group;
   readonly splatmap: LandscapeSplatmap;
   /**
    * The currently-active surface material. Replaced wholesale by
@@ -50,13 +66,18 @@ export class RuntimeLandscapeMesh {
    * replaced `colorNode` / `normalNode` / etc. even with
    * `material.needsUpdate = true`, so the only way to guarantee the
    * compiled shader reflects the new bindings is to hand Three a
-   * fresh material. The old material is disposed on swap.
+   * fresh material. Retired materials are disposed after a short grace
+   * period instead of immediately on swap because WebGPU render-object
+   * teardown can still reference the previous material for a frame.
    */
   private material: MeshStandardNodeMaterial;
   private readonly geometry: THREE.PlaneGeometry;
   private placeholder: THREE.DataTexture | null = null;
   private readonly channelColors: THREE.Color[] = [];
   private readonly splatTextures: THREE.DataTexture[] = [];
+  private scatterBuilds: SurfaceScatterBuildResult[] = [];
+  private readonly retiredMaterials = new Set<MeshStandardNodeMaterial>();
+  private readonly retiredMaterialTimers = new Map<MeshStandardNodeMaterial, ReturnType<typeof setTimeout>>();
   /**
    * Signature of the last-applied material state. Paint strokes
    * mutate splat textures in place and don't change the TSL node
@@ -74,6 +95,11 @@ export class RuntimeLandscapeMesh {
    * wins.
    */
   private readonly carrierForEvaluation = new THREE.MeshStandardMaterial();
+  private readonly logger = {
+    warn(message: string, payload?: Record<string, unknown>) {
+      console.warn("[landscape-scatter]", { message, ...(payload ?? {}) });
+    }
+  };
 
   constructor(
     private readonly size: number,
@@ -98,11 +124,17 @@ export class RuntimeLandscapeMesh {
     this.rebuildSplatTextures();
     this.rebuildMaterialNodes(null);
 
+    this.root = new THREE.Group();
+    this.root.name = "runtime-landscape-mesh-root";
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.name = "region-landscape-plane";
     this.mesh.position.y = 0.001;
     this.mesh.receiveShadow = true;
     this.mesh.userData.sugarmagicLandscapeSurface = true;
+    this.scatterRoot = new THREE.Group();
+    this.scatterRoot.name = "region-landscape-scatter-root";
+    this.root.add(this.mesh);
+    this.root.add(this.scatterRoot);
   }
 
   getResolution(): number {
@@ -118,15 +150,13 @@ export class RuntimeLandscapeMesh {
 
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
       const slot = landscape.surfaceSlots[index];
-      const color =
-        slot?.surface?.kind === "color"
-          ? slot.surface.color
-          : 0x000000;
+      const color = extractLandscapeSlotColor(slot);
       this.channelColors[index].set(color);
     }
 
     this.rebuildSplatTextures();
     this.rebuildMaterialNodes(contentLibrary, landscape);
+    this.rebuildScatter(contentLibrary, landscape);
   }
 
   paintAtWorldPoint(
@@ -153,6 +183,7 @@ export class RuntimeLandscapeMesh {
     });
     this.rebuildSplatTextures();
     this.rebuildMaterialNodes(contentLibrary, landscape);
+    this.rebuildScatter(contentLibrary, landscape);
   }
 
   renderMaskToCanvas(channelIndex: number, canvas: HTMLCanvasElement): void {
@@ -164,6 +195,8 @@ export class RuntimeLandscapeMesh {
   }
 
   dispose(): void {
+    this.disposeScatterBuilds();
+    this.disposeRetiredMaterials();
     this.geometry.dispose();
     this.material.dispose();
     this.carrierForEvaluation.dispose();
@@ -175,6 +208,30 @@ export class RuntimeLandscapeMesh {
     // External textures are owned by the shared AuthoredAssetResolver;
     // disposing them here would pull the rug out from under Shader-
     // Runtime's cache for the same TextureDefinition.
+  }
+
+  private retireMaterial(material: MeshStandardNodeMaterial): void {
+    if (material === this.material || this.retiredMaterials.has(material)) {
+      return;
+    }
+    this.retiredMaterials.add(material);
+    const timer = setTimeout(() => {
+      this.retiredMaterialTimers.delete(material);
+      this.retiredMaterials.delete(material);
+      material.dispose();
+    }, 32);
+    this.retiredMaterialTimers.set(material, timer);
+  }
+
+  private disposeRetiredMaterials(): void {
+    for (const timer of this.retiredMaterialTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.retiredMaterialTimers.clear();
+    for (const material of this.retiredMaterials) {
+      material.dispose();
+    }
+    this.retiredMaterials.clear();
   }
 
   private rebuildSplatTextures(): void {
@@ -210,6 +267,56 @@ export class RuntimeLandscapeMesh {
     }
   }
 
+  private disposeScatterBuilds(): void {
+    for (const build of this.scatterBuilds) {
+      this.scatterRoot.remove(build.root);
+      build.dispose();
+    }
+    this.scatterBuilds = [];
+  }
+
+  private rebuildScatter(
+    contentLibrary: ContentLibrarySnapshot | null,
+    landscape: RegionLandscapeState | null
+  ): void {
+    this.disposeScatterBuilds();
+    if (!contentLibrary || !landscape) {
+      return;
+    }
+
+    for (let channelIndex = 0; channelIndex < landscape.surfaceSlots.length; channelIndex += 1) {
+      const slot = landscape.surfaceSlots[channelIndex];
+      if (!slot?.surface) {
+        continue;
+      }
+      const resolvedSurface = resolveSurfaceBinding(
+        slot.surface,
+        contentLibrary,
+        "landscape-only"
+      );
+      if (!resolvedSurface.ok) {
+        continue;
+      }
+      const builds = buildLandscapeScatterForSurface(
+        resolvedSurface.binding,
+        landscape,
+        channelIndex,
+        this.size,
+        this.splatmap,
+        {
+          contentLibrary,
+          assetResolver: this.assetResolver,
+          shaderRuntime: this.getShaderRuntime(),
+          logger: this.logger
+        }
+      );
+      for (const build of builds) {
+        this.scatterRoot.add(build.root);
+        this.scatterBuilds.push(build);
+      }
+    }
+  }
+
   private getPlaceholder(): THREE.DataTexture {
     if (!this.placeholder) {
       this.placeholder = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
@@ -237,22 +344,24 @@ export class RuntimeLandscapeMesh {
     slot: LandscapeSurfaceSlot | null,
     channelColor: THREE.Color,
     worldUv: unknown,
-    contentLibrary: ContentLibrarySnapshot | null
+    contentLibrary: ContentLibrarySnapshot | null,
+    splatmapWeightNode?: (channelIndex: number) => unknown | null
   ): ShaderSurfaceNodeSet {
     const shaderRuntime = this.getShaderRuntime();
     const binding =
       slot?.surface && contentLibrary
-        ? resolveSurface(slot.surface, contentLibrary, "mesh-surface")
+        ? resolveSurfaceBinding(slot.surface, contentLibrary, "landscape-only")
         : null;
 
     if (shaderRuntime && binding?.ok) {
-      const evaluated = shaderRuntime.evaluateMeshSurfaceBinding(binding.binding, {
+      const evaluated = shaderRuntime.evaluateLayerStackToNodeSet(binding.binding, {
         geometry: this.geometry,
         carrierMaterial: this.carrierForEvaluation,
-        uvOverride: worldUv
+        uvOverride: worldUv,
+        splatmapWeightNode
       });
       if (evaluated) {
-        return this.fillSurfaceNodeDefaults(evaluated, channelColor, binding.binding);
+        return this.fillSurfaceNodeDefaults(evaluated, channelColor);
       }
     }
 
@@ -265,8 +374,7 @@ export class RuntimeLandscapeMesh {
    */
   private fillSurfaceNodeDefaults(
     evaluated: ShaderSurfaceNodeSet,
-    channelColor: THREE.Color,
-    _binding: EffectiveShaderBinding
+    channelColor: THREE.Color
   ): ShaderSurfaceNodeSet {
     return {
       colorNode:
@@ -314,10 +422,7 @@ export class RuntimeLandscapeMesh {
     const channels = landscape?.surfaceSlots ?? [];
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {
       const channel = channels[index] ?? null;
-      const color =
-        channel?.surface?.kind === "color"
-          ? channel.surface.color
-          : this.channelColors[index]?.getHex() ?? 0;
+      const color = extractLandscapeSlotColor(channel) || this.channelColors[index]?.getHex() || 0;
       const tilingScale = channel?.tilingScale;
       const tilingPart = tilingScale
         ? `${tilingScale[0]},${tilingScale[1]}`
@@ -402,7 +507,8 @@ export class RuntimeLandscapeMesh {
         channel,
         color,
         channelUv,
-        contentLibrary
+        contentLibrary,
+        (channelIndex) => weights[channelIndex] ?? float(0)
       );
 
       // Each channel contributes weight × its node to the blend. Null
@@ -426,7 +532,7 @@ export class RuntimeLandscapeMesh {
     }
 
     // Fresh material per binding change (see field docs). We swap it
-    // onto the mesh and dispose the old one. This sidesteps a Three
+    // onto the mesh and retire the old one after a brief delay. This sidesteps a Three
     // WebGPU NodeMaterial quirk where reassigning `colorNode` etc. on
     // an already-compiled material doesn't reliably cause the
     // compiled shader / bind groups to pick up the new nodes, even
@@ -450,7 +556,7 @@ export class RuntimeLandscapeMesh {
     const shaderRuntime = this.getShaderRuntime();
     if (shaderRuntime && contentLibrary) {
       if (landscape?.deform) {
-        const deform = resolveSurface(landscape.deform, contentLibrary, "mesh-deform");
+        const deform = resolveAppearanceLayer(landscape.deform, contentLibrary, "mesh-deform");
         if (deform.ok) {
           const deformNodes = shaderRuntime.evaluateMeshDeformBinding(deform.binding, {
             geometry: this.geometry,
@@ -462,7 +568,7 @@ export class RuntimeLandscapeMesh {
         }
       }
       if (landscape?.effect) {
-        const effect = resolveSurface(landscape.effect, contentLibrary, "mesh-effect");
+        const effect = resolveAppearanceLayer(landscape.effect, contentLibrary, "mesh-effect");
         if (effect.ok) {
           const effectNodes = shaderRuntime.evaluateMeshEffectBinding(effect.binding, {
             geometry: this.geometry,
@@ -499,6 +605,6 @@ export class RuntimeLandscapeMesh {
     if (this.mesh) {
       this.mesh.material = nextMaterial;
     }
-    previous.dispose();
+    this.retireMaterial(previous);
   }
 }

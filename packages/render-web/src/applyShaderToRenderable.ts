@@ -99,7 +99,6 @@ export function applyShaderToRenderable(
 
   const previousManagedMaterials = releaseShadersFromRenderable(renderable);
   const nextLeases: ShaderMaterialLease[] = [];
-  const replacedBaseMaterials = new Set<THREE.Material>();
   let meshCount = 0;
   const effectiveMaterialSlots = object.effectiveMaterialSlots ?? [];
 
@@ -154,9 +153,6 @@ export function applyShaderToRenderable(
       }
 
       nextLeases.push({ runtime: shaderRuntime, material: finalized });
-      if (finalized !== material && !previousManagedMaterials.has(material)) {
-        replacedBaseMaterials.add(material);
-      }
       return finalized;
     };
 
@@ -172,9 +168,6 @@ export function applyShaderToRenderable(
 
   if (nextLeases.length > 0) {
     shaderMaterialLeases.set(renderable, nextLeases);
-  }
-  for (const material of replacedBaseMaterials) {
-    material.dispose();
   }
   return meshCount > 0;
 }

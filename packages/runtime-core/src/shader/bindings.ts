@@ -11,19 +11,30 @@ import type {
   AssetDefinition,
   ContentLibrarySnapshot,
   AssetSurfaceSlot,
+  AppearanceContent,
+  BlendMode,
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
+  Layer,
+  Mask,
   PlacedAssetInstance,
   PostProcessShaderBinding,
   RegionItemPresence,
   RegionNPCPresence,
+  ScatterContent,
   ShaderOrMaterial,
   ShaderGraphDocument,
   ShaderParameterOverride,
-  Surface,
+  SurfaceBinding,
+  SurfaceContext,
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
   getAssetDefinition,
+  getFlowerTypeDefinition,
+  getGrassTypeDefinition,
   getMaterialDefinition,
+  getSurfaceDefinition,
   getShaderDefinition
 } from "@sugarmagic/domain";
 
@@ -40,7 +51,53 @@ export interface EffectiveMaterialSlotBinding {
   slotName: string;
   slotIndex: number;
   materialDefinitionId: string | null;
-  surface: EffectiveShaderBinding | null;
+  surface: ResolvedSurfaceStack | null;
+}
+
+interface ResolvedSurfaceLayerCommon {
+  layerId: string;
+  displayName: string;
+  enabled: boolean;
+  opacity: number;
+  mask: Mask;
+}
+
+export interface ResolvedAppearanceLayer extends ResolvedSurfaceLayerCommon {
+  kind: "appearance";
+  blendMode: BlendMode;
+  contentKind: AppearanceContent["kind"];
+  binding: EffectiveShaderBinding;
+}
+
+export interface ResolvedEmissionLayer extends ResolvedSurfaceLayerCommon {
+  kind: "emission";
+  contentKind: "color" | "texture" | "material";
+  intensity: number;
+  binding: EffectiveShaderBinding;
+}
+
+export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
+  kind: "scatter";
+  contentKind: ScatterContent["kind"];
+  definitionId: string;
+  definition: GrassTypeDefinition | FlowerTypeDefinition;
+  wind: EffectiveShaderBinding | null;
+}
+
+export type ResolvedSurfaceLayer =
+  | ResolvedAppearanceLayer
+  | ResolvedEmissionLayer
+  | ResolvedScatterLayer;
+
+export interface ResolvedSurfaceStack<
+  C extends SurfaceContext = SurfaceContext
+> {
+  context: C;
+  layers: ResolvedSurfaceLayer[];
+  shaderDefinitionId?: string | null;
+  targetKind?: ShaderGraphDocument["targetKind"] | null;
+  parameterValues?: Record<string, unknown>;
+  textureBindings?: Record<string, string>;
 }
 
 export interface ShaderBindingResolutionDiagnostic {
@@ -233,17 +290,18 @@ function resolveSlotBinding(
 export function resolveMaterialEffectiveShaderBinding(
   contentLibrary: ContentLibrarySnapshot,
   materialDefinitionId: string,
+  parameterOverrides: ShaderParameterOverride[] = [],
   diagnostics: ShaderBindingResolutionDiagnostic[] = []
 ): EffectiveShaderBinding | null {
   return resolveMaterialSurfaceBinding(
     contentLibrary,
     materialDefinitionId,
-    [],
+    parameterOverrides,
     diagnostics
   );
 }
 
-export type ResolveSurfaceResult =
+export type ResolveAppearanceLayerResult =
   | { ok: true; binding: EffectiveShaderBinding }
   | { ok: false; diagnostic: SurfaceResolverDiagnostic };
 
@@ -251,7 +309,7 @@ function surfaceDiagnostic(
   expectedTargetKind: ShaderGraphDocument["targetKind"],
   shaderDefinitionId: string | null,
   message: string
-): ResolveSurfaceResult {
+): ResolveAppearanceLayerResult {
   return {
     ok: false,
     diagnostic: {
@@ -266,7 +324,7 @@ function surfaceDiagnostic(
 function validateResolvedSurfaceTarget(
   binding: EffectiveShaderBinding | null,
   expectedTargetKind: ShaderGraphDocument["targetKind"]
-): ResolveSurfaceResult {
+): ResolveAppearanceLayerResult {
   if (!binding) {
     return surfaceDiagnostic(expectedTargetKind, null, "Surface slot could not be resolved.");
   }
@@ -280,11 +338,12 @@ function validateResolvedSurfaceTarget(
   return { ok: true, binding };
 }
 
-export function resolveSurface(
-  surface: Surface,
+export function resolveAppearanceLayer(
+  surface: AppearanceContent,
   contentLibrary: ContentLibrarySnapshot,
-  expectedTargetKind: ShaderGraphDocument["targetKind"]
-): ResolveSurfaceResult {
+  expectedTargetKind: ShaderGraphDocument["targetKind"],
+  parameterOverrides: ShaderParameterOverride[] = []
+): ResolveAppearanceLayerResult {
   if (surface.kind === "color") {
     const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
     if (!shaderDefinitionId) {
@@ -295,7 +354,7 @@ export function resolveSurface(
         contentLibrary,
         "surface",
         shaderDefinitionId,
-        [],
+        parameterOverrides,
         [],
         { baseParameterValues: { color: [(surface.color >> 16 & 0xff) / 255, (surface.color >> 8 & 0xff) / 255, (surface.color & 0xff) / 255] } }
       ),
@@ -313,7 +372,7 @@ export function resolveSurface(
         contentLibrary,
         "surface",
         shaderDefinitionId,
-        [],
+        parameterOverrides,
         [],
         {
           baseParameterValues: { tiling: surface.tiling },
@@ -326,13 +385,16 @@ export function resolveSurface(
 
   if (surface.kind === "material") {
     return validateResolvedSurfaceTarget(
-      resolveMaterialEffectiveShaderBinding(contentLibrary, surface.materialDefinitionId, []),
+      resolveMaterialEffectiveShaderBinding(
+        contentLibrary,
+        surface.materialDefinitionId,
+        parameterOverrides
+      ),
       expectedTargetKind
     );
   }
 
-  const definition = getShaderDefinition(contentLibrary, surface.shaderDefinitionId);
-  if (!definition) {
+  if (!getShaderDefinition(contentLibrary, surface.shaderDefinitionId)) {
     return surfaceDiagnostic(
       expectedTargetKind,
       surface.shaderDefinitionId,
@@ -352,7 +414,7 @@ export function resolveSurface(
       contentLibrary,
       slot,
       surface.shaderDefinitionId,
-      [],
+      parameterOverrides,
       [],
       {
         baseParameterValues: surface.parameterValues,
@@ -361,6 +423,235 @@ export function resolveSurface(
     ),
     expectedTargetKind
   );
+}
+
+export type ResolveSurfaceBindingResult =
+  | { ok: true; binding: ResolvedSurfaceStack }
+  | { ok: false; diagnostic: SurfaceResolverDiagnostic };
+
+function resolvedSurfaceDiagnostic(
+  message: string,
+  expectedTargetKind: ShaderGraphDocument["targetKind"] = "mesh-surface",
+  shaderDefinitionId: string | null = null
+): ResolveSurfaceBindingResult {
+  return {
+    ok: false,
+    diagnostic: {
+      severity: "error",
+      expectedTargetKind,
+      shaderDefinitionId,
+      message
+    }
+  };
+}
+
+function resolveEmissionLayer(
+  content: Extract<Layer, { kind: "emission" }>["content"],
+  contentLibrary: ContentLibrarySnapshot
+): ResolveAppearanceLayerResult {
+  if (content.kind === "color") {
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic("mesh-surface", null, 'Missing built-in "flat-color" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(contentLibrary, "surface", shaderDefinitionId, [], [], {
+        baseParameterValues: {
+          color: [
+            ((content.color >> 16) & 0xff) / 255,
+            ((content.color >> 8) & 0xff) / 255,
+            (content.color & 0xff) / 255
+          ]
+        }
+      }),
+      "mesh-surface"
+    );
+  }
+  if (content.kind === "texture") {
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-texture");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic("mesh-surface", null, 'Missing built-in "flat-texture" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(contentLibrary, "surface", shaderDefinitionId, [], [], {
+        baseParameterValues: { tiling: content.tiling },
+        textureBindings: { texture: content.textureDefinitionId }
+      }),
+      "mesh-surface"
+    );
+  }
+  return validateResolvedSurfaceTarget(
+    resolveMaterialEffectiveShaderBinding(contentLibrary, content.materialDefinitionId, []),
+    "mesh-surface"
+  );
+}
+
+export function resolveScatterLayer(
+  content: ScatterContent,
+  contentLibrary: ContentLibrarySnapshot
+): ResolvedScatterLayer["definition"] | null {
+  if (content.kind === "grass") {
+    return getGrassTypeDefinition(contentLibrary, content.grassTypeId);
+  }
+  return getFlowerTypeDefinition(contentLibrary, content.flowerTypeId);
+}
+
+function resolveScatterWind(
+  definition: GrassTypeDefinition | FlowerTypeDefinition,
+  contentLibrary: ContentLibrarySnapshot
+): EffectiveShaderBinding | null {
+  if (!definition.wind) {
+    return null;
+  }
+  const result = resolveAppearanceLayer(definition.wind, contentLibrary, "mesh-deform");
+  return result.ok ? result.binding : null;
+}
+
+function surfaceStackFromBinding(
+  binding: EffectiveShaderBinding
+): ResolvedSurfaceStack<"universal"> {
+  return {
+    context: "universal",
+    shaderDefinitionId: binding.shaderDefinitionId,
+    targetKind: binding.targetKind,
+    parameterValues: binding.parameterValues,
+    textureBindings: binding.textureBindings,
+    layers: [
+      {
+        kind: "appearance",
+        layerId: "fallback-surface",
+        displayName: "Surface",
+        enabled: true,
+        opacity: 1,
+        mask: { kind: "always" },
+        blendMode: "base",
+        contentKind: "shader",
+        binding
+      }
+    ]
+  };
+}
+
+export function resolveSurfaceBinding(
+  binding: SurfaceBinding,
+  contentLibrary: ContentLibrarySnapshot,
+  callerContext: SurfaceContext,
+  parameterOverrides: ShaderParameterOverride[] = []
+): ResolveSurfaceBindingResult {
+  const surface =
+    binding.kind === "reference"
+      ? getSurfaceDefinition(contentLibrary, binding.surfaceDefinitionId)?.surface ?? null
+      : binding.surface;
+
+  if (!surface) {
+    return resolvedSurfaceDiagnostic(
+      binding.kind === "reference"
+        ? `Surface binding references missing SurfaceDefinition "${binding.surfaceDefinitionId}".`
+        : "Inline surface binding is missing its surface."
+    );
+  }
+
+  if (callerContext === "universal" && surface.context !== "universal") {
+    return resolvedSurfaceDiagnostic(
+      "Landscape-only surfaces cannot bind to universal slots."
+    );
+  }
+
+  const resolvedLayers: ResolvedSurfaceLayer[] = [];
+  for (const layer of surface.layers) {
+    if (layer.kind === "appearance") {
+      const result = resolveAppearanceLayer(
+        layer.content,
+        contentLibrary,
+        "mesh-surface",
+        parameterOverrides
+      );
+      if (!result.ok) {
+        return resolvedSurfaceDiagnostic(
+          result.diagnostic.message,
+          result.diagnostic.expectedTargetKind,
+          result.diagnostic.shaderDefinitionId
+        );
+      }
+      resolvedLayers.push({
+        kind: "appearance",
+        layerId: layer.layerId,
+        displayName: layer.displayName,
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: layer.mask,
+        blendMode: layer.blendMode,
+        contentKind: layer.content.kind,
+        binding: result.binding
+      });
+      continue;
+    }
+
+    if (layer.kind === "emission") {
+      const result = resolveEmissionLayer(layer.content, contentLibrary);
+      if (!result.ok) {
+        return resolvedSurfaceDiagnostic(
+          result.diagnostic.message,
+          result.diagnostic.expectedTargetKind,
+          result.diagnostic.shaderDefinitionId
+        );
+      }
+      resolvedLayers.push({
+        kind: "emission",
+        layerId: layer.layerId,
+        displayName: layer.displayName,
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: layer.mask,
+        contentKind: layer.content.kind,
+        intensity:
+          layer.content.kind === "material" ? 1 : layer.content.intensity,
+        binding: result.binding
+      });
+      continue;
+    }
+
+    const definition = resolveScatterLayer(layer.content, contentLibrary);
+    if (!definition) {
+      return resolvedSurfaceDiagnostic(
+        layer.content.kind === "grass"
+          ? `Scatter layer references missing GrassTypeDefinition "${layer.content.grassTypeId}".`
+          : `Scatter layer references missing FlowerTypeDefinition "${layer.content.flowerTypeId}".`
+      );
+    }
+    resolvedLayers.push({
+      kind: "scatter",
+      layerId: layer.layerId,
+      displayName: layer.displayName,
+      enabled: layer.enabled,
+      opacity: layer.opacity,
+      mask: layer.mask,
+      contentKind: layer.content.kind,
+      definitionId: definition.definitionId,
+      definition,
+      wind: resolveScatterWind(definition, contentLibrary)
+    });
+  }
+
+  return {
+    ok: true,
+    binding: {
+      context: surface.context,
+      layers: resolvedLayers,
+      shaderDefinitionId:
+        resolvedLayers.find((layer): layer is ResolvedAppearanceLayer => layer.kind === "appearance")
+          ?.binding.shaderDefinitionId ?? null,
+      targetKind:
+        resolvedLayers.find((layer): layer is ResolvedAppearanceLayer => layer.kind === "appearance")
+          ?.binding.targetKind ?? null,
+      parameterValues:
+        resolvedLayers.find((layer): layer is ResolvedAppearanceLayer => layer.kind === "appearance")
+          ?.binding.parameterValues ?? {},
+      textureBindings:
+        resolvedLayers.find((layer): layer is ResolvedAppearanceLayer => layer.kind === "appearance")
+          ?.binding.textureBindings ?? {}
+    }
+  };
 }
 
 function resolveMaterialSurfaceBinding(
@@ -422,7 +713,7 @@ function resolveBindingSetForOwner(
       continue;
     }
 
-    const hostSurface: Surface | ShaderOrMaterial | null =
+    const hostSurface: ShaderOrMaterial | null =
       slot === "deform"
         ? ownerAssetDefinition?.deform ?? null
         : slot === "effect"
@@ -432,7 +723,7 @@ function resolveBindingSetForOwner(
       bindingSet[slot] = null;
       continue;
     }
-    const result = resolveSurface(
+    const result = resolveAppearanceLayer(
       hostSurface,
       contentLibrary,
       SHADER_SLOT_TARGET_KINDS[slot]
@@ -476,38 +767,44 @@ function resolveSurfaceSlotBindings(
         slotName: slotBinding.slotName,
         slotIndex: slotBinding.slotIndex,
         materialDefinitionId: null,
-        surface: fallbackSurface
+        surface: fallbackSurface ? surfaceStackFromBinding(fallbackSurface) : null
       };
     }
-
-    if (slotBinding.surface.kind !== "material") {
-      const result = resolveSurface(slotBinding.surface, contentLibrary, "mesh-surface");
-      if (!result.ok) {
-        diagnostics.push({
-          severity: "error",
-          slot: "surface",
-          shaderDefinitionId: result.diagnostic.shaderDefinitionId,
-          message: result.diagnostic.message
-        });
-      }
-      return {
-        slotName: slotBinding.slotName,
-        slotIndex: slotBinding.slotIndex,
-        materialDefinitionId: null,
-        surface: result.ok ? result.binding : fallbackSurface
-      };
+    const result = resolveSurfaceBinding(
+      slotBinding.surface,
+      contentLibrary,
+      "universal",
+      parameterOverrides
+    );
+    if (!result.ok) {
+      diagnostics.push({
+        severity: "error",
+        slot: "surface",
+        shaderDefinitionId: result.diagnostic.shaderDefinitionId,
+        message: result.diagnostic.message
+      });
     }
-
     return {
       slotName: slotBinding.slotName,
       slotIndex: slotBinding.slotIndex,
-      materialDefinitionId: slotBinding.surface.materialDefinitionId,
-      surface: resolveMaterialSurfaceBinding(
-        contentLibrary,
-        slotBinding.surface.materialDefinitionId,
-        parameterOverrides,
-        diagnostics
-      )
+      materialDefinitionId:
+        slotBinding.surface.kind === "reference"
+          ? null
+          : (
+              slotBinding.surface.surface.layers.find(
+                (
+                  layer
+                ): layer is Extract<Layer, { kind: "appearance" }> & {
+                  content: Extract<AppearanceContent, { kind: "material" }>;
+                } => layer.kind === "appearance" && layer.content.kind === "material"
+              )?.content.materialDefinitionId ?? null
+            ),
+      surface:
+        result.ok
+          ? result.binding
+          : fallbackSurface
+            ? surfaceStackFromBinding(fallbackSurface)
+            : null
     };
   });
 }

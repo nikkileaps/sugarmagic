@@ -22,7 +22,11 @@ import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
 import type { DeploymentSettings } from "../deployment";
 import type { DocumentId, SubjectReference } from "../shared/identity";
-import type { LandscapeSurfaceSlot, Surface } from "../surface";
+import type {
+  LandscapeSurfaceSlot,
+  SurfaceBinding,
+  SurfaceContext
+} from "../surface";
 
 export type AuthoringAggregateKind =
   | "game-project"
@@ -184,7 +188,7 @@ export type UpdateLandscapeChannelCommand = SemanticCommandBase<
     channelId: string;
     displayName?: string;
     slotName?: string;
-    surface?: Surface | null;
+    surface?: SurfaceBinding<SurfaceContext> | null;
     tilingScale?: [number, number] | null;
   }
 >;

@@ -17,11 +17,15 @@ import {
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
   MaterialDefinition,
-  Surface,
+  SurfaceDefinition,
+  SurfaceBinding,
   ShaderGraphDocument,
   ShaderParameterOverride,
-  ShaderSlotKind
+  ShaderSlotKind,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
 import { PanelSection, Inspector } from "@sugarmagic/ui";
@@ -33,7 +37,11 @@ import { ShaderSlotEditor } from "../ShaderSlotEditor";
 export interface AssetsWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   contentLibrary: ContentLibrarySnapshot;
+  surfaceDefinitions: SurfaceDefinition[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
@@ -43,7 +51,7 @@ export interface AssetsWorkspaceViewProps {
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    surface: Surface | null
+    surface: SurfaceBinding<"universal"> | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
@@ -77,7 +85,11 @@ export function useAssetsWorkspaceView(
   const {
     assetDefinitions,
     contentLibrary,
+    surfaceDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     materialDefinitions,
+    textureDefinitions,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
@@ -162,7 +174,11 @@ export function useAssetsWorkspaceView(
             key={selectedAsset.definitionId}
             assetDefinition={selectedAsset}
             contentLibrary={contentLibrary}
+            surfaceDefinitions={surfaceDefinitions}
+            grassTypeDefinitions={grassTypeDefinitions}
+            flowerTypeDefinitions={flowerTypeDefinitions}
             materialDefinitions={materialDefinitions}
+            textureDefinitions={textureDefinitions}
             shaderDefinitions={shaderDefinitions}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
             onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
@@ -183,7 +199,11 @@ export function useAssetsWorkspaceView(
 function AssetInspectorPanel({
   assetDefinition,
   contentLibrary,
+  surfaceDefinitions,
+  grassTypeDefinitions,
+  flowerTypeDefinitions,
   materialDefinitions,
+  textureDefinitions,
   shaderDefinitions,
   onUpdateAssetDefinition,
   onSetAssetMaterialSlotBinding,
@@ -192,14 +212,18 @@ function AssetInspectorPanel({
 }: {
   assetDefinition: AssetDefinition;
   contentLibrary: ContentLibrarySnapshot;
+  surfaceDefinitions: SurfaceDefinition[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    surface: Surface | null
+    surface: SurfaceBinding<"universal"> | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
@@ -277,7 +301,12 @@ function AssetInspectorPanel({
         </Text>
         <MaterialSlotBindingsEditor
           bindings={assetDefinition.surfaceSlots}
+          surfaceDefinitions={surfaceDefinitions}
           materialDefinitions={materialDefinitions}
+          textureDefinitions={textureDefinitions}
+          shaderDefinitions={shaderDefinitions}
+          grassTypeDefinitions={grassTypeDefinitions}
+          flowerTypeDefinitions={flowerTypeDefinitions}
           onChangeBinding={(slotName, slotIndex, surface) =>
             onSetAssetMaterialSlotBinding(
               assetDefinition.definitionId,

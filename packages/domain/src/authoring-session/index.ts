@@ -80,6 +80,7 @@ import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
+import type { SurfaceDefinition } from "../surface";
 import {
   removePluginConfiguration,
   upsertPluginConfiguration,
@@ -92,6 +93,7 @@ import {
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
+  listSurfaceDefinitions as listSurfaceDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
   listTextureDefinitions as listTextureDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot,
@@ -190,6 +192,12 @@ export function getAllMaterialDefinitions(
   session: AuthoringSession
 ): MaterialDefinition[] {
   return listMaterialDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllSurfaceDefinitions(
+  session: AuthoringSession
+): SurfaceDefinition[] {
+  return listSurfaceDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllTextureDefinitions(
@@ -483,8 +491,13 @@ function applyDeleteShaderGraphCommand(
       assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
         ...definition,
         surfaceSlots: definition.surfaceSlots.map((slot) =>
-          slot.surface?.kind === "shader" &&
-          slot.surface.shaderDefinitionId === command.payload.shaderDefinitionId
+          slot.surface?.kind === "inline" &&
+          slot.surface.surface.layers.some(
+            (layer) =>
+              layer.kind === "appearance" &&
+              layer.content.kind === "shader" &&
+              layer.content.shaderDefinitionId === command.payload.shaderDefinitionId
+          )
             ? { ...slot, surface: null }
             : slot
         ),
@@ -1902,6 +1915,70 @@ export function addMaterialDefinitionToSession(
   };
 }
 
+export function addSurfaceDefinitionToSession(
+  session: AuthoringSession,
+  surfaceDefinition: SurfaceDefinition
+): AuthoringSession {
+  const existingDefinitions = session.contentLibrary.surfaceDefinitions ?? [];
+  const existingIndex = existingDefinitions.findIndex(
+    (definition) => definition.definitionId === surfaceDefinition.definitionId
+  );
+
+  const nextDefinitions = [...existingDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = surfaceDefinition;
+  } else {
+    nextDefinitions.push(surfaceDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateSurfaceDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<SurfaceDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).map((definition) =>
+        definition.definitionId === definitionId
+          ? {
+              ...definition,
+              ...patch
+            }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeSurfaceDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
 export function updateMaterialDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
@@ -1967,8 +2044,13 @@ export function materialDefinitionHasReferences(
   const boundInAssets = session.contentLibrary.assetDefinitions.some((assetDefinition) =>
     assetDefinition.surfaceSlots.some(
       (binding) =>
-        binding.surface?.kind === "material" &&
-        binding.surface.materialDefinitionId === definitionId
+        binding.surface?.kind === "inline" &&
+        binding.surface.surface.layers.some(
+          (layer) =>
+            (layer.kind === "appearance" || layer.kind === "emission") &&
+            layer.content.kind === "material" &&
+            layer.content.materialDefinitionId === definitionId
+        )
     )
   );
   if (boundInAssets) {
@@ -1978,8 +2060,13 @@ export function materialDefinitionHasReferences(
   return getAllRegions(session).some((region) =>
     region.landscape.surfaceSlots.some(
       (channel) =>
-        channel.surface?.kind === "material" &&
-        channel.surface.materialDefinitionId === definitionId
+        channel.surface?.kind === "inline" &&
+        channel.surface.surface.layers.some(
+          (layer) =>
+            (layer.kind === "appearance" || layer.kind === "emission") &&
+            layer.content.kind === "material" &&
+            layer.content.materialDefinitionId === definitionId
+        )
     )
   );
 }

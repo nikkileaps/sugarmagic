@@ -22,7 +22,7 @@
  *
  * Contract:
  *
- *   - Constructed once per WebRenderHost.
+ *   - Constructed once per WebRenderEngine.
  *   - resolveAssetUrl(path) returns the blob URL or null — never the
  *     raw path. Callers surface explicit errors on null.
  *   - resolveTextureDefinition(def, options) returns a three.Texture
@@ -30,7 +30,7 @@
  *     definitionId do NOT cause cache misses; they trigger an in-place
  *     reload of the existing Texture object (keeps GPU bindings stable
  *     even when Studio re-mints blob URLs).
- *   - sync(contentLibrary, assetSources) is how upstream (WebRenderHost)
+ *   - sync(contentLibrary, assetSources) is how upstream (WebRenderEngine)
  *     pushes fresh state. Idempotent and cheap to call on every frame
  *     budget; usually called on every applyEnvironment.
  *   - Debug logging fires on cache state changes so Preview-vs-editor
@@ -83,6 +83,12 @@ export interface AuthoredAssetResolver {
 
   /** Current content library snapshot. */
   getContentLibrary(): ContentLibrarySnapshot | null;
+
+  /**
+   * Hard reset for project switches. Keeps the resolver instance alive while
+   * discarding every project-scoped cached artifact.
+   */
+  resetForProjectSwitch(): void;
 
   /** Dispose every cached texture and drop state. */
   dispose(): void;
@@ -167,6 +173,13 @@ export function createAuthoredAssetResolver(
   let assetSources: Record<string, string> = {};
   const cache = new Map<string, CachedTextureEntry>();
   let syncCount = 0;
+
+  function clearCache(): void {
+    for (const entry of cache.values()) {
+      entry.texture.dispose();
+    }
+    cache.clear();
+  }
 
   function loadTextureBytes(
     entry: CachedTextureEntry,
@@ -390,12 +403,20 @@ export function createAuthoredAssetResolver(
       return contentLibrary;
     },
 
+    resetForProjectSwitch() {
+      debugLog(logger, "resetForProjectSwitch", {
+        cacheSize: cache.size,
+        syncCount
+      });
+      contentLibrary = null;
+      assetSources = {};
+      syncCount = 0;
+      clearCache();
+    },
+
     dispose() {
       debugLog(logger, "dispose", { cacheSize: cache.size, syncCount });
-      for (const entry of cache.values()) {
-        entry.texture.dispose();
-      }
-      cache.clear();
+      clearCache();
       contentLibrary = null;
       assetSources = {};
     }

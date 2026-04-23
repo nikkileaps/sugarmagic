@@ -3,7 +3,7 @@ import * as THREE from "three";
 import type { ContentLibrarySnapshot, RegionDocument } from "@sugarmagic/domain";
 import {
   createLandscapeSurfaceSlot,
-  createMaterialSurface,
+  createMaterialSurfaceBinding,
   createDefaultRegionLandscapeState,
   createDefaultStandardPbrShaderGraph,
   createEmptyContentLibrarySnapshot
@@ -138,7 +138,7 @@ describe("landscape standard pbr parity", () => {
       createLandscapeSurfaceSlot({
         channelId: "landscape-channel:grass",
         displayName: "Grass",
-        surface: createMaterialSurface("wordlark:material:grass"),
+        surface: createMaterialSurfaceBinding("wordlark:material:grass"),
         tilingScale: null
       })
     );
@@ -155,7 +155,8 @@ describe("landscape standard pbr parity", () => {
       })
     );
 
-    const landscapeMesh = controller.root.children[0] as THREE.Mesh | undefined;
+    const landscapeRoot = controller.root.children[0] as THREE.Group | undefined;
+    const landscapeMesh = landscapeRoot?.children[0] as THREE.Mesh | undefined;
     expect(landscapeMesh).toBeTruthy();
     const material = landscapeMesh?.material as THREE.Material & {
       colorNode?: unknown;

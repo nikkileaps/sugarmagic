@@ -46,15 +46,17 @@ import {
 } from "@sugarmagic/plugins";
 import {
   createCapsuleFallback,
+  createRenderView,
+  createWebRenderEngine,
   createFallbackMesh,
   createRenderableShaderApplicationState,
-  createWebRenderHost,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
   type RenderableShaderApplicationState,
-  type WebRenderHost
+  type RenderView,
+  type WebRenderEngine
 } from "@sugarmagic/render-web";
 import {
   BillboardComponent,
@@ -75,7 +77,6 @@ import {
   createRuntimeDebugHud,
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
-  createRuntimeEnvironmentState,
   createPlayerVisualController,
   spawnRuntimePlayerEntity,
   type SceneObject,
@@ -83,12 +84,12 @@ import {
   type RuntimeBootModel,
   type RuntimeCompileProfile,
   type RuntimeContentSource,
-  type RuntimeEnvironmentState,
   type RuntimeHostKind
 } from "@sugarmagic/runtime-core";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
+import { createRuntimeRenderEngineProjector } from "./RenderEngineProjector";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -489,16 +490,25 @@ export function createWebRuntimeHost(
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
-  // Single shared render host owns: WebGPURenderer, RuntimeRenderPipeline,
-  // ShaderRuntime, EnvironmentSceneController, LandscapeSceneController, the
-  // render loop, and post-process application. Studio's authoring viewport
-  // uses the same host, so renderer config + pipeline setup cannot drift
-  // between the two callers.
-  let host: WebRenderHost | null = null;
+  // Shared render engine owns the GPU device, ShaderRuntime, resolver, and
+  // resolved environment state. This runtime host creates a per-surface
+  // RenderView bound to that engine.
+  const engine: WebRenderEngine = createWebRenderEngine({
+    compileProfile: request.compileProfile,
+    logger: {
+      warn(message: string, payload?: Record<string, unknown>) {
+        console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+      },
+      debug(message: string, payload?: Record<string, unknown>) {
+        console.debug("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+      }
+    }
+  });
+  const renderEngineProjector = createRuntimeRenderEngineProjector(engine);
+  let renderView: RenderView | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
-  let runtimeEnvironmentState: RuntimeEnvironmentState | null = null;
   let playerVisualController: ReturnType<typeof createPlayerVisualController> | null = null;
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
@@ -527,7 +537,6 @@ export function createWebRuntimeHost(
     inputManager?.detach();
     inputManager = null;
     cameraState = null;
-    runtimeEnvironmentState = null;
     world = null;
 
     playerVisualController?.dispose();
@@ -559,24 +568,21 @@ export function createWebRuntimeHost(
       disposeRenderableObject(scene);
     }
 
-    // Host unmount handles: renderer dispose, canvas removal, pipeline
-    // dispose, shader runtime dispose, environment + landscape controller
-    // dispose, frame-listener cleanup. Single-owner teardown — no drift.
-    host?.unmount();
-    host = null;
+    renderView?.unmount();
+    renderView = null;
 
     camera = null;
     scene = null;
   }
 
   function handleResize() {
-    if (!camera || !host) return;
+    if (!camera || !renderView) return;
 
     const width = root.clientWidth || 1;
     const height = root.clientHeight || 1;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    host.resize(width, height);
+    renderView.resize(width, height);
   }
 
   function renderFrame(now: number) {
@@ -584,7 +590,7 @@ export function createWebRuntimeHost(
       !world ||
       !cameraState ||
       !camera ||
-      !host ||
+      !renderView ||
       !scene ||
       !playerVisualController ||
       !inputManager
@@ -662,12 +668,12 @@ export function createWebRuntimeHost(
 
     ensureShaderSetsAppliedToRenderables(
       sceneObjectEntries.values(),
-      host.shaderRuntime,
+      renderView.shaderRuntime,
       currentAssetSources
     );
 
-    host.setCamera(camera);
-    host.render();
+    renderView.setCamera(camera);
+    renderView.render();
 
     debugHud?.update(delta);
 
@@ -711,11 +717,8 @@ export function createWebRuntimeHost(
       1000
     );
 
-    // Single shared host creates + configures the renderer, pipeline, shader
-    // runtime, environment + landscape controllers, and the render loop.
-    // Studio's authoring viewport creates its host the same way, so neither
-    // caller can drift in renderer config or pipeline lifecycle.
-    host = createWebRenderHost({
+    renderView = createRenderView({
+      engine,
       scene,
       camera,
       compileProfile: request.compileProfile,
@@ -730,11 +733,12 @@ export function createWebRuntimeHost(
     });
 
     const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
-    runtimeEnvironmentState = createRuntimeEnvironmentState({
-      region: activeRegion,
-      contentLibrary: state.contentLibrary,
-      explicitEnvironmentId: state.activeEnvironmentId
-    });
+    renderEngineProjector.push(state);
+    renderView.landscapeController.applyLandscape(
+      activeRegion?.landscape ?? null,
+      state.contentLibrary,
+      state.assetSources
+    );
 
     if (activeRegion) {
       const region = activeRegion;
@@ -755,7 +759,7 @@ export function createWebRuntimeHost(
         rootObject.scale.set(...object.transform.scale);
 
         const assetSourceUrl = object.modelSourcePath
-          ? state.assetSources[object.modelSourcePath] ?? null
+          ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath)
           : null;
 
         if (assetSourceUrl) {
@@ -779,11 +783,11 @@ export function createWebRuntimeHost(
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
-              host?.enableShadowsOnObject(renderable);
+              renderView?.enableShadowsOnObject(renderable);
               ensureShaderSetAppliedToRenderable(
                 renderable,
                 object,
-                host?.shaderRuntime ?? null,
+                renderView?.shaderRuntime ?? null,
                 shaderApplication,
                 state.assetSources
               );
@@ -900,7 +904,7 @@ export function createWebRuntimeHost(
         blackboard: gameplaySession.blackboard,
         pluginCards: gameplaySession.getDebugHudCardContributions(),
         getRendererStats: () => {
-          const renderer = host?.renderer;
+          const renderer = renderView?.renderer;
           if (!renderer) {
             return { drawCalls: 0, triangles: 0, textures: 0, geometries: 0 };
           }
@@ -950,18 +954,9 @@ export function createWebRuntimeHost(
       () => cameraState?.yaw ?? Math.PI * 1.25
     );
 
-    // Kick off the host mount (creates renderer + pipeline + shader runtime
-    // + controllers). Queue the environment apply so it fires inside the
-    // host's init().then() as soon as the pipeline is ready.
-    host.mount(root);
-    host.applyEnvironment(
-      activeRegion,
-      state.contentLibrary,
-      runtimeEnvironmentState?.activeEnvironmentId ?? null,
-      state.assetSources
-    );
+    renderView.mount(root);
     // Runtime host drives its own render loop (renderFrame ticks gameplay
-    // then calls host.render()). We wait one tick so the host's async init
+    // then calls renderView.render()). We wait one tick so the view's async init
     // can resolve and create the pipeline before we try to render.
     ownerWindow.requestAnimationFrame(() => {
       handleResize();
@@ -978,6 +973,8 @@ export function createWebRuntimeHost(
     ownerWindow.removeEventListener("beforeunload", dispose);
 
     disposeRuntime();
+    renderEngineProjector.reset();
+    engine.dispose();
   }
 
   return {

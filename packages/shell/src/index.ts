@@ -23,6 +23,7 @@ export * from "./preview";
 export * from "./projection";
 export * from "./project";
 export * from "./status";
+export * from "./surface-editing";
 export * from "./viewport";
 export * from "./viewport-host";
 export * from "./workspace-host";
@@ -33,6 +34,7 @@ export type BuildWorkspaceKind =
   | "spatial"
   | "behavior"
   | "environment"
+  | "surfaces"
   | "materials"
   | "assets";
 export type CoreDesignWorkspaceKind =
@@ -123,6 +125,9 @@ export function deriveBuildWorkspaceId(
 ): string | null {
   if (kind === "materials") {
     return "build:materials:library";
+  }
+  if (kind === "surfaces") {
+    return "build:surfaces:library";
   }
   if (!contextId) return null;
   return `build:${kind}:${contextId}`;

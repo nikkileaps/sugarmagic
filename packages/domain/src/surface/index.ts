@@ -1,42 +1,57 @@
 /**
  * Surface / deform / effect domain traits.
  *
- * Owns the canonical authored slot-content shape used by surface, deform, and
- * effect traits. This module is the single domain source of truth for
- * "what can fill a render slot" before runtime-core resolves that authored
- * meaning into concrete shader bindings.
+ * Owns the canonical authored slot-content model for render-facing traits in
+ * Sugarmagic. A surface slot now carries a SurfaceBinding whose inline form is
+ * a layer stack; deform/effect stay whole-mesh ShaderOrMaterial bindings.
  */
 
-export type Surface =
-  | { kind: "color"; color: number }
-  | {
-      kind: "texture";
-      textureDefinitionId: string;
-      tiling: [number, number];
-    }
-  | { kind: "material"; materialDefinitionId: string }
-  | {
-      kind: "shader";
-      shaderDefinitionId: string;
-      parameterValues: Record<string, unknown>;
-      textureBindings: Record<string, string>;
-    };
+import type {
+  AppearanceContent,
+  Layer,
+  Mask,
+  BlendMode,
+  ScatterContent,
+  EmissionContent
+} from "./layer";
+import {
+  createAppearanceLayer,
+  createEmissionLayer,
+  createScatterLayer,
+  layerUsesLandscapeOnlyMask
+} from "./layer";
+
+export * from "./layer";
+export * from "./surface-definition";
+export * from "./grass-type";
+export * from "./flower-type";
 
 export type ShaderOrMaterial = Extract<
-  Surface,
+  AppearanceContent,
   { kind: "material" } | { kind: "shader" }
 >;
 
-export interface SurfaceSlot {
-  readonly slotName: string;
-  readonly surface: Surface | null;
+export type SurfaceContext = "universal" | "landscape-only";
+
+export interface Surface<C extends SurfaceContext = SurfaceContext> {
+  readonly layers: readonly Layer[];
+  readonly context: C;
 }
 
-export interface AssetSurfaceSlot extends SurfaceSlot {
+export type SurfaceBinding<C extends SurfaceContext = SurfaceContext> =
+  | { kind: "inline"; surface: Surface<C> }
+  | { kind: "reference"; surfaceDefinitionId: string };
+
+export interface SurfaceSlot<C extends SurfaceContext = SurfaceContext> {
+  readonly slotName: string;
+  readonly surface: SurfaceBinding<C> | null;
+}
+
+export interface AssetSurfaceSlot extends SurfaceSlot<"universal"> {
   readonly slotIndex: number;
 }
 
-export interface LandscapeSurfaceSlot extends SurfaceSlot {
+export interface LandscapeSurfaceSlot extends SurfaceSlot<SurfaceContext> {
   readonly channelId: string;
   readonly displayName: string;
   readonly tilingScale: [number, number] | null;
@@ -54,14 +69,52 @@ export interface Effectable {
   readonly effect: ShaderOrMaterial | null;
 }
 
-export function createColorSurface(color: number): Surface {
+export function deriveSurfaceContext(
+  layers: readonly Layer[]
+): SurfaceContext {
+  return layers.some(layerUsesLandscapeOnlyMask)
+    ? "landscape-only"
+    : "universal";
+}
+
+export function validateSurfaceLayers(layers: readonly Layer[]): void {
+  if (layers.length === 0) {
+    throw new Error("Surface.layers must contain at least one layer.");
+  }
+  const baseLayer = layers[0];
+  if (!baseLayer || baseLayer.kind !== "appearance") {
+    throw new Error("Surface.layers[0] must be an appearance layer.");
+  }
+  if (baseLayer.blendMode !== "base") {
+    throw new Error('Surface.layers[0] must use blendMode "base".');
+  }
+}
+
+export function createSurface<C extends SurfaceContext = SurfaceContext>(
+  layers: readonly Layer[],
+  context?: C
+): Surface<C> {
+  validateSurfaceLayers(layers);
+  const derivedContext = deriveSurfaceContext(layers) as C;
+  if (context && context !== derivedContext) {
+    throw new Error(
+      `Surface context "${context}" does not match derived context "${derivedContext}".`
+    );
+  }
+  return {
+    layers: [...layers],
+    context: context ?? derivedContext
+  };
+}
+
+export function createColorAppearanceContent(color: number): AppearanceContent {
   return { kind: "color", color };
 }
 
-export function createTextureSurface(
+export function createTextureAppearanceContent(
   textureDefinitionId: string,
   tiling: [number, number] = [1, 1]
-): Surface {
+): AppearanceContent {
   return {
     kind: "texture",
     textureDefinitionId,
@@ -69,17 +122,17 @@ export function createTextureSurface(
   };
 }
 
-export function createMaterialSurface(
+export function createMaterialAppearanceContent(
   materialDefinitionId: string
-): Extract<Surface, { kind: "material" }> {
+): Extract<AppearanceContent, { kind: "material" }> {
   return { kind: "material", materialDefinitionId };
 }
 
-export function createShaderSurface(
+export function createShaderAppearanceContent(
   shaderDefinitionId: string,
   parameterValues: Record<string, unknown> = {},
   textureBindings: Record<string, string> = {}
-): Extract<Surface, { kind: "shader" }> {
+): Extract<AppearanceContent, { kind: "shader" }> {
   return {
     kind: "shader",
     shaderDefinitionId,
@@ -88,8 +141,144 @@ export function createShaderSurface(
   };
 }
 
-export function isShaderOrMaterialSurface(
-  surface: Surface | null | undefined
-): surface is ShaderOrMaterial {
-  return surface?.kind === "material" || surface?.kind === "shader";
+export function createColorEmissionContent(
+  color: number,
+  intensity = 1
+): EmissionContent {
+  return { kind: "color", color, intensity };
+}
+
+export function createTextureEmissionContent(
+  textureDefinitionId: string,
+  intensity = 1,
+  tiling: [number, number] = [1, 1]
+): EmissionContent {
+  return { kind: "texture", textureDefinitionId, intensity, tiling };
+}
+
+export function createMaterialEmissionContent(
+  materialDefinitionId: string
+): EmissionContent {
+  return { kind: "material", materialDefinitionId };
+}
+
+export function createDefaultSurface(
+  baseColor = 0x808080
+): Surface<"universal"> {
+  return createSurface<"universal">([
+    createAppearanceLayer(createColorAppearanceContent(baseColor), {
+      displayName: "Base",
+      blendMode: "base"
+    })
+  ]);
+}
+
+export function createInlineSurfaceBinding<C extends SurfaceContext = "universal">(
+  surface?: Surface<C>
+): SurfaceBinding<C> {
+  return {
+    kind: "inline",
+    surface: surface ?? (createDefaultSurface() as Surface<C>)
+  };
+}
+
+export function createInlineSurfaceBindingFromAppearance(
+  content: AppearanceContent,
+  options: {
+    displayName?: string;
+    blendMode?: BlendMode;
+  } = {}
+): SurfaceBinding<"universal"> {
+  return createInlineSurfaceBinding(
+    createSurface([
+      createAppearanceLayer(content, {
+        displayName: options.displayName ?? "Base",
+        blendMode: options.blendMode ?? "base"
+      })
+    ])
+  );
+}
+
+export function createColorSurfaceBinding(
+  color: number
+): SurfaceBinding<"universal"> {
+  return createInlineSurfaceBindingFromAppearance(createColorSurface(color));
+}
+
+export function createMaterialSurfaceBinding(
+  materialDefinitionId: string
+): SurfaceBinding<"universal"> {
+  return createInlineSurfaceBindingFromAppearance(
+    createMaterialSurface(materialDefinitionId)
+  );
+}
+
+export function createShaderSurfaceBinding(
+  shaderDefinitionId: string,
+  parameterValues: Record<string, unknown> = {},
+  textureBindings: Record<string, string> = {}
+): SurfaceBinding<"universal"> {
+  return createInlineSurfaceBindingFromAppearance(
+    createShaderSurface(shaderDefinitionId, parameterValues, textureBindings)
+  );
+}
+
+export function createReferenceSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
+  surfaceDefinitionId: string
+): SurfaceBinding<C> {
+  return {
+    kind: "reference",
+    surfaceDefinitionId
+  };
+}
+
+export function isShaderOrMaterialContent(
+  value: AppearanceContent | null | undefined
+): value is ShaderOrMaterial {
+  return value?.kind === "material" || value?.kind === "shader";
+}
+
+/**
+ * Narrow compatibility aliases while flat-surface call sites migrate to the
+ * explicit AppearanceContent names. These still produce AppearanceContent, not
+ * a full SurfaceBinding.
+ */
+export const createColorSurface = createColorAppearanceContent;
+export const createTextureSurface = createTextureAppearanceContent;
+export const createMaterialSurface = createMaterialAppearanceContent;
+export const createShaderSurface = createShaderAppearanceContent;
+export const isShaderOrMaterialSurface = isShaderOrMaterialContent;
+
+export function surfaceBindingUsesLandscapeOnlyMasks(
+  binding: SurfaceBinding | null | undefined
+): boolean {
+  return binding?.kind === "inline" && binding.surface.context === "landscape-only";
+}
+
+export function cloneSurface<C extends SurfaceContext = SurfaceContext>(
+  surface: Surface<C>
+): Surface<C> {
+  return {
+    layers: surface.layers.map((layer) => ({
+      ...layer,
+      mask: { ...layer.mask },
+      content: { ...layer.content }
+    })) as Layer[],
+    context: surface.context
+  };
+}
+
+export function cloneSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
+  binding: SurfaceBinding<C> | null | undefined
+): SurfaceBinding<C> | null {
+  if (!binding) {
+    return null;
+  }
+  if (binding.kind === "reference") {
+    return { ...binding };
+  }
+  return {
+    kind: "inline",
+    surface: cloneSurface(binding.surface)
+  };
 }

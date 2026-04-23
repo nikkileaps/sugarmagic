@@ -1,16 +1,19 @@
 # Surface Domain
 
-This module owns the canonical authored slot-content model for render-facing
-traits in Sugarmagic.
+This module owns the canonical authored render-slot model for Sugarmagic.
 
-- `Surfaceable` declares per-slot fragment surfaces.
-- `Deformable` declares one whole-object vertex deformation slot.
-- `Effectable` declares one whole-object fragment-effect slot.
+- `Surfaceable` declares per-slot `SurfaceBinding`s.
+- `SurfaceBinding.inline` carries a `Surface`, which is now a layer stack.
+- `SurfaceBinding.reference` points at a reusable `SurfaceDefinition`.
+- `Deformable` and `Effectable` stay whole-mesh `ShaderOrMaterial` bindings.
 
-`Surface` is the one domain shape that can fill a slot. runtime-core resolves
-that authored surface into an effective shader binding; render-web realizes the
-resolved binding into Three/WebGPU materials and nodes.
+Layer contents are split by concern:
 
-This keeps one source of truth for slot content and prevents assets,
-landscapes, and future renderable definitions from each inventing their own
-binding shape.
+- `AppearanceContent` for base visible material/color/texture/shader
+- `ScatterContent` for grass / flowers
+- `EmissionContent` for additive glow layers
+- `Mask` and `BlendMode` for per-layer composition
+
+runtime-core is the single semantic resolver for these authored shapes.
+render-web is the single enforcer that realizes the resolved meaning into
+Three/WebGPU nodes, materials, and scatter meshes.

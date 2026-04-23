@@ -9,7 +9,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
-import type { SemanticCommand, RegionDocument, Surface } from "@sugarmagic/domain";
+import type {
+  SemanticCommand,
+  RegionDocument,
+  SurfaceBinding
+} from "@sugarmagic/domain";
 import {
   createAuthoringSession,
   applyCommand,
@@ -30,17 +34,24 @@ import {
   getAllPluginConfigurations,
   getPluginConfiguration,
   getAllQuestDefinitions,
+  getAllSurfaceDefinitions,
   getAllSpellDefinitions,
   getAllTextureDefinitions,
+  listFlowerTypeDefinitions,
+  listGrassTypeDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addEnvironmentDefinitionToSession,
   addMaterialDefinitionToSession,
+  addSurfaceDefinitionToSession,
   addTextureDefinitionToSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
+  updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
+  removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
+  createDefaultSurfaceDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultRegion,
   createScopedId
@@ -73,9 +84,9 @@ import {
   createPreviewStore,
   createAssetSourceStore,
   createDesignPreviewStore,
+  createSurfaceEditingStore,
   createViewportStore,
   CORE_DESIGN_WORKSPACE_KINDS,
-  designWorkspaceRequiresViewport,
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
 import {
@@ -101,6 +112,10 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
+import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
+import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
+import { createWebRenderEngine } from "@sugarmagic/render-web";
+import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
@@ -136,6 +151,10 @@ const previewStore = createPreviewStore();
 const viewportStore = createViewportStore();
 const assetSourceStore = createAssetSourceStore();
 const designPreviewStore = createDesignPreviewStore();
+const surfaceEditingStore = createSurfaceEditingStore();
+const studioRenderEngine = createWebRenderEngine({
+  compileProfile: "authoring-preview"
+});
 
 const modeBarItems: ModeBarItem[] = productModes.map((mode) => ({
   id: mode.id,
@@ -535,11 +554,31 @@ export function App() {
     if (!session) return [];
     return getAllMaterialDefinitions(session);
   }, [session]);
+  const surfaceDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllSurfaceDefinitions(session);
+  }, [session]);
+  const grassTypeDefinitions = useMemo(() => {
+    if (!session) return [];
+    return listGrassTypeDefinitions(session.contentLibrary);
+  }, [session]);
+  const flowerTypeDefinitions = useMemo(() => {
+    if (!session) return [];
+    return listFlowerTypeDefinitions(session.contentLibrary);
+  }, [session]);
   const textureDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllTextureDefinitions(session);
   }, [session]);
   const assetSources = useStore(assetSourceStore, (state) => state.sources);
+  const editedSurfaceDefinitionId = useStore(
+    surfaceEditingStore,
+    (state) => state.editedSurfaceDefinitionId
+  );
+  const surfacePreviewGeometryKind = useStore(
+    surfaceEditingStore,
+    (state) => state.previewGeometryKind
+  );
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -606,6 +645,19 @@ export function App() {
       assetSourceStore.getState().stop();
     };
   }, [phase, projectHandle]);
+
+  useEffect(() => {
+    return connectStudioRenderEngineProjector({
+      engine: studioRenderEngine,
+      stores: {
+        projectStore,
+        shellStore,
+        viewportStore,
+        assetSourceStore,
+        designPreviewStore
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!isPreviewRunning || !previewWindow || previewWindow.closed || !session) {
@@ -861,7 +913,7 @@ export function App() {
       definitionId: string,
       slotName: string,
       slotIndex: number,
-      surface: Surface | null
+      surface: SurfaceBinding<"universal"> | null
     ) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
@@ -1015,6 +1067,45 @@ export function App() {
     []
   );
 
+  const handleCreateSurfaceDefinition = useCallback(() => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return null;
+    const surfaceDefinition = createDefaultSurfaceDefinition(
+      currentSession.gameProject.identity.id,
+      {
+        displayName: `Surface ${(currentSession.contentLibrary.surfaceDefinitions ?? []).length + 1}`
+      }
+    );
+    projectStore
+      .getState()
+      .updateSession(addSurfaceDefinitionToSession(currentSession, surfaceDefinition));
+    return surfaceDefinition;
+  }, []);
+
+  const handleUpdateSurfaceDefinition = useCallback(
+    (definitionId: string, patch: Parameters<typeof updateSurfaceDefinitionInSession>[2]) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateSurfaceDefinitionInSession(currentSession, definitionId, patch)
+        );
+    },
+    []
+  );
+
+  const handleRemoveSurfaceDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    if (!window.confirm("Remove this surface from the project?")) {
+      return;
+    }
+    projectStore
+      .getState()
+      .updateSession(removeSurfaceDefinitionFromSession(currentSession, definitionId));
+  }, []);
+
   const handleRemoveMaterialDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -1057,80 +1148,28 @@ export function App() {
       .setActiveEnvironmentId(environmentDefinition.definitionId);
   }, []);
 
-  // --- Viewport lifecycle (tied to project phase) ---
+  // --- Viewport lifecycle (tied to the shared center viewport DOM) ---
   const viewportRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (phase !== "active") return;
-    if (
-      activeProductMode === "render" ||
-      (activeProductMode === "design" &&
-        !designWorkspaceRequiresViewport(activeDesignKind))
-    ) {
-      return;
-    }
-    if (!viewportRef.current) return;
-    const viewport =
-      activeProductMode === "design"
-        ? activeDesignKind === "npcs"
-          ? createNPCViewport({
-              stores: {
-                projectStore,
-                shellStore,
-                viewportStore,
-                assetSourceStore,
-                designPreviewStore
-              }
-            })
-          : activeDesignKind === "items"
-            ? createItemViewport({
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
-            : createPlayerViewport({
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
-        : createAuthoringViewport({
-            stores: {
-              projectStore,
-              shellStore,
-              viewportStore,
-              assetSourceStore,
-              designPreviewStore
-            },
-            overlays: [
-              mountAuthoringCameraOverlay,
-              mountLandscapeAuthoringOverlay,
-              mountTransformGizmoOverlay,
-              mountSpatialAuthoringOverlay
-            ]
-          });
-    viewport.mount(viewportRef.current);
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) viewport.resize(entry.contentRect.width, entry.contentRect.height);
-    });
-    observer.observe(viewportRef.current);
-
-    return () => {
-      observer.disconnect();
-      viewport.unmount();
-    };
-  }, [activeDesignKind, activeProductMode, phase]);
 
   // --- Active region remains shell/project truth; the authoring viewport now
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
+
+  useEffect(() => {
+    const nextSurfaceDefinitionId =
+      editedSurfaceDefinitionId &&
+      surfaceDefinitions.some(
+        (definition) => definition.definitionId === editedSurfaceDefinitionId
+      )
+        ? editedSurfaceDefinitionId
+        : surfaceDefinitions[0]?.definitionId ?? null;
+    if (nextSurfaceDefinitionId === editedSurfaceDefinitionId) {
+      return;
+    }
+    surfaceEditingStore
+      .getState()
+      .setEditedSurfaceDefinitionId(nextSurfaceDefinitionId);
+  }, [editedSurfaceDefinitionId, surfaceDefinitions]);
 
   // --- Build workspace view (owns its own lifecycle) ---
   const buildView = useBuildProductModeView({
@@ -1140,6 +1179,9 @@ export function App() {
     selectedIds,
     session,
     assetDefinitions,
+    surfaceDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
     documentDefinitions,
@@ -1220,6 +1262,27 @@ export function App() {
     onImportTextureDefinition: handleImportTextureDefinition,
     onUpdateMaterialDefinition: handleUpdateMaterialDefinition,
     onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
+    onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
+    onUpdateSurfaceDefinition: handleUpdateSurfaceDefinition,
+    onRemoveSurfaceDefinition: handleRemoveSurfaceDefinition,
+    selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
+    onSelectSurfaceDefinition: (definitionId) =>
+      surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
+    surfaceCenterPanel: (
+      <SurfacePreviewViewport
+        engine={studioRenderEngine}
+        contentLibrary={session?.contentLibrary ?? null}
+        surfaceDefinition={
+          surfaceDefinitions.find(
+            (definition) => definition.definitionId === editedSurfaceDefinitionId
+          ) ?? null
+        }
+        previewGeometryKind={surfacePreviewGeometryKind}
+        onChangePreviewGeometryKind={(kind) =>
+          surfaceEditingStore.getState().setPreviewGeometryKind(kind)
+        }
+      />
+    ),
     isMaterialReferenced: (definitionId) =>
       session ? materialDefinitionHasReferences(session, definitionId) : false,
     renderLayoutInspectorSections: ({ activeRegion: layoutRegion }) =>
@@ -1397,6 +1460,85 @@ export function App() {
   ]);
 
   const activeDesignPanels = activePluginView ?? genericPluginView ?? designView;
+  const shouldRenderSharedViewport = shouldShowSharedViewport({
+    phase,
+    activeProductMode,
+    activeBuildKind,
+    activeDesignKind,
+    buildCenterPanelVisible: Boolean(buildView.centerPanel),
+    designCenterPanelVisible: Boolean(activeDesignPanels.centerPanel)
+  });
+
+  useEffect(() => {
+    if (!shouldRenderSharedViewport) {
+      return;
+    }
+    if (!viewportRef.current) {
+      return;
+    }
+    const viewport =
+      activeProductMode === "design"
+        ? activeDesignKind === "npcs"
+          ? createNPCViewport({
+              engine: studioRenderEngine,
+              stores: {
+                projectStore,
+                shellStore,
+                viewportStore,
+                assetSourceStore,
+                designPreviewStore
+              }
+            })
+          : activeDesignKind === "items"
+            ? createItemViewport({
+                engine: studioRenderEngine,
+                stores: {
+                  projectStore,
+                  shellStore,
+                  viewportStore,
+                  assetSourceStore,
+                  designPreviewStore
+                }
+              })
+            : createPlayerViewport({
+                engine: studioRenderEngine,
+                stores: {
+                  projectStore,
+                  shellStore,
+                  viewportStore,
+                  assetSourceStore,
+                  designPreviewStore
+                }
+              })
+        : createAuthoringViewport({
+            engine: studioRenderEngine,
+            stores: {
+              projectStore,
+              shellStore,
+              viewportStore,
+              assetSourceStore,
+              designPreviewStore
+            },
+            overlays: [
+              mountAuthoringCameraOverlay,
+              mountLandscapeAuthoringOverlay,
+              mountTransformGizmoOverlay,
+              mountSpatialAuthoringOverlay
+            ]
+          });
+    viewport.mount(viewportRef.current);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        viewport.resize(entry.contentRect.width, entry.contentRect.height);
+      }
+    });
+    observer.observe(viewportRef.current);
+
+    return () => {
+      observer.disconnect();
+      viewport.unmount();
+    };
+  }, [activeDesignKind, activeProductMode, shouldRenderSharedViewport]);
 
   const handleUndo = useCallback(() => {
     const { session: s } = projectStore.getState();
@@ -1631,7 +1773,7 @@ export function App() {
             renderView.centerPanel
           ) : (
             <ViewportFrame>
-              {phase === "active" ? (
+              {shouldRenderSharedViewport ? (
                 <>
                   <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
                   {isBuild && buildView.viewportOverlay}

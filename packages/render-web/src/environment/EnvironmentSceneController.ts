@@ -53,6 +53,13 @@ export interface EnvironmentSceneController {
     overrideEnvironmentId?: string | null
   ) => EnvironmentApplyResult;
   /**
+   * Apply an already-resolved environment definition. This is the RenderView
+   * entry point used by the shared WebRenderEngine, which owns canonical
+   * environment resolution and notifies attached views when the resolved
+   * environment changes.
+   */
+  applyResolved: (definition: EnvironmentDefinition | null) => EnvironmentApplyResult;
+  /**
    * Update shadow parameters on the currently-applied sun without re-running
    * the full environment apply path. Hosts should call this from the shadow
    * inspector commit path. Quality changes rebuild the CSM rig; other
@@ -355,6 +362,43 @@ export function createEnvironmentSceneController(
     }
   }
 
+  function applyResolvedDefinition(
+    definition: EnvironmentDefinition | null
+  ): EnvironmentApplyResult {
+    if (!definition) {
+      clear();
+      return {
+        definitionId: null,
+        preset: null,
+        warnings: [
+          {
+            code: "environment-missing",
+            message: "No environment definition could be resolved for the scene."
+          }
+        ]
+      };
+    }
+
+    if (lastEnvironmentId !== definition.definitionId) {
+      clear();
+    }
+    lastEnvironmentId = definition.definitionId;
+
+    scene.background = null;
+
+    applyAmbient(definition);
+    applySunLight(definition.lighting.sun);
+    applySunShadows(definition.lighting.sun.shadows);
+    applyRimLight(definition.lighting.rim);
+    applySky(definition);
+
+    return {
+      definitionId: definition.definitionId,
+      preset: definition.lighting.preset,
+      warnings: []
+    };
+  }
+
   return {
     apply(region, contentLibrary, overrideEnvironmentId = null) {
       const definition = resolveEnvironmentDefinition(
@@ -362,41 +406,10 @@ export function createEnvironmentSceneController(
         contentLibrary,
         overrideEnvironmentId
       );
-      if (!definition) {
-        clear();
-        return {
-          definitionId: null,
-          preset: null,
-          warnings: [
-            {
-              code: "environment-missing",
-              message: "No environment definition could be resolved for the scene."
-            }
-          ]
-        };
-      }
-
-      // Full teardown only when switching to a different environment. Same-
-      // environment re-applies (the common case during live slider edits)
-      // mutate existing lights and the CSM rig in place.
-      if (lastEnvironmentId !== definition.definitionId) {
-        clear();
-      }
-      lastEnvironmentId = definition.definitionId;
-
-      scene.background = null;
-
-      applyAmbient(definition);
-      applySunLight(definition.lighting.sun);
-      applySunShadows(definition.lighting.sun.shadows);
-      applyRimLight(definition.lighting.rim);
-      applySky(definition);
-
-      return {
-        definitionId: definition.definitionId,
-        preset: definition.lighting.preset,
-        warnings: []
-      };
+      return applyResolvedDefinition(definition);
+    },
+    applyResolved(definition) {
+      return applyResolvedDefinition(definition);
     },
     updateShadowParameters(shadows) {
       // Direct entry point exposed for hosts that know they're only editing

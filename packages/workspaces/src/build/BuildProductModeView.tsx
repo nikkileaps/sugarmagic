@@ -14,10 +14,13 @@ import type {
   AssetDefinition,
   DocumentDefinition,
   EnvironmentDefinition,
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
   MaterialDefinition,
   NPCDefinition,
   QuestDefinition,
-  Surface,
+  SurfaceDefinition,
+  SurfaceBinding,
   ShaderParameterOverride,
   ShaderGraphDocument,
   TextureDefinition,
@@ -46,6 +49,7 @@ import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
 import { useMaterialsWorkspaceView } from "./materials";
+import { useSurfaceLibraryView } from "./surfaces";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "layout", label: "Layout", icon: "🏗️" },
@@ -53,6 +57,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "spatial", label: "Spatial", icon: "🗺️" },
   { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
+  { id: "surfaces", label: "Surfaces", icon: "🪴" },
   { id: "materials", label: "Materials", icon: "🧱" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
@@ -64,6 +69,9 @@ export interface BuildProductModeViewProps {
   selectedIds: string[];
   session: AuthoringSession | null;
   assetDefinitions: AssetDefinition[];
+  surfaceDefinitions: SurfaceDefinition[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -90,7 +98,7 @@ export interface BuildProductModeViewProps {
     definitionId: string,
     slotName: string,
     slotIndex: number,
-    surface: Surface | null
+    surface: SurfaceBinding<"universal"> | null
   ) => void;
   onSetAssetDefaultShader: (
     definitionId: string,
@@ -115,6 +123,15 @@ export interface BuildProductModeViewProps {
     patch: Partial<MaterialDefinition>
   ) => void;
   onRemoveMaterialDefinition: (definitionId: string) => void;
+  onCreateSurfaceDefinition: () => SurfaceDefinition | null;
+  onUpdateSurfaceDefinition: (
+    definitionId: string,
+    patch: Partial<SurfaceDefinition>
+  ) => void;
+  onRemoveSurfaceDefinition: (definitionId: string) => void;
+  selectedSurfaceDefinitionId: string | null;
+  onSelectSurfaceDefinition: (definitionId: string | null) => void;
+  surfaceCenterPanel?: ReactNode;
   isMaterialReferenced: (definitionId: string) => boolean;
   renderLayoutInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
@@ -140,6 +157,9 @@ export function useBuildProductModeView(
     selectedIds,
     session,
     assetDefinitions,
+    surfaceDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     materialDefinitions,
     textureDefinitions,
     documentDefinitions,
@@ -171,6 +191,12 @@ export function useBuildProductModeView(
     onImportTextureDefinition,
     onUpdateMaterialDefinition,
     onRemoveMaterialDefinition,
+    onCreateSurfaceDefinition,
+    onUpdateSurfaceDefinition,
+    onRemoveSurfaceDefinition,
+    selectedSurfaceDefinitionId,
+    onSelectSurfaceDefinition,
+    surfaceCenterPanel,
     isMaterialReferenced,
     renderLayoutInspectorSections
   } = props;
@@ -358,6 +384,11 @@ export function useBuildProductModeView(
     isActive: activeBuildKind === "landscape",
     viewportStore,
     materialDefinitions,
+    surfaceDefinitions,
+    textureDefinitions,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     region: activeRegion,
     onCommand
   });
@@ -387,7 +418,11 @@ export function useBuildProductModeView(
     assetDefinitions,
     contentLibrary:
       session?.contentLibrary ?? createEmptyContentLibrarySnapshot("empty:content-library"),
+    surfaceDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     materialDefinitions,
+    textureDefinitions,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
@@ -415,6 +450,21 @@ export function useBuildProductModeView(
     isMaterialReferenced
   });
 
+  const surfacesView = useSurfaceLibraryView({
+    surfaceDefinitions,
+    materialDefinitions,
+    textureDefinitions,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    selectedSurfaceDefinitionId,
+    onSelectSurfaceDefinition,
+    onCreateSurfaceDefinition,
+    onUpdateSurfaceDefinition,
+    onRemoveSurfaceDefinition,
+    centerPanel: surfaceCenterPanel
+  });
+
   const activeView: WorkspaceViewContribution =
     activeBuildKind === "layout"
       ? layoutView
@@ -424,11 +474,13 @@ export function useBuildProductModeView(
           ? spatialView
           : activeBuildKind === "behavior"
           ? behaviorView
-          : activeBuildKind === "environment"
-            ? environmentView
-            : activeBuildKind === "materials"
-              ? materialsView
-              : assetsView;
+            : activeBuildKind === "environment"
+              ? environmentView
+              : activeBuildKind === "surfaces"
+                ? surfacesView
+                : activeBuildKind === "materials"
+                  ? materialsView
+                  : assetsView;
 
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||

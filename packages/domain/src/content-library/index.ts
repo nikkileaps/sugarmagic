@@ -8,10 +8,24 @@
 
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
+import {
+  createBuiltInFlowerTypeDefinitions,
+  createBuiltInGrassTypeDefinitions,
+  createBuiltInSurfaceDefinitions
+} from "./builtins";
 import type {
   AssetSurfaceSlot,
-  ShaderOrMaterial
+  ShaderOrMaterial,
+  SurfaceBinding
 } from "../surface";
+import {
+  cloneSurfaceBinding,
+  createSurface,
+  type FlowerTypeDefinition,
+  type GrassTypeDefinition,
+  type SurfaceContext
+} from "../surface";
+import type { SurfaceDefinition } from "../surface";
 import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
@@ -49,6 +63,9 @@ export type ContentDefinitionKind =
   | "asset"
   | "material"
   | "texture"
+  | "surface"
+  | "grass-type"
+  | "flower-type"
   | "npc"
   | "dialogue"
   | "quest"
@@ -230,6 +247,9 @@ export interface ContentLibrarySnapshot {
   assetDefinitions: AssetDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  surfaceDefinitions?: SurfaceDefinition[];
+  grassTypeDefinitions?: GrassTypeDefinition[];
+  flowerTypeDefinitions?: FlowerTypeDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
 }
@@ -265,6 +285,12 @@ export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
 
+function normalizeSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
+  binding: SurfaceBinding<C> | null | undefined
+): SurfaceBinding<C> | null {
+  return cloneSurfaceBinding(binding);
+}
+
 function normalizeAssetSurfaceSlots(
   surfaceSlots: AssetSurfaceSlot[] | null | undefined
 ): AssetSurfaceSlot[] {
@@ -279,9 +305,36 @@ function normalizeAssetSurfaceSlots(
         typeof slot.slotIndex === "number" && Number.isFinite(slot.slotIndex)
           ? slot.slotIndex
           : index,
-      surface: slot.surface ?? null
+      surface: normalizeSurfaceBinding(slot.surface)
     }))
     .filter((slot) => slot.slotName.length > 0);
+}
+
+function normalizeSurfaceDefinitions(
+  definitions: SurfaceDefinition[] | null | undefined
+): SurfaceDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    surface: createSurface(definition.surface.layers, definition.surface.context)
+  }));
+}
+
+function normalizeGrassTypeDefinitions(
+  definitions: GrassTypeDefinition[] | null | undefined
+): GrassTypeDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    wind: normalizeShaderOrMaterial(definition.wind)
+  }));
+}
+
+function normalizeFlowerTypeDefinitions(
+  definitions: FlowerTypeDefinition[] | null | undefined
+): FlowerTypeDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    wind: normalizeShaderOrMaterial(definition.wind)
+  }));
 }
 
 function normalizeShaderOrMaterial(
@@ -931,15 +984,24 @@ export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
+  const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   return {
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 3
+      version: 4
     },
     assetDefinitions: [],
     materialDefinitions: [],
     textureDefinitions: [],
+    surfaceDefinitions: createBuiltInSurfaceDefinitions(
+      projectId,
+      grassTypeDefinitions,
+      flowerTypeDefinitions
+    ),
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
     environmentDefinitions: [
       createDefaultEnvironmentDefinition(projectId, {
         definitionId: `${projectId}:environment:default`,
@@ -956,6 +1018,27 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const builtInGrassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
+  const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
+  const mergedGrassTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeGrassTypeDefinitions(contentLibrary.grassTypeDefinitions),
+    builtInGrassTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedFlowerTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeFlowerTypeDefinitions(contentLibrary.flowerTypeDefinitions),
+    builtInFlowerTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedSurfaceDefinitions = mergeBuiltInDefinitions(
+    normalizeSurfaceDefinitions(contentLibrary.surfaceDefinitions),
+    createBuiltInSurfaceDefinitions(
+      projectId,
+      mergedGrassTypeDefinitions,
+      mergedFlowerTypeDefinitions
+    ),
+    (definition) => definition.definitionId
+  );
   const authoredShaderDefinitions =
     contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
       ? contentLibrary.shaderDefinitions.map((definition) => ({
@@ -980,14 +1063,14 @@ export function normalizeContentLibrarySnapshot(
           definitionId: `${projectId}:environment:default`,
           displayName: "Default Environment",
           preset: "default"
-        })
-      ];
+      })
+    ];
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
 
-  return {
+  const normalizedContentLibrary: ContentLibrarySnapshot = {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 3)
+      version: Math.max(contentLibrary.identity.version ?? 1, 4)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
@@ -1008,6 +1091,9 @@ export function normalizeContentLibrarySnapshot(
         mimeType: definition.source.mimeType
       }
     })),
+    surfaceDefinitions: mergedSurfaceDefinitions,
+    grassTypeDefinitions: mergedGrassTypeDefinitions,
+    flowerTypeDefinitions: mergedFlowerTypeDefinitions,
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
       const legacyDefinition = definition as LegacyEnvironmentDefinition;
       const preset = legacyDefinition.lighting?.preset ?? "default";
@@ -1100,6 +1186,34 @@ export function normalizeContentLibrarySnapshot(
     }),
     shaderDefinitions: mergedShaderDefinitions
   };
+
+  for (const assetDefinition of normalizedContentLibrary.assetDefinitions) {
+    for (const slot of assetDefinition.surfaceSlots) {
+      if (!slot.surface) {
+        continue;
+      }
+      if (slot.surface.kind === "inline") {
+        if (slot.surface.surface.context !== "universal") {
+          throw new Error(
+            `Asset "${assetDefinition.definitionId}" slot "${slot.slotName}" cannot bind a landscape-only surface.`
+          );
+        }
+        continue;
+      }
+      const referencedSurface = (normalizedContentLibrary.surfaceDefinitions ?? []).find(
+        (definition) =>
+          slot.surface?.kind === "reference" &&
+          definition.definitionId === slot.surface.surfaceDefinitionId
+      );
+      if (referencedSurface && referencedSurface.surface.context !== "universal") {
+        throw new Error(
+          `Asset "${assetDefinition.definitionId}" slot "${slot.slotName}" references landscape-only SurfaceDefinition "${referencedSurface.definitionId}".`
+        );
+      }
+    }
+  }
+
+  return normalizedContentLibrary;
 }
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
@@ -1238,6 +1352,25 @@ function mergeBuiltInShaderDefinitions(
   return nextDefinitions;
 }
 
+function mergeBuiltInDefinitions<T>(
+  authoredDefinitions: T[],
+  builtInDefinitions: T[],
+  getId: (definition: T) => string
+): T[] {
+  const nextDefinitions = [...authoredDefinitions];
+  for (const builtInDefinition of builtInDefinitions) {
+    const existingIndex = nextDefinitions.findIndex(
+      (definition) => getId(definition) === getId(builtInDefinition)
+    );
+    if (existingIndex >= 0) {
+      nextDefinitions[existingIndex] = builtInDefinition;
+      continue;
+    }
+    nextDefinitions.push(builtInDefinition);
+  }
+  return nextDefinitions;
+}
+
 export function getAssetDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
@@ -1270,6 +1403,57 @@ export function listMaterialDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): MaterialDefinition[] {
   return [...contentLibrary.materialDefinitions];
+}
+
+export function getSurfaceDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): SurfaceDefinition | null {
+  return (
+    (contentLibrary.surfaceDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listSurfaceDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): SurfaceDefinition[] {
+  return [...(contentLibrary.surfaceDefinitions ?? [])];
+}
+
+export function getGrassTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): GrassTypeDefinition | null {
+  return (
+    (contentLibrary.grassTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listGrassTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): GrassTypeDefinition[] {
+  return [...(contentLibrary.grassTypeDefinitions ?? [])];
+}
+
+export function getFlowerTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): FlowerTypeDefinition | null {
+  return (
+    (contentLibrary.flowerTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listFlowerTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): FlowerTypeDefinition[] {
+  return [...(contentLibrary.flowerTypeDefinitions ?? [])];
 }
 
 export function getTextureDefinition(

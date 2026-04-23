@@ -64,6 +64,43 @@ export class LandscapeSplatmap {
     return this.buffers;
   }
 
+  sampleChannelWeight(
+    channelIndex: number,
+    u: number,
+    v: number
+  ): number {
+    const x = Math.max(0, Math.min(this.resolution - 1, Math.floor(u * this.resolution)));
+    const y = Math.max(0, Math.min(this.resolution - 1, Math.floor(v * this.resolution)));
+    const pixelIndex = (y * this.resolution + x) * 4;
+
+    if (channelIndex === 0) {
+      let paintedSum = 0;
+      for (const buffer of this.buffers) {
+        for (let component = 0; component < 4; component += 1) {
+          paintedSum += buffer[pixelIndex + component]! / 255;
+        }
+      }
+      return Math.max(0, Math.min(1, 1 - paintedSum));
+    }
+
+    const storageIndex = channelIndex - 1;
+    const textureIndex = Math.floor(storageIndex / 4);
+    const componentIndex = storageIndex % 4;
+    const buffer = this.buffers[textureIndex];
+    if (!buffer) {
+      return 0;
+    }
+    return buffer[pixelIndex + componentIndex]! / 255;
+  }
+
+  sampleAllChannelWeights(channelCount: number, u: number, v: number): number[] {
+    const weights: number[] = [];
+    for (let channelIndex = 0; channelIndex < channelCount; channelIndex += 1) {
+      weights.push(this.sampleChannelWeight(channelIndex, u, v));
+    }
+    return weights;
+  }
+
   ensureChannelCount(channelCount: number): void {
     this.channelCount = channelCount;
     const paintableChannels = Math.max(0, channelCount - 1);

@@ -16,7 +16,10 @@ import type {
   MaterialDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
-import { createMaterialSurface } from "@sugarmagic/domain";
+import {
+  createInlineSurfaceBindingFromAppearance,
+  createMaterialSurface
+} from "@sugarmagic/domain";
 
 export interface GlbNodeDocument {
   extras?: Record<string, unknown>;
@@ -285,7 +288,9 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
     surfaceSlots.push({
       slotName,
       slotIndex,
-      surface: createMaterialSurface(materialDefinitionId)
+      surface: createInlineSurfaceBindingFromAppearance(
+        createMaterialSurface(materialDefinitionId)
+      )
     });
   }
 
