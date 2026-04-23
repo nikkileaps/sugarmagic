@@ -18,7 +18,7 @@ import type {
 } from "@sugarmagic/domain";
 import { Inspector, PanelSection } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
-import { SurfaceBindingEditor } from "./SurfaceBindingEditor";
+import { LayerStackView } from "./LayerStackView";
 
 export interface SurfaceLibraryViewProps {
   surfaceDefinitions: SurfaceDefinition[];
@@ -168,10 +168,9 @@ export function useSurfaceLibraryView(
                 })
               }
             />
-            <SurfaceBindingEditor
-              value={{ kind: "inline", surface: selectedDefinition.surface }}
+            <LayerStackView
+              surface={selectedDefinition.surface}
               allowedContext="landscape-only"
-              surfaceDefinitions={surfaceDefinitions}
               materialDefinitions={materialDefinitions}
               textureDefinitions={textureDefinitions}
               maskTextureDefinitions={maskTextureDefinitions}
@@ -183,12 +182,10 @@ export function useSurfaceLibraryView(
               grassTypeDefinitions={grassTypeDefinitions}
               flowerTypeDefinitions={flowerTypeDefinitions}
               rockTypeDefinitions={rockTypeDefinitions}
-              onChange={(next) => {
-                if (next?.kind === "inline") {
-                  onUpdateSurfaceDefinition(selectedDefinition.definitionId, {
-                    surface: next.surface
-                  });
-                }
+              onChangeSurface={(surface) => {
+                onUpdateSurfaceDefinition(selectedDefinition.definitionId, {
+                  surface
+                });
               }}
             />
             <Button
