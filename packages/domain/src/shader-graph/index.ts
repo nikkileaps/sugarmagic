@@ -851,7 +851,14 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     inputPorts: [inputPort("position", "Position", "vec3", { optional: true })],
     outputPorts: [outputPort("value", "Value", "float")],
     settings: [
-      setting("scale", "Scale", "float", 0.25, { min: 0.001, max: 4, step: 0.01 })
+      // scale is a world-space frequency multiplier. Low values (0.05-0.5)
+      // produce macro patches of many meters; high values (4-32) produce
+      // fine-grain per-fragment-ish noise used for hashed-alpha dither in
+      // the grass blade fade. The cap is widened to 32 because the
+      // Perlin-like helper multiplies the input by 1/2/4 per octave — at
+      // scale=32 the finest octave runs at ~128 cells per world unit,
+      // which is roughly "one per centimeter" when viewed in-scene.
+      setting("scale", "Scale", "float", 0.25, { min: 0.001, max: 32, step: 0.01 })
     ]
   },
   {
@@ -2682,7 +2689,39 @@ export function createDefaultGrassSurface6ShaderGraph(
 
       // Apply texture luminance to add painterly grain (lit × macro × texture.color)
       { nodeId: "final-color", nodeType: "color.multiply", position: { x: 1600, y: 700 }, settings: {} },
-      { nodeId: "output", nodeType: "output.fragment", position: { x: 1824, y: 700 }, settings: {} }
+
+      // Base fade: the blade's alpha fades from 0 at the root (treeHeight=0)
+      // to full at treeHeight=baseFadeEnd. BUT the engine's alphaTest=0.5
+      // cutout collapses a smooth gradient into a hard horizontal line at
+      // the blade's cut height. To break that line we jitter the smoothstep
+      // input per-fragment using a fine-grained world-space noise — each
+      // fragment's cutoff threshold shifts ±baseFadeJitter/2, producing a
+      // dithered / irregular edge ("hashed alpha" pattern) instead of a
+      // clean line. Both baseFadeEnd and baseFadeJitter are material
+      // parameters so the author can tune from the inspector without
+      // shader rebuilds.
+      createFloatConstantNode("fade-edge-start", 0, { x: 1600, y: 880 }),
+      { nodeId: "fade-edge-end", nodeType: "input.parameter", position: { x: 1600, y: 960 }, settings: { parameterId: "baseFadeEnd" } },
+      {
+        nodeId: "fine-noise",
+        nodeType: "effect.world-noise",
+        position: { x: 1600, y: 1040 },
+        // Scale tuned for per-fragment-ish dithering on ~10cm-tall blades:
+        // at 12, the noise varies at roughly 12 world-unit frequency, so
+        // across a single blade height you sample 5-6 distinct values.
+        // Combined with the smoothstep thresholding this reads as a
+        // scattered cutoff boundary instead of a clean line.
+        settings: { scale: 12.0 }
+      },
+      createFloatConstantNode("fade-noise-center", 0.5, { x: 1600, y: 1120 }),
+      { nodeId: "fade-noise-offset", nodeType: "math.subtract", position: { x: 1760, y: 1080 }, settings: {} },
+      { nodeId: "fade-jitter-amount", nodeType: "input.parameter", position: { x: 1600, y: 1200 }, settings: { parameterId: "baseFadeJitter" } },
+      { nodeId: "fade-jitter-scaled", nodeType: "math.multiply", position: { x: 1920, y: 1120 }, settings: {} },
+      { nodeId: "fade-height-jittered", nodeType: "math.add", position: { x: 2080, y: 1040 }, settings: {} },
+      { nodeId: "base-fade", nodeType: "math.smoothstep", position: { x: 2240, y: 920 }, settings: {} },
+      { nodeId: "faded-alpha", nodeType: "math.multiply", position: { x: 2400, y: 860 }, settings: {} },
+
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 2624, y: 780 }, settings: {} }
     ],
     edges: [
       // Base gradient
@@ -2728,9 +2767,29 @@ export function createDefaultGrassSurface6ShaderGraph(
       createShaderEdge("gs6-e-litmacro-final", "lit-macro", "value", "final-color", "a"),
       createShaderEdge("gs6-e-texture-final", "blade-texture", "color", "final-color", "b"),
 
-      // Output color + alpha
+      // Base fade with noise-jittered cutoff:
+      //   noise = worldNoise(worldPos × 8) ∈ [0, 1]
+      //   offset = noise - 0.5 ∈ [-0.5, 0.5]
+      //   scaled = offset × baseFadeJitter
+      //   jitteredHeight = treeHeight + scaled
+      //   fade = smoothstep(0, baseFadeEnd, jitteredHeight)
+      //   alpha = textureAlpha × fade
+      createShaderEdge("gs6-e-fade-noise-pos", "world-position", "value", "fine-noise", "position"),
+      createShaderEdge("gs6-e-fade-noise-a", "fine-noise", "value", "fade-noise-offset", "a"),
+      createShaderEdge("gs6-e-fade-noise-b", "fade-noise-center", "value", "fade-noise-offset", "b"),
+      createShaderEdge("gs6-e-fade-jitter-a", "fade-noise-offset", "value", "fade-jitter-scaled", "a"),
+      createShaderEdge("gs6-e-fade-jitter-b", "fade-jitter-amount", "value", "fade-jitter-scaled", "b"),
+      createShaderEdge("gs6-e-fade-height-a", "tree-height", "value", "fade-height-jittered", "a"),
+      createShaderEdge("gs6-e-fade-height-b", "fade-jitter-scaled", "value", "fade-height-jittered", "b"),
+      createShaderEdge("gs6-e-fade-edge0", "fade-edge-start", "value", "base-fade", "edge0"),
+      createShaderEdge("gs6-e-fade-edge1", "fade-edge-end", "value", "base-fade", "edge1"),
+      createShaderEdge("gs6-e-fade-x", "fade-height-jittered", "value", "base-fade", "x"),
+      createShaderEdge("gs6-e-fade-alpha-a", "blade-texture", "alpha", "faded-alpha", "a"),
+      createShaderEdge("gs6-e-fade-alpha-b", "base-fade", "value", "faded-alpha", "b"),
+
+      // Output color + faded alpha
       createShaderEdge("gs6-e-color-output", "final-color", "value", "output", "color"),
-      createShaderEdge("gs6-e-alpha-output", "blade-texture", "alpha", "output", "alpha")
+      createShaderEdge("gs6-e-alpha-output", "faded-alpha", "value", "output", "alpha")
     ],
     parameters: [
       {
@@ -2794,9 +2853,21 @@ export function createDefaultGrassSurface6ShaderGraph(
         dataType: "color",
         colorSpace: "hdr",
         defaultValue: [1.4, 1.22, 0.74]
+      },
+      {
+        parameterId: "baseFadeEnd",
+        displayName: "Base Fade End",
+        dataType: "float",
+        defaultValue: 0.4
+      },
+      {
+        parameterId: "baseFadeJitter",
+        displayName: "Base Fade Jitter",
+        dataType: "float",
+        defaultValue: 0.0
       }
     ],
-    metadata: { builtIn: true, builtInKey: "grass-surface-6" }
+    metadata: { builtIn: true, builtInKey: "grass-surface-6", blendMode: "blend" }
   };
 }
 

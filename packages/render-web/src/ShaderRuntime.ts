@@ -975,7 +975,8 @@ function applyIRToMaterial(
   parameterUniforms: Map<string, UniformNodeLike>,
   sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>,
-  accumulator?: ShaderSurfaceNodeSet | null
+  accumulator?: ShaderSurfaceNodeSet | null,
+  blendMode?: "mask" | "blend"
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -992,12 +993,20 @@ function applyIRToMaterial(
     accumulator
   );
 
-  return applyNodeSetToMaterial(material, nodeSet);
+  return applyNodeSetToMaterial(material, nodeSet, { blendMode });
+}
+
+function resolveShaderBlendMode(
+  shaderDefinition: ShaderGraphDocument | null | undefined
+): "mask" | "blend" {
+  const raw = shaderDefinition?.metadata?.blendMode;
+  return raw === "blend" ? "blend" : "mask";
 }
 
 function applyNodeSetToMaterial(
   material: MeshStandardNodeMaterial | MeshBasicNodeMaterial,
-  nodeSet: ShaderSurfaceNodeSet
+  nodeSet: ShaderSurfaceNodeSet,
+  options: { blendMode?: "mask" | "blend" } = {}
 ): MeshStandardNodeMaterial | MeshBasicNodeMaterial {
   if (nodeSet.vertexNode) {
     material.positionNode = nodeSet.vertexNode as never;
@@ -1007,27 +1016,38 @@ function applyNodeSetToMaterial(
   }
   if (nodeSet.alphaNode && "opacityNode" in material) {
     material.opacityNode = nodeSet.alphaNode as never;
-    // An authored shader writing an opacity output is opting into MASK-mode
-    // cutout rendering: opaque where alpha passes the threshold, discarded
-    // below it, and (critically) writing to the depth buffer on the opaque
-    // pixels so near leaf cards properly occlude branches / other leaves
-    // behind them.
-    //
-    // Previously we deferred to the GLB's authored alphaMode on the
-    // theory "the author knows best," but tools like FoilageMaker export
-    // leaf cards as BLEND (transparent: true) which disables depth-write
-    // and causes the characteristic "see-through-the-front-leaves-to-the-
-    // branches-inside" artifact. Since the shader graph's opacityNode IS
-    // the author's intent for per-pixel alpha, we treat that intent as
-    // "cutout" and set the material up accordingly. If a future shader
-    // needs true BLEND (glass, smoke), that becomes a per-shader opt-in
-    // instead of a per-GLB accident.
-    (material as { transparent: boolean }).transparent = false;
-    if ("alphaTest" in material) {
-      (material as { alphaTest: number }).alphaTest = 0.5;
-    }
-    if ("depthWrite" in material) {
-      (material as { depthWrite: boolean }).depthWrite = true;
+    // Opacity policy is per-shader via metadata.blendMode:
+    //   "mask"  (default) — alphaTest=0.5 cutout + depthWrite=true. Binary
+    //           edges; used for foliage cards where the painted alpha is
+    //           effectively a silhouette mask and we want depth-write so
+    //           near leaves occlude inner branches. Historical default
+    //           preventing GLB-authored BLEND from producing the
+    //           "see-through-leaves-to-branches" artifact.
+    //   "blend" — transparent=true + alphaTest=0.01 + depthWrite=false.
+    //           True alpha gradients; used for grass blade base fade
+    //           (Grass Surface 6) where we want the blade to smoothly
+    //           transition to transparent so its root appears to blend
+    //           into the ground rather than terminate at a hard cutoff
+    //           line. alphaTest=0.01 (not 0) is a small optimization so
+    //           fully-transparent fragments short-circuit before the
+    //           expensive blend math.
+    const blendMode = options.blendMode ?? "mask";
+    if (blendMode === "blend") {
+      (material as { transparent: boolean }).transparent = true;
+      if ("alphaTest" in material) {
+        (material as { alphaTest: number }).alphaTest = 0.01;
+      }
+      if ("depthWrite" in material) {
+        (material as { depthWrite: boolean }).depthWrite = false;
+      }
+    } else {
+      (material as { transparent: boolean }).transparent = false;
+      if ("alphaTest" in material) {
+        (material as { alphaTest: number }).alphaTest = 0.5;
+      }
+      if ("depthWrite" in material) {
+        (material as { depthWrite: boolean }).depthWrite = true;
+      }
     }
   }
   if (nodeSet.emissiveNode && material instanceof MeshStandardNodeMaterial) {
@@ -1281,6 +1301,7 @@ export class ShaderRuntime {
       stableStringify(binding.parameterValues)
     ].join("|");
 
+    const blendMode = resolveShaderBlendMode(definition);
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
       applyIRToMaterial(
         ir,
@@ -1288,7 +1309,9 @@ export class ShaderRuntime {
         target,
         parameterUniforms,
         this.sunDirectionUniform,
-        effectNodes
+        effectNodes,
+        undefined,
+        blendMode
       )
     );
   }
@@ -1639,7 +1662,9 @@ export class ShaderRuntime {
           this.sunDirectionUniform,
           this.getOrCreateEffectNodeCache(surfaceBinding.shaderDefinitionId)
         );
-        material = applyNodeSetToMaterial(material, surfaceNodeSet) as MeshStandardNodeMaterial;
+        material = applyNodeSetToMaterial(material, surfaceNodeSet, {
+          blendMode: resolveShaderBlendMode(surfaceDefinition)
+        }) as MeshStandardNodeMaterial;
       } else if (surfaceStack) {
         surfaceNodeSet = this.evaluateLayerStackToNodeSet(surfaceStack, {
           geometry: target.geometry,
