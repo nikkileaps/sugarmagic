@@ -5,13 +5,21 @@
  * domain documents. No separate "editor project" abstraction.
  */
 
-import type { GameProject, RegionDocument, ContentLibrarySnapshot } from "@sugarmagic/domain";
+import type {
+  ContentLibrarySnapshot,
+  GameProject,
+  RegionDocument,
+  Surface,
+  SurfaceBinding
+} from "@sugarmagic/domain";
 import {
+  assertReusableSurfaceHasNoPaintedMasks,
   createDefaultGameProject,
   createDefaultRegion,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import {
+  deleteFile,
   ensureDirectory,
   pickDirectory,
   readJsonFile,
@@ -57,11 +65,18 @@ export interface SaveProjectResult {
   changedManagedFiles: string[];
   driftedManagedFiles: string[];
   writtenManagedFiles: string[];
+  reconciledContentLibrary: ContentLibrarySnapshot;
+  orphanedMaskPaths: string[];
 }
 
 export interface ManagedProjectFileInspectionResult {
   changedManagedFiles: string[];
   driftedManagedFiles: string[];
+}
+
+export interface PaintedMaskSaveReconciliationResult {
+  contentLibrary: ContentLibrarySnapshot;
+  orphanedMaskPaths: string[];
 }
 
 function hashText(input: string): string {
@@ -78,6 +93,72 @@ function makeEmptyProject(
   slug: string
 ): GameProject {
   return createDefaultGameProject(gameName, slug);
+}
+
+function collectPaintedMaskTextureIdsFromSurface(
+  surface: Surface | null | undefined,
+  destination: Set<string>
+): void {
+  for (const layer of surface?.layers ?? []) {
+    if (layer.mask.kind === "painted" && layer.mask.maskTextureId) {
+      destination.add(layer.mask.maskTextureId);
+    }
+  }
+}
+
+function collectPaintedMaskTextureIdsFromBinding(
+  binding: SurfaceBinding | null | undefined,
+  destination: Set<string>
+): void {
+  if (binding?.kind === "inline") {
+    collectPaintedMaskTextureIdsFromSurface(binding.surface, destination);
+  }
+}
+
+export function reconcilePaintedMaskDefinitionsForSave(
+  contentLibrary: ContentLibrarySnapshot,
+  regions: RegionDocument[]
+): PaintedMaskSaveReconciliationResult {
+  for (const definition of contentLibrary.surfaceDefinitions ?? []) {
+    assertReusableSurfaceHasNoPaintedMasks(
+      definition.surface,
+      `SurfaceDefinition "${definition.definitionId}"`
+    );
+  }
+
+  const referencedMaskTextureIds = new Set<string>();
+  for (const assetDefinition of contentLibrary.assetDefinitions) {
+    for (const slot of assetDefinition.surfaceSlots) {
+      collectPaintedMaskTextureIdsFromBinding(slot.surface, referencedMaskTextureIds);
+    }
+  }
+
+  for (const region of regions) {
+    for (const slot of region.landscape.surfaceSlots) {
+      collectPaintedMaskTextureIdsFromBinding(slot.surface, referencedMaskTextureIds);
+    }
+  }
+
+  const maskTextureDefinitions = contentLibrary.maskTextureDefinitions ?? [];
+  const orphanedMaskPaths: string[] = [];
+  const keptMaskTextureDefinitions = maskTextureDefinitions.filter((definition) => {
+    const keep = referencedMaskTextureIds.has(definition.definitionId);
+    if (!keep) {
+      orphanedMaskPaths.push(definition.source.relativeAssetPath);
+    }
+    return keep;
+  });
+
+  return {
+    contentLibrary:
+      keptMaskTextureDefinitions.length === maskTextureDefinitions.length
+        ? contentLibrary
+        : {
+            ...contentLibrary,
+            maskTextureDefinitions: keptMaskTextureDefinitions
+          },
+    orphanedMaskPaths
+  };
 }
 
 export async function checkDirectoryHasProject(
@@ -249,8 +330,17 @@ export async function saveProjectWithManagedFiles(
     overwriteManagedFiles?: boolean;
   }
 ): Promise<SaveProjectResult> {
+  const reconciliation = reconcilePaintedMaskDefinitionsForSave(
+    active.contentLibrary,
+    active.regions
+  );
+
   await writeJsonFile(active.handle, [PROJECT_FILE], active.gameProject);
-  await writeJsonFile(active.handle, [CONTENT_LIBRARY_FILE], active.contentLibrary);
+  await writeJsonFile(
+    active.handle,
+    [CONTENT_LIBRARY_FILE],
+    reconciliation.contentLibrary
+  );
   for (const region of active.regions) {
     await writeJsonFile(
       active.handle,
@@ -261,10 +351,19 @@ export async function saveProjectWithManagedFiles(
 
   const managedFiles = active.managedFiles ?? [];
   if (managedFiles.length === 0) {
+    for (const relativePath of reconciliation.orphanedMaskPaths) {
+      try {
+        await deleteFile(active.handle, relativePath.split("/").filter(Boolean));
+      } catch {
+        // Missing orphaned files are already effectively reconciled.
+      }
+    }
     return {
       changedManagedFiles: [],
       driftedManagedFiles: [],
-      writtenManagedFiles: []
+      writtenManagedFiles: [],
+      reconciledContentLibrary: reconciliation.contentLibrary,
+      orphanedMaskPaths: reconciliation.orphanedMaskPaths
     };
   }
 
@@ -277,7 +376,9 @@ export async function saveProjectWithManagedFiles(
     return {
       changedManagedFiles: inspection.changedManagedFiles,
       driftedManagedFiles: inspection.driftedManagedFiles,
-      writtenManagedFiles: []
+      writtenManagedFiles: [],
+      reconciledContentLibrary: reconciliation.contentLibrary,
+      orphanedMaskPaths: reconciliation.orphanedMaskPaths
     };
   }
 
@@ -299,10 +400,20 @@ export async function saveProjectWithManagedFiles(
     }))
   } satisfies DeploymentManifest);
 
+  for (const relativePath of reconciliation.orphanedMaskPaths) {
+    try {
+      await deleteFile(active.handle, relativePath.split("/").filter(Boolean));
+    } catch {
+      // Missing orphaned files are already effectively reconciled.
+    }
+  }
+
   return {
     changedManagedFiles: inspection.changedManagedFiles,
     driftedManagedFiles: [],
-    writtenManagedFiles
+    writtenManagedFiles,
+    reconciledContentLibrary: reconciliation.contentLibrary,
+    orphanedMaskPaths: reconciliation.orphanedMaskPaths
   };
 }
 

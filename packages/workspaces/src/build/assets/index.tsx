@@ -21,6 +21,7 @@ import type {
   GrassTypeDefinition,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RockTypeDefinition,
   SurfaceDefinition,
   SurfaceBinding,
@@ -49,6 +50,8 @@ export interface AssetsWorkspaceViewProps {
   shaderDefinitions: ShaderGraphDocument[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   selectedAssetDefinitionId: string | null;
   onSelectAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
@@ -101,6 +104,8 @@ export function useAssetsWorkspaceView(
     shaderDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     selectedAssetDefinitionId,
     onSelectAssetDefinition,
     onImportAsset,
@@ -192,6 +197,10 @@ export function useAssetsWorkspaceView(
             textureDefinitions={textureDefinitions}
             maskTextureDefinitions={maskTextureDefinitions}
             shaderDefinitions={shaderDefinitions}
+            activeMaskPaintTarget={activeMaskPaintTarget}
+            onSetMaskPaintTarget={onSetMaskPaintTarget}
+            onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+            onImportMaskTextureDefinition={onImportMaskTextureDefinition}
             onUpdateAssetDefinition={onUpdateAssetDefinition}
             onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
             onSetAssetDefaultShader={onSetAssetDefaultShader}
@@ -219,6 +228,8 @@ function AssetInspectorPanel({
   textureDefinitions,
   maskTextureDefinitions,
   shaderDefinitions,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
   onUpdateAssetDefinition,
@@ -236,6 +247,8 @@ function AssetInspectorPanel({
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
@@ -321,12 +334,15 @@ function AssetInspectorPanel({
         </Text>
         <MaterialSlotBindingsEditor
           bindings={assetDefinition.surfaceSlots}
+          assetDefinitionId={assetDefinition.definitionId}
           surfaceDefinitions={surfaceDefinitions}
           materialDefinitions={materialDefinitions}
           textureDefinitions={textureDefinitions}
           maskTextureDefinitions={maskTextureDefinitions}
           onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
           onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+          activeMaskPaintTarget={activeMaskPaintTarget}
+          onSetMaskPaintTarget={onSetMaskPaintTarget}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}

@@ -15,6 +15,7 @@ import { createStore } from "zustand/vanilla";
 import {
   LandscapeSplatmap,
   cloneSurfaceBinding,
+  type PaintedMaskTargetAddress,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 
@@ -54,7 +55,7 @@ export interface ViewportState {
   transformDrafts: Record<string, TransformDraft>;
   activeToolCursor: LandscapeCursor | null;
   brushSettings: LandscapeBrushSettings | null;
-  activePaintMaskTextureId: string | null;
+  activeMaskPaintTarget: PaintedMaskTargetAddress | null;
   activeLandscapeChannelIndex: number;
   activeTransformTool: TransformTool;
   activeSpatialTool: "select" | "draw-rect";
@@ -73,7 +74,7 @@ export interface ViewportActions {
   clearTransformDrafts: () => void;
   setActiveToolCursor: (cursor: LandscapeCursor | null) => void;
   setBrushSettings: (settings: LandscapeBrushSettings | null) => void;
-  setActivePaintMaskTextureId: (definitionId: string | null) => void;
+  setActiveMaskPaintTarget: (target: PaintedMaskTargetAddress | null) => void;
   setActiveLandscapeChannelIndex: (channelIndex: number) => void;
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
@@ -137,7 +138,7 @@ export function createViewportStore() {
       falloff: 0.7,
       mode: "paint"
     },
-    activePaintMaskTextureId: null,
+    activeMaskPaintTarget: null,
     activeLandscapeChannelIndex: 1,
     activeTransformTool: "move",
     activeSpatialTool: "select",
@@ -184,8 +185,8 @@ export function createViewportStore() {
     setBrushSettings(settings) {
       set({ brushSettings: settings });
     },
-    setActivePaintMaskTextureId(definitionId) {
-      set({ activePaintMaskTextureId: definitionId });
+    setActiveMaskPaintTarget(target) {
+      set({ activeMaskPaintTarget: target });
     },
     setActiveLandscapeChannelIndex(channelIndex) {
       set({ activeLandscapeChannelIndex: channelIndex });

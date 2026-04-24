@@ -19,6 +19,7 @@ import {
   EDITOR_NEUTRAL_CLAY_COLOR,
   type AuthoringSession,
   getActiveRegion,
+  getMaskTextureDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -67,6 +68,8 @@ interface LandscapeGridSpec {
 interface AuthoringViewportOptions {
   engine: WebRenderEngine;
   stores: ProjectionStores;
+  readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
+  writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
   overlays?: ViewportOverlayFactory[];
 }
 
@@ -209,6 +212,11 @@ async function createRenderableRoot(
 ): Promise<SceneObjectEntry> {
   const root = new THREE.Group();
   root.name = object.instanceId;
+  root.userData.sugarmagicSceneObject = {
+    instanceId: object.instanceId,
+    assetDefinitionId: object.assetDefinitionId ?? null,
+    kind: object.kind
+  };
   applyObjectTransform(root, object);
 
   const assetSourceUrl = object.modelSourcePath
@@ -598,6 +606,9 @@ export function createAuthoringViewport(
           clearLandscapeDraft() {
             options.stores.viewportStore.getState().clearLandscapeDraft();
           },
+          setActiveMaskPaintTarget(target) {
+            options.stores.viewportStore.getState().setActiveMaskPaintTarget(target);
+          },
           setCameraQuaternion(quaternion: [number, number, number, number]) {
             options.stores.viewportStore.getState().setCameraQuaternion(quaternion);
           }
@@ -619,6 +630,27 @@ export function createAuthoringViewport(
           opts?: Parameters<typeof subscribeToProjection<T>>[3]
         ) {
           return subscribeToProjection(options.stores, selector, listener, opts);
+        },
+        readMaskTexture(maskTextureId: string) {
+          return options.readMaskTexture(maskTextureId);
+        },
+        writeMaskTexture(maskTextureId: string, imageData: ImageData) {
+          return options.writeMaskTexture(maskTextureId, imageData);
+        },
+        previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement) {
+          const session = options.stores.projectStore.getState().session;
+          if (!session) {
+            return;
+          }
+          const definition = getMaskTextureDefinition(session.contentLibrary, maskTextureId);
+          if (!definition) {
+            return;
+          }
+          const texture = renderView.assetResolver.resolveMaskTextureDefinition(definition);
+          texture.dispose();
+          texture.image = canvas;
+          texture.needsUpdate = true;
+          renderView.markSceneMaterialsDirty();
         },
         subscribeFrame: renderView.subscribeFrame
       };

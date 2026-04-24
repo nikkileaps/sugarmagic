@@ -9,6 +9,7 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
 import {
+  createBuiltInMaterialDefinitions,
   createBuiltInFlowerTypeDefinitions,
   createBuiltInGrassTypeDefinitions,
   createBuiltInRockTypeDefinitions,
@@ -21,6 +22,7 @@ import type {
   SurfaceBinding
 } from "../surface";
 import {
+  assertReusableSurfaceHasNoPaintedMasks,
   cloneSurfaceBinding,
   createSurface,
   type FlowerTypeDefinition,
@@ -30,8 +32,7 @@ import {
 import type { SurfaceDefinition } from "../surface";
 import type {
   PostProcessShaderBinding,
-  ShaderGraphDocument,
-  ShaderTargetKind
+  ShaderGraphDocument
 } from "../shader-graph";
 import {
   createDefaultBloomPostProcessShaderGraph,
@@ -39,6 +40,14 @@ import {
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageSurface2ShaderGraph,
   createDefaultFoliageSurface3ShaderGraph,
+  createDefaultGrassSurface2ShaderGraph,
+  createDefaultGrassSurface3ShaderGraph,
+  createDefaultGrassSurface4ShaderGraph,
+  createDefaultGrassSurface6ShaderGraph,
+  createDefaultPainterlyGrassShaderGraph,
+  createDefaultMeadowGrassShaderGraph,
+  createDefaultSunlitLawnShaderGraph,
+  createDefaultAutumnFieldGrassShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -334,7 +343,14 @@ function normalizeSurfaceDefinitions(
 ): SurfaceDefinition[] {
   return (definitions ?? []).map((definition) => ({
     ...definition,
-    surface: createSurface(definition.surface.layers, definition.surface.context)
+    surface: (() => {
+      const surface = createSurface(definition.surface.layers, definition.surface.context);
+      assertReusableSurfaceHasNoPaintedMasks(
+        surface,
+        `SurfaceDefinition "${definition.definitionId}"`
+      );
+      return surface;
+    })()
   }));
 }
 
@@ -622,22 +638,6 @@ function normalizePostProcessShaderBindings(
     }));
 }
 
-function upsertBindingOverride(
-  overrides: PostProcessShaderBinding["parameterOverrides"],
-  parameterId: string,
-  value: number | [number, number, number]
-): PostProcessShaderBinding["parameterOverrides"] {
-  const existingIndex = overrides.findIndex(
-    (override) => override.parameterId === parameterId
-  );
-  if (existingIndex < 0) {
-    return [...overrides, { parameterId, value }];
-  }
-  const next = [...overrides];
-  next[existingIndex] = { parameterId, value };
-  return next;
-}
-
 function synchronizeFogBinding(
   definition: EnvironmentDefinition,
   projectId: string
@@ -665,48 +665,6 @@ function synchronizeFogBinding(
   }
 
   return normalizePostProcessShaderBindings([nextBinding, ...sortedBindings]);
-}
-
-/**
- * Tonemap is the final perceptual transform turning HDR linear scene values
- * into an sRGB-encodable image. Like fog, it is owned by the authored
- * post-process stack — not the renderer's toneMapping setting (which would
- * silently compete with the stack and recreate the dual-authority pattern we
- * already eliminated for fog and bloom). Always pinned to the END of the
- * chain so bloom/color-grade/etc. operate in HDR space before tonemapping.
- *
- * Authors can swap to tonemap-reinhard (or remove tonemap entirely) via the
- * stack editor — but if they remove it, the scene goes back to raw linear
- * HDR which will look wrong. That's their explicit choice, not a hidden
- * default.
- */
-function synchronizeTonemapBinding(
-  bindings: PostProcessShaderBinding[],
-  projectId: string
-): PostProcessShaderBinding[] {
-  const tonemapShaderDefinitionId = createBuiltInTonemapAcesShaderId(projectId);
-  // If any tonemap variant (aces, reinhard, future others) is already in the
-  // chain, leave it alone — the author has made an explicit choice.
-  const hasAuthorTonemap = bindings.some(
-    (binding) =>
-      binding.shaderDefinitionId.endsWith(":shader:tonemap-aces") ||
-      binding.shaderDefinitionId.endsWith(":shader:tonemap-reinhard")
-  );
-  if (hasAuthorTonemap) {
-    return bindings;
-  }
-
-  // Append tonemap-aces as the final binding so it runs last, after every
-  // HDR-space effect (bloom, color-grade, fog).
-  return normalizePostProcessShaderBindings([
-    ...bindings,
-    {
-      shaderDefinitionId: tonemapShaderDefinitionId,
-      order: bindings.length,
-      enabled: true,
-      parameterOverrides: [{ parameterId: "exposure", value: 1 }]
-    }
-  ]);
 }
 
 function ensureBuiltInEffectBinding(
@@ -740,30 +698,6 @@ function colorToVector3(color: number): [number, number, number] {
     ((color >> 8) & 0xff) / 255,
     (color & 0xff) / 255
   ];
-}
-
-function vector3ToColor(value: unknown, fallback: number): number {
-  if (!Array.isArray(value) || value.length < 3) {
-    return fallback;
-  }
-  const [r, g, b] = value;
-  if (
-    typeof r !== "number" ||
-    typeof g !== "number" ||
-    typeof b !== "number" ||
-    !Number.isFinite(r) ||
-    !Number.isFinite(g) ||
-    !Number.isFinite(b)
-  ) {
-    return fallback;
-  }
-  const clampChannel = (channel: number) =>
-    Math.max(0, Math.min(255, Math.round(channel * 255)));
-  return (
-    (clampChannel(r) << 16) |
-    (clampChannel(g) << 8) |
-    clampChannel(b)
-  );
 }
 
 type LegacyEnvironmentDefinition = EnvironmentDefinition & {
@@ -943,7 +877,8 @@ function normalizeSunShadows(lighting: EnvironmentLighting): EnvironmentLighting
             : DEFAULT_SUN_SHADOWS.enabled
       };
 
-  const { castShadows: _droppedCastShadows, ...cleanSun } = lighting.sun;
+  const cleanSun = { ...lighting.sun };
+  delete (cleanSun as Partial<SunLight>).castShadows;
   return {
     ...lighting,
     sun: {
@@ -1023,6 +958,7 @@ export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
   const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   const rockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
@@ -1033,7 +969,7 @@ export function createEmptyContentLibrarySnapshot(
       version: 5
     },
     assetDefinitions: [],
-    materialDefinitions: [],
+    materialDefinitions: builtInMaterialDefinitions,
     textureDefinitions: [],
     maskTextureDefinitions: [],
     surfaceDefinitions: createBuiltInSurfaceDefinitions(
@@ -1060,9 +996,19 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
   const builtInGrassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   const builtInRockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
+  const mergedMaterialDefinitions = mergeBuiltInDefinitions(
+    (contentLibrary.materialDefinitions ?? []).map((definition) => ({
+      ...definition,
+      parameterValues: { ...(definition.parameterValues ?? {}) },
+      textureBindings: { ...(definition.textureBindings ?? {}) }
+    })),
+    builtInMaterialDefinitions,
+    (definition) => definition.definitionId
+  );
   const mergedGrassTypeDefinitions = mergeBuiltInDefinitions(
     normalizeGrassTypeDefinitions(contentLibrary.grassTypeDefinitions),
     builtInGrassTypeDefinitions,
@@ -1126,11 +1072,7 @@ export function normalizeContentLibrarySnapshot(
       deform: normalizeShaderOrMaterial(definition.deform),
       effect: normalizeShaderOrMaterial(definition.effect)
     })),
-    materialDefinitions: (contentLibrary.materialDefinitions ?? []).map((definition) => ({
-      ...definition,
-      parameterValues: { ...(definition.parameterValues ?? {}) },
-      textureBindings: { ...(definition.textureBindings ?? {}) }
-    })),
+    materialDefinitions: mergedMaterialDefinitions,
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
       ...definition,
       source: {
@@ -1289,6 +1231,38 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageSurface3ShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-surface-3`,
       displayName: "Foliage Surface 3"
+    }),
+    createDefaultGrassSurface2ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-2`,
+      displayName: "Grass Surface 2"
+    }),
+    createDefaultGrassSurface3ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-3`,
+      displayName: "Grass Surface 3"
+    }),
+    createDefaultGrassSurface4ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-4`,
+      displayName: "Grass Surface 4"
+    }),
+    createDefaultGrassSurface6ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-6`,
+      displayName: "Grass Surface 6"
+    }),
+    createDefaultMeadowGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:meadow-grass`,
+      displayName: "Meadow Grass"
+    }),
+    createDefaultSunlitLawnShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:sunlit-lawn`,
+      displayName: "Sunlit Lawn"
+    }),
+    createDefaultAutumnFieldGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:autumn-field-grass`,
+      displayName: "Autumn Field Grass"
+    }),
+    createDefaultPainterlyGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:painterly-grass`,
+      displayName: "Painterly Grass"
     }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,

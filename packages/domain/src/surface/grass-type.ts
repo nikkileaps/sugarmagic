@@ -16,6 +16,7 @@ export interface GrassTypeDefinition {
   tuft:
     | {
         kind: "procedural";
+        bladeProfile?: "flat" | "tapered";
         bladesPerTuft: number;
         heightRange: [number, number];
         widthBase: number;
@@ -53,12 +54,13 @@ export function createDefaultGrassTypeDefinition(
     displayName: opts.displayName ?? "Grass Type",
     tuft: {
       kind: "procedural",
+      bladeProfile: "tapered",
       bladesPerTuft: 6,
       heightRange: [0.35, 0.7],
-      widthBase: 0.055,
-      bendAmount: 0.35
+      widthBase: 0.08,
+      bendAmount: 0.7
     },
-    density: opts.density ?? 18,
+    density: opts.density ?? 60,
     scaleJitter: [0.8, 1.25],
     rotationJitter: 1,
     heightJitter: 0.3,

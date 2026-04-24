@@ -18,6 +18,7 @@ import {
   cameraProjectionMatrixInverse,
   cameraWorldMatrix,
   attribute as tslAttribute,
+  color as tslColor,
   float,
   normalLocal,
   normalMap,
@@ -45,7 +46,6 @@ import type {
 import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
-  EffectiveShaderBindingSet,
   ResolvedSurfaceStack,
   RuntimeCompileProfile,
   ShaderIR,
@@ -434,10 +434,19 @@ function literalNode(dataType: ShaderIRValue["dataType"], value: unknown): unkno
     case "vec2":
       return Array.isArray(value) ? vec2(value[0] ?? 0, value[1] ?? 0) : vec2(0, 0);
     case "vec3":
-    case "color":
       return Array.isArray(value)
         ? vec3(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0)
         : vec3(0, 0, 0);
+    case "color":
+      return Array.isArray(value)
+        ? tslColor(
+            new THREE.Color().setRGB(
+              Number(value[0]) || 0,
+              Number(value[1]) || 0,
+              Number(value[2]) || 0
+            )
+          )
+        : tslColor(new THREE.Color().setRGB(0, 0, 0));
     case "vec4":
       return Array.isArray(value)
         ? vec4(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 0)
@@ -820,7 +829,6 @@ function uniformValueFromPrimitive(
       }
       return new THREE.Vector2(0, 0);
     case "vec3":
-    case "color":
       if (Array.isArray(value)) {
         return new THREE.Vector3(
           Number(value[0]) || 0,
@@ -829,6 +837,15 @@ function uniformValueFromPrimitive(
         );
       }
       return new THREE.Vector3(0, 0, 0);
+    case "color":
+      if (Array.isArray(value)) {
+        return new THREE.Color().setRGB(
+          Number(value[0]) || 0,
+          Number(value[1]) || 0,
+          Number(value[2]) || 0
+        );
+      }
+      return new THREE.Color().setRGB(0, 0, 0);
     case "vec4":
       if (Array.isArray(value)) {
         return new THREE.Vector4(
@@ -1574,9 +1591,9 @@ export class ShaderRuntime {
       }
     }
 
-    const surfaceTextures = this.resolveTextureBindings(surfaceBinding, target.fileSources);
-    const deformTextures = this.resolveTextureBindings(deform, target.fileSources);
-    const effectTextures = this.resolveTextureBindings(effect, target.fileSources);
+    const surfaceTextures = this.resolveTextureBindings(surfaceBinding);
+    const deformTextures = this.resolveTextureBindings(deform);
+    const effectTextures = this.resolveTextureBindings(effect);
     const cacheKey = [
       "shader-set",
       surfaceBinding?.shaderDefinitionId ?? surfaceStackSignature(surfaceStack) ?? "no-surface",
@@ -1746,8 +1763,7 @@ export class ShaderRuntime {
   }
 
   private resolveTextureBindings(
-    binding: EffectiveShaderBinding | null,
-    _fileSources: Record<string, string> = {}
+    binding: EffectiveShaderBinding | null
   ): Record<string, THREE.Texture | null> {
     if (!binding) {
       return {};

@@ -116,6 +116,18 @@ export interface ShaderEdge {
   targetPortId: string;
 }
 
+/**
+ * `inheritSource` lets a shader parameter opt into automatic binding from
+ * surrounding authored context at resolve time. Currently the only supported
+ * source is `"baseLayerColor"` — when a scatter layer's appearance shader
+ * declares a parameter with this source, the scatter resolver injects the
+ * color from the containing Surface's first `blendMode: "base"` appearance
+ * layer (when that layer's content is `color`-kind). An explicit value in the
+ * material/layer `parameterValues` always wins. This is what makes grass
+ * visually "grow out of" the ground it's placed on without authoring churn.
+ */
+export type ShaderParameterInheritSource = "baseLayerColor";
+
 export interface ShaderParameter {
   parameterId: string;
   displayName: string;
@@ -123,6 +135,7 @@ export interface ShaderParameter {
   defaultValue: ShaderParameterValue;
   colorSpace?: "sdr" | "hdr";
   textureRole?: "color" | "normal" | "data";
+  inheritSource?: ShaderParameterInheritSource;
 }
 
 export interface ShaderGraphDocument {
@@ -831,6 +844,17 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     ]
   },
   {
+    nodeType: "effect.world-noise",
+    displayName: "World-Space Noise",
+    category: "effect",
+    validTargetKinds: ["mesh-surface", "billboard-surface", "mesh-deform"],
+    inputPorts: [inputPort("position", "Position", "vec3", { optional: true })],
+    outputPorts: [outputPort("value", "Value", "float")],
+    settings: [
+      setting("scale", "Scale", "float", 0.25, { min: 0.001, max: 4, step: 0.01 })
+    ]
+  },
+  {
     nodeType: "effect.fresnel",
     displayName: "Fresnel Effect",
     category: "effect",
@@ -912,7 +936,7 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     category: "output",
     validTargetKinds: ["mesh-surface", "billboard-surface"],
     inputPorts: [
-      inputPort("color", "Color", "vec3"),
+      inputPort("color", "Color", "color"),
       inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 }),
       // The remaining PBR channels are optional. When unwired, the
       // runtime leaves the corresponding MeshStandardNodeMaterial node
@@ -945,7 +969,7 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     category: "output",
     validTargetKinds: ["mesh-surface"],
     inputPorts: [
-      inputPort("color", "Color", "vec3"),
+      inputPort("color", "Color", "color"),
       inputPort("alpha", "Alpha", "float", { optional: true, defaultValue: 1 }),
       inputPort("normal", "Normal", "vec3", {
         optional: true,
@@ -2132,6 +2156,1146 @@ export function createDefaultFoliageSurface3ShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "foliage-surface-3"
+    }
+  };
+}
+
+/**
+ * Grass Surface 2: the FS2-equivalent for grass. Strips away sun-dot,
+ * tip-boost, and rim-fresnel lighting terms and outputs a single gradient:
+ *   color = vertexColor * mix(rootTint, tipTint, treeHeight)
+ *   alpha = 1
+ *
+ * Why: the built-in grass shader's four lighting terms look great on one
+ * big silhouette (like a tree canopy) but produce per-blade noise on the
+ * thousands of near-vertical thin quads that make up a grass field,
+ * reading as "spiky" rather than "soft." FS2 solved the same problem for
+ * foliage canopies by removing the lighting math entirely. This applies
+ * that same cure to grass.
+ *
+ * `rootTint` declares `inheritSource: "baseLayerColor"` so unless the
+ * author has explicitly set a root tint via parameterValues, the scatter
+ * resolver injects the color of the containing Surface's first
+ * `blendMode: "base"` appearance layer. Grass visually grows out of the
+ * ground it sits on without any per-scene tuning.
+ */
+export function createDefaultGrassSurface2ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:grass-surface-2`;
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Grass Surface 2",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 56 }, settings: {} },
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 96 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 480, y: 56 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 704, y: 56 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("gs2-e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("gs2-e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("gs2-e-th-heighttint", "tree-height", "value", "height-tint", "alpha"),
+      createShaderEdge("gs2-e-ht-out", "height-tint", "value", "output", "color")
+    ],
+    parameters: [
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.36, 0.52, 0.24],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.84, 0.91, 0.58]
+      }
+    ],
+    metadata: { builtIn: true, builtInKey: "grass-surface-2" }
+  };
+}
+
+/**
+ * Grass Surface 3: GS2's smooth rootTint↔tipTint gradient + the FS3 warm-sun
+ * and rim-fresnel highlight terms, driven off `world-normal` (which is the
+ * force-up `(0, 1, 0)` vertex normal baked by `createProceduralGrassGeometry`).
+ *
+ * Because every blade in a tuft has the same up-pointing normal, the sun
+ * dot and rim fresnel produce per-TUFT / per-view variation — sunlit sides
+ * of a hill pick up the warm term, silhouette-edge clumps pick up the rim
+ * term — without introducing per-BLADE lighting noise, which was the bug
+ * that made the original grass shader look spiky. This is the FS3 pattern
+ * safely re-applied to grass.
+ *
+ * Graph shape:
+ *   base      = mix(rootTint, tipTint, treeHeight)
+ *   warmTerm  = warmColor * saturate(dot(worldNormal, sunDir)) * warmStrength
+ *   rimTerm   = fresnel(worldNormal, viewDir, rimColor, power=2.1, strength=1.0) * rimStrength
+ *   color     = base + warmTerm + rimTerm
+ *
+ * `rootTint` declares `inheritSource: "baseLayerColor"` so the grass root
+ * color auto-matches the containing Surface's base layer color unless the
+ * author explicitly sets it. Same inheritance contract as GS2.
+ */
+export function createDefaultGrassSurface3ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:grass-surface-3`;
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Grass Surface 3",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 40 }, settings: {} },
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 80 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 480, y: 40 }, settings: {} },
+
+      // Shared lighting inputs (world-normal is force-up on grass geometry)
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 260 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 420 }, settings: {} },
+
+      // Warm sun term: warmColor * saturate(dot(worldNormal, sunDirection)) * warmStrength
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 256, y: 180 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 256, y: 260 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 360 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 360 }, settings: {} },
+      { nodeId: "warm-scalar", nodeType: "math.multiply", position: { x: 640, y: 300 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 832, y: 240 }, settings: {} },
+
+      // Rim term: fresnel(worldNormal, viewDir, rimColor) * rimStrength
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 256, y: 520 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 256, y: 600 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 448, y: 500 },
+        settings: { power: 2.1, strength: 1.0 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 640, y: 580 }, settings: {} },
+
+      // Combine: heightTint + warmTerm + rimTerm
+      { nodeId: "warm-plus-rim", nodeType: "color.add", position: { x: 1024, y: 400 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1216, y: 240 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1440, y: 240 }, settings: {} }
+    ],
+    edges: [
+      // Base gradient
+      createShaderEdge("gs3-e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("gs3-e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("gs3-e-th-heighttint", "tree-height", "value", "height-tint", "alpha"),
+
+      // Sun dot / saturate mask
+      createShaderEdge("gs3-e-n-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("gs3-e-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("gs3-e-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+
+      // Warm scalar = warmStrength * sunMask
+      createShaderEdge("gs3-e-warmstrength-scalar", "warm-strength", "value", "warm-scalar", "a"),
+      createShaderEdge("gs3-e-sunmask-scalar", "sun-mask", "value", "warm-scalar", "b"),
+
+      // Warm term = warmColor * warmScalar (scalar splats to vec3)
+      createShaderEdge("gs3-e-warmcolor-term", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("gs3-e-warmscalar-term", "warm-scalar", "value", "warm-term", "b"),
+
+      // Rim fresnel
+      createShaderEdge("gs3-e-n-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("gs3-e-v-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("gs3-e-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+
+      // Rim term = rimFresnel * rimStrength
+      createShaderEdge("gs3-e-rimfresnel-term", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("gs3-e-rimstrength-term", "rim-strength", "value", "rim-term", "b"),
+
+      // Combine warm + rim, then add heightTint base
+      createShaderEdge("gs3-e-warm-plus-rim-a", "warm-term", "value", "warm-plus-rim", "a"),
+      createShaderEdge("gs3-e-warm-plus-rim-b", "rim-term", "value", "warm-plus-rim", "b"),
+      createShaderEdge("gs3-e-base-final", "height-tint", "value", "final-color", "a"),
+      createShaderEdge("gs3-e-warmrim-final", "warm-plus-rim", "value", "final-color", "b"),
+
+      // Output
+      createShaderEdge("gs3-e-final-output", "final-color", "value", "output", "color")
+    ],
+    parameters: [
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.36, 0.52, 0.24],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.84, 0.91, 0.58]
+      },
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.25
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.88, 0.96, 0.72]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.3
+      }
+    ],
+    metadata: { builtIn: true, builtInKey: "grass-surface-3" }
+  };
+}
+
+/**
+ * Grass Surface 4: GS3 + world-space macro noise color modulation. The
+ * stylized-grass trick the Unreal tutorial and every painterly reference
+ * lean on: sample a perlin-like noise at each fragment's world XZ position,
+ * use it to interpolate between two subtle tint colors, and multiply the
+ * resulting tint onto the accumulated lighting. Because the noise is
+ * spatially coherent (neighboring fragments see similar values), you get
+ * washes of color variation at multi-meter scale instead of per-blade
+ * speckle. This is what makes stylized grass fields feel alive and
+ * painterly instead of uniform.
+ *
+ * Graph shape:
+ *   base      = mix(rootTint, tipTint, treeHeight)
+ *   warmTerm  = warmColor * saturate(dot(worldNormal, sunDir)) * warmStrength
+ *   rimTerm   = fresnel(worldNormal, viewDir, rimColor) * rimStrength
+ *   lit       = base + warmTerm + rimTerm
+ *   noise     = worldNoise(worldPosition * macroScale)
+ *   macroTint = mix(macroDarkColor, macroLightColor, noise)
+ *   color     = lit * macroTint
+ *
+ * The two macro colors are defaulted close to white (~0.8-1.1 range) so
+ * the modulation is a gentle tint, not a full color replacement. Authors
+ * can widen the range for more dramatic washes.
+ *
+ * `rootTint` inherits from base layer color (same contract as GS2/GS3).
+ */
+export function createDefaultGrassSurface4ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:grass-surface-4`;
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Grass Surface 4",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 40 }, settings: {} },
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 80 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 480, y: 40 }, settings: {} },
+
+      // Lighting inputs (worldNormal is the force-up (0,1,0) on grass geometry)
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 260 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 420 }, settings: {} },
+      { nodeId: "world-position", nodeType: "input.world-position", position: { x: 48, y: 720 }, settings: {} },
+
+      // Warm sun term
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 256, y: 180 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 256, y: 260 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 360 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 360 }, settings: {} },
+      { nodeId: "warm-scalar", nodeType: "math.multiply", position: { x: 640, y: 300 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 832, y: 240 }, settings: {} },
+
+      // Rim term
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 256, y: 520 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 256, y: 600 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 448, y: 500 },
+        settings: { power: 2.1, strength: 1.0 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 640, y: 580 }, settings: {} },
+
+      // Combine lit = base + warm + rim
+      { nodeId: "warm-plus-rim", nodeType: "color.add", position: { x: 1024, y: 400 }, settings: {} },
+      { nodeId: "lit", nodeType: "color.add", position: { x: 1216, y: 240 }, settings: {} },
+
+      // Macro-noise modulation
+      { nodeId: "macro-dark", nodeType: "input.parameter", position: { x: 256, y: 760 }, settings: { parameterId: "macroDarkColor" } },
+      { nodeId: "macro-light", nodeType: "input.parameter", position: { x: 256, y: 840 }, settings: { parameterId: "macroLightColor" } },
+      {
+        nodeId: "world-noise",
+        nodeType: "effect.world-noise",
+        position: { x: 256, y: 720 },
+        settings: { scale: 0.08 }
+      },
+      { nodeId: "macro-tint", nodeType: "math.lerp", position: { x: 640, y: 800 }, settings: {} },
+
+      // final = lit * macroTint
+      { nodeId: "final-color", nodeType: "color.multiply", position: { x: 1408, y: 500 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1632, y: 500 }, settings: {} }
+    ],
+    edges: [
+      // Base gradient
+      createShaderEdge("gs4-e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("gs4-e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("gs4-e-th-heighttint", "tree-height", "value", "height-tint", "alpha"),
+
+      // Sun dot / mask
+      createShaderEdge("gs4-e-n-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("gs4-e-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("gs4-e-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+
+      // Warm scalar + term
+      createShaderEdge("gs4-e-warmstrength-scalar", "warm-strength", "value", "warm-scalar", "a"),
+      createShaderEdge("gs4-e-sunmask-scalar", "sun-mask", "value", "warm-scalar", "b"),
+      createShaderEdge("gs4-e-warmcolor-term", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("gs4-e-warmscalar-term", "warm-scalar", "value", "warm-term", "b"),
+
+      // Rim fresnel + term
+      createShaderEdge("gs4-e-n-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("gs4-e-v-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("gs4-e-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("gs4-e-rimfresnel-term", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("gs4-e-rimstrength-term", "rim-strength", "value", "rim-term", "b"),
+
+      // Combine lit = base + warm + rim
+      createShaderEdge("gs4-e-warm-plus-rim-a", "warm-term", "value", "warm-plus-rim", "a"),
+      createShaderEdge("gs4-e-warm-plus-rim-b", "rim-term", "value", "warm-plus-rim", "b"),
+      createShaderEdge("gs4-e-base-lit", "height-tint", "value", "lit", "a"),
+      createShaderEdge("gs4-e-warmrim-lit", "warm-plus-rim", "value", "lit", "b"),
+
+      // World-noise at worldPosition (scale from node setting)
+      createShaderEdge("gs4-e-worldpos-noise", "world-position", "value", "world-noise", "position"),
+
+      // macroTint = mix(macroDark, macroLight, noise)
+      createShaderEdge("gs4-e-macrodark-tint", "macro-dark", "value", "macro-tint", "a"),
+      createShaderEdge("gs4-e-macrolight-tint", "macro-light", "value", "macro-tint", "b"),
+      createShaderEdge("gs4-e-noise-tint", "world-noise", "value", "macro-tint", "alpha"),
+
+      // final = lit * macroTint
+      createShaderEdge("gs4-e-lit-final", "lit", "value", "final-color", "a"),
+      createShaderEdge("gs4-e-tint-final", "macro-tint", "value", "final-color", "b"),
+
+      // Output
+      createShaderEdge("gs4-e-final-output", "final-color", "value", "output", "color")
+    ],
+    parameters: [
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.36, 0.52, 0.24],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.84, 0.91, 0.58]
+      },
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.25
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.88, 0.96, 0.72]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.3
+      },
+      {
+        parameterId: "macroDarkColor",
+        displayName: "Macro Dark Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.5, 0.68, 0.42]
+      },
+      {
+        parameterId: "macroLightColor",
+        displayName: "Macro Light Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.4, 1.22, 0.74]
+      }
+    ],
+    metadata: { builtIn: true, builtInKey: "grass-surface-4" }
+  };
+}
+
+/**
+ * Grass Surface 6: GS4's color math + a textured blade silhouette. Samples
+ * an authored blade PNG (soft antialiased alpha edges, subtle internal
+ * luminance grain) to shape the visible blade cutout and to add micro-scale
+ * painterly variation on top of the macro world-space noise.
+ *
+ * Why: up through GS4 the blade silhouette is pure geometry — every blade
+ * edge traces a clean geometric ribbon, which reads as cartoonish / vector-
+ * graphic next to the alpha-cutout tree foliage that inherits painterly
+ * silhouettes from its leaf texture. GS6 closes that gap by letting the
+ * blade shape come from an authored alpha texture, same mechanism the
+ * foliage surfaces use. The `tooling/generate-grass-blade.mjs` script
+ * produces a default 128×512 PNG matching the procedural ribbon geometry
+ * with soft noise-jittered edges.
+ *
+ * Graph shape:
+ *   texture    = sample(bladeTexture, uv)
+ *   base       = mix(rootTint, tipTint, treeHeight)
+ *   warmTerm   = warmColor * saturate(dot(worldNormal, sunDir)) * warmStrength
+ *   rimTerm    = fresnel(worldNormal, viewDir, rimColor) * rimStrength
+ *   lit        = base + warmTerm + rimTerm
+ *   noise      = worldNoise(worldPosition * macroScale)
+ *   macroTint  = mix(macroDarkColor, macroLightColor, noise)
+ *   color.rgb  = lit * macroTint * texture.color   (texture luminance adds grain)
+ *   color.a    = texture.alpha                     (silhouette + soft edge)
+ *
+ * `rootTint` inherits from base layer color as in GS2/GS3/GS4. The
+ * `bladeTexture` parameter has no default binding — authors must import a
+ * blade PNG (e.g., `assets/grass-blade.png`) as a TextureDefinition in
+ * their project and bind it on the material instance. Without a texture
+ * bound, the material falls back to full opacity (default texture alpha
+ * is 1) and looks identical to GS4.
+ */
+export function createDefaultGrassSurface6ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:grass-surface-6`;
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Grass Surface 6",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      // Blade texture (alpha + subtle luminance grain)
+      createMaterialTextureNode("blade-texture", "bladeTexture", { x: 48, y: 900 }),
+
+      // Base gradient
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 40 }, settings: {} },
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 80 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 480, y: 40 }, settings: {} },
+
+      // Lighting inputs
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 260 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 340 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 420 }, settings: {} },
+      { nodeId: "world-position", nodeType: "input.world-position", position: { x: 48, y: 720 }, settings: {} },
+
+      // Warm sun term
+      { nodeId: "warm-color", nodeType: "input.parameter", position: { x: 256, y: 180 }, settings: { parameterId: "warmColor" } },
+      { nodeId: "warm-strength", nodeType: "input.parameter", position: { x: 256, y: 260 }, settings: { parameterId: "warmStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 360 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 448, y: 360 }, settings: {} },
+      { nodeId: "warm-scalar", nodeType: "math.multiply", position: { x: 640, y: 300 }, settings: {} },
+      { nodeId: "warm-term", nodeType: "color.multiply", position: { x: 832, y: 240 }, settings: {} },
+
+      // Rim term
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 256, y: 520 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 256, y: 600 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 448, y: 500 },
+        settings: { power: 2.1, strength: 1.0 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 640, y: 580 }, settings: {} },
+
+      // Combine lit = base + warm + rim
+      { nodeId: "warm-plus-rim", nodeType: "color.add", position: { x: 1024, y: 400 }, settings: {} },
+      { nodeId: "lit", nodeType: "color.add", position: { x: 1216, y: 240 }, settings: {} },
+
+      // Macro-noise modulation
+      { nodeId: "macro-dark", nodeType: "input.parameter", position: { x: 256, y: 760 }, settings: { parameterId: "macroDarkColor" } },
+      { nodeId: "macro-light", nodeType: "input.parameter", position: { x: 256, y: 840 }, settings: { parameterId: "macroLightColor" } },
+      {
+        nodeId: "world-noise",
+        nodeType: "effect.world-noise",
+        position: { x: 256, y: 720 },
+        settings: { scale: 0.08 }
+      },
+      { nodeId: "macro-tint", nodeType: "math.lerp", position: { x: 640, y: 800 }, settings: {} },
+      { nodeId: "lit-macro", nodeType: "color.multiply", position: { x: 1408, y: 500 }, settings: {} },
+
+      // Apply texture luminance to add painterly grain (lit × macro × texture.color)
+      { nodeId: "final-color", nodeType: "color.multiply", position: { x: 1600, y: 700 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1824, y: 700 }, settings: {} }
+    ],
+    edges: [
+      // Base gradient
+      createShaderEdge("gs6-e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("gs6-e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("gs6-e-th-heighttint", "tree-height", "value", "height-tint", "alpha"),
+
+      // Sun dot / mask
+      createShaderEdge("gs6-e-n-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("gs6-e-sun-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("gs6-e-sundot-mask", "sun-dot", "value", "sun-mask", "input"),
+
+      // Warm scalar + term
+      createShaderEdge("gs6-e-warmstrength-scalar", "warm-strength", "value", "warm-scalar", "a"),
+      createShaderEdge("gs6-e-sunmask-scalar", "sun-mask", "value", "warm-scalar", "b"),
+      createShaderEdge("gs6-e-warmcolor-term", "warm-color", "value", "warm-term", "a"),
+      createShaderEdge("gs6-e-warmscalar-term", "warm-scalar", "value", "warm-term", "b"),
+
+      // Rim fresnel + term
+      createShaderEdge("gs6-e-n-rim", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("gs6-e-v-rim", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("gs6-e-rimcolor-rim", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("gs6-e-rimfresnel-term", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("gs6-e-rimstrength-term", "rim-strength", "value", "rim-term", "b"),
+
+      // Combine lit = base + warm + rim
+      createShaderEdge("gs6-e-warm-plus-rim-a", "warm-term", "value", "warm-plus-rim", "a"),
+      createShaderEdge("gs6-e-warm-plus-rim-b", "rim-term", "value", "warm-plus-rim", "b"),
+      createShaderEdge("gs6-e-base-lit", "height-tint", "value", "lit", "a"),
+      createShaderEdge("gs6-e-warmrim-lit", "warm-plus-rim", "value", "lit", "b"),
+
+      // World-noise
+      createShaderEdge("gs6-e-worldpos-noise", "world-position", "value", "world-noise", "position"),
+      createShaderEdge("gs6-e-macrodark-tint", "macro-dark", "value", "macro-tint", "a"),
+      createShaderEdge("gs6-e-macrolight-tint", "macro-light", "value", "macro-tint", "b"),
+      createShaderEdge("gs6-e-noise-tint", "world-noise", "value", "macro-tint", "alpha"),
+
+      // lit × macroTint
+      createShaderEdge("gs6-e-lit-macro-a", "lit", "value", "lit-macro", "a"),
+      createShaderEdge("gs6-e-lit-macro-b", "macro-tint", "value", "lit-macro", "b"),
+
+      // Final: (lit × macro) × texture.color — texture luminance adds painterly grain
+      createShaderEdge("gs6-e-litmacro-final", "lit-macro", "value", "final-color", "a"),
+      createShaderEdge("gs6-e-texture-final", "blade-texture", "color", "final-color", "b"),
+
+      // Output color + alpha
+      createShaderEdge("gs6-e-color-output", "final-color", "value", "output", "color"),
+      createShaderEdge("gs6-e-alpha-output", "blade-texture", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "bladeTexture",
+        displayName: "Blade Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.36, 0.52, 0.24],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.84, 0.91, 0.58]
+      },
+      {
+        parameterId: "warmColor",
+        displayName: "Warm Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.35, 1.08, 0.68]
+      },
+      {
+        parameterId: "warmStrength",
+        displayName: "Warm Sun Strength",
+        dataType: "float",
+        defaultValue: 0.25
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.88, 0.96, 0.72]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.3
+      },
+      {
+        parameterId: "macroDarkColor",
+        displayName: "Macro Dark Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.5, 0.68, 0.42]
+      },
+      {
+        parameterId: "macroLightColor",
+        displayName: "Macro Light Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.4, 1.22, 0.74]
+      }
+    ],
+    metadata: { builtIn: true, builtInKey: "grass-surface-6" }
+  };
+}
+
+interface BuiltInGrassSurfacePreset {
+  shaderDefinitionId: string;
+  displayName: string;
+  builtInKey: string;
+  rootTint: [number, number, number];
+  tipTint: [number, number, number];
+  sunColor: [number, number, number];
+  sunStrength: number;
+  tipBoostColor: [number, number, number];
+  tipBoostStrength: number;
+  rimColor: [number, number, number];
+  rimStrength: number;
+}
+
+/**
+ * Shared painterly grass surface graph.
+ *
+ * This is the canonical stylized scatter-surface shape for grass-like
+ * instances. It preserves the GrassTypeDefinition's authored vertex colors,
+ * then layers on painterly tinting, warm sun, tip brightening, and a soft rim
+ * so grass lands in the same visual family as the foliage surface shaders.
+ */
+function createBuiltInGrassSurfaceShaderGraph(
+  preset: BuiltInGrassSurfacePreset
+): ShaderGraphDocument {
+  return {
+    shaderDefinitionId: preset.shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: preset.displayName,
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 200 }, settings: {} },
+      { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 256, y: 200 }, settings: {} },
+      { nodeId: "vertex-rgb", nodeType: "math.combine-vector", position: { x: 480, y: 200 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 56 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 360 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 456 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 552 }, settings: {} },
+
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 96 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 480, y: 56 }, settings: {} },
+      { nodeId: "tinted-base", nodeType: "color.multiply", position: { x: 704, y: 160 }, settings: {} },
+
+      { nodeId: "sun-color", nodeType: "input.parameter", position: { x: 256, y: 240 }, settings: { parameterId: "sunColor" } },
+      { nodeId: "sun-strength", nodeType: "input.parameter", position: { x: 256, y: 320 }, settings: { parameterId: "sunStrength" } },
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 432 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 480, y: 432 }, settings: {} },
+      { nodeId: "sun-scalar", nodeType: "math.multiply", position: { x: 704, y: 376 }, settings: {} },
+      { nodeId: "sun-term", nodeType: "color.multiply", position: { x: 928, y: 312 }, settings: {} },
+
+      { nodeId: "tip-boost-color", nodeType: "input.parameter", position: { x: 256, y: 648 }, settings: { parameterId: "tipBoostColor" } },
+      { nodeId: "tip-boost-strength", nodeType: "input.parameter", position: { x: 256, y: 728 }, settings: { parameterId: "tipBoostStrength" } },
+      { nodeId: "tip-boost-scalar", nodeType: "math.multiply", position: { x: 480, y: 696 }, settings: {} },
+      { nodeId: "tip-boost-term", nodeType: "color.multiply", position: { x: 704, y: 648 }, settings: {} },
+
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 928, y: 536 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 928, y: 632 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 1168, y: 520 },
+        settings: { power: 2.1, strength: 1.0 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 1408, y: 576 }, settings: {} },
+
+      { nodeId: "base-plus-sun", nodeType: "color.add", position: { x: 1168, y: 200 }, settings: {} },
+      { nodeId: "base-plus-sun-plus-tip", nodeType: "color.add", position: { x: 1408, y: 264 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 1648, y: 360 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 1888, y: 360 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-vertexcolor-split", "vertex-color", "value", "split-vertex-color", "input"),
+      createShaderEdge("e-splitvertex-x-rgb", "split-vertex-color", "x", "vertex-rgb", "x"),
+      createShaderEdge("e-splitvertex-y-rgb", "split-vertex-color", "y", "vertex-rgb", "y"),
+      createShaderEdge("e-splitvertex-z-rgb", "split-vertex-color", "z", "vertex-rgb", "z"),
+      createShaderEdge("e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("e-treeheight-heighttint", "tree-height", "value", "height-tint", "alpha"),
+      createShaderEdge("e-vertexcolor-tintedbase", "vertex-rgb", "vec3", "tinted-base", "a"),
+      createShaderEdge("e-heighttint-tintedbase", "height-tint", "value", "tinted-base", "b"),
+
+      createShaderEdge("e-normal-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-sundir-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-sundot-sunmask", "sun-dot", "value", "sun-mask", "input"),
+      createShaderEdge("e-sunmask-sunscalar", "sun-mask", "value", "sun-scalar", "a"),
+      createShaderEdge("e-sunstrength-sunscalar", "sun-strength", "value", "sun-scalar", "b"),
+      createShaderEdge("e-suncolor-sunterm", "sun-color", "value", "sun-term", "a"),
+      createShaderEdge("e-sunscalar-sunterm", "sun-scalar", "value", "sun-term", "b"),
+
+      createShaderEdge("e-treeheight-tipboostscalar", "tree-height", "value", "tip-boost-scalar", "a"),
+      createShaderEdge("e-tipbooststrength-tipboostscalar", "tip-boost-strength", "value", "tip-boost-scalar", "b"),
+      createShaderEdge("e-tipboostcolor-tipboostterm", "tip-boost-color", "value", "tip-boost-term", "a"),
+      createShaderEdge("e-tipboostscalar-tipboostterm", "tip-boost-scalar", "value", "tip-boost-term", "b"),
+
+      createShaderEdge("e-normal-rimfresnel", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("e-view-rimfresnel", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("e-rimcolor-rimfresnel", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("e-rimfresnel-rimterm", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("e-rimstrength-rimterm", "rim-strength", "value", "rim-term", "b"),
+
+      createShaderEdge("e-tintedbase-baseplussun", "tinted-base", "value", "base-plus-sun", "a"),
+      createShaderEdge("e-sunterm-baseplussun", "sun-term", "value", "base-plus-sun", "b"),
+      createShaderEdge("e-baseplussun-baseplussunplustip", "base-plus-sun", "value", "base-plus-sun-plus-tip", "a"),
+      createShaderEdge("e-tipboostterm-baseplussunplustip", "tip-boost-term", "value", "base-plus-sun-plus-tip", "b"),
+      createShaderEdge("e-baseplussunplustip-final", "base-plus-sun-plus-tip", "value", "final-color", "a"),
+      createShaderEdge("e-rimterm-final", "rim-term", "value", "final-color", "b"),
+      createShaderEdge("e-final-output", "final-color", "value", "output", "color")
+    ],
+    parameters: [
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: preset.rootTint
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: preset.tipTint
+      },
+      {
+        parameterId: "sunColor",
+        displayName: "Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: preset.sunColor
+      },
+      {
+        parameterId: "sunStrength",
+        displayName: "Sun Strength",
+        dataType: "float",
+        defaultValue: preset.sunStrength
+      },
+      {
+        parameterId: "tipBoostColor",
+        displayName: "Tip Boost Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: preset.tipBoostColor
+      },
+      {
+        parameterId: "tipBoostStrength",
+        displayName: "Tip Boost Strength",
+        dataType: "float",
+        defaultValue: preset.tipBoostStrength
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: preset.rimColor
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: preset.rimStrength
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: preset.builtInKey
+    }
+  };
+}
+
+/**
+ * Meadow Grass: soft cool-to-warm greens with painterly tips and a modest
+ * warm sun term. This is the neutral default that should sit comfortably next
+ * to the foliage surface family in spring/summer scenes.
+ */
+export function createDefaultMeadowGrassShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  return createBuiltInGrassSurfaceShaderGraph({
+    shaderDefinitionId:
+      options.shaderDefinitionId ?? `${projectId}:shader:meadow-grass`,
+    displayName: options.displayName ?? "Meadow Grass",
+    builtInKey: "meadow-grass",
+    rootTint: [0.72, 0.9, 0.72],
+    tipTint: [1.08, 1.18, 0.86],
+    sunColor: [1.22, 1.08, 0.72],
+    sunStrength: 0.28,
+    tipBoostColor: [1.12, 1.14, 0.8],
+    tipBoostStrength: 0.16,
+    rimColor: [0.88, 0.96, 0.82],
+    rimStrength: 0.12
+  });
+}
+
+/**
+ * Sunlit Lawn: a brighter, cleaner lawn look with stronger top-lighting and a
+ * lighter value range for the broad sunlit fields in the refs.
+ */
+export function createDefaultSunlitLawnShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  return createBuiltInGrassSurfaceShaderGraph({
+    shaderDefinitionId:
+      options.shaderDefinitionId ?? `${projectId}:shader:sunlit-lawn`,
+    displayName: options.displayName ?? "Sunlit Lawn",
+    builtInKey: "sunlit-lawn",
+    rootTint: [0.86, 1.04, 0.76],
+    tipTint: [1.22, 1.32, 0.92],
+    sunColor: [1.36, 1.18, 0.76],
+    sunStrength: 0.38,
+    tipBoostColor: [1.2, 1.22, 0.82],
+    tipBoostStrength: 0.22,
+    rimColor: [0.92, 1.0, 0.86],
+    rimStrength: 0.16
+  });
+}
+
+/**
+ * Autumn Field Grass: warm ochres and golds tuned for broad painterly field
+ * reads that still keep some base-to-tip separation.
+ */
+export function createDefaultAutumnFieldGrassShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  return createBuiltInGrassSurfaceShaderGraph({
+    shaderDefinitionId:
+      options.shaderDefinitionId ?? `${projectId}:shader:autumn-field-grass`,
+    displayName: options.displayName ?? "Autumn Field Grass",
+    builtInKey: "autumn-field-grass",
+    rootTint: [0.98, 0.82, 0.58],
+    tipTint: [1.28, 1.0, 0.62],
+    sunColor: [1.42, 1.02, 0.58],
+    sunStrength: 0.26,
+    tipBoostColor: [1.32, 1.04, 0.68],
+    tipBoostStrength: 0.18,
+    rimColor: [1.0, 0.9, 0.72],
+    rimStrength: 0.1
+  });
+}
+
+/**
+ * Painterly Grass: a more stylized scatter look with brighter tip lift,
+ * softer root-to-tip banding, and a stronger soft rim so a dedicated
+ * painterly surface can be added without disturbing the existing starter
+ * meadow/lawn/field looks.
+ */
+export function createDefaultPainterlyGrassShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:painterly-grass`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Painterly Grass",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 240 }, settings: {} },
+      { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 256, y: 240 }, settings: {} },
+      { nodeId: "vertex-rgb", nodeType: "math.combine-vector", position: { x: 448, y: 240 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 80 }, settings: {} },
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 560 }, settings: {} },
+      { nodeId: "split-uv", nodeType: "math.split-vector", position: { x: 256, y: 560 }, settings: {} },
+      { nodeId: "world-normal", nodeType: "input.world-normal", position: { x: 48, y: 400 }, settings: {} },
+      { nodeId: "sun-direction", nodeType: "input.sun-direction", position: { x: 48, y: 720 }, settings: {} },
+      { nodeId: "view-direction", nodeType: "input.view-direction", position: { x: 48, y: 820 }, settings: {} },
+
+      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootTint" } },
+      { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 104 }, settings: { parameterId: "tipTint" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
+      { nodeId: "base-color", nodeType: "color.multiply", position: { x: 896, y: 168 }, settings: {} },
+
+      { nodeId: "base-shade", nodeType: "input.parameter", position: { x: 448, y: 360 }, settings: { parameterId: "baseShade" } },
+      { nodeId: "tip-shade", nodeType: "input.parameter", position: { x: 448, y: 440 }, settings: { parameterId: "tipShade" } },
+      { nodeId: "vertical-shade", nodeType: "math.lerp", position: { x: 672, y: 408 }, settings: {} },
+      { nodeId: "shaded-base", nodeType: "color.multiply", position: { x: 1120, y: 200 }, settings: {} },
+
+      { nodeId: "sun-dot", nodeType: "math.dot", position: { x: 256, y: 720 }, settings: {} },
+      { nodeId: "sun-dot-abs", nodeType: "math.abs", position: { x: 448, y: 720 }, settings: {} },
+      { nodeId: "sun-mask", nodeType: "math.saturate", position: { x: 672, y: 720 }, settings: {} },
+      { nodeId: "sun-strength", nodeType: "input.parameter", position: { x: 448, y: 804 }, settings: { parameterId: "sunStrength" } },
+      { nodeId: "sun-scalar", nodeType: "math.multiply", position: { x: 896, y: 760 }, settings: {} },
+      { nodeId: "sun-color", nodeType: "input.parameter", position: { x: 896, y: 664 }, settings: { parameterId: "sunColor" } },
+      { nodeId: "sun-term", nodeType: "color.multiply", position: { x: 1120, y: 680 }, settings: {} },
+
+      { nodeId: "tip-boost-color", nodeType: "input.parameter", position: { x: 896, y: 360 }, settings: { parameterId: "tipBoostColor" } },
+      { nodeId: "tip-boost-strength", nodeType: "input.parameter", position: { x: 896, y: 456 }, settings: { parameterId: "tipBoostStrength" } },
+      { nodeId: "tip-boost-scalar", nodeType: "math.multiply", position: { x: 1120, y: 456 }, settings: {} },
+      { nodeId: "tip-boost-term", nodeType: "color.multiply", position: { x: 1344, y: 392 }, settings: {} },
+
+      { nodeId: "rim-color", nodeType: "input.parameter", position: { x: 896, y: 920 }, settings: { parameterId: "rimColor" } },
+      { nodeId: "rim-strength", nodeType: "input.parameter", position: { x: 1120, y: 920 }, settings: { parameterId: "rimStrength" } },
+      {
+        nodeId: "rim-fresnel",
+        nodeType: "effect.fresnel",
+        position: { x: 1120, y: 820 },
+        settings: { power: 1.6, strength: 1.0 }
+      },
+      { nodeId: "rim-term", nodeType: "color.multiply", position: { x: 1344, y: 840 }, settings: {} },
+
+      { nodeId: "center-x", nodeType: "math.subtract", position: { x: 448, y: 560 }, settings: {} },
+      { nodeId: "half", nodeType: "input.parameter", position: { x: 448, y: 640 }, settings: { parameterId: "halfValue" } },
+      { nodeId: "abs-x", nodeType: "math.abs", position: { x: 672, y: 560 }, settings: {} },
+      { nodeId: "root-width", nodeType: "input.parameter", position: { x: 672, y: 880 }, settings: { parameterId: "rootWidth" } },
+      { nodeId: "tip-width", nodeType: "input.parameter", position: { x: 672, y: 960 }, settings: { parameterId: "tipWidth" } },
+      { nodeId: "width-delta", nodeType: "math.subtract", position: { x: 896, y: 920 }, settings: {} },
+      { nodeId: "width-scale", nodeType: "math.multiply", position: { x: 1120, y: 960 }, settings: {} },
+      { nodeId: "width-at-height", nodeType: "math.add", position: { x: 1344, y: 920 }, settings: {} },
+      { nodeId: "distance-to-edge", nodeType: "math.subtract", position: { x: 1120, y: 560 }, settings: {} },
+      { nodeId: "edge-softness", nodeType: "input.parameter", position: { x: 1120, y: 640 }, settings: { parameterId: "edgeSoftness" } },
+      { nodeId: "alpha-divide", nodeType: "math.divide", position: { x: 1344, y: 560 }, settings: {} },
+      { nodeId: "alpha-mask", nodeType: "math.clamp", position: { x: 1568, y: 560 }, settings: {} },
+
+      { nodeId: "base-plus-sun", nodeType: "color.add", position: { x: 1568, y: 200 }, settings: {} },
+      { nodeId: "base-plus-sun-plus-tip", nodeType: "color.add", position: { x: 1792, y: 296 }, settings: {} },
+      { nodeId: "final-color", nodeType: "color.add", position: { x: 2016, y: 424 }, settings: {} },
+      { nodeId: "output", nodeType: "output.fragment", position: { x: 2240, y: 424 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("e-vertexcolor-split", "vertex-color", "value", "split-vertex-color", "input"),
+      createShaderEdge("e-vertexsplit-x", "split-vertex-color", "x", "vertex-rgb", "x"),
+      createShaderEdge("e-vertexsplit-y", "split-vertex-color", "y", "vertex-rgb", "y"),
+      createShaderEdge("e-vertexsplit-z", "split-vertex-color", "z", "vertex-rgb", "z"),
+      createShaderEdge("e-uv-splituv", "uv", "value", "split-uv", "input"),
+
+      createShaderEdge("e-root-heighttint", "root-tint", "value", "height-tint", "a"),
+      createShaderEdge("e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("e-treeheight-heighttint", "tree-height", "value", "height-tint", "alpha"),
+      createShaderEdge("e-vertexrgb-basecolor", "vertex-rgb", "vec3", "base-color", "a"),
+      createShaderEdge("e-heighttint-basecolor", "height-tint", "value", "base-color", "b"),
+
+      createShaderEdge("e-baseshade-verticalshade", "base-shade", "value", "vertical-shade", "a"),
+      createShaderEdge("e-tipshade-verticalshade", "tip-shade", "value", "vertical-shade", "b"),
+      createShaderEdge("e-uvy-verticalshade", "split-uv", "y", "vertical-shade", "alpha"),
+      createShaderEdge("e-basecolor-shadedbase", "base-color", "value", "shaded-base", "a"),
+      createShaderEdge("e-verticalshade-shadedbase", "vertical-shade", "value", "shaded-base", "b"),
+
+      createShaderEdge("e-normal-sundot", "world-normal", "value", "sun-dot", "a"),
+      createShaderEdge("e-sundir-sundot", "sun-direction", "value", "sun-dot", "b"),
+      createShaderEdge("e-sundot-abs", "sun-dot", "value", "sun-dot-abs", "input"),
+      createShaderEdge("e-sundotabs-sunmask", "sun-dot-abs", "value", "sun-mask", "input"),
+      createShaderEdge("e-sunmask-sunscalar", "sun-mask", "value", "sun-scalar", "a"),
+      createShaderEdge("e-sunstrength-sunscalar", "sun-strength", "value", "sun-scalar", "b"),
+      createShaderEdge("e-suncolor-sunterm", "sun-color", "value", "sun-term", "a"),
+      createShaderEdge("e-sunscalar-sunterm", "sun-scalar", "value", "sun-term", "b"),
+
+      createShaderEdge("e-treeheight-tipboostscalar", "tree-height", "value", "tip-boost-scalar", "a"),
+      createShaderEdge("e-tipbooststrength-tipboostscalar", "tip-boost-strength", "value", "tip-boost-scalar", "b"),
+      createShaderEdge("e-tipboostcolor-tipboostterm", "tip-boost-color", "value", "tip-boost-term", "a"),
+      createShaderEdge("e-tipboostscalar-tipboostterm", "tip-boost-scalar", "value", "tip-boost-term", "b"),
+
+      createShaderEdge("e-normal-rimfresnel", "world-normal", "value", "rim-fresnel", "normal"),
+      createShaderEdge("e-view-rimfresnel", "view-direction", "value", "rim-fresnel", "viewDirection"),
+      createShaderEdge("e-rimcolor-rimfresnel", "rim-color", "value", "rim-fresnel", "color"),
+      createShaderEdge("e-rimfresnel-rimterm", "rim-fresnel", "value", "rim-term", "a"),
+      createShaderEdge("e-rimstrength-rimterm", "rim-strength", "value", "rim-term", "b"),
+
+      createShaderEdge("e-half-centerx", "half", "value", "center-x", "a"),
+      createShaderEdge("e-uvx-centerx", "split-uv", "x", "center-x", "b"),
+      createShaderEdge("e-centerx-absx", "center-x", "value", "abs-x", "input"),
+      createShaderEdge("e-tipwidth-widthdelta", "tip-width", "value", "width-delta", "a"),
+      createShaderEdge("e-rootwidth-widthdelta", "root-width", "value", "width-delta", "b"),
+      createShaderEdge("e-widthdelta-widthscale", "width-delta", "value", "width-scale", "a"),
+      createShaderEdge("e-uvy-widthscale", "split-uv", "y", "width-scale", "b"),
+      createShaderEdge("e-rootwidth-widthatheight", "root-width", "value", "width-at-height", "a"),
+      createShaderEdge("e-widthscale-widthatheight", "width-scale", "value", "width-at-height", "b"),
+      createShaderEdge("e-widthatheight-distancetoedge", "width-at-height", "value", "distance-to-edge", "a"),
+      createShaderEdge("e-absx-distancetoedge", "abs-x", "value", "distance-to-edge", "b"),
+      createShaderEdge("e-distancetoedge-alphadivide", "distance-to-edge", "value", "alpha-divide", "a"),
+      createShaderEdge("e-edgesoftness-alphadivide", "edge-softness", "value", "alpha-divide", "b"),
+      createShaderEdge("e-alphadivide-alphamask", "alpha-divide", "value", "alpha-mask", "input"),
+
+      createShaderEdge("e-shadedbase-baseplussun", "shaded-base", "value", "base-plus-sun", "a"),
+      createShaderEdge("e-sunterm-baseplussun", "sun-term", "value", "base-plus-sun", "b"),
+      createShaderEdge("e-baseplussun-baseplussunplustip", "base-plus-sun", "value", "base-plus-sun-plus-tip", "a"),
+      createShaderEdge("e-tipboostterm-baseplussunplustip", "tip-boost-term", "value", "base-plus-sun-plus-tip", "b"),
+      createShaderEdge("e-baseplussunplustip-final", "base-plus-sun-plus-tip", "value", "final-color", "a"),
+      createShaderEdge("e-rimterm-final", "rim-term", "value", "final-color", "b"),
+
+      createShaderEdge("e-final-output", "final-color", "value", "output", "color"),
+      createShaderEdge("e-alpha-output", "alpha-mask", "value", "output", "alpha")
+    ],
+    parameters: [
+      {
+        parameterId: "rootTint",
+        displayName: "Root Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.88, 0.98, 0.78]
+      },
+      {
+        parameterId: "tipTint",
+        displayName: "Tip Tint",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.26, 1.34, 0.96]
+      },
+      {
+        parameterId: "baseShade",
+        displayName: "Base Shade",
+        dataType: "float",
+        defaultValue: 0.58
+      },
+      {
+        parameterId: "tipShade",
+        displayName: "Tip Shade",
+        dataType: "float",
+        defaultValue: 1.06
+      },
+      {
+        parameterId: "sunColor",
+        displayName: "Sun Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.42, 1.22, 0.76]
+      },
+      {
+        parameterId: "sunStrength",
+        displayName: "Sun Strength",
+        dataType: "float",
+        defaultValue: 0.34
+      },
+      {
+        parameterId: "tipBoostColor",
+        displayName: "Tip Boost Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [1.18, 1.24, 0.92]
+      },
+      {
+        parameterId: "tipBoostStrength",
+        displayName: "Tip Boost Strength",
+        dataType: "float",
+        defaultValue: 0.22
+      },
+      {
+        parameterId: "rimColor",
+        displayName: "Rim Color",
+        dataType: "color",
+        colorSpace: "hdr",
+        defaultValue: [0.94, 1, 0.9]
+      },
+      {
+        parameterId: "rimStrength",
+        displayName: "Rim Strength",
+        dataType: "float",
+        defaultValue: 0.18
+      },
+      {
+        parameterId: "halfValue",
+        displayName: "Half",
+        dataType: "float",
+        defaultValue: 0.5
+      },
+      {
+        parameterId: "rootWidth",
+        displayName: "Root Width",
+        dataType: "float",
+        defaultValue: 0.48
+      },
+      {
+        parameterId: "tipWidth",
+        displayName: "Tip Width",
+        dataType: "float",
+        defaultValue: 0.025
+      },
+      {
+        parameterId: "edgeSoftness",
+        displayName: "Edge Softness",
+        dataType: "float",
+        defaultValue: 0.16
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "painterly-grass"
     }
   };
 }

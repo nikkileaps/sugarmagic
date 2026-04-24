@@ -11,6 +11,7 @@ import { Button, Popover, Stack, UnstyledButton } from "@mantine/core";
 import type {
   Mask,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   SurfaceContext,
   TextureDefinition
 } from "@sugarmagic/domain";
@@ -23,12 +24,18 @@ import { sampleMask } from "./maskSampling";
 export interface LayerMaskPopoverProps {
   value: Mask;
   allowedContext: SurfaceContext;
+  allowPainted: boolean;
+  paintOwner:
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | null;
+  layerId: string;
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onApply: (nextMask: Mask) => void;
   onActivate?: () => void;
 }
@@ -36,12 +43,15 @@ export interface LayerMaskPopoverProps {
 export function LayerMaskPopover({
   value,
   allowedContext,
+  allowPainted,
+  paintOwner,
+  layerId,
   textureDefinitions,
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   onApply,
   onActivate
 }: LayerMaskPopoverProps) {
@@ -63,6 +73,7 @@ export function LayerMaskPopover({
           setDraftMask(cloneMask(value));
         }
       }}
+      withinPortal={false}
       position="bottom-start"
       shadow="md"
       width={300}
@@ -91,12 +102,21 @@ export function LayerMaskPopover({
             showHeading={false}
             value={draftMask}
             allowedContext={allowedContext}
+            allowPainted={allowPainted}
+            paintTarget={
+              paintOwner
+                ? {
+                    ...paintOwner,
+                    layerId
+                  }
+                : null
+            }
             textureDefinitions={textureDefinitions}
             maskTextureDefinitions={maskTextureDefinitions}
             onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
             onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-            activePaintMaskTextureId={activePaintMaskTextureId}
-            onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
+            activeMaskPaintTarget={activeMaskPaintTarget}
+            onSetMaskPaintTarget={onSetMaskPaintTarget}
             onChange={setDraftMask}
           />
           <Button

@@ -2178,36 +2178,32 @@ pattern from `applyShaderToRenderable`.
 
 ### 36.12 — Painted mask textures
 
-**Outcome:** Authors paint masks directly in the viewport. Paint
-strokes produce pixel data; that pixel data is persisted as
-**IO-managed authored texture files** in the project directory,
-referenced by a new `MaskTextureDefinition` content-library
-primitive. New Mask variant:
-`{ kind: "painted"; maskTextureId: string }`. A layer with a
-painted mask shows a "paint mode" button in the mask editor;
-entering paint mode enables brush input over the viewport, brush
-strokes accumulate into an in-memory canvas during drag and commit
-on pointerup through the Epic 033 draft/commit pattern, the commit
-writes the updated PNG back to the project directory, and the
-assetSourceStore's stable-fingerprint regeneration hands the new
-blob URL to the render path.
+**Outcome:** Painted masks remain a real `Mask` variant, but they
+are only authorable on **inline application-site surfaces**. A
+shared `Surface Library Reference` stays shared and read-only at
+the application point. If the author wants to customize that
+channel/slot, they click **Make Local** to convert the binding to
+an `Inline Surface`, and then edit the actual local layer stack
+there. That local inline surface may use `{ kind: "painted";
+maskTextureId }`; reusable `SurfaceDefinition`s in the Surface
+Library may not.
 
-**Storage ownership — where the pixels actually live.** A
-painted mask's source of truth is a PNG file inside the project
-directory, NOT inline bytes in the serialized project document.
-Rationale:
+This is intentionally simpler than the old override model:
 
-- A project with many painted masks (50 Surfaces × 2 painted masks
-  × 512×512 R8 ≈ 25 MB) would obliterate the project document's
-  size + readability + diff-ability if embedded. File-based storage
-  scales.
-- It's the same pattern TextureDefinition and AssetDefinition
-  already use (see the existing `packages/io` asset infrastructure
-  and Plan 032's `AuthoredAssetResolver`). One model, one save/load
-  path, one blob-URL lifecycle through assetSourceStore.
-- The mask file is plain PNG — human-inspectable, git-friendly
-  (with LFS for larger ones), standard format. Browsers and native
-  tools can open it directly.
+- `Reference` means "use the library surface exactly as-is."
+- `Make Local` means "fork a local inline copy for this specific
+  channel or slot."
+- Painted masks live only on that local inline copy.
+
+No per-layer bounded override payload, no "Override here" toggles,
+no split between library layer + local override layer. One source
+of truth for shared surfaces, one obvious path for local
+customization.
+
+**Storage ownership — where the pixels actually live.** Painted
+mask pixels still live as **IO-managed PNG files** in the project
+directory, referenced by `MaskTextureDefinition`. They do **not**
+embed binary data inside the project document.
 
 **`MaskTextureDefinition` shape:**
 
@@ -2216,306 +2212,140 @@ export interface MaskTextureDefinition {
   definitionId: string;
   definitionKind: "mask-texture";
   displayName: string;
-  source: { relativeAssetPath: string };   // e.g. "masks/abc123.png"
-  format: "r8" | "rgba8";                    // R8 default; RGBA supports multi-mask packing
-  resolution: [number, number];              // e.g. [512, 512]
+  source: { relativeAssetPath: string }; // e.g. "masks/abc123.png"
+  format: "r8" | "rgba8";
+  resolution: [number, number];
 }
 ```
-
-Structurally parallel to `TextureDefinition`; they differ only in
-semantic role (`TextureDefinition` carries color / normal / ORM
-textures used in appearance content; `MaskTextureDefinition`
-carries scalar masks used in Mask sources).
 
 **Project directory layout.** Mask files live at
 `<project-root>/masks/<definitionId>.png`. The `masks/` folder is
-created lazily on first paint operation in a project. The
-`relativeAssetPath` on the definition always starts with `masks/`
-for painted masks. (Authors could later hand-import a PNG into
-`masks/` and reference it with a MaskTextureDefinition — same
-shape; painted vs. imported is invisible at the domain layer.)
+created lazily on first paint operation.
 
 **Paint stroke flow (the data path):**
 
-1. Author enters paint mode on a layer whose mask is
-   `{ kind: "painted"; maskTextureId }`.
-2. If `maskTextureId` is null (newly-added painted mask), the UI
-   dispatches `CreateMaskTexture` command: generates a new
-   `definitionId`, creates a blank R8 PNG at
-   `masks/<id>.png`, writes a new MaskTextureDefinition into the
-   content library, sets the layer's mask's `maskTextureId` to
-   the new id.
-3. Author drags the brush over the viewport. Brush strokes
-   accumulate into an in-memory canvas (OffscreenCanvas when
-   available, fallback to HTMLCanvasElement). During the drag the
-   viewport samples the in-memory canvas directly so the preview
-   reflects the in-progress stroke immediately (Epic 033 draft
-   semantics — no disk write until commit).
-4. On pointerup, `PaintMaskTextureStroke` command commits:
-   - Writes the updated canvas bytes to `masks/<id>.png` via the
-     `packages/io` write path (FileSystemDirectoryHandle).
-   - Fires through the session update mechanism.
-   - `assetSourceStore`'s fingerprint detection sees the file's
-     bytes changed, regenerates the blob URL for that path (per
-     the existing texture-dispose-and-reallocate pattern from Plan
-     032's `AuthoredAssetResolver`).
-   - Viewport re-renders with the new blob URL.
-5. In-memory canvas is flushed; next stroke re-loads from the
-   committed file.
+1. Author binds a Surface to a landscape channel or asset slot.
+2. If the binding is a library reference and they want to
+   customize it, they click **Make Local**. The binding becomes an
+   `Inline Surface` seeded from the referenced library
+   `SurfaceDefinition`.
+3. On one of that inline surface's layers, author chooses
+   `Mask Type = Painted`.
+4. If `maskTextureId` is null, the UI creates a new
+   `MaskTextureDefinition`, writes a blank PNG to
+   `masks/<id>.png`, and stores the new `maskTextureId` on the
+   inline layer's mask.
+5. Author clicks **Paint in Viewport**. Brush input now targets
+   that specific inline layer on that specific application site.
+6. During drag, strokes accumulate into an in-memory canvas and
+   preview live in the viewport.
+7. On pointerup, the updated canvas is written back to the PNG via
+   `packages/io`, `assetSourceStore` refreshes the blob URL, and
+   render-web rebinds the updated texture.
 
-**Undo/redo.** A painted stroke's undo payload carries enough
-information to reverse the stroke: (a) the pre-stroke pixel
-snapshot for the affected bounding rectangle only (not the whole
-texture — localized to stroke bounds so undo memory is bounded
-even for large masks), (b) the stroke parameters, (c) the target
-`maskTextureId`. Undo writes the pre-stroke bounding-rect snapshot
-back to the file; redo replays the stroke. The bounded snapshot
-keeps undo-stack memory manageable even with 10 strokes of a
-512×512 R8 mask. Same shape as the existing landscape splatmap
-undo path (which already handles paint-stroke undo against a
-pixel texture).
+**Which surface is the author brushing on?** Only real
+application-site inline surfaces:
 
-**Save/load.** On project save, MaskTextureDefinitions serialize
-as metadata only — `definitionId`, `displayName`,
-`source.relativeAssetPath`, `format`, `resolution`. Pixel data is
-already on disk at the path the definition references; save-time
-does not re-write mask files unless there are uncommitted strokes.
-On project load, the IO path reads all MaskTextureDefinitions from
-the project document, assetSourceStore mints blob URLs for their
-paths, materializers sample the blob URLs. No special-casing
-painted masks — they flow through the same asset-source path as
-every other texture.
+- Inline surface on a landscape channel → brush raycasts the
+  landscape mesh in terrain/world paint space; the painted mask
+  gates one layer *inside that channel*.
+- Inline surface on an asset slot → brush raycasts the placed
+  asset mesh at that slot's UVs; the painted mask gates one layer
+  inside that slot's local inline surface.
 
-**Brush settings.** Radius, strength, falloff, mode (paint /
-erase). Reuses the landscape brush controller (which already
-exists from Plan 032) with a different target texture.
+The Surface Library preview is **not** a painted-mask authoring
+surface in v2. Reusable library surfaces may use procedural masks
+(`Noise`, `Voronoi`, `Gradient`, etc.), but custom painted masks
+are application-owned local variation.
 
-**Which surface is the author brushing on?** Depends on where the
-layer sits:
+**Paint resolution.** `512×512 R8` is the default, but authors
+choose per-site resolution on creation (`512`, `1024`, `2048`).
 
-- Layer on a Landscape channel → brush raycasts against the
-  landscape mesh; stroke writes into the mask texture at the
-  corresponding landscape UV.
-- Layer on an asset mesh slot → brush raycasts against the asset
-  mesh (already placed in the authoring viewport); stroke writes
-  at the corresponding mesh UV for that material slot.
-- Layer on a preview primitive (Surface Library plane / cube /
-  sphere) → brush raycasts against the preview geometry; stroke
-  writes at the corresponding primitive UV. (Useful for authoring
-  reusable Surfaces whose masks are then used wherever the Surface
-  is referenced.)
+**Save/load + cleanup.** `MaskTextureDefinition`s serialize as
+metadata only. The backing PNG is already on disk. On save,
+Sugarmagic reconciles live inline painted-mask references and
+deletes orphaned `MaskTextureDefinition`s and `masks/*.png` files
+that are no longer reachable from any inline application-site
+surface.
 
 **Files touched:**
 
-- `packages/domain/src/surface/mask.ts` — add `painted` variant.
+- `packages/domain/src/surface/mask.ts` — keep `painted` as a real
+  mask source, but document/runtime-check that reusable library
+  surfaces may not contain it.
 - `packages/domain/src/content-library/index.ts` —
-  `MaskTextureDefinition` primitive in the content library
-  (sibling of `TextureDefinition`); `ContentLibrarySnapshot.maskTextureDefinitions[]`.
-- `packages/io/src/masks/index.ts` (new) — file-system helpers:
-  `createBlankMaskFile(handle, relativePath, resolution, format)`,
-  `writeMaskFile(handle, relativePath, canvas)`,
-  `readMaskFile(handle, relativePath) → ImageData` (for undo
-  snapshot generation).
-- `packages/io/src/imports/mask-texture-import.ts` (new) — import
-  an existing PNG as a MaskTextureDefinition (author drops a PNG
-  into the project from an external tool).
-- `packages/domain/src/commands/executor.ts` — `CreateMaskTexture`,
-  `PaintMaskTextureStroke`, `DeleteMaskTexture` commands.
-- `packages/shell/src/viewport/index.ts` — `maskPaintTarget` slice
-  (which layer's mask is currently in paint mode) + `maskPaintDraft`
-  slice (the in-progress canvas contents during a drag).
-- `apps/studio/src/viewport/overlays/mask-paint.ts` (new) —
-  overlay subscriber that installs brush pointer handlers when a
-  mask-paint target is active; raycasts against the
-  appropriate surface (landscape / asset / preview primitive);
-  samples + writes to the draft canvas during drag; commits
-  through the session on pointerup.
-- `packages/workspaces/src/build/surfaces/MaskEditor.tsx` —
-  add a "Paint" button for the `painted` variant that enters
-  paint mode for the selected layer; add a "Create new painted
-  mask" action when the layer's painted mask has a null
-  `maskTextureId`.
-- `packages/render-web/src/materialize/mask.ts` — add materializer
-  for `painted` (trivial — resolves the maskTextureId to a
-  texture + samples it via the current UV context).
-- `packages/testing/src/painted-mask.test.ts` (new) —
-  round-trip a brush-stroke sequence through commands: create a
-  MaskTexture, paint a stroke, read back the file, assert the
-  bounding rectangle contains the stroke; undo the stroke, read
-  back again, assert the pre-stroke state; save / load the
-  project + verify the PNG file survives round-trip.
+  `MaskTextureDefinition` in the content library and
+  load-normalization that rejects painted masks inside reusable
+  `SurfaceDefinition.surface`.
+- `packages/io/src/masks/index.ts` — blank/create/read/write mask
+  PNG helpers.
+- `packages/io/src/project-lifecycle/index.ts` — save-time
+  reconciliation of orphaned painted mask definitions/files.
+- `packages/shell/src/viewport/index.ts` — active addressed
+  `maskPaintTarget` slice for the currently painted inline layer.
+- `apps/studio/src/viewport/overlays/mask-paint.ts` — viewport
+  brush overlay for inline landscape-channel and asset-slot layers.
+- `packages/workspaces/src/build/surfaces/MaskEditor.tsx` — only
+  show `Painted` in inline application-site editing, not in the
+  Surface Library.
+- `packages/testing/src/painted-mask.test.ts` — verify blank mask
+  creation, viewport writeback round-trip, and save-time orphan GC.
 
-### 36.13 — Per-slot layer overrides on referenced Surfaces
+### 36.13 — Reference bindings stay shared; `Make Local` converts them to inline surfaces
 
-**Outcome:** `SurfaceBinding.reference` variant gains optional
-`layerOverrides: Record<layerId, LayerOverride>`. Overrides are
-**bounded** — a `LayerOverride` is NOT a free partial of a `Layer`.
-It's a discriminated union keyed by target layer kind, permitting
-only a specific, named set of fields per kind. The rest of the
-layer (identity, kind, content discriminants, referenced
-definition ids) is frozen at the reference site.
-
-**What this gets right that "partial of Layer" doesn't:** a free
-partial would permit overrides to swap `kind`, `content.kind`,
-or any reference id (e.g. change `materialDefinitionId`), which
-semantically means "different layer entirely, not a tuning of an
-existing one." Those operations belong in a different library
-Surface or a new layer, not in an override payload. The narrowed
-type makes the distinction structural instead of documented.
-
-**Identity vs. tuning.** The override model splits a layer's
-fields into two categories:
-
-- **Identity** (frozen — cannot be overridden): `layerId`, `kind`,
-  `content.kind`, and any reference id inside content
-  (`materialDefinitionId`, `shaderDefinitionId`, `grassTypeId`,
-  `flowerTypeId`, `rockTypeId`, `textureDefinitionId` when it
-  identifies a specific texture asset). Touching any of these
-  means "author a new layer," not "tune this one."
-- **Tuning** (overrideable): presentation (`enabled`, `opacity`,
-  `mask`), appearance-specific `blendMode`, and
-  parameter-level knobs that already have a parameter-override
-  pattern from Plan 032 (`parameterOverrides`,
-  `textureBindingOverrides`, `tiling`, scatter `density`,
-  emission `intensity`).
-
-**`LayerOverride` type, fully enumerated:**
+**Outcome:** `SurfaceBinding.reference` stays simple:
 
 ```ts
-// packages/domain/src/surface/layer-override.ts
-
-interface LayerOverrideBase {
-  layerId: string;           // identity of the target layer; frozen
-  targetKind: Layer["kind"]; // sanity check; if the referenced
-                             // Surface's layer with this id is a
-                             // different kind, the override is
-                             // dropped with a diagnostic rather
-                             // than silently reinterpreted
-  enabled?: boolean;
-  opacity?: number;
-  mask?: Mask;
-}
-
-interface AppearanceLayerOverride extends LayerOverrideBase {
-  targetKind: "appearance";
-  blendMode?: BlendMode;
-  // Content-parameter tuning. Applies to the existing content,
-  // never swaps its kind or the referenced definition id.
-  contentTuning?:
-    // "color" content accepts NO parameter tuning — color layers
-    // are intentionally minimal; to change a color, author a new
-    // library Surface or a new layer.
-    | { for: "texture"; tiling?: [number, number] }
-    | {
-        for: "material";
-        parameterOverrides?: Record<string, unknown>;
-        textureBindingOverrides?: Record<string, string>;
-      }
-    | {
-        for: "shader";
-        parameterValues?: Partial<Record<string, unknown>>;
-        textureBindings?: Partial<Record<string, string>>;
-      };
-}
-
-interface ScatterLayerOverride extends LayerOverrideBase {
-  targetKind: "scatter";
-  // Density is THE per-slot knob for scatter. Everything else
-  // (tip color, scale jitter, wind) lives on the referenced
-  // GrassType/FlowerType/RockType definition; per-slot overrides
-  // of those would reach too far — they belong on the type
-  // definition or on a new type.
-  densityMultiplier?: number;  // scales the scatter type's density
-                               // (0.5 = half; 1.0 = unchanged; 2.0 = double)
-}
-
-interface EmissionLayerOverride extends LayerOverrideBase {
-  targetKind: "emission";
-  contentTuning?:
-    | { for: "color"; intensity?: number }
-    | {
-        for: "texture";
-        intensity?: number;
-        tiling?: [number, number];
-      }
-    | {
-        for: "material";
-        parameterOverrides?: Record<string, unknown>;
-        textureBindingOverrides?: Record<string, string>;
-      };
-}
-
-export type LayerOverride =
-  | AppearanceLayerOverride
-  | ScatterLayerOverride
-  | EmissionLayerOverride;
+type SurfaceBinding =
+  | { kind: "inline"; surface: Surface }
+  | { kind: "reference"; surfaceDefinitionId: string };
 ```
 
-**Merge rules** (exactly these, in this order, in
-`applyLayerOverride(layer, override)`):
+There is **no** `layerOverrides` model. If authors want a local
+variation, they make the binding local and edit the resulting
+inline surface directly.
 
-1. If `override.layerId` doesn't match a layer in the referenced
-   Surface: drop the override, log a diagnostic naming the
-   orphaned layerId. Not an error.
-2. If `override.targetKind !== matchedLayer.kind`: drop the
-   override, log a diagnostic ("layer kind drifted — the library
-   Surface was restructured"). Not an error, and the original
-   layer's values are used.
-3. Apply presentation fields over the matched layer's values:
-   `enabled`, `opacity`, `mask`. Any unset field inherits.
-4. Apply kind-specific tuning:
-   - Appearance: `blendMode` if set. If `contentTuning.for` matches
-     the layer's `content.kind`, apply the tuning fields (tiling,
-     parameterOverrides, textureBindingOverrides, parameterValues,
-     textureBindings) over the layer's content. If
-     `contentTuning.for` doesn't match `content.kind`, drop the
-     contentTuning (log diagnostic).
-   - Scatter: multiply the resolved scatter type's density by
-     `densityMultiplier`. (The GrassType's own density is
-     authoritative; per-slot overrides tune it, don't replace it.)
-   - Emission: same as Appearance — kind-matched contentTuning
-     applies; mismatched is dropped.
+**Authoring flow:**
 
-The narrow `Partial<Record>` shape on shader content tuning and
-the `Record` shapes on material-binding tuning match the Plan 032
-§32.1 "parameter-override precedence" pattern — authors override
-*values*, never the shader graph or the material reference.
+1. Pick `Surface Library Reference`.
+2. Choose a reusable `SurfaceDefinition`.
+3. If shared behavior is correct, stop there.
+4. If local variation is needed, click **Make Local**.
+5. Sugarmagic clones the referenced `SurfaceDefinition.surface`
+   into an `Inline Surface`.
+6. The author now edits that local layer stack directly
+   (including painted masks, which are only valid here).
 
-Authoring flow: in the SurfacePicker's reference-mode view,
-each layer has per-field "Override here" toggles on exactly the
-fields the narrowed type permits. Toggling a field pops it into
-the override payload; clearing it drops. The UI can't offer an
-override toggle on a field the type doesn't allow (kind, layerId,
-content.kind, reference ids) — so those controls never exist in
-reference-binding mode.
+This is a deliberate product simplification:
+
+- no "Override layer here" switch
+- no override diagnostics or orphan override bookkeeping
+- no runtime merge semantics
+- no confusion about whether a mask is on the shared surface or a
+  local override shadow-copy
+
+The tradeoff is explicit and acceptable: once a binding is made
+local, it no longer live-tracks future edits to the library
+surface. That is the point. Shared vs local is visible and
+intentional.
 
 **Files touched:**
-- `packages/domain/src/surface/layer-override.ts` (new) —
-  `LayerOverride` discriminated union + `applyLayerOverride(layer,
-  override) → { layer: Layer; diagnostics: LayerOverrideDiagnostic[] }`
-  helper. The return type surfaces diagnostics for drops (orphan
-  layerId, kind mismatch, contentTuning mismatch) rather than
-  silently swallowing — callers route them to the logger.
-- `packages/domain/src/surface/index.ts` — extend
-  `SurfaceBinding.reference` with
-  `layerOverrides?: Record<string, LayerOverride>`.
-- `packages/runtime-core/src/shader/bindings.ts` — extend
-  `resolveSurfaceBinding` to run `applyLayerOverride` during
-  resolution; collect diagnostics and return them with the
-  resolved binding.
-- `packages/workspaces/src/build/surfaces/LayerDetailPanel.tsx` —
-  in reference-binding mode, render per-field "Override here"
-  toggles ONLY for the fields the LayerOverride type permits for
-  the target layer's kind; drop the toggles for kind, layerId,
-  content.kind, and reference ids.
-- `packages/testing/src/surface-layer-overrides.test.ts` (new) —
-  reference a library Surface, override one layer's opacity +
-  mask + scatter density; assert resolved layer carries the
-  overridden values; override a nonexistent layerId, assert the
-  drop + diagnostic; override with mismatched targetKind, assert
-  the drop + diagnostic; attempt (at the type level) to build a
-  LayerOverride that changes `content.kind` or a reference id —
-  assert it fails `tsc --noEmit`.
+
+- `packages/domain/src/surface/index.ts` — remove
+  `layerOverrides` from `SurfaceBinding.reference`.
+- `packages/runtime-core/src/shader/bindings.ts` — resolve
+  references directly; delete `applyLayerOverride(...)` path and
+  associated diagnostics.
+- `packages/workspaces/src/build/surfaces/SurfaceBindingEditor.tsx`
+  — replace the override panel with a `Make Local` action that
+  clones the selected referenced surface into an inline binding.
+- `packages/workspaces/src/build/surfaces/SurfaceLibraryView.tsx`
+  — Surface Library stays reusable and shared; it does not expose
+  painted-mask authoring.
+- `packages/testing/src/surface-localize.test.ts` (new) — verify
+  that `Make Local` clones the referenced surface into an inline
+  binding and that later edits to the local inline surface do not
+  mutate the library `SurfaceDefinition`.
 
 ### 36.14 — `RockTypeDefinition` + rocks scatter
 

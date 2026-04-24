@@ -13,6 +13,7 @@ import type {
   Layer,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RockTypeDefinition,
   ShaderGraphDocument,
   Surface,
@@ -27,13 +28,18 @@ import { cloneLayer, createDefaultLayer } from "./utils";
 export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> {
   surface: Surface<C>;
   allowedContext: C;
+  allowPainted: boolean;
+  paintOwner:
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | null;
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -44,13 +50,15 @@ export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> 
 export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   surface,
   allowedContext,
+  allowPainted,
+  paintOwner,
   materialDefinitions,
   textureDefinitions,
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
@@ -209,12 +217,15 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
               <LayerMaskPopover
                 value={item.layer.mask}
                 allowedContext={allowedContext}
+                allowPainted={allowPainted}
+                paintOwner={paintOwner}
+                layerId={item.layer.layerId}
                 textureDefinitions={textureDefinitions}
                 maskTextureDefinitions={maskTextureDefinitions}
                 onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
                 onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                activePaintMaskTextureId={activePaintMaskTextureId}
-                onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
+                activeMaskPaintTarget={activeMaskPaintTarget}
+                onSetMaskPaintTarget={onSetMaskPaintTarget}
                 onActivate={() => setSelectedLayerId(item.id)}
                 onApply={(nextMask) =>
                   commitLayers(
@@ -238,8 +249,6 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                 maskTextureDefinitions={maskTextureDefinitions}
                 onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
                 onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                activePaintMaskTextureId={activePaintMaskTextureId}
-                onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
                 shaderDefinitions={shaderDefinitions}
                 grassTypeDefinitions={grassTypeDefinitions}
                 flowerTypeDefinitions={flowerTypeDefinitions}

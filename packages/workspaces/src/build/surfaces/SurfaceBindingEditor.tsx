@@ -5,13 +5,13 @@
  * or a reference to a reusable `SurfaceDefinition`.
  */
 
-import { Select, Stack, Switch, Text } from "@mantine/core";
-import { useEffect, useMemo, useState } from "react";
+import { Button, Select, Stack, Text } from "@mantine/core";
 import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RockTypeDefinition,
   ShaderGraphDocument,
   SurfaceBinding,
@@ -19,26 +19,30 @@ import type {
   SurfaceDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
-import { createDefaultSurface, createInlineSurfaceBinding, createReferenceSurfaceBinding } from "@sugarmagic/domain";
-import { LayerStackView } from "./LayerStackView";
-import { ReferenceLayerOverridePanel } from "./ReferenceLayerOverridePanel";
 import {
-  cloneLayerOverride,
-  createSeededLayerOverride,
-  surfaceDefinitionMatchesContext
-} from "./utils";
+  cloneSurface,
+  createDefaultSurface,
+  createInlineSurfaceBinding,
+  createReferenceSurfaceBinding
+} from "@sugarmagic/domain";
+import { LayerStackView } from "./LayerStackView";
+import { surfaceDefinitionMatchesContext } from "./utils";
 
 export interface SurfaceBindingEditorProps<C extends SurfaceContext = SurfaceContext> {
   value: SurfaceBinding<C> | null;
   allowedContext: C;
+  paintOwner:
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | null;
   surfaceDefinitions: SurfaceDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -49,14 +53,15 @@ export interface SurfaceBindingEditorProps<C extends SurfaceContext = SurfaceCon
 export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>({
   value,
   allowedContext,
+  paintOwner,
   surfaceDefinitions,
   materialDefinitions,
   textureDefinitions,
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
@@ -71,37 +76,6 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
       ? compatibleSurfaceDefinitions.find(
           (definition) => definition.definitionId === value.surfaceDefinitionId
         ) ?? null
-      : null;
-  const [selectedReferenceLayerId, setSelectedReferenceLayerId] = useState<string | null>(
-    selectedReferenceSurface?.surface.layers[0]?.layerId ?? null
-  );
-
-  useEffect(() => {
-    if (!selectedReferenceSurface) {
-      setSelectedReferenceLayerId(null);
-      return;
-    }
-    if (
-      selectedReferenceLayerId &&
-      selectedReferenceSurface.surface.layers.some(
-        (layer) => layer.layerId === selectedReferenceLayerId
-      )
-    ) {
-      return;
-    }
-    setSelectedReferenceLayerId(selectedReferenceSurface.surface.layers[0]?.layerId ?? null);
-  }, [selectedReferenceLayerId, selectedReferenceSurface]);
-
-  const selectedReferenceLayer = useMemo(
-    () =>
-      selectedReferenceSurface?.surface.layers.find(
-        (layer) => layer.layerId === selectedReferenceLayerId
-      ) ?? null,
-    [selectedReferenceLayerId, selectedReferenceSurface]
-  );
-  const selectedLayerOverride =
-    value?.kind === "reference" && selectedReferenceLayerId
-      ? value.layerOverrides?.[selectedReferenceLayerId] ?? null
       : null;
 
   return (
@@ -121,6 +95,14 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
             return;
           }
           if (next === "inline") {
+            if (value?.kind === "reference" && selectedReferenceSurface) {
+              onChange(
+                createInlineSurfaceBinding(
+                  cloneSurface(selectedReferenceSurface.surface)
+                ) as SurfaceBinding<C>
+              );
+              return;
+            }
             onChange(
               createInlineSurfaceBinding(
                 createDefaultSurface()
@@ -155,77 +137,19 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
             }}
           />
           {selectedReferenceSurface ? (
-            <>
-              <Select
-                size="xs"
-                label="Layer"
-                data={selectedReferenceSurface.surface.layers.map((layer) => ({
-                  value: layer.layerId,
-                  label: layer.displayName
-                }))}
-                value={selectedReferenceLayerId}
-                onChange={(next) => setSelectedReferenceLayerId(next)}
-              />
-              {selectedReferenceLayer ? (
-                <Switch
-                  size="xs"
-                  label={`Override "${selectedReferenceLayer.displayName}" here`}
-                  checked={Boolean(selectedLayerOverride)}
-                  onChange={(event) => {
-                    if (value.kind !== "reference") {
-                      return;
-                    }
-                    const nextOverrides = { ...(value.layerOverrides ?? {}) };
-                    if (event.currentTarget.checked) {
-                      nextOverrides[selectedReferenceLayer.layerId] =
-                        createSeededLayerOverride(selectedReferenceLayer);
-                    } else {
-                      delete nextOverrides[selectedReferenceLayer.layerId];
-                    }
-                    onChange({
-                      ...value,
-                      layerOverrides: nextOverrides
-                    });
-                  }}
-                />
-              ) : null}
-              {selectedReferenceLayer && selectedLayerOverride ? (
-                <ReferenceLayerOverridePanel
-                  layer={selectedReferenceLayer}
-                  override={selectedLayerOverride}
-                  allowedContext={allowedContext}
-                  materialDefinitions={materialDefinitions}
-                  textureDefinitions={textureDefinitions}
-                  maskTextureDefinitions={maskTextureDefinitions}
-                  shaderDefinitions={shaderDefinitions}
-                  onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                  onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                  onChange={(nextOverride) => {
-                    if (value.kind !== "reference") {
-                      return;
-                    }
-                    onChange({
-                      ...value,
-                      layerOverrides: {
-                        ...(value.layerOverrides ?? {}),
-                        [nextOverride.layerId]: cloneLayerOverride(nextOverride)
-                      }
-                    });
-                  }}
-                  onClear={() => {
-                    if (value.kind !== "reference") {
-                      return;
-                    }
-                    const nextOverrides = { ...(value.layerOverrides ?? {}) };
-                    delete nextOverrides[selectedReferenceLayer.layerId];
-                    onChange({
-                      ...value,
-                      layerOverrides: nextOverrides
-                    });
-                  }}
-                />
-              ) : null}
-            </>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() =>
+                onChange(
+                  createInlineSurfaceBinding(
+                    cloneSurface(selectedReferenceSurface.surface)
+                  ) as SurfaceBinding<C>
+                )
+              }
+            >
+              Make Local
+            </Button>
           ) : null}
         </>
       ) : null}
@@ -234,13 +158,15 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
         <LayerStackView
           surface={value.surface}
           allowedContext={allowedContext}
+          allowPainted={paintOwner !== null}
+          paintOwner={paintOwner}
           materialDefinitions={materialDefinitions}
           textureDefinitions={textureDefinitions}
           maskTextureDefinitions={maskTextureDefinitions}
           onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
           onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activePaintMaskTextureId={activePaintMaskTextureId}
-          onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
+          activeMaskPaintTarget={activeMaskPaintTarget}
+          onSetMaskPaintTarget={onSetMaskPaintTarget}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}

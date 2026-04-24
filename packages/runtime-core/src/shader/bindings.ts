@@ -16,7 +16,6 @@ import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
   Layer,
-  LayerOverride,
   Mask,
   PlacedAssetInstance,
   PostProcessShaderBinding,
@@ -27,13 +26,11 @@ import type {
   ShaderOrMaterial,
   ShaderGraphDocument,
   ShaderParameterOverride,
-  ShaderParameterValue,
   SurfaceBinding,
   SurfaceContext,
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
-  applyLayerOverride,
   getAssetDefinition,
   getFlowerTypeDefinition,
   getGrassTypeDefinition,
@@ -86,6 +83,8 @@ export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
   contentKind: ScatterContent["kind"];
   definitionId: string;
   definition: GrassTypeDefinition | FlowerTypeDefinition | RockTypeDefinition;
+  materialDefinitionId: string | null;
+  appearanceBinding: EffectiveShaderBinding | null;
   density: number;
   wind: EffectiveShaderBinding | null;
 }
@@ -525,6 +524,73 @@ function resolveScatterWind(
   return result.ok ? result.binding : null;
 }
 
+function resolveScatterAppearance(
+  materialDefinitionId: string | null,
+  contentLibrary: ContentLibrarySnapshot
+): ResolveAppearanceLayerResult | null {
+  if (!materialDefinitionId) {
+    return null;
+  }
+  return resolveAppearanceLayer(
+    { kind: "material", materialDefinitionId },
+    contentLibrary,
+    "mesh-surface"
+  );
+}
+
+/**
+ * Pick the canonical "ground color" of a Surface for inheritance purposes:
+ * the first appearance layer in author order whose blend is "base" and whose
+ * content is color-kind. Texture/material/shader bases return null — those
+ * don't resolve to one flat color at authoring time, so the scatter shader's
+ * own default wins instead of guessing.
+ */
+function pickSurfaceBaseColor(layers: readonly Layer[]): [number, number, number] | null {
+  for (const layer of layers) {
+    if (layer.kind !== "appearance") continue;
+    if (layer.blendMode !== "base") continue;
+    if (layer.content.kind !== "color") return null;
+    return hexToRgbTuple(layer.content.color);
+  }
+  return null;
+}
+
+function hexToRgbTuple(color: number): [number, number, number] {
+  return [
+    ((color >> 16) & 0xff) / 255,
+    ((color >> 8) & 0xff) / 255,
+    (color & 0xff) / 255
+  ];
+}
+
+/**
+ * Inject the containing Surface's base color into scatter-shader parameters
+ * that opted in with `inheritSource: "baseLayerColor"`, but only if the
+ * author hasn't already set that parameter explicitly in the material's
+ * parameterValues. Explicit author intent always beats inheritance.
+ */
+function applyBaseLayerColorInheritance(
+  binding: EffectiveShaderBinding,
+  baseColor: [number, number, number] | null,
+  contentLibrary: ContentLibrarySnapshot
+): EffectiveShaderBinding {
+  if (!baseColor) return binding;
+  const shader = getShaderDefinition(contentLibrary, binding.shaderDefinitionId);
+  if (!shader) return binding;
+  let nextParameterValues: Record<string, unknown> | null = null;
+  for (const parameter of shader.parameters) {
+    if (parameter.inheritSource !== "baseLayerColor") continue;
+    if (parameter.dataType !== "color") continue;
+    if (parameter.parameterId in binding.parameterValues) continue;
+    if (!nextParameterValues) {
+      nextParameterValues = { ...binding.parameterValues };
+    }
+    nextParameterValues[parameter.parameterId] = baseColor;
+  }
+  if (!nextParameterValues) return binding;
+  return { ...binding, parameterValues: nextParameterValues };
+}
+
 function surfaceStackFromBinding(
   binding: EffectiveShaderBinding
 ): ResolvedSurfaceStack<"universal"> {
@@ -549,26 +615,6 @@ function surfaceStackFromBinding(
       }
     ]
   };
-}
-
-function warningDiagnostic(message: string): SurfaceResolverDiagnostic {
-  return {
-    severity: "warning",
-    expectedTargetKind: "mesh-surface",
-    shaderDefinitionId: null,
-    message
-  };
-}
-
-function materialOverrideEntries(
-  overrides: Record<string, unknown> | undefined,
-  slot: ShaderSlotKind
-): ShaderParameterOverride[] {
-  return Object.entries(overrides ?? {}).map(([parameterId, value]) => ({
-    slot,
-    parameterId,
-    value: value as ShaderParameterValue
-  }));
 }
 
 export function resolveSurfaceBinding(
@@ -598,43 +644,25 @@ export function resolveSurfaceBinding(
 
   const resolvedLayers: ResolvedSurfaceLayer[] = [];
   const diagnostics: SurfaceResolverDiagnostic[] = [];
-  const referenceOverrides =
-    binding.kind === "reference" ? binding.layerOverrides ?? {} : {};
-  const appliedOverrideIds = new Set<string>();
+
+  // Ground-color inheritance for scatter shaders: resolve the containing
+  // Surface's canonical base color once so scatter layers whose appearance
+  // shader declares a `baseLayerColor`-inheriting parameter can auto-bind
+  // their root tint without per-scene authoring. A color-kind base appearance
+  // layer is the only source that resolves; textures/materials/shaders stay
+  // null and leave the shader parameter's own default in effect.
+  const surfaceBaseColor = pickSurfaceBaseColor(surface.layers);
+
   for (const layer of surface.layers) {
-    const override = referenceOverrides[layer.layerId] ?? null;
-    const overrideResult = applyLayerOverride(layer, override);
-    const effectiveLayer = overrideResult.layer;
-    if (override) {
-      appliedOverrideIds.add(layer.layerId);
-    }
-    for (const diagnostic of overrideResult.diagnostics) {
-      diagnostics.push(warningDiagnostic(diagnostic.message));
-    }
+    const effectiveLayer = layer;
 
     if (effectiveLayer.kind === "appearance") {
-      const mergedParameterOverrides = [...parameterOverrides];
-      let textureBindingOverrides: Record<string, string> = {};
-      if (
-        override?.targetKind === "appearance" &&
-        override.contentTuning?.for === "material"
-      ) {
-        mergedParameterOverrides.push(
-          ...materialOverrideEntries(
-            override.contentTuning.parameterOverrides,
-            "surface"
-          )
-        );
-        textureBindingOverrides = {
-          ...(override.contentTuning.textureBindingOverrides ?? {})
-        };
-      }
       const result = resolveAppearanceLayer(
         effectiveLayer.content,
         contentLibrary,
         "mesh-surface",
-        mergedParameterOverrides,
-        textureBindingOverrides
+        parameterOverrides,
+        {}
       );
       if (!result.ok) {
         return resolvedSurfaceDiagnostic(
@@ -658,24 +686,7 @@ export function resolveSurfaceBinding(
     }
 
     if (effectiveLayer.kind === "emission") {
-      const result =
-        effectiveLayer.content.kind === "material" &&
-        override?.targetKind === "emission" &&
-        override.contentTuning?.for === "material"
-          ? validateResolvedSurfaceTarget(
-              resolveMaterialEffectiveShaderBinding(
-                contentLibrary,
-                effectiveLayer.content.materialDefinitionId,
-                materialOverrideEntries(
-                  override.contentTuning.parameterOverrides,
-                  "surface"
-                ),
-                [],
-                override.contentTuning.textureBindingOverrides ?? {}
-              ),
-              "mesh-surface"
-            )
-          : resolveEmissionLayer(effectiveLayer.content, contentLibrary);
+      const result = resolveEmissionLayer(effectiveLayer.content, contentLibrary);
       if (!result.ok) {
         return resolvedSurfaceDiagnostic(
           result.diagnostic.message,
@@ -710,6 +721,24 @@ export function resolveSurfaceBinding(
             : `Scatter layer references missing RockTypeDefinition "${effectiveLayer.content.rockTypeId}".`
       );
     }
+    const resolvedAppearance = resolveScatterAppearance(
+      effectiveLayer.materialDefinitionId,
+      contentLibrary
+    );
+    if (resolvedAppearance && !resolvedAppearance.ok) {
+      return resolvedSurfaceDiagnostic(
+        resolvedAppearance.diagnostic.message,
+        resolvedAppearance.diagnostic.expectedTargetKind,
+        resolvedAppearance.diagnostic.shaderDefinitionId
+      );
+    }
+    const scatterAppearanceBinding = resolvedAppearance?.ok
+      ? applyBaseLayerColorInheritance(
+          resolvedAppearance.binding,
+          surfaceBaseColor,
+          contentLibrary
+        )
+      : null;
     resolvedLayers.push({
       kind: "scatter",
       layerId: effectiveLayer.layerId,
@@ -720,21 +749,14 @@ export function resolveSurfaceBinding(
       contentKind: effectiveLayer.content.kind,
       definitionId: definition.definitionId,
       definition,
+      materialDefinitionId: effectiveLayer.materialDefinitionId,
+      appearanceBinding: scatterAppearanceBinding,
       density: Math.max(
         0,
-        ("density" in definition ? definition.density : 0) *
-          overrideResult.densityMultiplier
+        "density" in definition ? definition.density : 0
       ),
       wind: resolveScatterWind(definition, contentLibrary)
     });
-  }
-
-  for (const layerId of Object.keys(referenceOverrides)) {
-    if (!appliedOverrideIds.has(layerId)) {
-      diagnostics.push(
-        warningDiagnostic(`SurfaceBinding layerOverrides references missing layer "${layerId}".`)
-      );
-    }
   }
 
   return {

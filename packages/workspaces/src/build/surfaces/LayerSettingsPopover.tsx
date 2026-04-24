@@ -31,8 +31,6 @@ export interface LayerSettingsPopoverProps {
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -50,8 +48,6 @@ export function LayerSettingsPopover({
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
@@ -68,6 +64,7 @@ export function LayerSettingsPopover({
       position="bottom-start"
       shadow="md"
       width={320}
+      withinPortal={false}
     >
       <Popover.Target>
         <UnstyledButton
@@ -95,8 +92,6 @@ export function LayerSettingsPopover({
           maskTextureDefinitions={maskTextureDefinitions}
           onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
           onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activePaintMaskTextureId={activePaintMaskTextureId}
-          onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
           shaderDefinitions={shaderDefinitions}
           grassTypeDefinitions={grassTypeDefinitions}
           flowerTypeDefinitions={flowerTypeDefinitions}

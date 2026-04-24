@@ -14,7 +14,6 @@ import type {
   ContentLibrarySnapshot,
   SurfaceDefinition
 } from "@sugarmagic/domain";
-import { getMaskTextureDefinition } from "@sugarmagic/domain";
 import { resolveSurfaceBinding } from "@sugarmagic/runtime-core";
 import {
   buildSurfaceScatterLayer,
@@ -33,68 +32,7 @@ export interface SurfacePreviewViewportProps {
   contentLibrary: ContentLibrarySnapshot | null;
   surfaceDefinition: SurfaceDefinition | null;
   previewGeometryKind: SurfacePreviewGeometryKind;
-  activePaintMaskTextureId: string | null;
   onChangePreviewGeometryKind: (kind: SurfacePreviewGeometryKind) => void;
-  onReadMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
-  onWriteMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
-}
-
-const PREVIEW_PAINT_BRUSH_RADIUS = 24;
-const PREVIEW_PAINT_BRUSH_STRENGTH = 0.75;
-
-function syncPaintCanvasToPreviewMaskTexture(options: {
-  renderView: RenderView | null;
-  contentLibrary: ContentLibrarySnapshot | null;
-  maskTextureId: string | null;
-  canvas: HTMLCanvasElement | null;
-}): void {
-  const { renderView, contentLibrary, maskTextureId, canvas } = options;
-  if (!renderView || !contentLibrary || !maskTextureId || !canvas) {
-    return;
-  }
-
-  const definition = getMaskTextureDefinition(contentLibrary, maskTextureId);
-  if (!definition) {
-    return;
-  }
-
-  const texture = renderView.assetResolver.resolveMaskTextureDefinition(definition);
-  texture.dispose();
-  texture.image = canvas;
-  texture.needsUpdate = true;
-  renderView.markSceneMaterialsDirty();
-}
-
-function applyPaintBrushToCanvas(
-  canvas: HTMLCanvasElement,
-  uv: THREE.Vector2
-): void {
-  const context = canvas.getContext("2d", {
-    willReadFrequently: true
-  });
-  if (!context) {
-    return;
-  }
-
-  const x = uv.x * canvas.width;
-  const y = (1 - uv.y) * canvas.height;
-  const gradient = context.createRadialGradient(
-    x,
-    y,
-    0,
-    x,
-    y,
-    PREVIEW_PAINT_BRUSH_RADIUS
-  );
-  gradient.addColorStop(0, `rgba(255, 255, 255, ${PREVIEW_PAINT_BRUSH_STRENGTH})`);
-  gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-
-  context.save();
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.arc(x, y, PREVIEW_PAINT_BRUSH_RADIUS, 0, Math.PI * 2);
-  context.fill();
-  context.restore();
 }
 
 export function SurfacePreviewViewport({
@@ -102,10 +40,7 @@ export function SurfacePreviewViewport({
   contentLibrary,
   surfaceDefinition,
   previewGeometryKind,
-  activePaintMaskTextureId,
-  onChangePreviewGeometryKind,
-  onReadMaskTexture,
-  onWriteMaskTexture
+  onChangePreviewGeometryKind
 }: SurfacePreviewViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const renderViewRef = useRef<RenderView | null>(null);
@@ -115,11 +50,6 @@ export function SurfacePreviewViewport({
   const previewMeshRef = useRef<THREE.Mesh | null>(null);
   const previewCarrierMaterialRef = useRef<THREE.Material | null>(null);
   const previewManagedMaterialRef = useRef<THREE.Material | null>(null);
-  const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const paintPointerIdRef = useRef<number | null>(null);
-  const paintDirtyRef = useRef(false);
-  const paintWriteInFlightRef = useRef(false);
-  const raycasterRef = useRef(new THREE.Raycaster());
 
   const scene = useMemo(() => new THREE.Scene(), []);
 
@@ -209,163 +139,6 @@ export function SurfacePreviewViewport({
       cameraRef.current = null;
     };
   }, [engine, scene]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!activePaintMaskTextureId || !contentLibrary) {
-      paintCanvasRef.current = null;
-      paintDirtyRef.current = false;
-      return;
-    }
-
-    const definition = getMaskTextureDefinition(contentLibrary, activePaintMaskTextureId);
-    if (!definition) {
-      paintCanvasRef.current = null;
-      paintDirtyRef.current = false;
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = definition.resolution[0];
-    canvas.height = definition.resolution[1];
-    const context = canvas.getContext("2d", {
-      willReadFrequently: true
-    });
-    if (!context) {
-      paintCanvasRef.current = null;
-      paintDirtyRef.current = false;
-      return;
-    }
-
-    void onReadMaskTexture(activePaintMaskTextureId).then((imageData) => {
-      if (cancelled) {
-        return;
-      }
-      if (imageData) {
-        context.putImageData(imageData, 0, 0);
-      } else {
-        context.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      paintCanvasRef.current = canvas;
-      paintDirtyRef.current = false;
-      syncPaintCanvasToPreviewMaskTexture({
-        renderView: renderViewRef.current,
-        contentLibrary,
-        maskTextureId: activePaintMaskTextureId,
-        canvas
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activePaintMaskTextureId, contentLibrary, onReadMaskTexture]);
-
-  useEffect(() => {
-    const currentElement = containerRef.current;
-    if (!currentElement) {
-      return;
-    }
-    const hostElement = currentElement;
-
-    function paintAtClientPosition(clientX: number, clientY: number): boolean {
-      if (!activePaintMaskTextureId || !paintCanvasRef.current) {
-        return false;
-      }
-      const previewMesh = previewMeshRef.current;
-      const camera = cameraRef.current;
-      if (!previewMesh || !camera) {
-        return false;
-      }
-
-      const bounds = hostElement.getBoundingClientRect();
-      const normalizedX = ((clientX - bounds.left) / bounds.width) * 2 - 1;
-      const normalizedY = -(((clientY - bounds.top) / bounds.height) * 2 - 1);
-      raycasterRef.current.setFromCamera(
-        new THREE.Vector2(normalizedX, normalizedY),
-        camera
-      );
-      const hit = raycasterRef.current.intersectObject(previewMesh, false)[0];
-      if (!hit?.uv) {
-        return false;
-      }
-
-      applyPaintBrushToCanvas(paintCanvasRef.current, hit.uv);
-      paintDirtyRef.current = true;
-      syncPaintCanvasToPreviewMaskTexture({
-        renderView: renderViewRef.current,
-        contentLibrary,
-        maskTextureId: activePaintMaskTextureId,
-        canvas: paintCanvasRef.current
-      });
-      return true;
-    }
-
-    async function commitPaintIfNeeded(maskTextureId: string) {
-      if (!paintDirtyRef.current || !paintCanvasRef.current || paintWriteInFlightRef.current) {
-        return;
-      }
-      const context = paintCanvasRef.current.getContext("2d");
-      if (!context) {
-        return;
-      }
-      paintWriteInFlightRef.current = true;
-      try {
-        await onWriteMaskTexture(
-          maskTextureId,
-          context.getImageData(
-            0,
-            0,
-            paintCanvasRef.current.width,
-            paintCanvasRef.current.height
-          )
-        );
-        paintDirtyRef.current = false;
-      } finally {
-        paintWriteInFlightRef.current = false;
-      }
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      if (!activePaintMaskTextureId) {
-        return;
-      }
-      if (!paintAtClientPosition(event.clientX, event.clientY)) {
-        return;
-      }
-      paintPointerIdRef.current = event.pointerId;
-      hostElement.setPointerCapture(event.pointerId);
-      event.preventDefault();
-    }
-
-    function handlePointerMove(event: PointerEvent) {
-      if (paintPointerIdRef.current !== event.pointerId) {
-        return;
-      }
-      paintAtClientPosition(event.clientX, event.clientY);
-    }
-
-    async function finishPointer(event: PointerEvent) {
-      if (paintPointerIdRef.current !== event.pointerId) {
-        return;
-      }
-      paintPointerIdRef.current = null;
-      if (activePaintMaskTextureId) {
-        await commitPaintIfNeeded(activePaintMaskTextureId);
-      }
-    }
-
-    hostElement.addEventListener("pointerdown", handlePointerDown);
-    hostElement.addEventListener("pointermove", handlePointerMove);
-    hostElement.addEventListener("pointerup", finishPointer);
-    hostElement.addEventListener("pointercancel", finishPointer);
-    return () => {
-      hostElement.removeEventListener("pointerdown", handlePointerDown);
-      hostElement.removeEventListener("pointermove", handlePointerMove);
-      hostElement.removeEventListener("pointerup", finishPointer);
-      hostElement.removeEventListener("pointercancel", finishPointer);
-    };
-  }, [activePaintMaskTextureId, contentLibrary, onWriteMaskTexture]);
 
   useEffect(() => {
     const renderView = renderViewRef.current;
@@ -480,23 +253,6 @@ export function SurfacePreviewViewport({
           ref={containerRef}
           style={{ position: "absolute", inset: 0 }}
         />
-        {activePaintMaskTextureId ? (
-          <Text
-            size="xs"
-            c="var(--sm-color-subtext)"
-            style={{
-              position: "absolute",
-              top: 10,
-              left: 12,
-              padding: "4px 8px",
-              borderRadius: 999,
-              background: "rgba(0, 0, 0, 0.45)",
-              pointerEvents: "none"
-            }}
-          >
-            Paint mode active: click and drag on the preview.
-          </Text>
-        ) : null}
         {!surfaceDefinition ? (
           <Stack
             align="center"

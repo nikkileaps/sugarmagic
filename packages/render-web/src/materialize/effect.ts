@@ -14,9 +14,11 @@ import {
   normalize,
   reinhardToneMapping,
   sin,
+  vec2,
   vec3
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { materializePerlinLikeNoise2d } from "./noise";
 import type {
   EffectMaterializeContext,
   MaterializeOpRequest,
@@ -49,6 +51,25 @@ export function materializeEffectOp(
       return {
         handled: true,
         value: clamp(normalizedHeight as never, float(0), float(1))
+      };
+    }
+    case "effect.world-noise": {
+      const position = input("position") as { x: unknown; z: unknown };
+      // Scale is a pure setting, read directly from op.settings. An input
+      // port was tempting for parameter-driven scale, but materializeValue
+      // returns float(0) for unconnected inputs (truthy — not nullish), so
+      // the `input ?? fallback` idiom silently evaluates to scale=0 and
+      // noise collapses to a constant. Effects that expose both an input
+      // port AND a setting (like wind-sway) rely on the port always being
+      // wired via an edge upstream; world-noise doesn't, so settings-only
+      // is the safe choice.
+      const scaleValue = Number(op.settings?.scale ?? 0.25);
+      const scaleNode = float(scaleValue);
+      const scaledX = (position.x as { mul: (other: unknown) => unknown }).mul(scaleNode);
+      const scaledZ = (position.z as { mul: (other: unknown) => unknown }).mul(scaleNode);
+      return {
+        handled: true,
+        value: materializePerlinLikeNoise2d(vec2(scaledX as never, scaledZ as never))
       };
     }
     case "effect.fresnel": {

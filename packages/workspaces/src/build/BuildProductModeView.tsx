@@ -18,6 +18,7 @@ import type {
   GrassTypeDefinition,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   NPCDefinition,
   QuestDefinition,
   RockTypeDefinition,
@@ -137,8 +138,8 @@ export interface BuildProductModeViewProps {
   onRemoveSurfaceDefinition: (definitionId: string) => void;
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string | null) => void;
-  activePaintMaskTextureId: string | null;
-  onSetActivePaintMaskTextureId: (definitionId: string | null) => void;
+  activeMaskPaintTarget: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) => void;
   surfaceCenterPanel?: ReactNode;
   isMaterialReferenced: (definitionId: string) => boolean;
   renderLayoutInspectorSections?: (context: {
@@ -208,8 +209,8 @@ export function useBuildProductModeView(
     onRemoveSurfaceDefinition,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
-    activePaintMaskTextureId,
-    onSetActivePaintMaskTextureId,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     surfaceCenterPanel,
     isMaterialReferenced,
     renderLayoutInspectorSections
@@ -403,6 +404,8 @@ export function useBuildProductModeView(
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
@@ -445,6 +448,8 @@ export function useBuildProductModeView(
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     shaderDefinitions,
     selectedAssetDefinitionId,
     onSelectAssetDefinition: setSelectedAssetDefinitionId,
@@ -479,8 +484,6 @@ export function useBuildProductModeView(
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
-    activePaintMaskTextureId,
-    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,

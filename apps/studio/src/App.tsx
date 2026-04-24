@@ -51,7 +51,6 @@ import {
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
-  removeMaskTextureDefinitionFromSession,
   removeMaterialDefinitionFromSession,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
@@ -74,7 +73,6 @@ import {
   createProjectInDirectory,
   openProject,
   pickDirectory,
-  saveProject,
   saveProjectWithManagedFiles,
   inspectManagedProjectFiles,
   importPbrTextureSet,
@@ -126,6 +124,7 @@ import { createWebRenderEngine } from "@sugarmagic/render-web";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
+import { mountMaskPaintOverlay } from "./viewport/overlays/mask-paint";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
 import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
 import {
@@ -240,6 +239,13 @@ function dispatchCommand(command: SemanticCommand) {
 async function handleSave() {
   const { handle, descriptor, session } = projectStore.getState();
   if (!handle || !descriptor || !session) return;
+  const baseSaveInput = {
+    handle,
+    descriptor,
+    gameProject: session.gameProject,
+    contentLibrary: session.contentLibrary,
+    regions: getAllRegions(session)
+  };
   const sugarDeployConfiguration = getPluginConfiguration(
     session.gameProject.pluginConfigurations,
     SUGARDEPLOY_PLUGIN_ID
@@ -256,14 +262,15 @@ async function handleSave() {
         .map((conflict) => `- ${conflict.message}`)
         .join("\n")}`
     );
-    await saveProject({
-      handle,
-      descriptor,
-      gameProject: session.gameProject,
-      contentLibrary: session.contentLibrary,
-      regions: getAllRegions(session)
-    });
-    projectStore.getState().updateSession(markSessionClean(session));
+    const result = await saveProjectWithManagedFiles(baseSaveInput);
+    projectStore
+      .getState()
+      .updateSession(
+        markSessionClean({
+          ...session,
+          contentLibrary: result.reconciledContentLibrary
+        })
+      );
     return;
   }
 
@@ -298,29 +305,33 @@ async function handleSave() {
 
     const confirmed = window.confirm(messageParts.join("\n"));
     if (!confirmed) {
-      await saveProject({
-        handle,
-        descriptor,
-        gameProject: session.gameProject,
-        contentLibrary: session.contentLibrary,
-        regions: getAllRegions(session)
-      });
-      projectStore.getState().updateSession(markSessionClean(session));
+      const result = await saveProjectWithManagedFiles(baseSaveInput);
+      projectStore
+        .getState()
+        .updateSession(
+          markSessionClean({
+            ...session,
+            contentLibrary: result.reconciledContentLibrary
+          })
+        );
       return;
     }
   }
 
-  await saveProjectWithManagedFiles({
-    handle,
-    descriptor,
-    gameProject: session.gameProject,
-    contentLibrary: session.contentLibrary,
-    regions: getAllRegions(session),
+  const result = await saveProjectWithManagedFiles({
+    ...baseSaveInput,
     managedFiles,
     overwriteManagedFiles: inspection.changedManagedFiles.length > 0
   });
 
-  projectStore.getState().updateSession(markSessionClean(session));
+  projectStore
+    .getState()
+    .updateSession(
+      markSessionClean({
+        ...session,
+        contentLibrary: result.reconciledContentLibrary
+      })
+    );
 }
 
 async function handleReload() {
@@ -595,9 +606,9 @@ export function App() {
     surfaceEditingStore,
     (state) => state.previewGeometryKind
   );
-  const activePaintMaskTextureId = useStore(
+  const activeMaskPaintTarget = useStore(
     viewportStore,
-    (state) => state.activePaintMaskTextureId
+    (state) => state.activeMaskPaintTarget
   );
 
   const environmentDefinitions = useMemo(() => {
@@ -1400,9 +1411,9 @@ export function App() {
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
-    activePaintMaskTextureId,
-    onSetActivePaintMaskTextureId: (definitionId) =>
-      viewportStore.getState().setActivePaintMaskTextureId(definitionId),
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget: (target) =>
+      viewportStore.getState().setActiveMaskPaintTarget(target),
     surfaceCenterPanel: (
       <SurfacePreviewViewport
         engine={studioRenderEngine}
@@ -1413,12 +1424,9 @@ export function App() {
           ) ?? null
         }
         previewGeometryKind={surfacePreviewGeometryKind}
-        activePaintMaskTextureId={activePaintMaskTextureId}
         onChangePreviewGeometryKind={(kind) =>
           surfaceEditingStore.getState().setPreviewGeometryKind(kind)
         }
-        onReadMaskTexture={handleReadMaskTexture}
-        onWriteMaskTexture={handleWriteMaskTexture}
       />
     ),
     isMaterialReferenced: (definitionId) =>
@@ -1657,9 +1665,12 @@ export function App() {
               assetSourceStore,
               designPreviewStore
             },
+            readMaskTexture: handleReadMaskTexture,
+            writeMaskTexture: handleWriteMaskTexture,
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
+              mountMaskPaintOverlay,
               mountTransformGizmoOverlay,
               mountSpatialAuthoringOverlay
             ]
@@ -1676,7 +1687,13 @@ export function App() {
       observer.disconnect();
       viewport.unmount();
     };
-  }, [activeDesignKind, activeProductMode, shouldRenderSharedViewport]);
+  }, [
+    activeDesignKind,
+    activeProductMode,
+    handleReadMaskTexture,
+    handleWriteMaskTexture,
+    shouldRenderSharedViewport
+  ]);
 
   const handleUndo = useCallback(() => {
     const { session: s } = projectStore.getState();

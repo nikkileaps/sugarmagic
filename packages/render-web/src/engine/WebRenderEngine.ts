@@ -123,6 +123,11 @@ export function createWebRenderEngine(
     onTextureUpdated() {
       for (const view of attachedViews) {
         view.markSceneMaterialsDirty();
+        view.landscapeController.applyLandscape(
+          currentRegion?.landscape ?? null,
+          currentContentLibrary,
+          currentAssetSources
+        );
       }
     }
   });

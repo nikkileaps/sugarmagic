@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 import {
   createAuthoredAssetResolver,
   ShaderRuntime
 } from "@sugarmagic/render-web";
 import {
+  resolveSurfaceBinding,
   resolveSceneObjects,
   resolveEffectivePostProcessShaderBindings,
   resolveAssetDefinitionShaderBindings,
@@ -12,6 +14,8 @@ import {
   type EffectiveShaderBinding
 } from "@sugarmagic/runtime-core";
 import {
+  createAppearanceLayer,
+  createColorAppearanceContent,
   createShaderSurface,
   createShaderSurfaceBinding,
   createDefaultColorGradePostProcessShaderGraph,
@@ -23,8 +27,11 @@ import {
   createDefaultStandardPbrShaderGraph,
   createDefaultShaderGraphDocument,
   createDefaultVignettePostProcessShaderGraph,
+  createEmptyContentLibrarySnapshot,
+  createInlineSurfaceBinding,
   createPlacedAssetInstance,
   createRegionPlayerPresence,
+  createSurface,
   normalizeContentLibrarySnapshot,
   type ContentLibrarySnapshot,
   type RegionDocument
@@ -146,6 +153,50 @@ describe("shader runtime contracts", () => {
           assetResolver: null as never
         })
     ).toThrow(/requires an explicit AuthoredAssetResolver/i);
+  });
+
+  it("materializes color-only surface layers as real color uniforms", () => {
+    const contentLibrary = createEmptyContentLibrarySnapshot("project");
+    const runtime = new ShaderRuntime({
+      contentLibrary,
+      compileProfile: "authoring-preview",
+      assetResolver: createAuthoredAssetResolver()
+    });
+    const resolution = resolveSurfaceBinding(
+      createInlineSurfaceBinding(
+        createSurface([
+          createAppearanceLayer(createColorAppearanceContent(0x6d8644), {
+            displayName: "Ground",
+            blendMode: "base"
+          })
+        ])
+      ),
+      contentLibrary,
+      "landscape-only"
+    );
+    if (!resolution.ok) {
+      throw new Error(resolution.diagnostic.message);
+    }
+
+    const material = runtime.applyShaderSet(
+      {
+        surface: resolution.binding,
+        deform: null,
+        effect: null
+      },
+      {
+        material: new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 1,
+          metalness: 0
+        }),
+        geometry: new THREE.PlaneGeometry(1, 1),
+        fileSources: {}
+      }
+    ) as MeshStandardNodeMaterial & { colorNode?: { value?: unknown } };
+
+    expect(material.colorNode).toBeTruthy();
+    expect(material.colorNode?.value).toBeInstanceOf(THREE.Color);
   });
 
   it("resolves explicit foliage surface slots and deform traits for foliage assets", () => {

@@ -349,10 +349,10 @@ export function buildSurfaceScatterLayer(
   let appliedMaterial: THREE.Material = material;
   let runtimeManagedMaterial = false;
 
-  if (layer.wind && options.shaderRuntime) {
+  if ((layer.appearanceBinding || layer.wind) && options.shaderRuntime) {
     appliedMaterial = options.shaderRuntime.applyShaderSet(
       {
-        surface: null,
+        surface: layer.appearanceBinding,
         deform: layer.wind,
         effect: null
       },

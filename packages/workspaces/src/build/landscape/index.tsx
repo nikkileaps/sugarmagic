@@ -27,6 +27,7 @@ import type {
   LandscapeSurfaceSlot,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RegionDocument,
   RockTypeDefinition,
   ShaderGraphDocument,
@@ -67,6 +68,8 @@ export interface LandscapeWorkspaceViewProps {
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -82,10 +85,6 @@ const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
   falloff: 0.7,
   mode: "paint"
 };
-
-function formatHexColor(value: number): string {
-  return `#${value.toString(16).padStart(6, "0")}`;
-}
 
 function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
@@ -131,6 +130,8 @@ function ChannelCard(props: {
   materials: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -150,6 +151,8 @@ function ChannelCard(props: {
     materials,
     textureDefinitions,
     maskTextureDefinitions,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
@@ -207,12 +210,18 @@ function ChannelCard(props: {
               <SurfaceBindingEditor
                 value={channel.surface}
                 allowedContext="landscape-only"
+                paintOwner={{
+                  scope: "landscape-channel",
+                  channelKey: channel.channelId
+                }}
                 surfaceDefinitions={surfaceDefinitions}
                 materialDefinitions={materials}
                 textureDefinitions={textureDefinitions}
                 maskTextureDefinitions={maskTextureDefinitions}
                 onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
                 onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                activeMaskPaintTarget={activeMaskPaintTarget}
+                onSetMaskPaintTarget={onSetMaskPaintTarget}
                 shaderDefinitions={shaderDefinitions}
                 grassTypeDefinitions={grassTypeDefinitions}
                 flowerTypeDefinitions={flowerTypeDefinitions}
@@ -299,6 +308,8 @@ export function useLandscapeWorkspaceView(
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
@@ -344,6 +355,8 @@ export function useLandscapeWorkspaceView(
           materials={materialDefinitions}
           textureDefinitions={textureDefinitions}
           maskTextureDefinitions={maskTextureDefinitions}
+          activeMaskPaintTarget={activeMaskPaintTarget}
+          onSetMaskPaintTarget={onSetMaskPaintTarget}
           onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
           onImportMaskTextureDefinition={onImportMaskTextureDefinition}
           shaderDefinitions={shaderDefinitions}
@@ -400,10 +413,14 @@ export function useLandscapeWorkspaceView(
       surfaceDefinitions,
       textureDefinitions,
       maskTextureDefinitions,
+      activeMaskPaintTarget,
+      onSetMaskPaintTarget,
       shaderDefinitions,
       grassTypeDefinitions,
       flowerTypeDefinitions,
       rockTypeDefinitions,
+      onCreateMaskTextureDefinition,
+      onImportMaskTextureDefinition,
       onCommand,
       region,
       viewportStore

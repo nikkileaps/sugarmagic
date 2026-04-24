@@ -9,6 +9,7 @@ import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import type {
   Mask,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   SurfaceContext,
   TextureDefinition
 } from "@sugarmagic/domain";
@@ -32,12 +33,14 @@ export interface MaskEditorProps {
   showHeading?: boolean;
   value: Mask;
   allowedContext: SurfaceContext;
+  allowPainted?: boolean;
+  paintTarget?: PaintedMaskTargetAddress | null;
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onChange: (next: Mask) => void;
 }
 
@@ -45,18 +48,34 @@ export function MaskEditor({
   showHeading = true,
   value,
   allowedContext,
+  allowPainted = false,
+  paintTarget = null,
   textureDefinitions,
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   onChange
 }: MaskEditorProps) {
   const options =
     allowedContext === "landscape-only"
       ? MASK_KIND_OPTIONS
       : MASK_KIND_OPTIONS.filter((option) => option.value !== "splatmap-channel");
+  const visibleOptions = allowPainted
+    ? options
+    : options.filter((option) => option.value !== "painted");
+  const isPaintTargetActive =
+    paintTarget?.scope === "landscape-channel"
+      ? activeMaskPaintTarget?.scope === "landscape-channel" &&
+        activeMaskPaintTarget.channelKey === paintTarget.channelKey &&
+        activeMaskPaintTarget.layerId === paintTarget.layerId
+      : paintTarget?.scope === "asset-slot"
+        ? activeMaskPaintTarget?.scope === "asset-slot" &&
+          activeMaskPaintTarget.assetDefinitionId === paintTarget.assetDefinitionId &&
+          activeMaskPaintTarget.slotName === paintTarget.slotName &&
+          activeMaskPaintTarget.layerId === paintTarget.layerId
+        : false;
 
   return (
     <Stack gap="xs">
@@ -70,7 +89,7 @@ export function MaskEditor({
           size="xs"
           label="Mask Type"
           comboboxProps={{ withinPortal: false }}
-          data={options}
+          data={visibleOptions}
           value={value.kind}
           onChange={(kind) => {
             switch (kind) {
@@ -223,25 +242,23 @@ export function MaskEditor({
                       >
                         Import PNG
                       </Button>
-                      {value.maskTextureId && onSetActivePaintMaskTextureId ? (
+                      {value.maskTextureId && paintTarget && onSetMaskPaintTarget ? (
                         <Button
                           size="compact-xs"
                           variant={
-                            activePaintMaskTextureId === value.maskTextureId
+                            isPaintTargetActive
                               ? "filled"
                               : "subtle"
                           }
                           onClick={() =>
-                            onSetActivePaintMaskTextureId(
-                              activePaintMaskTextureId === value.maskTextureId
+                            onSetMaskPaintTarget(
+                              isPaintTargetActive
                                 ? null
-                                : value.maskTextureId
+                                : paintTarget
                             )
                           }
                         >
-                          {activePaintMaskTextureId === value.maskTextureId
-                            ? "Stop Painting"
-                            : "Paint in Preview"}
+                          {isPaintTargetActive ? "Stop Painting" : "Paint in Viewport"}
                         </Button>
                       ) : null}
                     </Group>

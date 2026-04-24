@@ -81,7 +81,10 @@ import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
-import type { SurfaceDefinition } from "../surface";
+import {
+  assertReusableSurfaceHasNoPaintedMasks,
+  type SurfaceDefinition
+} from "../surface";
 import {
   removePluginConfiguration,
   upsertPluginConfiguration,
@@ -1952,6 +1955,10 @@ export function addSurfaceDefinitionToSession(
   session: AuthoringSession,
   surfaceDefinition: SurfaceDefinition
 ): AuthoringSession {
+  assertReusableSurfaceHasNoPaintedMasks(
+    surfaceDefinition.surface,
+    `SurfaceDefinition "${surfaceDefinition.definitionId}"`
+  );
   const existingDefinitions = session.contentLibrary.surfaceDefinitions ?? [];
   const existingIndex = existingDefinitions.findIndex(
     (definition) => definition.definitionId === surfaceDefinition.definitionId
@@ -1979,6 +1986,22 @@ export function updateSurfaceDefinitionInSession(
   definitionId: string,
   patch: Partial<SurfaceDefinition>
 ): AuthoringSession {
+  const existingDefinition =
+    (session.contentLibrary.surfaceDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null;
+  const nextDefinition = existingDefinition
+    ? {
+        ...existingDefinition,
+        ...patch
+      }
+    : null;
+  if (nextDefinition?.surface) {
+    assertReusableSurfaceHasNoPaintedMasks(
+      nextDefinition.surface,
+      `SurfaceDefinition "${definitionId}"`
+    );
+  }
   return {
     ...session,
     contentLibrary: {

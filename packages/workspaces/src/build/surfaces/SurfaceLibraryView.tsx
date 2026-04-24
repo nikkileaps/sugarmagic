@@ -27,8 +27,6 @@ export interface SurfaceLibraryViewProps {
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -54,8 +52,6 @@ export function useSurfaceLibraryView(
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
-    activePaintMaskTextureId,
-    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
@@ -171,13 +167,13 @@ export function useSurfaceLibraryView(
             <LayerStackView
               surface={selectedDefinition.surface}
               allowedContext="landscape-only"
+              allowPainted={false}
+              paintOwner={null}
               materialDefinitions={materialDefinitions}
               textureDefinitions={textureDefinitions}
               maskTextureDefinitions={maskTextureDefinitions}
               onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
               onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-              activePaintMaskTextureId={activePaintMaskTextureId}
-              onSetActivePaintMaskTextureId={onSetActivePaintMaskTextureId}
               shaderDefinitions={shaderDefinitions}
               grassTypeDefinitions={grassTypeDefinitions}
               flowerTypeDefinitions={flowerTypeDefinitions}

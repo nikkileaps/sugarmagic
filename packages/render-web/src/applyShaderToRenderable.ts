@@ -110,7 +110,7 @@ export function applyShaderToRenderable(
     return false;
   }
 
-  const previousManagedMaterials = releaseShadersFromRenderable(renderable);
+  releaseShadersFromRenderable(renderable);
   const nextLeases: ShaderMaterialLease[] = [];
   const nextScatterBuilds: SurfaceScatterBuildResult[] = [];
   let meshCount = 0;
@@ -122,7 +122,12 @@ export function applyShaderToRenderable(
     }
     meshCount += 1;
 
-    const resolveSurfaceBinding = (
+    const resolvedSlotMetadata: Array<{
+      slotName: string;
+      slotIndex: number;
+    } | null> = [];
+
+    const resolveSlotBinding = (
       material: THREE.Material,
       slotIndex: number,
       allowSlotIndexFallback: boolean
@@ -131,17 +136,29 @@ export function applyShaderToRenderable(
         (slot) => slot.slotName === material.name
       );
       if (byName) {
-        return byName.surface;
+        return byName;
       }
 
       if (allowSlotIndexFallback) {
-        return (
-          effectiveMaterialSlots.find((slot) => slot.slotIndex === slotIndex)?.surface ??
-          object.effectiveShaders.surface
-        );
+        return effectiveMaterialSlots.find((slot) => slot.slotIndex === slotIndex) ?? null;
       }
 
-      return object.effectiveShaders.surface;
+      return effectiveMaterialSlots.length === 1 ? (effectiveMaterialSlots[0] ?? null) : null;
+    };
+
+    const resolveSurfaceBinding = (
+      material: THREE.Material,
+      slotIndex: number,
+      allowSlotIndexFallback: boolean
+    ) => {
+      const resolvedSlot = resolveSlotBinding(material, slotIndex, allowSlotIndexFallback);
+      resolvedSlotMetadata[slotIndex] = resolvedSlot
+        ? {
+            slotName: resolvedSlot.slotName,
+            slotIndex: resolvedSlot.slotIndex
+          }
+        : null;
+      return resolvedSlot?.surface ?? object.effectiveShaders.surface;
     };
 
     const applyMaterial = (
@@ -174,10 +191,12 @@ export function applyShaderToRenderable(
       child.material = child.material.map((material, slotIndex) =>
         applyMaterial(material, slotIndex, true)
       );
+      child.userData.sugarmagicMaterialSlots = resolvedSlotMetadata;
       return;
     }
 
     child.material = applyMaterial(child.material, 0, false);
+    child.userData.sugarmagicMaterialSlots = resolvedSlotMetadata;
   });
 
   if (nextLeases.length > 0) {

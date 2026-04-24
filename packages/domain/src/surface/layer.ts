@@ -59,6 +59,7 @@ export interface AppearanceLayer extends LayerCommon {
 export interface ScatterLayer extends LayerCommon {
   kind: "scatter";
   content: ScatterContent;
+  materialDefinitionId: string | null;
 }
 
 export interface EmissionLayer extends LayerCommon {
@@ -141,14 +142,17 @@ export function createAppearanceLayer(
 
 export function createScatterLayer(
   content: ScatterContent,
-  overrides: LayerFactoryOverrides = {}
+  overrides: LayerFactoryOverrides & {
+    materialDefinitionId?: string | null;
+  } = {}
 ): ScatterLayer {
   const common = createLayerCommon(overrides);
   return {
     ...common,
     kind: "scatter",
     displayName: overrides.displayName ?? scatterLayerName(content),
-    content
+    content,
+    materialDefinitionId: overrides.materialDefinitionId ?? null
   };
 }
 

@@ -44,6 +44,19 @@ export type Mask =
       fade: number;
     };
 
+export type PaintedMaskTargetAddress =
+  | {
+      scope: "landscape-channel";
+      channelKey: string;
+      layerId: string;
+    }
+  | {
+      scope: "asset-slot";
+      assetDefinitionId: string;
+      slotName: string;
+      layerId: string;
+    };
+
 export function cloneMask(mask: Mask): Mask {
   switch (mask.kind) {
     case "texture":
@@ -75,4 +88,3 @@ export function cloneMask(mask: Mask): Mask {
 export function maskUsesLandscapeOnlyInputs(mask: Mask): boolean {
   return mask.kind === "splatmap-channel";
 }
-

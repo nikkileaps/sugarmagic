@@ -12,6 +12,9 @@ import type {
   SurfaceDefinition
 } from "../../surface";
 import {
+  getBuiltInGrassSurface4MaterialId
+} from "./material-definitions";
+import {
   createAppearanceLayer,
   createColorAppearanceContent,
   createColorEmissionContent,
@@ -44,7 +47,10 @@ export function createBuiltInSurfaceDefinitions(
         }),
         createScatterLayer(
           { kind: "grass", grassTypeId: grassByName.get("Wild Tall")! },
-          { displayName: "Tall Grass" }
+          {
+            displayName: "Tall Grass",
+            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+          }
         ),
         createScatterLayer(
           { kind: "flowers", flowerTypeId: flowerByName.get("White Meadow")! },
@@ -67,7 +73,10 @@ export function createBuiltInSurfaceDefinitions(
         }),
         createScatterLayer(
           { kind: "grass", grassTypeId: grassByName.get("Autumn Golden")! },
-          { displayName: "Grass" }
+          {
+            displayName: "Grass",
+            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+          }
         ),
         createScatterLayer(
           { kind: "flowers", flowerTypeId: flowerByName.get("Yellow Buttercup")! },
@@ -102,7 +111,10 @@ export function createBuiltInSurfaceDefinitions(
         }),
         createScatterLayer(
           { kind: "grass", grassTypeId: grassByName.get("Short Lawn")! },
-          { displayName: "Short Grass" }
+          {
+            displayName: "Short Grass",
+            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+          }
         )
       ])
     },
@@ -117,12 +129,43 @@ export function createBuiltInSurfaceDefinitions(
         }),
         createScatterLayer(
           { kind: "grass", grassTypeId: grassByName.get("Short Lawn")! },
-          { displayName: "Clover Base", opacity: 0.85 }
+          {
+            displayName: "Clover Base",
+            opacity: 0.85,
+            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+          }
         ),
         createScatterLayer(
           { kind: "flowers", flowerTypeId: flowerByName.get("White Meadow")! },
           { displayName: "Tiny Blooms", opacity: 0.35 }
         )
+      ])
+    },
+    {
+      definitionId: `${projectId}:surface:painterly-grass`,
+      definitionKind: "surface",
+      displayName: "Painterly Grass",
+      surface: createSurface([
+        createAppearanceLayer(createColorAppearanceContent(0x6d8644), {
+          displayName: "Ground",
+          blendMode: "base"
+        }),
+        createScatterLayer(
+          { kind: "grass", grassTypeId: grassByName.get("Painterly Tuft")! },
+          {
+            displayName: "Painterly Tufts",
+            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId),
+            opacity: 0.95
+          }
+        ),
+        createScatterLayer(
+          { kind: "flowers", flowerTypeId: flowerByName.get("White Meadow")! },
+          { displayName: "Tiny Blooms", opacity: 0.2 }
+        ),
+        createEmissionLayer(createColorEmissionContent(0xf4d37d, 0.08), {
+          displayName: "Warm Lift",
+          opacity: 0.35
+        })
       ])
     }
   ];

@@ -162,6 +162,18 @@ export async function ensureDirectory(
   return dirHandle.getDirectoryHandle(name, { create: true });
 }
 
+export async function deleteFile(
+  dirHandle: FileSystemDirectoryHandle,
+  pathSegments: string[]
+): Promise<void> {
+  let current = dirHandle;
+  for (const segment of pathSegments.slice(0, -1)) {
+    current = await current.getDirectoryHandle(segment);
+  }
+  const fileName = pathSegments[pathSegments.length - 1];
+  await current.removeEntry(fileName);
+}
+
 const DB_NAME = "sugarmagic-project-handles";
 const STORE_NAME = "handles";
 

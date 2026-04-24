@@ -14,6 +14,7 @@ import type {
   GrassTypeDefinition,
   MaterialDefinition,
   MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RockTypeDefinition,
   ShaderGraphDocument,
   SurfaceBinding,
@@ -59,12 +60,15 @@ function describeSurface(
 
 export interface MaterialSlotBindingsEditorProps {
   bindings: AssetSurfaceSlot[];
+  assetDefinitionId: string;
   surfaceDefinitions: SurfaceDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -78,12 +82,15 @@ export interface MaterialSlotBindingsEditorProps {
 
 export function MaterialSlotBindingsEditor({
   bindings,
+  assetDefinitionId,
   surfaceDefinitions,
   materialDefinitions,
   textureDefinitions,
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
@@ -136,12 +143,19 @@ export function MaterialSlotBindingsEditor({
                   <SurfaceBindingEditor
                     value={binding.surface}
                     allowedContext="universal"
+                    paintOwner={{
+                      scope: "asset-slot",
+                      assetDefinitionId,
+                      slotName: binding.slotName
+                    }}
                     surfaceDefinitions={surfaceDefinitions}
                     materialDefinitions={materialDefinitions}
                     textureDefinitions={textureDefinitions}
                     maskTextureDefinitions={maskTextureDefinitions}
                     onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
                     onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                    activeMaskPaintTarget={activeMaskPaintTarget}
+                    onSetMaskPaintTarget={onSetMaskPaintTarget}
                     shaderDefinitions={shaderDefinitions}
                     grassTypeDefinitions={grassTypeDefinitions}
                     flowerTypeDefinitions={flowerTypeDefinitions}

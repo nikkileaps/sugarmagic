@@ -21,12 +21,10 @@ import {
 } from "./layer";
 import type { Mask } from "./mask";
 import { cloneMask } from "./mask";
-import type { LayerOverride } from "./layer-override";
 
 export * from "./layer";
 export * from "./mask";
 export * from "./noise";
-export * from "./layer-override";
 export * from "./surface-definition";
 export * from "./grass-type";
 export * from "./flower-type";
@@ -49,7 +47,6 @@ export type SurfaceBinding<C extends SurfaceContext = SurfaceContext> =
   | {
       kind: "reference";
       surfaceDefinitionId: string;
-      layerOverrides?: Record<string, LayerOverride>;
     };
 
 export interface SurfaceSlot<C extends SurfaceContext = SurfaceContext> {
@@ -98,6 +95,25 @@ export function validateSurfaceLayers(layers: readonly Layer[]): void {
   if (baseLayer.blendMode !== "base") {
     throw new Error('Surface.layers[0] must use blendMode "base".');
   }
+}
+
+export function surfaceUsesPaintedMasks(surface: Surface | null | undefined): boolean {
+  return Boolean(
+    surface?.layers.some((layer) => layer.mask.kind === "painted")
+  );
+}
+
+export function assertReusableSurfaceHasNoPaintedMasks(
+  surface: Surface,
+  ownerLabel = "SurfaceDefinition.surface"
+): void {
+  const paintedLayer = surface.layers.find((layer) => layer.mask.kind === "painted");
+  if (!paintedLayer) {
+    return;
+  }
+  throw new Error(
+    `${ownerLabel} layer "${paintedLayer.layerId}" uses a painted mask. Painted masks are only valid on inline application-site surfaces.`
+  );
 }
 
 export function createSurface<C extends SurfaceContext = SurfaceContext>(
@@ -238,8 +254,7 @@ export function createReferenceSurfaceBinding<C extends SurfaceContext = Surface
 ): SurfaceBinding<C> {
   return {
     kind: "reference",
-    surfaceDefinitionId,
-    layerOverrides: {}
+    surfaceDefinitionId
   };
 }
 
@@ -273,7 +288,22 @@ export function cloneSurface<C extends SurfaceContext = SurfaceContext>(
     layers: surface.layers.map((layer) => ({
       ...layer,
       mask: cloneMask(layer.mask),
-      content: { ...layer.content }
+      content:
+        layer.kind === "appearance"
+          ? layer.content.kind === "texture"
+            ? { ...layer.content, tiling: [...layer.content.tiling] as [number, number] }
+            : layer.content.kind === "shader"
+              ? {
+                  ...layer.content,
+                  parameterValues: { ...layer.content.parameterValues },
+                  textureBindings: { ...layer.content.textureBindings }
+                }
+              : { ...layer.content }
+          : layer.kind === "emission"
+            ? layer.content.kind === "texture"
+              ? { ...layer.content, tiling: [...layer.content.tiling] as [number, number] }
+              : { ...layer.content }
+            : { ...layer.content }
     })) as Layer[],
     context: surface.context
   };
@@ -287,18 +317,7 @@ export function cloneSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
   }
   if (binding.kind === "reference") {
     return {
-      ...binding,
-      layerOverrides: binding.layerOverrides
-        ? Object.fromEntries(
-            Object.entries(binding.layerOverrides).map(([layerId, override]) => [
-              layerId,
-              {
-                ...override,
-                ...(override.mask ? { mask: cloneMask(override.mask) } : {})
-              }
-            ])
-          )
-        : {}
+      ...binding
     };
   }
   return {

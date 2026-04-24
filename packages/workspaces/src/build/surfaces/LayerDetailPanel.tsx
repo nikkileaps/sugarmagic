@@ -53,8 +53,6 @@ interface SharedProps {
   maskTextureDefinitions: MaskTextureDefinition[];
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activePaintMaskTextureId?: string | null;
-  onSetActivePaintMaskTextureId?: (definitionId: string | null) => void;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
   flowerTypeDefinitions: FlowerTypeDefinition[];
@@ -330,11 +328,19 @@ function ScatterLayerEditor(
 ) {
   const {
     layer,
+    materialDefinitions,
+    shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
     rockTypeDefinitions,
     onChange
   } = props;
+  const scatterMaterials = materialDefinitions.filter((material) => {
+    const shader = shaderDefinitions.find(
+      (candidate) => candidate.shaderDefinitionId === material.shaderDefinitionId
+    );
+    return shader?.targetKind === "mesh-surface";
+  });
   return (
     <KindTabs
       value={layer.content.kind}
@@ -372,62 +378,119 @@ function ScatterLayerEditor(
       }}
       renderPanel={(kind) =>
         kind === "grass" && layer.content.kind === "grass" ? (
-          <Select
-            size="xs"
-            label="Grass Type"
-            comboboxProps={{ withinPortal: false }}
-            data={grassTypeDefinitions.map((definition) => ({
-              value: definition.definitionId,
-              label: definition.displayName
-            }))}
-            value={layer.content.grassTypeId}
-            onChange={(next) => {
-              if (next) {
+          <Stack gap="xs">
+            <Select
+              size="xs"
+              label="Grass Type"
+              comboboxProps={{ withinPortal: false }}
+              data={grassTypeDefinitions.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.content.grassTypeId}
+              onChange={(next) => {
+                if (next) {
+                  onChange({
+                    ...layer,
+                    content: { kind: "grass", grassTypeId: next }
+                  });
+                }
+              }}
+            />
+            <Select
+              size="xs"
+              label="Material"
+              clearable
+              comboboxProps={{ withinPortal: false }}
+              data={scatterMaterials.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.materialDefinitionId}
+              onChange={(next) =>
                 onChange({
                   ...layer,
-                  content: { kind: "grass", grassTypeId: next }
-                });
+                  materialDefinitionId: next ?? null
+                })
               }
-            }}
-          />
+            />
+          </Stack>
         ) : kind === "flowers" && layer.content.kind === "flowers" ? (
-          <Select
-            size="xs"
-            label="Flower Type"
-            comboboxProps={{ withinPortal: false }}
-            data={flowerTypeDefinitions.map((definition) => ({
-              value: definition.definitionId,
-              label: definition.displayName
-            }))}
-            value={layer.content.flowerTypeId}
-            onChange={(next) => {
-              if (next) {
+          <Stack gap="xs">
+            <Select
+              size="xs"
+              label="Flower Type"
+              comboboxProps={{ withinPortal: false }}
+              data={flowerTypeDefinitions.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.content.flowerTypeId}
+              onChange={(next) => {
+                if (next) {
+                  onChange({
+                    ...layer,
+                    content: { kind: "flowers", flowerTypeId: next }
+                  });
+                }
+              }}
+            />
+            <Select
+              size="xs"
+              label="Material"
+              clearable
+              comboboxProps={{ withinPortal: false }}
+              data={scatterMaterials.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.materialDefinitionId}
+              onChange={(next) =>
                 onChange({
                   ...layer,
-                  content: { kind: "flowers", flowerTypeId: next }
-                });
+                  materialDefinitionId: next ?? null
+                })
               }
-            }}
-          />
+            />
+          </Stack>
         ) : kind === "rocks" && layer.content.kind === "rocks" ? (
-          <Select
-            size="xs"
-            label="Rock Type"
-            comboboxProps={{ withinPortal: false }}
-            data={rockTypeDefinitions.map((definition) => ({
-              value: definition.definitionId,
-              label: definition.displayName
-            }))}
-            value={layer.content.rockTypeId}
-            onChange={(next) => {
-              if (next) {
+          <Stack gap="xs">
+            <Select
+              size="xs"
+              label="Rock Type"
+              comboboxProps={{ withinPortal: false }}
+              data={rockTypeDefinitions.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.content.rockTypeId}
+              onChange={(next) => {
+                if (next) {
+                  onChange({
+                    ...layer,
+                    content: { kind: "rocks", rockTypeId: next }
+                  });
+                }
+              }}
+            />
+            <Select
+              size="xs"
+              label="Material"
+              clearable
+              comboboxProps={{ withinPortal: false }}
+              data={scatterMaterials.map((definition) => ({
+                value: definition.definitionId,
+                label: definition.displayName
+              }))}
+              value={layer.materialDefinitionId}
+              onChange={(next) =>
                 onChange({
                   ...layer,
-                  content: { kind: "rocks", rockTypeId: next }
-                });
+                  materialDefinitionId: next ?? null
+                })
               }
-            }}
-          />
+            />
+          </Stack>
         ) : null
       }
     />
@@ -592,8 +655,6 @@ export function LayerDetailPanel({
   maskTextureDefinitions,
   onCreateMaskTextureDefinition,
   onImportMaskTextureDefinition,
-  activePaintMaskTextureId,
-  onSetActivePaintMaskTextureId,
   shaderDefinitions,
   grassTypeDefinitions,
   flowerTypeDefinitions,
@@ -607,8 +668,6 @@ export function LayerDetailPanel({
     maskTextureDefinitions,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
-    activePaintMaskTextureId,
-    onSetActivePaintMaskTextureId,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
