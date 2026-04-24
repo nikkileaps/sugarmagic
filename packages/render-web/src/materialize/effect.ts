@@ -160,35 +160,48 @@ export function materializeEffectOp(
         add: (other: unknown) => unknown;
       };
       const strength = input("strength") ?? float(Number(op.settings?.strength ?? 0.3));
-      const frequency = input("frequency") ?? float(Number(op.settings?.frequency ?? 1.6));
 
-      // Per-blade world XZ; sweep axis is +X.
+      // Per-blade world XZ. Used by ambient noise sampling so each
+      // blade reads noise at its own location.
       const instanceOrigin = attribute("instanceOrigin", "vec2");
-      const instanceX = dot(instanceOrigin as never, vec2(1, 0) as never);
       const timeNode = input("time");
 
-      // Three wind fronts traveling at DIFFERENT speeds (and starting at
-      // different phases) along the +X axis. Because their speeds don't
-      // share a common divisor, their combined bend pattern never
-      // visibly repeats — no periodic "loop" feeling. At any moment,
-      // some blades are inside zero, one, two, or three overlapping
-      // bands. Where bands overlap, the blade bends harder.
+      // heightMask = input.tree-height (0 at root, 1 at tip).
+      const heightMask = input("mask");
+
+      // ===========================================================
+      // BAND / GUST LAYER (DISABLED — needs more iteration)
+      // ===========================================================
+      // Periodic wind fronts that sweep across the field. Disabled
+      // for now because the timing/feel needs more work. The ambient
+      // wave alone does a good job of "always-moving wind"; gusts
+      // are layered on top to add directional pulses.
       //
-      // frequency (from the preset material) scales all three fronts.
-      // Gusty (freq=2.6) → bands pass every ~2s. Meadow Breeze (1.6) →
-      // every ~3s. Gentle Breeze (1.1) → every ~5s. Still Air (freq
-      // unused because strength=0) → no bend regardless.
+      // To re-enable: uncomment the block below AND change the final
+      // `value:` to `position.add(vec3(totalBend …))` where
+      //   totalBend = ambientBend.add(bandBendLeft).
+      //
+      // What this does:
+      //  - 3 wind fronts at different speeds & periods (coprime-ish
+      //    so they don't visibly loop) sweeping in +X.
+      //  - Each front WRAPS every N meters so it re-enters the field
+      //    instead of flying off to infinity.
+      //  - Within each band, contrast-stretched noise gates which
+      //    blades bend (creates "still pockets" within active bands).
+      //  - frequency (preset param) scales all three speeds.
+      //
+      // Tuning notes:
+      //  - periods 130/190/100 → at freq 1.6, gusts every ~10-15s
+      //  - reduce periods → more frequent gusts
+      //  - reduce speed → slower-moving fronts (more wave-like)
+      //  - smoothstep(0.4, 0.75) → ~40% of band stays still
+      //
+      // BLOCK START — uncomment to re-enable
+      /*
+      const frequency = input("frequency") ?? float(Number(op.settings?.frequency ?? 1.6));
+      const instanceX = dot(instanceOrigin as never, vec2(1, 0) as never);
       const timeScaled = (timeNode as { mul: (other: unknown) => unknown }).mul(frequency);
 
-      // Each band's front travels at `speed` m/s but WRAPS every `period`
-      // meters — so after sweeping across the region, it re-enters from
-      // the opposite side. Without this wrap the front flies off to +X
-      // infinity and there's no more wind after a few seconds.
-      //
-      // period values are different for each band so the wraps stay
-      // out of phase. Choose periods >> typical region width (~20m) so
-      // there's a clear "gap" between passes, otherwise a new front
-      // appears the instant the old one leaves.
       const makeBand = (
         speed: number,
         phase: number,
@@ -200,9 +213,6 @@ export function materializeEffectOp(
             add: (other: unknown) => unknown;
           }
         ).add(float(phase));
-        // front = (time*speed + phase) mod period - halfPeriod
-        // Centering at 0 so the front sweeps across [-period/2, +period/2]
-        // which covers the grass region symmetrically.
         const wrapped = (
           mod(raw as never, float(period)) as { sub: (other: unknown) => unknown }
         ).sub(float(period / 2));
@@ -216,20 +226,10 @@ export function materializeEffectOp(
         );
       };
 
-      // periods 130, 190, 100 are coprime-ish so combined pattern has
-      // very long repeat. Time between any single band's passes at a
-      // given blade is period/(speed*freq). At freq=1.6:
-      //   band1: 130/(4.0*1.6) = ~20s
-      //   band2: 190/(2.5*1.6) = ~47s
-      //   band3: 100/(5.5*1.6) = ~11s
-      // Summed there's a front somewhere ~every 10-15s, with most
-      // blades seeing a noticeable front every 20-40s.
       const band1 = makeBand(4.0, 0, 4, 130);
       const band2 = makeBand(2.5, 7, 5, 190);
       const band3 = makeBand(5.5, 3, 3, 100);
 
-      // Sum bands — overlapping fronts boost bend. Clamp so one blade
-      // can't bend more than ~1.2× strength.
       const summedBands = clamp(
         (band1 as { add: (other: unknown) => unknown })
           .add(band2 as never) as never,
@@ -244,50 +244,24 @@ export function materializeEffectOp(
         float(1.2) as never
       );
 
-      // Noise modulation across the field (time-drifting). We want
-      // CONTRASTY noise — visible pockets of "still" blades within
-      // the band so not every blade in a passing front bends. Raw
-      // perlin spends most of its output in the middle of [0,1], so
-      // multiplying alone never zeros anything out. smoothstep with
-      // a high lower edge maps the bottom ~40% of the noise range to
-      // 0 (dead pockets) and ramps the rest 0→1 sharply.
-      //
-      // Spatial scale controls pocket size: multiplier M → features
-      // ~1/M meters across. 0.2 gives ~5m pockets (large contiguous
-      // patches of still or active blades, each spanning many blades).
-      // Higher = smaller/denser pockets; lower = huge regional patches.
+      // In-band pocket gating noise (different sample from ambient).
       const noiseUV = (instanceOrigin as unknown as {
         mul: (other: unknown) => unknown;
       }).mul(float(0.2));
-      // Slow drift: the noise field scrolls at 0.15 UV/sec which at
-      // scale 0.2 = 0.75 m/s in world space — pockets drift slowly
-      // so a "still patch" stays still for several seconds before
-      // becoming a bending patch.
       const noiseDrift = (timeNode as { mul: (other: unknown) => unknown }).mul(float(0.15));
       const noiseUVWithTime = (noiseUV as unknown as {
         add: (other: unknown) => unknown;
       }).add(vec2(noiseDrift as never, 0) as never);
       const noiseValue = materializePerlinLikeNoise2d(noiseUVWithTime);
-
-      // Contrast-stretched noise: bottom 40% → 0, top 25% → 1,
-      // ramp in between. Result: ~40% of blades in any band are
-      // completely still, ~25% bend at full strength, rest between.
       const noiseContrasty = smoothstep(
         float(0.4) as never,
         float(0.75) as never,
         noiseValue as never
       );
-
-      // 1.4× peak amplitude for gust intensity in "active" pockets.
       const amplitudeWithinBand = (noiseContrasty as unknown as {
         mul: (other: unknown) => unknown;
       }).mul(float(1.4));
 
-      // heightMask = input.tree-height (0 at root, 1 at tip).
-      const heightMask = input("mask");
-
-      // ============= BAND LAYER =============
-      // Bands push grass to the LEFT (-X) when a wind front passes over.
       const bandModulated = (allBands as unknown as { mul: (other: unknown) => unknown })
         .mul(amplitudeWithinBand as never);
       const bandBend = (bandModulated as { mul: (other: unknown) => unknown })
@@ -296,6 +270,8 @@ export function materializeEffectOp(
         .mul(heightMask as never);
       const bandBendLeft = (bandBendH as { mul: (other: unknown) => unknown })
         .mul(float(-1));
+      */
+      // BLOCK END
 
       // ============= AMBIENT WAVE LAYER =============
       // Always-on background motion. Two octaves of drifting noise,
@@ -362,14 +338,11 @@ export function materializeEffectOp(
       ).mul(heightMask as never);
 
       // ============= COMBINE =============
-      // Total X bend = band push (negative) + ambient (signed).
-      const totalBend = (bandBendLeft as unknown as {
-        add: (other: unknown) => unknown;
-      }).add(ambientBend as never);
-
+      // Bands disabled — ambient is the only contribution.
+      // (When re-enabling bands: const totalBend = ambientBend.add(bandBendLeft) )
       return {
         handled: true,
-        value: position.add(vec3(totalBend as never, 0, 0))
+        value: position.add(vec3(ambientBend as never, 0, 0))
       };
     }
     default:
