@@ -806,9 +806,9 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: [
       setting("strength", "Strength", "float", 0.3, { min: 0, max: 2, step: 0.05 }),
       setting("frequency", "Frequency", "float", 1.6, { min: 0.1, max: 6, step: 0.1 }),
-      setting("spatialScale", "Spatial Scale", "float", 0.35, {
+      setting("spatialScale", "Spatial Scale", "float", 3.5, {
         min: 0.01,
-        max: 2,
+        max: 10,
         step: 0.05
       }),
       setting("heightScale", "Height Scale", "float", 1, {
@@ -1151,10 +1151,17 @@ export function createDefaultFoliageWindShaderGraph(
         settings: {}
       },
       {
+        // `_tree_height` baked by createProceduralGrassGeometry: 0 at the
+        // blade root, 1 at the tip. Routed into wind-sway's mask port so
+        // bases stay anchored and tips sway. This replaces the previous
+        // `input.vertex-wind-mask` source, which reads from vertexColor
+        // and evaluates to 0 in TSL's vertex stage — collapsing all sway
+        // to zero. tree-height is a regular scalar attribute that flows
+        // correctly through the vertex pipeline.
         nodeId: "mask",
-        nodeType: "input.vertex-wind-mask",
+        nodeType: "input.tree-height",
         position: { x: 48, y: 172 },
-        settings: { channel: "r" }
+        settings: {}
       },
       {
         nodeId: "local-position",

@@ -413,6 +413,27 @@ export function buildSurfaceScatterLayer(
   instancedMesh.castShadow = true;
   instancedMesh.receiveShadow = true;
 
+  // Per-instance world-XZ origin. Each blade (instance) carries its own
+  // placement in world space so vertex-stage shaders (wind sway, etc.)
+  // can vary their phase across the field. We bake this as a custom
+  // InstancedBufferAttribute because TSL's positionWorld in vertex
+  // stage doesn't include the per-instance matrix on our NodeMaterial
+  // path — it evaluates to the same value for every blade, which is why
+  // wind looked like a metronome instead of a wave sweeping across the
+  // field. With this attribute, the wind shader reads each blade's own
+  // world XZ and produces real spatial variation.
+  const instanceOriginData = new Float32Array(acceptedSamples.length * 2);
+  for (let index = 0; index < acceptedSamples.length; index += 1) {
+    const sample = acceptedSamples[index]!;
+    instanceOriginData[index * 2] = sample.position[0];
+    instanceOriginData[index * 2 + 1] = sample.position[2];
+  }
+  const instanceOriginAttribute = new THREE.InstancedBufferAttribute(
+    instanceOriginData,
+    2
+  );
+  geometry.setAttribute("instanceOrigin", instanceOriginAttribute);
+
   const up = new THREE.Vector3(0, 1, 0);
   const samplePosition = new THREE.Vector3();
   const sampleNormal = new THREE.Vector3();

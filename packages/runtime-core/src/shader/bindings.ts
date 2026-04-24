@@ -298,14 +298,16 @@ export function resolveMaterialEffectiveShaderBinding(
   materialDefinitionId: string,
   parameterOverrides: ShaderParameterOverride[] = [],
   diagnostics: ShaderBindingResolutionDiagnostic[] = [],
-  textureBindingOverrides: Record<string, string> = {}
+  textureBindingOverrides: Record<string, string> = {},
+  slot: ShaderSlotKind = "surface"
 ): EffectiveShaderBinding | null {
   return resolveMaterialSurfaceBinding(
     contentLibrary,
     materialDefinitionId,
     parameterOverrides,
     diagnostics,
-    textureBindingOverrides
+    textureBindingOverrides,
+    slot
   );
 }
 
@@ -393,13 +395,26 @@ export function resolveAppearanceLayer(
   }
 
   if (surface.kind === "material") {
+    // Route the material resolution to the correct slot so the
+    // shader's target-kind check doesn't falsely reject a mesh-deform
+    // material bound as a wind deform (or a mesh-effect material).
+    // Defaulting to "surface" would emit the misleading "shader X
+    // targets mesh-deform but slot surface requires mesh-surface"
+    // error that used to break Gentle Breeze et al.
+    const materialSlot: ShaderSlotKind =
+      expectedTargetKind === "mesh-deform"
+        ? "deform"
+        : expectedTargetKind === "mesh-effect"
+          ? "effect"
+          : "surface";
     return validateResolvedSurfaceTarget(
       resolveMaterialEffectiveShaderBinding(
         contentLibrary,
         surface.materialDefinitionId,
         parameterOverrides,
         [],
-        textureBindingOverrides
+        textureBindingOverrides,
+        materialSlot
       ),
       expectedTargetKind
     );
@@ -512,15 +527,20 @@ export function resolveScatterLayer(
 
 function resolveScatterWind(
   definition: GrassTypeDefinition | FlowerTypeDefinition | RockTypeDefinition,
+  layerDeform: ShaderOrMaterial | null | undefined,
   contentLibrary: ContentLibrarySnapshot
 ): EffectiveShaderBinding | null {
-  if (!("wind" in definition)) {
+  // Scatter-layer-level `deform` binding wins when present — that's the
+  // per-placement wind override ("Gentle Breeze" on this patch, "Gusty" on
+  // that one). When it's absent, fall back to the type-level wind baked
+  // into the grass / flower / rock definition so legacy surfaces continue
+  // to sway unchanged.
+  const source =
+    layerDeform ?? ("wind" in definition ? definition.wind : null);
+  if (!source) {
     return null;
   }
-  if (!definition.wind) {
-    return null;
-  }
-  const result = resolveAppearanceLayer(definition.wind, contentLibrary, "mesh-deform");
+  const result = resolveAppearanceLayer(source, contentLibrary, "mesh-deform");
   return result.ok ? result.binding : null;
 }
 
@@ -755,7 +775,7 @@ export function resolveSurfaceBinding(
         0,
         "density" in definition ? definition.density : 0
       ),
-      wind: resolveScatterWind(definition, contentLibrary)
+      wind: resolveScatterWind(definition, effectiveLayer.deform ?? null, contentLibrary)
     });
   }
 
@@ -786,13 +806,14 @@ function resolveMaterialSurfaceBinding(
   materialDefinitionId: string,
   parameterOverrides: ShaderParameterOverride[],
   diagnostics: ShaderBindingResolutionDiagnostic[],
-  textureBindingOverrides: Record<string, string> = {}
+  textureBindingOverrides: Record<string, string> = {},
+  slot: ShaderSlotKind = "surface"
 ): EffectiveShaderBinding | null {
   const materialDefinition = getMaterialDefinition(contentLibrary, materialDefinitionId);
   if (!materialDefinition) {
     const diagnostic: ShaderBindingResolutionDiagnostic = {
       severity: "error",
-      slot: "surface",
+      slot,
       shaderDefinitionId: null,
       message: `Material slot references missing material "${materialDefinitionId}".`
     };
@@ -803,7 +824,7 @@ function resolveMaterialSurfaceBinding(
 
   return resolveSlotBinding(
     contentLibrary,
-    "surface",
+    slot,
     materialDefinition.shaderDefinitionId,
     parameterOverrides,
     diagnostics,

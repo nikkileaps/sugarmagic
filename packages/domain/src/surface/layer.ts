@@ -9,6 +9,7 @@
 import { createUuid } from "../shared/identity";
 import type { Mask } from "./mask";
 import { maskUsesLandscapeOnlyInputs } from "./mask";
+import type { ShaderOrMaterial } from "./index";
 
 export type BlendMode = "base" | "mix" | "multiply" | "add" | "overlay";
 
@@ -60,6 +61,15 @@ export interface ScatterLayer extends LayerCommon {
   kind: "scatter";
   content: ScatterContent;
   materialDefinitionId: string | null;
+  /**
+   * Optional wind / deform binding for this specific scatter layer. When
+   * set, overrides the referenced GrassType / FlowerType's own `wind`
+   * field at the scatter resolve step. Lets authors bind named wind
+   * presets ("Gentle Breeze", "Gusty", etc.) per scatter without forking
+   * a new grass-type. When null, the type-level wind flows through
+   * unchanged (backwards-compatible with older authored surfaces).
+   */
+  deform?: ShaderOrMaterial | null;
 }
 
 export interface EmissionLayer extends LayerCommon {
@@ -144,6 +154,7 @@ export function createScatterLayer(
   content: ScatterContent,
   overrides: LayerFactoryOverrides & {
     materialDefinitionId?: string | null;
+    deform?: ShaderOrMaterial | null;
   } = {}
 ): ScatterLayer {
   const common = createLayerCommon(overrides);
@@ -152,7 +163,8 @@ export function createScatterLayer(
     kind: "scatter",
     displayName: overrides.displayName ?? scatterLayerName(content),
     content,
-    materialDefinitionId: overrides.materialDefinitionId ?? null
+    materialDefinitionId: overrides.materialDefinitionId ?? null,
+    deform: overrides.deform ?? null
   };
 }
 

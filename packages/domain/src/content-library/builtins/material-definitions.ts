@@ -42,6 +42,26 @@ export function getBuiltInGrassSurface6MaterialId(projectId: string): string {
   return `${projectId}:material:grass-surface-6`;
 }
 
+// Wind presets — MaterialDefinitions wrapping the foliage-wind shader with
+// named parameterValues. Authors bind these on ScatterLayer.deform to swap
+// wind "mood" per placement without forking a new grass type.
+
+export function getBuiltInStillAirMaterialId(projectId: string): string {
+  return `${projectId}:material:still-air`;
+}
+
+export function getBuiltInGentleBreezeMaterialId(projectId: string): string {
+  return `${projectId}:material:gentle-breeze`;
+}
+
+export function getBuiltInMeadowBreezeMaterialId(projectId: string): string {
+  return `${projectId}:material:meadow-breeze`;
+}
+
+export function getBuiltInGustyMaterialId(projectId: string): string {
+  return `${projectId}:material:gusty`;
+}
+
 export function createBuiltInMaterialDefinitions(
   projectId: string
 ): MaterialDefinition[] {
@@ -67,6 +87,45 @@ export function createBuiltInMaterialDefinitions(
     make(getBuiltInGrassSurface2MaterialId(projectId), "Grass Surface 2", `${projectId}:shader:grass-surface-2`, "grass-surface-2"),
     make(getBuiltInGrassSurface3MaterialId(projectId), "Grass Surface 3", `${projectId}:shader:grass-surface-3`, "grass-surface-3"),
     make(getBuiltInGrassSurface4MaterialId(projectId), "Grass Surface 4", `${projectId}:shader:grass-surface-4`, "grass-surface-4"),
-    make(getBuiltInGrassSurface6MaterialId(projectId), "Grass Surface 6", `${projectId}:shader:grass-surface-6`, "grass-surface-6")
+    make(getBuiltInGrassSurface6MaterialId(projectId), "Grass Surface 6", `${projectId}:shader:grass-surface-6`, "grass-surface-6"),
+    // Wind deform presets. Same shader (foliage-wind), different
+    // authored parameter values for different moods. Bind any of these on
+    // ScatterLayer.deform to swap wind per placement.
+    {
+      definitionId: getBuiltInStillAirMaterialId(projectId),
+      definitionKind: "material",
+      displayName: "Still Air",
+      shaderDefinitionId: `${projectId}:shader:foliage-wind`,
+      parameterValues: { windStrength: 0 },
+      textureBindings: {},
+      metadata: { builtIn: true, builtInKey: "still-air" }
+    },
+    {
+      definitionId: getBuiltInGentleBreezeMaterialId(projectId),
+      definitionKind: "material",
+      displayName: "Gentle Breeze",
+      shaderDefinitionId: `${projectId}:shader:foliage-wind`,
+      parameterValues: { windStrength: 0.18, windFrequency: 1.1, windDirection: [1, 0] },
+      textureBindings: {},
+      metadata: { builtIn: true, builtInKey: "gentle-breeze" }
+    },
+    {
+      definitionId: getBuiltInMeadowBreezeMaterialId(projectId),
+      definitionKind: "material",
+      displayName: "Meadow Breeze",
+      shaderDefinitionId: `${projectId}:shader:foliage-wind`,
+      parameterValues: { windStrength: 0.35, windFrequency: 1.6, windDirection: [1, 0.2] },
+      textureBindings: {},
+      metadata: { builtIn: true, builtInKey: "meadow-breeze" }
+    },
+    {
+      definitionId: getBuiltInGustyMaterialId(projectId),
+      definitionKind: "material",
+      displayName: "Gusty",
+      shaderDefinitionId: `${projectId}:shader:foliage-wind`,
+      parameterValues: { windStrength: 0.65, windFrequency: 2.6, windDirection: [1, -0.15] },
+      textureBindings: {},
+      metadata: { builtIn: true, builtInKey: "gusty" }
+    }
   ];
 }

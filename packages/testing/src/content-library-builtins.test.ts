@@ -29,7 +29,11 @@ describe("content-library built-ins", () => {
       "Grass Surface 2",
       "Grass Surface 3",
       "Grass Surface 4",
-      "Grass Surface 6"
+      "Grass Surface 6",
+      "Still Air",
+      "Gentle Breeze",
+      "Meadow Breeze",
+      "Gusty"
     ]);
     expect(grassTypeDefinitions.map((definition) => definition.displayName)).toEqual([
       "Short Lawn",
@@ -96,7 +100,7 @@ describe("content-library built-ins", () => {
       "little-world"
     );
 
-    expect(normalized.materialDefinitions).toHaveLength(8);
+    expect(normalized.materialDefinitions).toHaveLength(12);
     expect(normalized.grassTypeDefinitions).toHaveLength(5);
     expect(normalized.flowerTypeDefinitions).toHaveLength(3);
     expect(normalized.rockTypeDefinitions).toHaveLength(1);

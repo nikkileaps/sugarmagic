@@ -341,8 +341,21 @@ function ScatterLayerEditor(
     );
     return shader?.targetKind === "mesh-surface";
   });
+  // Wind / deform materials: any material whose shader targets mesh-deform.
+  // These are the author-selectable wind presets (Still Air, Gentle Breeze,
+  // Gusty, etc.). Empty selection = inherit whatever wind the grass/flower/
+  // rock type itself carries by default.
+  const deformMaterials = materialDefinitions.filter((material) => {
+    const shader = shaderDefinitions.find(
+      (candidate) => candidate.shaderDefinitionId === material.shaderDefinitionId
+    );
+    return shader?.targetKind === "mesh-deform";
+  });
+  const deformValue =
+    layer.deform?.kind === "material" ? layer.deform.materialDefinitionId : null;
   return (
-    <KindTabs
+    <Stack gap="sm">
+      <KindTabs
       value={layer.content.kind}
       options={[
         { value: "grass", label: "Grass" },
@@ -494,6 +507,27 @@ function ScatterLayerEditor(
         ) : null
       }
     />
+      <Select
+        size="xs"
+        label="Wind"
+        clearable
+        comboboxProps={{ withinPortal: false }}
+        placeholder="Inherit from type"
+        data={deformMaterials.map((definition) => ({
+          value: definition.definitionId,
+          label: definition.displayName
+        }))}
+        value={deformValue}
+        onChange={(next) =>
+          onChange({
+            ...layer,
+            deform: next
+              ? { kind: "material", materialDefinitionId: next }
+              : null
+          })
+        }
+      />
+    </Stack>
   );
 }
 

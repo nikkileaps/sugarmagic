@@ -1010,6 +1010,7 @@ function applyNodeSetToMaterial(
 ): MeshStandardNodeMaterial | MeshBasicNodeMaterial {
   if (nodeSet.vertexNode) {
     material.positionNode = nodeSet.vertexNode as never;
+    material.needsUpdate = true;
   }
   if (nodeSet.colorNode && "colorNode" in material) {
     material.colorNode = nodeSet.colorNode as never;
