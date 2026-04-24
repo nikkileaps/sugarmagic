@@ -1381,7 +1381,8 @@ function mergeBuiltInShaderDefinitions(
 function mergeBuiltInDefinitions<T>(
   authoredDefinitions: T[],
   builtInDefinitions: T[],
-  getId: (definition: T) => string
+  getId: (definition: T) => string,
+  preserveAuthored?: (authored: T, builtIn: T) => T
 ): T[] {
   const nextDefinitions = [...authoredDefinitions];
   for (const builtInDefinition of builtInDefinitions) {
@@ -1389,7 +1390,14 @@ function mergeBuiltInDefinitions<T>(
       (definition) => getId(definition) === getId(builtInDefinition)
     );
     if (existingIndex >= 0) {
-      nextDefinitions[existingIndex] = builtInDefinition;
+      // When the user has the same-id authored definition on disk, default
+      // behaviour is to replace it with the current built-in shape so
+      // engine-side improvements (new fields, renamed defaults) propagate.
+      // Callers that have user-editable fields on the built-in must opt in
+      // via `preserveAuthored` to keep those fields when the merge happens.
+      nextDefinitions[existingIndex] = preserveAuthored
+        ? preserveAuthored(nextDefinitions[existingIndex]!, builtInDefinition)
+        : builtInDefinition;
       continue;
     }
     nextDefinitions.push(builtInDefinition);

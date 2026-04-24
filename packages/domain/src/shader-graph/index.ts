@@ -2640,6 +2640,13 @@ export function createDefaultGrassSurface6ShaderGraph(
       // Blade texture (alpha + subtle luminance grain)
       createMaterialTextureNode("blade-texture", "bladeTexture", { x: 48, y: 900 }),
 
+      // Diffuse tint texture (optional painterly color field tiled across
+      // world XZ). Sampled at worldXZ × diffuseTiling so neighboring blades
+      // see coherent color patches. Multiplied into the final color via a
+      // strength-controlled lerp so strength=0 disables it and strength=1
+      // fully applies the tint.
+      createMaterialTextureNode("diffuse-texture", "diffuseTexture", { x: 48, y: 1140 }),
+
       // Base gradient
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 40 }, settings: {} },
       { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 0 }, settings: { parameterId: "rootTint" } },
@@ -2689,6 +2696,32 @@ export function createDefaultGrassSurface6ShaderGraph(
 
       // Apply texture luminance to add painterly grain (lit × macro × texture.color)
       { nodeId: "final-color", nodeType: "color.multiply", position: { x: 1600, y: 700 }, settings: {} },
+
+      // Diffuse tint sampling path. math.multiply has strict-float ports, so
+      // we split the mesh UV vec2 into its components (via split-vector with
+      // widen-to-vec3 coercion), scale each scalar by tiling, and recombine
+      // into a vec2 UV for the texture sample. Mesh UV varies across each
+      // blade (0→1 base→tip), so tiling controls how many texture
+      // repetitions per blade.
+      //   split = splitVector(meshUV → widen to vec3)
+      //   scaledU = split.x × diffuseTiling
+      //   scaledV = split.y × diffuseTiling
+      //   uv = vec2(scaledU, scaledV)
+      //   tint = texture(diffuseTexture, uv).color × 2      // re-centers mean around 1
+      //   factor = mix(1.0, tint, diffuseStrength)          // strength=0 disables
+      //   finalWithDiffuse = finalColor × factor
+      { nodeId: "diffuse-mesh-uv", nodeType: "input.uv", position: { x: 240, y: 1180 }, settings: {} },
+      { nodeId: "split-mesh-uv", nodeType: "math.split-vector", position: { x: 432, y: 1180 }, settings: {} },
+      { nodeId: "diffuse-tiling", nodeType: "input.parameter", position: { x: 432, y: 1260 }, settings: { parameterId: "diffuseTiling" } },
+      { nodeId: "uv-x-scaled", nodeType: "math.multiply", position: { x: 624, y: 1140 }, settings: {} },
+      { nodeId: "uv-y-scaled", nodeType: "math.multiply", position: { x: 624, y: 1220 }, settings: {} },
+      { nodeId: "diffuse-uv", nodeType: "math.combine-vector", position: { x: 816, y: 1180 }, settings: {} },
+      createColorConstantNode("diffuse-boost-color", [2, 2, 2], { x: 816, y: 1320 }),
+      { nodeId: "diffuse-boosted", nodeType: "color.multiply", position: { x: 1008, y: 1220 }, settings: {} },
+      createColorConstantNode("diffuse-identity", [1, 1, 1], { x: 1008, y: 1400 }),
+      { nodeId: "diffuse-strength", nodeType: "input.parameter", position: { x: 1200, y: 1400 }, settings: { parameterId: "diffuseStrength" } },
+      { nodeId: "diffuse-factor", nodeType: "math.lerp", position: { x: 1392, y: 1320 }, settings: {} },
+      { nodeId: "final-with-diffuse", nodeType: "color.multiply", position: { x: 1760, y: 760 }, settings: {} },
 
       // Base fade: the blade's alpha fades from 0 at the root (treeHeight=0)
       // to full at treeHeight=baseFadeEnd. BUT the engine's alphaTest=0.5
@@ -2767,6 +2800,23 @@ export function createDefaultGrassSurface6ShaderGraph(
       createShaderEdge("gs6-e-litmacro-final", "lit-macro", "value", "final-color", "a"),
       createShaderEdge("gs6-e-texture-final", "blade-texture", "color", "final-color", "b"),
 
+      // Diffuse tint path: mesh UV → split → scale per-component → recombine
+      createShaderEdge("gs6-e-meshuv-split", "diffuse-mesh-uv", "value", "split-mesh-uv", "input"),
+      createShaderEdge("gs6-e-uv-x-a", "split-mesh-uv", "x", "uv-x-scaled", "a"),
+      createShaderEdge("gs6-e-uv-x-b", "diffuse-tiling", "value", "uv-x-scaled", "b"),
+      createShaderEdge("gs6-e-uv-y-a", "split-mesh-uv", "y", "uv-y-scaled", "a"),
+      createShaderEdge("gs6-e-uv-y-b", "diffuse-tiling", "value", "uv-y-scaled", "b"),
+      createShaderEdge("gs6-e-uv-combine-x", "uv-x-scaled", "value", "diffuse-uv", "x"),
+      createShaderEdge("gs6-e-uv-combine-y", "uv-y-scaled", "value", "diffuse-uv", "y"),
+      createShaderEdge("gs6-e-diffuse-uv-input", "diffuse-uv", "vec2", "diffuse-texture", "uv"),
+      createShaderEdge("gs6-e-diffuse-boost-a", "diffuse-texture", "color", "diffuse-boosted", "a"),
+      createShaderEdge("gs6-e-diffuse-boost-b", "diffuse-boost-color", "value", "diffuse-boosted", "b"),
+      createShaderEdge("gs6-e-factor-a", "diffuse-identity", "value", "diffuse-factor", "a"),
+      createShaderEdge("gs6-e-factor-b", "diffuse-boosted", "value", "diffuse-factor", "b"),
+      createShaderEdge("gs6-e-factor-alpha", "diffuse-strength", "value", "diffuse-factor", "alpha"),
+      createShaderEdge("gs6-e-final-diffuse-a", "final-color", "value", "final-with-diffuse", "a"),
+      createShaderEdge("gs6-e-final-diffuse-b", "diffuse-factor", "value", "final-with-diffuse", "b"),
+
       // Base fade with noise-jittered cutoff:
       //   noise = worldNoise(worldPos × 8) ∈ [0, 1]
       //   offset = noise - 0.5 ∈ [-0.5, 0.5]
@@ -2788,7 +2838,7 @@ export function createDefaultGrassSurface6ShaderGraph(
       createShaderEdge("gs6-e-fade-alpha-b", "base-fade", "value", "faded-alpha", "b"),
 
       // Output color + faded alpha
-      createShaderEdge("gs6-e-color-output", "final-color", "value", "output", "color"),
+      createShaderEdge("gs6-e-color-output", "final-with-diffuse", "value", "output", "color"),
       createShaderEdge("gs6-e-alpha-output", "faded-alpha", "value", "output", "alpha")
     ],
     parameters: [
@@ -2863,6 +2913,25 @@ export function createDefaultGrassSurface6ShaderGraph(
       {
         parameterId: "baseFadeJitter",
         displayName: "Base Fade Jitter",
+        dataType: "float",
+        defaultValue: 0.0
+      },
+      {
+        parameterId: "diffuseTexture",
+        displayName: "Diffuse Tint Texture",
+        dataType: "texture2d",
+        textureRole: "color",
+        defaultValue: null
+      },
+      {
+        parameterId: "diffuseTiling",
+        displayName: "Diffuse Tiling",
+        dataType: "float",
+        defaultValue: 3.0
+      },
+      {
+        parameterId: "diffuseStrength",
+        displayName: "Diffuse Strength",
         dataType: "float",
         defaultValue: 0.0
       }
