@@ -45,70 +45,28 @@ export function getBuiltInGrassSurface6MaterialId(projectId: string): string {
 export function createBuiltInMaterialDefinitions(
   projectId: string
 ): MaterialDefinition[] {
+  const make = (
+    definitionId: string,
+    displayName: string,
+    shaderDefinitionId: string,
+    builtInKey: string
+  ): MaterialDefinition => ({
+    definitionId,
+    definitionKind: "material",
+    displayName,
+    shaderDefinitionId,
+    parameterValues: {},
+    textureBindings: {},
+    metadata: { builtIn: true, builtInKey }
+  });
   return [
-    {
-      definitionId: getBuiltInMeadowGrassMaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Meadow Grass",
-      shaderDefinitionId: `${projectId}:shader:meadow-grass`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInSunlitLawnMaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Sunlit Lawn",
-      shaderDefinitionId: `${projectId}:shader:sunlit-lawn`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInAutumnFieldGrassMaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Autumn Field Grass",
-      shaderDefinitionId: `${projectId}:shader:autumn-field-grass`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInPainterlyGrassMaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Painterly Grass",
-      shaderDefinitionId: `${projectId}:shader:painterly-grass`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInGrassSurface2MaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Grass Surface 2",
-      shaderDefinitionId: `${projectId}:shader:grass-surface-2`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInGrassSurface3MaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Grass Surface 3",
-      shaderDefinitionId: `${projectId}:shader:grass-surface-3`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInGrassSurface4MaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Grass Surface 4",
-      shaderDefinitionId: `${projectId}:shader:grass-surface-4`,
-      parameterValues: {},
-      textureBindings: {}
-    },
-    {
-      definitionId: getBuiltInGrassSurface6MaterialId(projectId),
-      definitionKind: "material",
-      displayName: "Grass Surface 6",
-      shaderDefinitionId: `${projectId}:shader:grass-surface-6`,
-      parameterValues: {},
-      textureBindings: {}
-    }
+    make(getBuiltInMeadowGrassMaterialId(projectId), "Meadow Grass", `${projectId}:shader:meadow-grass`, "meadow-grass"),
+    make(getBuiltInSunlitLawnMaterialId(projectId), "Sunlit Lawn", `${projectId}:shader:sunlit-lawn`, "sunlit-lawn"),
+    make(getBuiltInAutumnFieldGrassMaterialId(projectId), "Autumn Field Grass", `${projectId}:shader:autumn-field-grass`, "autumn-field-grass"),
+    make(getBuiltInPainterlyGrassMaterialId(projectId), "Painterly Grass", `${projectId}:shader:painterly-grass`, "painterly-grass"),
+    make(getBuiltInGrassSurface2MaterialId(projectId), "Grass Surface 2", `${projectId}:shader:grass-surface-2`, "grass-surface-2"),
+    make(getBuiltInGrassSurface3MaterialId(projectId), "Grass Surface 3", `${projectId}:shader:grass-surface-3`, "grass-surface-3"),
+    make(getBuiltInGrassSurface4MaterialId(projectId), "Grass Surface 4", `${projectId}:shader:grass-surface-4`, "grass-surface-4"),
+    make(getBuiltInGrassSurface6MaterialId(projectId), "Grass Surface 6", `${projectId}:shader:grass-surface-6`, "grass-surface-6")
   ];
 }

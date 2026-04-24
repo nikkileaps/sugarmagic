@@ -109,7 +109,7 @@ import {
   createEmptyShaderSlotBindingMap,
   validateShaderGraphDocument
 } from "../shader-graph";
-import { createScopedId } from "../shared";
+import { createScopedId, createUuid } from "../shared";
 import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
 
@@ -2054,6 +2054,60 @@ export function updateMaterialDefinitionInSession(
       )
     },
     isDirty: true
+  };
+}
+
+/**
+ * Duplicate an existing MaterialDefinition as a new user-owned material.
+ * Creates a fresh `definitionId` via createUuid, copies shader reference,
+ * parameter values, and texture bindings. Strips any `metadata.builtIn`
+ * marker so the copy is treated as authored content that can be freely
+ * edited and persisted. Adds a " (Copy)" suffix to the display name
+ * unless caller provides a custom one.
+ *
+ * Used by the "Duplicate to edit" flow when the user tries to edit a
+ * built-in material — we fork a local copy rather than mutating the
+ * engine-owned definition. Returns the new material's id so the caller
+ * can redirect selection / re-point bindings.
+ */
+export function duplicateMaterialDefinitionInSession(
+  session: AuthoringSession,
+  sourceDefinitionId: string,
+  options: { displayName?: string; newDefinitionId?: string } = {}
+): { session: AuthoringSession; newDefinitionId: string } | null {
+  const source = session.contentLibrary.materialDefinitions.find(
+    (definition) => definition.definitionId === sourceDefinitionId
+  );
+  if (!source) {
+    return null;
+  }
+  const projectScope = session.gameProject.identity.id;
+  const newDefinitionId =
+    options.newDefinitionId ?? `${projectScope}:material:${createUuid()}`;
+  const displayName =
+    options.displayName ?? `${source.displayName} (Copy)`;
+  const copy: MaterialDefinition = {
+    definitionId: newDefinitionId,
+    definitionKind: "material",
+    displayName,
+    shaderDefinitionId: source.shaderDefinitionId,
+    parameterValues: { ...source.parameterValues },
+    textureBindings: { ...source.textureBindings }
+    // metadata intentionally omitted so the copy is user-owned.
+  };
+  return {
+    session: {
+      ...session,
+      contentLibrary: {
+        ...session.contentLibrary,
+        materialDefinitions: [
+          ...session.contentLibrary.materialDefinitions,
+          copy
+        ]
+      },
+      isDirty: true
+    },
+    newDefinitionId
   };
 }
 

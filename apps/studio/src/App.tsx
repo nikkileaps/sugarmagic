@@ -50,6 +50,7 @@ import {
   addTextureDefinitionToSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
+  duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
   removeSurfaceDefinitionFromSession,
@@ -1206,6 +1207,21 @@ export function App() {
     []
   );
 
+  const handleDuplicateMaterialDefinition = useCallback(
+    (sourceDefinitionId: string): string | null => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return null;
+      const result = duplicateMaterialDefinitionInSession(
+        currentSession,
+        sourceDefinitionId
+      );
+      if (!result) return null;
+      projectStore.getState().updateSession(result.session);
+      return result.newDefinitionId;
+    },
+    []
+  );
+
   const handleCreateSurfaceDefinition = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return null;
@@ -1404,6 +1420,7 @@ export function App() {
     onCreateMaskTextureDefinition: handleCreateMaskTextureDefinition,
     onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
     onUpdateMaterialDefinition: handleUpdateMaterialDefinition,
+    onDuplicateMaterialDefinition: handleDuplicateMaterialDefinition,
     onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
     onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
     onUpdateSurfaceDefinition: handleUpdateSurfaceDefinition,

@@ -137,11 +137,23 @@ export interface MaskTextureDefinition {
   resolution: [number, number];
 }
 
+/**
+ * Optional metadata carried on builtin-created definitions so the UI can
+ * detect "user is editing something the engine authored" and intercept
+ * with a duplicate-to-edit flow. Missing = authored (user-owned). This
+ * mirrors the same pattern on ShaderGraphDocument.metadata.builtIn.
+ */
+export interface DefinitionMetadata {
+  builtIn?: boolean;
+  builtInKey?: string;
+}
+
 export interface MaterialDefinition {
   definitionId: string;
   definitionKind: "material";
   displayName: string;
   shaderDefinitionId: string;
+  metadata?: DefinitionMetadata;
   parameterValues: Record<string, unknown>;
   textureBindings: Record<string, string>;
 }
@@ -1381,8 +1393,7 @@ function mergeBuiltInShaderDefinitions(
 function mergeBuiltInDefinitions<T>(
   authoredDefinitions: T[],
   builtInDefinitions: T[],
-  getId: (definition: T) => string,
-  preserveAuthored?: (authored: T, builtIn: T) => T
+  getId: (definition: T) => string
 ): T[] {
   const nextDefinitions = [...authoredDefinitions];
   for (const builtInDefinition of builtInDefinitions) {
@@ -1390,14 +1401,15 @@ function mergeBuiltInDefinitions<T>(
       (definition) => getId(definition) === getId(builtInDefinition)
     );
     if (existingIndex >= 0) {
-      // When the user has the same-id authored definition on disk, default
-      // behaviour is to replace it with the current built-in shape so
-      // engine-side improvements (new fields, renamed defaults) propagate.
-      // Callers that have user-editable fields on the built-in must opt in
-      // via `preserveAuthored` to keep those fields when the merge happens.
-      nextDefinitions[existingIndex] = preserveAuthored
-        ? preserveAuthored(nextDefinitions[existingIndex]!, builtInDefinition)
-        : builtInDefinition;
+      // Built-in ids always resolve to the current built-in definition.
+      // User edits to built-in materials are NOT persisted by design — the
+      // authoring flow forks edits into a new, user-owned material via the
+      // "Duplicate to edit" command. Callers who need to retain authored
+      // overrides should be working against a duplicated id, not the
+      // built-in one. This keeps engine upgrades frictionless (renamed
+      // parameters, new shader requirements, tuning changes) while making
+      // the user → built-in boundary crisp.
+      nextDefinitions[existingIndex] = builtInDefinition;
       continue;
     }
     nextDefinitions.push(builtInDefinition);
@@ -1437,6 +1449,18 @@ export function listMaterialDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): MaterialDefinition[] {
   return [...contentLibrary.materialDefinitions];
+}
+
+/**
+ * Whether a material was authored by the engine (built-in preset) rather
+ * than by the user. The material inspector uses this to intercept edits
+ * on built-in materials with a "Duplicate to edit?" flow so engine-owned
+ * definitions stay pristine and engine upgrades can refresh them cleanly.
+ */
+export function isBuiltInMaterialDefinition(
+  definition: Pick<MaterialDefinition, "metadata"> | null | undefined
+): boolean {
+  return definition?.metadata?.builtIn === true;
 }
 
 export function getSurfaceDefinition(

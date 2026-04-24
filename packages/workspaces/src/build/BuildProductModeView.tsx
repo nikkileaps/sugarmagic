@@ -129,6 +129,7 @@ export interface BuildProductModeViewProps {
     definitionId: string,
     patch: Partial<MaterialDefinition>
   ) => void;
+  onDuplicateMaterialDefinition: (sourceDefinitionId: string) => string | null;
   onRemoveMaterialDefinition: (definitionId: string) => void;
   onCreateSurfaceDefinition: () => SurfaceDefinition | null;
   onUpdateSurfaceDefinition: (
@@ -203,6 +204,7 @@ export function useBuildProductModeView(
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
     onUpdateMaterialDefinition,
+    onDuplicateMaterialDefinition,
     onRemoveMaterialDefinition,
     onCreateSurfaceDefinition,
     onUpdateSurfaceDefinition,
@@ -473,6 +475,7 @@ export function useBuildProductModeView(
     onImportPbrMaterial,
     onImportTextureDefinition,
     onUpdateMaterialDefinition,
+    onDuplicateMaterialDefinition,
     onRemoveMaterialDefinition,
     isMaterialReferenced
   });
