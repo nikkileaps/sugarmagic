@@ -92,8 +92,10 @@ import {
 } from "../plugins";
 import type { TimestampIso } from "../shared";
 import {
+  createBuiltInCloudShadowsShaderId,
   createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
+  DEFAULT_CLOUD_SHADOW_SETTINGS,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
@@ -936,6 +938,56 @@ function updatePostProcessBindingOverride(
         }
       };
     }
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInCloudShadowsShaderId(session.gameProject.identity.id)
+    ) {
+      const current =
+        nextDefinition.atmosphere.cloudShadows ?? DEFAULT_CLOUD_SHADOW_SETTINGS;
+      const value = command.payload.override.value;
+      const param = command.payload.override.parameterId;
+      const numericFields = [
+        "scale",
+        "speedX",
+        "speedZ",
+        "coverage",
+        "softness",
+        "darkness"
+      ];
+      if (
+        numericFields.includes(param) &&
+        typeof value === "number" &&
+        Number.isFinite(value)
+      ) {
+        nextDefinition = {
+          ...nextDefinition,
+          atmosphere: {
+            ...nextDefinition.atmosphere,
+            cloudShadows: { ...current, [param]: value }
+          }
+        };
+      } else if (
+        param === "shadowColor" &&
+        Array.isArray(value) &&
+        value.length >= 3 &&
+        value.every((c) => typeof c === "number" && Number.isFinite(c))
+      ) {
+        nextDefinition = {
+          ...nextDefinition,
+          atmosphere: {
+            ...nextDefinition.atmosphere,
+            cloudShadows: {
+              ...current,
+              shadowColor: [
+                value[0] as number,
+                value[1] as number,
+                value[2] as number
+              ] as [number, number, number]
+            }
+          }
+        };
+      }
+    }
   } else if (command.kind === "TogglePostProcessShader") {
     nextDefinition = {
       ...definition,
@@ -955,6 +1007,21 @@ function updatePostProcessBindingOverride(
           ...nextDefinition.atmosphere,
           fog: {
             ...nextDefinition.atmosphere.fog,
+            enabled: command.payload.enabled
+          }
+        }
+      };
+    }
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInCloudShadowsShaderId(session.gameProject.identity.id)
+    ) {
+      nextDefinition = {
+        ...nextDefinition,
+        atmosphere: {
+          ...nextDefinition.atmosphere,
+          cloudShadows: {
+            ...nextDefinition.atmosphere.cloudShadows,
             enabled: command.payload.enabled
           }
         }

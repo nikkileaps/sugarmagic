@@ -920,6 +920,36 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: [setting("exposure", "Exposure", "float", 1, { min: 0, max: 8, step: 0.05 })]
   },
   {
+    nodeType: "effect.cloud-shadow-pass",
+    displayName: "Cloud Shadow Pass",
+    category: "effect",
+    validTargetKinds: ["post-process"],
+    inputPorts: [
+      inputPort("input", "Input", "vec3"),
+      inputPort("worldPosition", "World Position", "vec3", { optional: true }),
+      inputPort("time", "Time", "float", { optional: true }),
+      inputPort("scale", "Scale", "float", { optional: true }),
+      inputPort("speedX", "Speed X", "float", { optional: true }),
+      inputPort("speedZ", "Speed Z", "float", { optional: true }),
+      inputPort("coverage", "Coverage", "float", { optional: true }),
+      inputPort("softness", "Softness", "float", { optional: true }),
+      inputPort("darkness", "Darkness", "float", { optional: true }),
+      inputPort("shadowColor", "Shadow Color", "color", {
+        optional: true,
+        defaultValue: [0, 0, 0] as [number, number, number]
+      })
+    ],
+    outputPorts: [outputPort("value", "Value", "vec3")],
+    settings: [
+      setting("scale", "Scale", "float", 0.04, { min: 0.001, max: 1, step: 0.001 }),
+      setting("speedX", "Speed X", "float", 1.0, { min: -5, max: 5, step: 0.05 }),
+      setting("speedZ", "Speed Z", "float", 0.3, { min: -5, max: 5, step: 0.05 }),
+      setting("coverage", "Coverage", "float", 0.4, { min: 0, max: 1, step: 0.01 }),
+      setting("softness", "Softness", "float", 0.15, { min: 0.01, max: 0.5, step: 0.01 }),
+      setting("darkness", "Darkness", "float", 0.35, { min: 0, max: 0.9, step: 0.01 })
+    ]
+  },
+  {
     nodeType: "output.vertex",
     displayName: "Vertex Output",
     category: "output",
@@ -4508,6 +4538,86 @@ export function createDefaultBloomPostProcessShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "bloom"
+    }
+  };
+}
+
+export function createDefaultCloudShadowsPostProcessShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:cloud-shadows`;
+
+  // Graph shape: scene-color + reconstructed world-position feed into the
+  // cloud-shadow-pass effect op. The op samples 2-octave drifting noise
+  // on world XZ, smoothsteps to a soft cloud mask, and multiplies the
+  // scene color by (1 - mask*darkness). Parameters are exposed so
+  // authors can tune coverage / softness / darkness / drift speed
+  // without forking a new shader.
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Cloud Shadows",
+    targetKind: "post-process",
+    revision: 1,
+    nodes: [
+      { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
+      { nodeId: "world-position", nodeType: "input.world-position", position: { x: 48, y: 48 }, settings: {} },
+      { nodeId: "time", nodeType: "input.time", position: { x: 48, y: 224 }, settings: {} },
+      createParameterNode("scale", "scale", { x: 48, y: 304 }),
+      createParameterNode("speedX", "speedX", { x: 48, y: 384 }),
+      createParameterNode("speedZ", "speedZ", { x: 48, y: 464 }),
+      createParameterNode("coverage", "coverage", { x: 48, y: 544 }),
+      createParameterNode("softness", "softness", { x: 48, y: 624 }),
+      createParameterNode("darkness", "darkness", { x: 48, y: 704 }),
+      createParameterNode("shadowColor", "shadowColor", { x: 48, y: 784 }),
+      { nodeId: "cloud", nodeType: "effect.cloud-shadow-pass", position: { x: 480, y: 240 }, settings: {} },
+      { nodeId: "output", nodeType: "output.post-process", position: { x: 880, y: 240 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("edge-scene-cloud", "scene-color", "value", "cloud", "input"),
+      createShaderEdge("edge-worldpos-cloud", "world-position", "value", "cloud", "worldPosition"),
+      createShaderEdge("edge-time-cloud", "time", "value", "cloud", "time"),
+      createShaderEdge("edge-scale", "scale", "value", "cloud", "scale"),
+      createShaderEdge("edge-speedx", "speedX", "value", "cloud", "speedX"),
+      createShaderEdge("edge-speedz", "speedZ", "value", "cloud", "speedZ"),
+      createShaderEdge("edge-coverage", "coverage", "value", "cloud", "coverage"),
+      createShaderEdge("edge-softness", "softness", "value", "cloud", "softness"),
+      createShaderEdge("edge-darkness", "darkness", "value", "cloud", "darkness"),
+      createShaderEdge("edge-shadowcolor", "shadowColor", "value", "cloud", "shadowColor"),
+      createShaderEdge("edge-cloud-output", "cloud", "value", "output", "color")
+    ],
+    parameters: [
+      // scale: lower = larger cloud features. 0.04 ≈ ~25m dominant scale.
+      { parameterId: "scale", displayName: "Scale", dataType: "float", defaultValue: 0.04 },
+      // speed: world units per second of cloud drift. Octave 2 multiplies
+      // these by 0.7 (X) and 1.3 (Z) for organic billowing.
+      { parameterId: "speedX", displayName: "Speed X", dataType: "float", defaultValue: 1.0 },
+      { parameterId: "speedZ", displayName: "Speed Z", dataType: "float", defaultValue: 0.3 },
+      // coverage: fraction of ground in shadow on average (0 = clear, 1 = mostly shadowed).
+      { parameterId: "coverage", displayName: "Coverage", dataType: "float", defaultValue: 0.4 },
+      // softness: smoothstep edge width. Larger = softer cloud edges.
+      { parameterId: "softness", displayName: "Softness", dataType: "float", defaultValue: 0.15 },
+      // darkness: max darkening under thickest cloud (0 = no dim, 0.9 = nearly black).
+      // Stylized aesthetic stays in the 0.25-0.45 range — never goes black.
+      { parameterId: "darkness", displayName: "Darkness", dataType: "float", defaultValue: 0.35 },
+      // shadowColor: tint of the shadow at full darkness. [0,0,0] = pure
+      // grayscale darkening. Try [0.25, 0.15, 0.45] for dark purple
+      // moody shadows, [0.2, 0.3, 0.5] for cool blue, etc.
+      {
+        parameterId: "shadowColor",
+        displayName: "Shadow Color",
+        dataType: "color",
+        defaultValue: [0, 0, 0]
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "cloud-shadows"
     }
   };
 }

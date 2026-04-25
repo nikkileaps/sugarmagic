@@ -14,6 +14,7 @@ import {
   dot,
   float,
   max,
+  mix,
   mod,
   normalize,
   reinhardToneMapping,
@@ -124,6 +125,116 @@ export function materializeEffectOp(
         handled: true,
         value: reinhardToneMapping(input("input") as never, float(1))
       };
+    case "effect.cloud-shadow-pass": {
+      // Cast shadows from drifting overhead clouds. Affects the whole
+      // scene by hooking into the post-process chain. Standard stylized
+      // technique: sample 2-octave drifting noise on world XZ, smoothstep
+      // to a soft cloud mask, multiply scene color by (1 - mask*darkness).
+      //
+      // World position is reconstructed inside materializeValue from
+      // screen UV + scene depth (input.world-position node), wired to
+      // the worldPosition input port by the cloud-shadows shader graph.
+      //
+      // Coverage controls how much of the ground sits in shadow at any
+      // moment (0 = clear, 1 = mostly shadowed). Softness controls edge
+      // blur. Darkness clamps the maximum darkening — never goes black,
+      // matches Ghibli/painterly aesthetic.
+      const inputColor = input("input") as {
+        mul: (other: unknown) => unknown;
+      };
+      const worldPosition = input("worldPosition") as { x: unknown; z: unknown };
+      const timeNode = input("time");
+
+      // Settings: settings come from op.settings, params come from input(...)
+      // when the graph wires a parameter node to the input. Pattern matches
+      // wind-sway: input(...) wins, op.settings is fallback default.
+      const scale = input("scale") ?? float(Number(op.settings?.scale ?? 0.04));
+      const speedX = input("speedX") ?? float(Number(op.settings?.speedX ?? 1.0));
+      const speedZ = input("speedZ") ?? float(Number(op.settings?.speedZ ?? 0.3));
+      const coverage = input("coverage") ?? float(Number(op.settings?.coverage ?? 0.4));
+      const softness = input("softness") ?? float(Number(op.settings?.softness ?? 0.15));
+      const darkness = input("darkness") ?? float(Number(op.settings?.darkness ?? 0.35));
+      // shadowColor: tint of the shadow at full darkness. Default vec3(0)
+      // produces black darkening (matches the original grayscale look).
+      // Set to e.g. vec3(0.25, 0.15, 0.45) for dark purple shadows.
+      const shadowColor = input("shadowColor") ?? vec3(0, 0, 0);
+
+      // World XZ as a vec2.
+      const worldXZ = vec2(worldPosition.x as never, worldPosition.z as never);
+
+      // Octave 1: large slow clouds.
+      const drift1 = vec2(
+        (timeNode as { mul: (other: unknown) => unknown }).mul(speedX as never) as never,
+        (timeNode as { mul: (other: unknown) => unknown }).mul(speedZ as never) as never
+      );
+      const uv1 = (
+        (worldXZ as unknown as { mul: (other: unknown) => unknown }).mul(scale as never) as {
+          add: (other: unknown) => unknown;
+        }
+      ).add(drift1 as never);
+      const noise1 = materializePerlinLikeNoise2d(uv1);
+
+      // Octave 2: smaller faster clouds layered for organic billowing.
+      const scale2 = (scale as { mul: (other: unknown) => unknown }).mul(float(1.7));
+      const drift2 = vec2(
+        ((timeNode as { mul: (other: unknown) => unknown }).mul(speedX as never) as {
+          mul: (other: unknown) => unknown;
+        }).mul(float(0.7)) as never,
+        ((timeNode as { mul: (other: unknown) => unknown }).mul(speedZ as never) as {
+          mul: (other: unknown) => unknown;
+        }).mul(float(1.3)) as never
+      );
+      const uv2 = (
+        (worldXZ as unknown as { mul: (other: unknown) => unknown }).mul(scale2 as never) as {
+          add: (other: unknown) => unknown;
+        }
+      ).add(drift2 as never);
+      const noise2 = materializePerlinLikeNoise2d(uv2);
+
+      // Combine octaves: 70% slow large, 30% fast detail.
+      const cloudRaw = mix(noise1 as never, noise2 as never, float(0.4) as never);
+
+      // Soft threshold around (1 - coverage). Higher coverage → lower
+      // threshold → more pixels exceed it → more shadow.
+      // smoothstep(low, high, x): x<low → 0, x>high → 1, smooth in between.
+      const threshold = float(1).sub(coverage as never);
+      const lowEdge = (threshold as { sub: (other: unknown) => unknown }).sub(softness as never);
+      const highEdge = (threshold as { add: (other: unknown) => unknown }).add(softness as never);
+      const cloudMask = smoothstep(
+        lowEdge as never,
+        highEdge as never,
+        cloudRaw as never
+      );
+
+      // Per-channel shadow multiplier:
+      //   shadowMul = mix(vec3(1), shadowColor, darkness)
+      // When darkness=0 → vec3(1) (no effect). When darkness=1 →
+      // shadowColor (full tint). For grayscale shadowColor=vec3(0)
+      // and darkness=0.35, this gives vec3(0.65) which matches the
+      // original grayscale darkening exactly.
+      const whiteVec = vec3(1, 1, 1);
+      const shadowMul = mix(
+        whiteVec as never,
+        shadowColor as never,
+        darkness as never
+      );
+
+      // tintedScene = sceneColor × shadowMul
+      const tintedScene = (inputColor as { mul: (other: unknown) => unknown })
+        .mul(shadowMul as never);
+
+      // Final: mix between unshadowed scene and tinted scene by cloud mask.
+      const result = mix(
+        inputColor as never,
+        tintedScene as never,
+        cloudMask as never
+      );
+
+      return {
+        handled: true,
+        value: result
+      };
+    }
     case "effect.wind-gust": {
       const gustStrength = float(Number(op.settings?.gustStrength ?? 0.25));
       const gustInterval = float(Number(op.settings?.gustInterval ?? 3));

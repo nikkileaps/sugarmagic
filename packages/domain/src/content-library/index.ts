@@ -36,6 +36,7 @@ import type {
 } from "../shader-graph";
 import {
   createDefaultBloomPostProcessShaderGraph,
+  createDefaultCloudShadowsPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageSurface2ShaderGraph,
@@ -231,6 +232,25 @@ export interface FogSettings {
   heightFalloff: number;
 }
 
+export interface CloudShadowSettings {
+  enabled: boolean;
+  // World-space frequency multiplier. Lower = larger cloud features.
+  scale: number;
+  // Drift speed in world units per second along X / Z. Wind direction.
+  speedX: number;
+  speedZ: number;
+  // Fraction of ground in shadow on average (0 = clear sky, 1 = mostly overcast).
+  coverage: number;
+  // Smoothstep edge width for cloud→sun transitions. Higher = softer.
+  softness: number;
+  // Maximum darkening under thickest cloud (0..1). Stylized aesthetic
+  // typically stays in 0.25-0.45 — never goes black.
+  darkness: number;
+  // Tint of the shadow color at full darkness. Stored as 0..1 RGB.
+  // [0,0,0] = grayscale darkening. [0.25, 0.15, 0.45] = dark purple.
+  shadowColor: [number, number, number];
+}
+
 export interface SSAOSettings {
   enabled: boolean;
   kernelRadius: number;
@@ -271,6 +291,7 @@ export interface EnvironmentDefinition {
   lighting: EnvironmentLighting;
   atmosphere: {
     fog: FogSettings;
+    cloudShadows: CloudShadowSettings;
     ssao: SSAOSettings;
     sky: SkySettings;
   };
@@ -432,6 +453,17 @@ export const DEFAULT_FOG_SETTINGS: FogSettings = {
   density: 0.008,
   color: 0x879bb4,
   heightFalloff: 1
+};
+
+export const DEFAULT_CLOUD_SHADOW_SETTINGS: CloudShadowSettings = {
+  enabled: false,
+  scale: 0.04,
+  speedX: 1.0,
+  speedZ: 0.3,
+  coverage: 0.4,
+  softness: 0.15,
+  darkness: 0.35,
+  shadowColor: [0, 0, 0]
 };
 
 export const DEFAULT_SSAO_SETTINGS: SSAOSettings = {
@@ -615,6 +647,10 @@ export function createBuiltInBloomShaderId(projectId: string): string {
   return `${projectId}:shader:bloom`;
 }
 
+export function createBuiltInCloudShadowsShaderId(projectId: string): string {
+  return `${projectId}:shader:cloud-shadows`;
+}
+
 export function createBuiltInTonemapAcesShaderId(projectId: string): string {
   return `${projectId}:shader:tonemap-aces`;
 }
@@ -679,6 +715,50 @@ function synchronizeFogBinding(
   return normalizePostProcessShaderBindings([nextBinding, ...sortedBindings]);
 }
 
+function synchronizeCloudShadowsBinding(
+  bindings: PostProcessShaderBinding[],
+  cloudShadows: CloudShadowSettings,
+  projectId: string
+): PostProcessShaderBinding[] {
+  const shaderDefinitionId = createBuiltInCloudShadowsShaderId(projectId);
+  const fogShaderDefinitionId = createBuiltInFogTintShaderId(projectId);
+  const sortedBindings = normalizePostProcessShaderBindings(bindings);
+  const bindingIndex = sortedBindings.findIndex(
+    (binding) => binding.shaderDefinitionId === shaderDefinitionId
+  );
+
+  // Insert just AFTER fog (so cloud darkening composes over fog) but
+  // BEFORE bloom / tonemap / vignette (so darkening lives in HDR space
+  // before tonemapping, and so bloom doesn't bleed cloud edges).
+  const fogIndex = sortedBindings.findIndex(
+    (binding) => binding.shaderDefinitionId === fogShaderDefinitionId
+  );
+  const insertOrder = fogIndex >= 0 ? sortedBindings[fogIndex]!.order + 0.5 : 0.5;
+
+  const nextBinding: PostProcessShaderBinding = {
+    shaderDefinitionId,
+    order: bindingIndex >= 0 ? sortedBindings[bindingIndex]!.order : insertOrder,
+    enabled: cloudShadows.enabled,
+    parameterOverrides: [
+      { parameterId: "scale", value: cloudShadows.scale },
+      { parameterId: "speedX", value: cloudShadows.speedX },
+      { parameterId: "speedZ", value: cloudShadows.speedZ },
+      { parameterId: "coverage", value: cloudShadows.coverage },
+      { parameterId: "softness", value: cloudShadows.softness },
+      { parameterId: "darkness", value: cloudShadows.darkness },
+      { parameterId: "shadowColor", value: cloudShadows.shadowColor }
+    ]
+  };
+
+  if (bindingIndex >= 0) {
+    const nextBindings = [...sortedBindings];
+    nextBindings[bindingIndex] = nextBinding;
+    return normalizePostProcessShaderBindings(nextBindings);
+  }
+
+  return normalizePostProcessShaderBindings([...sortedBindings, nextBinding]);
+}
+
 function ensureBuiltInEffectBinding(
   bindings: PostProcessShaderBinding[],
   shaderDefinitionId: string,
@@ -724,6 +804,7 @@ type LegacyEnvironmentDefinition = EnvironmentDefinition & {
   };
   atmosphere?: {
     fog?: Partial<FogSettings>;
+    cloudShadows?: Partial<CloudShadowSettings>;
     bloom?: {
       enabled?: boolean;
       strength?: number;
@@ -817,6 +898,10 @@ export function synchronizeEnvironmentDefinition(
             ? definition.atmosphere.fog.heightFalloff
             : DEFAULT_FOG_SETTINGS.heightFalloff
       },
+      cloudShadows: {
+        ...DEFAULT_CLOUD_SHADOW_SETTINGS,
+        ...(definition.atmosphere.cloudShadows ?? {})
+      },
       ssao: {
         ...DEFAULT_SSAO_SETTINGS,
         ...definition.atmosphere.ssao
@@ -837,6 +922,11 @@ export function synchronizeEnvironmentDefinition(
   };
 
   nextDefinition.postProcessShaders = synchronizeFogBinding(nextDefinition, projectId);
+  nextDefinition.postProcessShaders = synchronizeCloudShadowsBinding(
+    nextDefinition.postProcessShaders,
+    nextDefinition.atmosphere.cloudShadows,
+    projectId
+  );
   nextDefinition.lighting = normalizeSunShadows(nextDefinition.lighting);
   return nextDefinition;
 }
@@ -950,6 +1040,7 @@ export function createDefaultEnvironmentDefinition(
         color: getDefaultFogColorForPreset(preset),
         heightFalloff: DEFAULT_FOG_SETTINGS.heightFalloff
       },
+      cloudShadows: { ...DEFAULT_CLOUD_SHADOW_SETTINGS },
       ssao: { ...DEFAULT_SSAO_SETTINGS },
       sky: {
         ...DEFAULT_SKY_SETTINGS,
@@ -1126,6 +1217,10 @@ export function normalizeContentLibrarySnapshot(
               typeof legacyDefinition.atmosphere.fog.heightFalloff === "number"
                 ? legacyDefinition.atmosphere.fog.heightFalloff
                 : DEFAULT_FOG_SETTINGS.heightFalloff
+          },
+          cloudShadows: {
+            ...DEFAULT_CLOUD_SHADOW_SETTINGS,
+            ...(legacyDefinition.atmosphere?.cloudShadows ?? {})
           },
           ssao: {
             ...DEFAULT_SSAO_SETTINGS,
@@ -1355,6 +1450,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultBloomPostProcessShaderGraph(projectId, {
       shaderDefinitionId: createBuiltInBloomShaderId(projectId),
       displayName: "Bloom"
+    }),
+    createDefaultCloudShadowsPostProcessShaderGraph(projectId, {
+      shaderDefinitionId: createBuiltInCloudShadowsShaderId(projectId),
+      displayName: "Cloud Shadows"
     })
   ];
 }
