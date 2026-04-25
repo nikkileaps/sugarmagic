@@ -98,7 +98,10 @@ export function buildLandscapeScatterForSurface(
       splatmap
     );
     results.push(
-      buildSurfaceScatterLayer(layer as ResolvedScatterLayer, samples, options)
+      buildSurfaceScatterLayer(layer as ResolvedScatterLayer, samples, {
+        ...options,
+        enableGpuCompute: true
+      })
     );
   }
 

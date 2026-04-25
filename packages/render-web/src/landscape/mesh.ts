@@ -87,6 +87,18 @@ export class RuntimeLandscapeMesh {
    */
   private lastMaterialSignature: string | null = null;
   /**
+   * References of the last-applied landscape state + content library.
+   * Used to skip the scatter rebuild path (which is expensive — it
+   * disposes and recreates GPU compute pipelines for every scatter
+   * layer) when applyLandscapeState is invoked with inputs we've
+   * already applied. The texture-update callback in WebRenderEngine
+   * calls applyLandscape on every texture load with the same
+   * landscape ref, which would otherwise tank frame rate by
+   * re-creating compute pipelines per loaded texture.
+   */
+  private lastAppliedLandscape: RegionLandscapeState | null = null;
+  private lastAppliedContentLibrary: ContentLibrarySnapshot | null = null;
+  /**
    * A reusable carrier material handed to ShaderRuntime.evaluate-
    * MeshSurfaceBinding as the `carrierMaterial` argument. The runtime
    * needs a material with a `.map` field for the legacy fallback path
@@ -146,6 +158,28 @@ export class RuntimeLandscapeMesh {
     contentLibrary: ContentLibrarySnapshot | null
   ): void {
     this.mesh.visible = landscape.enabled;
+
+    // Skip the rebuild chain entirely when applyLandscapeState is
+    // called with the SAME landscape + content-library references
+    // we last applied. This catches the texture-loaded callback in
+    // WebRenderEngine, which fires applyLandscape on every texture
+    // load with the same `currentRegion?.landscape` reference. The
+    // landscape itself didn't change; only a referenced texture did.
+    // Without this guard each texture load triggers a full splat-
+    // texture rebuild, material rebuild, and scatter rebuild
+    // (including disposing+recreating GPU compute pipelines for
+    // every scatter layer), which dominates frame time. Reference
+    // equality is the right check because the engine plumbs
+    // immutable snapshots — a mutated landscape produces a new ref.
+    if (
+      landscape === this.lastAppliedLandscape &&
+      contentLibrary === this.lastAppliedContentLibrary
+    ) {
+      return;
+    }
+    this.lastAppliedLandscape = landscape;
+    this.lastAppliedContentLibrary = contentLibrary;
+
     this.splatmap.load(landscape.paintPayload, landscape.surfaceSlots.length);
 
     for (let index = 0; index < MAX_REGION_LANDSCAPE_CHANNELS; index += 1) {

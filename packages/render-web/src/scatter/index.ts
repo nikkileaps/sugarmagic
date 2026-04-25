@@ -7,7 +7,7 @@
  */
 
 import * as THREE from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import type {
   ContentLibrarySnapshot,
   FlowerTypeDefinition,
@@ -25,6 +25,10 @@ import {
 import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
+import {
+  createScatterComputeLayerParams,
+  createScatterComputePipeline
+} from "./compute-pipeline";
 import {
   createProceduralFlowerGeometry,
   createProceduralGrassGeometry,
@@ -45,6 +49,7 @@ export interface SurfaceScatterBuildOptions {
   contentLibrary: ContentLibrarySnapshot;
   assetResolver: AuthoredAssetResolver;
   shaderRuntime?: ShaderRuntime | null;
+  enableGpuCompute?: boolean;
   logger?: {
     warn: (message: string, payload?: Record<string, unknown>) => void;
   };
@@ -54,6 +59,9 @@ export interface SurfaceScatterBuildResult {
   root: THREE.Group;
   dispose: () => void;
 }
+
+export * from "./compute-pipeline";
+export * from "./instance-buffer";
 
 interface TextureSampleCacheEntry {
   version: number;
@@ -364,10 +372,9 @@ export function buildSurfaceScatterLayer(
     runtimeManagedMaterial = true;
   }
 
-  const acceptedSamples: SurfaceScatterSample[] = [];
   const warnedMaskKinds = new Set<Mask["kind"]>();
-  for (const sample of samples) {
-    const densityScale = Math.max(
+  const densityWeights = samples.map((sample) =>
+    Math.max(
       0,
       Math.min(
         1,
@@ -380,7 +387,90 @@ export function buildSurfaceScatterLayer(
           ) *
           layer.opacity
       )
+    )
+  );
+  const hasAnyDensity = densityWeights.some((value) => value > 0);
+
+  if (!hasAnyDensity) {
+    return {
+      root,
+      dispose() {
+        geometry.dispose();
+        if (runtimeManagedMaterial && options.shaderRuntime) {
+          options.shaderRuntime.releaseMaterial(appliedMaterial);
+        } else {
+          appliedMaterial.dispose();
+        }
+      }
+    };
+  }
+
+  const canUseGpuCompute = options.enableGpuCompute ?? true;
+  if (canUseGpuCompute) {
+    const computeParams = createScatterComputeLayerParams(layer, geometry);
+    const computePipeline = createScatterComputePipeline({
+      geometry,
+      material: appliedMaterial,
+      samples,
+      densityWeights,
+      params: computeParams
+    });
+
+    if (computePipeline) {
+      // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
+      console.warn(
+        `[surface-scatter] GPU compute pipeline ACTIVE for ${layer.layerId} (${samples.length} samples).`
+      );
+      const scatterMesh = computePipeline.mesh;
+      scatterMesh.name = `${root.name}:instances`;
+      scatterMesh.onBeforeRender = (renderer, _scene, camera) => {
+        if (renderer instanceof WebGPURenderer) {
+          computePipeline.prepareForRender(renderer, camera);
+        }
+      };
+      root.add(scatterMesh);
+
+      return {
+        root,
+        dispose() {
+          root.remove(scatterMesh);
+          // ORDER MATTERS: geometry.dispose() must run BEFORE
+          // computePipeline.dispose(). Three's WebGPU backend keeps a
+          // RenderObject keyed by the geometry that lazily resolves the
+          // geometry's attributes when its dispose event fires. The
+          // compute pipeline's buffers (visibleMatrices, visibleColors,
+          // visibleOrigins, indirectDrawArgs) are referenced FROM the
+          // mesh's geometry — instanceMatrix/Color via the InstancedMesh,
+          // instanceOrigin as a setAttribute on the geometry. If we
+          // dispose the compute pipeline first, those storage buffers
+          // are torn down (and `instanceOrigin` is deleted from the
+          // geometry); then geometry.dispose dispatches its event, the
+          // WebGPU backend asks the RenderObject for attributes, finds
+          // undefined slots, and crashes on `.id`. Disposing the
+          // geometry FIRST lets Three tear down its RenderObject while
+          // attributes still point at live storage. The compute pipeline
+          // can then dispose its compute passes + buffers safely.
+          geometry.dispose();
+          computePipeline.dispose();
+          if (runtimeManagedMaterial && options.shaderRuntime) {
+            options.shaderRuntime.releaseMaterial(appliedMaterial);
+          } else {
+            appliedMaterial.dispose();
+          }
+        }
+      };
+    }
+
+    // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
+    console.warn(
+      `[surface-scatter] GPU compute scatter UNAVAILABLE for ${layer.layerId}; falling back to CPU instancing.`
     );
+  }
+
+  const acceptedSamples: SurfaceScatterSample[] = [];
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index]!;
+    const densityScale = densityWeights[index] ?? 0;
     if (densityScale <= 0) {
       continue;
     }

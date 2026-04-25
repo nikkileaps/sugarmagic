@@ -99,8 +99,33 @@ async function requestSharedDevice(): Promise<GPUDevice> {
   const supportedFeatures = Array.from(
     adapter.features.values()
   ) as GPUFeatureName[];
+
+  // Request elevated limits for our compute pipelines.
+  //
+  // The scatter compute pipeline (Story 36.16) binds 9 storage buffers in
+  // its cull pass — sample positions, sample normals, sample density,
+  // candidateActive/Position/Matrix/Color/Radius (read), visibleCount
+  // (atomic), visibleMatrix/Color/Origin (write). The default WebGPU limit
+  // is 8 storage buffers per stage, which makes the cull pipeline fail to
+  // create. We ask for the adapter's reported max, capped at 10 (which is
+  // what mainstream desktop adapters expose). If the adapter doesn't
+  // support more than the default, requestDevice will fall back to 8 and
+  // GPU scatter will fail at compute pipeline creation; the CPU scatter
+  // path takes over and emits its existing warning. There is NO silent
+  // fallback for "GPU compute didn't work" — only for "WebGPU compute
+  // capabilities aren't present in this environment".
+  const requestedStorageBuffers = Math.min(
+    adapter.limits.maxStorageBuffersPerShaderStage,
+    10
+  );
+  const requiredLimits: Record<string, number> = {};
+  if (requestedStorageBuffers > 8) {
+    requiredLimits.maxStorageBuffersPerShaderStage = requestedStorageBuffers;
+  }
+
   return adapter.requestDevice({
-    requiredFeatures: supportedFeatures
+    requiredFeatures: supportedFeatures,
+    requiredLimits
   });
 }
 

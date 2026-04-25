@@ -91,6 +91,7 @@ export function buildScatterInstancesForAssetSlot(
       contentLibrary: options.contentLibrary,
       assetResolver: options.assetResolver,
       shaderRuntime: options.shaderRuntime,
+      enableGpuCompute: true,
       logger: options.logger
     });
     build.root.name = `asset-scatter:${slot.slotName}:${layer.layerId}`;

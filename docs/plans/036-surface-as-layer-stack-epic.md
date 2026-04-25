@@ -2471,9 +2471,100 @@ project (1M grass blades in TSL via storage buffers + indirect
 draw + compute culling) and the Ghost of Tsushima approach
 described in the GDC 2021 talk, scaled to Sugarmagic's needs.
 
+**Mesh type and instancing mechanism — canonical pattern (locked
+in during 36.16 implementation).** The scatter rendered mesh is
+`THREE.InstancedMesh`. `mesh.instanceMatrix` and
+`mesh.instanceColor` are assigned to the
+`StorageInstancedBufferAttribute` instances from the visible
+buffer set; `setIndirect(indirectDrawArgs)` drives the actual
+instance count each frame from the cull pass output.
+
+`InstancedMesh` is required because of how Three's WebGPU
+backend handles mat4 vertex attributes: WGSL doesn't allow
+`@location` on `mat4x4<f32>` (only scalars and vectors), and
+`THREE.InstancedMesh` is the only path that auto-splits the
+mat4 instance attribute into 4 vec4 attribute slots in the
+generated WGSL. Using a plain `THREE.Mesh` with
+`setAttribute("instanceMatrix", visibleMatrices)` produces a
+WGSL validation error on the mat4 attribute. The
+`StorageInstancedBufferAttribute` extends
+`InstancedBufferAttribute`, so assigning it to
+`mesh.instanceMatrix` routes through Three's optimized
+mat4-splitting code path AND remains writable from compute via
+storage()-node bindings declared elsewhere in the pipeline.
+One GPU buffer, two binding views — compute writes via
+storage, render reads via instance attribute.
+
+**Why NOT wrap `material.positionNode` to apply the instance
+matrix manually.** Tried and rejected during this story.
+Reading the visible-matrix storage buffer via
+`storage().element(instanceIndex)` in the wrapped positionNode
+adds storage bindings to the vertex stage — and Three's
+`MeshStandardNodeMaterial` already brings enough storage
+bindings (lights, shadows, scene state) that any added storage
+push the count past the WebGPU per-stage limit (observed at
+16 storage buffers when the limit was 10 on this hardware).
+Routing instance state through `mesh.instanceMatrix` /
+`mesh.instanceColor` instead keeps the per-instance reads in
+the vertex-attribute binding category, which has a much higher
+per-stage limit.
+
+**Storage buffer count discipline.** The cull pass uses 9
+storage buffers (sample × 3, candidate × 5, visibleCount = 9)
+and the device must be requested with
+`maxStorageBuffersPerShaderStage` ≥ 9. The default WebGPU
+limit is 8; engine startup requests up to 10 (capped at the
+adapter's reported max) at device-creation time. If the
+adapter doesn't support ≥ 9, GPU compute pipeline creation
+fails at the storage-binding stage — the legitimate CPU path
+fallback at `scatter/index.ts` then takes over with its
+existing warning, the only legitimate fallback case.
+
+**`instanceOrigin` carry-forward (resolved during Stage 1/2
+wind-shader iteration).** The Stage-1 CPU scatter path bakes a
+custom `instanceOrigin: vec2` `InstancedBufferAttribute` into
+each scatter geometry — per-blade world XZ — because TSL's
+`positionWorld` in the vertex stage doesn't include the
+per-instance matrix on the InstancedMesh + NodeMaterial path
+(observed during foliage-wind work). The wind-sway materializer
+reads this attribute via `attribute("instanceOrigin", "vec2")` to
+phase per-blade ambient noise. The compute pipeline emits the
+equivalent: the compute cull pass appends per-visible-instance
+world XZ into a `visibleOrigins` storage buffer that's also
+bound to the geometry as `instanceOrigin` via `setAttribute`.
+Unlike `mesh.instanceMatrix` (where Three has special handling
+that conflicts with storage buffers), regular instanced
+geometry attributes can be storage-backed without issue —
+the renderer reads them through the normal vertex-attribute
+binding path. So `wind-sway`'s existing
+`attribute("instanceOrigin", "vec2")` call works unchanged on
+both Stage-1 CPU and Stage-3 GPU paths.
+
+**Pipeline side-effect: makes MSAA + alphaToCoverage feasible.**
+While the compute pipeline is being plumbed, the underlying
+WebGPU render configuration is being touched anyway. Story
+36.16b (below) takes the opportunity to enable MSAA on the
+scenePass and apply `alphaToCoverage` to foliage materials —
+fixes the alpha-test sub-pixel shimmer documented as a TODO in
+`packages/render-web/src/ShaderRuntime.ts:applyNodeSetToMaterial`.
+Splitting it into its own story keeps the compute scatter
+work auditable on its own.
+
 **Files touched:**
 - `packages/render-web/src/scatter/compute-pipeline.ts` (new) —
-  full pipeline scaffold; TSL compute shader for scatter + cull.
+  full pipeline scaffold; TSL compute shader for scatter + cull;
+  rendered mesh is `THREE.Mesh` with `setIndirect`-driven
+  instancing; the material's `positionNode` is wrapped to apply
+  the per-instance matrix from `visibleMatrices` storage,
+  `colorNode` is wrapped to multiply by `visibleColors` storage.
+  `visibleOrigins` storage is bound to the geometry as
+  `instanceOrigin` via `setAttribute` for the wind-sway
+  materializer. There is also a known cache-pollution caveat:
+  the wrapper mutates the `ShaderRuntime`-cached material in
+  place; safe with one GPU scatter layer per shader binding,
+  hazard with two layers sharing a material identity. Tracked
+  by an in-code `TODO(scatter-material-cache)` and a follow-up
+  story (clone or skip-cache for GPU-scatter materials).
 - `packages/render-web/src/scatter/instance-buffer.ts` (new) —
   GPU buffer lifecycle (alloc, resize, update).
 - `packages/render-web/src/landscape/scatter.ts` — rewire to use
@@ -2485,7 +2576,63 @@ described in the GDC 2021 talk, scaled to Sugarmagic's needs.
   known mask + density through the compute pass; read back the
   instance buffer; assert instance count matches CPU-path count
   within tolerance; assert frustum culling drops instances
-  outside the test camera frustum.
+  outside the test camera frustum; assert that the wind-sway
+  vertex shader receives correct per-instance world XZ in the
+  compute path (regression guard for the `instanceOrigin`
+  carry-forward).
+
+### 36.16b — MSAA + `alphaToCoverage` for alpha-tested foliage
+
+**Outcome:** Enable MSAA on the WebGPU scenePass and switch
+foliage mask-mode materials from binary `alphaTest=0.5` cutout to
+`alphaToCoverage`. Eliminates the per-frame pixel-flicker shimmer
+on tall grass and other alpha-tested foliage when wind animates
+blade vertices — a known limitation documented in the existing
+TODO at `packages/render-web/src/ShaderRuntime.ts`
+`applyNodeSetToMaterial`.
+
+**Cause being fixed.** Today the foliage mask blend mode sets
+`alphaTest = 0.5` and `depthWrite = true`. Every fragment is a
+binary keep / discard at the alpha boundary. With wind shifting
+blade vertices by tiny amounts each frame, individual pixels at
+the alpha edge flip on/off → scattered pixel flashes. Confirmed
+by setting wind to Still Air on all scatter layers — flashes
+vanish entirely.
+
+**Mechanism of the fix.** With MSAA enabled, the rasterizer
+generates multiple coverage samples per pixel.
+`alphaToCoverage = true` derives a partial-coverage mask from the
+shader's output alpha — fractional coverage produces blended
+edges instead of a hard binary. Sub-pixel motion now produces
+sub-pixel coverage shifts instead of full-pixel pops. Foliage
+edges become anti-aliased automatically.
+
+**Files touched:**
+- `packages/render-web/src/render/RuntimeRenderGraph.ts` (or
+  wherever the renderer / scenePass is constructed) — enable
+  MSAA on the scenePass with a sample count parameter (4×
+  default for v1; configurable in the future).
+- `packages/render-web/src/ShaderRuntime.ts`
+  `applyNodeSetToMaterial` — for `blendMode === "mask"`, set
+  `material.alphaToCoverage = true` and drop `alphaTest` to
+  ~0.01 (coverage replaces the hard cutoff). Remove the TODO
+  block.
+- `packages/render-web/src/scatter/compute-pipeline.ts` —
+  ensure the indirect-draw path is MSAA-compatible (target
+  texture format, multisample state).
+- `packages/testing/src/foliage-shimmer.test.ts` (new) — render
+  a static grass field with wind motion across N frames; per-pixel
+  diff between consecutive frames must stay under a tight
+  threshold (proves the shimmer is gone at the pixel level).
+
+**Out of scope:**
+- Blend-mode foliage (`blendMode === "blend"`) is unchanged. It
+  uses `transparent: true` + `depthWrite: false` for true alpha
+  gradients (Grass Surface 6 base fade); MSAA still applies
+  but `alphaToCoverage` doesn't.
+- Performance comparison between alphaToCoverage and TAA — TAA
+  is a deeper refactor (jittered camera, history buffer, motion
+  vectors) and is deferred beyond this epic.
 
 ### 36.17 — Scatter LOD (distance density thin + mesh swap)
 
@@ -2590,6 +2737,58 @@ stay planted; tip vertices bend. Buffer is sized for v1 at 64
 sources; Stage 4 extension (beyond this epic's scope) would add
 a grid-acceleration structure if gameplay demands thousands.
 
+**Composition with wind (decided architecture).** Today the
+scatter vertex shader is whatever the scatter layer's `deform`
+slot binds — currently `foliage-wind` (an `effect.wind-sway`
+shader graph) via the wind-preset Material indirection. Its
+`output.vertex` is the sole `positionNode` override on the
+scatter mesh. Displacement must compose with this without
+fighting it.
+
+**Decision: displacement is a new effect-op
+(`effect.displacement`) authored into the existing wind shader
+graph.** It runs in series with `effect.wind-sway`, both
+contributing displacements that sum into the final
+`output.vertex`. Concretely:
+- Add `effect.displacement` to the shader-node registry in
+  `packages/domain/src/shader-graph/index.ts`. Inputs:
+  `position` (vec3), `mask` (float, treeHeight — "tip
+  weight"), `displacementBufferRef` (handle, fed by
+  scatter-system uniforms). Output: `displacement` (vec3).
+- Update the built-in `foliage-wind` shader graph: `wind-sway`
+  output and `displacement` output are summed into a final
+  vertex node. Ordering doesn't matter (additive) but keep
+  displacement after wind-sway in the graph for
+  read-the-graph clarity.
+- The materializer for `effect.displacement` reads the
+  `DisplacementSourceBuffer` (uploaded each frame from
+  `DisplacementSourceRegistry`), iterates active sources,
+  computes the closest one's contribution, returns a vec3.
+- Wind preset Materials (Still Air, Gentle Breeze, etc.)
+  remain unchanged. Displacement strength comes from the
+  per-entity `displacementProfile` on the entity Definition,
+  NOT from the wind preset. Wind preset and displacement are
+  independent layers of motion.
+
+**Why this composition over alternatives:**
+- *Separate vertex pass after wind:* TSL doesn't have a clean
+  "two `positionNode` contributions" primitive. Forcing it
+  would require a custom render pass or material wrapper —
+  more code, less authorable.
+- *Replace wind shader with displacement-aware variant:*
+  forks the foliage-wind shader, doubles the surface area to
+  maintain. Avoid.
+
+This composition also gives us the natural moment to wire up
+the currently-inert `windDirection` parameter on wind preset
+materials. The ambient wave layer in `effect.wind-sway`
+hardcodes `vec3(ambientBend, 0, 0)` (-X-only bend) today;
+when displacement is added as a vec3-producing op,
+`wind-sway` should likewise output a vec3 that respects
+`windDirection`. Both layers then push along authored axes
+and compose properly. Documented in the
+`material-definitions.ts` TODO; resolve here.
+
 **Files touched:**
 - `packages/domain/src/content-library/index.ts` — add
   `displacementProfile: { radius: number; strength: number;
@@ -2598,6 +2797,20 @@ a grid-acceleration structure if gameplay demands thousands.
   `PlayerDefinition.displacementProfile` in `createDefaultPlayerDefinition`
   to a sensible non-null value (e.g. `{ radius: 1.5, strength:
   0.8, falloff: 2 }`); others default to `null`.
+- `packages/domain/src/shader-graph/index.ts` — register the
+  new `effect.displacement` node type (input ports: position,
+  mask, displacement-buffer handle; output: vec3
+  displacement). Update `createDefaultFoliageWindShaderGraph`
+  to include the displacement op alongside wind-sway, with
+  their outputs summed into `output.vertex`.
+- `packages/render-web/src/materialize/effect.ts` — add the
+  `effect.displacement` materializer: iterate
+  DisplacementSourceBuffer, compute closest source, return
+  vec3 contribution. While here, replace the `wind-sway`
+  hardcoded `vec3(ambientBend, 0, 0)` axis with one driven by
+  the wind shader's `windDirection` parameter (resolves the
+  inert-parameter TODO in
+  `packages/domain/src/content-library/builtins/material-definitions.ts`).
 - `packages/runtime-core/src/displacement/index.ts` (new) —
   `DisplacementSourceRegistry` service (runtime data, not a
   store slice; see Epic 033's precedent for "runtime service vs.
@@ -2640,7 +2853,8 @@ the two-paths regression this story exists to prevent):
 ### 36.19 — Perf validation + benchmarks
 
 **Outcome:** A benchmark suite exercising three representative
-scenes:
+scenes in **steady state** (no live editing, no parameter
+changes — only camera + entity motion):
 
 - **Small region** — 64×64m landscape, 2 channels, 1 scatter
   layer each at modest density. ~50K instances total. Target:
@@ -2657,9 +2871,29 @@ Benchmarks run in CI and record frame-time + GPU-time telemetry.
 Regressions fail the build. Results inform whether further perf
 work is needed before declaring the epic done.
 
+**Steady-state vs. interactive benchmarking — explicit choice.**
+The Stage-1/2 `uniformForParameter` fix (literals instead of
+shared TSL uniforms) means any change to a shader parameter
+forces a fresh material acquire and a TSL recompile. That's
+correct — the prior "shared uniform with `.value` mutation" path
+silently failed to propagate parameter values to the GPU
+(observed during wind-preset iteration). Steady-state frame
+time is unaffected; interactive frame time during slider drags
+will show recompile bubbles.
+- **In scope for 36.19:** steady-state frame time at the three
+  density tiers above. This is the published-game / preview
+  metric that matters for shipping.
+- **Out of scope for 36.19, captured as follow-up:** an
+  "interactive editing latency" benchmark — drag a parameter
+  slider while a scene is rendering and measure the
+  recompile-bubble duration. Belongs in a Stage 4 (or
+  separate authoring-perf) workstream.
+
 **Files touched:**
 - `packages/testing/src/scatter-benchmarks/` (new folder) — one
-  test file per scene scenario.
+  test file per scene scenario; each fixture pre-warms the
+  shader cache before sampling frame times so a first-frame
+  compile cost doesn't pollute the steady-state numbers.
 - `tooling/benchmark-report.mjs` (new) — aggregates run output;
   compares against a baseline checked into the repo.
 - CI config — add a nightly benchmark job.
