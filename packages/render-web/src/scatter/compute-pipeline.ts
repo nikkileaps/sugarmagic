@@ -14,7 +14,6 @@ import {
   Fn,
   If,
   PI2,
-  Return,
   abs,
   atomicAdd,
   atomicLoad,
@@ -355,9 +354,29 @@ export function createScatterComputePipeline(options: {
     "instanceOrigin",
     buffers.visibleOrigins as unknown as THREE.BufferAttribute
   );
-  mesh.geometry.setIndirect(buffers.indirectDrawArgs, 0);
-  // mesh.count is the upper bound; the actual draw count comes from
-  // indirectDrawArgs[1] which the cull pass writes each frame.
+  // TODO(scatter-compaction): the stable-index approach below trades GPU
+  // perf (~3x more vertex shader invocations because invisible blades
+  // still emit degenerate triangles) for correctness (deterministic
+  // instance order, no BLEND-mode flicker). For perf-sensitive scenes,
+  // replace with a deterministic GPU prefix-sum compaction over
+  // `candidateActive[]`: each thread computes its output slot as the
+  // exclusive scan of its predecessors' active flags, giving stable
+  // ordering AND skipping invisible vertex work. Reuses the existing
+  // visibleCount / indirectDrawArgs buffers — they're left allocated
+  // and the resetVisibleCompute / finalizeIndirectCompute kernels are
+  // left defined for the eventual port back to indirect-draw.
+  // STABLE-INDEX INSTANCING (was: indirect draw via setIndirect):
+  // The cull pass now writes visibleMatrices/Colors/Origins at the
+  // candidate's own sampleIndex (deterministic) rather than packing
+  // visible candidates into a [0..visibleCount) range via atomicAdd
+  // (non-deterministic across frames due to parallel workgroup race).
+  // Invisible candidates get a zero-rotation/zero-translation matrix
+  // so their geometry collapses to a single point (degenerate triangles
+  // → rasterizer skips). Cost: vertex shader runs for every candidate,
+  // not just visible ones (~3x more VS invocations in typical view).
+  // Benefit: stable instance order, which is required for BLEND-mode
+  // foliage (Grass Surface 6) — alpha blending accumulates in instance
+  // order, so non-deterministic order produced TV-static flicker.
   mesh.count = packedInputs.sampleCount;
 
   const samplePositionsNode: any = storageAny(
@@ -533,9 +552,6 @@ export function createScatterComputePipeline(options: {
   const cullVisibleCompute = Fn(() => {
     const sampleIndex = instanceIndex.toVar();
     const active = candidateActiveNode.element(sampleIndex).toVar();
-    If(active.equal(uint(0)), () => {
-      Return();
-    });
 
     const localPosition = candidatePositionNode.element(sampleIndex).toVar();
     const localPosition4 = vec4(localPosition, 1).toVar();
@@ -554,18 +570,42 @@ export function createScatterComputePipeline(options: {
     const insideDistance = distance(worldPosition, cameraPositionUniform).lessThanEqual(
       maxDrawDistanceUniform
     );
+    const visible = active.notEqual(uint(0))
+      .and(insideFrustum)
+      .and(insideDistance);
 
-    If(insideFrustum.and(insideDistance), () => {
-      const visibleIndex = atomicAdd(visibleCountNode.element(uint(0)), uint(1));
+    // Stable-index write: each candidate writes to its OWN sampleIndex
+    // slot every frame, regardless of visibility. This makes instance
+    // ordering deterministic across frames, which is required for
+    // BLEND-mode foliage (depth-write off → alpha accumulates in
+    // instance order; non-deterministic order = visible flicker).
+    // Invisible candidates get a degenerate transform (all-zero
+    // rotation/scale + zero translation, w=1) so every blade vertex
+    // collapses to (0,0,0) and the rasterizer drops the zero-area
+    // triangles. Cost: vertex shader runs for invisible blades.
+    If(visible, () => {
       visibleMatrixNode
-        .element(visibleIndex)
+        .element(sampleIndex)
         .assign(candidateMatrixNode.element(sampleIndex));
       visibleColorNode
-        .element(visibleIndex)
+        .element(sampleIndex)
         .assign(candidateColorNode.element(sampleIndex));
       visibleOriginNode
-        .element(visibleIndex)
+        .element(sampleIndex)
         .assign(vec2(worldPosition.x, worldPosition.z));
+    }).Else(() => {
+      visibleMatrixNode
+        .element(sampleIndex)
+        .assign(
+          mat4(
+            vec4(0, 0, 0, 0),
+            vec4(0, 0, 0, 0),
+            vec4(0, 0, 0, 0),
+            vec4(0, 0, 0, 1)
+          )
+        );
+      visibleColorNode.element(sampleIndex).assign(vec3(0, 0, 0));
+      visibleOriginNode.element(sampleIndex).assign(vec2(0, 0));
     });
   })()
     .compute(packedInputs.sampleCount, [SCATTER_COMPUTE_WORKGROUP_SIZE])
@@ -612,9 +652,13 @@ export function createScatterComputePipeline(options: {
       }
 
       updateCullingUniforms(camera);
-      renderer.compute(resetVisibleCompute);
+      // Stable-index instancing: cull writes to per-sample slots; no
+      // compaction count to reset, no indirect-draw arg to finalize.
+      // (resetVisibleCompute / finalizeIndirectCompute kept defined
+      // above for now in case we resurrect compaction with a proper
+      // prefix-sum scan; their atomicAdd-based variant produced
+      // non-deterministic visible-slot order → BLEND-mode flicker.)
       renderer.compute(cullVisibleCompute);
-      renderer.compute(finalizeIndirectCompute);
       lastPreparedFrameByCamera.set(cameraKey, frameId);
     },
     async readVisibleCount(renderer: WebGPURenderer): Promise<number> {

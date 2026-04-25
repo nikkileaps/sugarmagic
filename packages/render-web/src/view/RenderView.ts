@@ -53,6 +53,12 @@ function configureRenderer(next: WebGPURenderer): void {
   next.toneMapping = THREE.ACESFilmicToneMapping;
   next.toneMappingExposure = 1;
   next.outputColorSpace = THREE.SRGBColorSpace;
+  // TEMP DEBUG: enable WebGPU timestamp queries so renderer.info.render.timestamp
+  // and renderer.info.compute.timestamp report real GPU time per frame.
+  const backend = (next as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
+  if (backend) {
+    backend.trackTimestamp = true;
+  }
 }
 
 export function createRenderView(options: RenderViewOptions): RenderView {
@@ -118,12 +124,121 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     applyEnvironmentState(state);
   }
 
+  // TEMP DEBUG: per-frame timing breakdown.
+  // CPU: performance.now() around sync / listeners / render call.
+  // GPU: WebGPU timestamp queries — drained each frame via
+  // renderer.resolveTimestampsAsync; renderer.info.render.timestamp /
+  // .compute.timestamp expose the resolved per-frame GPU ms.
+  // info.render.calls is cumulative across the renderer's lifetime, so we
+  // sample by delta between frames; info.render.triangles is per-frame.
+  const frameTimings = {
+    cpuSync: 0,
+    cpuListeners: 0,
+    cpuRenderCall: 0,
+    gpuRender: 0,
+    gpuCompute: 0,
+    total: 0,
+    drawCalls: 0,
+    triangles: 0,
+    samples: 0,
+    lastCallsCumulative: 0
+  };
+  let timestampResolveInFlight = false;
+
   function renderOnce(): void {
+    const t0 = performance.now();
     syncEnvironmentFromEngine();
+    const t1 = performance.now();
     for (const listener of frameListeners) {
       listener();
     }
+    const t2 = performance.now();
     renderPipeline?.render();
+    const t3 = performance.now();
+
+    frameTimings.cpuSync += t1 - t0;
+    frameTimings.cpuListeners += t2 - t1;
+    frameTimings.cpuRenderCall += t3 - t2;
+    frameTimings.total += t3 - t0;
+
+    if (renderer) {
+      const rendererAny = renderer as unknown as {
+        info: {
+          render: { timestamp?: number; calls?: number; triangles?: number };
+          compute: { timestamp?: number };
+        };
+        resolveTimestampsAsync?: (type?: unknown) => Promise<unknown>;
+      };
+      const info = rendererAny.info;
+      frameTimings.gpuRender += info.render.timestamp ?? 0;
+      frameTimings.gpuCompute += info.compute.timestamp ?? 0;
+      const callsNow = info.render.calls ?? 0;
+      const callsDelta = Math.max(0, callsNow - frameTimings.lastCallsCumulative);
+      frameTimings.lastCallsCumulative = callsNow;
+      frameTimings.drawCalls += callsDelta;
+      frameTimings.triangles += info.render.triangles ?? 0;
+
+      // Drain timestamp queue so info.render.timestamp / .compute.timestamp
+      // get populated. Fire-and-forget; we guard with a flight flag so we
+      // don't pile up resolutions if the GPU is behind.
+      if (rendererAny.resolveTimestampsAsync && !timestampResolveInFlight) {
+        timestampResolveInFlight = true;
+        rendererAny.resolveTimestampsAsync()
+          .catch(() => undefined)
+          .finally(() => {
+            timestampResolveInFlight = false;
+          });
+      }
+    }
+    frameTimings.samples += 1;
+
+    if (frameTimings.samples >= 60) {
+      const n = frameTimings.samples;
+      // TEMP DEBUG: scene census so we can correlate cpuRender cost with
+      // how many objects three has to walk through render lists each frame.
+      let sceneObjectCount = 0;
+      let sceneMeshCount = 0;
+      let sceneVisibleMeshCount = 0;
+      let sceneLightCount = 0;
+      scene.traverse((obj) => {
+        sceneObjectCount += 1;
+        if ((obj as THREE.Mesh).isMesh) {
+          sceneMeshCount += 1;
+          if (obj.visible) sceneVisibleMeshCount += 1;
+        }
+        if ((obj as THREE.Light).isLight) sceneLightCount += 1;
+      });
+      // eslint-disable-next-line no-console
+      console.log(
+        "[scene-census]",
+        `objects=${sceneObjectCount}`,
+        `meshes=${sceneMeshCount}`,
+        `visibleMeshes=${sceneVisibleMeshCount}`,
+        `lights=${sceneLightCount}`,
+        `topLevelChildren=${scene.children.length}`
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        "[render-timing] 60-frame avg:",
+        `total=${(frameTimings.total / n).toFixed(2)}ms`,
+        `cpuRender=${(frameTimings.cpuRenderCall / n).toFixed(2)}ms`,
+        `gpuRender=${(frameTimings.gpuRender / n).toFixed(2)}ms`,
+        `gpuCompute=${(frameTimings.gpuCompute / n).toFixed(2)}ms`,
+        `cpuSync=${(frameTimings.cpuSync / n).toFixed(2)}ms`,
+        `cpuListeners=${(frameTimings.cpuListeners / n).toFixed(2)}ms`,
+        `calls/frame=${(frameTimings.drawCalls / n).toFixed(0)}`,
+        `tris/frame=${(frameTimings.triangles / n).toFixed(0)}`
+      );
+      frameTimings.cpuSync = 0;
+      frameTimings.cpuListeners = 0;
+      frameTimings.cpuRenderCall = 0;
+      frameTimings.gpuRender = 0;
+      frameTimings.gpuCompute = 0;
+      frameTimings.total = 0;
+      frameTimings.drawCalls = 0;
+      frameTimings.triangles = 0;
+      frameTimings.samples = 0;
+    }
   }
 
   function renderLoopTick(): void {
@@ -261,6 +376,12 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       renderPipeline?.resize(width, height);
     },
     setCamera(camera) {
+      // Identity check: runtime hosts call setCamera every frame with the same
+      // camera reference (its transform changes, not the object). Re-running
+      // requestEngineStateSync here forces applyEnvironmentState every frame,
+      // which rebuilds the post-process TSL graph and dirties every material —
+      // ~19ms of CPU per frame on an otherwise empty scene.
+      if (camera === activeCamera) return;
       activeCamera = camera;
       renderPipeline?.setCamera(camera);
       view.requestEngineStateSync();
