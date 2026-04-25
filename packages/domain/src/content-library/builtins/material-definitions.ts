@@ -6,6 +6,22 @@
  * layers to these materials so authors can swap and refine grass looks
  * through the normal Material apparatus instead of a parallel scatter-only
  * styling path.
+ *
+ * TODO(wind-presets): the wind preset materials below (Still Air, Gentle
+ * Breeze, Meadow Breeze, Gusty) declare three parameters — windStrength,
+ * windFrequency, windDirection — but only `windStrength` is currently
+ * active in the rendered output. The wind-sway materializer's BAND layer
+ * (which consumed windFrequency for gust speed) is commented out pending
+ * more iteration, and `windDirection` was never wired into the ambient
+ * wave layer (bend is hardcoded along -X). Result: changing Gentle Breeze
+ * → Gusty changes only the bend magnitude, not the gust cadence or wind
+ * direction. The frequency/direction values are kept on the presets as
+ * placeholders for when the band layer is re-enabled and direction is
+ * wired through. See packages/render-web/src/materialize/effect.ts
+ * `effect.wind-sway` (BLOCK START / BLOCK END) for the disabled band
+ * code that would consume windFrequency, and the ambient wave layer
+ * below it for where windDirection would need to replace the hardcoded
+ * `vec3(ambientBend, 0, 0)` axis.
  */
 
 import type { MaterialDefinition } from "../index";
