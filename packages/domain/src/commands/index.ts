@@ -193,6 +193,13 @@ export type UpdateLandscapeChannelCommand = SemanticCommandBase<
   }
 >;
 
+export type DeleteLandscapeChannelCommand = SemanticCommandBase<
+  "DeleteLandscapeChannel",
+  {
+    channelId: string;
+  }
+>;
+
 export type PaintLandscapeCommand = SemanticCommandBase<
   "PaintLandscape",
   {
@@ -739,6 +746,7 @@ export type SemanticCommand =
   | DeleteRegionNPCBehaviorCommand
   | CreateLandscapeChannelCommand
   | UpdateLandscapeChannelCommand
+  | DeleteLandscapeChannelCommand
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand

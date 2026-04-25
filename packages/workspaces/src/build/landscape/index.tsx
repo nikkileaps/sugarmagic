@@ -19,7 +19,8 @@ import {
   Stack,
   Switch,
   Text,
-  TextInput
+  TextInput,
+  UnstyledButton
 } from "@mantine/core";
 import type {
   FlowerTypeDefinition,
@@ -139,6 +140,7 @@ function ChannelCard(props: {
   onSelect: () => void;
   onRename: (displayName: string) => void;
   onSurfaceChange: (surface: SurfaceBinding | null) => void;
+  onDelete: () => void;
   onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
 }) {
@@ -160,6 +162,7 @@ function ChannelCard(props: {
     onSelect,
     onRename,
     onSurfaceChange,
+    onDelete,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition
   } = props;
@@ -168,6 +171,33 @@ function ChannelCard(props: {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(channel.displayName);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    function handlePointerDown(): void {
+      setContextMenu(null);
+    }
+
+    function handleEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [contextMenu]);
 
   return (
     <Paper
@@ -175,6 +205,18 @@ function ChannelCard(props: {
       radius="sm"
       withBorder
       onClick={isBase ? undefined : onSelect}
+      onContextMenu={(event) => {
+        if (isBase) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect();
+        setContextMenu({
+          x: event.clientX,
+          y: event.clientY
+        });
+      }}
       style={{
         cursor: isBase ? "default" : "pointer",
         opacity: isBase && !isActive ? 0.75 : 1,
@@ -292,6 +334,40 @@ function ChannelCard(props: {
         </Group>
 
       </Group>
+      {contextMenu ? (
+        <Paper
+          withBorder
+          shadow="md"
+          radius="sm"
+          p={4}
+          style={{
+            position: "fixed",
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 1000,
+            minWidth: 140
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Stack gap={2}>
+            <UnstyledButton
+              onClick={() => {
+                onDelete();
+                setContextMenu(null);
+              }}
+              style={{
+                padding: "6px 8px",
+                borderRadius: "var(--sm-radius-sm)",
+                color: "var(--sm-red)",
+                cursor: "pointer"
+              }}
+            >
+              <Text size="xs">Delete</Text>
+            </UnstyledButton>
+          </Stack>
+        </Paper>
+      ) : null}
     </Paper>
   );
 }
@@ -400,6 +476,23 @@ export function useLandscapeWorkspaceView(
                 channelId: channel.channelId,
                 surface,
                 tilingScale: channel.tilingScale
+              }
+            });
+          }}
+          onDelete={() => {
+            if (!region || channelIndex === 0) return;
+            onCommand({
+              kind: "DeleteLandscapeChannel",
+              target: {
+                aggregateKind: "region-document",
+                aggregateId: region.identity.id
+              },
+              subject: {
+                subjectKind: "region-landscape",
+                subjectId: region.identity.id
+              },
+              payload: {
+                channelId: channel.channelId
               }
             });
           }}

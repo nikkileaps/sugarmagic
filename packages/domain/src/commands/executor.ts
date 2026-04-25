@@ -42,6 +42,7 @@ import type {
   DeleteRegionNPCBehaviorCommand,
   CreateLandscapeChannelCommand,
   UpdateLandscapeChannelCommand,
+  DeleteLandscapeChannelCommand,
   PaintLandscapeCommand,
   ConfigureLandscapeCommand,
   CreatePlayerPresenceCommand,
@@ -1075,6 +1076,27 @@ function applyUpdateLandscapeChannel(
   };
 }
 
+function applyDeleteLandscapeChannel(
+  region: RegionDocument,
+  command: DeleteLandscapeChannelCommand
+): RegionDocument {
+  const nextSurfaceSlots = region.landscape.surfaceSlots.filter(
+    (channel, channelIndex) =>
+      channelIndex === 0 || channel.channelId !== command.payload.channelId
+  );
+  if (nextSurfaceSlots.length === region.landscape.surfaceSlots.length) {
+    return region;
+  }
+
+  return {
+    ...region,
+    landscape: {
+      ...region.landscape,
+      surfaceSlots: nextSurfaceSlots
+    }
+  };
+}
+
 function applyPaintLandscape(
   region: RegionDocument,
   command: PaintLandscapeCommand
@@ -1187,6 +1209,9 @@ export function executeCommand(
       break;
     case "UpdateLandscapeChannel":
       updatedRegion = applyUpdateLandscapeChannel(region, command);
+      break;
+    case "DeleteLandscapeChannel":
+      updatedRegion = applyDeleteLandscapeChannel(region, command);
       break;
     case "PaintLandscape":
       updatedRegion = applyPaintLandscape(region, command);

@@ -1615,35 +1615,6 @@ export class ShaderRuntime {
     if (deform && (!deformDefinition || deformDefinition.targetKind !== "mesh-deform")) {
       throw new Error(`Deform shader "${deform.shaderDefinitionId}" is not a mesh-deform graph.`);
     }
-
-    // Stub-attribute insurance for deform shaders.
-    //
-    // The built-in foliage-wind deform shader (and anything else that reuses
-    // its wind-sway op) reads `attribute("instanceOrigin", "vec2")` for
-    // per-blade phase variation in the ambient wave. Scatter geometries
-    // bake an InstancedBufferAttribute named `instanceOrigin` with the
-    // per-blade world XZ; non-scatter geometries (e.g., the tree asset)
-    // have no such attribute, and Three's WGSL builder spams the console
-    // with `THREE.AttributeNode: Vertex attribute "instanceOrigin" not
-    // found on geometry.` once per shader compile.
-    //
-    // The shader compiles fine without the attribute (Three substitutes
-    // a default vec2(0)), but the warning is loud noise. Dropping a
-    // zero-filled per-vertex stub here makes the warning go away for
-    // non-scatter geometries while leaving the scatter path untouched
-    // (it sets a real instanced attribute earlier in scatter/index.ts
-    // and asset-scatter.ts; this `if` skips when one already exists).
-    if (deform && !target.geometry.getAttribute("instanceOrigin")) {
-      const positionAttr = target.geometry.getAttribute("position");
-      const vertexCount = positionAttr ? positionAttr.count : 0;
-      if (vertexCount > 0) {
-        const stub = new Float32Array(vertexCount * 2);
-        target.geometry.setAttribute(
-          "instanceOrigin",
-          new THREE.BufferAttribute(stub, 2)
-        );
-      }
-    }
     if (effect && (!effectDefinition || effectDefinition.targetKind !== "mesh-effect")) {
       throw new Error(`Effect shader "${effect.shaderDefinitionId}" is not a mesh-effect graph.`);
     }
