@@ -800,16 +800,30 @@ function uniformForParameter(
   dataType: ShaderIRValue["dataType"],
   context: FinalizationContext
 ): unknown {
+  // Materialize parameters as TSL LITERALS, not uniform() nodes.
+  //
+  // The original implementation used `uniform()` with a shared cache
+  // (keyed by shader+parameterId) so that mutating `.value` would push
+  // new values to the GPU without recompiling. Empirically that didn't
+  // work in this stack — switching wind preset Meadow Breeze (0.35) →
+  // Still Air (0) left the GPU rendering with 0.35 baked in, and even
+  // creating a fresh `uniform(0)` per material didn't take. Three's
+  // TSL appears to inline scalar uniform values at compile time in
+  // ways that don't propagate.
+  //
+  // A literal `float(value)` IS guaranteed to inline correctly (proven
+  // by hardcoding `float(0)` in the wind-sway materializer, which DOES
+  // stop the grass). Since `cacheKey` already includes parameterValues,
+  // any param change forces a fresh material acquire anyway — at which
+  // point a fresh literal captures the new value. Live editing still
+  // works; it just costs a recompile per change instead of a uniform
+  // poke. That price is fine — graphics shaders are short and Three's
+  // compile is fast.
   const currentValue = context.parameterValues[parameterId] ?? 0;
-  const existing = context.parameterUniforms.get(parameterId);
-  if (existing) {
-    existing.value = uniformValueFromPrimitive(dataType, currentValue);
-    return existing;
-  }
-  const node = (uniform as unknown as (value: unknown) => UniformNodeLike)(
-    uniformValueFromPrimitive(dataType, currentValue)
-  );
-  context.parameterUniforms.set(parameterId, node);
+  const node = literalNode(dataType, currentValue);
+  // Keep cache write for compat with anything that reads it; nothing
+  // in the new path reads it back.
+  context.parameterUniforms.set(parameterId, node as UniformNodeLike);
   return node;
 }
 
@@ -1017,6 +1031,28 @@ function applyNodeSetToMaterial(
   }
   if (nodeSet.alphaNode && "opacityNode" in material) {
     material.opacityNode = nodeSet.alphaNode as never;
+    // TODO(foliage-shimmer): mask-mode (alphaTest=0.5) causes scattered pixel
+    // flashes on tall grass and other alpha-tested foliage when wind animates
+    // the blades. Cause: every fragment is binary keep/discard at alpha=0.5,
+    // so sub-pixel motion of blade triangles flips individual pixels on/off
+    // each frame. Bloom amplifies the effect but is not the source. Confirmed
+    // 2026-04-24 by setting all scatter wind to Still Air (Tall Grass +
+    // Flowers in Wildflower Meadow) — flashes vanish entirely without motion.
+    //
+    // Proper fix path (real refactor, deferred):
+    //  1. Enable MSAA on the WebGPU scenePass.
+    //  2. Set `material.alphaToCoverage = true` on foliage materials (mask
+    //     mode only — blend mode already smooth-fades).
+    //  3. Drop alphaTest below to ~0.01; coverage replaces the hard cutoff
+    //     and gets anti-aliased by MSAA naturally.
+    // Alternative: implement TAA (jittered camera + reprojection + history
+    // buffer) — bigger refactor, but addresses many other aliasing issues
+    // beyond foliage too.
+    //
+    // Workaround for now: lower wind strength = less per-frame jitter =
+    // smaller / fewer flashes. Don't crank wind on grass without thinking
+    // about the bloom interaction.
+    //
     // Opacity policy is per-shader via metadata.blendMode:
     //   "mask"  (default) — alphaTest=0.5 cutout + depthWrite=true. Binary
     //           edges; used for foliage cards where the painted alpha is

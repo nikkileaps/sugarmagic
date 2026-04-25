@@ -101,21 +101,26 @@ export function useMaterialsWorkspaceView(
   } = props;
 
   const [searchValue, setSearchValue] = useState("");
-  const surfaceShaderDefinitions = useMemo(
+  // Materials can wrap any shader that's not a post-process effect — this
+  // includes mesh-surface (grass/foliage looks), mesh-deform (wind presets
+  // like Still Air, Gentle Breeze), and mesh-effect (e.g. cloud-shadow demo).
+  // Post-process shaders bind directly to environment.postProcessShaders, not
+  // to materials, so excluding them avoids confusion in the inspector.
+  const materialShaderDefinitions = useMemo(
     () =>
       shaderDefinitions.filter(
-        (definition) => definition.targetKind === "mesh-surface"
+        (definition) => definition.targetKind !== "post-process"
       ),
     [shaderDefinitions]
   );
   const defaultNewShaderId = useMemo(
     () =>
-      surfaceShaderDefinitions.find(
+      materialShaderDefinitions.find(
         (definition) => definition.metadata.builtInKey === "standard-pbr"
       )?.shaderDefinitionId ??
-      surfaceShaderDefinitions[0]?.shaderDefinitionId ??
+      materialShaderDefinitions[0]?.shaderDefinitionId ??
       null,
-    [surfaceShaderDefinitions]
+    [materialShaderDefinitions]
   );
 
   const filteredMaterials = useMemo(() => {
@@ -125,19 +130,19 @@ export function useMaterialsWorkspaceView(
     }
     return materialDefinitions.filter((definition) => {
       const shaderLabel =
-        surfaceShaderDefinitions.find(
+        materialShaderDefinitions.find(
           (shader) => shader.shaderDefinitionId === definition.shaderDefinitionId
         )?.displayName ?? "";
       return normalizeSearchValue(`${definition.displayName} ${shaderLabel}`).includes(search);
     });
-  }, [materialDefinitions, searchValue, surfaceShaderDefinitions]);
+  }, [materialDefinitions, searchValue, materialShaderDefinitions]);
 
   const selectedMaterial =
     materialDefinitions.find(
       (definition) => definition.definitionId === selectedMaterialDefinitionId
     ) ?? materialDefinitions[0] ?? null;
   const selectedShader =
-    surfaceShaderDefinitions.find(
+    materialShaderDefinitions.find(
       (definition) => definition.shaderDefinitionId === selectedMaterial?.shaderDefinitionId
     ) ?? null;
 
@@ -210,7 +215,7 @@ export function useMaterialsWorkspaceView(
                 const isSelected =
                   definition.definitionId === selectedMaterial?.definitionId;
                 const shaderLabel =
-                  surfaceShaderDefinitions.find(
+                  materialShaderDefinitions.find(
                     (shader) => shader.shaderDefinitionId === definition.shaderDefinitionId
                   )?.displayName ?? "Missing Shader";
                 return (
@@ -258,7 +263,7 @@ export function useMaterialsWorkspaceView(
           <MaterialInspectorPanel
             materialDefinition={selectedMaterial}
             shaderDefinition={selectedShader}
-            shaderDefinitions={surfaceShaderDefinitions}
+            shaderDefinitions={materialShaderDefinitions}
             textureDefinitions={textureDefinitions}
             isReferenced={isMaterialReferenced(selectedMaterial.definitionId)}
             onUpdateMaterialDefinition={onUpdateMaterialDefinition}
