@@ -2647,75 +2647,77 @@ two-level deterministic prefix-sum compaction documented above.
 Same indirect-draw mechanism, deterministic visible-slot order,
 no flicker.
 
-### 36.16b — MSAA + `alphaToCoverage` for alpha-tested foliage
+### 36.16b — Disable scene-pass MSAA to kill the foliage flicker
 
-**Outcome:** Enable MSAA on the WebGPU scenePass and switch
-foliage mask-mode materials from binary `alphaTest=0.5` cutout to
-`alphaToCoverage`. Eliminates the per-frame pixel-flicker shimmer
-on tall grass and other alpha-tested foliage when wind animates
-blade vertices — a known limitation documented in the existing
-TODO at `packages/render-web/src/ShaderRuntime.ts`
-`applyNodeSetToMaterial`.
+**Outcome:** Pass `{ samples: 0 }` explicitly to `pass(scene,
+camera, …)` in `RuntimeRenderGraph` so the scene pass renders
+without MSAA. Eliminates the per-frame "camera flash" halos on
+grass tips that bloom amplifies under wind motion. Single-line
+fix; trade-off is aliased scene edges everywhere, which in the
+current stylized look reads acceptably and isn't pursued further
+in this epic.
 
-**Cause being fixed.** The foliage mask blend mode sets
-`alphaTest = 0.5` and `depthWrite = true`. Every fragment is a
-binary keep / discard at the alpha boundary. With wind shifting
-blade vertices by tiny amounts each frame, individual pixels at
-the alpha edge can flip on/off → scattered pixel flashes.
+**The actual cause (and how we got it wrong twice).** The
+original 36.16b draft assumed the flicker was alpha-cutout
+sub-pixel pop on MASK-mode foliage and prescribed enabling MSAA +
+`alphaToCoverage` to fix it. We implemented that and it changed
+nothing — because **MSAA was already on**. Three.js's `pass(scene,
+camera)` factory inherits `samples` from `renderer.samples` when
+the caller doesn't specify, and `WebGPURenderer({ antialias:
+true })` sets `renderer.samples = 4`. The session's first 36.16b
+attempt (`pass(…, { samples: 4 })`) was a no-op — it just made the
+existing default explicit.
 
-**Validation gotcha (retrospective from 36.16).** An earlier draft
-of this story claimed "Confirmed by setting wind to Still Air on
-all scatter layers — flashes vanish entirely." That observation
-turned out to conflate two distinct flicker sources: (1) the
-sub-pixel cutout shimmer this story addresses, AND (2) the
-non-deterministic compute scatter instance order that 36.16 had to
-solve before shipping. The Still-Air test eliminated wind-driven
-vertex motion, which masked BOTH. After 36.16's deterministic
-compaction landed, the surface preview no longer flickered with
-Still Air — but BLEND-mode foliage (Grass Surface 6) had been
-flickering for an entirely different reason. **Before implementing
-36.16b, re-validate the residual MASK-mode shimmer with the current
-deterministic-compaction pipeline:** turn on wind, observe whether
-shimmer persists at the alpha cutout edges. If yes, MSAA +
-`alphaToCoverage` is still warranted (the spec direction below
-holds). If shimmer is now negligible, downgrade the urgency or
-close as resolved-by-side-effect.
+The actual mechanism: with 4× MSAA, partially-covered grass blade
+pixels (the rasterizer's per-pixel sub-sample coverage of thin
+geometry) average samples-on-blade with samples-on-background-
+through-inter-blade-gaps. Wind motion shifts blades sub-pixel each
+frame, so the proportion of "blade vs gap" samples changes per
+frame → per-pixel brightness varies → bloom catches the bright
+frames and amplifies them into the visible camera-flash halos. No
+alpha needed (grass scatter has no alpha output). Nothing about
+shader graphs, lighting, HDR clamping, sub-pixel coverage
+toggling, or compute scatter ordering matters here — it's purely
+the MSAA composition variation.
 
-**Mechanism of the fix.** With MSAA enabled, the rasterizer
-generates multiple coverage samples per pixel.
-`alphaToCoverage = true` derives a partial-coverage mask from the
-shader's output alpha — fractional coverage produces blended
-edges instead of a hard binary. Sub-pixel motion now produces
-sub-pixel coverage shifts instead of full-pixel pops. Foliage
-edges become anti-aliased automatically.
+Confirmed by isolated test 2026-04-26: revert all other changes,
+add only `{ samples: 0 }` to the scene pass — flicker eliminated.
 
 **Files touched:**
-- `packages/render-web/src/render/RuntimeRenderGraph.ts` (or
-  wherever the renderer / scenePass is constructed) — enable
-  MSAA on the scenePass with a sample count parameter (4×
-  default for v1; configurable in the future).
-- `packages/render-web/src/ShaderRuntime.ts`
-  `applyNodeSetToMaterial` — for `blendMode === "mask"`, set
-  `material.alphaToCoverage = true` and drop `alphaTest` to
-  ~0.01 (coverage replaces the hard cutoff). Remove the TODO
-  block.
-- `packages/render-web/src/scatter/compute-pipeline.ts` —
-  ensure the indirect-draw + InstancedMesh path is MSAA-compatible
-  (target texture format, multisample state). The compaction
-  pipeline itself doesn't change.
-- `packages/testing/src/foliage-shimmer.test.ts` (new) — render
-  a static grass field with wind motion across N frames; per-pixel
-  diff between consecutive frames must stay under a tight
-  threshold (proves the shimmer is gone at the pixel level).
+- `packages/render-web/src/render/RuntimeRenderGraph.ts` — pass
+  `{ samples: 0 }` to `pass(scene, options.camera, …)`. Comment
+  block in-file documents why explicit-zero is load-bearing
+  (defeats `renderer.samples` default inheritance) and lists the
+  upgrade paths if aliasing later becomes the bigger problem.
 
-**Out of scope:**
-- Blend-mode foliage (`blendMode === "blend"`) is unchanged. It
-  uses `transparent: true` + `depthWrite: false` for true alpha
-  gradients (Grass Surface 6 base fade); MSAA still applies
-  but `alphaToCoverage` doesn't.
-- Performance comparison between alphaToCoverage and TAA — TAA
-  is a deeper refactor (jittered camera, history buffer, motion
-  vectors) and is deferred beyond this epic.
+**What we explicitly did NOT ship:**
+- MSAA on with `alphaToCoverage` on foliage materials. We tried
+  this and it didn't help (because MSAA was already on; the issue
+  isn't alpha-edge aliasing). The MASK-mode `alphaTest = 0.5` +
+  `depthWrite = true` policy in `ShaderRuntime.ts` is unchanged.
+- HDR output clamp on foliage. We tried this and it didn't help
+  (PBR lighting amplifies past the clamp; and the cause wasn't
+  HDR brightness anyway).
+- View-space blade thickening (Ghost-of-Tsushima style). We tried
+  this and it didn't help (cause isn't sub-pixel geometric
+  coverage toggle; it's MSAA composition variation).
+- TAA. Three.js's TRAANode + VelocityNode does not capture
+  per-vertex wind motion → would ghost. A custom velocity pass
+  that does capture wind would be the proper fix if/when MSAA
+  needs to come back; out of scope here.
+
+**Aliasing trade-off.** Without MSAA, scene geometry edges are
+technically aliased. In the current stylized look + typical
+camera distances they don't read as jaggy (subjective check;
+re-evaluate per-scene). If aliasing becomes a visible problem,
+the upgrade paths (in increasing complexity):
+1. FXAA / SMAA post-process AA — no coverage variation, blurs
+   slightly. Cheap to wire in.
+2. TAA + custom per-vertex velocity pass that includes wind.
+   Three.js doesn't ship this; would need to build the velocity
+   pass through the compute scatter pipeline.
+3. Render foliage to a buffer that bypasses bloom; keep MSAA on
+   the rest of the scene. Architectural change.
 
 ### 36.17 — Scatter LOD (distance density thin + mesh swap)
 
