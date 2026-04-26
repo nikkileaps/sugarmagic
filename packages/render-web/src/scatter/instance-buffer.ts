@@ -19,6 +19,23 @@ import {
 } from "three/webgpu";
 import type { SurfaceScatterSample } from "./index";
 
+/**
+ * Workgroup size for the per-frame scan + compaction kernels.
+ *
+ * WebGPU requires support for compute workgroup sizes up to 256.
+ * Sizing the scan kernels at 256 lets a single second-level partials
+ * scan handle up to SCAN_WORKGROUP_SIZE * SCAN_WORKGROUP_SIZE = 65,536
+ * candidates per scatter layer with no recursion.
+ *
+ * If you raise the per-layer candidate cap above 65,536 you must also
+ * extend the partials scan with another level of recursion (or use
+ * subgroup intrinsics on Chrome 134+). Today's pipeline returns null
+ * from createScatterComputePipeline above this ceiling — see
+ * MAX_GPU_COMPACTION_CANDIDATES in compute-pipeline.ts — and the CPU
+ * fallback in scatter/index.ts takes over.
+ */
+export const SCATTER_SCAN_WORKGROUP_SIZE = 256;
+
 export interface PackedScatterSampleInputs {
   sampleCount: number;
   positions: Float32Array;
@@ -28,6 +45,8 @@ export interface PackedScatterSampleInputs {
 
 export interface ScatterGpuInstanceBuffers {
   readonly sampleCount: number;
+  /** Number of workgroups in the per-frame scan: ceil(sampleCount / SCATTER_SCAN_WORKGROUP_SIZE). */
+  readonly scanWorkgroupCount: number;
   readonly samplePositions: StorageBufferAttribute;
   readonly sampleNormals: StorageBufferAttribute;
   readonly sampleDensityWeights: StorageBufferAttribute;
@@ -36,6 +55,31 @@ export interface ScatterGpuInstanceBuffers {
   readonly candidateMatrices: StorageInstancedBufferAttribute;
   readonly candidateColors: StorageInstancedBufferAttribute;
   readonly candidateRadii: StorageBufferAttribute;
+  /**
+   * Per-frame visibility flag set by the markVisible compute pass.
+   * `1` if the candidate passed frustum + distance + density culling
+   * for the current camera, else `0`. Distinct from `candidateActive`,
+   * which is the build-time density-acceptance flag computed once and
+   * persisted across frames.
+   */
+  readonly frameActive: StorageBufferAttribute;
+  /**
+   * Per-thread exclusive offset within its workgroup, written by the
+   * scanLocal pass. Combined with workgroupOffsets[wgid] in the
+   * scatterCompact pass to produce the final compacted output index.
+   */
+  readonly localOffsets: StorageBufferAttribute;
+  /**
+   * Per-workgroup total visible count, written by scanLocal as
+   * scratch[WG-1] of the inclusive scan. Read by scanPartials.
+   */
+  readonly workgroupPartials: StorageBufferAttribute;
+  /**
+   * Per-workgroup exclusive prefix offset over workgroupPartials,
+   * written by scanPartials. Tells each workgroup where its first
+   * compacted output element lands in visibleMatrices/Colors/Origins.
+   */
+  readonly workgroupOffsets: StorageBufferAttribute;
   readonly visibleCount: StorageBufferAttribute;
   readonly visibleMatrices: StorageInstancedBufferAttribute;
   readonly visibleColors: StorageInstancedBufferAttribute;
@@ -123,6 +167,26 @@ export function createScatterGpuInstanceBuffers(
     new Float32Array(sampleCount),
     1
   );
+  const scanWorkgroupCount = Math.max(
+    1,
+    Math.ceil(sampleCount / SCATTER_SCAN_WORKGROUP_SIZE)
+  );
+  const frameActive = new StorageBufferAttribute(
+    new Uint32Array(Math.max(1, sampleCount)),
+    1
+  );
+  const localOffsets = new StorageBufferAttribute(
+    new Uint32Array(Math.max(1, sampleCount)),
+    1
+  );
+  const workgroupPartials = new StorageBufferAttribute(
+    new Uint32Array(scanWorkgroupCount),
+    1
+  );
+  const workgroupOffsets = new StorageBufferAttribute(
+    new Uint32Array(scanWorkgroupCount),
+    1
+  );
   const visibleCount = new StorageBufferAttribute(new Uint32Array(1), 1);
   const visibleMatrices = new StorageInstancedBufferAttribute(
     new Float32Array(sampleCount * 16),
@@ -171,6 +235,22 @@ export function createScatterGpuInstanceBuffers(
     candidateRadii as unknown as THREE.BufferAttribute
   );
   resourceCarrier.setAttribute(
+    "scatter-frame-active",
+    frameActive as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-local-offsets",
+    localOffsets as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-workgroup-partials",
+    workgroupPartials as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-workgroup-offsets",
+    workgroupOffsets as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
     "scatter-visible-count",
     visibleCount as unknown as THREE.BufferAttribute
   );
@@ -181,6 +261,7 @@ export function createScatterGpuInstanceBuffers(
 
   return {
     sampleCount,
+    scanWorkgroupCount,
     samplePositions,
     sampleNormals,
     sampleDensityWeights,
@@ -189,6 +270,10 @@ export function createScatterGpuInstanceBuffers(
     candidateMatrices,
     candidateColors,
     candidateRadii,
+    frameActive,
+    localOffsets,
+    workgroupPartials,
+    workgroupOffsets,
     visibleCount,
     visibleMatrices,
     visibleColors,

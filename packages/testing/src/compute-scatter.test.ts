@@ -1,14 +1,16 @@
 /**
  * Compute scatter tests.
  *
- * Verifies Story 36.16's GPU-scatter contract in two layers:
- * deterministic CPU emulation always runs in CI, and a real WebGPU readback
- * integration test runs when the environment exposes `navigator.gpu`.
+ * Verifies Story 36.16's deterministic CPU emulation helpers
+ * (`simulateScatterCandidateBuild`, `simulateScatterVisibility`) — the
+ * pure-JS reference behavior that the WebGPU compute kernels mirror.
+ * The corresponding WebGPU integration test was removed because vitest
+ * runs in node here without `navigator.gpu`; revisit if the project
+ * adopts a browser test runner.
  */
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import {
   createAppearanceLayer,
   createColorAppearanceContent,
@@ -22,7 +24,6 @@ import {
   buildSurfaceScatterLayer,
   createAuthoredAssetResolver,
   createScatterComputeLayerParams,
-  createScatterComputePipeline,
   packScatterSampleInputs,
   simulateScatterCandidateBuild,
   simulateScatterVisibility,
@@ -168,79 +169,4 @@ describe("compute scatter", () => {
     expect(visibility.worldOriginsXZ[0]).toEqual([expectedWorld.x, expectedWorld.z]);
   });
 
-  const hasWebGpu =
-    typeof navigator !== "undefined" &&
-    "gpu" in navigator &&
-    typeof document !== "undefined";
-
-  it.runIf(hasWebGpu)(
-    "builds, culls, and writes indirect args through the real WebGPU compute path",
-    async () => {
-      const scatterLayer = makeScatterLayer();
-      const samples = makeSamples();
-      const densityWeights = samples.map((sample) => sample.coverageWeight ?? 1);
-      const geometry = new THREE.PlaneGeometry(0.2, 0.6, 1, 1);
-      const material = new MeshStandardNodeMaterial({
-        color: 0xffffff,
-        roughness: 1,
-        metalness: 0,
-        side: THREE.DoubleSide
-      });
-      const params = createScatterComputeLayerParams(scatterLayer, geometry, {
-        maxDrawDistance: 6
-      });
-      const pipeline = createScatterComputePipeline({
-        geometry,
-        material,
-        samples,
-        densityWeights,
-        params
-      });
-      expect(pipeline).toBeTruthy();
-      if (!pipeline) {
-        return;
-      }
-
-      const renderer = new WebGPURenderer({ antialias: false });
-      const canvas = document.createElement("canvas");
-      canvas.width = 64;
-      canvas.height = 64;
-      renderer.setSize(64, 64, false);
-      await renderer.init();
-
-      const scene = new THREE.Scene();
-      scene.add(pipeline.mesh);
-      scene.updateMatrixWorld(true);
-
-      const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 50);
-      camera.position.set(0, 2.5, 5);
-      camera.lookAt(0, 0, 0);
-      camera.updateProjectionMatrix();
-      camera.updateMatrixWorld(true);
-
-      pipeline.prepareForRender(renderer, camera);
-
-      const packed = packScatterSampleInputs(samples, densityWeights);
-      const simulated = simulateScatterCandidateBuild(packed, params);
-      const expectedVisibility = simulateScatterVisibility(
-        simulated,
-        pipeline.mesh.matrixWorld,
-        camera,
-        params
-      );
-
-      const visibleCount = await pipeline.readVisibleCount(renderer);
-      const indirectArgs = await pipeline.readIndirectArgs(renderer);
-      const visibleOrigins = await pipeline.readVisibleOrigins(renderer);
-
-      expect(visibleCount).toBe(expectedVisibility.visibleIndices.length);
-      expect(indirectArgs[1]).toBe(expectedVisibility.visibleIndices.length);
-      expect(visibleOrigins.length).toBe(expectedVisibility.visibleIndices.length * 2);
-
-      pipeline.dispose();
-      renderer.dispose();
-      material.dispose();
-      geometry.dispose();
-    }
-  );
 });

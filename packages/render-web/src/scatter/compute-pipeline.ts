@@ -14,10 +14,8 @@ import {
   Fn,
   If,
   PI2,
+  Return,
   abs,
-  atomicAdd,
-  atomicLoad,
-  atomicStore,
   clamp,
   cos,
   cross,
@@ -25,6 +23,7 @@ import {
   float,
   fract,
   instanceIndex,
+  invocationLocalIndex,
   mat4,
   max,
   normalize,
@@ -34,7 +33,10 @@ import {
   uint,
   vec2,
   vec3,
-  vec4
+  vec4,
+  workgroupArray,
+  workgroupBarrier,
+  workgroupId
 } from "three/tsl";
 import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
 import type {
@@ -42,6 +44,7 @@ import type {
   ScatterGpuInstanceBuffers
 } from "./instance-buffer";
 import {
+  SCATTER_SCAN_WORKGROUP_SIZE,
   createScatterGpuInstanceBuffers,
   packScatterSampleInputs
 } from "./instance-buffer";
@@ -49,6 +52,15 @@ import type { SurfaceScatterSample } from "./index";
 
 const SCATTER_COMPUTE_WORKGROUP_SIZE = 64;
 const DEFAULT_SCATTER_MAX_DRAW_DISTANCE = 96;
+/**
+ * Per-layer candidate ceiling for the GPU-compaction path. Above this
+ * count the single-level partials scan can't cover the workgroup count
+ * (ceil(N / SCATTER_SCAN_WORKGROUP_SIZE) > SCATTER_SCAN_WORKGROUP_SIZE
+ * means we'd need a recursive partials scan, which v1 doesn't
+ * implement). The CPU fallback in scatter/index.ts takes over.
+ */
+const MAX_GPU_COMPACTION_CANDIDATES =
+  SCATTER_SCAN_WORKGROUP_SIZE * SCATTER_SCAN_WORKGROUP_SIZE;
 
 function hash01(seed: number): number {
   const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
@@ -294,6 +306,16 @@ export function createScatterComputePipeline(options: {
   if (!canUseScatterComputeAtBuildTime()) {
     return null;
   }
+  if (options.samples.length > MAX_GPU_COMPACTION_CANDIDATES) {
+    // Single-level partials scan can't cover ceil(N/WG) > WG. Recursive
+    // partials scan would let us scale further but isn't implemented in
+    // v1; the CPU fallback in scatter/index.ts handles oversize layers.
+    // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
+    console.warn(
+      `[surface-scatter] GPU compute pipeline declined for layer with ${options.samples.length} samples (above the ${MAX_GPU_COMPACTION_CANDIDATES}-candidate cap for single-level partials scan). Falling back to CPU instancing.`
+    );
+    return null;
+  }
 
   const packedInputs = packScatterSampleInputs(options.samples, options.densityWeights);
   const buffers = createScatterGpuInstanceBuffers(packedInputs);
@@ -354,29 +376,25 @@ export function createScatterComputePipeline(options: {
     "instanceOrigin",
     buffers.visibleOrigins as unknown as THREE.BufferAttribute
   );
-  // TODO(scatter-compaction): the stable-index approach below trades GPU
-  // perf (~3x more vertex shader invocations because invisible blades
-  // still emit degenerate triangles) for correctness (deterministic
-  // instance order, no BLEND-mode flicker). For perf-sensitive scenes,
-  // replace with a deterministic GPU prefix-sum compaction over
-  // `candidateActive[]`: each thread computes its output slot as the
-  // exclusive scan of its predecessors' active flags, giving stable
-  // ordering AND skipping invisible vertex work. Reuses the existing
-  // visibleCount / indirectDrawArgs buffers — they're left allocated
-  // and the resetVisibleCompute / finalizeIndirectCompute kernels are
-  // left defined for the eventual port back to indirect-draw.
-  // STABLE-INDEX INSTANCING (was: indirect draw via setIndirect):
-  // The cull pass now writes visibleMatrices/Colors/Origins at the
-  // candidate's own sampleIndex (deterministic) rather than packing
-  // visible candidates into a [0..visibleCount) range via atomicAdd
-  // (non-deterministic across frames due to parallel workgroup race).
-  // Invisible candidates get a zero-rotation/zero-translation matrix
-  // so their geometry collapses to a single point (degenerate triangles
-  // → rasterizer skips). Cost: vertex shader runs for every candidate,
-  // not just visible ones (~3x more VS invocations in typical view).
-  // Benefit: stable instance order, which is required for BLEND-mode
-  // foliage (Grass Surface 6) — alpha blending accumulates in instance
-  // order, so non-deterministic order produced TV-static flicker.
+  // DETERMINISTIC PREFIX-SUM COMPACTION ("Option B"):
+  // Each frame, the cull→scan→compact pipeline (markVisible, scanLocal,
+  // scanPartials, scatterCompact below) packs visible candidates into a
+  // contiguous [0..visibleCount) range in visibleMatrices/Colors/Origins
+  // in candidate-sampleIndex order. The order is deterministic across
+  // frames because each thread writes to `workgroupOffsets[wgid] +
+  // localOffsets[tid]`, both of which are pure functions of the visibility
+  // bitmap — no atomicAdd race. Indirect draw with `setIndirect` reads
+  // the per-frame visibleCount written by scanPartials, so the GPU draws
+  // exactly the visible instances and skips the vertex shader for
+  // invisible candidates.
+  //
+  // Why determinism matters: BLEND-mode foliage (Grass Surface 6) renders
+  // with depth-write off; alpha blending accumulates in instance order,
+  // so non-deterministic order produced TV-static flicker. The previous
+  // atomicAdd-based packing was the bug source.
+  mesh.geometry.setIndirect(buffers.indirectDrawArgs, 0);
+  // mesh.count is the upper bound; the actual draw count comes from
+  // indirectDrawArgs[1] which scanPartials writes each frame.
   mesh.count = packedInputs.sampleCount;
 
   const samplePositionsNode: any = storageAny(
@@ -421,7 +439,10 @@ export function createScatterComputePipeline(options: {
     packedInputs.sampleCount
   );
 
-  const visibleCountNode: any = storageAny(buffers.visibleCount, "uint", 1).toAtomic();
+  // Plain (non-atomic) uint storage. Option B's scanPartials kernel
+  // writes visibleCount[0] with a regular assign() from the single
+  // first-thread of the partials workgroup; no atomic ops needed.
+  const visibleCountNode: any = storageAny(buffers.visibleCount, "uint", 1);
   const visibleMatrixNode: any = storageAny(
     buffers.visibleMatrices,
     null,
@@ -438,7 +459,31 @@ export function createScatterComputePipeline(options: {
     packedInputs.sampleCount
   );
   const indirectArgsNode: any = storageAny(buffers.indirectDrawArgs, "uint", 5);
+  // Per-frame compaction buffers.
+  const frameActiveNode: any = storageAny(
+    buffers.frameActive,
+    "uint",
+    packedInputs.sampleCount
+  );
+  const localOffsetsNode: any = storageAny(
+    buffers.localOffsets,
+    "uint",
+    packedInputs.sampleCount
+  );
+  const workgroupPartialsNode: any = storageAny(
+    buffers.workgroupPartials,
+    "uint",
+    buffers.scanWorkgroupCount
+  );
+  const workgroupOffsetsNode: any = storageAny(
+    buffers.workgroupOffsets,
+    "uint",
+    buffers.scanWorkgroupCount
+  );
   /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const sampleCountUniform = uniform(uint(packedInputs.sampleCount));
+  const scanWorkgroupCountUniform = uniform(uint(buffers.scanWorkgroupCount));
 
   // Per-instance position and color come from `mesh.instanceMatrix` and
   // `mesh.instanceColor` (set above) via Three's automatic InstancedMesh
@@ -538,8 +583,26 @@ export function createScatterComputePipeline(options: {
     .compute(packedInputs.sampleCount, [SCATTER_COMPUTE_WORKGROUP_SIZE])
     .setName("Scatter Build Candidates");
 
-  const resetVisibleCompute = Fn(() => {
-    atomicStore(visibleCountNode.element(uint(0)), uint(0));
+  // ============================================================
+  // Per-frame compaction pipeline (Option B):
+  //   markVisible  -> writes 0/1 visibility flag per candidate
+  //   scanLocal    -> per-workgroup inclusive scan of flags
+  //                   writes localOffsets[tid] (exclusive within wg)
+  //                   writes workgroupPartials[wgid] (wg total)
+  //   scanPartials -> single workgroup scans the partials array
+  //                   writes workgroupOffsets[wgid] (exclusive across wgs)
+  //                   writes visibleCount[0] AND indirectDrawArgs[1]
+  //                   (so indirect-draw kicks the right instanceCount)
+  //   scatterCompact -> visible candidates write their matrix/color/
+  //                   origin to visible*[workgroupOffsets[wgid] +
+  //                   localOffsets[tid]]. Output order is deterministic
+  //                   (sampleIndex order), no atomicAdd race.
+  // ============================================================
+
+  const initIndirectArgsCompute = Fn(() => {
+    // One-time init for the constant fields of the indirect draw args.
+    // (instanceCount, indirectArgs[1], is overwritten by scanPartials
+    // each frame.)
     indirectArgsNode.element(uint(0)).assign(indexCountUniform);
     indirectArgsNode.element(uint(1)).assign(uint(0));
     indirectArgsNode.element(uint(2)).assign(firstIndexUniform);
@@ -547,12 +610,19 @@ export function createScatterComputePipeline(options: {
     indirectArgsNode.element(uint(4)).assign(uint(0));
   })()
     .compute(1)
-    .setName("Scatter Reset Visible");
+    .setName("Scatter Init Indirect Args");
 
-  const cullVisibleCompute = Fn(() => {
+  const markVisibleCompute = Fn(() => {
     const sampleIndex = instanceIndex.toVar();
-    const active = candidateActiveNode.element(sampleIndex).toVar();
+    // Bounds check: dispatch rounds up to a workgroup boundary, so
+    // some threads in the last workgroup may have sampleIndex >=
+    // sampleCount. Skip them — and their slot in frameActive must
+    // not be touched (it's not part of the per-layer state).
+    If(sampleIndex.greaterThanEqual(sampleCountUniform), () => {
+      Return();
+    });
 
+    const active = candidateActiveNode.element(sampleIndex).toVar();
     const localPosition = candidatePositionNode.element(sampleIndex).toVar();
     const localPosition4 = vec4(localPosition, 1).toVar();
     const worldPosition4 = ownerMatrixWorldUniform.mul(localPosition4).toVar();
@@ -574,52 +644,157 @@ export function createScatterComputePipeline(options: {
       .and(insideFrustum)
       .and(insideDistance);
 
-    // Stable-index write: each candidate writes to its OWN sampleIndex
-    // slot every frame, regardless of visibility. This makes instance
-    // ordering deterministic across frames, which is required for
-    // BLEND-mode foliage (depth-write off → alpha accumulates in
-    // instance order; non-deterministic order = visible flicker).
-    // Invisible candidates get a degenerate transform (all-zero
-    // rotation/scale + zero translation, w=1) so every blade vertex
-    // collapses to (0,0,0) and the rasterizer drops the zero-area
-    // triangles. Cost: vertex shader runs for invisible blades.
-    If(visible, () => {
-      visibleMatrixNode
-        .element(sampleIndex)
-        .assign(candidateMatrixNode.element(sampleIndex));
-      visibleColorNode
-        .element(sampleIndex)
-        .assign(candidateColorNode.element(sampleIndex));
-      visibleOriginNode
-        .element(sampleIndex)
-        .assign(vec2(worldPosition.x, worldPosition.z));
-    }).Else(() => {
-      visibleMatrixNode
-        .element(sampleIndex)
-        .assign(
-          mat4(
-            vec4(0, 0, 0, 0),
-            vec4(0, 0, 0, 0),
-            vec4(0, 0, 0, 0),
-            vec4(0, 0, 0, 1)
-          )
-        );
-      visibleColorNode.element(sampleIndex).assign(vec3(0, 0, 0));
-      visibleOriginNode.element(sampleIndex).assign(vec2(0, 0));
+    frameActiveNode
+      .element(sampleIndex)
+      .assign(visible.select(uint(1), uint(0)));
+  })()
+    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+    .setName("Scatter Mark Visible");
+
+  // Hillis-Steele inclusive scan inside a workgroup. The validated
+  // pattern from the prefix-sum spike: read scratch[tid] AND
+  // scratch[tid - stride] into per-thread vars, barrier, then write
+  // back to scratch[tid]. Writes happen ONLY after every reader has
+  // captured the prior value — eliminates the read-write race that a
+  // single-buffer inclusive scan would otherwise have.
+  /* eslint-disable @typescript-eslint/no-explicit-any -- TSL
+   * WorkgroupInfoNode element access types collapse on chained ops. */
+  function emitWorkgroupInclusiveScan(scratch: any, lid: any): void {
+    for (let stride = 1; stride < SCATTER_SCAN_WORKGROUP_SIZE; stride *= 2) {
+      const strideUint = uint(stride);
+      const me = scratch.element(lid).toVar();
+      const newValue = me.toVar();
+      If(lid.greaterThanEqual(strideUint), () => {
+        const left = scratch.element(lid.sub(strideUint));
+        newValue.assign(me.add(left));
+      });
+      workgroupBarrier();
+      scratch.element(lid).assign(newValue);
+      workgroupBarrier();
+    }
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const scanLocalCompute = Fn(() => {
+    const tid = instanceIndex.toVar();
+    const lid = invocationLocalIndex.toVar();
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+     * TSL ComputeBuiltinNode doesn't expose .x in its types but the
+     * swizzle accessor exists at runtime (chainable nodes). */
+    const wgid = (workgroupId as any).x.toVar();
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    // Load this thread's flag (0 if out-of-range — keeps the scan a
+    // no-op for trailing threads in the last partial workgroup).
+    const flag = uint(0).toVar();
+    If(tid.lessThan(sampleCountUniform), () => {
+      flag.assign(frameActiveNode.element(tid));
+    });
+    scratch.element(lid).assign(flag);
+    workgroupBarrier();
+
+    emitWorkgroupInclusiveScan(scratch, lid);
+
+    // scratch[lid] now holds the inclusive scan up to and including
+    // this thread. Subtract own flag for the EXCLUSIVE offset (the
+    // count of preceding visible candidates within this workgroup).
+    If(tid.lessThan(sampleCountUniform), () => {
+      const inclusive = scratch.element(lid);
+      localOffsetsNode.element(tid).assign(inclusive.sub(flag));
+    });
+
+    // Last thread of the workgroup writes the workgroup total.
+    // For the last (partial) workgroup, scratch[WG-1] still equals
+    // the cumulative flag count because all threads beyond
+    // sampleCount contributed 0.
+    If(lid.equal(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1)), () => {
+      workgroupPartialsNode.element(wgid).assign(scratch.element(lid));
     });
   })()
-    .compute(packedInputs.sampleCount, [SCATTER_COMPUTE_WORKGROUP_SIZE])
-    .setName("Scatter Cull Visible");
+    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+    .setName("Scatter Scan Local");
 
-  const finalizeIndirectCompute = Fn(() => {
-    indirectArgsNode
-      .element(uint(1))
-      .assign(atomicLoad(visibleCountNode.element(uint(0))));
+  const scanPartialsCompute = Fn(() => {
+    const lid = invocationLocalIndex.toVar();
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    // Load each workgroup's partial total (0 if beyond the active
+    // workgroup count — keeps the scan correct for any sampleCount).
+    const partial = uint(0).toVar();
+    If(lid.lessThan(scanWorkgroupCountUniform), () => {
+      partial.assign(workgroupPartialsNode.element(lid));
+    });
+    scratch.element(lid).assign(partial);
+    workgroupBarrier();
+
+    emitWorkgroupInclusiveScan(scratch, lid);
+
+    // scratch[lid] is now the inclusive scan over partials. Write
+    // exclusive scan to workgroupOffsets — that's what scatterCompact
+    // adds to its localOffset to compute the output index.
+    If(lid.lessThan(scanWorkgroupCountUniform), () => {
+      const inclusive = scratch.element(lid);
+      workgroupOffsetsNode.element(lid).assign(inclusive.sub(partial));
+    });
+
+    // First thread writes the grand total to BOTH visibleCount and
+    // indirectDrawArgs[1] (the instanceCount the GPU reads on draw).
+    // scratch[WG-1] holds the cumulative total because trailing
+    // partial-array entries contributed 0 to the scan.
+    If(lid.equal(uint(0)), () => {
+      const total = scratch.element(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1));
+      visibleCountNode.element(uint(0)).assign(total);
+      indirectArgsNode.element(uint(1)).assign(total);
+    });
   })()
-    .compute(1)
-    .setName("Scatter Finalize Indirect");
+    .compute(SCATTER_SCAN_WORKGROUP_SIZE, [SCATTER_SCAN_WORKGROUP_SIZE])
+    .setName("Scatter Scan Partials");
+
+  const scatterCompactCompute = Fn(() => {
+    const tid = instanceIndex.toVar();
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+     * TSL ComputeBuiltinNode doesn't expose .x in its types but the
+     * swizzle accessor exists at runtime (chainable nodes). */
+    const wgid = (workgroupId as any).x.toVar();
+
+    If(tid.greaterThanEqual(sampleCountUniform), () => {
+      Return();
+    });
+    const flag = frameActiveNode.element(tid).toVar();
+    If(flag.equal(uint(0)), () => {
+      Return();
+    });
+
+    const outputIdx = workgroupOffsetsNode
+      .element(wgid)
+      .add(localOffsetsNode.element(tid))
+      .toVar();
+
+    visibleMatrixNode
+      .element(outputIdx)
+      .assign(candidateMatrixNode.element(tid));
+    visibleColorNode
+      .element(outputIdx)
+      .assign(candidateColorNode.element(tid));
+
+    // visibleOrigins is per-instance world XZ for wind-sway phasing.
+    // Recompute from candidatePosition + ownerMatrix instead of
+    // adding another storage binding for a precomputed worldXZ.
+    const localPosition = candidatePositionNode.element(tid).toVar();
+    const worldPosition4 = ownerMatrixWorldUniform.mul(vec4(localPosition, 1));
+    visibleOriginNode
+      .element(outputIdx)
+      .assign(vec2(worldPosition4.x, worldPosition4.z));
+  })()
+    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+    .setName("Scatter Compact");
 
   let candidatesDirty = true;
+  let indirectArgsInitialized = false;
   const lastPreparedFrameByCamera = new Map<string, number>();
 
   function updateCullingUniforms(camera: THREE.Camera): void {
@@ -646,19 +821,27 @@ export function createScatterComputePipeline(options: {
         return;
       }
 
+      if (!indirectArgsInitialized) {
+        // Constant-field init: indexCount, firstIndex, baseVertex,
+        // firstInstance never change. instanceCount is overwritten by
+        // scanPartials each frame.
+        renderer.compute(initIndirectArgsCompute);
+        indirectArgsInitialized = true;
+      }
+
       if (candidatesDirty) {
         renderer.compute(buildCandidatesCompute);
         candidatesDirty = false;
       }
 
       updateCullingUniforms(camera);
-      // Stable-index instancing: cull writes to per-sample slots; no
-      // compaction count to reset, no indirect-draw arg to finalize.
-      // (resetVisibleCompute / finalizeIndirectCompute kept defined
-      // above for now in case we resurrect compaction with a proper
-      // prefix-sum scan; their atomicAdd-based variant produced
-      // non-deterministic visible-slot order → BLEND-mode flicker.)
-      renderer.compute(cullVisibleCompute);
+      // Sequenced compaction. WebGPU spec guarantees in-order execution
+      // on the device queue, so dependent reads (each pass reads what
+      // the previous pass wrote) are safe across compute() calls.
+      renderer.compute(markVisibleCompute);
+      renderer.compute(scanLocalCompute);
+      renderer.compute(scanPartialsCompute);
+      renderer.compute(scatterCompactCompute);
       lastPreparedFrameByCamera.set(cameraKey, frameId);
     },
     async readVisibleCount(renderer: WebGPURenderer): Promise<number> {
@@ -676,9 +859,11 @@ export function createScatterComputePipeline(options: {
     },
     dispose() {
       buildCandidatesCompute.dispose();
-      resetVisibleCompute.dispose();
-      cullVisibleCompute.dispose();
-      finalizeIndirectCompute.dispose();
+      initIndirectArgsCompute.dispose();
+      markVisibleCompute.dispose();
+      scanLocalCompute.dispose();
+      scanPartialsCompute.dispose();
+      scatterCompactCompute.dispose();
       buffers.dispose();
       // Don't manually deleteAttribute("instanceOrigin") here — by the
       // time this runs, the caller (scatter/index.ts) has already

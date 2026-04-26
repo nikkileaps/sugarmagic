@@ -178,16 +178,19 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       frameTimings.drawCalls += callsDelta;
       frameTimings.triangles += info.render.triangles ?? 0;
 
-      // Drain timestamp queue so info.render.timestamp / .compute.timestamp
-      // get populated. Fire-and-forget; we guard with a flight flag so we
-      // don't pile up resolutions if the GPU is behind.
+      // Drain BOTH timestamp queues — render and compute have separate
+      // pools in three's WebGPU backend. resolveTimestampsAsync defaults
+      // to 'render' only; compute scatter dispatches multiple compute
+      // passes per frame and saturates the compute pool quickly if not
+      // drained too. Fire-and-forget; flight flag avoids stacking.
       if (rendererAny.resolveTimestampsAsync && !timestampResolveInFlight) {
         timestampResolveInFlight = true;
-        rendererAny.resolveTimestampsAsync()
-          .catch(() => undefined)
-          .finally(() => {
-            timestampResolveInFlight = false;
-          });
+        Promise.all([
+          rendererAny.resolveTimestampsAsync("render").catch(() => undefined),
+          rendererAny.resolveTimestampsAsync("compute").catch(() => undefined)
+        ]).finally(() => {
+          timestampResolveInFlight = false;
+        });
       }
     }
     frameTimings.samples += 1;

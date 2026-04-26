@@ -2453,13 +2453,24 @@ into a WebGPU compute pass. A `ScatterComputePipeline` in
    instance. Samples mask → density → rejects below threshold.
    Computes jittered position / scale / rotation / color seed.
    Writes into a **candidate instance buffer**.
-3. **Visibility cull compute pass**: per-instance frustum test +
-   distance test. Appends surviving indices into a
-   `visibleInstancesBuffer` with an atomic counter. Writes
-   instance count into an `indirectDrawArgs` buffer.
-4. **Indirect draw**: `mesh.renderAsync` via WebGPU indirect-draw
-   path using `indirectDrawArgs`. The GPU decides how many
-   instances to draw per frame without a CPU round-trip.
+3. **Visibility cull + compaction (4 dispatches per frame)**:
+   - `markVisible` — per-candidate frustum + distance test, writes a
+     0/1 flag into `frameActive[i]`.
+   - `scanLocal` — per-workgroup inclusive prefix-sum over
+     `frameActive[]` in workgroup-shared memory. Writes each thread's
+     exclusive offset within its workgroup to `localOffsets[i]` and
+     the workgroup total to `workgroupPartials[wgid]`.
+   - `scanPartials` — single-workgroup inclusive scan over the
+     partials array. Writes `workgroupOffsets[wgid]` (exclusive scan)
+     plus the grand total to `visibleCount[0]` AND directly into
+     `indirectDrawArgs[1]` (the instanceCount the GPU draws).
+   - `scatterCompact` — visible candidates write their matrix / color
+     / origin to `visibleMatrices/Colors/Origins[workgroupOffsets[wgid]
+     + localOffsets[tid]]`. Output order is **deterministic** (sample
+     index order) — no atomicAdd race.
+4. **Indirect draw**: `setIndirect(indirectDrawArgs)` on the
+   InstancedMesh's geometry; WebGPU reads the instanceCount written
+   by `scanPartials` each frame, no CPU round-trip.
 
 CPU becomes the orchestrator (one dispatch per scatter layer per
 frame for the visibility pass; the scatter pass itself only runs
@@ -2477,7 +2488,33 @@ in during 36.16 implementation).** The scatter rendered mesh is
 `mesh.instanceColor` are assigned to the
 `StorageInstancedBufferAttribute` instances from the visible
 buffer set; `setIndirect(indirectDrawArgs)` drives the actual
-instance count each frame from the cull pass output.
+instance count each frame from the `scanPartials` output.
+
+**Compaction must be deterministic — no atomicAdd packing.** A
+naive cull pass that uses `atomicAdd(visibleCount, 1)` to assign
+each visible candidate an output slot produces a non-deterministic
+slot order across frames (the order parallel workgroups complete
+the atomic op is implementation-defined). For BLEND-mode foliage —
+e.g. Grass Surface 6 (`blendMode: "blend"` → `transparent: true`,
+`depthWrite: false`) — alpha blending accumulates in instance
+order, so non-deterministic order produces severe TV-static
+flicker. The prefix-sum compaction above gives a stable
+sample-index ordering: visible[k] always corresponds to the same
+candidate sampleIndex j across frames, so the blend output is
+stable. MASK-mode foliage tolerates non-determinism better
+(depthWrite + alphaTest hides most order effects) but the surface
+preview viewport — where each blade is only a few pixels wide —
+makes the variance visible even in MASK mode. Keep the compaction
+deterministic for both modes.
+
+**Per-layer ceiling: 65,536 candidates.** The single-level
+partials scan covers up to `SCATTER_SCAN_WORKGROUP_SIZE *
+SCATTER_SCAN_WORKGROUP_SIZE = 65,536` candidates (workgroup size
+256). Above this cap, `createScatterComputePipeline` returns
+`null` and the CPU fallback in `scatter/index.ts` takes over,
+with a console warning. Lifting the cap requires a recursive
+partials scan or subgroup intrinsics on Chrome 134+; deferred to
+a future story (the same one that revisits the LOD ceiling).
 
 `InstancedMesh` is required because of how Three's WebGPU
 backend handles mat4 vertex attributes: WGSL doesn't allow
@@ -2552,26 +2589,37 @@ work auditable on its own.
 
 **Files touched:**
 - `packages/render-web/src/scatter/compute-pipeline.ts` (new) —
-  full pipeline scaffold; TSL compute shader for scatter + cull;
-  rendered mesh is `THREE.Mesh` with `setIndirect`-driven
-  instancing; the material's `positionNode` is wrapped to apply
-  the per-instance matrix from `visibleMatrices` storage,
-  `colorNode` is wrapped to multiply by `visibleColors` storage.
+  full pipeline scaffold; TSL compute kernels for build candidates
+  + markVisible + scanLocal + scanPartials + scatterCompact;
+  rendered mesh is `THREE.InstancedMesh` with `setIndirect`-driven
+  instancing reading from `indirectDrawArgs` (instanceCount written
+  per frame by `scanPartials`). `mesh.instanceMatrix` and
+  `mesh.instanceColor` are assigned the visible-buffer storage
+  attributes directly (one GPU buffer, two binding views — compute
+  writes via storage, render reads via instance attribute).
   `visibleOrigins` storage is bound to the geometry as
   `instanceOrigin` via `setAttribute` for the wind-sway
-  materializer. There is also a known cache-pollution caveat:
-  the wrapper mutates the `ShaderRuntime`-cached material in
-  place; safe with one GPU scatter layer per shader binding,
-  hazard with two layers sharing a material identity. Tracked
-  by an in-code `TODO(scatter-material-cache)` and a follow-up
-  story (clone or skip-cache for GPU-scatter materials).
+  materializer.
 - `packages/render-web/src/scatter/instance-buffer.ts` (new) —
-  GPU buffer lifecycle (alloc, resize, update).
+  GPU buffer lifecycle (alloc, resize, update). Owns the per-frame
+  compaction-state buffers (`frameActive`, `localOffsets`,
+  `workgroupPartials`, `workgroupOffsets`) in addition to the
+  candidate / visible / indirect-args buffers.
 - `packages/render-web/src/landscape/scatter.ts` — rewire to use
   the compute pipeline; the Stage-1 CPU path stays as a fallback
   for environments without WebGPU compute shaders (document as a
   graceful degradation path, not a primary route).
 - `packages/render-web/src/asset-scatter.ts` — same rewire.
+- `packages/render-web/src/view/RenderView.ts` — `setCamera`
+  identity guard. Found during 36.16 perf debugging: the runtime
+  host calls `renderView.setCamera(camera)` every frame with the
+  same camera object (its transform updates, not the reference);
+  the previous implementation unconditionally bumped the
+  environment-state version, forcing `applyPostProcessStack` +
+  `markSceneMaterialsDirty` to re-run every frame. That ate ~19ms
+  of CPU per frame and capped FPS at ~51 even on an empty scene.
+  The guard skips the dirty-bump when the camera reference hasn't
+  changed.
 - `packages/testing/src/compute-scatter.test.ts` (new) — run a
   known mask + density through the compute pass; read back the
   instance buffer; assert instance count matches CPU-path count
@@ -2580,6 +2628,24 @@ work auditable on its own.
   vertex shader receives correct per-instance world XZ in the
   compute path (regression guard for the `instanceOrigin`
   carry-forward).
+
+**Implementation arc (retrospective).** The first cut of 36.16
+shipped with `atomicAdd`-based packing into a contiguous visible
+range and indirect-draw. It rendered correctly under most camera
+angles but produced severe per-frame flicker on Grass Surface 6
+(BLEND mode) and a subtler shimmer on MASK-mode foliage in the
+small surface preview viewport. Investigation traced the flicker
+to the non-deterministic ordering of `atomicAdd` returns under
+parallel workgroup execution: visible[k] mapped to a different
+candidate sampleIndex each frame, so alpha-blended pixels mixed
+in different orders frame-to-frame. A spike validated that
+`workgroupArray` + `workgroupBarrier` + a Hillis-Steele inclusive
+scan all work correctly in TSL on three.js v0.183.2 (the
+primitives are exported but had not been exercised in this
+codebase). The fix replaced the atomic compaction with the
+two-level deterministic prefix-sum compaction documented above.
+Same indirect-draw mechanism, deterministic visible-slot order,
+no flicker.
 
 ### 36.16b — MSAA + `alphaToCoverage` for alpha-tested foliage
 
@@ -2591,13 +2657,29 @@ blade vertices — a known limitation documented in the existing
 TODO at `packages/render-web/src/ShaderRuntime.ts`
 `applyNodeSetToMaterial`.
 
-**Cause being fixed.** Today the foliage mask blend mode sets
+**Cause being fixed.** The foliage mask blend mode sets
 `alphaTest = 0.5` and `depthWrite = true`. Every fragment is a
 binary keep / discard at the alpha boundary. With wind shifting
 blade vertices by tiny amounts each frame, individual pixels at
-the alpha edge flip on/off → scattered pixel flashes. Confirmed
-by setting wind to Still Air on all scatter layers — flashes
-vanish entirely.
+the alpha edge can flip on/off → scattered pixel flashes.
+
+**Validation gotcha (retrospective from 36.16).** An earlier draft
+of this story claimed "Confirmed by setting wind to Still Air on
+all scatter layers — flashes vanish entirely." That observation
+turned out to conflate two distinct flicker sources: (1) the
+sub-pixel cutout shimmer this story addresses, AND (2) the
+non-deterministic compute scatter instance order that 36.16 had to
+solve before shipping. The Still-Air test eliminated wind-driven
+vertex motion, which masked BOTH. After 36.16's deterministic
+compaction landed, the surface preview no longer flickered with
+Still Air — but BLEND-mode foliage (Grass Surface 6) had been
+flickering for an entirely different reason. **Before implementing
+36.16b, re-validate the residual MASK-mode shimmer with the current
+deterministic-compaction pipeline:** turn on wind, observe whether
+shimmer persists at the alpha cutout edges. If yes, MSAA +
+`alphaToCoverage` is still warranted (the spec direction below
+holds). If shimmer is now negligible, downgrade the urgency or
+close as resolved-by-side-effect.
 
 **Mechanism of the fix.** With MSAA enabled, the rasterizer
 generates multiple coverage samples per pixel.
@@ -2618,8 +2700,9 @@ edges become anti-aliased automatically.
   ~0.01 (coverage replaces the hard cutoff). Remove the TODO
   block.
 - `packages/render-web/src/scatter/compute-pipeline.ts` —
-  ensure the indirect-draw path is MSAA-compatible (target
-  texture format, multisample state).
+  ensure the indirect-draw + InstancedMesh path is MSAA-compatible
+  (target texture format, multisample state). The compaction
+  pipeline itself doesn't change.
 - `packages/testing/src/foliage-shimmer.test.ts` (new) — render
   a static grass field with wind motion across N frames; per-pixel
   diff between consecutive frames must stay under a tight
@@ -2663,7 +2746,14 @@ sensible defaults.
   `flower-type.ts` + `rock-type.ts` — add `lodMeshes` + distance
   thresholds.
 - `packages/render-web/src/scatter/compute-pipeline.ts` — extend
-  the cull pass with density-thin + mesh-band selection.
+  the **markVisible** kernel with density-thin (additional
+  hash-based rejection at distance bands) + mesh-band selection.
+  The downstream scan + compact passes are unchanged: a
+  density-thinned candidate just clears its `frameActive[i]` flag,
+  same as a frustum-culled one. Mesh swap likely needs one
+  InstancedMesh per LOD bin (each with its own visible buffer
+  range), routed by the markVisible kernel writing into per-bin
+  flag arrays.
 - `packages/render-web/src/scatter/lod.ts` (new) — LOD math
   (hash-based deterministic rejection; mesh-band selection per
   instance).
@@ -2867,6 +2957,31 @@ changes — only camera + entity motion):
   around rocks). ~500K instances. Target: 60fps on reference
   hardware with displacement sources active.
 
+**Realistic path to the dense / full-scene targets (informed by
+36.16 measurements).** The compaction pipeline shipped in 36.16
+is per-layer and capped at 65,536 candidates per layer
+(`MAX_GPU_COMPACTION_CANDIDATES`). Reaching 300K–500K total
+instances requires:
+- Multiple scatter layers (each within its own 65K cap), AND
+- 36.17's LOD doing real work — distance-band density thinning so
+  most far-camera blades are eliminated by `markVisible` rather
+  than rendered as full-detail geometry, AND
+- Likely a `lodMeshes.billboard` or imposter-card swap beyond
+  ~50m so far blades draw 2 triangles instead of ~50–80.
+
+A bare grass field with all blades visible (the camera looking
+straight at the meadow) measured ~10ms GPU at ~30K instances on
+the M-series MacBook reference hardware after 36.16 shipped. That
+linearly extrapolates poorly: at 300K instances every-blade-visible
+would burst the budget. The expected steady-state operating point
+with 36.17 LOD is "most blades not at full detail" — measurement
+will confirm. If 36.19 shows the targets aren't reachable with
+LOD alone, escalations are: (a) recursive partials scan to lift
+the per-layer cap, (b) subgroup intrinsics on Chrome 134+ for
+faster scans, (c) imposter rendering beyond ~30m. All deferrable
+to a Stage-4 perf workstream if 36.19 finds the current
+combination "good enough" for shipping target scenes.
+
 Benchmarks run in CI and record frame-time + GPU-time telemetry.
 Regressions fail the build. Results inform whether further perf
 work is needed before declaring the epic done.
@@ -2997,11 +3112,14 @@ pause is cleared and the next stage starts.
   reference hardware** (defined as a mid-range 2025 M-series
   MacBook + Chrome stable). Verified by the benchmark suite in
   Story 36.19. Regressions fail CI.
-- **Indirect-draw pipeline replaces CPU scatter by default.** CPU
-  path remains as a documented fallback for WebGPU-compute-missing
-  environments. A test asserts the compute pipeline produces
-  instance counts within tolerance of the CPU path given the same
-  inputs.
+- **Indirect-draw pipeline replaces CPU scatter by default.** GPU
+  compute build + deterministic prefix-sum compaction + indirect
+  draw is the default path for layers with up to
+  `MAX_GPU_COMPACTION_CANDIDATES` (65,536) candidates. CPU path
+  remains as a documented fallback for WebGPU-compute-missing
+  environments AND for layers that exceed the per-layer cap. A
+  test asserts the compute pipeline produces instance counts
+  within tolerance of the CPU path given the same inputs.
 - **Player displacement is visibly convincing, through the
   canonical entity path.** Walking through a grass field in
   Preview (gameplay simulation active) bends blades away from
