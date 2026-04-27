@@ -60,6 +60,12 @@ export interface AppearanceLayer extends LayerCommon {
 export interface ScatterLayer extends LayerCommon {
   kind: "scatter";
   content: ScatterContent;
+  /**
+   * Optional executable surface shader for this scatter layer's rendered
+   * instances. Kept separate from MaterialDefinition so grass/foliage looks
+   * can use shader graphs without turning materials back into shader wrappers.
+   */
+  shaderDefinitionId: string | null;
   materialDefinitionId: string | null;
   /**
    * Optional wind / deform binding for this specific scatter layer. When
@@ -153,6 +159,7 @@ export function createAppearanceLayer(
 export function createScatterLayer(
   content: ScatterContent,
   overrides: LayerFactoryOverrides & {
+    shaderDefinitionId?: string | null;
     materialDefinitionId?: string | null;
     deform?: ShaderOrMaterial | null;
   } = {}
@@ -163,6 +170,7 @@ export function createScatterLayer(
     kind: "scatter",
     displayName: overrides.displayName ?? scatterLayerName(content),
     content,
+    shaderDefinitionId: overrides.shaderDefinitionId ?? null,
     materialDefinitionId: overrides.materialDefinitionId ?? null,
     deform: overrides.deform ?? null
   };

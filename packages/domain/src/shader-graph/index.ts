@@ -4112,6 +4112,65 @@ export function createDefaultStandardPbrSeparateShaderGraph(
   };
 }
 
+export function createBuiltInMaterialPbrShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:material-pbr`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Material PBR",
+    targetKind: "mesh-surface",
+    revision: 1,
+    nodes: [
+      createParameterNode("color", "color", { x: 48, y: 96 }),
+      createParameterNode("roughness", "roughness", { x: 48, y: 192 }),
+      createParameterNode("metallic", "metallic", { x: 48, y: 288 }),
+      {
+        nodeId: "output",
+        nodeType: "output.surface",
+        position: { x: 392, y: 176 },
+        settings: {}
+      }
+    ],
+    edges: [
+      createShaderEdge("edge-color-output", "color", "value", "output", "color"),
+      createShaderEdge("edge-roughness-output", "roughness", "value", "output", "roughness"),
+      createShaderEdge("edge-metallic-output", "metallic", "value", "output", "metalness")
+    ],
+    parameters: [
+      {
+        parameterId: "color",
+        displayName: "Base Color",
+        dataType: "color",
+        defaultValue: [0.5, 0.5, 0.5]
+      },
+      {
+        parameterId: "roughness",
+        displayName: "Roughness",
+        dataType: "float",
+        defaultValue: 0.7
+      },
+      {
+        parameterId: "metallic",
+        displayName: "Metallic",
+        dataType: "float",
+        defaultValue: 0
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "material-pbr"
+    }
+  };
+}
+
 function createFloatConstantNode(
   nodeId: string,
   value: number,

@@ -83,6 +83,7 @@ export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
   contentKind: ScatterContent["kind"];
   definitionId: string;
   definition: GrassTypeDefinition | FlowerTypeDefinition | RockTypeDefinition;
+  shaderDefinitionId: string | null;
   materialDefinitionId: string | null;
   appearanceBinding: EffectiveShaderBinding | null;
   density: number;
@@ -545,9 +546,25 @@ function resolveScatterWind(
 }
 
 function resolveScatterAppearance(
+  shaderDefinitionId: string | null,
   materialDefinitionId: string | null,
   contentLibrary: ContentLibrarySnapshot
 ): ResolveAppearanceLayerResult | null {
+  const migratedShaderDefinitionId =
+    shaderDefinitionId ??
+    migrateLegacyScatterMaterialToShader(materialDefinitionId, contentLibrary);
+  if (migratedShaderDefinitionId) {
+    return resolveAppearanceLayer(
+      {
+        kind: "shader",
+        shaderDefinitionId: migratedShaderDefinitionId,
+        parameterValues: {},
+        textureBindings: {}
+      },
+      contentLibrary,
+      "mesh-surface"
+    );
+  }
   if (!materialDefinitionId) {
     return null;
   }
@@ -556,6 +573,19 @@ function resolveScatterAppearance(
     contentLibrary,
     "mesh-surface"
   );
+}
+
+function migrateLegacyScatterMaterialToShader(
+  materialDefinitionId: string | null,
+  contentLibrary: ContentLibrarySnapshot
+): string | null {
+  if (!materialDefinitionId) {
+    return null;
+  }
+  const shaderDefinitionId = materialDefinitionId.replace(":material:", ":shader:");
+  return getShaderDefinition(contentLibrary, shaderDefinitionId)
+    ? shaderDefinitionId
+    : null;
 }
 
 /**
@@ -581,6 +611,90 @@ function hexToRgbTuple(color: number): [number, number, number] {
     ((color >> 8) & 0xff) / 255,
     (color & 0xff) / 255
   ];
+}
+
+function materialScalarBindingValues(
+  materialDefinition: NonNullable<ReturnType<typeof getMaterialDefinition>>
+): Record<string, unknown> {
+  const pbr = materialDefinition.pbr;
+  return {
+    color: hexToRgbTuple(pbr.baseColor),
+    roughness: pbr.roughness,
+    metallic: pbr.metallic
+  };
+}
+
+function materialTextureBindingValues(
+  materialDefinition: NonNullable<ReturnType<typeof getMaterialDefinition>>
+): {
+  shaderKey: string;
+  parameterValues: Record<string, unknown>;
+  textureBindings: Record<string, string>;
+} {
+  const pbr = materialDefinition.pbr;
+  const tiling = pbr.tiling;
+  if (pbr.baseColorMap && pbr.normalMap && pbr.ormMap) {
+    return {
+      shaderKey: "standard-pbr",
+      parameterValues: {
+        tiling,
+        roughness_scale: pbr.roughness,
+        metallic_scale: pbr.metallic
+      },
+      textureBindings: {
+        basecolor_texture: pbr.baseColorMap,
+        normal_texture: pbr.normalMap,
+        orm_texture: pbr.ormMap
+      }
+    };
+  }
+  if (
+    pbr.baseColorMap &&
+    pbr.normalMap &&
+    pbr.roughnessMap &&
+    pbr.metallicMap &&
+    pbr.ambientOcclusionMap
+  ) {
+    return {
+      shaderKey: "standard-pbr-separate",
+      parameterValues: {
+        tiling,
+        roughness_scale: pbr.roughness,
+        metallic_scale: pbr.metallic
+      },
+      textureBindings: {
+        basecolor_texture: pbr.baseColorMap,
+        normal_texture: pbr.normalMap,
+        roughness_texture: pbr.roughnessMap,
+        metallic_texture: pbr.metallicMap,
+        ao_texture: pbr.ambientOcclusionMap
+      }
+    };
+  }
+  // Partial-map fallback: material has a baseColorMap but not the
+  // full standard-pbr / standard-pbr-separate map set. Route to
+  // flat-texture so the basecolor texture (including its alpha,
+  // load-bearing for foliage cutout) actually reaches the renderer.
+  // Without this case, foliage import materials (which only set
+  // baseColorMap) fall through to material-pbr (scalar-only,
+  // textureBindings: {}) and the leaf texture is silently dropped
+  // from the rendered model.
+  if (pbr.baseColorMap) {
+    return {
+      shaderKey: "flat-texture",
+      parameterValues: {
+        tiling
+      },
+      textureBindings: {
+        texture: pbr.baseColorMap
+      }
+    };
+  }
+  return {
+    shaderKey: "material-pbr",
+    parameterValues: materialScalarBindingValues(materialDefinition),
+    textureBindings: {}
+  };
 }
 
 /**
@@ -742,6 +856,7 @@ export function resolveSurfaceBinding(
       );
     }
     const resolvedAppearance = resolveScatterAppearance(
+      effectiveLayer.shaderDefinitionId ?? null,
       effectiveLayer.materialDefinitionId,
       contentLibrary
     );
@@ -769,6 +884,7 @@ export function resolveSurfaceBinding(
       contentKind: effectiveLayer.content.kind,
       definitionId: definition.definitionId,
       definition,
+      shaderDefinitionId: scatterAppearanceBinding?.shaderDefinitionId ?? null,
       materialDefinitionId: effectiveLayer.materialDefinitionId,
       appearanceBinding: scatterAppearanceBinding,
       density: Math.max(
@@ -821,17 +937,45 @@ function resolveMaterialSurfaceBinding(
     console.error(`[ShaderBindings] ${diagnostic.message}`);
     return null;
   }
+  if (slot !== "surface") {
+    const diagnostic: ShaderBindingResolutionDiagnostic = {
+      severity: "error",
+      slot,
+      shaderDefinitionId: null,
+      message: `Material "${materialDefinitionId}" is a PBR surface material and cannot be bound to the "${slot}" shader slot.`
+    };
+    diagnostics.push(diagnostic);
+    console.error(`[ShaderBindings] ${diagnostic.message}`);
+    return null;
+  }
+
+  const materialBinding = materialTextureBindingValues(materialDefinition);
+  const shaderDefinitionId = builtInShaderIdForKey(
+    contentLibrary,
+    materialBinding.shaderKey
+  );
+  if (!shaderDefinitionId) {
+    const diagnostic: ShaderBindingResolutionDiagnostic = {
+      severity: "error",
+      slot,
+      shaderDefinitionId: null,
+      message: `Material "${materialDefinitionId}" requires built-in shader "${materialBinding.shaderKey}", but it is missing.`
+    };
+    diagnostics.push(diagnostic);
+    console.error(`[ShaderBindings] ${diagnostic.message}`);
+    return null;
+  }
 
   return resolveSlotBinding(
     contentLibrary,
     slot,
-    materialDefinition.shaderDefinitionId,
+    shaderDefinitionId,
     parameterOverrides,
     diagnostics,
     {
-      baseParameterValues: materialDefinition.parameterValues,
+      baseParameterValues: materialBinding.parameterValues,
       textureBindings: {
-        ...materialDefinition.textureBindings,
+        ...materialBinding.textureBindings,
         ...textureBindingOverrides
       }
     }

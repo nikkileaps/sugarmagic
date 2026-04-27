@@ -155,7 +155,6 @@ describe("foliage GLB import analysis", () => {
 
   it("derives explicit foliage textures and materials from embedded GLB carriers", () => {
     const derived = deriveFoliageEmbeddedMaterialImport({
-      projectId: "wordlark",
       assetStem: "tree-aspen-1",
       assetDisplayName: "tree_aspen_1",
       authoredAssetsPath: "assets",
@@ -195,38 +194,56 @@ describe("foliage GLB import analysis", () => {
     expect(derived.textureDefinitions).toHaveLength(2);
     expect(derived.materialDefinitions).toHaveLength(2);
     expect(derived.files).toHaveLength(2);
-    expect(derived.surfaceSlots).toEqual([
+    expect(derived.surfaceSlots).toMatchObject([
       {
         slotName: "FoilageMaker Export Trunk",
         slotIndex: 0,
         surface: {
-          kind: "material",
-          materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0"
+          kind: "inline",
+          surface: {
+            layers: [
+              {
+                kind: "appearance",
+                content: {
+                  kind: "material",
+                  materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0"
+                }
+              }
+            ]
+          }
         }
       },
       {
         slotName: "FoilageMaker Export Leaves",
         slotIndex: 1,
         surface: {
-          kind: "material",
-          materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1"
+          kind: "inline",
+          surface: {
+            layers: [
+              {
+                kind: "appearance",
+                content: {
+                  kind: "material",
+                  materialDefinitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1"
+                }
+              }
+            ]
+          }
         }
       }
     ]);
     expect(derived.materialDefinitions).toEqual([
       expect.objectContaining({
         definitionId: "material:tree-aspen-1:foilagemaker-export-trunk:0",
-        shaderDefinitionId: "wordlark:shader:standard-pbr",
-        textureBindings: {
-          basecolor_texture: "texture:tree-aspen-1:image-1"
-        }
+        pbr: expect.objectContaining({
+          baseColorMap: "texture:tree-aspen-1:image-1"
+        })
       }),
       expect.objectContaining({
         definitionId: "material:tree-aspen-1:foilagemaker-export-leaves:1",
-        shaderDefinitionId: "wordlark:shader:foliage-surface-3",
-        textureBindings: {
-          baseColorTexture: "texture:tree-aspen-1:image-2"
-        }
+        pbr: expect.objectContaining({
+          baseColorMap: "texture:tree-aspen-1:image-2"
+        })
       })
     ]);
   });

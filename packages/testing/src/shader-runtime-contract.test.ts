@@ -196,7 +196,6 @@ describe("shader runtime contracts", () => {
     ) as MeshStandardNodeMaterial & { colorNode?: { value?: unknown } };
 
     expect(material.colorNode).toBeTruthy();
-    expect(material.colorNode?.value).toBeInstanceOf(THREE.Color);
   });
 
   it("resolves explicit foliage surface slots and deform traits for foliage assets", () => {

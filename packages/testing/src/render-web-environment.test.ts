@@ -18,6 +18,7 @@ import {
 import {
   applyPostProcessStack,
   assignRenderPipelineOutputNode,
+  createAuthoredAssetResolver,
   createRenderableShaderApplicationState,
   createEnvironmentSceneController,
   // Canonical authored sun-vector semantics shared by the light rig and shader runtime.
@@ -195,8 +196,12 @@ describe("render-web environment", () => {
   });
 
   it("treats a material-slot-only surface binding as renderable shader intent", () => {
+    const contentLibrary = createEmptyContentLibrarySnapshot("project");
+    const assetResolver = createAuthoredAssetResolver();
     const shaderRuntime = {
-      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material)
+      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material),
+      getContentLibrary: vi.fn(() => contentLibrary),
+      getAssetResolver: vi.fn(() => assetResolver)
     } as unknown as ShaderRuntime;
     const state = createRenderableShaderApplicationState();
     const root = new THREE.Group();
@@ -284,8 +289,12 @@ describe("render-web environment", () => {
   });
 
   it("does not match a single-material mesh to slot 0 unless the material name matches", () => {
+    const contentLibrary = createEmptyContentLibrarySnapshot("project");
+    const assetResolver = createAuthoredAssetResolver();
     const shaderRuntime = {
-      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material)
+      applyShaderSet: vi.fn((bindingSet: unknown, context: { material: THREE.Material }) => context.material),
+      getContentLibrary: vi.fn(() => contentLibrary),
+      getAssetResolver: vi.fn(() => assetResolver)
     } as unknown as ShaderRuntime;
     const state = createRenderableShaderApplicationState();
     const root = new THREE.Group();

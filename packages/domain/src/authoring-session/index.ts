@@ -2126,11 +2126,10 @@ export function updateMaterialDefinitionInSession(
 
 /**
  * Duplicate an existing MaterialDefinition as a new user-owned material.
- * Creates a fresh `definitionId` via createUuid, copies shader reference,
- * parameter values, and texture bindings. Strips any `metadata.builtIn`
- * marker so the copy is treated as authored content that can be freely
- * edited and persisted. Adds a " (Copy)" suffix to the display name
- * unless caller provides a custom one.
+ * Creates a fresh `definitionId` via createUuid and copies its PBR payload.
+ * Strips any `metadata.builtIn` marker so the copy is treated as authored
+ * content that can be freely edited and persisted. Adds a " (Copy)" suffix
+ * to the display name unless caller provides a custom one.
  *
  * Used by the "Duplicate to edit" flow when the user tries to edit a
  * built-in material — we fork a local copy rather than mutating the
@@ -2157,9 +2156,10 @@ export function duplicateMaterialDefinitionInSession(
     definitionId: newDefinitionId,
     definitionKind: "material",
     displayName,
-    shaderDefinitionId: source.shaderDefinitionId,
-    parameterValues: { ...source.parameterValues },
-    textureBindings: { ...source.textureBindings }
+    pbr: {
+      ...source.pbr,
+      tiling: [...source.pbr.tiling]
+    }
     // metadata intentionally omitted so the copy is user-owned.
   };
   return {

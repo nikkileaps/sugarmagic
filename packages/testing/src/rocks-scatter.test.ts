@@ -21,6 +21,7 @@ describe("rocks scatter", () => {
         contentKind: "rocks",
         definitionId: rockDefinition.definitionId,
         definition: rockDefinition,
+        shaderDefinitionId: null,
         materialDefinitionId: null,
         appearanceBinding: null,
         density: 8,

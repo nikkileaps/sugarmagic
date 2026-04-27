@@ -1,16 +1,14 @@
 /**
  * MaterialParameterEditor
  *
- * Renders the parameter and texture-binding controls for a single material
- * against its parent shader graph. This keeps MaterialDefinition editing in
- * one reusable place so the Build Material Library stays the single UI
- * enforcer for "shader graph + parameter snapshot" authoring.
+ * Renders reusable parameter and texture-binding controls for a shader graph.
+ * Materials are PBR data now, so this component is used by shader-backed
+ * surface layers rather than by the material library itself.
  */
 
 import { Fragment } from "react";
 import { Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import type {
-  MaterialDefinition,
   ShaderGraphDocument,
   ShaderParameter,
   ShaderParameterValue,
@@ -18,11 +16,11 @@ import type {
 } from "@sugarmagic/domain";
 import { ColorField, HDRColorField } from "@sugarmagic/ui";
 
-function parameterValueForMaterial(
-  materialDefinition: MaterialDefinition,
+function parameterValueForShader(
+  parameterValues: Record<string, unknown>,
   parameter: ShaderParameter
 ): ShaderParameterValue {
-  const overrideValue = materialDefinition.parameterValues[parameter.parameterId];
+  const overrideValue = parameterValues[parameter.parameterId];
   return (overrideValue as ShaderParameterValue | undefined) ?? parameter.defaultValue;
 }
 
@@ -47,8 +45,9 @@ function textureMatchesRole(
 }
 
 export interface MaterialParameterEditorProps {
-  materialDefinition: MaterialDefinition;
   shaderDefinition: ShaderGraphDocument | null;
+  parameterValues: Record<string, unknown>;
+  textureBindings: Record<string, string>;
   textureDefinitions: TextureDefinition[];
   onChangeParameterValue: (
     parameter: ShaderParameter,
@@ -61,8 +60,9 @@ export interface MaterialParameterEditorProps {
 }
 
 export function MaterialParameterEditor({
-  materialDefinition,
   shaderDefinition,
+  parameterValues,
+  textureBindings,
   textureDefinitions,
   onChangeParameterValue,
   onChangeTextureBinding
@@ -86,7 +86,7 @@ export function MaterialParameterEditor({
   return (
     <Stack gap="xs">
       {shaderDefinition.parameters.map((parameter) => {
-        const value = parameterValueForMaterial(materialDefinition, parameter);
+        const value = parameterValueForShader(parameterValues, parameter);
 
         if (parameter.dataType === "texture2d") {
           const compatibleTextures = textureDefinitions.filter((definition) =>
@@ -109,7 +109,7 @@ export function MaterialParameterEditor({
                   }))
                 ]}
                 value={
-                  materialDefinition.textureBindings[parameter.parameterId] ?? "__none__"
+                  textureBindings[parameter.parameterId] ?? "__none__"
                 }
                 onChange={(next) =>
                   onChangeTextureBinding(

@@ -35,7 +35,6 @@ export type BuildWorkspaceKind =
   | "behavior"
   | "environment"
   | "surfaces"
-  | "materials"
   | "assets";
 export type CoreDesignWorkspaceKind =
   | "player"
@@ -78,6 +77,14 @@ export interface ShellSelectionState {
   entityIds: string[];
 }
 
+/**
+ * Library popover kinds. Surfaces are NOT a library kind — they're
+ * the composition layer that references Materials and Shaders, and
+ * are authored in the Surfaces workspace, not browsed in a library
+ * popover. Per Plan 037.
+ */
+export type LibraryKind = "materials" | "textures" | "shaders";
+
 export interface ShellToolSessionState {
   workspaceId: string | null;
   toolId: string | null;
@@ -102,6 +109,14 @@ export interface ShellState {
   panels: ShellPanelState;
   selection: ShellSelectionState;
   toolSession: ShellToolSessionState;
+  /**
+   * Currently-open library popover, or null if none. Triggered from
+   * the Game > Libraries menu (Plan 037). Lives on the shell store
+   * so the menu trigger (in app shell) and the popover renderer
+   * (currently in BuildProductModeView, eventually higher) share
+   * one source of truth.
+   */
+  activeLibrary: LibraryKind | null;
 }
 
 export interface ShellActions {
@@ -115,6 +130,7 @@ export interface ShellActions {
   setSelection: (entityIds: string[]) => void;
   setToolSession: (toolId: string | null, isActive: boolean) => void;
   togglePanel: (panel: keyof ShellPanelState) => void;
+  setActiveLibrary: (library: LibraryKind | null) => void;
 }
 
 export type ShellStore = ReturnType<typeof createShellStore>;
@@ -123,9 +139,6 @@ export function deriveBuildWorkspaceId(
   kind: BuildWorkspaceKind,
   contextId: string | null
 ): string | null {
-  if (kind === "materials") {
-    return "build:materials:library";
-  }
   if (kind === "surfaces") {
     return "build:surfaces:library";
   }
@@ -151,9 +164,6 @@ function getBuildContextId(
 ): string | null {
   if (kind === "environment") {
     return state.activeEnvironmentId;
-  }
-  if (kind === "materials") {
-    return "library";
   }
   return state.activeRegionId;
 }
@@ -234,6 +244,8 @@ export function createShellStore(
       toolId: null,
       isActive: false
     },
+    activeLibrary: null,
+    setActiveLibrary: (library) => set({ activeLibrary: library }),
     setActiveProductMode: (productModeId) =>
       set((state) => {
         const workspaceId = deriveWorkspaceIdForMode(state, productModeId);

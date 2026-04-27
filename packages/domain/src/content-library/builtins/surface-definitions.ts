@@ -12,9 +12,6 @@ import type {
   SurfaceDefinition
 } from "../../surface";
 import {
-  getBuiltInGrassSurface4MaterialId
-} from "./material-definitions";
-import {
   createAppearanceLayer,
   createColorAppearanceContent,
   createColorEmissionContent,
@@ -22,6 +19,10 @@ import {
   createScatterLayer,
   createSurface
 } from "../../surface";
+
+function getBuiltInGrassSurface4ShaderId(projectId: string): string {
+  return `${projectId}:shader:grass-surface-4`;
+}
 
 export function createBuiltInSurfaceDefinitions(
   projectId: string,
@@ -49,7 +50,7 @@ export function createBuiltInSurfaceDefinitions(
           { kind: "grass", grassTypeId: grassByName.get("Wild Tall")! },
           {
             displayName: "Tall Grass",
-            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+            shaderDefinitionId: getBuiltInGrassSurface4ShaderId(projectId)
           }
         ),
         createScatterLayer(
@@ -75,7 +76,7 @@ export function createBuiltInSurfaceDefinitions(
           { kind: "grass", grassTypeId: grassByName.get("Autumn Golden")! },
           {
             displayName: "Grass",
-            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+            shaderDefinitionId: getBuiltInGrassSurface4ShaderId(projectId)
           }
         ),
         createScatterLayer(
@@ -113,7 +114,7 @@ export function createBuiltInSurfaceDefinitions(
           { kind: "grass", grassTypeId: grassByName.get("Short Lawn")! },
           {
             displayName: "Short Grass",
-            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+            shaderDefinitionId: getBuiltInGrassSurface4ShaderId(projectId)
           }
         )
       ])
@@ -132,7 +133,7 @@ export function createBuiltInSurfaceDefinitions(
           {
             displayName: "Clover Base",
             opacity: 0.85,
-            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId)
+            shaderDefinitionId: getBuiltInGrassSurface4ShaderId(projectId)
           }
         ),
         createScatterLayer(
@@ -154,7 +155,7 @@ export function createBuiltInSurfaceDefinitions(
           { kind: "grass", grassTypeId: grassByName.get("Painterly Tuft")! },
           {
             displayName: "Painterly Tufts",
-            materialDefinitionId: getBuiltInGrassSurface4MaterialId(projectId),
+            shaderDefinitionId: `${projectId}:shader:painterly-grass`,
             opacity: 0.95
           }
         ),

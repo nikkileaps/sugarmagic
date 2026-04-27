@@ -17,6 +17,7 @@ import type {
   TextureDefinition
 } from "@sugarmagic/domain";
 import {
+  createDefaultMaterialPbr,
   createInlineSurfaceBindingFromAppearance,
   createMaterialSurface
 } from "@sugarmagic/domain";
@@ -171,20 +172,6 @@ function extractEmbeddedImageBlob(
   );
 }
 
-function isLeafSlot(slotName: string): boolean {
-  return /leaf|leaves|foliage|canopy/i.test(slotName);
-}
-
-function shaderDefinitionIdForSlot(projectId: string, slotName: string): string {
-  return isLeafSlot(slotName)
-    ? `${projectId}:shader:foliage-surface-3`
-    : `${projectId}:shader:standard-pbr`;
-}
-
-function baseColorParameterIdForSlot(slotName: string): string {
-  return isLeafSlot(slotName) ? "baseColorTexture" : "basecolor_texture";
-}
-
 function slotNameForMaterial(material: GlbMaterialDocument, slotIndex: number): string {
   return typeof material.name === "string" && material.name.trim().length > 0
     ? material.name.trim()
@@ -192,7 +179,6 @@ function slotNameForMaterial(material: GlbMaterialDocument, slotIndex: number): 
 }
 
 export function deriveFoliageEmbeddedMaterialImport(options: {
-  projectId: string;
   assetStem: string;
   assetDisplayName: string;
   authoredAssetsPath: string;
@@ -200,7 +186,6 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
   binaryChunk: Uint8Array | null;
 }): DerivedFoliageEmbeddedMaterialImport {
   const {
-    projectId,
     assetStem,
     assetDisplayName,
     authoredAssetsPath,
@@ -279,11 +264,9 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
       definitionId: materialDefinitionId,
       definitionKind: "material",
       displayName: `${assetDisplayName} ${slotName}`,
-      shaderDefinitionId: shaderDefinitionIdForSlot(projectId, slotName),
-      parameterValues: {},
-      textureBindings: {
-        [baseColorParameterIdForSlot(slotName)]: textureDefinitionId
-      }
+      pbr: createDefaultMaterialPbr({
+        baseColorMap: textureDefinitionId
+      })
     });
     surfaceSlots.push({
       slotName,
