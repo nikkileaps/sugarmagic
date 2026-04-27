@@ -13,6 +13,7 @@ Owns:
 - per-sample mask gating for realized scatter instances
 - deterministic instance transforms / jitters
 - Story 36.16's GPU compute candidate build, culling, and indirect draw buffers
+- Story 36.17's per-bin scatter LOD routing and distance-density thinning math
 - CPU fallback realization when WebGPU compute is unavailable
 - optional wind-deform application through the shared `ShaderRuntime`
 

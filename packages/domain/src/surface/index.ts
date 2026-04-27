@@ -25,6 +25,7 @@ import { cloneMask } from "./mask";
 export * from "./layer";
 export * from "./mask";
 export * from "./noise";
+export * from "./lod";
 export * from "./surface-definition";
 export * from "./grass-type";
 export * from "./flower-type";

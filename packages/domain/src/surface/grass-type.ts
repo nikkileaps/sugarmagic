@@ -8,8 +8,9 @@
 
 import { createScopedId } from "../shared/identity";
 import type { ShaderOrMaterial } from "./index";
+import type { ScatterLodDefinition } from "./lod";
 
-export interface GrassTypeDefinition {
+export interface GrassTypeDefinition extends ScatterLodDefinition {
   definitionId: string;
   definitionKind: "grass-type";
   displayName: string;
@@ -67,6 +68,19 @@ export function createDefaultGrassTypeDefinition(
     tipColor: opts.tipColor ?? 0xbadf7c,
     baseColor: opts.baseColor ?? 0x4f7d35,
     colorJitter: 0.15,
-    wind: opts.wind ?? null
+    wind: opts.wind ?? null,
+    lodMeshes: {
+      near: { kind: "procedural-default" },
+      far: {
+        kind: "procedural-reduced",
+        vertexBudget: 0.5
+      },
+      billboard: { kind: "billboard" }
+    },
+    lod1Distance: 36,
+    lod2Distance: 68,
+    lodTransitionWidth: 12,
+    distantMeshThreshold: 88,
+    maxDrawDistance: 120
   };
 }

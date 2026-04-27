@@ -12,6 +12,7 @@ import type {
   ContentLibrarySnapshot,
   FlowerTypeDefinition,
   GrassTypeDefinition,
+  LodMeshSpec,
   Mask,
   MaskTextureDefinition,
   TextureDefinition,
@@ -29,6 +30,10 @@ import {
   createScatterComputeLayerParams,
   createScatterComputePipeline
 } from "./compute-pipeline";
+import {
+  type ScatterLodBin,
+  type ScatterLodRuntimeParams
+} from "./lod";
 import {
   createProceduralFlowerGeometry,
   createProceduralGrassGeometry,
@@ -62,6 +67,187 @@ export interface SurfaceScatterBuildResult {
 
 export * from "./compute-pipeline";
 export * from "./instance-buffer";
+export * from "./lod";
+
+interface ScatterLodDefinitionLike {
+  lodMeshes: {
+    near: LodMeshSpec;
+    far?: LodMeshSpec | null;
+    billboard?: LodMeshSpec | null;
+  };
+  lod1Distance: number;
+  lod2Distance: number;
+  lodTransitionWidth: number;
+  distantMeshThreshold: number;
+  maxDrawDistance: number;
+}
+
+interface ScatterLodBinConfig {
+  bin: Exclude<ScatterLodBin, "none">;
+  spec: LodMeshSpec;
+}
+
+interface ScatterMaterialSetup {
+  material: THREE.Material;
+  runtimeManagedMaterial: boolean;
+}
+
+function scatterLodDefinitionForLayer(
+  layer: ResolvedScatterLayer
+): ScatterLodDefinitionLike {
+  return layer.definition as ResolvedScatterLayer["definition"] & ScatterLodDefinitionLike;
+}
+
+function scatterLodParamsForLayer(layer: ResolvedScatterLayer): ScatterLodRuntimeParams {
+  const lod = scatterLodDefinitionForLayer(layer);
+  return {
+    lod1Distance: lod.lod1Distance,
+    lod2Distance: lod.lod2Distance,
+    lodTransitionWidth: lod.lodTransitionWidth,
+    distantMeshThreshold: lod.distantMeshThreshold,
+    maxDrawDistance: lod.maxDrawDistance,
+    hasFarBin: Boolean(lod.lodMeshes.far),
+    hasBillboardBin: Boolean(lod.lodMeshes.billboard)
+  };
+}
+
+function scatterLodBinConfigs(layer: ResolvedScatterLayer): ScatterLodBinConfig[] {
+  const lod = scatterLodDefinitionForLayer(layer);
+  const bins: ScatterLodBinConfig[] = [
+    {
+      bin: "near",
+      spec: lod.lodMeshes.near
+    }
+  ];
+  if (lod.lodMeshes.far) {
+    bins.push({
+      bin: "far",
+      spec: lod.lodMeshes.far
+    });
+  }
+  if (lod.lodMeshes.billboard) {
+    bins.push({
+      bin: "billboard",
+      spec: lod.lodMeshes.billboard
+    });
+  }
+  return bins;
+}
+
+function createScatterBillboardGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array([
+    -0.18, 0, 0,
+    0.18, 0, 0,
+    -0.06, 1, 0,
+    0.06, 1, 0
+  ]);
+  const normals = new Float32Array([
+    0, 1, 0,
+    0, 1, 0,
+    0, 1, 0,
+    0, 1, 0
+  ]);
+  const colors = new Float32Array([
+    0.4, 0.6, 0.35,
+    0.4, 0.6, 0.35,
+    0.8, 0.9, 0.7,
+    0.8, 0.9, 0.7
+  ]);
+  const uvs = new Float32Array([
+    0, 0,
+    1, 0,
+    0.25, 1,
+    0.75, 1
+  ]);
+  const heights = new Float32Array([0, 0, 1, 1]);
+  geometry.setIndex([0, 2, 1, 1, 2, 3]);
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geometry.setAttribute("_tree_height", new THREE.BufferAttribute(heights, 1));
+  return geometry;
+}
+
+function createScatterGeometryForLodSpec(
+  layer: ResolvedScatterLayer,
+  spec: LodMeshSpec,
+  options: SurfaceScatterBuildOptions
+): THREE.BufferGeometry {
+  if (spec.kind === "billboard") {
+    return createScatterBillboardGeometry();
+  }
+
+  const geometryOptions =
+    spec.kind === "procedural-reduced"
+      ? {
+          vertexBudget: spec.vertexBudget
+        }
+      : {};
+
+  if (spec.kind === "asset-reference") {
+    options.logger?.warn?.(
+      "[surface-scatter] Asset-reference LOD meshes are not yet realized in render-web scatter; falling back to procedural/default geometry.",
+      {
+        layerId: layer.layerId,
+        contentKind: layer.contentKind,
+        assetDefinitionId: spec.assetDefinitionId
+      }
+    );
+  }
+
+  if (layer.contentKind === "grass") {
+    return createProceduralGrassGeometry(
+      layer.definition as GrassTypeDefinition,
+      geometryOptions
+    );
+  }
+  if (layer.contentKind === "flowers") {
+    return createProceduralFlowerGeometry(
+      layer.definition as FlowerTypeDefinition,
+      geometryOptions
+    );
+  }
+  return createProceduralRockGeometry(
+    layer.definition as RockTypeDefinition,
+    geometryOptions
+  );
+}
+
+function createScatterMaterialForGeometry(
+  layer: ResolvedScatterLayer,
+  geometry: THREE.BufferGeometry,
+  options: SurfaceScatterBuildOptions
+): ScatterMaterialSetup {
+  const material = new MeshStandardNodeMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 0,
+    vertexColors: true,
+    side: THREE.DoubleSide
+  });
+  let appliedMaterial: THREE.Material = material;
+
+  if ((layer.appearanceBinding || layer.wind) && options.shaderRuntime) {
+    appliedMaterial = options.shaderRuntime.applyShaderSet(
+      {
+        surface: layer.appearanceBinding,
+        deform: layer.wind,
+        effect: null
+      },
+      {
+        material,
+        geometry
+      }
+    );
+  }
+
+  return {
+    material: appliedMaterial,
+    runtimeManagedMaterial: false
+  };
+}
 
 interface TextureSampleCacheEntry {
   version: number;
@@ -341,36 +527,8 @@ export function buildSurfaceScatterLayer(
     layer.contentKind === "rocks"
       ? (layer.definition as RockTypeDefinition)
       : null;
-  const geometry = isGrassLayer
-    ? createProceduralGrassGeometry(grassDefinition!)
-    : isFlowerLayer
-      ? createProceduralFlowerGeometry(flowerDefinition!)
-      : createProceduralRockGeometry(rockDefinition!);
-
-  const material = new MeshStandardNodeMaterial({
-    color: 0xffffff,
-    roughness: 1,
-    metalness: 0,
-    vertexColors: true,
-    side: THREE.DoubleSide
-  });
-  let appliedMaterial: THREE.Material = material;
-  let runtimeManagedMaterial = false;
-
-  if ((layer.appearanceBinding || layer.wind) && options.shaderRuntime) {
-    appliedMaterial = options.shaderRuntime.applyShaderSet(
-      {
-        surface: layer.appearanceBinding,
-        deform: layer.wind,
-        effect: null
-      },
-      {
-        material,
-        geometry
-      }
-    );
-    runtimeManagedMaterial = true;
-  }
+  const lodBinConfigs = scatterLodBinConfigs(layer);
+  const lodParams = scatterLodParamsForLayer(layer);
 
   const warnedMaskKinds = new Set<Mask["kind"]>();
   const densityWeights = samples.map((sample) =>
@@ -394,79 +552,120 @@ export function buildSurfaceScatterLayer(
   if (!hasAnyDensity) {
     return {
       root,
-      dispose() {
-        geometry.dispose();
-        if (runtimeManagedMaterial && options.shaderRuntime) {
-          options.shaderRuntime.releaseMaterial(appliedMaterial);
-        } else {
-          appliedMaterial.dispose();
-        }
-      }
+      dispose() {}
     };
   }
 
   const canUseGpuCompute = options.enableGpuCompute ?? true;
   if (canUseGpuCompute) {
-    const computeParams = createScatterComputeLayerParams(layer, geometry);
-    const computePipeline = createScatterComputePipeline({
-      geometry,
-      material: appliedMaterial,
+    const gpuBins: Array<{
+      bin: Exclude<ScatterLodBin, "none">;
+      geometry: THREE.BufferGeometry;
+      material: THREE.Material;
+      runtimeManagedMaterial: boolean;
+      mesh: THREE.InstancedMesh;
+    }> = [];
+    const gpuBinInputs: Array<{
+      bin: Exclude<ScatterLodBin, "none">;
+      geometry: THREE.BufferGeometry;
+      material: THREE.Material;
+      runtimeManagedMaterial: boolean;
+    }> = [];
+
+    for (const lodBinConfig of lodBinConfigs) {
+      const geometry = createScatterGeometryForLodSpec(
+        layer,
+        lodBinConfig.spec,
+        options
+      );
+      const materialSetup = createScatterMaterialForGeometry(
+        layer,
+        geometry,
+        options
+      );
+      gpuBinInputs.push({
+        bin: lodBinConfig.bin,
+        geometry,
+        material: materialSetup.material,
+        runtimeManagedMaterial: materialSetup.runtimeManagedMaterial
+      });
+    }
+
+    const sharedComputePipeline = createScatterComputePipeline({
+      bins: gpuBinInputs.map((bin) => ({
+        bin: bin.bin,
+        geometry: bin.geometry,
+        material: bin.material
+      })),
       samples,
       densityWeights,
-      params: computeParams
+      params: createScatterComputeLayerParams(layer, gpuBinInputs[0]!.geometry, {
+        maxDrawDistance: lodParams.maxDrawDistance
+      })
     });
 
-    if (computePipeline) {
-      // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
-      console.warn(
-        `[surface-scatter] GPU compute pipeline ACTIVE for ${layer.layerId} (${samples.length} samples).`
-      );
-      const scatterMesh = computePipeline.mesh;
-      scatterMesh.name = `${root.name}:instances`;
-      scatterMesh.onBeforeRender = (renderer, _scene, camera) => {
-        if (renderer instanceof WebGPURenderer) {
-          computePipeline.prepareForRender(renderer, camera);
-        }
-      };
-      root.add(scatterMesh);
+    if (sharedComputePipeline && sharedComputePipeline.bins.length > 0) {
+      for (const [index, computeBin] of sharedComputePipeline.bins.entries()) {
+        const gpuBinInput = gpuBinInputs[index]!;
+        const scatterMesh = computeBin.mesh;
+        scatterMesh.name = `${root.name}:${gpuBinInput.bin}`;
+        scatterMesh.onBeforeRender = (renderer, _scene, camera) => {
+          if (renderer instanceof WebGPURenderer) {
+            sharedComputePipeline.prepareForRender(renderer, camera);
+          }
+        };
+        root.add(scatterMesh);
+        gpuBins.push({
+          ...gpuBinInput,
+          mesh: scatterMesh
+        });
+      }
 
       return {
         root,
         dispose() {
-          root.remove(scatterMesh);
-          // ORDER MATTERS: geometry.dispose() must run BEFORE
-          // computePipeline.dispose(). Three's WebGPU backend keeps a
-          // RenderObject keyed by the geometry that lazily resolves the
-          // geometry's attributes when its dispose event fires. The
-          // compute pipeline's buffers (visibleMatrices, visibleColors,
-          // visibleOrigins, indirectDrawArgs) are referenced FROM the
-          // mesh's geometry — instanceMatrix/Color via the InstancedMesh,
-          // instanceOrigin as a setAttribute on the geometry. If we
-          // dispose the compute pipeline first, those storage buffers
-          // are torn down (and `instanceOrigin` is deleted from the
-          // geometry); then geometry.dispose dispatches its event, the
-          // WebGPU backend asks the RenderObject for attributes, finds
-          // undefined slots, and crashes on `.id`. Disposing the
-          // geometry FIRST lets Three tear down its RenderObject while
-          // attributes still point at live storage. The compute pipeline
-          // can then dispose its compute passes + buffers safely.
-          geometry.dispose();
-          computePipeline.dispose();
-          if (runtimeManagedMaterial && options.shaderRuntime) {
-            options.shaderRuntime.releaseMaterial(appliedMaterial);
-          } else {
-            appliedMaterial.dispose();
+          for (const gpuBin of gpuBins) {
+            root.remove(gpuBin.mesh);
+            gpuBin.geometry.dispose();
+            if (gpuBin.runtimeManagedMaterial && options.shaderRuntime) {
+              options.shaderRuntime.releaseMaterial(gpuBin.material);
+            } else {
+              gpuBin.material.dispose();
+            }
           }
+          sharedComputePipeline.dispose();
         }
       };
     }
 
-    // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
-    console.warn(
-      `[surface-scatter] GPU compute scatter UNAVAILABLE for ${layer.layerId}; falling back to CPU instancing.`
+    for (const gpuBinInput of gpuBinInputs) {
+      gpuBinInput.geometry.dispose();
+      if (gpuBinInput.runtimeManagedMaterial && options.shaderRuntime) {
+        options.shaderRuntime.releaseMaterial(gpuBinInput.material);
+      } else {
+        gpuBinInput.material.dispose();
+      }
+    }
+
+    options.logger?.warn?.(
+      "[surface-scatter] GPU scatter LOD unavailable for this layer; falling back to CPU near-mesh instancing.",
+      {
+        layerId: layer.layerId,
+        contentKind: layer.contentKind
+      }
     );
   }
 
+  const nearGeometry = createScatterGeometryForLodSpec(
+    layer,
+    lodBinConfigs[0]!.spec,
+    options
+  );
+  const nearMaterialSetup = createScatterMaterialForGeometry(
+    layer,
+    nearGeometry,
+    options
+  );
   const acceptedSamples: SurfaceScatterSample[] = [];
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index]!;
@@ -484,19 +683,19 @@ export function buildSurfaceScatterLayer(
     return {
       root,
       dispose() {
-        geometry.dispose();
-        if (runtimeManagedMaterial && options.shaderRuntime) {
-          options.shaderRuntime.releaseMaterial(appliedMaterial);
+        nearGeometry.dispose();
+        if (nearMaterialSetup.runtimeManagedMaterial && options.shaderRuntime) {
+          options.shaderRuntime.releaseMaterial(nearMaterialSetup.material);
         } else {
-          appliedMaterial.dispose();
+          nearMaterialSetup.material.dispose();
         }
       }
     };
   }
 
   const instancedMesh = new THREE.InstancedMesh(
-    geometry,
-    appliedMaterial,
+    nearGeometry,
+    nearMaterialSetup.material,
     acceptedSamples.length
   );
   instancedMesh.name = `${root.name}:instances`;
@@ -522,7 +721,7 @@ export function buildSurfaceScatterLayer(
     instanceOriginData,
     2
   );
-  geometry.setAttribute("instanceOrigin", instanceOriginAttribute);
+  nearGeometry.setAttribute("instanceOrigin", instanceOriginAttribute);
 
   const up = new THREE.Vector3(0, 1, 0);
   const samplePosition = new THREE.Vector3();
@@ -604,11 +803,11 @@ export function buildSurfaceScatterLayer(
     root,
     dispose() {
       root.remove(instancedMesh);
-      geometry.dispose();
-      if (runtimeManagedMaterial && options.shaderRuntime) {
-        options.shaderRuntime.releaseMaterial(appliedMaterial);
+      nearGeometry.dispose();
+      if (nearMaterialSetup.runtimeManagedMaterial && options.shaderRuntime) {
+        options.shaderRuntime.releaseMaterial(nearMaterialSetup.material);
       } else {
-        appliedMaterial.dispose();
+        nearMaterialSetup.material.dispose();
       }
     }
   };

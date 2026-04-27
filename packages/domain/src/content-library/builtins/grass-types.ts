@@ -53,26 +53,13 @@ export function createBuiltInGrassTypeDefinitions(
       baseColor: 0x7e6337,
       wind
     }),
-    {
+    createDefaultGrassTypeDefinition(projectId, {
       definitionId: `${projectId}:grass-type:painterly-tuft`,
-      definitionKind: "grass-type",
       displayName: "Painterly Tuft",
-      tuft: {
-        kind: "procedural",
-        bladeProfile: "tapered",
-        bladesPerTuft: 6,
-        heightRange: [0.42, 0.72],
-        widthBase: 0.09,
-        bendAmount: 0.7
-      },
       density: 70,
-      scaleJitter: [0.95, 1.28],
-      rotationJitter: 1,
-      heightJitter: 0.16,
       tipColor: 0xd6e793,
       baseColor: 0x628640,
-      colorJitter: 0.08,
       wind: wind
-    },
+    }),
   ];
 }

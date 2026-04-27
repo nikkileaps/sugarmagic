@@ -43,7 +43,7 @@ export interface PackedScatterSampleInputs {
   densityWeights: Float32Array;
 }
 
-export interface ScatterGpuInstanceBuffers {
+export interface ScatterGpuCandidateBuffers {
   readonly sampleCount: number;
   /** Number of workgroups in the per-frame scan: ceil(sampleCount / SCATTER_SCAN_WORKGROUP_SIZE). */
   readonly scanWorkgroupCount: number;
@@ -55,6 +55,12 @@ export interface ScatterGpuInstanceBuffers {
   readonly candidateMatrices: StorageInstancedBufferAttribute;
   readonly candidateColors: StorageInstancedBufferAttribute;
   readonly candidateRadii: StorageBufferAttribute;
+  dispose: () => void;
+}
+
+export interface ScatterGpuVisibleBinBuffers {
+  readonly sampleCount: number;
+  readonly scanWorkgroupCount: number;
   /**
    * Per-frame visibility flag set by the markVisible compute pass.
    * `1` if the candidate passed frustum + distance + density culling
@@ -129,9 +135,9 @@ export function packScatterSampleInputs(
   };
 }
 
-export function createScatterGpuInstanceBuffers(
+export function createScatterGpuCandidateBuffers(
   packedInputs: PackedScatterSampleInputs
-): ScatterGpuInstanceBuffers {
+): ScatterGpuCandidateBuffers {
   const { sampleCount } = packedInputs;
 
   const samplePositions = new StorageBufferAttribute(
@@ -171,6 +177,58 @@ export function createScatterGpuInstanceBuffers(
     1,
     Math.ceil(sampleCount / SCATTER_SCAN_WORKGROUP_SIZE)
   );
+
+  markStorageAttributeNeedsUpload(samplePositions);
+  markStorageAttributeNeedsUpload(sampleNormals);
+  markStorageAttributeNeedsUpload(sampleDensityWeights);
+
+  const resourceCarrier = new THREE.BufferGeometry();
+  resourceCarrier.setAttribute(
+    "scatter-sample-position",
+    samplePositions as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-sample-normal",
+    sampleNormals as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-sample-density",
+    sampleDensityWeights as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-candidate-active",
+    candidateActive as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-candidate-position",
+    candidatePositions as unknown as THREE.BufferAttribute
+  );
+  resourceCarrier.setAttribute(
+    "scatter-candidate-radius",
+    candidateRadii as unknown as THREE.BufferAttribute
+  );
+
+  return {
+    sampleCount,
+    scanWorkgroupCount,
+    samplePositions,
+    sampleNormals,
+    sampleDensityWeights,
+    candidateActive,
+    candidatePositions,
+    candidateMatrices,
+    candidateColors,
+    candidateRadii,
+    dispose() {
+      resourceCarrier.dispose();
+    }
+  };
+}
+
+export function createScatterGpuVisibleBinBuffers(
+  sampleCount: number,
+  scanWorkgroupCount: number
+): ScatterGpuVisibleBinBuffers {
   const frameActive = new StorageBufferAttribute(
     new Uint32Array(Math.max(1, sampleCount)),
     1
@@ -205,35 +263,7 @@ export function createScatterGpuInstanceBuffers(
     1
   );
 
-  markStorageAttributeNeedsUpload(samplePositions);
-  markStorageAttributeNeedsUpload(sampleNormals);
-  markStorageAttributeNeedsUpload(sampleDensityWeights);
-
   const resourceCarrier = new THREE.BufferGeometry();
-  resourceCarrier.setAttribute(
-    "scatter-sample-position",
-    samplePositions as unknown as THREE.BufferAttribute
-  );
-  resourceCarrier.setAttribute(
-    "scatter-sample-normal",
-    sampleNormals as unknown as THREE.BufferAttribute
-  );
-  resourceCarrier.setAttribute(
-    "scatter-sample-density",
-    sampleDensityWeights as unknown as THREE.BufferAttribute
-  );
-  resourceCarrier.setAttribute(
-    "scatter-candidate-active",
-    candidateActive as unknown as THREE.BufferAttribute
-  );
-  resourceCarrier.setAttribute(
-    "scatter-candidate-position",
-    candidatePositions as unknown as THREE.BufferAttribute
-  );
-  resourceCarrier.setAttribute(
-    "scatter-candidate-radius",
-    candidateRadii as unknown as THREE.BufferAttribute
-  );
   resourceCarrier.setAttribute(
     "scatter-frame-active",
     frameActive as unknown as THREE.BufferAttribute
@@ -262,14 +292,6 @@ export function createScatterGpuInstanceBuffers(
   return {
     sampleCount,
     scanWorkgroupCount,
-    samplePositions,
-    sampleNormals,
-    sampleDensityWeights,
-    candidateActive,
-    candidatePositions,
-    candidateMatrices,
-    candidateColors,
-    candidateRadii,
     frameActive,
     localOffsets,
     workgroupPartials,

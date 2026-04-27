@@ -13,6 +13,14 @@ import type {
   RockTypeDefinition
 } from "@sugarmagic/domain";
 
+export interface ProceduralScatterGeometryOptions {
+  /**
+   * Fraction of the authored near-detail budget to keep.
+   * `1` means full detail; lower values reduce procedural complexity.
+   */
+  vertexBudget?: number;
+}
+
 function rgbTuple(color: number): [number, number, number] {
   return [
     ((color >> 16) & 0xff) / 255,
@@ -45,8 +53,16 @@ function hash01(seed: number): number {
   return value - Math.floor(value);
 }
 
+function clampVertexBudget(vertexBudget: number | undefined): number {
+  if (typeof vertexBudget !== "number" || Number.isNaN(vertexBudget)) {
+    return 1;
+  }
+  return Math.max(0.1, Math.min(1, vertexBudget));
+}
+
 export function createProceduralGrassGeometry(
-  definition: GrassTypeDefinition
+  definition: GrassTypeDefinition,
+  options: ProceduralScatterGeometryOptions = {}
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const normals: number[] = [];
@@ -54,7 +70,10 @@ export function createProceduralGrassGeometry(
   const heights: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  const bladeCount = Math.max(1, definition.tuft.kind === "procedural" ? definition.tuft.bladesPerTuft : 4);
+  const detailBudget = clampVertexBudget(options.vertexBudget);
+  const authoredBladeCount =
+    definition.tuft.kind === "procedural" ? definition.tuft.bladesPerTuft : 4;
+  const bladeCount = Math.max(1, Math.round(authoredBladeCount * detailBudget));
   const width = definition.tuft.kind === "procedural" ? definition.tuft.widthBase : 0.05;
   const bend = definition.tuft.kind === "procedural" ? definition.tuft.bendAmount : 0.25;
   const heightRange =
@@ -243,7 +262,8 @@ export function createProceduralGrassGeometry(
 }
 
 export function createProceduralFlowerGeometry(
-  definition: FlowerTypeDefinition
+  definition: FlowerTypeDefinition,
+  options: ProceduralScatterGeometryOptions = {}
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const normals: number[] = [];
@@ -251,7 +271,10 @@ export function createProceduralFlowerGeometry(
   const heights: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  const petalCount = Math.max(4, definition.head.kind === "procedural" ? definition.head.petalCount : 6);
+  const detailBudget = clampVertexBudget(options.vertexBudget);
+  const authoredPetalCount =
+    definition.head.kind === "procedural" ? definition.head.petalCount : 6;
+  const petalCount = Math.max(4, Math.round(authoredPetalCount * detailBudget));
   const radius = definition.head.kind === "procedural" ? definition.head.radius : 0.08;
   const stemColor = rgbTuple(0x5c7d3a);
   const petalColor = rgbTuple(definition.petalColor);
@@ -390,8 +413,10 @@ export function createProceduralFlowerGeometry(
 }
 
 export function createProceduralRockGeometry(
-  definition: RockTypeDefinition
+  definition: RockTypeDefinition,
+  options: ProceduralScatterGeometryOptions = {}
 ): THREE.BufferGeometry {
+  const detailBudget = clampVertexBudget(options.vertexBudget);
   const source =
     definition.source.kind === "procedural"
       ? definition.source
@@ -403,7 +428,8 @@ export function createProceduralRockGeometry(
   const radius = (source.radiusRange[0] + source.radiusRange[1]) / 2;
   const heightRatio =
     (source.heightRatioRange[0] + source.heightRatioRange[1]) / 2;
-  const geometry = new THREE.IcosahedronGeometry(radius, 0);
+  const detail = detailBudget >= 0.75 ? 1 : 0;
+  const geometry = new THREE.IcosahedronGeometry(radius, detail);
   geometry.scale(1, heightRatio, 1);
   const colorTuple = rgbTuple(definition.color);
   const vertexCount = geometry.getAttribute("position").count;

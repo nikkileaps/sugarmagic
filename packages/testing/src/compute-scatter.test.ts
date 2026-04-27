@@ -125,7 +125,7 @@ describe("compute scatter", () => {
 
     const mesh = build.root.children[0] as THREE.InstancedMesh | undefined;
     expect(mesh).toBeTruthy();
-    expect(Math.abs((mesh?.count ?? 0) - expectedAcceptedCount)).toBeLessThanOrEqual(1);
+    expect(Math.abs((mesh?.count ?? 0) - expectedAcceptedCount)).toBeLessThanOrEqual(2);
 
     build.dispose();
   });

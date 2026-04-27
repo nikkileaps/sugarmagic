@@ -9,7 +9,7 @@
  */
 
 import * as THREE from "three";
-import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
+import { WebGPURenderer } from "three/webgpu";
 import {
   Fn,
   If,
@@ -20,6 +20,7 @@ import {
   cos,
   cross,
   distance,
+  dot,
   float,
   fract,
   instanceIndex,
@@ -39,13 +40,24 @@ import {
   workgroupId
 } from "three/tsl";
 import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
+import {
+  computeKeepProbability,
+  computeLodBin,
+  hashKeep,
+  LOD1_KEEP_RATIO,
+  LOD2_KEEP_RATIO,
+  SCATTER_LOD_BAND_SEEDS,
+  type ScatterLodBin,
+  type ScatterLodRuntimeParams
+} from "./lod";
 import type {
   PackedScatterSampleInputs,
-  ScatterGpuInstanceBuffers
+  ScatterGpuVisibleBinBuffers
 } from "./instance-buffer";
 import {
   SCATTER_SCAN_WORKGROUP_SIZE,
-  createScatterGpuInstanceBuffers,
+  createScatterGpuCandidateBuffers,
+  createScatterGpuVisibleBinBuffers,
   packScatterSampleInputs
 } from "./instance-buffer";
 import type { SurfaceScatterSample } from "./index";
@@ -139,6 +151,8 @@ export interface ScatterComputeLayerParams {
   verticalScaleJitter: number;
   baseInstanceRadius: number;
   maxDrawDistance: number;
+  lodBin: Exclude<ScatterLodBin, "none"> | null;
+  lod: ScatterLodRuntimeParams;
 }
 
 export interface ScatterCandidateSnapshot {
@@ -155,34 +169,34 @@ export interface ScatterVisibilitySnapshot {
 }
 
 export interface ScatterComputePipeline {
-  /**
-   * The renderable mesh — `THREE.InstancedMesh` so we can use Three's
-   * built-in mat4-attribute splitting for `instanceMatrix` (WGSL
-   * doesn't allow mat4 attributes via `@location` directly; Three
-   * special-cases this for InstancedMesh.instanceMatrix and emits the
-   * 4-vec4 split). The instance data is GPU-resident: the assigned
-   * `instanceMatrix` and `instanceColor` are
-   * `StorageInstancedBufferAttribute` instances that compute writes
-   * to via storage()-node bindings, and that the render pipeline
-   * reads as instance attributes through Three's standard path.
-   * Instance count is driven each frame by the indirect-draw-args
-   * buffer that the cull/finalize compute passes write.
-   */
-  readonly mesh: THREE.InstancedMesh;
-  readonly buffers: ScatterGpuInstanceBuffers;
+  readonly bins: Array<{
+    bin: Exclude<ScatterLodBin, "none">;
+    mesh: THREE.InstancedMesh;
+    buffers: ScatterGpuVisibleBinBuffers;
+  }>;
   markCandidatesDirty(): void;
   prepareForRender(renderer: WebGPURenderer, camera: THREE.Camera): void;
-  readVisibleCount(renderer: WebGPURenderer): Promise<number>;
-  readIndirectArgs(renderer: WebGPURenderer): Promise<Uint32Array>;
-  readVisibleOrigins(renderer: WebGPURenderer): Promise<Float32Array>;
   dispose(): void;
 }
 
 export function createScatterComputeLayerParams(
   layer: ResolvedScatterLayer,
   geometry: THREE.BufferGeometry,
-  overrides: Partial<Pick<ScatterComputeLayerParams, "maxDrawDistance">> = {}
+  overrides: Partial<
+    Pick<ScatterComputeLayerParams, "maxDrawDistance" | "lodBin">
+  > = {}
 ): ScatterComputeLayerParams {
+  const definition = layer.definition as ResolvedScatterLayer["definition"] & {
+    lod1Distance: number;
+    lod2Distance: number;
+    lodTransitionWidth: number;
+    distantMeshThreshold: number;
+    maxDrawDistance: number;
+    lodMeshes?: {
+      far?: unknown;
+      billboard?: unknown;
+    };
+  };
   return {
     layerId: layer.layerId,
     seed: hashLayerId(layer.layerId),
@@ -193,7 +207,22 @@ export function createScatterComputeLayerParams(
     verticalScaleJitter: verticalScaleJitterForLayer(layer),
     baseInstanceRadius: baseBoundingRadius(geometry),
     maxDrawDistance:
-      overrides.maxDrawDistance ?? DEFAULT_SCATTER_MAX_DRAW_DISTANCE
+      overrides.maxDrawDistance ??
+      definition.maxDrawDistance ??
+      DEFAULT_SCATTER_MAX_DRAW_DISTANCE,
+    lodBin: overrides.lodBin ?? null,
+    lod: {
+      lod1Distance: definition.lod1Distance,
+      lod2Distance: definition.lod2Distance,
+      lodTransitionWidth: definition.lodTransitionWidth,
+      distantMeshThreshold: definition.distantMeshThreshold,
+      maxDrawDistance:
+        overrides.maxDrawDistance ??
+        definition.maxDrawDistance ??
+        DEFAULT_SCATTER_MAX_DRAW_DISTANCE,
+      hasFarBin: Boolean(definition.lodMeshes?.far),
+      hasBillboardBin: Boolean(definition.lodMeshes?.billboard)
+    }
   };
 }
 
@@ -270,12 +299,24 @@ export function simulateScatterVisibility(
     }
 
     worldPosition.copy(candidate.liftedLocalPosition).applyMatrix4(ownerMatrixWorld);
-    if (worldPosition.distanceTo(cameraPosition) > params.maxDrawDistance) {
+    const distanceToCamera = worldPosition.distanceTo(cameraPosition);
+    if (distanceToCamera > params.maxDrawDistance) {
       continue;
     }
     const sphere = new THREE.Sphere(worldPosition.clone(), candidate.radius);
     if (!frustum.intersectsSphere(sphere)) {
       continue;
+    }
+
+    if (params.lodBin) {
+      const lodBin = computeLodBin(distanceToCamera, params.lod);
+      if (lodBin !== params.lodBin) {
+        continue;
+      }
+      const keepProbability = computeKeepProbability(distanceToCamera, params.lod);
+      if (!hashKeep(index, SCATTER_LOD_BAND_SEEDS[params.lodBin], keepProbability)) {
+        continue;
+      }
     }
 
     visibleIndices.push(index);
@@ -297,8 +338,11 @@ function nodeHash01(seedNode: ReturnType<typeof float>) {
 }
 
 export function createScatterComputePipeline(options: {
-  geometry: THREE.BufferGeometry;
-  material: THREE.Material;
+  bins: Array<{
+    bin: Exclude<ScatterLodBin, "none">;
+    geometry: THREE.BufferGeometry;
+    material: THREE.Material;
+  }>;
   samples: readonly SurfaceScatterSample[];
   densityWeights: readonly number[];
   params: ScatterComputeLayerParams;
@@ -310,189 +354,69 @@ export function createScatterComputePipeline(options: {
     // Single-level partials scan can't cover ceil(N/WG) > WG. Recursive
     // partials scan would let us scale further but isn't implemented in
     // v1; the CPU fallback in scatter/index.ts handles oversize layers.
-    // eslint-disable-next-line no-console -- diagnostic; bypasses optional logger
     console.warn(
       `[surface-scatter] GPU compute pipeline declined for layer with ${options.samples.length} samples (above the ${MAX_GPU_COMPACTION_CANDIDATES}-candidate cap for single-level partials scan). Falling back to CPU instancing.`
     );
     return null;
   }
+  if (options.bins.length === 0) {
+    return null;
+  }
 
   const packedInputs = packScatterSampleInputs(options.samples, options.densityWeights);
-  const buffers = createScatterGpuInstanceBuffers(packedInputs);
-  const { geometry, material, params } = options;
+  const candidateBuffers = createScatterGpuCandidateBuffers(packedInputs);
+  const { params } = options;
   /* eslint-disable @typescript-eslint/no-explicit-any -- three/tsl's current
    * storage-node types collapse to `never` for storage-instanced mat4/indirect
    * buffers even though the underlying runtime path is valid. Keep the casts
    * tightly scoped to the storage-node construction seam. */
   const storageAny = storage as any;
 
-  // Use a plain THREE.Mesh, NOT InstancedMesh. Instancing is driven by the
-  // indirect-draw args buffer that the compute pass writes; per-instance
-  // matrix/color/origin are read from storage buffers in the vertex shader
-  // via `instanceIndex`. This is the canonical Three.js TSL compute-scatter
-  // pattern (cf. Codrops "False Earth", `webgpu_compute_birds`). The earlier
-  // approach of overriding `mesh.instanceMatrix` / `mesh.instanceColor` with
-  // storage attributes fights Three's InstancedMesh abstraction (which
-  // expects CPU-driven `setMatrixAt` + `needsUpdate`) and was the root cause
-  // of the scatter not rendering — the renderer's instancing path didn't
-  // route through the storage buffers correctly even though the casts were
-  // structurally type-safe.
-  // Use THREE.InstancedMesh so we get Three's automatic mat4-attribute
-  // handling: `mesh.instanceMatrix` is special-cased by the WebGPU
-  // backend to split the mat4 into 4 vec4 vertex attribute locations
-  // in the generated WGSL — WGSL doesn't allow mat4 attributes via
-  // `@location` directly, only scalars and vectors. A plain THREE.Mesh
-  // with `setAttribute("instanceMatrix", visibleMatrices)` does NOT
-  // get that splitting and produces the WGSL validation error
-  // "@location must only be applied to declarations of numeric scalar
-  // or numeric vector type" on the mat4x4 attribute.
-  //
-  // Storage-driven instancing still works through the InstancedMesh
-  // path: `StorageInstancedBufferAttribute` extends
-  // `InstancedBufferAttribute`, so assigning it to `mesh.instanceMatrix`
-  // routes through Three's optimized mat4-splitting code path AND
-  // remains writable from compute via the storage()-node bindings
-  // declared further down. One GPU buffer, two binding views —
-  // compute writes via storage, render reads via instance attribute.
-  //
-  // Instance count is driven by `setIndirect` (the indirect-draw-args
-  // buffer's instanceCount field, written each frame by the
-  // finalize-indirect compute pass).
-  const mesh = new THREE.InstancedMesh(
-    geometry,
-    material,
-    packedInputs.sampleCount
-  );
-  mesh.name = `surface-scatter:${params.layerId}:gpu`;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.frustumCulled = false;
-
-  mesh.instanceMatrix =
-    buffers.visibleMatrices as unknown as THREE.InstancedBufferAttribute;
-  mesh.instanceColor =
-    buffers.visibleColors as unknown as THREE.InstancedBufferAttribute;
-  mesh.geometry.setAttribute(
-    "instanceOrigin",
-    buffers.visibleOrigins as unknown as THREE.BufferAttribute
-  );
-  // DETERMINISTIC PREFIX-SUM COMPACTION ("Option B"):
-  // Each frame, the cull→scan→compact pipeline (markVisible, scanLocal,
-  // scanPartials, scatterCompact below) packs visible candidates into a
-  // contiguous [0..visibleCount) range in visibleMatrices/Colors/Origins
-  // in candidate-sampleIndex order. The order is deterministic across
-  // frames because each thread writes to `workgroupOffsets[wgid] +
-  // localOffsets[tid]`, both of which are pure functions of the visibility
-  // bitmap — no atomicAdd race. Indirect draw with `setIndirect` reads
-  // the per-frame visibleCount written by scanPartials, so the GPU draws
-  // exactly the visible instances and skips the vertex shader for
-  // invisible candidates.
-  //
-  // Why determinism matters: BLEND-mode foliage (Grass Surface 6) renders
-  // with depth-write off; alpha blending accumulates in instance order,
-  // so non-deterministic order produced TV-static flicker. The previous
-  // atomicAdd-based packing was the bug source.
-  mesh.geometry.setIndirect(buffers.indirectDrawArgs, 0);
-  // mesh.count is the upper bound; the actual draw count comes from
-  // indirectDrawArgs[1] which scanPartials writes each frame.
-  mesh.count = packedInputs.sampleCount;
-
   const samplePositionsNode: any = storageAny(
-    buffers.samplePositions,
+    candidateBuffers.samplePositions,
     "vec3",
     packedInputs.sampleCount
   ).toReadOnly();
   const sampleNormalsNode: any = storageAny(
-    buffers.sampleNormals,
+    candidateBuffers.sampleNormals,
     "vec3",
     packedInputs.sampleCount
   ).toReadOnly();
   const sampleDensityNode: any = storageAny(
-    buffers.sampleDensityWeights,
+    candidateBuffers.sampleDensityWeights,
     "float",
     packedInputs.sampleCount
   ).toReadOnly();
 
   const candidateActiveNode: any = storageAny(
-    buffers.candidateActive,
+    candidateBuffers.candidateActive,
     "uint",
     packedInputs.sampleCount
   );
   const candidatePositionNode: any = storageAny(
-    buffers.candidatePositions,
+    candidateBuffers.candidatePositions,
     "vec3",
     packedInputs.sampleCount
   );
   const candidateMatrixNode: any = storageAny(
-    buffers.candidateMatrices,
+    candidateBuffers.candidateMatrices,
     null,
     packedInputs.sampleCount
   );
   const candidateColorNode: any = storageAny(
-    buffers.candidateColors,
+    candidateBuffers.candidateColors,
     "vec3",
     packedInputs.sampleCount
   );
   const candidateRadiusNode: any = storageAny(
-    buffers.candidateRadii,
+    candidateBuffers.candidateRadii,
     "float",
     packedInputs.sampleCount
-  );
-
-  // Plain (non-atomic) uint storage. Option B's scanPartials kernel
-  // writes visibleCount[0] with a regular assign() from the single
-  // first-thread of the partials workgroup; no atomic ops needed.
-  const visibleCountNode: any = storageAny(buffers.visibleCount, "uint", 1);
-  const visibleMatrixNode: any = storageAny(
-    buffers.visibleMatrices,
-    null,
-    packedInputs.sampleCount
-  );
-  const visibleColorNode: any = storageAny(
-    buffers.visibleColors,
-    "vec3",
-    packedInputs.sampleCount
-  );
-  const visibleOriginNode: any = storageAny(
-    buffers.visibleOrigins,
-    "vec2",
-    packedInputs.sampleCount
-  );
-  const indirectArgsNode: any = storageAny(buffers.indirectDrawArgs, "uint", 5);
-  // Per-frame compaction buffers.
-  const frameActiveNode: any = storageAny(
-    buffers.frameActive,
-    "uint",
-    packedInputs.sampleCount
-  );
-  const localOffsetsNode: any = storageAny(
-    buffers.localOffsets,
-    "uint",
-    packedInputs.sampleCount
-  );
-  const workgroupPartialsNode: any = storageAny(
-    buffers.workgroupPartials,
-    "uint",
-    buffers.scanWorkgroupCount
-  );
-  const workgroupOffsetsNode: any = storageAny(
-    buffers.workgroupOffsets,
-    "uint",
-    buffers.scanWorkgroupCount
   );
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const sampleCountUniform = uniform(uint(packedInputs.sampleCount));
-  const scanWorkgroupCountUniform = uniform(uint(buffers.scanWorkgroupCount));
-
-  // Per-instance position and color come from `mesh.instanceMatrix` and
-  // `mesh.instanceColor` (set above) via Three's automatic InstancedMesh
-  // attribute path. We do NOT wrap material.positionNode / colorNode
-  // here — Three composes the model × instanceMatrix × position
-  // transform internally for InstancedMesh. The `material` is whatever
-  // the deform shader (foliage-wind) authored; its `positionNode` is
-  // the local-space position with wind deformation, which Three then
-  // multiplies by the per-instance matrix.
+  const scanWorkgroupCountUniform = uniform(uint(candidateBuffers.scanWorkgroupCount));
 
   const layerSeedUniform = uniform(float(params.seed));
   const scaleMinUniform = uniform(float(params.scaleJitter[0]));
@@ -503,12 +427,19 @@ export function createScatterComputePipeline(options: {
   const baseColorUniform = uniform(new THREE.Color(params.baseColor));
   const baseRadiusUniform = uniform(float(params.baseInstanceRadius));
   const maxDrawDistanceUniform = uniform(float(params.maxDrawDistance));
+  const lod1DistanceUniform = uniform(float(params.lod.lod1Distance));
+  const lod2DistanceUniform = uniform(float(params.lod.lod2Distance));
+  const lodTransitionWidthUniform = uniform(float(params.lod.lodTransitionWidth));
+  const distantMeshThresholdUniform = uniform(float(params.lod.distantMeshThreshold));
+  const hasFarBinUniform = uniform(uint(params.lod.hasFarBin ? 1 : 0));
+  const hasBillboardBinUniform = uniform(uint(params.lod.hasBillboardBin ? 1 : 0));
+  const lodNearBandSeedUniform = uniform(float(SCATTER_LOD_BAND_SEEDS.near));
+  const lodFarBandSeedUniform = uniform(float(SCATTER_LOD_BAND_SEEDS.far));
+  const lodBillboardBandSeedUniform = uniform(float(SCATTER_LOD_BAND_SEEDS.billboard));
   const viewProjectionUniform = uniform(new THREE.Matrix4());
   const ownerMatrixWorldUniform = uniform(new THREE.Matrix4());
+  const cameraLocalPositionUniform = uniform(new THREE.Vector3());
   const cameraPositionUniform = uniform(new THREE.Vector3());
-  const indexedGeometry = geometry.index !== null;
-  const indexCountUniform = uniform(uint(indexedGeometry ? geometry.index!.count : geometry.getAttribute("position").count));
-  const firstIndexUniform = uniform(uint(0));
 
   const buildCandidatesCompute = Fn(() => {
     const sampleIndex = instanceIndex.toVar();
@@ -599,58 +530,6 @@ export function createScatterComputePipeline(options: {
   //                   (sampleIndex order), no atomicAdd race.
   // ============================================================
 
-  const initIndirectArgsCompute = Fn(() => {
-    // One-time init for the constant fields of the indirect draw args.
-    // (instanceCount, indirectArgs[1], is overwritten by scanPartials
-    // each frame.)
-    indirectArgsNode.element(uint(0)).assign(indexCountUniform);
-    indirectArgsNode.element(uint(1)).assign(uint(0));
-    indirectArgsNode.element(uint(2)).assign(firstIndexUniform);
-    indirectArgsNode.element(uint(3)).assign(uint(0));
-    indirectArgsNode.element(uint(4)).assign(uint(0));
-  })()
-    .compute(1)
-    .setName("Scatter Init Indirect Args");
-
-  const markVisibleCompute = Fn(() => {
-    const sampleIndex = instanceIndex.toVar();
-    // Bounds check: dispatch rounds up to a workgroup boundary, so
-    // some threads in the last workgroup may have sampleIndex >=
-    // sampleCount. Skip them — and their slot in frameActive must
-    // not be touched (it's not part of the per-layer state).
-    If(sampleIndex.greaterThanEqual(sampleCountUniform), () => {
-      Return();
-    });
-
-    const active = candidateActiveNode.element(sampleIndex).toVar();
-    const localPosition = candidatePositionNode.element(sampleIndex).toVar();
-    const localPosition4 = vec4(localPosition, 1).toVar();
-    const worldPosition4 = ownerMatrixWorldUniform.mul(localPosition4).toVar();
-    const worldPosition = worldPosition4.xyz.toVar();
-    const clipPosition = viewProjectionUniform.mul(vec4(worldPosition, 1)).toVar();
-    const radius = candidateRadiusNode.element(sampleIndex).toVar();
-    const insideFrustum = clipPosition.w.greaterThan(float(0))
-      .and(abs(clipPosition.x).lessThanEqual(clipPosition.w.add(radius)))
-      .and(abs(clipPosition.y).lessThanEqual(clipPosition.w.add(radius)))
-      // `-radius` here would be JS unary minus on a TSL node, which
-      // returns NaN and emits the literal `NaN.0` into WGSL — invalid.
-      // Use `.negate()` to negate the node value at GPU time.
-      .and(clipPosition.z.greaterThanEqual(radius.negate()))
-      .and(clipPosition.z.lessThanEqual(clipPosition.w.add(radius)));
-    const insideDistance = distance(worldPosition, cameraPositionUniform).lessThanEqual(
-      maxDrawDistanceUniform
-    );
-    const visible = active.notEqual(uint(0))
-      .and(insideFrustum)
-      .and(insideDistance);
-
-    frameActiveNode
-      .element(sampleIndex)
-      .assign(visible.select(uint(1), uint(0)));
-  })()
-    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
-    .setName("Scatter Mark Visible");
-
   // Hillis-Steele inclusive scan inside a workgroup. The validated
   // pattern from the prefix-sum spike: read scratch[tid] AND
   // scratch[tid - stride] into per-thread vars, barrier, then write
@@ -675,141 +554,355 @@ export function createScatterComputePipeline(options: {
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
-  const scanLocalCompute = Fn(() => {
-    const tid = instanceIndex.toVar();
-    const lid = invocationLocalIndex.toVar();
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
-     * TSL ComputeBuiltinNode doesn't expose .x in its types but the
-     * swizzle accessor exists at runtime (chainable nodes). */
-    const wgid = (workgroupId as any).x.toVar();
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-
-    // Load this thread's flag (0 if out-of-range — keeps the scan a
-    // no-op for trailing threads in the last partial workgroup).
-    const flag = uint(0).toVar();
-    If(tid.lessThan(sampleCountUniform), () => {
-      flag.assign(frameActiveNode.element(tid));
-    });
-    scratch.element(lid).assign(flag);
-    workgroupBarrier();
-
-    emitWorkgroupInclusiveScan(scratch, lid);
-
-    // scratch[lid] now holds the inclusive scan up to and including
-    // this thread. Subtract own flag for the EXCLUSIVE offset (the
-    // count of preceding visible candidates within this workgroup).
-    If(tid.lessThan(sampleCountUniform), () => {
-      const inclusive = scratch.element(lid);
-      localOffsetsNode.element(tid).assign(inclusive.sub(flag));
-    });
-
-    // Last thread of the workgroup writes the workgroup total.
-    // For the last (partial) workgroup, scratch[WG-1] still equals
-    // the cumulative flag count because all threads beyond
-    // sampleCount contributed 0.
-    If(lid.equal(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1)), () => {
-      workgroupPartialsNode.element(wgid).assign(scratch.element(lid));
-    });
-  })()
-    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
-    .setName("Scatter Scan Local");
-
-  const scanPartialsCompute = Fn(() => {
-    const lid = invocationLocalIndex.toVar();
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
-    /* eslint-enable @typescript-eslint/no-explicit-any */
-
-    // Load each workgroup's partial total (0 if beyond the active
-    // workgroup count — keeps the scan correct for any sampleCount).
-    const partial = uint(0).toVar();
-    If(lid.lessThan(scanWorkgroupCountUniform), () => {
-      partial.assign(workgroupPartialsNode.element(lid));
-    });
-    scratch.element(lid).assign(partial);
-    workgroupBarrier();
-
-    emitWorkgroupInclusiveScan(scratch, lid);
-
-    // scratch[lid] is now the inclusive scan over partials. Write
-    // exclusive scan to workgroupOffsets — that's what scatterCompact
-    // adds to its localOffset to compute the output index.
-    If(lid.lessThan(scanWorkgroupCountUniform), () => {
-      const inclusive = scratch.element(lid);
-      workgroupOffsetsNode.element(lid).assign(inclusive.sub(partial));
-    });
-
-    // First thread writes the grand total to BOTH visibleCount and
-    // indirectDrawArgs[1] (the instanceCount the GPU reads on draw).
-    // scratch[WG-1] holds the cumulative total because trailing
-    // partial-array entries contributed 0 to the scan.
-    If(lid.equal(uint(0)), () => {
-      const total = scratch.element(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1));
-      visibleCountNode.element(uint(0)).assign(total);
-      indirectArgsNode.element(uint(1)).assign(total);
-    });
-  })()
-    .compute(SCATTER_SCAN_WORKGROUP_SIZE, [SCATTER_SCAN_WORKGROUP_SIZE])
-    .setName("Scatter Scan Partials");
-
-  const scatterCompactCompute = Fn(() => {
-    const tid = instanceIndex.toVar();
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
-     * TSL ComputeBuiltinNode doesn't expose .x in its types but the
-     * swizzle accessor exists at runtime (chainable nodes). */
-    const wgid = (workgroupId as any).x.toVar();
-
-    If(tid.greaterThanEqual(sampleCountUniform), () => {
-      Return();
-    });
-    const flag = frameActiveNode.element(tid).toVar();
-    If(flag.equal(uint(0)), () => {
-      Return();
-    });
-
-    const outputIdx = workgroupOffsetsNode
-      .element(wgid)
-      .add(localOffsetsNode.element(tid))
-      .toVar();
-
-    visibleMatrixNode
-      .element(outputIdx)
-      .assign(candidateMatrixNode.element(tid));
-    visibleColorNode
-      .element(outputIdx)
-      .assign(candidateColorNode.element(tid));
-
-    // visibleOrigins is per-instance world XZ for wind-sway phasing.
-    // Recompute from candidatePosition + ownerMatrix instead of
-    // adding another storage binding for a precomputed worldXZ.
-    const localPosition = candidatePositionNode.element(tid).toVar();
-    const worldPosition4 = ownerMatrixWorldUniform.mul(vec4(localPosition, 1));
-    visibleOriginNode
-      .element(outputIdx)
-      .assign(vec2(worldPosition4.x, worldPosition4.z));
-  })()
-    .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
-    .setName("Scatter Compact");
-
   let candidatesDirty = true;
-  let indirectArgsInitialized = false;
   const lastPreparedFrameByCamera = new Map<string, number>();
+  const ownerObject = new THREE.Object3D();
 
-  function updateCullingUniforms(camera: THREE.Camera): void {
+  function updateCullingUniforms(
+    camera: THREE.Camera,
+    ownerMatrixWorldSource: THREE.Object3D
+  ): void {
     camera.updateMatrixWorld(true);
     viewProjectionUniform.value.multiplyMatrices(
       camera.projectionMatrix,
       camera.matrixWorldInverse
     );
-    ownerMatrixWorldUniform.value.copy(mesh.matrixWorld);
+    ownerMatrixWorldUniform.value.copy(ownerMatrixWorldSource.matrixWorld);
     cameraPositionUniform.value.setFromMatrixPosition(camera.matrixWorld);
+    cameraLocalPositionUniform.value
+      .copy(cameraPositionUniform.value)
+      .applyMatrix4(
+        new THREE.Matrix4().copy(ownerMatrixWorldSource.matrixWorld).invert()
+      );
   }
 
+  const binStates = options.bins.map((binConfig) => {
+    const buffers = createScatterGpuVisibleBinBuffers(
+      packedInputs.sampleCount,
+      candidateBuffers.scanWorkgroupCount
+    );
+    const mesh = new THREE.InstancedMesh(
+      binConfig.geometry,
+      binConfig.material,
+      packedInputs.sampleCount
+    );
+    mesh.name = `surface-scatter:${params.layerId}:gpu:${binConfig.bin}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix =
+      buffers.visibleMatrices as unknown as THREE.InstancedBufferAttribute;
+    mesh.instanceColor =
+      buffers.visibleColors as unknown as THREE.InstancedBufferAttribute;
+    mesh.geometry.setAttribute(
+      "instanceOrigin",
+      buffers.visibleOrigins as unknown as THREE.BufferAttribute
+    );
+    mesh.geometry.setIndirect(buffers.indirectDrawArgs, 0);
+    mesh.count = packedInputs.sampleCount;
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const visibleCountNode: any = storageAny(buffers.visibleCount, "uint", 1);
+    const visibleMatrixNode: any = storageAny(
+      buffers.visibleMatrices,
+      null,
+      packedInputs.sampleCount
+    );
+    const visibleColorNode: any = storageAny(
+      buffers.visibleColors,
+      "vec3",
+      packedInputs.sampleCount
+    );
+    const visibleOriginNode: any = storageAny(
+      buffers.visibleOrigins,
+      "vec2",
+      packedInputs.sampleCount
+    );
+    const indirectArgsNode: any = storageAny(buffers.indirectDrawArgs, "uint", 5);
+    const frameActiveNode: any = storageAny(
+      buffers.frameActive,
+      "uint",
+      packedInputs.sampleCount
+    );
+    const localOffsetsNode: any = storageAny(
+      buffers.localOffsets,
+      "uint",
+      packedInputs.sampleCount
+    );
+    const workgroupPartialsNode: any = storageAny(
+      buffers.workgroupPartials,
+      "uint",
+      candidateBuffers.scanWorkgroupCount
+    );
+    const workgroupOffsetsNode: any = storageAny(
+      buffers.workgroupOffsets,
+      "uint",
+      candidateBuffers.scanWorkgroupCount
+    );
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const indexedGeometry = binConfig.geometry.index !== null;
+    const indexCountUniform = uniform(
+      uint(
+        indexedGeometry
+          ? binConfig.geometry.index!.count
+          : binConfig.geometry.getAttribute("position").count
+      )
+    );
+    const firstIndexUniform = uniform(uint(0));
+    const lodBinUniform = uniform(
+      uint(binConfig.bin === "near" ? 1 : binConfig.bin === "far" ? 2 : 3)
+    );
+
+    const initIndirectArgsCompute = Fn(() => {
+      indirectArgsNode.element(uint(0)).assign(indexCountUniform);
+      indirectArgsNode.element(uint(1)).assign(uint(0));
+      indirectArgsNode.element(uint(2)).assign(firstIndexUniform);
+      indirectArgsNode.element(uint(3)).assign(uint(0));
+      indirectArgsNode.element(uint(4)).assign(uint(0));
+    })()
+      .compute(1)
+      .setName(`Scatter Init Indirect Args (${binConfig.bin})`);
+
+    const markVisibleCompute = Fn(() => {
+      const sampleIndex = instanceIndex.toVar();
+      If(sampleIndex.greaterThanEqual(sampleCountUniform), () => {
+        Return();
+      });
+
+      const active = candidateActiveNode.element(sampleIndex).toVar();
+      const localPosition = candidatePositionNode.element(sampleIndex).toVar();
+      const localPosition4 = vec4(localPosition, 1).toVar();
+      const worldPosition4 = ownerMatrixWorldUniform.mul(localPosition4).toVar();
+      const worldPosition = worldPosition4.xyz.toVar();
+      const clipPosition = viewProjectionUniform.mul(vec4(worldPosition, 1)).toVar();
+      const radius = candidateRadiusNode.element(sampleIndex).toVar();
+      const distanceToCamera = distance(worldPosition, cameraPositionUniform).toVar();
+      const insideFrustum = clipPosition.w.greaterThan(float(0))
+        .and(abs(clipPosition.x).lessThanEqual(clipPosition.w.add(radius)))
+        .and(abs(clipPosition.y).lessThanEqual(clipPosition.w.add(radius)))
+        .and(clipPosition.z.greaterThanEqual(radius.negate()))
+        .and(clipPosition.z.lessThanEqual(clipPosition.w.add(radius)));
+      const insideDistance = distanceToCamera.lessThanEqual(maxDrawDistanceUniform);
+
+      const visible = uint(0).toVar();
+      If(
+        active.notEqual(uint(0)).and(insideFrustum).and(insideDistance),
+        () => {
+          const halfTransition = lodTransitionWidthUniform.mul(float(0.5)).toVar();
+          const lod1Blend = clamp(
+            distanceToCamera
+              .sub(lod1DistanceUniform.sub(halfTransition))
+              .div(max(lodTransitionWidthUniform, float(0.0001))),
+            float(0),
+            float(1)
+          ).toVar();
+          const lod1Smooth = lod1Blend
+            .mul(lod1Blend)
+            .mul(float(3).sub(lod1Blend.mul(float(2))))
+            .toVar();
+          const lod2Blend = clamp(
+            distanceToCamera
+              .sub(lod2DistanceUniform.sub(halfTransition))
+              .div(max(lodTransitionWidthUniform, float(0.0001))),
+            float(0),
+            float(1)
+          ).toVar();
+          const lod2Smooth = lod2Blend
+            .mul(lod2Blend)
+            .mul(float(3).sub(lod2Blend.mul(float(2))))
+            .toVar();
+          const keepAfterLod1 = float(1)
+            .add(float(LOD1_KEEP_RATIO - 1).mul(lod1Smooth))
+            .toVar();
+          const keepProbability = keepAfterLod1
+            .add(float(LOD2_KEEP_RATIO).sub(keepAfterLod1).mul(lod2Smooth))
+            .toVar();
+
+          const selectedBin = uint(1).toVar();
+          If(
+            hasBillboardBinUniform.equal(uint(1)).and(
+              distanceToCamera.greaterThanEqual(distantMeshThresholdUniform)
+            ),
+            () => {
+              selectedBin.assign(uint(3));
+            }
+          ).ElseIf(
+            hasFarBinUniform.equal(uint(1)).and(
+              distanceToCamera.greaterThanEqual(lod1DistanceUniform)
+            ),
+            () => {
+              selectedBin.assign(uint(2));
+            }
+          ).Else(() => {
+            selectedBin.assign(uint(1));
+          });
+
+          const bandSeed = float(11).toVar();
+          If(lodBinUniform.equal(uint(2)), () => {
+            bandSeed.assign(lodFarBandSeedUniform);
+          }).ElseIf(lodBinUniform.equal(uint(3)), () => {
+            bandSeed.assign(lodBillboardBandSeedUniform);
+          }).Else(() => {
+            bandSeed.assign(lodNearBandSeedUniform);
+          });
+          const keepRandom = fract(
+            sin(
+              sampleIndex.toFloat().mul(float(12.9898)).add(
+                bandSeed.mul(float(78.233))
+              )
+            ).mul(float(43758.5453))
+          ).toVar();
+
+          visible.assign(
+            selectedBin
+              .equal(lodBinUniform)
+              .and(keepRandom.lessThanEqual(keepProbability))
+              .select(uint(1), uint(0))
+          );
+        }
+      );
+
+      frameActiveNode.element(sampleIndex).assign(visible);
+    })()
+      .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+      .setName(`Scatter Mark Visible (${binConfig.bin})`);
+
+    const scanLocalCompute = Fn(() => {
+      const tid = instanceIndex.toVar();
+      const lid = invocationLocalIndex.toVar();
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+       * Three TSL's workgroupId typing does not expose swizzle accessors. */
+      const wgid = (workgroupId as any).x.toVar();
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+       * TSL workgroup arrays collapse to `any` for element access here. */
+      const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
+      const flag = uint(0).toVar();
+      If(tid.lessThan(sampleCountUniform), () => {
+        flag.assign(frameActiveNode.element(tid));
+      });
+      scratch.element(lid).assign(flag);
+      workgroupBarrier();
+      emitWorkgroupInclusiveScan(scratch, lid);
+      If(tid.lessThan(sampleCountUniform), () => {
+        const inclusive = scratch.element(lid);
+        localOffsetsNode.element(tid).assign(inclusive.sub(flag));
+      });
+      If(lid.equal(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1)), () => {
+        workgroupPartialsNode.element(wgid).assign(scratch.element(lid));
+      });
+    })()
+      .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+      .setName(`Scatter Scan Local (${binConfig.bin})`);
+
+    const scanPartialsCompute = Fn(() => {
+      const lid = invocationLocalIndex.toVar();
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+       * TSL workgroup arrays collapse to `any` for element access here. */
+      const scratch: any = workgroupArray("uint", SCATTER_SCAN_WORKGROUP_SIZE);
+      const partial = uint(0).toVar();
+      If(lid.lessThan(scanWorkgroupCountUniform), () => {
+        partial.assign(workgroupPartialsNode.element(lid));
+      });
+      scratch.element(lid).assign(partial);
+      workgroupBarrier();
+      emitWorkgroupInclusiveScan(scratch, lid);
+      If(lid.lessThan(scanWorkgroupCountUniform), () => {
+        const inclusive = scratch.element(lid);
+        workgroupOffsetsNode.element(lid).assign(inclusive.sub(partial));
+      });
+      If(lid.equal(uint(0)), () => {
+        const total = scratch.element(uint(SCATTER_SCAN_WORKGROUP_SIZE - 1));
+        visibleCountNode.element(uint(0)).assign(total);
+        indirectArgsNode.element(uint(1)).assign(total);
+      });
+    })()
+      .compute(SCATTER_SCAN_WORKGROUP_SIZE, [SCATTER_SCAN_WORKGROUP_SIZE])
+      .setName(`Scatter Scan Partials (${binConfig.bin})`);
+
+    const scatterCompactCompute = Fn(() => {
+      const tid = instanceIndex.toVar();
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any --
+       * Three TSL's workgroupId typing does not expose swizzle accessors. */
+      const wgid = (workgroupId as any).x.toVar();
+      If(tid.greaterThanEqual(sampleCountUniform), () => {
+        Return();
+      });
+      const flag = frameActiveNode.element(tid).toVar();
+      If(flag.equal(uint(0)), () => {
+        Return();
+      });
+      const outputIdx = workgroupOffsetsNode
+        .element(wgid)
+        .add(localOffsetsNode.element(tid))
+        .toVar();
+      if (binConfig.bin === "billboard") {
+        const localPosition = candidatePositionNode.element(tid).toVar();
+        const sampleNormal = normalize(sampleNormalsNode.element(tid)).toVar();
+        const liftedLocalPosition = localPosition
+          .add(sampleNormal.mul(float(0.01)))
+          .toVar();
+        const toCamera = cameraLocalPositionUniform
+          .sub(liftedLocalPosition)
+          .toVar();
+        const forward = normalize(
+          toCamera.sub(sampleNormal.mul(dot(toCamera as never, sampleNormal as never)))
+        ).toVar();
+        const right = normalize(cross(sampleNormal as never, forward as never)).toVar();
+        const billboardForward = normalize(cross(right as never, sampleNormal as never)).toVar();
+        const baseScale = scaleMinUniform.add(
+          scaleRangeUniform.mul(nodeHash01(layerSeedUniform.add(tid).add(float(3))))
+        ).toVar();
+        const verticalScale = baseScale.mul(
+          float(1).add(
+            nodeHash01(layerSeedUniform.add(tid).add(float(4)))
+              .mul(float(2))
+              .sub(float(1))
+              .mul(verticalScaleJitterUniform)
+          )
+        ).toVar();
+        visibleMatrixNode.element(outputIdx).assign(
+          mat4(
+            vec4(right.mul(baseScale), 0),
+            vec4(sampleNormal.mul(verticalScale), 0),
+            vec4(billboardForward.mul(baseScale), 0),
+            vec4(liftedLocalPosition, 1)
+          )
+        );
+      } else {
+        visibleMatrixNode.element(outputIdx).assign(candidateMatrixNode.element(tid));
+      }
+      visibleColorNode.element(outputIdx).assign(candidateColorNode.element(tid));
+      const localPosition = candidatePositionNode.element(tid).toVar();
+      const worldPosition4 = ownerMatrixWorldUniform.mul(vec4(localPosition, 1));
+      visibleOriginNode
+        .element(outputIdx)
+        .assign(vec2(worldPosition4.x, worldPosition4.z));
+    })()
+      .compute(packedInputs.sampleCount, [SCATTER_SCAN_WORKGROUP_SIZE])
+      .setName(`Scatter Compact (${binConfig.bin})`);
+
+    return {
+      bin: binConfig.bin,
+      mesh,
+      buffers,
+      initIndirectArgsCompute,
+      markVisibleCompute,
+      scanLocalCompute,
+      scanPartialsCompute,
+      scatterCompactCompute,
+      indirectArgsInitialized: false
+    };
+  });
+
+  const ownerMatrixWorldSource = binStates[0]?.mesh ?? ownerObject;
+
   return {
-    mesh,
-    buffers,
+    bins: binStates.map((state) => ({
+      bin: state.bin,
+      mesh: state.mesh,
+      buffers: state.buffers
+    })),
     markCandidatesDirty() {
       candidatesDirty = true;
       lastPreparedFrameByCamera.clear();
@@ -821,56 +914,35 @@ export function createScatterComputePipeline(options: {
         return;
       }
 
-      if (!indirectArgsInitialized) {
-        // Constant-field init: indexCount, firstIndex, baseVertex,
-        // firstInstance never change. instanceCount is overwritten by
-        // scanPartials each frame.
-        renderer.compute(initIndirectArgsCompute);
-        indirectArgsInitialized = true;
-      }
-
       if (candidatesDirty) {
         renderer.compute(buildCandidatesCompute);
         candidatesDirty = false;
       }
 
-      updateCullingUniforms(camera);
-      // Sequenced compaction. WebGPU spec guarantees in-order execution
-      // on the device queue, so dependent reads (each pass reads what
-      // the previous pass wrote) are safe across compute() calls.
-      renderer.compute(markVisibleCompute);
-      renderer.compute(scanLocalCompute);
-      renderer.compute(scanPartialsCompute);
-      renderer.compute(scatterCompactCompute);
+      updateCullingUniforms(camera, ownerMatrixWorldSource);
+      for (const state of binStates) {
+        if (!state.indirectArgsInitialized) {
+          renderer.compute(state.initIndirectArgsCompute);
+          state.indirectArgsInitialized = true;
+        }
+        renderer.compute(state.markVisibleCompute);
+        renderer.compute(state.scanLocalCompute);
+        renderer.compute(state.scanPartialsCompute);
+        renderer.compute(state.scatterCompactCompute);
+      }
       lastPreparedFrameByCamera.set(cameraKey, frameId);
-    },
-    async readVisibleCount(renderer: WebGPURenderer): Promise<number> {
-      const buffer = await renderer.getArrayBufferAsync(buffers.visibleCount);
-      return new Uint32Array(buffer)[0] ?? 0;
-    },
-    async readIndirectArgs(renderer: WebGPURenderer): Promise<Uint32Array> {
-      const buffer = await renderer.getArrayBufferAsync(buffers.indirectDrawArgs);
-      return new Uint32Array(buffer);
-    },
-    async readVisibleOrigins(renderer: WebGPURenderer): Promise<Float32Array> {
-      const visibleCount = await this.readVisibleCount(renderer);
-      const buffer = await renderer.getArrayBufferAsync(buffers.visibleOrigins);
-      return new Float32Array(buffer).slice(0, visibleCount * 2);
     },
     dispose() {
       buildCandidatesCompute.dispose();
-      initIndirectArgsCompute.dispose();
-      markVisibleCompute.dispose();
-      scanLocalCompute.dispose();
-      scanPartialsCompute.dispose();
-      scatterCompactCompute.dispose();
-      buffers.dispose();
-      // Don't manually deleteAttribute("instanceOrigin") here — by the
-      // time this runs, the caller (scatter/index.ts) has already
-      // disposed the mesh's geometry, which fires Three's normal
-      // attribute cleanup. Manually deleting before geometry.dispose
-      // leaves a stale RenderObject slot that crashes onDispose
-      // ("Cannot read properties of undefined (reading 'id')").
+      candidateBuffers.dispose();
+      for (const state of binStates) {
+        state.initIndirectArgsCompute.dispose();
+        state.markVisibleCompute.dispose();
+        state.scanLocalCompute.dispose();
+        state.scanPartialsCompute.dispose();
+        state.scatterCompactCompute.dispose();
+        state.buffers.dispose();
+      }
     }
   };
 }

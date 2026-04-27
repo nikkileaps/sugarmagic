@@ -2724,44 +2724,329 @@ the upgrade paths (in increasing complexity):
 **Outcome:** Two LOD mechanisms running in the compute pass's
 visibility cull:
 
-1. **Distance density thin**: beyond `lod1Distance`, drop 3 of 4
-   instances (or a configured ratio). Beyond `lod2Distance`, drop
-   7 of 8. Smooth hash-based rejection — the same blade never
-   suddenly pops in or out; rejection is deterministic per
-   instance seed + distance band.
-2. **Mesh swap**: beyond `distantMeshThreshold`, swap the tuft /
-   flower mesh to a lower-poly variant (or a flat billboard, or a
-   single-triangle decal). Each `GrassTypeDefinition` /
-   `FlowerTypeDefinition` / `RockTypeDefinition` gains
-   `lodMeshes: { near: MeshSource, far?: MeshSource,
-   billboard?: MeshSource }`.
-3. Beyond `maxDistance`, scatter fades out entirely — at that
-   distance the terrain texture on the ground carries the visual
-   impression of grass without per-instance draws. Matches Ghost
-   of Tsushima's "very far → replaced by terrain texture" technique.
+1. **Distance density thin (smoothstep-blended)**: beyond
+   `lod1Distance`, drop 3 of 4 instances (or a configured ratio).
+   Beyond `lod2Distance`, drop 7 of 8. Per-blade rejection
+   probability is `smoothstep(threshold - lodTransitionWidth/2,
+   threshold + lodTransitionWidth/2, distance)` so the field
+   doesn't pop at the threshold — blades phase out individually
+   over a distance band. Per-blade keep/drop is deterministic on
+   `hash(sampleIndex, bandSeed)`, so the same blade never
+   oscillates in/out across frames; only its rejection threshold
+   is band-position-dependent.
+2. **Mesh swap (per-bin InstancedMesh)**: beyond
+   `distantMeshThreshold`, render with a lower-detail mesh. Each
+   `GrassTypeDefinition` / `FlowerTypeDefinition` /
+   `RockTypeDefinition` gains `lodMeshes: { near, far?,
+   billboard? }`. Each populated entry instantiates its OWN
+   InstancedMesh + visible buffer set, routed by the markVisible
+   kernel writing into per-bin flag arrays. See architecture notes
+   below.
+3. Beyond the existing `maxDrawDistance` (in
+   `createScatterComputeLayerParams`), scatter doesn't render at
+   all. Reuses the existing field — see "Naming reuse" note
+   below. Matches Ghost of Tsushima's "very far → replaced by
+   terrain texture" technique; the ground surface itself carries
+   the visual at extreme range.
 
-All three thresholds are authored per scatter type with project-wide
-sensible defaults.
+All thresholds are authored on the scatter-type definition with
+hardcoded sensible defaults baked into the type-definition
+factory functions. No separate project-wide-defaults tier in v1
+— if/when project-level overrides become a real need, that adds
+a settings tier; resist adding the tier speculatively.
+
+**Naming reuse: `maxDrawDistance` is unchanged.** The existing
+`createScatterComputeLayerParams` field already means "stop
+drawing this scatter type beyond X meters" — that's the same
+domain concept the original 36.17 draft called `maxDistance`.
+Per AGENTS principles ("explicit types for important domain
+concepts", "do not allow multiple persisted models to overlap in
+meaning"), do NOT add a parallel `maxDistance`. Reuse
+`maxDrawDistance` for the cutoff. The new LOD-specific
+parameters are `lod1Distance`, `lod2Distance`,
+`lodTransitionWidth`, `distantMeshThreshold` — these are
+genuinely new concepts.
+
+**`lodMeshes` data shape (locked-in per AGENTS "explicit types"):**
+```ts
+type LodMeshSpec =
+  | { kind: "procedural-default" }
+    // Use the type's existing procedural geometry builder
+    // (createProceduralGrassGeometry, etc.) at full detail.
+  | { kind: "procedural-reduced" }
+    // The type's COVERAGE-PRESERVING STAND-IN geometry. NOT "fewer
+    // blades per tuft" — a fundamentally simpler shape that occupies
+    // the same coverage footprint as a full near-detail tuft using
+    // an order of magnitude fewer triangles. Each scatter type
+    // implements its own stand-in builder.
+    //   Grass: textured cross-quad (two perpendicular quads,
+    //          ~8 tris) per tuft. Pre-baked tuft texture supplies
+    //          the silhouette. Same coverage area as near tuft.
+    //   Flowers: single textured quad (~2 tris) showing a flower-
+    //            head image, scaled to match near radius.
+    //   Rocks: low-detail icosahedron (existing behaviour) — rocks
+    //          are already low-poly, the existing detail-0 sphere
+    //          is fine.
+    // The reduction must be at LEAST 5-10x triangles per instance
+    // vs near; "modest reduction" defeats the point.
+  | { kind: "billboard" }
+    // Camera-facing single quad (~2 tris) per instance, sized to
+    // the type's bounding silhouette. Vertex shader produces a
+    // camera-facing transform every frame. See billboard
+    // architecture below — implementation detail matters; getting
+    // this wrong leaves billboards rendering at wildly wrong world
+    // positions.
+  | { kind: "asset-reference"; assetDefinitionId: string };
+    // For foliage that ships with authored LODs (tree GLBs etc).
+    // Resolved through the existing AuthoredAssetResolver.
+```
+
+Built-in defaults per type:
+- Grass: `near = procedural-default` (full ribbon tufts, ~50-100
+  tris each), `far = procedural-reduced` (textured cross-quad,
+  ~8 tris each), `billboard = billboard` (camera-facing textured
+  quad, ~2 tris each).
+- Flowers: `near = procedural-default`, `far = procedural-reduced`
+  (single textured quad, ~2 tris). No `billboard` (flowers cull
+  entirely past distance instead of billboarding).
+- Rocks: `near = procedural-default` only. Rocks don't typically
+  reach LOD distances; `far`/`billboard` left null.
+
+**Mesh swap architecture (per-bin InstancedMesh):**
+
+The existing scatter-compute pipeline produces ONE InstancedMesh
+per scatter layer. For mesh swap we instantiate ONE InstancedMesh
+per populated LOD bin per scatter layer. Each bin has its own
+visible buffer set (`visibleMatrices`, `visibleColors`,
+`visibleOrigins`), its own `frameActive` flag array, its own
+scan + compact + indirect-draw chain — i.e., a parallel
+instance of the existing pipeline, one per bin.
+
+The `markVisible` kernel (currently writes one `frameActive[i]`
+per candidate) becomes:
+- Compute the candidate's distance from camera.
+- Pick the bin: `near` if distance < `lod1Distance`, `far` if
+  between `lod1Distance` and `distantMeshThreshold`,
+  `billboard` if between `distantMeshThreshold` and
+  `maxDrawDistance`, none if beyond `maxDrawDistance`.
+- (Optional, default off) Compute the LOD-band density-thin keep
+  probability for this band (smoothstep-blended). Apply via
+  `hashKeep(sampleIndex, bandSeed, keepProbability)`.
+- Write to `frameActive_near[i]`, `frameActive_far[i]`,
+  `frameActive_billboard[i]` as appropriate (1 in the chosen bin
+  if density-thin keeps it; 0 in all bins otherwise).
+
+**Default keep ratios are 1.0 across all bins.** The perf gain
+from LOD comes from the geometric reduction in
+`procedural-reduced` and `billboard`, NOT from dropping
+instances. With keep=1.0:
+- Near bin renders all near-distance instances at full detail.
+- Far bin renders all far-distance instances using the
+  ~10x-cheaper stand-in geometry → same coverage, dramatically
+  fewer triangles.
+- Billboard bin renders all billboard-distance instances using
+  the ~50x-cheaper camera-facing quad → ground reads as
+  continuous grass coverage.
+
+Density thinning is preserved as authoring infrastructure for
+cases like flowers where authors WANT thinner distant instances
+for stylistic reasons, but defaults set
+`LOD1_KEEP_RATIO = LOD2_KEEP_RATIO = 1.0`. Reducing instance
+count without changing per-instance geometry trades visible
+coverage for negligible perf — historical mistake from the first
+implementation, do not repeat.
+
+Each bin then runs its own `scanLocal` → `scanPartials` →
+`scatterCompact` → indirect draw, in parallel. GPU cost scales
+with N bins, but each bin only processes a fraction of the
+candidates — net work is roughly the same as the single-bin
+case, with deterministic per-bin output ordering preserved
+(critical for BLEND-mode compatibility per 36.16 lessons).
+
+**Billboard architecture (single-concern, isolated module):**
+```
+packages/render-web/src/billboard/
+  index.ts                  — public exports
+  billboardMath.ts          — pure JS: given (instance world origin,
+                              instance scale, camera world position)
+                              → camera-facing rotation matrix
+                              + assembled mat4 (translation+rotation+scale)
+  billboardMath.test.ts     — vitest unit tests for billboardMath
+                              against hand-computed cases
+```
+
+**The billboard bin uses a DIFFERENT scatterCompact than near/far.**
+Near and far bins copy `candidateMatrix[tid]` (which has the per-
+instance random-spin rotation around the surface normal — correct
+for blade orientation). Billboard bin **synthesizes its own
+camera-facing matrix** at write time:
+- Translation = instance's world position (extracted from
+  `candidateMatrix[tid].column[3].xyz`, which is what
+  buildCandidates wrote — the lifted local position transformed
+  by the owner matrix in markVisible's coordinate system, OR
+  equivalently the instance origin XZ + Y from the candidate).
+- Rotation = horizontal camera-facing rotation. Compute
+  `forward = normalize(camera - anchor)` in the XZ plane,
+  `right = perpendicular(forward) in XZ`, `up = (0, 1, 0)`.
+  Pack as a 3x3 in the matrix's upper-left.
+- Scale = uniform scale extracted from `candidateMatrix[tid]`'s
+  column magnitudes.
+
+The vertex shader for the billboard bin's material then runs the
+STANDARD path — `positionNode = positionLocal` (or whatever
+wind-sway returns). The `instanceMatrix` (which scatterCompact
+just wrote) supplies the camera-facing transform. No
+`material.positionNode` wrapping. No `material.vertexNode`
+override. Billboarding lives entirely in the GPU compute pass +
+the billboard math module.
+
+**Why NOT wrap material.positionNode:** The first cut tried this
+and broke. Wrapping `positionNode` produces a position that's
+then re-transformed by the candidate's `instanceMatrix`
+rotation — billboards land at wildly wrong world positions. To
+make positionNode wrapping work, the wrapped output would need to
+be `inverse(instanceMatrix.rotation) * R_billboard * vertex`,
+which is expensive in WGSL. Writing the camera-facing matrix
+directly into `instanceMatrix` via scatterCompact sidesteps this
+entirely.
+
+**Why NOT wrap material.vertexNode (clip-space override):** Could
+work but bypasses the entire standard transform path —
+incompatible with shadow casting, post-process depth, etc. The
+scatterCompact-writes-instanceMatrix approach keeps the standard
+render path intact.
+
+**Per-frame data the billboard bin's scatterCompact needs:**
+- `cameraPositionUniform` (already exists, vec3 world position).
+- `ownerMatrixWorldUniform` (already exists, for translation
+  extraction).
+- The candidate matrix (already in `candidateMatrices` storage).
+
+No new uniforms or buffers. The math is "extract translation +
+scale from candidate matrix, build camera-facing rotation from
+camera position, pack into output matrix at compacted index."
+Tested in `billboardMath.ts` as a pure function:
+`computeBillboardInstanceMatrix({ candidateMatrix, cameraWorldPos })`.
+
+Wind/deform still belongs to the material shader. The billboard bin
+owns only the per-instance orientation matrix that places the
+already-authored scatter geometry toward the camera.
+
+**Hash formula for density thin:**
+```
+hash(sampleIndex, bandSeed) =
+  fract(sin(sampleIndex * 12.9898 + bandSeed * 78.233) * 43758.5453)
+```
+Standard noise (matches `nodeHash01` in
+`compute-pipeline.ts`). Each LOD band uses a different
+`bandSeed` constant so the bands don't all keep/drop the same
+blades.
 
 **Files touched:**
 - `packages/domain/src/surface/grass-type.ts` +
-  `flower-type.ts` + `rock-type.ts` — add `lodMeshes` + distance
-  thresholds.
+  `flower-type.ts` + `rock-type.ts` — add `lodMeshes`,
+  `lod1Distance`, `lod2Distance`, `lodTransitionWidth`,
+  `distantMeshThreshold` fields. Add the `LodMeshSpec`
+  discriminated union somewhere shared (probably
+  `packages/domain/src/surface/lod.ts` new). Update the type
+  definition factory functions to bake in the v1 defaults
+  documented above. The existing procedural geometry builders
+  (`createProceduralGrassGeometry` etc.) gain a `vertexBudget`
+  parameter so `procedural-reduced` works.
+- `packages/render-web/src/scatter/lod.ts` (new) — LOD math:
+  `computeLodBin(distance, params): "near" | "far" | "billboard"
+  | "none"`, `computeKeepProbability(distance, threshold,
+  transitionWidth): number`, `hashKeep(sampleIndex, bandSeed,
+  keepProbability): boolean`. Pure JS, CPU-emulatable, exported
+  for test reuse and for the GPU kernel to mirror.
 - `packages/render-web/src/scatter/compute-pipeline.ts` — extend
-  the **markVisible** kernel with density-thin (additional
-  hash-based rejection at distance bands) + mesh-band selection.
-  The downstream scan + compact passes are unchanged: a
-  density-thinned candidate just clears its `frameActive[i]` flag,
-  same as a frustum-culled one. Mesh swap likely needs one
-  InstancedMesh per LOD bin (each with its own visible buffer
-  range), routed by the markVisible kernel writing into per-bin
-  flag arrays.
-- `packages/render-web/src/scatter/lod.ts` (new) — LOD math
-  (hash-based deterministic rejection; mesh-band selection per
-  instance).
-- `packages/testing/src/scatter-lod.test.ts` (new) — instance
-  beyond `lod1Distance` has a 3-in-4 chance of rejection,
-  verified over many camera positions.
+  the `markVisible` kernel with the per-bin routing logic above.
+  Allocate per-bin `frameActive` / `localOffsets` /
+  `workgroupPartials` / `workgroupOffsets` / `visibleCount` /
+  `indirectDrawArgs` buffers (one set per populated bin). Run the
+  existing scan + compact pipeline N times (one per bin).
+- `packages/render-web/src/scatter/index.ts` — for each populated
+  bin in the layer's `lodMeshes`, build the bin's geometry
+  (procedural-default / procedural-reduced / billboard /
+  asset-reference) and create its own `InstancedMesh` bound to
+  the bin's visible buffer set. For `billboard` bins, wrap the
+  material's `positionNode` with the billboard transform from the
+  new module. Bins are siblings under the layer's root group.
+- `packages/render-web/src/billboard/` (new module, files listed
+  above) — the only owner of billboard rotation math. Single
+  concern, unit-testable, isolated.
+- `packages/testing/src/scatter-lod.test.ts` (new) — CPU-only
+  vitest. Verify: `computeLodBin` returns the right bin per
+  distance band; `hashKeep` is deterministic per
+  `(sampleIndex, bandSeed)`; smoothstep blend at the threshold
+  produces the expected probability curve over a range of
+  distances; per-band keep/drop ratio matches the ratio
+  parameter over many sample indices.
+- `packages/testing/src/billboard-math.test.ts` (new) — CPU-only
+  vitest. Hand-computed cases: vertex on the right of a blade
+  with camera in +Z direction → expected world position; rotate
+  camera 90° → vertex moves to the expected new position.
+
+**Engineering call: tests are CPU-emulation only.** No WebGPU
+integration test (matches the rest of the scatter test pattern
+post-36.16, where the WebGPU integration test was removed
+because vitest runs in node without `navigator.gpu` in this
+project's setup).
+
+**Out of scope for 36.17:**
+- Cross-fade between LOD meshes (hard mesh swap at the boundary
+  is acceptable; the smoothstep density-thin is what kills the
+  perceptual pop — a few far blades crossing into "billboard"
+  bin per frame at random per-blade thresholds is invisible).
+- Project-wide LOD-defaults override tier (see Storage section
+  above; baked-in factory defaults only in v1).
+- Billboard for flowers / rocks (see defaults).
+
+**Lessons from the first implementation (2026-04-26).** The
+first cut of 36.17 shipped with three load-bearing bugs that an
+implementer should specifically NOT repeat:
+
+1. **`procedural-reduced` was implemented as "halve the blade
+   count per tuft."** This produces ~2× triangle reduction at
+   most, while halving visible coverage — exactly the wrong
+   trade. The defaults were then walked back (lod1Distance
+   pushed out, keep ratios bumped to 0.9/0.75) to compensate
+   for visual sparsity, which gave back the perf win. The
+   correct implementation is documented above: `procedural-
+   reduced` produces a fundamentally cheaper SHAPE (cross-quad
+   for grass), not fewer of the same expensive shape. Triangle
+   reduction is order-of-magnitude per instance; coverage stays
+   constant; instance counts stay at keep=1.0.
+
+2. **The billboard transform wrapped `material.positionNode`
+   with a world-direction-space output.** Resulting positions
+   were then re-transformed by `candidateMatrix`'s rotation,
+   placing billboards at wildly wrong world positions —
+   probably below the ground or off-screen. The fix above moves
+   the camera-facing matrix synthesis into the billboard bin's
+   `scatterCompact` pass, producing a correct `instanceMatrix`
+   that the standard vertex shader path consumes.
+
+3. **The first cut also did per-bin FULL compute pipelines
+   (one buildCandidates + sample buffer set per bin) instead of
+   ONE shared compute pipeline with per-bin compact paths.**
+   The architecture above (shared candidate state, per-bin
+   compact) is the spec direction. The per-bin-pipeline
+   variant 3x'd buffer memory and TSL kernel compile cost, and
+   crashed under paint-stroke rebuild rates. That fix was
+   shipped in the second iteration but is documented here as
+   the canonical structure.
+
+If the implementer can answer "yes" to all three of these before
+declaring 36.17 done, it's good:
+- Does the triangle count drop dramatically when the camera pans
+  to view distant grass? (Geometry substitution working.)
+- Are billboard-bin instances visible at billboard distances and
+  at the correct world positions (visually planted on the
+  ground at the right XZ)? (Billboard math correct.)
+- Does buildCandidates appear in the GPU profiler exactly ONCE
+  per scatter layer per frame, regardless of bin count?
+  (Architecture single-pipeline.)
 
 ### 36.18 — Player / NPC displacement (canonical-entity-driven)
 

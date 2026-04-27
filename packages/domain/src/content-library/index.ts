@@ -23,6 +23,7 @@ import type {
 } from "../surface";
 import {
   assertReusableSurfaceHasNoPaintedMasks,
+  cloneScatterLodMeshes,
   cloneSurfaceBinding,
   createSurface,
   type FlowerTypeDefinition,
@@ -406,6 +407,7 @@ function normalizeGrassTypeDefinitions(
 ): GrassTypeDefinition[] {
   return (definitions ?? []).map((definition) => ({
     ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
     wind: normalizeShaderOrMaterial(definition.wind)
   }));
 }
@@ -415,6 +417,7 @@ function normalizeFlowerTypeDefinitions(
 ): FlowerTypeDefinition[] {
   return (definitions ?? []).map((definition) => ({
     ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
     wind: normalizeShaderOrMaterial(definition.wind)
   }));
 }
@@ -422,7 +425,10 @@ function normalizeFlowerTypeDefinitions(
 function normalizeRockTypeDefinitions(
   definitions: RockTypeDefinition[] | null | undefined
 ): RockTypeDefinition[] {
-  return [...(definitions ?? [])];
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes)
+  }));
 }
 
 function normalizeShaderOrMaterial(

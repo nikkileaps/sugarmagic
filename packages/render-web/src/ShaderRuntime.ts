@@ -827,56 +827,6 @@ function uniformForParameter(
   return node;
 }
 
-function uniformValueFromPrimitive(
-  dataType: ShaderIRValue["dataType"],
-  value: unknown
-): unknown {
-  switch (dataType) {
-    case "float":
-      return typeof value === "number" ? value : 0;
-    case "vec2":
-      if (Array.isArray(value)) {
-        return new THREE.Vector2(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0
-        );
-      }
-      return new THREE.Vector2(0, 0);
-    case "vec3":
-      if (Array.isArray(value)) {
-        return new THREE.Vector3(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0,
-          Number(value[2]) || 0
-        );
-      }
-      return new THREE.Vector3(0, 0, 0);
-    case "color":
-      if (Array.isArray(value)) {
-        return new THREE.Color().setRGB(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0,
-          Number(value[2]) || 0
-        );
-      }
-      return new THREE.Color().setRGB(0, 0, 0);
-    case "vec4":
-      if (Array.isArray(value)) {
-        return new THREE.Vector4(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0,
-          Number(value[2]) || 0,
-          Number(value[3]) || 0
-        );
-      }
-      return new THREE.Vector4(0, 0, 0, 0);
-    case "bool":
-      return value ? 1 : 0;
-    default:
-      return typeof value === "number" ? value : 0;
-  }
-}
-
 function materializeOp(opId: string, context: FinalizationContext): unknown {
   if (context.opNodeCache.has(opId)) {
     return context.opNodeCache.get(opId);

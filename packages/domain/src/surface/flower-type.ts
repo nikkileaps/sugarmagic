@@ -8,8 +8,9 @@
 
 import { createScopedId } from "../shared/identity";
 import type { ShaderOrMaterial } from "./index";
+import type { ScatterLodDefinition } from "./lod";
 
-export interface FlowerTypeDefinition {
+export interface FlowerTypeDefinition extends ScatterLodDefinition {
   definitionId: string;
   definitionKind: "flower-type";
   displayName: string;
@@ -62,6 +63,19 @@ export function createDefaultFlowerTypeDefinition(
     petalColor: opts.petalColor ?? 0xf8f6eb,
     centerColor: opts.centerColor ?? 0xf0c85a,
     colorJitter: 0.12,
-    wind: opts.wind ?? null
+    wind: opts.wind ?? null,
+    lodMeshes: {
+      near: { kind: "procedural-default" },
+      far: {
+        kind: "procedural-reduced",
+        vertexBudget: 0.3
+      },
+      billboard: null
+    },
+    lod1Distance: 12,
+    lod2Distance: 24,
+    lodTransitionWidth: 5,
+    distantMeshThreshold: 32,
+    maxDrawDistance: 52
   };
 }
