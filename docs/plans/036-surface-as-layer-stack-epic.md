@@ -1,7 +1,9 @@
 # Plan 036: Surface as Layer Stack Epic
 
-**Status:** Proposed
-**Date:** 2026-04-22
+**Status:** Implemented (with 36.18 + 36.19 deferred)
+**Date:** 2026-04-22 — closed out 2026-04-26
+**ADR:** `docs/adr/013-surface-as-layer-stack.md` (extended 2026-04-26
+with Stages 2 + 3 outcomes and per-stage retrospective)
 
 > **2026-04-22 framing** (before any implementation): Epic 034 landed
 > the Surfaceable / Deformable / Effectable trait split and is the
