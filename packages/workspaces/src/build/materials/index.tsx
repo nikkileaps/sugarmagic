@@ -12,6 +12,7 @@ import {
   ActionIcon,
   Button,
   Menu,
+  Modal,
   Select,
   Stack,
   Text,
@@ -25,6 +26,7 @@ import type {
   ShaderParameterValue,
   TextureDefinition
 } from "@sugarmagic/domain";
+import { isBuiltInMaterialDefinition } from "@sugarmagic/domain";
 import { Inspector, PanelSection } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { MaterialParameterEditor } from "../MaterialParameterEditor";
@@ -75,6 +77,7 @@ export interface MaterialsWorkspaceViewProps {
     definitionId: string,
     patch: Partial<MaterialDefinition>
   ) => void;
+  onDuplicateMaterialDefinition: (sourceDefinitionId: string) => string | null;
   onRemoveMaterialDefinition: (definitionId: string) => void;
   isMaterialReferenced: (definitionId: string) => boolean;
 }
@@ -92,26 +95,32 @@ export function useMaterialsWorkspaceView(
     onImportPbrMaterial,
     onImportTextureDefinition,
     onUpdateMaterialDefinition,
+    onDuplicateMaterialDefinition,
     onRemoveMaterialDefinition,
     isMaterialReferenced
   } = props;
 
   const [searchValue, setSearchValue] = useState("");
-  const surfaceShaderDefinitions = useMemo(
+  // Materials can wrap any shader that's not a post-process effect — this
+  // includes mesh-surface (grass/foliage looks), mesh-deform (wind presets
+  // like Still Air, Gentle Breeze), and mesh-effect (e.g. cloud-shadow demo).
+  // Post-process shaders bind directly to environment.postProcessShaders, not
+  // to materials, so excluding them avoids confusion in the inspector.
+  const materialShaderDefinitions = useMemo(
     () =>
       shaderDefinitions.filter(
-        (definition) => definition.targetKind === "mesh-surface"
+        (definition) => definition.targetKind !== "post-process"
       ),
     [shaderDefinitions]
   );
   const defaultNewShaderId = useMemo(
     () =>
-      surfaceShaderDefinitions.find(
+      materialShaderDefinitions.find(
         (definition) => definition.metadata.builtInKey === "standard-pbr"
       )?.shaderDefinitionId ??
-      surfaceShaderDefinitions[0]?.shaderDefinitionId ??
+      materialShaderDefinitions[0]?.shaderDefinitionId ??
       null,
-    [surfaceShaderDefinitions]
+    [materialShaderDefinitions]
   );
 
   const filteredMaterials = useMemo(() => {
@@ -121,19 +130,19 @@ export function useMaterialsWorkspaceView(
     }
     return materialDefinitions.filter((definition) => {
       const shaderLabel =
-        surfaceShaderDefinitions.find(
+        materialShaderDefinitions.find(
           (shader) => shader.shaderDefinitionId === definition.shaderDefinitionId
         )?.displayName ?? "";
       return normalizeSearchValue(`${definition.displayName} ${shaderLabel}`).includes(search);
     });
-  }, [materialDefinitions, searchValue, surfaceShaderDefinitions]);
+  }, [materialDefinitions, searchValue, materialShaderDefinitions]);
 
   const selectedMaterial =
     materialDefinitions.find(
       (definition) => definition.definitionId === selectedMaterialDefinitionId
     ) ?? materialDefinitions[0] ?? null;
   const selectedShader =
-    surfaceShaderDefinitions.find(
+    materialShaderDefinitions.find(
       (definition) => definition.shaderDefinitionId === selectedMaterial?.shaderDefinitionId
     ) ?? null;
 
@@ -206,7 +215,7 @@ export function useMaterialsWorkspaceView(
                 const isSelected =
                   definition.definitionId === selectedMaterial?.definitionId;
                 const shaderLabel =
-                  surfaceShaderDefinitions.find(
+                  materialShaderDefinitions.find(
                     (shader) => shader.shaderDefinitionId === definition.shaderDefinitionId
                   )?.displayName ?? "Missing Shader";
                 return (
@@ -254,10 +263,12 @@ export function useMaterialsWorkspaceView(
           <MaterialInspectorPanel
             materialDefinition={selectedMaterial}
             shaderDefinition={selectedShader}
-            shaderDefinitions={surfaceShaderDefinitions}
+            shaderDefinitions={materialShaderDefinitions}
             textureDefinitions={textureDefinitions}
             isReferenced={isMaterialReferenced(selectedMaterial.definitionId)}
             onUpdateMaterialDefinition={onUpdateMaterialDefinition}
+            onDuplicateMaterialDefinition={onDuplicateMaterialDefinition}
+            onSelectMaterialDefinition={onSelectMaterialDefinition}
             onRemoveMaterialDefinition={onRemoveMaterialDefinition}
           />
         ) : (
@@ -278,6 +289,8 @@ function MaterialInspectorPanel({
   textureDefinitions,
   isReferenced,
   onUpdateMaterialDefinition,
+  onDuplicateMaterialDefinition,
+  onSelectMaterialDefinition,
   onRemoveMaterialDefinition
 }: {
   materialDefinition: MaterialDefinition;
@@ -289,16 +302,91 @@ function MaterialInspectorPanel({
     definitionId: string,
     patch: Partial<MaterialDefinition>
   ) => void;
+  onDuplicateMaterialDefinition: (sourceDefinitionId: string) => string | null;
+  onSelectMaterialDefinition: (definitionId: string) => void;
   onRemoveMaterialDefinition: (definitionId: string) => void;
 }) {
   const [draftDisplayName, setDraftDisplayName] = useState(materialDefinition.displayName);
+  // Deferred edit held open while the duplicate-to-edit confirmation modal
+  // is visible. Set when the user attempts to mutate a built-in material:
+  // the modal tells them we'll fork a copy, and if they confirm we replay
+  // this patch against the newly-created duplicate.
+  const [pendingBuiltInEdit, setPendingBuiltInEdit] = useState<
+    Partial<MaterialDefinition> | null
+  >(null);
 
   useEffect(() => {
     setDraftDisplayName(materialDefinition.displayName);
   }, [materialDefinition.definitionId, materialDefinition.displayName]);
 
+  const isBuiltIn = isBuiltInMaterialDefinition(materialDefinition);
+
+  /**
+   * Intercept mutations on built-in materials. Instead of writing the patch
+   * to the engine-owned definition (which would be discarded on the next
+   * normalize pass anyway), queue the patch and open the confirmation
+   * modal. On confirm we duplicate the built-in, select the copy, and
+   * replay the patch against the new id.
+   */
+  function handleUpdate(patch: Partial<MaterialDefinition>): void {
+    if (isBuiltIn) {
+      setPendingBuiltInEdit(patch);
+      return;
+    }
+    onUpdateMaterialDefinition(materialDefinition.definitionId, patch);
+  }
+
+  function confirmDuplicateAndApply(): void {
+    const patch = pendingBuiltInEdit;
+    if (!patch) {
+      setPendingBuiltInEdit(null);
+      return;
+    }
+    const newId = onDuplicateMaterialDefinition(materialDefinition.definitionId);
+    setPendingBuiltInEdit(null);
+    if (!newId) return;
+    onSelectMaterialDefinition(newId);
+    onUpdateMaterialDefinition(newId, patch);
+  }
+
   return (
     <Stack gap="md">
+      <Modal
+        opened={pendingBuiltInEdit !== null}
+        onClose={() => setPendingBuiltInEdit(null)}
+        title="Duplicate to edit?"
+        size="sm"
+        centered
+        withinPortal
+      >
+        <Stack gap="sm">
+          <Text size="sm">
+            <Text component="span" fw={600}>
+              {materialDefinition.displayName}
+            </Text>
+            {" "}is a built-in material. Built-ins can&apos;t be edited directly — they
+            refresh from the engine on every project load.
+          </Text>
+          <Text size="sm" c="var(--sm-color-subtext)">
+            Create a copy to edit? Existing bindings on scatter layers, assets,
+            and landscape channels will keep pointing at the built-in until you
+            re-bind them to the copy.
+          </Text>
+          <Stack gap="xs">
+            <Button size="xs" onClick={confirmDuplicateAndApply}>
+              Duplicate &amp; edit
+            </Button>
+            <Button size="xs" variant="subtle" onClick={() => setPendingBuiltInEdit(null)}>
+              Cancel
+            </Button>
+          </Stack>
+        </Stack>
+      </Modal>
+      {isBuiltIn ? (
+        <Text size="xs" c="var(--sm-color-overlay0)">
+          Built-in material. Edits will prompt to duplicate into a local copy.
+        </Text>
+      ) : null}
       <TextInput
         label="Display Name"
         value={draftDisplayName}
@@ -324,7 +412,7 @@ function MaterialInspectorPanel({
           !draftDisplayName.trim() || draftDisplayName.trim() === materialDefinition.displayName
         }
         onClick={() =>
-          onUpdateMaterialDefinition(materialDefinition.definitionId, {
+          handleUpdate({
             displayName: draftDisplayName.trim()
           })
         }
@@ -350,7 +438,7 @@ function MaterialInspectorPanel({
           if (!nextShaderDefinition) {
             return;
           }
-          onUpdateMaterialDefinition(materialDefinition.definitionId, {
+          handleUpdate({
             shaderDefinitionId: nextShaderDefinition.shaderDefinitionId,
             ...pruneMaterialParametersForShader(materialDefinition, nextShaderDefinition)
           });
@@ -371,7 +459,7 @@ function MaterialInspectorPanel({
             } else {
               nextValues[parameter.parameterId] = value;
             }
-            onUpdateMaterialDefinition(materialDefinition.definitionId, {
+            handleUpdate({
               parameterValues: nextValues
             });
           }}
@@ -382,7 +470,7 @@ function MaterialInspectorPanel({
             } else {
               nextBindings[parameter.parameterId] = textureDefinitionId;
             }
-            onUpdateMaterialDefinition(materialDefinition.definitionId, {
+            handleUpdate({
               textureBindings: nextBindings
             });
           }}

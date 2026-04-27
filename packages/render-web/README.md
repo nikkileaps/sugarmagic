@@ -14,8 +14,10 @@ runtime-visible behavior.
 
 Owns:
 
+- the shared `WebRenderEngine` / per-surface `RenderView` split
 - `ShaderRuntime` finalization and lifecycle
 - object-tree shader application helpers
+- layer-stack scatter realization
 - authored environment realization (`EnvironmentSceneController`)
 - authored post-process stack application
 - shared runtime render-pipeline wrappers

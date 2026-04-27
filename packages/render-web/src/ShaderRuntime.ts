@@ -18,6 +18,7 @@ import {
   cameraProjectionMatrixInverse,
   cameraWorldMatrix,
   attribute as tslAttribute,
+  color as tslColor,
   float,
   normalLocal,
   normalMap,
@@ -38,28 +39,28 @@ import {
   viewportLinearDepth
 } from "three/tsl";
 import type {
+  BlendMode,
   ContentLibrarySnapshot,
   ShaderGraphDocument
 } from "@sugarmagic/domain";
 import { getShaderDefinition } from "@sugarmagic/domain";
 import type {
   EffectiveShaderBinding,
-  EffectiveShaderBindingSet,
+  ResolvedSurfaceStack,
   RuntimeCompileProfile,
   ShaderIR,
   ShaderIRDiagnostic,
   ShaderIROp,
   ShaderIRValue
 } from "@sugarmagic/runtime-core";
-import {
-  createAuthoredAssetResolver,
-  type AuthoredAssetResolver
-} from "./authoredAssetResolver";
+import type { AuthoredAssetResolver } from "./authoredAssetResolver";
 import { compileShaderGraph } from "@sugarmagic/runtime-core";
 import type { RuntimeRenderPipeline } from "./render";
 import {
   materializeEffectOp
 } from "./materialize/effect";
+import { blendLayerNode } from "./materialize/layer-blends";
+import { evaluateLayerMask } from "./materialize/mask";
 import {
   materializeMathOp
 } from "./materialize/math";
@@ -126,14 +127,12 @@ interface ShaderRuntimeOptions {
     warn: (message: string, payload?: Record<string, unknown>) => void;
   };
   /**
-   * Optional shared AuthoredAssetResolver. When running inside a
-   * WebRenderHost this is the host-owned resolver so textures flow
-   * through the same cache that landscape rendering uses. When
-   * constructed standalone (tests, bespoke contexts), the runtime spins
-   * up its own internal resolver and drives sync on every texture
-   * resolution pass from the fileSources passed with the apply target.
+   * Required shared AuthoredAssetResolver. WebRenderEngine is the single
+   * production owner; standalone tests must wire an explicit resolver
+   * instead of relying on a hidden fallback that would mask missing
+   * engine wiring.
    */
-  assetResolver?: AuthoredAssetResolver;
+  assetResolver: AuthoredAssetResolver;
 }
 
 interface CachedMaterialEntry {
@@ -240,6 +239,86 @@ function textureBindingSignature(
         .map(([parameterId, texture]) => [parameterId, textureSignature(texture)])
     )
   );
+}
+
+function surfaceStackSignature(
+  surface: ResolvedSurfaceStack | null
+): string | null {
+  if (!surface) {
+    return null;
+  }
+  return stableStringify({
+    context: surface.context,
+    layers: surface.layers.map((layer) => {
+      if (layer.kind === "scatter") {
+        return {
+          kind: layer.kind,
+          contentKind: layer.contentKind,
+          definitionId: layer.definitionId,
+          enabled: layer.enabled,
+          opacity: layer.opacity,
+          mask: layer.mask
+        };
+      }
+      return {
+        kind: layer.kind,
+        contentKind: layer.contentKind,
+        shaderDefinitionId: layer.binding.shaderDefinitionId,
+        parameterValues: layer.binding.parameterValues,
+        textureBindings: layer.binding.textureBindings,
+        enabled: layer.enabled,
+        opacity: layer.opacity,
+        mask: layer.mask
+      };
+    })
+  });
+}
+
+function isResolvedSurfaceStack(
+  value: EffectiveShaderBinding | ResolvedSurfaceStack | null
+): value is ResolvedSurfaceStack {
+  return Boolean(value && "layers" in value);
+}
+
+function isEffectiveShaderBinding(
+  value: EffectiveShaderBinding | ResolvedSurfaceStack | null
+): value is EffectiveShaderBinding {
+  return Boolean(value && "documentRevision" in value);
+}
+
+function withSurfaceNodeDefaults(
+  nodeSet: ShaderSurfaceNodeSet
+): ShaderSurfaceNodeSet {
+  return {
+    colorNode: nodeSet.colorNode ?? vec3(1, 1, 1),
+    alphaNode: nodeSet.alphaNode ?? float(1),
+    normalNode: nodeSet.normalNode ?? vec3(0.5, 0.5, 1),
+    roughnessNode: nodeSet.roughnessNode ?? float(1),
+    metalnessNode: nodeSet.metalnessNode ?? float(0),
+    aoNode: nodeSet.aoNode ?? float(1),
+    emissiveNode: nodeSet.emissiveNode ?? vec3(0, 0, 0),
+    vertexNode: nodeSet.vertexNode ?? null
+  };
+}
+
+function blendSurfaceNodeSets(
+  base: ShaderSurfaceNodeSet,
+  layer: ShaderSurfaceNodeSet,
+  blendMode: BlendMode,
+  alpha: unknown
+): ShaderSurfaceNodeSet {
+  return {
+    colorNode: blendLayerNode(blendMode, base.colorNode, layer.colorNode, alpha),
+    alphaNode: blendLayerNode("mix", base.alphaNode, layer.alphaNode, alpha),
+    normalNode: blendLayerNode("mix", base.normalNode, layer.normalNode, alpha),
+    roughnessNode: blendLayerNode(blendMode, base.roughnessNode, layer.roughnessNode, alpha),
+    metalnessNode: blendLayerNode(blendMode, base.metalnessNode, layer.metalnessNode, alpha),
+    aoNode: blendLayerNode(blendMode, base.aoNode, layer.aoNode, alpha),
+    emissiveNode: (base.emissiveNode as { add: (other: unknown) => unknown }).add(
+      (layer.emissiveNode as { mul: (other: unknown) => unknown }).mul(alpha)
+    ),
+    vertexNode: layer.vertexNode ?? base.vertexNode
+  };
 }
 
 function materialCarrierSignature(
@@ -355,10 +434,19 @@ function literalNode(dataType: ShaderIRValue["dataType"], value: unknown): unkno
     case "vec2":
       return Array.isArray(value) ? vec2(value[0] ?? 0, value[1] ?? 0) : vec2(0, 0);
     case "vec3":
-    case "color":
       return Array.isArray(value)
         ? vec3(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0)
         : vec3(0, 0, 0);
+    case "color":
+      return Array.isArray(value)
+        ? tslColor(
+            new THREE.Color().setRGB(
+              Number(value[0]) || 0,
+              Number(value[1]) || 0,
+              Number(value[2]) || 0
+            )
+          )
+        : tslColor(new THREE.Color().setRGB(0, 0, 0));
     case "vec4":
       return Array.isArray(value)
         ? vec4(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 0)
@@ -712,59 +800,31 @@ function uniformForParameter(
   dataType: ShaderIRValue["dataType"],
   context: FinalizationContext
 ): unknown {
+  // Materialize parameters as TSL LITERALS, not uniform() nodes.
+  //
+  // The original implementation used `uniform()` with a shared cache
+  // (keyed by shader+parameterId) so that mutating `.value` would push
+  // new values to the GPU without recompiling. Empirically that didn't
+  // work in this stack — switching wind preset Meadow Breeze (0.35) →
+  // Still Air (0) left the GPU rendering with 0.35 baked in, and even
+  // creating a fresh `uniform(0)` per material didn't take. Three's
+  // TSL appears to inline scalar uniform values at compile time in
+  // ways that don't propagate.
+  //
+  // A literal `float(value)` IS guaranteed to inline correctly (proven
+  // by hardcoding `float(0)` in the wind-sway materializer, which DOES
+  // stop the grass). Since `cacheKey` already includes parameterValues,
+  // any param change forces a fresh material acquire anyway — at which
+  // point a fresh literal captures the new value. Live editing still
+  // works; it just costs a recompile per change instead of a uniform
+  // poke. That price is fine — graphics shaders are short and Three's
+  // compile is fast.
   const currentValue = context.parameterValues[parameterId] ?? 0;
-  const existing = context.parameterUniforms.get(parameterId);
-  if (existing) {
-    existing.value = uniformValueFromPrimitive(dataType, currentValue);
-    return existing;
-  }
-  const node = (uniform as unknown as (value: unknown) => UniformNodeLike)(
-    uniformValueFromPrimitive(dataType, currentValue)
-  );
-  context.parameterUniforms.set(parameterId, node);
+  const node = literalNode(dataType, currentValue);
+  // Keep cache write for compat with anything that reads it; nothing
+  // in the new path reads it back.
+  context.parameterUniforms.set(parameterId, node as UniformNodeLike);
   return node;
-}
-
-function uniformValueFromPrimitive(
-  dataType: ShaderIRValue["dataType"],
-  value: unknown
-): unknown {
-  switch (dataType) {
-    case "float":
-      return typeof value === "number" ? value : 0;
-    case "vec2":
-      if (Array.isArray(value)) {
-        return new THREE.Vector2(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0
-        );
-      }
-      return new THREE.Vector2(0, 0);
-    case "vec3":
-    case "color":
-      if (Array.isArray(value)) {
-        return new THREE.Vector3(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0,
-          Number(value[2]) || 0
-        );
-      }
-      return new THREE.Vector3(0, 0, 0);
-    case "vec4":
-      if (Array.isArray(value)) {
-        return new THREE.Vector4(
-          Number(value[0]) || 0,
-          Number(value[1]) || 0,
-          Number(value[2]) || 0,
-          Number(value[3]) || 0
-        );
-      }
-      return new THREE.Vector4(0, 0, 0, 0);
-    case "bool":
-      return value ? 1 : 0;
-    default:
-      return typeof value === "number" ? value : 0;
-  }
 }
 
 function materializeOp(opId: string, context: FinalizationContext): unknown {
@@ -879,7 +939,8 @@ function applyIRToMaterial(
   parameterUniforms: Map<string, UniformNodeLike>,
   sunDirectionUniform: UniformNodeLike,
   effectNodes: Map<string, EffectNodeCacheEntry>,
-  accumulator?: ShaderSurfaceNodeSet | null
+  accumulator?: ShaderSurfaceNodeSet | null,
+  blendMode?: "mask" | "blend"
 ): THREE.Material {
   const material =
     target.targetKind === "billboard-surface"
@@ -896,42 +957,84 @@ function applyIRToMaterial(
     accumulator
   );
 
-  return applyNodeSetToMaterial(material, nodeSet);
+  return applyNodeSetToMaterial(material, nodeSet, { blendMode });
+}
+
+function resolveShaderBlendMode(
+  shaderDefinition: ShaderGraphDocument | null | undefined
+): "mask" | "blend" {
+  const raw = shaderDefinition?.metadata?.blendMode;
+  return raw === "blend" ? "blend" : "mask";
 }
 
 function applyNodeSetToMaterial(
   material: MeshStandardNodeMaterial | MeshBasicNodeMaterial,
-  nodeSet: ShaderSurfaceNodeSet
+  nodeSet: ShaderSurfaceNodeSet,
+  options: { blendMode?: "mask" | "blend" } = {}
 ): MeshStandardNodeMaterial | MeshBasicNodeMaterial {
   if (nodeSet.vertexNode) {
     material.positionNode = nodeSet.vertexNode as never;
+    material.needsUpdate = true;
   }
   if (nodeSet.colorNode && "colorNode" in material) {
     material.colorNode = nodeSet.colorNode as never;
   }
   if (nodeSet.alphaNode && "opacityNode" in material) {
     material.opacityNode = nodeSet.alphaNode as never;
-    // An authored shader writing an opacity output is opting into MASK-mode
-    // cutout rendering: opaque where alpha passes the threshold, discarded
-    // below it, and (critically) writing to the depth buffer on the opaque
-    // pixels so near leaf cards properly occlude branches / other leaves
-    // behind them.
+    // TODO(foliage-shimmer): mask-mode (alphaTest=0.5) causes scattered pixel
+    // flashes on tall grass and other alpha-tested foliage when wind animates
+    // the blades. Cause: every fragment is binary keep/discard at alpha=0.5,
+    // so sub-pixel motion of blade triangles flips individual pixels on/off
+    // each frame. Bloom amplifies the effect but is not the source. Confirmed
+    // 2026-04-24 by setting all scatter wind to Still Air (Tall Grass +
+    // Flowers in Wildflower Meadow) — flashes vanish entirely without motion.
     //
-    // Previously we deferred to the GLB's authored alphaMode on the
-    // theory "the author knows best," but tools like FoilageMaker export
-    // leaf cards as BLEND (transparent: true) which disables depth-write
-    // and causes the characteristic "see-through-the-front-leaves-to-the-
-    // branches-inside" artifact. Since the shader graph's opacityNode IS
-    // the author's intent for per-pixel alpha, we treat that intent as
-    // "cutout" and set the material up accordingly. If a future shader
-    // needs true BLEND (glass, smoke), that becomes a per-shader opt-in
-    // instead of a per-GLB accident.
-    (material as { transparent: boolean }).transparent = false;
-    if ("alphaTest" in material) {
-      (material as { alphaTest: number }).alphaTest = 0.5;
-    }
-    if ("depthWrite" in material) {
-      (material as { depthWrite: boolean }).depthWrite = true;
+    // Proper fix path (real refactor, deferred):
+    //  1. Enable MSAA on the WebGPU scenePass.
+    //  2. Set `material.alphaToCoverage = true` on foliage materials (mask
+    //     mode only — blend mode already smooth-fades).
+    //  3. Drop alphaTest below to ~0.01; coverage replaces the hard cutoff
+    //     and gets anti-aliased by MSAA naturally.
+    // Alternative: implement TAA (jittered camera + reprojection + history
+    // buffer) — bigger refactor, but addresses many other aliasing issues
+    // beyond foliage too.
+    //
+    // Workaround for now: lower wind strength = less per-frame jitter =
+    // smaller / fewer flashes. Don't crank wind on grass without thinking
+    // about the bloom interaction.
+    //
+    // Opacity policy is per-shader via metadata.blendMode:
+    //   "mask"  (default) — alphaTest=0.5 cutout + depthWrite=true. Binary
+    //           edges; used for foliage cards where the painted alpha is
+    //           effectively a silhouette mask and we want depth-write so
+    //           near leaves occlude inner branches. Historical default
+    //           preventing GLB-authored BLEND from producing the
+    //           "see-through-leaves-to-branches" artifact.
+    //   "blend" — transparent=true + alphaTest=0.01 + depthWrite=false.
+    //           True alpha gradients; used for grass blade base fade
+    //           (Grass Surface 6) where we want the blade to smoothly
+    //           transition to transparent so its root appears to blend
+    //           into the ground rather than terminate at a hard cutoff
+    //           line. alphaTest=0.01 (not 0) is a small optimization so
+    //           fully-transparent fragments short-circuit before the
+    //           expensive blend math.
+    const blendMode = options.blendMode ?? "mask";
+    if (blendMode === "blend") {
+      (material as { transparent: boolean }).transparent = true;
+      if ("alphaTest" in material) {
+        (material as { alphaTest: number }).alphaTest = 0.01;
+      }
+      if ("depthWrite" in material) {
+        (material as { depthWrite: boolean }).depthWrite = false;
+      }
+    } else {
+      (material as { transparent: boolean }).transparent = false;
+      if ("alphaTest" in material) {
+        (material as { alphaTest: number }).alphaTest = 0.5;
+      }
+      if ("depthWrite" in material) {
+        (material as { depthWrite: boolean }).depthWrite = true;
+      }
     }
   }
   if (nodeSet.emissiveNode && material instanceof MeshStandardNodeMaterial) {
@@ -1028,14 +1131,6 @@ export class ShaderRuntime {
   private readonly materialEntryByMaterial = new WeakMap<THREE.Material, CachedMaterialEntry>();
   private readonly materialEntries = new Set<CachedMaterialEntry>();
   private readonly assetResolver: AuthoredAssetResolver;
-  /**
-   * True when this runtime owns its resolver (created internally because
-   * no shared one was passed). In that case every resolveTextureBindings
-   * call must sync the resolver with the fileSources arg — because there
-   * is no upstream host syncing on our behalf. When false, the host
-   * (WebRenderHost) owns sync and we must NOT stomp its contentLibrary.
-   */
-  private readonly ownsAssetResolver: boolean;
   private readonly diagnostics = new Map<string, ShaderIRDiagnostic[]>();
   /**
    * Persistent uniform node cache, keyed by shaderDefinitionId. Each entry is
@@ -1062,14 +1157,12 @@ export class ShaderRuntime {
     this.materialDisposalGraceMs =
       options.materialDisposalGraceMs ?? ShaderRuntime.DEFAULT_MATERIAL_DISPOSAL_GRACE_MS;
     this.logger = options.logger ?? { warn() {} };
-    if (options.assetResolver) {
-      this.assetResolver = options.assetResolver;
-      this.ownsAssetResolver = false;
-    } else {
-      this.assetResolver = createAuthoredAssetResolver({ logger: this.logger });
-      this.assetResolver.sync(this.contentLibrary, {});
-      this.ownsAssetResolver = true;
+    if (!options.assetResolver) {
+      throw new Error(
+        "ShaderRuntime requires an explicit AuthoredAssetResolver. Wire the shared engine-owned resolver instead of relying on an internal fallback."
+      );
     }
+    this.assetResolver = options.assetResolver;
   }
 
   /**
@@ -1087,11 +1180,6 @@ export class ShaderRuntime {
       throw new Error("ShaderRuntime was used after disposal.");
     }
     this.contentLibrary = contentLibrary;
-    if (this.ownsAssetResolver) {
-      // Standalone runtime: keep our resolver in step so texture-
-      // definition lookups stay coherent.
-      this.assetResolver.sync(contentLibrary, {});
-    }
   }
 
   setSunDirection(direction: THREE.Vector3Like): void {
@@ -1107,6 +1195,14 @@ export class ShaderRuntime {
 
   getCompileProfile(): RuntimeCompileProfile {
     return this.compileProfile;
+  }
+
+  getContentLibrary(): ContentLibrarySnapshot {
+    return this.contentLibrary;
+  }
+
+  getAssetResolver(): AuthoredAssetResolver {
+    return this.assetResolver;
   }
 
   applyShader(
@@ -1192,6 +1288,7 @@ export class ShaderRuntime {
       stableStringify(binding.parameterValues)
     ].join("|");
 
+    const blendMode = resolveShaderBlendMode(definition);
     return this.acquireMaterial(cacheKey, binding.shaderDefinitionId, () =>
       applyIRToMaterial(
         ir,
@@ -1199,7 +1296,9 @@ export class ShaderRuntime {
         target,
         parameterUniforms,
         this.sunDirectionUniform,
-        effectNodes
+        effectNodes,
+        undefined,
+        blendMode
       )
     );
   }
@@ -1349,8 +1448,87 @@ export class ShaderRuntime {
     );
   }
 
+  evaluateLayerStackToNodeSet(
+    surface: ResolvedSurfaceStack,
+    options: {
+      geometry: THREE.BufferGeometry | null;
+      carrierMaterial: THREE.Material;
+      uvOverride?: unknown;
+      splatmapWeightNode?: (channelIndex: number) => unknown | null;
+    }
+  ): ShaderSurfaceNodeSet | null {
+    let accumulator: ShaderSurfaceNodeSet | null = null;
+    const geometry = options.geometry ?? new THREE.BufferGeometry();
+
+    for (const layer of surface.layers) {
+      if (!layer.enabled) {
+        continue;
+      }
+
+      const maskNode = evaluateLayerMask(layer.mask, {
+        contentLibrary: this.contentLibrary,
+        assetResolver: this.assetResolver,
+        uvNode: options.uvOverride ?? uv(),
+        splatmapWeightNode: options.splatmapWeightNode
+      });
+      const layerAlpha = (maskNode as { mul: (other: unknown) => unknown }).mul(
+        float(layer.opacity)
+      );
+
+      if (layer.kind === "scatter") {
+        continue;
+      }
+
+      const evaluated = this.evaluateMeshSurfaceBinding(layer.binding, {
+        geometry,
+        carrierMaterial: options.carrierMaterial,
+        uvOverride: options.uvOverride
+      });
+      if (!evaluated) {
+        continue;
+      }
+
+      const normalized = withSurfaceNodeDefaults(evaluated);
+      if (!accumulator || layer.kind === "appearance" && layer.blendMode === "base") {
+        accumulator = normalized;
+        continue;
+      }
+
+      if (layer.kind === "appearance") {
+        accumulator = blendSurfaceNodeSets(
+          accumulator,
+          normalized,
+          layer.blendMode,
+          layerAlpha
+        );
+        continue;
+      }
+
+      const currentEmissive = (accumulator.emissiveNode ?? vec3(0, 0, 0)) as {
+        add: (other: unknown) => unknown;
+      };
+      const emissionSource = (
+        normalized.emissiveNode ??
+        normalized.colorNode ??
+        vec3(0, 0, 0)
+      ) as { mul: (other: unknown) => unknown };
+      accumulator = {
+        ...accumulator,
+        emissiveNode: currentEmissive.add(
+          emissionSource.mul((layerAlpha as { mul: (other: unknown) => unknown }).mul(float(layer.intensity)))
+        )
+      };
+    }
+
+    return accumulator ? withSurfaceNodeDefaults(accumulator) : null;
+  }
+
   applyShaderSet(
-    bindings: EffectiveShaderBindingSet,
+    bindings: {
+      surface: EffectiveShaderBinding | ResolvedSurfaceStack | null;
+      deform: EffectiveShaderBinding | null;
+      effect: EffectiveShaderBinding | null;
+    },
     target: MeshShaderSetApplyTarget
   ): THREE.Material {
     if (this.disposed) {
@@ -1364,8 +1542,10 @@ export class ShaderRuntime {
       return target.material;
     }
 
-    const surfaceDefinition = surface
-      ? getShaderDefinition(this.contentLibrary, surface.shaderDefinitionId)
+    const surfaceBinding = isEffectiveShaderBinding(surface) ? surface : null;
+    const surfaceStack = isResolvedSurfaceStack(surface) ? surface : null;
+    const surfaceDefinition = surfaceBinding
+      ? getShaderDefinition(this.contentLibrary, surfaceBinding.shaderDefinitionId)
       : null;
     const deformDefinition = deform
       ? getShaderDefinition(this.contentLibrary, deform.shaderDefinitionId)
@@ -1374,8 +1554,13 @@ export class ShaderRuntime {
       ? getShaderDefinition(this.contentLibrary, effect.shaderDefinitionId)
       : null;
 
-    if (surface && (!surfaceDefinition || surfaceDefinition.targetKind !== "mesh-surface")) {
-      throw new Error(`Surface shader "${surface.shaderDefinitionId}" is not a mesh-surface graph.`);
+    if (
+      surfaceBinding &&
+      (!surfaceDefinition || surfaceDefinition.targetKind !== "mesh-surface")
+    ) {
+      throw new Error(
+        `Surface shader "${surfaceBinding.shaderDefinitionId}" is not a mesh-surface graph.`
+      );
     }
     if (deform && (!deformDefinition || deformDefinition.targetKind !== "mesh-deform")) {
       throw new Error(`Deform shader "${deform.shaderDefinitionId}" is not a mesh-deform graph.`);
@@ -1389,7 +1574,7 @@ export class ShaderRuntime {
     const effectIR = effectDefinition ? this.getCompiledIR(effectDefinition) : null;
 
     for (const [binding, ir] of [
-      [surface, surfaceIR],
+      [surfaceBinding, surfaceIR],
       [deform, deformIR],
       [effect, effectIR]
     ] as const) {
@@ -1416,15 +1601,15 @@ export class ShaderRuntime {
       }
     }
 
-    const surfaceTextures = this.resolveTextureBindings(surface, target.fileSources);
-    const deformTextures = this.resolveTextureBindings(deform, target.fileSources);
-    const effectTextures = this.resolveTextureBindings(effect, target.fileSources);
+    const surfaceTextures = this.resolveTextureBindings(surfaceBinding);
+    const deformTextures = this.resolveTextureBindings(deform);
+    const effectTextures = this.resolveTextureBindings(effect);
     const cacheKey = [
       "shader-set",
-      surface?.shaderDefinitionId ?? "no-surface",
-      surface?.documentRevision ?? 0,
-      stableStringify(surface?.parameterValues ?? {}),
-      stableStringify(surface?.textureBindings ?? {}),
+      surfaceBinding?.shaderDefinitionId ?? surfaceStackSignature(surfaceStack) ?? "no-surface",
+      surfaceBinding?.documentRevision ?? 0,
+      stableStringify(surfaceBinding?.parameterValues ?? surfaceStack ?? {}),
+      stableStringify(surfaceBinding?.textureBindings ?? {}),
       textureBindingSignature(surfaceTextures),
       deform?.shaderDefinitionId ?? "no-deform",
       deform?.documentRevision ?? 0,
@@ -1442,25 +1627,39 @@ export class ShaderRuntime {
 
     return this.acquireMaterial(
       cacheKey,
-      surface?.shaderDefinitionId ?? deform?.shaderDefinitionId ?? effect!.shaderDefinitionId,
+      surfaceBinding?.shaderDefinitionId ??
+        surfaceStackSignature(surfaceStack) ??
+        deform?.shaderDefinitionId ??
+        effect?.shaderDefinitionId ??
+        "shader-set",
       () => {
       let material = toMeshStandardNodeMaterial(target.material);
       let surfaceNodeSet: ShaderSurfaceNodeSet | null = null;
-      if (surface && surfaceIR) {
+      if (surfaceBinding && surfaceIR) {
         surfaceNodeSet = evaluateIRToSurfaceNodes(
           surfaceIR,
-          surface,
+          surfaceBinding,
           {
             targetKind: "mesh-surface",
             material,
             geometry: target.geometry,
             materialTextures: surfaceTextures
           },
-          this.getOrCreateParameterUniformCache(surface.shaderDefinitionId),
+          this.getOrCreateParameterUniformCache(surfaceBinding.shaderDefinitionId),
           this.sunDirectionUniform,
-          this.getOrCreateEffectNodeCache(surface.shaderDefinitionId)
+          this.getOrCreateEffectNodeCache(surfaceBinding.shaderDefinitionId)
         );
-        material = applyNodeSetToMaterial(material, surfaceNodeSet) as MeshStandardNodeMaterial;
+        material = applyNodeSetToMaterial(material, surfaceNodeSet, {
+          blendMode: resolveShaderBlendMode(surfaceDefinition)
+        }) as MeshStandardNodeMaterial;
+      } else if (surfaceStack) {
+        surfaceNodeSet = this.evaluateLayerStackToNodeSet(surfaceStack, {
+          geometry: target.geometry,
+          carrierMaterial: material
+        });
+        if (surfaceNodeSet) {
+          material = applyNodeSetToMaterial(material, surfaceNodeSet) as MeshStandardNodeMaterial;
+        }
       }
       if (deform && deformIR) {
         material = applyIRToMaterial(
@@ -1561,9 +1760,14 @@ export class ShaderRuntime {
     this.disposed = true;
     this.retireMaterials(() => true);
     this.materialCache.clear();
-    if (this.ownsAssetResolver) {
-      this.assetResolver.dispose();
+    for (const entry of this.materialEntries) {
+      if (entry.disposeTimer) {
+        clearTimeout(entry.disposeTimer);
+        entry.disposeTimer = null;
+      }
+      this.materialEntryByMaterial.delete(entry.material);
     }
+    this.materialEntries.clear();
     this.compileCache.clear();
     this.parameterUniformCache.clear();
     this.effectNodeCache.clear();
@@ -1571,19 +1775,10 @@ export class ShaderRuntime {
   }
 
   private resolveTextureBindings(
-    binding: EffectiveShaderBinding | null,
-    fileSources: Record<string, string> = {}
+    binding: EffectiveShaderBinding | null
   ): Record<string, THREE.Texture | null> {
     if (!binding) {
       return {};
-    }
-
-    // When we own the resolver (standalone / test usage), push the
-    // per-call fileSources into it. When the host owns it, sync is the
-    // host's responsibility — doing it here would stomp the host's
-    // current view if callers pass partial maps.
-    if (this.ownsAssetResolver) {
-      this.assetResolver.sync(this.contentLibrary, fileSources);
     }
 
     const { repeatX, repeatY } = textureRepeatForBinding(binding);
@@ -1660,7 +1855,12 @@ export class ShaderRuntime {
       if (entry.refCount > 0) {
         return;
       }
-      entry.material.dispose();
+      // WebGPU node materials are still referenced by Three's internal
+      // render-object bookkeeping for at least one frame after callers
+      // release them. Disposing them here can crash inside NodeManager
+      // teardown (`usedTimes` access on an already-pruned node). The
+      // runtime therefore retires cache ownership immediately but leaves
+      // final GPU/material teardown to the renderer lifecycle.
       this.materialEntryByMaterial.delete(entry.material);
       this.materialEntries.delete(entry);
       if (this.materialCache.get(entry.cacheKey) === entry) {

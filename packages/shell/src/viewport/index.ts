@@ -14,6 +14,8 @@
 import { createStore } from "zustand/vanilla";
 import {
   LandscapeSplatmap,
+  cloneSurfaceBinding,
+  type PaintedMaskTargetAddress,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 
@@ -53,6 +55,7 @@ export interface ViewportState {
   transformDrafts: Record<string, TransformDraft>;
   activeToolCursor: LandscapeCursor | null;
   brushSettings: LandscapeBrushSettings | null;
+  activeMaskPaintTarget: PaintedMaskTargetAddress | null;
   activeLandscapeChannelIndex: number;
   activeTransformTool: TransformTool;
   activeSpatialTool: "select" | "draw-rect";
@@ -71,6 +74,7 @@ export interface ViewportActions {
   clearTransformDrafts: () => void;
   setActiveToolCursor: (cursor: LandscapeCursor | null) => void;
   setBrushSettings: (settings: LandscapeBrushSettings | null) => void;
+  setActiveMaskPaintTarget: (target: PaintedMaskTargetAddress | null) => void;
   setActiveLandscapeChannelIndex: (channelIndex: number) => void;
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
@@ -84,17 +88,7 @@ function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
     ...landscape,
     surfaceSlots: landscape.surfaceSlots.map((slot) => ({
       ...slot,
-      surface: slot.surface
-        ? slot.surface.kind === "texture"
-          ? { ...slot.surface, tiling: [...slot.surface.tiling] as [number, number] }
-          : slot.surface.kind === "shader"
-            ? {
-                ...slot.surface,
-                parameterValues: { ...slot.surface.parameterValues },
-                textureBindings: { ...slot.surface.textureBindings }
-              }
-            : { ...slot.surface }
-        : null
+      surface: cloneSurfaceBinding(slot.surface)
     })),
     paintPayload: landscape.paintPayload
       ? {
@@ -144,6 +138,7 @@ export function createViewportStore() {
       falloff: 0.7,
       mode: "paint"
     },
+    activeMaskPaintTarget: null,
     activeLandscapeChannelIndex: 1,
     activeTransformTool: "move",
     activeSpatialTool: "select",
@@ -189,6 +184,9 @@ export function createViewportStore() {
     },
     setBrushSettings(settings) {
       set({ brushSettings: settings });
+    },
+    setActiveMaskPaintTarget(target) {
+      set({ activeMaskPaintTarget: target });
     },
     setActiveLandscapeChannelIndex(channelIndex) {
       set({ activeLandscapeChannelIndex: channelIndex });

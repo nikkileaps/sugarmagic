@@ -1158,6 +1158,31 @@ export function useLayoutWorkspaceView(
                 })
               }
             />
+            <NumberInput
+              label="Size (m)"
+              description="Width and depth of the region's landscape footprint."
+              size="xs"
+              min={10}
+              max={500}
+              value={region.landscape.size}
+              onChange={(value) => {
+                if (typeof value !== "number" || Number.isNaN(value)) return;
+                onCommand({
+                  kind: "ConfigureLandscape",
+                  target: {
+                    aggregateKind: "region-document",
+                    aggregateId: region.identity.id
+                  },
+                  subject: {
+                    subjectKind: "region-landscape",
+                    subjectId: region.identity.id
+                  },
+                  payload: {
+                    size: value
+                  }
+                });
+              }}
+            />
             <Stack gap={2}>
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Region ID

@@ -1,8 +1,6 @@
 import * as THREE from "three";
-import type {
-  RegionLandscapePaintPayload,
-  RegionLandscapeState
-} from "@sugarmagic/domain";
+import type { RegionLandscapePaintPayload, RegionLandscapeState } from "@sugarmagic/domain";
+import { cloneSurfaceBinding } from "@sugarmagic/domain";
 import {
   createInputRouter,
   createHitTestService,
@@ -61,17 +59,7 @@ function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
     ...landscape,
     surfaceSlots: landscape.surfaceSlots.map((slot) => ({
       ...slot,
-      surface: slot.surface
-        ? slot.surface.kind === "texture"
-          ? { ...slot.surface, tiling: [...slot.surface.tiling] as [number, number] }
-          : slot.surface.kind === "shader"
-            ? {
-                ...slot.surface,
-                parameterValues: { ...slot.surface.parameterValues },
-                textureBindings: { ...slot.surface.textureBindings }
-              }
-            : { ...slot.surface }
-        : null
+      surface: cloneSurfaceBinding(slot.surface)
     })),
     paintPayload: landscape.paintPayload
       ? {

@@ -4,8 +4,8 @@ Transient authoring viewport state.
 
 This module owns uncommitted build-viewport drafts and UI hints such as
 landscape paint drafts, transform drafts, brush settings, cursor
-state, active spatial tool state, and the current authoring-camera
-quaternion used by viewport chrome. Committed authored truth remains in
+state, active spatial tool state, transient mask-paint targeting, and the
+current authoring-camera quaternion used by viewport chrome. Committed authored truth remains in
 `projectStore`.
 
 Store actions in this module are expected to return fresh nested references

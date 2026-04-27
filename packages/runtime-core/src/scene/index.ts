@@ -13,6 +13,7 @@ import {
 } from "@sugarmagic/domain";
 import type {
   EffectiveMaterialSlotBinding,
+  ResolvedSurfaceStack,
   EffectiveShaderBinding
 } from "../shader";
 import {
@@ -193,7 +194,7 @@ function shaderRepresentationKey(
     shaderSlotRepresentation("deform", effectiveShaders.deform),
     shaderSlotRepresentation("effect", effectiveShaders.effect),
     ...effectiveMaterialSlots.map((slot) =>
-      `material:${slot.slotIndex}:${slot.slotName}:${slot.materialDefinitionId ?? "none"}:${shaderSlotRepresentation("surface", slot.surface)}`
+      `material:${slot.slotIndex}:${slot.slotName}:${slot.materialDefinitionId ?? "none"}:${surfaceStackRepresentation(slot.surface)}`
     )
   ].join(":");
 }
@@ -210,6 +211,26 @@ function shaderSlotRepresentation(
     .map((key) => `${key}=${JSON.stringify(binding.parameterValues[key])}`)
     .join("|");
   return `${slotLabel}:${binding.shaderDefinitionId}[${serializedParams}]`;
+}
+
+function surfaceStackRepresentation(
+  binding: ResolvedSurfaceStack | null
+): string {
+  if (!binding) {
+    return "surface:none";
+  }
+  return binding.layers
+    .map((layer) => {
+      if (layer.kind === "scatter") {
+        return `${layer.kind}:${layer.contentKind}:${layer.definitionId}`;
+      }
+      const serializedParams = Object.keys(layer.binding.parameterValues)
+        .sort()
+        .map((key) => `${key}=${JSON.stringify(layer.binding.parameterValues[key])}`)
+        .join("|");
+      return `${layer.kind}:${layer.binding.shaderDefinitionId}[${serializedParams}]`;
+    })
+    .join(";");
 }
 
 function createPlacedAssetSceneObject(

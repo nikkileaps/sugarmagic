@@ -16,3 +16,5 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 010: Asset Pipeline Layers](/Users/nikki/projects/sugarmagic/docs/adr/010-asset-pipeline-layers.md)
 - [ADR 011: Viewport As Subscriber](/Users/nikki/projects/sugarmagic/docs/adr/011-viewport-as-subscriber.md)
 - [ADR 012: Surface / Deform / Effect Traits](/Users/nikki/projects/sugarmagic/docs/adr/012-surface-deform-effect-traits.md)
+- [ADR 013: Surface as Layer Stack](/Users/nikki/projects/sugarmagic/docs/adr/013-surface-as-layer-stack.md)
+- [ADR 014: Render Engine and Render View](/Users/nikki/projects/sugarmagic/docs/adr/014-render-engine-and-render-view.md)

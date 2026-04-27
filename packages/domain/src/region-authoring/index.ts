@@ -4,7 +4,7 @@ import type {
   LandscapeSurfaceSlot,
   ShaderOrMaterial
 } from "../surface";
-import { createColorSurface } from "../surface";
+import { createDefaultSurface, createInlineSurfaceBinding } from "../surface";
 import type {
   ShaderBindingOverride,
   ShaderParameterOverride
@@ -442,7 +442,8 @@ export function createLandscapeSurfaceSlot(
     displayName: overrides.displayName ?? "Channel",
     slotName: overrides.slotName ?? overrides.displayName ?? "Channel",
     surface:
-      overrides.surface ?? createColorSurface(DEFAULT_REGION_LANDSCAPE_GRASS_COLOR),
+      overrides.surface ??
+      createInlineSurfaceBinding(createDefaultSurface(DEFAULT_REGION_LANDSCAPE_GRASS_COLOR)),
     tilingScale:
       overrides.tilingScale === undefined ? null : overrides.tilingScale
   };
@@ -462,7 +463,7 @@ export function createDefaultRegionLandscapeSurfaceSlots(
       channelId: LANDSCAPE_BASE_CHANNEL_ID,
       displayName: "Base",
       slotName: "Base",
-      surface: createColorSurface(baseColor),
+      surface: createInlineSurfaceBinding(createDefaultSurface(baseColor)),
       tilingScale: null
     }
   ];

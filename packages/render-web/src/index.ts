@@ -8,10 +8,14 @@
 
 export * from "./ShaderRuntime";
 export * from "./applyShaderToRenderable";
+export * from "./asset-scatter";
 export * from "./authoredAssetResolver";
+export * from "./billboard";
+export * from "./engine/WebRenderEngine";
 export * from "./environment";
-export * from "./host";
 export * from "./landscape";
 export * from "./render";
 export * from "./renderableFallbacks";
 export * from "./renderableTransforms";
+export * from "./scatter";
+export * from "./view/RenderView";

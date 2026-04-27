@@ -19,27 +19,37 @@ import {
   Stack,
   Switch,
   Text,
-  TextInput
+  TextInput,
+  UnstyledButton
 } from "@mantine/core";
 import type {
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
   LandscapeSurfaceSlot,
   MaterialDefinition,
+  MaskTextureDefinition,
+  PaintedMaskTargetAddress,
   RegionDocument,
+  RockTypeDefinition,
+  ShaderGraphDocument,
   SemanticCommand,
-  RegionLandscapeState
+  RegionLandscapeState,
+  SurfaceBinding,
+  SurfaceDefinition,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import {
   MAX_REGION_LANDSCAPE_CHANNELS,
-  createColorSurface,
-  createMaterialSurface,
   createLandscapeSurfaceSlot,
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
 import type { ViewportStore } from "@sugarmagic/shell";
-import { PanelSection, SurfacePicker, type Surface as PickerSurface } from "@sugarmagic/ui";
+import { PanelSection } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
+import { SurfaceBindingEditor } from "../surfaces";
+import { previewColorForBinding } from "../surfaces/utils";
 import type { LandscapeBrushSettings } from "./landscape-workspace";
 
 export { createLandscapeCameraController, type LandscapeCameraController } from "./landscape-camera-controller";
@@ -54,6 +64,17 @@ export interface LandscapeWorkspaceViewProps {
   isActive: boolean;
   viewportStore: ViewportStore;
   materialDefinitions: MaterialDefinition[];
+  surfaceDefinitions: SurfaceDefinition[];
+  textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
+  shaderDefinitions: ShaderGraphDocument[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
 }
@@ -66,42 +87,8 @@ const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
   mode: "paint"
 };
 
-function formatHexColor(value: number): string {
-  return `#${value.toString(16).padStart(6, "0")}`;
-}
-
 function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
-}
-
-function toPickerSurface(surface: LandscapeSurfaceSlot["surface"]): PickerSurface | null {
-  if (!surface) {
-    return null;
-  }
-  if (surface.kind === "color") {
-    return {
-      kind: "color",
-      value: surface.color
-    };
-  }
-  if (surface.kind === "material") {
-    return {
-      kind: "material",
-      materialDefinitionId: surface.materialDefinitionId
-    };
-  }
-  return null;
-}
-
-function fromPickerSurface(surface: PickerSurface | null) {
-  if (!surface) {
-    return null;
-  }
-  return surface.kind === "color"
-    ? createColorSurface(surface.value)
-    : surface.materialDefinitionId
-      ? createMaterialSurface(surface.materialDefinitionId)
-      : null;
 }
 
 function MaskThumbnail(props: {
@@ -140,37 +127,77 @@ function ChannelCard(props: {
   channelIndex: number;
   isActive: boolean;
   landscape: RegionLandscapeState | null;
+  surfaceDefinitions: SurfaceDefinition[];
   materials: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
+  shaderDefinitions: ShaderGraphDocument[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
-  onSurfaceChange: (surface: PickerSurface | null) => void;
+  onSurfaceChange: (surface: SurfaceBinding | null) => void;
+  onDelete: () => void;
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
 }) {
   const {
     channel,
     channelIndex,
     isActive,
     landscape,
+    surfaceDefinitions,
     materials,
+    textureDefinitions,
+    maskTextureDefinitions,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    rockTypeDefinitions,
     onSelect,
     onRename,
-    onSurfaceChange
+    onSurfaceChange,
+    onDelete,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition
   } = props;
 
   const isBase = channelIndex === 0;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(channel.displayName);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
-  const surfaceValue = toPickerSurface(channel.surface);
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
 
-  const materialOptions = useMemo(
-    () =>
-      materials.map((material) => ({
-        value: material.definitionId,
-        label: material.displayName
-      })),
-    [materials]
-  );
+    function handlePointerDown(): void {
+      setContextMenu(null);
+    }
+
+    function handleEscape(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [contextMenu]);
 
   return (
     <Paper
@@ -178,6 +205,18 @@ function ChannelCard(props: {
       radius="sm"
       withBorder
       onClick={isBase ? undefined : onSelect}
+      onContextMenu={(event) => {
+        if (isBase) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect();
+        setContextMenu({
+          x: event.clientX,
+          y: event.clientY
+        });
+      }}
       style={{
         cursor: isBase ? "default" : "pointer",
         opacity: isBase && !isActive ? 0.75 : 1,
@@ -200,9 +239,7 @@ function ChannelCard(props: {
           >
             <Popover.Target>
               <ColorSwatch
-                color={formatHexColor(
-                  channel.surface?.kind === "color" ? channel.surface.color : 0x808080
-                )}
+                color={previewColorForBinding(channel.surface, surfaceDefinitions)}
                 size={18}
                 style={{ cursor: "pointer", flexShrink: 0 }}
                 onClick={(event) => {
@@ -212,29 +249,29 @@ function ChannelCard(props: {
               />
             </Popover.Target>
             <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
-              <SurfacePicker
-                value={surfaceValue}
-                materials={materialOptions}
-                colorSwatches={[
-                  "#7f8ea3",
-                  "#5c8a5a",
-                  "#6b5b3a",
-                  "#8b7355",
-                  "#556b2f",
-                  "#2e4d2e",
-                  "#5c4033",
-                  "#8fbc8f",
-                  "#d2b48c",
-                  "#deb887",
-                  "#a0522d",
-                  "#696969"
-                ]}
-                onApply={(next) => {
+              <SurfaceBindingEditor
+                value={channel.surface}
+                allowedContext="landscape-only"
+                paintOwner={{
+                  scope: "landscape-channel",
+                  channelKey: channel.channelId
+                }}
+                surfaceDefinitions={surfaceDefinitions}
+                materialDefinitions={materials}
+                textureDefinitions={textureDefinitions}
+                maskTextureDefinitions={maskTextureDefinitions}
+                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                activeMaskPaintTarget={activeMaskPaintTarget}
+                onSetMaskPaintTarget={onSetMaskPaintTarget}
+                shaderDefinitions={shaderDefinitions}
+                grassTypeDefinitions={grassTypeDefinitions}
+                flowerTypeDefinitions={flowerTypeDefinitions}
+                rockTypeDefinitions={rockTypeDefinitions}
+                onChange={(next) => {
                   onSurfaceChange(next);
                   setPickerOpen(false);
                 }}
-                title={`${channel.displayName} surface`}
-                emptyMaterialsHint="Create a material in the Material Library to bind it here."
               />
             </Popover.Dropdown>
           </Popover>
@@ -297,6 +334,40 @@ function ChannelCard(props: {
         </Group>
 
       </Group>
+      {contextMenu ? (
+        <Paper
+          withBorder
+          shadow="md"
+          radius="sm"
+          p={4}
+          style={{
+            position: "fixed",
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 1000,
+            minWidth: 140
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Stack gap={2}>
+            <UnstyledButton
+              onClick={() => {
+                onDelete();
+                setContextMenu(null);
+              }}
+              style={{
+                padding: "6px 8px",
+                borderRadius: "var(--sm-radius-sm)",
+                color: "var(--sm-red)",
+                cursor: "pointer"
+              }}
+            >
+              <Text size="xs">Delete</Text>
+            </UnstyledButton>
+          </Stack>
+        </Paper>
+      ) : null}
     </Paper>
   );
 }
@@ -308,6 +379,17 @@ export function useLandscapeWorkspaceView(
     isActive,
     viewportStore,
     materialDefinitions,
+    surfaceDefinitions,
+    textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget,
+    shaderDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    rockTypeDefinitions,
     region,
     onCommand
   } = props;
@@ -345,7 +427,18 @@ export function useLandscapeWorkspaceView(
           channelIndex={channelIndex}
           isActive={channelIndex === effectiveActiveChannelIndex}
           landscape={displayedLandscape}
+          surfaceDefinitions={surfaceDefinitions}
           materials={materialDefinitions}
+          textureDefinitions={textureDefinitions}
+          maskTextureDefinitions={maskTextureDefinitions}
+          activeMaskPaintTarget={activeMaskPaintTarget}
+          onSetMaskPaintTarget={onSetMaskPaintTarget}
+          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+          shaderDefinitions={shaderDefinitions}
+          grassTypeDefinitions={grassTypeDefinitions}
+          flowerTypeDefinitions={flowerTypeDefinitions}
+          rockTypeDefinitions={rockTypeDefinitions}
           onSelect={() =>
             viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
           }
@@ -381,8 +474,25 @@ export function useLandscapeWorkspaceView(
               },
               payload: {
                 channelId: channel.channelId,
-                surface: fromPickerSurface(surface),
+                surface,
                 tilingScale: channel.tilingScale
+              }
+            });
+          }}
+          onDelete={() => {
+            if (!region || channelIndex === 0) return;
+            onCommand({
+              kind: "DeleteLandscapeChannel",
+              target: {
+                aggregateKind: "region-document",
+                aggregateId: region.identity.id
+              },
+              subject: {
+                subjectKind: "region-landscape",
+                subjectId: region.identity.id
+              },
+              payload: {
+                channelId: channel.channelId
               }
             });
           }}
@@ -393,6 +503,17 @@ export function useLandscapeWorkspaceView(
       effectiveActiveChannelIndex,
       displayedLandscape,
       materialDefinitions,
+      surfaceDefinitions,
+      textureDefinitions,
+      maskTextureDefinitions,
+      activeMaskPaintTarget,
+      onSetMaskPaintTarget,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
+      rockTypeDefinitions,
+      onCreateMaskTextureDefinition,
+      onImportMaskTextureDefinition,
       onCommand,
       region,
       viewportStore
@@ -509,8 +630,7 @@ export function useLandscapeWorkspaceView(
                           },
                           payload: {
                             channel: createLandscapeSurfaceSlot({
-                              displayName: nextLandscapeChannelName(region.landscape.surfaceSlots),
-                              surface: createColorSurface(0x808080)
+                              displayName: nextLandscapeChannelName(region.landscape.surfaceSlots)
                             })
                           }
                         });

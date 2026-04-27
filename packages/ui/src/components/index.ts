@@ -14,6 +14,19 @@ export {
   type ColorFieldProps
 } from "./ColorField";
 export {
+  KindTabs,
+  type KindTabsOption,
+  type KindTabsProps
+} from "./KindTabs";
+export {
+  LabeledSlider,
+  type LabeledSliderProps
+} from "./LabeledSlider";
+export {
+  MaskPreview,
+  type MaskPreviewProps
+} from "./MaskPreview";
+export {
   CreateRegionDialog,
   type CreateRegionDialogProps
 } from "./CreateRegionDialog";
@@ -34,11 +47,10 @@ export {
   type SceneExplorerProps
 } from "./SceneExplorer";
 export {
-  SurfacePicker,
-  type Surface,
-  type SurfaceMaterialOption,
-  type SurfacePickerProps
-} from "./SurfacePicker";
+  SortableList,
+  type SortableListItem,
+  type SortableListProps
+} from "./SortableList";
 export {
   Inspector,
   type InspectorProps

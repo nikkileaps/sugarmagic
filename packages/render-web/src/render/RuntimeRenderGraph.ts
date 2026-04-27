@@ -54,7 +54,32 @@ export function createRuntimeRenderGraph(options: {
   height: number;
 }): RuntimeRenderGraph {
   const { renderer, scene } = options;
-  const scenePass = pass(scene, options.camera);
+  // MSAA explicitly off on the scene pass.
+  //
+  // Why explicit: `pass(scene, camera)` without options inherits
+  // samples from `renderer.samples`, and `WebGPURenderer({ antialias:
+  // true })` sets `renderer.samples = 4`. Without this `{ samples: 0 }`
+  // override the scene pass would silently render at 4× MSAA.
+  //
+  // Why off: with MSAA on, partially-covered grass pixels average
+  // samples-on-blade with samples-on-background-through-inter-blade-
+  // gaps. Wind motion shifts blades sub-pixel each frame, so the
+  // composition of "blade vs gap" samples changes per frame, producing
+  // per-pixel brightness variation. Bloom amplifies that into visible
+  // "camera flash" halos on grass tips. Confirmed by isolated test
+  // 2026-04-26: this is the only line that needed to change to
+  // eliminate the flicker; all the other MSAA / alphaToCoverage /
+  // shader-graph tuning we tried was either wrong or made trees worse.
+  //
+  // Trade-off: scene edges are technically aliased without MSAA. In
+  // practice with the current stylized look + camera distances they
+  // don't read as jaggy, so we ship without. If aliasing becomes a
+  // visible problem later, the tractable upgrade paths are FXAA/SMAA
+  // post-process AA (no coverage-variation issue), TAA with a custom
+  // per-vertex velocity pass (proper fix; three.js's TRAANode +
+  // VelocityNode does NOT capture wind-driven vertex motion → would
+  // ghost), or rendering foliage to a buffer that bypasses bloom.
+  const scenePass = pass(scene, options.camera, { samples: 0 });
   const baseOutputNode = scenePass.getTextureNode("output");
   // Explicit depth node from the scene pass. Fog and other depth-based post-
   // process effects read this directly instead of going through

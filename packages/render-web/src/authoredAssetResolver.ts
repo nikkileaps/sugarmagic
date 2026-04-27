@@ -22,7 +22,7 @@
  *
  * Contract:
  *
- *   - Constructed once per WebRenderHost.
+ *   - Constructed once per WebRenderEngine.
  *   - resolveAssetUrl(path) returns the blob URL or null — never the
  *     raw path. Callers surface explicit errors on null.
  *   - resolveTextureDefinition(def, options) returns a three.Texture
@@ -30,7 +30,7 @@
  *     definitionId do NOT cause cache misses; they trigger an in-place
  *     reload of the existing Texture object (keeps GPU bindings stable
  *     even when Studio re-mints blob URLs).
- *   - sync(contentLibrary, assetSources) is how upstream (WebRenderHost)
+ *   - sync(contentLibrary, assetSources) is how upstream (WebRenderEngine)
  *     pushes fresh state. Idempotent and cheap to call on every frame
  *     budget; usually called on every applyEnvironment.
  *   - Debug logging fires on cache state changes so Preview-vs-editor
@@ -42,6 +42,7 @@
 import * as THREE from "three";
 import type {
   ContentLibrarySnapshot,
+  MaskTextureDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
 
@@ -75,6 +76,11 @@ export interface AuthoredAssetResolver {
     options?: TextureResolveOptions
   ): THREE.Texture;
 
+  resolveMaskTextureDefinition(
+    definition: MaskTextureDefinition,
+    options?: TextureResolveOptions
+  ): THREE.Texture;
+
   /** Pushes the latest content library and asset-source map. Idempotent. */
   sync(
     contentLibrary: ContentLibrarySnapshot | null,
@@ -83,6 +89,12 @@ export interface AuthoredAssetResolver {
 
   /** Current content library snapshot. */
   getContentLibrary(): ContentLibrarySnapshot | null;
+
+  /**
+   * Hard reset for project switches. Keeps the resolver instance alive while
+   * discarding every project-scoped cached artifact.
+   */
+  resetForProjectSwitch(): void;
 
   /** Dispose every cached texture and drop state. */
   dispose(): void;
@@ -129,6 +141,10 @@ function colorSpaceForDefinition(
     : THREE.LinearSRGBColorSpace;
 }
 
+function colorSpaceForMaskDefinition(): THREE.ColorSpace {
+  return THREE.LinearSRGBColorSpace;
+}
+
 function cacheKeyFor(
   definitionId: string,
   options: TextureResolveOptions | undefined
@@ -167,6 +183,13 @@ export function createAuthoredAssetResolver(
   let assetSources: Record<string, string> = {};
   const cache = new Map<string, CachedTextureEntry>();
   let syncCount = 0;
+
+  function clearCache(): void {
+    for (const entry of cache.values()) {
+      entry.texture.dispose();
+    }
+    cache.clear();
+  }
 
   function loadTextureBytes(
     entry: CachedTextureEntry,
@@ -260,6 +283,71 @@ export function createAuthoredAssetResolver(
     loadTextureBytes(entry, resolvedUrl);
   }
 
+  function resolveTextureLikeDefinition(
+    definition: {
+      definitionId: string;
+      source: {
+        relativeAssetPath: string;
+      };
+    },
+    colorSpace: THREE.ColorSpace,
+    textureOptions?: TextureResolveOptions
+  ): THREE.Texture {
+    const cacheKey = cacheKeyFor(definition.definitionId, textureOptions);
+    const existing = cache.get(cacheKey);
+    const relativeAssetPath = definition.source.relativeAssetPath;
+    const resolvedUrl = assetSources[relativeAssetPath] ?? null;
+
+    if (existing) {
+      maybeReloadForUrlChange(existing, resolvedUrl);
+      return existing.texture;
+    }
+
+    const texture = new THREE.Texture();
+    texture.colorSpace = colorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(
+      textureOptions?.repeatX ?? 1,
+      textureOptions?.repeatY ?? 1
+    );
+
+    const entry: CachedTextureEntry = {
+      definitionId: definition.definitionId,
+      cacheKey,
+      colorSpace,
+      relativeAssetPath,
+      loadedFromUrl: resolvedUrl,
+      loadInFlight: false,
+      texture
+    };
+    cache.set(cacheKey, entry);
+
+    debugLog(logger, "texture cache miss, created entry", {
+      definitionId: definition.definitionId,
+      cacheKey,
+      relativeAssetPath,
+      resolvedUrl,
+      repeatX: textureOptions?.repeatX ?? 1,
+      repeatY: textureOptions?.repeatY ?? 1,
+      totalCacheSize: cache.size
+    });
+
+    if (!resolvedUrl) {
+      warnLog(logger, "texture created without source url", {
+        definitionId: definition.definitionId,
+        relativeAssetPath,
+        cacheKey,
+        syncCount,
+        knownPathCount: Object.keys(assetSources).length
+      });
+      return texture;
+    }
+
+    loadTextureBytes(entry, resolvedUrl);
+    return texture;
+  }
+
   return {
     resolveAssetUrl(relativeAssetPath) {
       const url = assetSources[relativeAssetPath];
@@ -275,70 +363,19 @@ export function createAuthoredAssetResolver(
     },
 
     resolveTextureDefinition(definition, textureOptions) {
-      const cacheKey = cacheKeyFor(definition.definitionId, textureOptions);
-      const existing = cache.get(cacheKey);
-      const relativeAssetPath = definition.source.relativeAssetPath;
-      const resolvedUrl = assetSources[relativeAssetPath] ?? null;
-
-      if (existing) {
-        // Definition bytes changed (or blob URL re-minted). Trigger
-        // in-place reload — keep the GPU binding stable so consumers
-        // don't need to rewire materials.
-        maybeReloadForUrlChange(existing, resolvedUrl);
-        return existing.texture;
-      }
-
-      // Create a bare Three.Texture with no image yet. The material
-      // graph compiles against this identity; the image arrives later
-      // via loadTextureBytes. We intentionally do NOT pre-populate a
-      // small placeholder image: a 1x1 canvas/data source locks the
-      // GPU texture to 1x1 in Three's WebGPU backend, and a later
-      // image swap won't resize it. Starting empty + disposing on
-      // swap gives Three a clean slate to size the GPU resource
-      // against the real image.
-      const texture = new THREE.Texture();
-      texture.colorSpace = colorSpaceForDefinition(definition);
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(
-        textureOptions?.repeatX ?? 1,
-        textureOptions?.repeatY ?? 1
+      return resolveTextureLikeDefinition(
+        definition,
+        colorSpaceForDefinition(definition),
+        textureOptions
       );
+    },
 
-      const entry: CachedTextureEntry = {
-        definitionId: definition.definitionId,
-        cacheKey,
-        colorSpace: colorSpaceForDefinition(definition),
-        relativeAssetPath,
-        loadedFromUrl: resolvedUrl,
-        loadInFlight: false,
-        texture
-      };
-      cache.set(cacheKey, entry);
-
-      debugLog(logger, "texture cache miss, created entry", {
-        definitionId: definition.definitionId,
-        cacheKey,
-        relativeAssetPath,
-        resolvedUrl,
-        repeatX: textureOptions?.repeatX ?? 1,
-        repeatY: textureOptions?.repeatY ?? 1,
-        totalCacheSize: cache.size
-      });
-
-      if (!resolvedUrl) {
-        warnLog(logger, "texture created without source url", {
-          definitionId: definition.definitionId,
-          relativeAssetPath,
-          cacheKey,
-          syncCount,
-          knownPathCount: Object.keys(assetSources).length
-        });
-        return texture;
-      }
-
-      loadTextureBytes(entry, resolvedUrl);
-      return texture;
+    resolveMaskTextureDefinition(definition, textureOptions) {
+      return resolveTextureLikeDefinition(
+        definition,
+        colorSpaceForMaskDefinition(),
+        textureOptions
+      );
     },
 
     sync(nextContentLibrary, nextAssetSources) {
@@ -363,9 +400,14 @@ export function createAuthoredAssetResolver(
       // content library; otherwise their textures leak until dispose.
       if (nextContentLibrary) {
         const livingIds = new Set(
-          nextContentLibrary.textureDefinitions.map(
-            (definition) => definition.definitionId
-          )
+          [
+            ...nextContentLibrary.textureDefinitions.map(
+              (definition) => definition.definitionId
+            ),
+            ...(nextContentLibrary.maskTextureDefinitions ?? []).map(
+              (definition) => definition.definitionId
+            )
+          ]
         );
         for (const [cacheKey, entry] of cache) {
           if (!livingIds.has(entry.definitionId)) {
@@ -390,12 +432,20 @@ export function createAuthoredAssetResolver(
       return contentLibrary;
     },
 
+    resetForProjectSwitch() {
+      debugLog(logger, "resetForProjectSwitch", {
+        cacheSize: cache.size,
+        syncCount
+      });
+      contentLibrary = null;
+      assetSources = {};
+      syncCount = 0;
+      clearCache();
+    },
+
     dispose() {
       debugLog(logger, "dispose", { cacheSize: cache.size, syncCount });
-      for (const entry of cache.values()) {
-        entry.texture.dispose();
-      }
-      cache.clear();
+      clearCache();
       contentLibrary = null;
       assetSources = {};
     }

@@ -6,117 +6,98 @@
  * not create or delete slots inside Sugarmagic.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ColorSwatch, Group, Popover, Stack, Text } from "@mantine/core";
-import type { AssetSurfaceSlot, MaterialDefinition, Surface as DomainSurface } from "@sugarmagic/domain";
-import { createColorSurface, createMaterialSurface } from "@sugarmagic/domain";
-import { SurfacePicker, type Surface as PickerSurface } from "@sugarmagic/ui";
+import type {
+  AssetSurfaceSlot,
+  FlowerTypeDefinition,
+  GrassTypeDefinition,
+  MaterialDefinition,
+  MaskTextureDefinition,
+  PaintedMaskTargetAddress,
+  RockTypeDefinition,
+  ShaderGraphDocument,
+  SurfaceBinding,
+  SurfaceDefinition,
+  TextureDefinition
+} from "@sugarmagic/domain";
+import { SurfaceBindingEditor } from "./surfaces";
+import { previewColorForBinding } from "./surfaces/utils";
 
 function looksLikeDefaultBlenderSlotName(slotName: string): boolean {
   return /^Material(?:[ .]\d+)?$/u.test(slotName);
 }
 
-function toPickerSurface(surface: DomainSurface | null): PickerSurface | null {
-  if (!surface) {
-    return null;
-  }
-  if (surface.kind === "color") {
-    return { kind: "color", value: surface.color };
-  }
-  if (surface.kind === "material") {
-    return { kind: "material", materialDefinitionId: surface.materialDefinitionId };
-  }
-  return null;
-}
-
-function fromPickerSurface(surface: PickerSurface | null): DomainSurface | null {
-  if (!surface) {
-    return null;
-  }
-  return surface.kind === "color"
-    ? createColorSurface(surface.value)
-    : surface.materialDefinitionId
-      ? createMaterialSurface(surface.materialDefinitionId)
-      : null;
-}
-
 function describeSurface(
-  surface: DomainSurface | null,
+  surface: SurfaceBinding<"universal"> | null,
+  surfaceDefinitions: SurfaceDefinition[],
   materialDefinitions: MaterialDefinition[]
 ): string {
   if (!surface) {
     return "No Surface";
   }
-  if (surface.kind === "color") {
-    return `Color ${`#${surface.color.toString(16).padStart(6, "0")}`}`;
+  if (surface.kind === "reference") {
+    return (
+      surfaceDefinitions.find(
+        (definition) => definition.definitionId === surface.surfaceDefinitionId
+      )?.displayName ?? "Missing Surface"
+    );
   }
-  if (surface.kind === "material") {
+  const layerCount = surface.surface.layers.length;
+  const baseLayer = surface.surface.layers[0];
+  const baseAppearance =
+    layerCount === 1 && baseLayer?.kind === "appearance" ? baseLayer : null;
+  if (baseAppearance && baseAppearance.content.kind === "material") {
+    const materialDefinitionId = baseAppearance.content.materialDefinitionId;
     return (
       materialDefinitions.find(
-        (material) => material.definitionId === surface.materialDefinitionId
+        (material) => material.definitionId === materialDefinitionId
       )?.displayName ?? "Missing Material"
     );
   }
-  if (surface.kind === "texture") {
-    return "Texture";
-  }
-  return "Shader";
-}
-
-function previewColor(surface: DomainSurface | null): string {
-  if (!surface) {
-    return "#5c6370";
-  }
-  if (surface.kind === "color") {
-    return `#${surface.color.toString(16).padStart(6, "0")}`;
-  }
-  if (surface.kind === "material") {
-    return "#89b4fa";
-  }
-  if (surface.kind === "texture") {
-    return "#a6e3a1";
-  }
-  return "#f9e2af";
+  return `${layerCount} layer${layerCount === 1 ? "" : "s"}`;
 }
 
 export interface MaterialSlotBindingsEditorProps {
   bindings: AssetSurfaceSlot[];
+  assetDefinitionId: string;
+  surfaceDefinitions: SurfaceDefinition[];
   materialDefinitions: MaterialDefinition[];
+  textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions: MaskTextureDefinition[];
+  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
+  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
+  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
+  shaderDefinitions: ShaderGraphDocument[];
+  grassTypeDefinitions: GrassTypeDefinition[];
+  flowerTypeDefinitions: FlowerTypeDefinition[];
+  rockTypeDefinitions: RockTypeDefinition[];
   onChangeBinding: (
     slotName: string,
     slotIndex: number,
-    surface: DomainSurface | null
+    surface: SurfaceBinding<"universal"> | null
   ) => void;
 }
 
 export function MaterialSlotBindingsEditor({
   bindings,
+  assetDefinitionId,
+  surfaceDefinitions,
   materialDefinitions,
+  textureDefinitions,
+  maskTextureDefinitions,
+  onCreateMaskTextureDefinition,
+  onImportMaskTextureDefinition,
+  activeMaskPaintTarget,
+  onSetMaskPaintTarget,
+  shaderDefinitions,
+  grassTypeDefinitions,
+  flowerTypeDefinitions,
+  rockTypeDefinitions,
   onChangeBinding
 }: MaterialSlotBindingsEditorProps) {
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null);
-  const materialOptions = useMemo(
-    () =>
-      materialDefinitions.map((material) => ({
-        value: material.definitionId,
-        label: material.displayName
-      })),
-    [materialDefinitions]
-  );
-  const colorSwatches = [
-    "#7f8ea3",
-    "#5c8a5a",
-    "#6b5b3a",
-    "#8b7355",
-    "#556b2f",
-    "#2e4d2e",
-    "#5c4033",
-    "#8fbc8f",
-    "#d2b48c",
-    "#deb887",
-    "#a0522d",
-    "#696969"
-  ];
 
   if (bindings.length === 0) {
     return (
@@ -130,9 +111,12 @@ export function MaterialSlotBindingsEditor({
     <Stack gap="xs">
       {bindings.map((binding) => {
         const slotKey = `${binding.slotIndex}:${binding.slotName}`;
-        const pickerValue = toPickerSurface(binding.surface);
-        const summary = describeSurface(binding.surface, materialDefinitions);
-        const colorSwatch = previewColor(binding.surface);
+        const summary = describeSurface(
+          binding.surface,
+          surfaceDefinitions,
+          materialDefinitions
+        );
+        const colorSwatch = previewColorForBinding(binding.surface, surfaceDefinitions);
         return (
           <Stack key={slotKey} gap={4}>
             <Group justify="space-between" align="flex-start" wrap="nowrap">
@@ -156,16 +140,30 @@ export function MaterialSlotBindingsEditor({
                   />
                 </Popover.Target>
                 <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
-                  <SurfacePicker
-                    value={pickerValue}
-                    materials={materialOptions}
-                    colorSwatches={colorSwatches}
-                    onApply={(next) => {
-                      onChangeBinding(binding.slotName, binding.slotIndex, fromPickerSurface(next));
+                  <SurfaceBindingEditor
+                    value={binding.surface}
+                    allowedContext="universal"
+                    paintOwner={{
+                      scope: "asset-slot",
+                      assetDefinitionId,
+                      slotName: binding.slotName
+                    }}
+                    surfaceDefinitions={surfaceDefinitions}
+                    materialDefinitions={materialDefinitions}
+                    textureDefinitions={textureDefinitions}
+                    maskTextureDefinitions={maskTextureDefinitions}
+                    onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
+                    onImportMaskTextureDefinition={onImportMaskTextureDefinition}
+                    activeMaskPaintTarget={activeMaskPaintTarget}
+                    onSetMaskPaintTarget={onSetMaskPaintTarget}
+                    shaderDefinitions={shaderDefinitions}
+                    grassTypeDefinitions={grassTypeDefinitions}
+                    flowerTypeDefinitions={flowerTypeDefinitions}
+                    rockTypeDefinitions={rockTypeDefinitions}
+                    onChange={(next) => {
+                      onChangeBinding(binding.slotName, binding.slotIndex, next);
                       setOpenSlotKey(null);
                     }}
-                    title={`${binding.slotName} surface`}
-                    emptyMaterialsHint="Create a material in the Material Library to bind it here."
                   />
                 </Popover.Dropdown>
               </Popover>

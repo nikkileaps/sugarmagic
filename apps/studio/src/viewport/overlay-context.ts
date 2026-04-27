@@ -15,6 +15,7 @@ import type {
 } from "@sugarmagic/shell";
 import type {
   AuthoringSession,
+  PaintedMaskTargetAddress,
   RegionDocument,
   RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -67,6 +68,7 @@ export interface ViewportOverlayStateAccess {
     stroke: LandscapePaintStroke
   ): boolean;
   clearLandscapeDraft(): void;
+  setActiveMaskPaintTarget(target: PaintedMaskTargetAddress | null): void;
   setCameraQuaternion(
     quaternion: [number, number, number, number]
   ): void;
@@ -80,6 +82,9 @@ export interface ViewportOverlayContext {
   stateAccess: ViewportOverlayStateAccess;
   getCamera(): THREE.Camera;
   setProjectionMode(mode: "perspective" | "orthographic-top"): void;
+  readMaskTexture(maskTextureId: string): Promise<ImageData | null>;
+  writeMaskTexture(maskTextureId: string, imageData: ImageData): Promise<void>;
+  previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement): void;
   subscribeToProjection<T>(
     selector: (state: StoreBundleState) => T,
     listener: (next: T) => void,

@@ -10,11 +10,17 @@
 import { describe, expect, it } from "vitest";
 import type { AssetDefinition, ContentLibrarySnapshot, PlacedAssetInstance } from "@sugarmagic/domain";
 import {
-  createMaterialSurface,
+  createAppearanceLayer,
+  createColorAppearanceContent,
+  createInlineSurfaceBinding,
+  createMaterialSurfaceBinding,
+  createScatterLayer,
+  createSurface,
   createDefaultStandardPbrShaderGraph,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import {
+  resolveSurfaceBinding,
   resolveAssetDefinitionShaderBindings,
   resolveEffectiveAssetMaterialSlotBindings
 } from "@sugarmagic/runtime-core";
@@ -25,7 +31,7 @@ function makeContentLibrary(): ContentLibrarySnapshot {
 
   return {
     ...snapshot,
-    shaderDefinitions: [standardPbr],
+    shaderDefinitions: [...snapshot.shaderDefinitions, standardPbr],
     textureDefinitions: [
       {
         definitionId: "wordlark:texture:brick-base",
@@ -94,7 +100,7 @@ function makeAssetDefinition(): AssetDefinition {
       {
         slotName: "Wall",
         slotIndex: 0,
-        surface: createMaterialSurface("wordlark:material:brick")
+        surface: createMaterialSurfaceBinding("wordlark:material:brick")
       }
     ],
     deform: null,
@@ -141,14 +147,18 @@ describe("material resolution", () => {
     const assetDefinition = makeAssetDefinition();
 
     const result = resolveAssetDefinitionShaderBindings(assetDefinition, contentLibrary);
+    const resolvedSlot = result.materialSlots[0];
+    const resolvedAppearanceLayer = resolvedSlot?.surface?.layers.find(
+      (layer) => layer.kind === "appearance"
+    );
 
     expect(result.materialSlots).toHaveLength(1);
-    expect(result.materialSlots[0]?.slotName).toBe("Wall");
-    expect(result.materialSlots[0]?.surface?.shaderDefinitionId).toBe(
+    expect(resolvedSlot?.slotName).toBe("Wall");
+    expect(resolvedSlot?.surface?.shaderDefinitionId).toBe(
       "wordlark:shader:standard-pbr"
     );
-    expect(result.materialSlots[0]?.surface?.parameterValues.tiling).toEqual([3, 4]);
-    expect(result.materialSlots[0]?.surface?.textureBindings).toEqual({
+    expect(resolvedAppearanceLayer?.binding.parameterValues.tiling).toEqual([3, 4]);
+    expect(resolvedAppearanceLayer?.binding.textureBindings).toEqual({
       basecolor_texture: "wordlark:texture:brick-base",
       normal_texture: "wordlark:texture:brick-normal",
       orm_texture: "wordlark:texture:brick-orm"
@@ -163,8 +173,56 @@ describe("material resolution", () => {
     const placedAsset = makePlacedAsset();
 
     const result = resolveEffectiveAssetMaterialSlotBindings(placedAsset, contentLibrary);
+    const resolvedAppearanceLayer = result[0]?.surface?.layers.find(
+      (layer) => layer.kind === "appearance"
+    );
 
     expect(result[0]?.surface?.shaderDefinitionId).toBe("wordlark:shader:standard-pbr");
-    expect(result[0]?.surface?.parameterValues.tiling).toEqual([6, 2]);
+    expect(resolvedAppearanceLayer?.binding.parameterValues.tiling).toEqual([6, 2]);
+  });
+
+  it("resolves scatter-layer material bindings through the same material apparatus", () => {
+    const contentLibrary = makeContentLibrary();
+    const grassTypeId = contentLibrary.grassTypeDefinitions?.[0]?.definitionId;
+    if (!grassTypeId) {
+      throw new Error("Expected starter grass definition.");
+    }
+    const binding = createInlineSurfaceBinding(
+      createSurface([
+        createAppearanceLayer(createColorAppearanceContent(0x6f8f52), {
+          displayName: "Ground",
+          blendMode: "base"
+        }),
+        createScatterLayer(
+          {
+            kind: "grass",
+            grassTypeId
+          },
+          {
+            displayName: "Tall Grass",
+            materialDefinitionId: "wordlark:material:brick"
+          }
+        )
+      ])
+    );
+
+    const result = resolveSurfaceBinding(binding, contentLibrary, "universal");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const scatterLayer = result.binding.layers.find(
+      (layer) => layer.kind === "scatter"
+    );
+    expect(scatterLayer?.kind).toBe("scatter");
+    if (scatterLayer?.kind !== "scatter") {
+      return;
+    }
+    expect(scatterLayer.materialDefinitionId).toBe("wordlark:material:brick");
+    expect(scatterLayer.appearanceBinding?.shaderDefinitionId).toBe(
+      "wordlark:shader:standard-pbr"
+    );
   });
 });

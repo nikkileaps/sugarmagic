@@ -23,7 +23,13 @@ import {
   createRegionPlayerPresence,
   type RegionDocument
 } from "../region-authoring";
-import { isShaderOrMaterialSurface, type ShaderOrMaterial } from "../surface";
+import {
+  createSurface,
+  isShaderOrMaterialContent,
+  type ShaderOrMaterial,
+  type SurfaceBinding,
+  type SurfaceContext
+} from "../surface";
 
 function defaultEnvironmentId(contentLibrary: ContentLibrarySnapshot): string | null {
   return contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
@@ -96,7 +102,7 @@ function normalizeShaderOrMaterialForLoad(
   if (!value) {
     return null;
   }
-  if (!isShaderOrMaterialSurface(value)) {
+  if (!isShaderOrMaterialContent(value)) {
     throw new Error(
       `${ownerLabel}.${field} must be a shader or material surface; received "${String(
         (value as { kind?: unknown }).kind ?? "unknown"
@@ -115,6 +121,33 @@ function normalizeShaderOrMaterialForLoad(
     parameterValues: { ...(value.parameterValues ?? {}) },
     textureBindings: { ...(value.textureBindings ?? {}) }
   };
+}
+
+function normalizeSurfaceBindingForLoad<C extends SurfaceContext = SurfaceContext>(
+  ownerLabel: string,
+  field: string,
+  value: SurfaceBinding<C> | null | undefined
+): SurfaceBinding<C> | null {
+  if (!value) {
+    return null;
+  }
+  if (value.kind === "reference") {
+    return {
+      kind: "reference",
+      surfaceDefinitionId: value.surfaceDefinitionId
+    };
+  }
+  if (value.kind !== "inline") {
+    throw new Error(
+      `${ownerLabel}.${field} must be an inline or reference surface binding; received "${String(
+        (value as { kind?: unknown }).kind ?? "unknown"
+      )}".`
+    );
+  }
+  return {
+    kind: "inline",
+    surface: createSurface(value.surface.layers, value.surface.context)
+  } as SurfaceBinding<C>;
 }
 
 export function normalizeRegionDocumentForLoad(
@@ -249,7 +282,16 @@ export function normalizeRegionDocumentForLoad(
       ...(legacyLandscape ?? {}),
       surfaceSlots:
         legacyLandscape?.surfaceSlots && legacyLandscape.surfaceSlots.length > 0
-          ? legacyLandscape.surfaceSlots.map((slot) => createLandscapeSurfaceSlot(slot))
+          ? legacyLandscape.surfaceSlots.map((slot) =>
+              createLandscapeSurfaceSlot({
+                ...slot,
+                surface: normalizeSurfaceBindingForLoad(
+                  `region:${region.identity.id}:landscape`,
+                  `surfaceSlots[${slot.channelId ?? slot.slotName ?? "unknown"}].surface`,
+                  slot.surface
+                )
+              })
+            )
           : defaultLandscape.surfaceSlots,
       deform: normalizeShaderOrMaterialForLoad(
         `region:${region.identity.id}:landscape`,

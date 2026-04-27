@@ -70,6 +70,7 @@ import type {
   ContentLibrarySnapshot,
   EnvironmentDefinition,
   MaterialDefinition,
+  MaskTextureDefinition,
   TextureDefinition
 } from "../content-library";
 import {
@@ -81,17 +82,25 @@ import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
 import {
+  assertReusableSurfaceHasNoPaintedMasks,
+  type SurfaceDefinition
+} from "../surface";
+import {
   removePluginConfiguration,
   upsertPluginConfiguration,
   type PluginConfigurationRecord
 } from "../plugins";
 import type { TimestampIso } from "../shared";
 import {
+  createBuiltInCloudShadowsShaderId,
   createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
+  DEFAULT_CLOUD_SHADOW_SETTINGS,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
+  listMaskTextureDefinitions as listMaskTextureDefinitionsFromLibrary,
+  listSurfaceDefinitions as listSurfaceDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
   listTextureDefinitions as listTextureDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot,
@@ -102,7 +111,7 @@ import {
   createEmptyShaderSlotBindingMap,
   validateShaderGraphDocument
 } from "../shader-graph";
-import { createScopedId } from "../shared";
+import { createScopedId, createUuid } from "../shared";
 import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
 
@@ -192,10 +201,22 @@ export function getAllMaterialDefinitions(
   return listMaterialDefinitionsFromLibrary(session.contentLibrary);
 }
 
+export function getAllSurfaceDefinitions(
+  session: AuthoringSession
+): SurfaceDefinition[] {
+  return listSurfaceDefinitionsFromLibrary(session.contentLibrary);
+}
+
 export function getAllTextureDefinitions(
   session: AuthoringSession
 ): TextureDefinition[] {
   return listTextureDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllMaskTextureDefinitions(
+  session: AuthoringSession
+): MaskTextureDefinition[] {
+  return listMaskTextureDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllShaderDefinitions(
@@ -483,8 +504,13 @@ function applyDeleteShaderGraphCommand(
       assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
         ...definition,
         surfaceSlots: definition.surfaceSlots.map((slot) =>
-          slot.surface?.kind === "shader" &&
-          slot.surface.shaderDefinitionId === command.payload.shaderDefinitionId
+          slot.surface?.kind === "inline" &&
+          slot.surface.surface.layers.some(
+            (layer) =>
+              layer.kind === "appearance" &&
+              layer.content.kind === "shader" &&
+              layer.content.shaderDefinitionId === command.payload.shaderDefinitionId
+          )
             ? { ...slot, surface: null }
             : slot
         ),
@@ -912,6 +938,56 @@ function updatePostProcessBindingOverride(
         }
       };
     }
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInCloudShadowsShaderId(session.gameProject.identity.id)
+    ) {
+      const current =
+        nextDefinition.atmosphere.cloudShadows ?? DEFAULT_CLOUD_SHADOW_SETTINGS;
+      const value = command.payload.override.value;
+      const param = command.payload.override.parameterId;
+      const numericFields = [
+        "scale",
+        "speedX",
+        "speedZ",
+        "coverage",
+        "softness",
+        "darkness"
+      ];
+      if (
+        numericFields.includes(param) &&
+        typeof value === "number" &&
+        Number.isFinite(value)
+      ) {
+        nextDefinition = {
+          ...nextDefinition,
+          atmosphere: {
+            ...nextDefinition.atmosphere,
+            cloudShadows: { ...current, [param]: value }
+          }
+        };
+      } else if (
+        param === "shadowColor" &&
+        Array.isArray(value) &&
+        value.length >= 3 &&
+        value.every((c) => typeof c === "number" && Number.isFinite(c))
+      ) {
+        nextDefinition = {
+          ...nextDefinition,
+          atmosphere: {
+            ...nextDefinition.atmosphere,
+            cloudShadows: {
+              ...current,
+              shadowColor: [
+                value[0] as number,
+                value[1] as number,
+                value[2] as number
+              ] as [number, number, number]
+            }
+          }
+        };
+      }
+    }
   } else if (command.kind === "TogglePostProcessShader") {
     nextDefinition = {
       ...definition,
@@ -931,6 +1007,21 @@ function updatePostProcessBindingOverride(
           ...nextDefinition.atmosphere,
           fog: {
             ...nextDefinition.atmosphere.fog,
+            enabled: command.payload.enabled
+          }
+        }
+      };
+    }
+    if (
+      command.payload.shaderDefinitionId ===
+      createBuiltInCloudShadowsShaderId(session.gameProject.identity.id)
+    ) {
+      nextDefinition = {
+        ...nextDefinition,
+        atmosphere: {
+          ...nextDefinition.atmosphere,
+          cloudShadows: {
+            ...nextDefinition.atmosphere.cloudShadows,
             enabled: command.payload.enabled
           }
         }
@@ -1878,6 +1969,31 @@ export function addTextureDefinitionToSession(
   };
 }
 
+export function addMaskTextureDefinitionToSession(
+  session: AuthoringSession,
+  maskTextureDefinition: MaskTextureDefinition
+): AuthoringSession {
+  const existingDefinitions = session.contentLibrary.maskTextureDefinitions ?? [];
+  const existingIndex = existingDefinitions.findIndex(
+    (definition) => definition.definitionId === maskTextureDefinition.definitionId
+  );
+  const nextDefinitions = [...existingDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = maskTextureDefinition;
+  } else {
+    nextDefinitions.push(maskTextureDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
 export function addMaterialDefinitionToSession(
   session: AuthoringSession,
   materialDefinition: MaterialDefinition
@@ -1897,6 +2013,90 @@ export function addMaterialDefinitionToSession(
     contentLibrary: {
       ...session.contentLibrary,
       materialDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function addSurfaceDefinitionToSession(
+  session: AuthoringSession,
+  surfaceDefinition: SurfaceDefinition
+): AuthoringSession {
+  assertReusableSurfaceHasNoPaintedMasks(
+    surfaceDefinition.surface,
+    `SurfaceDefinition "${surfaceDefinition.definitionId}"`
+  );
+  const existingDefinitions = session.contentLibrary.surfaceDefinitions ?? [];
+  const existingIndex = existingDefinitions.findIndex(
+    (definition) => definition.definitionId === surfaceDefinition.definitionId
+  );
+
+  const nextDefinitions = [...existingDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = surfaceDefinition;
+  } else {
+    nextDefinitions.push(surfaceDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateSurfaceDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<SurfaceDefinition>
+): AuthoringSession {
+  const existingDefinition =
+    (session.contentLibrary.surfaceDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null;
+  const nextDefinition = existingDefinition
+    ? {
+        ...existingDefinition,
+        ...patch
+      }
+    : null;
+  if (nextDefinition?.surface) {
+    assertReusableSurfaceHasNoPaintedMasks(
+      nextDefinition.surface,
+      `SurfaceDefinition "${definitionId}"`
+    );
+  }
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).map((definition) =>
+        definition.definitionId === definitionId
+          ? {
+              ...definition,
+              ...patch
+            }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeSurfaceDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).filter(
+        (definition) => definition.definitionId !== definitionId
+      )
     },
     isDirty: true
   };
@@ -1924,6 +2124,60 @@ export function updateMaterialDefinitionInSession(
   };
 }
 
+/**
+ * Duplicate an existing MaterialDefinition as a new user-owned material.
+ * Creates a fresh `definitionId` via createUuid, copies shader reference,
+ * parameter values, and texture bindings. Strips any `metadata.builtIn`
+ * marker so the copy is treated as authored content that can be freely
+ * edited and persisted. Adds a " (Copy)" suffix to the display name
+ * unless caller provides a custom one.
+ *
+ * Used by the "Duplicate to edit" flow when the user tries to edit a
+ * built-in material — we fork a local copy rather than mutating the
+ * engine-owned definition. Returns the new material's id so the caller
+ * can redirect selection / re-point bindings.
+ */
+export function duplicateMaterialDefinitionInSession(
+  session: AuthoringSession,
+  sourceDefinitionId: string,
+  options: { displayName?: string; newDefinitionId?: string } = {}
+): { session: AuthoringSession; newDefinitionId: string } | null {
+  const source = session.contentLibrary.materialDefinitions.find(
+    (definition) => definition.definitionId === sourceDefinitionId
+  );
+  if (!source) {
+    return null;
+  }
+  const projectScope = session.gameProject.identity.id;
+  const newDefinitionId =
+    options.newDefinitionId ?? `${projectScope}:material:${createUuid()}`;
+  const displayName =
+    options.displayName ?? `${source.displayName} (Copy)`;
+  const copy: MaterialDefinition = {
+    definitionId: newDefinitionId,
+    definitionKind: "material",
+    displayName,
+    shaderDefinitionId: source.shaderDefinitionId,
+    parameterValues: { ...source.parameterValues },
+    textureBindings: { ...source.textureBindings }
+    // metadata intentionally omitted so the copy is user-owned.
+  };
+  return {
+    session: {
+      ...session,
+      contentLibrary: {
+        ...session.contentLibrary,
+        materialDefinitions: [
+          ...session.contentLibrary.materialDefinitions,
+          copy
+        ]
+      },
+      isDirty: true
+    },
+    newDefinitionId
+  };
+}
+
 export function removeMaterialDefinitionFromSession(
   session: AuthoringSession,
   definitionId: string
@@ -1933,6 +2187,45 @@ export function removeMaterialDefinitionFromSession(
     contentLibrary: {
       ...session.contentLibrary,
       materialDefinitions: session.contentLibrary.materialDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function updateMaskTextureDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<MaskTextureDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).map(
+        (definition) =>
+          definition.definitionId === definitionId
+            ? {
+                ...definition,
+                ...patch
+              }
+            : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeMaskTextureDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).filter(
         (definition) => definition.definitionId !== definitionId
       )
     },
@@ -1967,8 +2260,13 @@ export function materialDefinitionHasReferences(
   const boundInAssets = session.contentLibrary.assetDefinitions.some((assetDefinition) =>
     assetDefinition.surfaceSlots.some(
       (binding) =>
-        binding.surface?.kind === "material" &&
-        binding.surface.materialDefinitionId === definitionId
+        binding.surface?.kind === "inline" &&
+        binding.surface.surface.layers.some(
+          (layer) =>
+            (layer.kind === "appearance" || layer.kind === "emission") &&
+            layer.content.kind === "material" &&
+            layer.content.materialDefinitionId === definitionId
+        )
     )
   );
   if (boundInAssets) {
@@ -1978,8 +2276,13 @@ export function materialDefinitionHasReferences(
   return getAllRegions(session).some((region) =>
     region.landscape.surfaceSlots.some(
       (channel) =>
-        channel.surface?.kind === "material" &&
-        channel.surface.materialDefinitionId === definitionId
+        channel.surface?.kind === "inline" &&
+        channel.surface.surface.layers.some(
+          (layer) =>
+            (layer.kind === "appearance" || layer.kind === "emission") &&
+            layer.content.kind === "material" &&
+            layer.content.materialDefinitionId === definitionId
+        )
     )
   );
 }

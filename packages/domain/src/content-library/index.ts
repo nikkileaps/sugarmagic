@@ -8,21 +8,48 @@
 
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId } from "../shared/identity";
+import {
+  createBuiltInMaterialDefinitions,
+  createBuiltInFlowerTypeDefinitions,
+  createBuiltInGrassTypeDefinitions,
+  createBuiltInRockTypeDefinitions,
+  createBuiltInSurfaceDefinitions
+} from "./builtins";
 import type {
   AssetSurfaceSlot,
-  ShaderOrMaterial
+  RockTypeDefinition,
+  ShaderOrMaterial,
+  SurfaceBinding
 } from "../surface";
+import {
+  assertReusableSurfaceHasNoPaintedMasks,
+  cloneScatterLodMeshes,
+  cloneSurfaceBinding,
+  createSurface,
+  type FlowerTypeDefinition,
+  type GrassTypeDefinition,
+  type SurfaceContext
+} from "../surface";
+import type { SurfaceDefinition } from "../surface";
 import type {
   PostProcessShaderBinding,
-  ShaderGraphDocument,
-  ShaderTargetKind
+  ShaderGraphDocument
 } from "../shader-graph";
 import {
   createDefaultBloomPostProcessShaderGraph,
+  createDefaultCloudShadowsPostProcessShaderGraph,
   createDefaultColorGradePostProcessShaderGraph,
   createDefaultFoliageSurfaceShaderGraph,
   createDefaultFoliageSurface2ShaderGraph,
   createDefaultFoliageSurface3ShaderGraph,
+  createDefaultGrassSurface2ShaderGraph,
+  createDefaultGrassSurface3ShaderGraph,
+  createDefaultGrassSurface4ShaderGraph,
+  createDefaultGrassSurface6ShaderGraph,
+  createDefaultPainterlyGrassShaderGraph,
+  createDefaultMeadowGrassShaderGraph,
+  createDefaultSunlitLawnShaderGraph,
+  createDefaultAutumnFieldGrassShaderGraph,
   createDefaultFogTintPostProcessShaderGraph,
   createDefaultFoliageTintShaderGraph,
   createDefaultFoliageWindShaderGraph,
@@ -49,6 +76,11 @@ export type ContentDefinitionKind =
   | "asset"
   | "material"
   | "texture"
+  | "mask-texture"
+  | "surface"
+  | "grass-type"
+  | "flower-type"
+  | "rock-type"
   | "npc"
   | "dialogue"
   | "quest"
@@ -94,11 +126,36 @@ export interface TextureDefinition {
   packing: "rgba" | "orm" | "normal" | "roughness" | "metallic" | "ao" | "height";
 }
 
+export interface MaskTextureDefinition {
+  definitionId: string;
+  definitionKind: "mask-texture";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+  format: "r8" | "rgba8";
+  resolution: [number, number];
+}
+
+/**
+ * Optional metadata carried on builtin-created definitions so the UI can
+ * detect "user is editing something the engine authored" and intercept
+ * with a duplicate-to-edit flow. Missing = authored (user-owned). This
+ * mirrors the same pattern on ShaderGraphDocument.metadata.builtIn.
+ */
+export interface DefinitionMetadata {
+  builtIn?: boolean;
+  builtInKey?: string;
+}
+
 export interface MaterialDefinition {
   definitionId: string;
   definitionKind: "material";
   displayName: string;
   shaderDefinitionId: string;
+  metadata?: DefinitionMetadata;
   parameterValues: Record<string, unknown>;
   textureBindings: Record<string, string>;
 }
@@ -176,6 +233,25 @@ export interface FogSettings {
   heightFalloff: number;
 }
 
+export interface CloudShadowSettings {
+  enabled: boolean;
+  // World-space frequency multiplier. Lower = larger cloud features.
+  scale: number;
+  // Drift speed in world units per second along X / Z. Wind direction.
+  speedX: number;
+  speedZ: number;
+  // Fraction of ground in shadow on average (0 = clear sky, 1 = mostly overcast).
+  coverage: number;
+  // Smoothstep edge width for cloud→sun transitions. Higher = softer.
+  softness: number;
+  // Maximum darkening under thickest cloud (0..1). Stylized aesthetic
+  // typically stays in 0.25-0.45 — never goes black.
+  darkness: number;
+  // Tint of the shadow color at full darkness. Stored as 0..1 RGB.
+  // [0,0,0] = grayscale darkening. [0.25, 0.15, 0.45] = dark purple.
+  shadowColor: [number, number, number];
+}
+
 export interface SSAOSettings {
   enabled: boolean;
   kernelRadius: number;
@@ -216,6 +292,7 @@ export interface EnvironmentDefinition {
   lighting: EnvironmentLighting;
   atmosphere: {
     fog: FogSettings;
+    cloudShadows: CloudShadowSettings;
     ssao: SSAOSettings;
     sky: SkySettings;
   };
@@ -230,6 +307,11 @@ export interface ContentLibrarySnapshot {
   assetDefinitions: AssetDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
+  maskTextureDefinitions?: MaskTextureDefinition[];
+  surfaceDefinitions?: SurfaceDefinition[];
+  grassTypeDefinitions?: GrassTypeDefinition[];
+  flowerTypeDefinitions?: FlowerTypeDefinition[];
+  rockTypeDefinitions?: RockTypeDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
 }
@@ -265,6 +347,12 @@ export const DEFAULT_ENVIRONMENT_LIGHTING: EnvironmentLighting = {
   ambient: { ...DEFAULT_AMBIENT_CONFIG }
 };
 
+function normalizeSurfaceBinding<C extends SurfaceContext = SurfaceContext>(
+  binding: SurfaceBinding<C> | null | undefined
+): SurfaceBinding<C> | null {
+  return cloneSurfaceBinding(binding);
+}
+
 function normalizeAssetSurfaceSlots(
   surfaceSlots: AssetSurfaceSlot[] | null | undefined
 ): AssetSurfaceSlot[] {
@@ -279,9 +367,68 @@ function normalizeAssetSurfaceSlots(
         typeof slot.slotIndex === "number" && Number.isFinite(slot.slotIndex)
           ? slot.slotIndex
           : index,
-      surface: slot.surface ?? null
+      surface: normalizeSurfaceBinding(slot.surface)
     }))
     .filter((slot) => slot.slotName.length > 0);
+}
+
+function normalizeSurfaceDefinitions(
+  definitions: SurfaceDefinition[] | null | undefined
+): SurfaceDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    surface: (() => {
+      const surface = createSurface(definition.surface.layers, definition.surface.context);
+      assertReusableSurfaceHasNoPaintedMasks(
+        surface,
+        `SurfaceDefinition "${definition.definitionId}"`
+      );
+      return surface;
+    })()
+  }));
+}
+
+function normalizeMaskTextureDefinitions(
+  definitions: MaskTextureDefinition[] | null | undefined
+): MaskTextureDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    source: {
+      relativeAssetPath: definition.source.relativeAssetPath,
+      fileName: definition.source.fileName,
+      mimeType: definition.source.mimeType
+    },
+    resolution: [...definition.resolution] as [number, number]
+  }));
+}
+
+function normalizeGrassTypeDefinitions(
+  definitions: GrassTypeDefinition[] | null | undefined
+): GrassTypeDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
+    wind: normalizeShaderOrMaterial(definition.wind)
+  }));
+}
+
+function normalizeFlowerTypeDefinitions(
+  definitions: FlowerTypeDefinition[] | null | undefined
+): FlowerTypeDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
+    wind: normalizeShaderOrMaterial(definition.wind)
+  }));
+}
+
+function normalizeRockTypeDefinitions(
+  definitions: RockTypeDefinition[] | null | undefined
+): RockTypeDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    ...definition,
+    lodMeshes: cloneScatterLodMeshes(definition.lodMeshes)
+  }));
 }
 
 function normalizeShaderOrMaterial(
@@ -312,6 +459,17 @@ export const DEFAULT_FOG_SETTINGS: FogSettings = {
   density: 0.008,
   color: 0x879bb4,
   heightFalloff: 1
+};
+
+export const DEFAULT_CLOUD_SHADOW_SETTINGS: CloudShadowSettings = {
+  enabled: false,
+  scale: 0.04,
+  speedX: 1.0,
+  speedZ: 0.3,
+  coverage: 0.4,
+  softness: 0.15,
+  darkness: 0.35,
+  shadowColor: [0, 0, 0]
 };
 
 export const DEFAULT_SSAO_SETTINGS: SSAOSettings = {
@@ -495,6 +653,10 @@ export function createBuiltInBloomShaderId(projectId: string): string {
   return `${projectId}:shader:bloom`;
 }
 
+export function createBuiltInCloudShadowsShaderId(projectId: string): string {
+  return `${projectId}:shader:cloud-shadows`;
+}
+
 export function createBuiltInTonemapAcesShaderId(projectId: string): string {
   return `${projectId}:shader:tonemap-aces`;
 }
@@ -530,22 +692,6 @@ function normalizePostProcessShaderBindings(
     }));
 }
 
-function upsertBindingOverride(
-  overrides: PostProcessShaderBinding["parameterOverrides"],
-  parameterId: string,
-  value: number | [number, number, number]
-): PostProcessShaderBinding["parameterOverrides"] {
-  const existingIndex = overrides.findIndex(
-    (override) => override.parameterId === parameterId
-  );
-  if (existingIndex < 0) {
-    return [...overrides, { parameterId, value }];
-  }
-  const next = [...overrides];
-  next[existingIndex] = { parameterId, value };
-  return next;
-}
-
 function synchronizeFogBinding(
   definition: EnvironmentDefinition,
   projectId: string
@@ -575,46 +721,48 @@ function synchronizeFogBinding(
   return normalizePostProcessShaderBindings([nextBinding, ...sortedBindings]);
 }
 
-/**
- * Tonemap is the final perceptual transform turning HDR linear scene values
- * into an sRGB-encodable image. Like fog, it is owned by the authored
- * post-process stack — not the renderer's toneMapping setting (which would
- * silently compete with the stack and recreate the dual-authority pattern we
- * already eliminated for fog and bloom). Always pinned to the END of the
- * chain so bloom/color-grade/etc. operate in HDR space before tonemapping.
- *
- * Authors can swap to tonemap-reinhard (or remove tonemap entirely) via the
- * stack editor — but if they remove it, the scene goes back to raw linear
- * HDR which will look wrong. That's their explicit choice, not a hidden
- * default.
- */
-function synchronizeTonemapBinding(
+function synchronizeCloudShadowsBinding(
   bindings: PostProcessShaderBinding[],
+  cloudShadows: CloudShadowSettings,
   projectId: string
 ): PostProcessShaderBinding[] {
-  const tonemapShaderDefinitionId = createBuiltInTonemapAcesShaderId(projectId);
-  // If any tonemap variant (aces, reinhard, future others) is already in the
-  // chain, leave it alone — the author has made an explicit choice.
-  const hasAuthorTonemap = bindings.some(
-    (binding) =>
-      binding.shaderDefinitionId.endsWith(":shader:tonemap-aces") ||
-      binding.shaderDefinitionId.endsWith(":shader:tonemap-reinhard")
+  const shaderDefinitionId = createBuiltInCloudShadowsShaderId(projectId);
+  const fogShaderDefinitionId = createBuiltInFogTintShaderId(projectId);
+  const sortedBindings = normalizePostProcessShaderBindings(bindings);
+  const bindingIndex = sortedBindings.findIndex(
+    (binding) => binding.shaderDefinitionId === shaderDefinitionId
   );
-  if (hasAuthorTonemap) {
-    return bindings;
+
+  // Insert just AFTER fog (so cloud darkening composes over fog) but
+  // BEFORE bloom / tonemap / vignette (so darkening lives in HDR space
+  // before tonemapping, and so bloom doesn't bleed cloud edges).
+  const fogIndex = sortedBindings.findIndex(
+    (binding) => binding.shaderDefinitionId === fogShaderDefinitionId
+  );
+  const insertOrder = fogIndex >= 0 ? sortedBindings[fogIndex]!.order + 0.5 : 0.5;
+
+  const nextBinding: PostProcessShaderBinding = {
+    shaderDefinitionId,
+    order: bindingIndex >= 0 ? sortedBindings[bindingIndex]!.order : insertOrder,
+    enabled: cloudShadows.enabled,
+    parameterOverrides: [
+      { parameterId: "scale", value: cloudShadows.scale },
+      { parameterId: "speedX", value: cloudShadows.speedX },
+      { parameterId: "speedZ", value: cloudShadows.speedZ },
+      { parameterId: "coverage", value: cloudShadows.coverage },
+      { parameterId: "softness", value: cloudShadows.softness },
+      { parameterId: "darkness", value: cloudShadows.darkness },
+      { parameterId: "shadowColor", value: cloudShadows.shadowColor }
+    ]
+  };
+
+  if (bindingIndex >= 0) {
+    const nextBindings = [...sortedBindings];
+    nextBindings[bindingIndex] = nextBinding;
+    return normalizePostProcessShaderBindings(nextBindings);
   }
 
-  // Append tonemap-aces as the final binding so it runs last, after every
-  // HDR-space effect (bloom, color-grade, fog).
-  return normalizePostProcessShaderBindings([
-    ...bindings,
-    {
-      shaderDefinitionId: tonemapShaderDefinitionId,
-      order: bindings.length,
-      enabled: true,
-      parameterOverrides: [{ parameterId: "exposure", value: 1 }]
-    }
-  ]);
+  return normalizePostProcessShaderBindings([...sortedBindings, nextBinding]);
 }
 
 function ensureBuiltInEffectBinding(
@@ -650,30 +798,6 @@ function colorToVector3(color: number): [number, number, number] {
   ];
 }
 
-function vector3ToColor(value: unknown, fallback: number): number {
-  if (!Array.isArray(value) || value.length < 3) {
-    return fallback;
-  }
-  const [r, g, b] = value;
-  if (
-    typeof r !== "number" ||
-    typeof g !== "number" ||
-    typeof b !== "number" ||
-    !Number.isFinite(r) ||
-    !Number.isFinite(g) ||
-    !Number.isFinite(b)
-  ) {
-    return fallback;
-  }
-  const clampChannel = (channel: number) =>
-    Math.max(0, Math.min(255, Math.round(channel * 255)));
-  return (
-    (clampChannel(r) << 16) |
-    (clampChannel(g) << 8) |
-    clampChannel(b)
-  );
-}
-
 type LegacyEnvironmentDefinition = EnvironmentDefinition & {
   lighting?: {
     preset?: LightingPreset;
@@ -686,6 +810,7 @@ type LegacyEnvironmentDefinition = EnvironmentDefinition & {
   };
   atmosphere?: {
     fog?: Partial<FogSettings>;
+    cloudShadows?: Partial<CloudShadowSettings>;
     bloom?: {
       enabled?: boolean;
       strength?: number;
@@ -779,6 +904,10 @@ export function synchronizeEnvironmentDefinition(
             ? definition.atmosphere.fog.heightFalloff
             : DEFAULT_FOG_SETTINGS.heightFalloff
       },
+      cloudShadows: {
+        ...DEFAULT_CLOUD_SHADOW_SETTINGS,
+        ...(definition.atmosphere.cloudShadows ?? {})
+      },
       ssao: {
         ...DEFAULT_SSAO_SETTINGS,
         ...definition.atmosphere.ssao
@@ -799,6 +928,11 @@ export function synchronizeEnvironmentDefinition(
   };
 
   nextDefinition.postProcessShaders = synchronizeFogBinding(nextDefinition, projectId);
+  nextDefinition.postProcessShaders = synchronizeCloudShadowsBinding(
+    nextDefinition.postProcessShaders,
+    nextDefinition.atmosphere.cloudShadows,
+    projectId
+  );
   nextDefinition.lighting = normalizeSunShadows(nextDefinition.lighting);
   return nextDefinition;
 }
@@ -851,7 +985,8 @@ function normalizeSunShadows(lighting: EnvironmentLighting): EnvironmentLighting
             : DEFAULT_SUN_SHADOWS.enabled
       };
 
-  const { castShadows: _droppedCastShadows, ...cleanSun } = lighting.sun;
+  const cleanSun = { ...lighting.sun };
+  delete (cleanSun as Partial<SunLight>).castShadows;
   return {
     ...lighting,
     sun: {
@@ -911,6 +1046,7 @@ export function createDefaultEnvironmentDefinition(
         color: getDefaultFogColorForPreset(preset),
         heightFalloff: DEFAULT_FOG_SETTINGS.heightFalloff
       },
+      cloudShadows: { ...DEFAULT_CLOUD_SHADOW_SETTINGS },
       ssao: { ...DEFAULT_SSAO_SETTINGS },
       sky: {
         ...DEFAULT_SKY_SETTINGS,
@@ -931,15 +1067,28 @@ export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
+  const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
+  const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
+  const rockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
   return {
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 3
+      version: 5
     },
     assetDefinitions: [],
-    materialDefinitions: [],
+    materialDefinitions: builtInMaterialDefinitions,
     textureDefinitions: [],
+    maskTextureDefinitions: [],
+    surfaceDefinitions: createBuiltInSurfaceDefinitions(
+      projectId,
+      grassTypeDefinitions,
+      flowerTypeDefinitions
+    ),
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    rockTypeDefinitions,
     environmentDefinitions: [
       createDefaultEnvironmentDefinition(projectId, {
         definitionId: `${projectId}:environment:default`,
@@ -956,6 +1105,43 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
+  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
+  const builtInGrassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
+  const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
+  const builtInRockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
+  const mergedMaterialDefinitions = mergeBuiltInDefinitions(
+    (contentLibrary.materialDefinitions ?? []).map((definition) => ({
+      ...definition,
+      parameterValues: { ...(definition.parameterValues ?? {}) },
+      textureBindings: { ...(definition.textureBindings ?? {}) }
+    })),
+    builtInMaterialDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedGrassTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeGrassTypeDefinitions(contentLibrary.grassTypeDefinitions),
+    builtInGrassTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedFlowerTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeFlowerTypeDefinitions(contentLibrary.flowerTypeDefinitions),
+    builtInFlowerTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedRockTypeDefinitions = mergeBuiltInDefinitions(
+    normalizeRockTypeDefinitions(contentLibrary.rockTypeDefinitions),
+    builtInRockTypeDefinitions,
+    (definition) => definition.definitionId
+  );
+  const mergedSurfaceDefinitions = mergeBuiltInDefinitions(
+    normalizeSurfaceDefinitions(contentLibrary.surfaceDefinitions),
+    createBuiltInSurfaceDefinitions(
+      projectId,
+      mergedGrassTypeDefinitions,
+      mergedFlowerTypeDefinitions
+    ),
+    (definition) => definition.definitionId
+  );
   const authoredShaderDefinitions =
     contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
       ? contentLibrary.shaderDefinitions.map((definition) => ({
@@ -980,14 +1166,14 @@ export function normalizeContentLibrarySnapshot(
           definitionId: `${projectId}:environment:default`,
           displayName: "Default Environment",
           preset: "default"
-        })
-      ];
+      })
+    ];
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
 
-  return {
+  const normalizedContentLibrary: ContentLibrarySnapshot = {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 3)
+      version: Math.max(contentLibrary.identity.version ?? 1, 5)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
@@ -995,11 +1181,7 @@ export function normalizeContentLibrarySnapshot(
       deform: normalizeShaderOrMaterial(definition.deform),
       effect: normalizeShaderOrMaterial(definition.effect)
     })),
-    materialDefinitions: (contentLibrary.materialDefinitions ?? []).map((definition) => ({
-      ...definition,
-      parameterValues: { ...(definition.parameterValues ?? {}) },
-      textureBindings: { ...(definition.textureBindings ?? {}) }
-    })),
+    materialDefinitions: mergedMaterialDefinitions,
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
       ...definition,
       source: {
@@ -1008,6 +1190,13 @@ export function normalizeContentLibrarySnapshot(
         mimeType: definition.source.mimeType
       }
     })),
+    maskTextureDefinitions: normalizeMaskTextureDefinitions(
+      contentLibrary.maskTextureDefinitions
+    ),
+    surfaceDefinitions: mergedSurfaceDefinitions,
+    grassTypeDefinitions: mergedGrassTypeDefinitions,
+    flowerTypeDefinitions: mergedFlowerTypeDefinitions,
+    rockTypeDefinitions: mergedRockTypeDefinitions,
     environmentDefinitions: nextEnvironmentDefinitions.map((definition) => {
       const legacyDefinition = definition as LegacyEnvironmentDefinition;
       const preset = legacyDefinition.lighting?.preset ?? "default";
@@ -1034,6 +1223,10 @@ export function normalizeContentLibrarySnapshot(
               typeof legacyDefinition.atmosphere.fog.heightFalloff === "number"
                 ? legacyDefinition.atmosphere.fog.heightFalloff
                 : DEFAULT_FOG_SETTINGS.heightFalloff
+          },
+          cloudShadows: {
+            ...DEFAULT_CLOUD_SHADOW_SETTINGS,
+            ...(legacyDefinition.atmosphere?.cloudShadows ?? {})
           },
           ssao: {
             ...DEFAULT_SSAO_SETTINGS,
@@ -1100,6 +1293,34 @@ export function normalizeContentLibrarySnapshot(
     }),
     shaderDefinitions: mergedShaderDefinitions
   };
+
+  for (const assetDefinition of normalizedContentLibrary.assetDefinitions) {
+    for (const slot of assetDefinition.surfaceSlots) {
+      if (!slot.surface) {
+        continue;
+      }
+      if (slot.surface.kind === "inline") {
+        if (slot.surface.surface.context !== "universal") {
+          throw new Error(
+            `Asset "${assetDefinition.definitionId}" slot "${slot.slotName}" cannot bind a landscape-only surface.`
+          );
+        }
+        continue;
+      }
+      const referencedSurface = (normalizedContentLibrary.surfaceDefinitions ?? []).find(
+        (definition) =>
+          slot.surface?.kind === "reference" &&
+          definition.definitionId === slot.surface.surfaceDefinitionId
+      );
+      if (referencedSurface && referencedSurface.surface.context !== "universal") {
+        throw new Error(
+          `Asset "${assetDefinition.definitionId}" slot "${slot.slotName}" references landscape-only SurfaceDefinition "${referencedSurface.definitionId}".`
+        );
+      }
+    }
+  }
+
+  return normalizedContentLibrary;
 }
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
@@ -1123,6 +1344,38 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageSurface3ShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-surface-3`,
       displayName: "Foliage Surface 3"
+    }),
+    createDefaultGrassSurface2ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-2`,
+      displayName: "Grass Surface 2"
+    }),
+    createDefaultGrassSurface3ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-3`,
+      displayName: "Grass Surface 3"
+    }),
+    createDefaultGrassSurface4ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-4`,
+      displayName: "Grass Surface 4"
+    }),
+    createDefaultGrassSurface6ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:grass-surface-6`,
+      displayName: "Grass Surface 6"
+    }),
+    createDefaultMeadowGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:meadow-grass`,
+      displayName: "Meadow Grass"
+    }),
+    createDefaultSunlitLawnShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:sunlit-lawn`,
+      displayName: "Sunlit Lawn"
+    }),
+    createDefaultAutumnFieldGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:autumn-field-grass`,
+      displayName: "Autumn Field Grass"
+    }),
+    createDefaultPainterlyGrassShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:painterly-grass`,
+      displayName: "Painterly Grass"
     }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
@@ -1203,6 +1456,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultBloomPostProcessShaderGraph(projectId, {
       shaderDefinitionId: createBuiltInBloomShaderId(projectId),
       displayName: "Bloom"
+    }),
+    createDefaultCloudShadowsPostProcessShaderGraph(projectId, {
+      shaderDefinitionId: createBuiltInCloudShadowsShaderId(projectId),
+      displayName: "Cloud Shadows"
     })
   ];
 }
@@ -1230,6 +1487,33 @@ function mergeBuiltInShaderDefinitions(
     });
 
     if (existingIndex >= 0) {
+      nextDefinitions[existingIndex] = builtInDefinition;
+      continue;
+    }
+    nextDefinitions.push(builtInDefinition);
+  }
+  return nextDefinitions;
+}
+
+function mergeBuiltInDefinitions<T>(
+  authoredDefinitions: T[],
+  builtInDefinitions: T[],
+  getId: (definition: T) => string
+): T[] {
+  const nextDefinitions = [...authoredDefinitions];
+  for (const builtInDefinition of builtInDefinitions) {
+    const existingIndex = nextDefinitions.findIndex(
+      (definition) => getId(definition) === getId(builtInDefinition)
+    );
+    if (existingIndex >= 0) {
+      // Built-in ids always resolve to the current built-in definition.
+      // User edits to built-in materials are NOT persisted by design — the
+      // authoring flow forks edits into a new, user-owned material via the
+      // "Duplicate to edit" command. Callers who need to retain authored
+      // overrides should be working against a duplicated id, not the
+      // built-in one. This keeps engine upgrades frictionless (renamed
+      // parameters, new shader requirements, tuning changes) while making
+      // the user → built-in boundary crisp.
       nextDefinitions[existingIndex] = builtInDefinition;
       continue;
     }
@@ -1272,6 +1556,86 @@ export function listMaterialDefinitions(
   return [...contentLibrary.materialDefinitions];
 }
 
+/**
+ * Whether a material was authored by the engine (built-in preset) rather
+ * than by the user. The material inspector uses this to intercept edits
+ * on built-in materials with a "Duplicate to edit?" flow so engine-owned
+ * definitions stay pristine and engine upgrades can refresh them cleanly.
+ */
+export function isBuiltInMaterialDefinition(
+  definition: Pick<MaterialDefinition, "metadata"> | null | undefined
+): boolean {
+  return definition?.metadata?.builtIn === true;
+}
+
+export function getSurfaceDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): SurfaceDefinition | null {
+  return (
+    (contentLibrary.surfaceDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listSurfaceDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): SurfaceDefinition[] {
+  return [...(contentLibrary.surfaceDefinitions ?? [])];
+}
+
+export function getGrassTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): GrassTypeDefinition | null {
+  return (
+    (contentLibrary.grassTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listGrassTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): GrassTypeDefinition[] {
+  return [...(contentLibrary.grassTypeDefinitions ?? [])];
+}
+
+export function getFlowerTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): FlowerTypeDefinition | null {
+  return (
+    (contentLibrary.flowerTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listFlowerTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): FlowerTypeDefinition[] {
+  return [...(contentLibrary.flowerTypeDefinitions ?? [])];
+}
+
+export function getRockTypeDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): RockTypeDefinition | null {
+  return (
+    (contentLibrary.rockTypeDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listRockTypeDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): RockTypeDefinition[] {
+  return [...(contentLibrary.rockTypeDefinitions ?? [])];
+}
+
 export function getTextureDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
@@ -1287,6 +1651,23 @@ export function listTextureDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): TextureDefinition[] {
   return [...contentLibrary.textureDefinitions];
+}
+
+export function getMaskTextureDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): MaskTextureDefinition | null {
+  return (
+    (contentLibrary.maskTextureDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listMaskTextureDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): MaskTextureDefinition[] {
+  return [...(contentLibrary.maskTextureDefinitions ?? [])];
 }
 
 export function getEnvironmentDefinition(
