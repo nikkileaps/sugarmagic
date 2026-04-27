@@ -1157,6 +1157,51 @@ export function createDefaultShaderGraphDocument(
   };
 }
 
+/**
+ * Deep-clone a ShaderGraphDocument as a new project-owned shader (the
+ * fork-to-edit flow for built-in shaders). Strips `metadata.builtIn`
+ * so the copy is freely editable, fresh `shaderDefinitionId`, resets
+ * `revision`, and suffixes display name with " (Copy)" unless caller
+ * provides one. Pure: callers wrap the result in a CreateShaderGraph
+ * command to persist + register undo.
+ */
+export function duplicateShaderGraphDocument(
+  source: ShaderGraphDocument,
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const { builtIn: _builtIn, ...metadataRest } = source.metadata as {
+    builtIn?: unknown;
+    [key: string]: unknown;
+  };
+  return {
+    shaderDefinitionId:
+      options.shaderDefinitionId ?? createShaderGraphDefinitionId(projectId),
+    definitionKind: "shader",
+    displayName: options.displayName ?? `${source.displayName} (Copy)`,
+    targetKind: source.targetKind,
+    revision: 0,
+    nodes: source.nodes.map((node) => ({
+      nodeId: node.nodeId,
+      nodeType: node.nodeType,
+      position: { x: node.position.x, y: node.position.y },
+      settings: { ...node.settings }
+    })),
+    edges: source.edges.map((edge) => ({ ...edge })),
+    parameters: source.parameters.map((parameter) => ({
+      ...parameter,
+      defaultValue:
+        Array.isArray(parameter.defaultValue)
+          ? ([...parameter.defaultValue] as ShaderParameter["defaultValue"])
+          : parameter.defaultValue
+    })),
+    metadata: { ...metadataRest }
+  };
+}
+
 export function createDefaultFoliageWindShaderGraph(
   projectId: string,
   options: {

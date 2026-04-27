@@ -32,6 +32,8 @@ import {
 import { ColorField, KindTabs, LabeledSlider } from "@sugarmagic/ui";
 import { MaterialParameterEditor } from "../MaterialParameterEditor";
 
+const SHADER_OVERRIDE_DEFAULT = "__default__";
+
 interface SharedProps {
   allowedContext: SurfaceContext;
   materialDefinitions: MaterialDefinition[];
@@ -202,25 +204,74 @@ function AppearanceLayerEditor(
           }
           if (kind === "material" && layer.content.kind === "material") {
             const materialContent = layer.content;
+            const boundMaterial = materialDefinitions.find(
+              (material) =>
+                material.definitionId === materialContent.materialDefinitionId
+            );
+            const shaderOverride =
+              materialContent.shaderOverrideDefinitionId ?? null;
+            const materialOwnShaderId = boundMaterial?.shaderDefinitionId ?? null;
+            const materialOwnShaderName = materialOwnShaderId
+              ? surfaceShaders.find(
+                  (s) => s.shaderDefinitionId === materialOwnShaderId
+                )?.displayName ?? "(picked shader)"
+              : "auto (PBR routing)";
             return (
-              <Select
-                size="xs"
-                label="Material"
-                comboboxProps={{ withinPortal: false }}
-                data={materialDefinitions.map((material) => ({
-                  value: material.definitionId,
-                  label: material.displayName
-                }))}
-                value={materialContent.materialDefinitionId}
-                onChange={(next) => {
-                  if (next) {
+              <Stack gap="xs">
+                <Select
+                  size="xs"
+                  label="Material"
+                  comboboxProps={{ withinPortal: false }}
+                  data={materialDefinitions.map((material) => ({
+                    value: material.definitionId,
+                    label: material.displayName
+                  }))}
+                  value={materialContent.materialDefinitionId}
+                  onChange={(next) => {
+                    if (next) {
+                      onChange({
+                        ...layer,
+                        content: createMaterialAppearanceContent(next, {
+                          shaderOverrideDefinitionId: shaderOverride,
+                          parameterOverrides: materialContent.parameterOverrides
+                        })
+                      });
+                    }
+                  }}
+                />
+                <Select
+                  size="xs"
+                  label="Shader"
+                  comboboxProps={{ withinPortal: false }}
+                  data={[
+                    { value: SHADER_OVERRIDE_DEFAULT, label: `Default (${materialOwnShaderName})` },
+                    ...surfaceShaders.map((shader) => ({
+                      value: shader.shaderDefinitionId,
+                      label: shader.metadata?.builtIn
+                        ? `${shader.displayName} (built-in)`
+                        : shader.displayName
+                    }))
+                  ]}
+                  value={shaderOverride ?? SHADER_OVERRIDE_DEFAULT}
+                  onChange={(next) => {
+                    const nextOverride =
+                      next === null || next === SHADER_OVERRIDE_DEFAULT
+                        ? null
+                        : next;
                     onChange({
                       ...layer,
-                      content: createMaterialAppearanceContent(next)
+                      content: createMaterialAppearanceContent(
+                        materialContent.materialDefinitionId,
+                        {
+                          shaderOverrideDefinitionId: nextOverride,
+                          parameterOverrides: materialContent.parameterOverrides
+                        }
+                      )
                     });
-                  }
-                }}
-              />
+                  }}
+                  allowDeselect={false}
+                />
+              </Stack>
             );
           }
           if (kind === "shader" && layer.content.kind === "shader") {

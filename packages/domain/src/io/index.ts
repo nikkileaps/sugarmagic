@@ -25,8 +25,7 @@ import {
 } from "../region-authoring";
 import {
   createSurface,
-  isShaderOrMaterialContent,
-  type ShaderOrMaterial,
+  type ShaderReference,
   type SurfaceBinding,
   type SurfaceContext
 } from "../surface";
@@ -94,32 +93,42 @@ function normalizeShaderOverrides(
   return [...nextOverrides.values()];
 }
 
-function normalizeShaderOrMaterialForLoad(
+function normalizeShaderReferenceForLoad(
   ownerLabel: string,
   field: "deform" | "effect",
-  value: ShaderOrMaterial | null | undefined
-): ShaderOrMaterial | null {
-  if (!value) {
+  value: unknown
+): ShaderReference | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
-  if (!isShaderOrMaterialContent(value)) {
+  const candidate = value as {
+    kind?: string;
+    shaderDefinitionId?: string;
+    parameterValues?: Record<string, unknown>;
+    textureBindings?: Record<string, string>;
+  };
+  // Pre-Plan-037 deform/effect slots accepted material refs (when
+  // materials were shader wrappers). Post-037, a material ref in a
+  // deform/effect slot is meaningless — drop with a load-time error
+  // so it surfaces in the project loader's warning channel rather
+  // than silently breaking rendering.
+  if (candidate.kind === "material") {
     throw new Error(
-      `${ownerLabel}.${field} must be a shader or material surface; received "${String(
-        (value as { kind?: unknown }).kind ?? "unknown"
+      `${ownerLabel}.${field} contains a Material reference, which is not a valid ${field} binding (post-Plan-037 Materials are PBR data only). Either delete the field or replace with a Shader reference.`
+    );
+  }
+  if (candidate.kind !== "shader" || !candidate.shaderDefinitionId) {
+    throw new Error(
+      `${ownerLabel}.${field} must be a shader reference; received "${String(
+        candidate.kind ?? "unknown"
       )}".`
     );
   }
-  if (value.kind === "material") {
-    return {
-      kind: "material",
-      materialDefinitionId: value.materialDefinitionId
-    };
-  }
   return {
     kind: "shader",
-    shaderDefinitionId: value.shaderDefinitionId,
-    parameterValues: { ...(value.parameterValues ?? {}) },
-    textureBindings: { ...(value.textureBindings ?? {}) }
+    shaderDefinitionId: candidate.shaderDefinitionId,
+    parameterValues: { ...(candidate.parameterValues ?? {}) },
+    textureBindings: { ...(candidate.textureBindings ?? {}) }
   };
 }
 
@@ -293,12 +302,12 @@ export function normalizeRegionDocumentForLoad(
               })
             )
           : defaultLandscape.surfaceSlots,
-      deform: normalizeShaderOrMaterialForLoad(
+      deform: normalizeShaderReferenceForLoad(
         `region:${region.identity.id}:landscape`,
         "deform",
         legacyLandscape?.deform ?? null
       ),
-      effect: normalizeShaderOrMaterialForLoad(
+      effect: normalizeShaderReferenceForLoad(
         `region:${region.identity.id}:landscape`,
         "effect",
         legacyLandscape?.effect ?? null

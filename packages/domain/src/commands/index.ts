@@ -229,6 +229,13 @@ export type CreateShaderGraphCommand = SemanticCommandBase<
   "CreateShaderGraph",
   {
     definition: ShaderGraphDocument;
+    /**
+     * If set, insert the new shader immediately after the shader with this id
+     * in the content library. Used by the "Duplicate" flow so a fork appears
+     * next to its source instead of getting buried at the end of the list.
+     * Falls back to append-to-end if the id isn't found.
+     */
+    insertAfterShaderDefinitionId?: string;
   }
 >;
 

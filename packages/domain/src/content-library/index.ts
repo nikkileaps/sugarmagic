@@ -18,7 +18,7 @@ import {
 import type {
   AssetSurfaceSlot,
   RockTypeDefinition,
-  ShaderOrMaterial,
+  ShaderReference,
   SurfaceBinding
 } from "../surface";
 import {
@@ -105,8 +105,8 @@ export interface AssetDefinition {
   displayName: string;
   assetKind: AssetKind;
   surfaceSlots: AssetSurfaceSlot[];
-  deform: ShaderOrMaterial | null;
-  effect: ShaderOrMaterial | null;
+  deform: ShaderReference | null;
+  effect: ShaderReference | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -157,6 +157,24 @@ export interface MaterialDefinition {
   displayName: string;
   metadata?: DefinitionMetadata;
   pbr: MaterialPbrDefinition;
+  /**
+   * The surface shader this material renders through. `null` =
+   * use the engine's standard PBR shader (the routing in
+   * runtime-core picks the right one based on which PBR maps the
+   * material has set). When set, the shader's parameters that
+   * match material PBR fields by name convention (baseColorMap →
+   * baseColorTexture / basecolor_texture, baseColor → baseColor /
+   * color / tint, etc.) get auto-bound from the material's pbr
+   * data; shader-only parameters (warmColor, rimStrength, etc.)
+   * use the shader's authored defaults unless overridden at the
+   * appearance-layer use-site.
+   *
+   * Same trait pattern as Asset.deform / Asset.effect: the
+   * material now satisfies the "Surfaceable" trait by both
+   * providing PBR data AND choosing which surface shader consumes
+   * it.
+   */
+  shaderDefinitionId: string | null;
 }
 
 export interface MaterialPbrDefinition {
@@ -409,7 +427,7 @@ function normalizeSurfaceDefinitions(
             materialDefinitionId: migratedShaderDefinitionId
               ? null
               : layer.materialDefinitionId ?? null,
-            deform: normalizeShaderOrMaterial(layer.deform, projectId)
+            deform: normalizeShaderReference(layer.deform, projectId)
           };
         }),
         definition.surface.context
@@ -560,7 +578,12 @@ function normalizeMaterialDefinitions(
           metallic: legacy.parameterValues?.metallic_scale,
           tiling: legacy.parameterValues?.tiling
         }
-      )
+      ),
+      shaderDefinitionId:
+        typeof (definition as unknown as { shaderDefinitionId?: unknown })
+          .shaderDefinitionId === "string"
+          ? ((definition as unknown as { shaderDefinitionId: string }).shaderDefinitionId)
+          : null
     };
   });
 }
@@ -571,7 +594,7 @@ function normalizeGrassTypeDefinitions(
   return (definitions ?? []).map((definition) => ({
     ...definition,
     lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
-    wind: normalizeShaderOrMaterial(definition.wind)
+    wind: normalizeShaderReference(definition.wind)
   }));
 }
 
@@ -581,7 +604,7 @@ function normalizeFlowerTypeDefinitions(
   return (definitions ?? []).map((definition) => ({
     ...definition,
     lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
-    wind: normalizeShaderOrMaterial(definition.wind)
+    wind: normalizeShaderReference(definition.wind)
   }));
 }
 
@@ -594,16 +617,27 @@ function normalizeRockTypeDefinitions(
   }));
 }
 
-function normalizeShaderOrMaterial(
-  value: ShaderOrMaterial | null | undefined,
+function normalizeShaderReference(
+  value: unknown,
   projectId?: string
-): ShaderOrMaterial | null {
-  if (!value) {
+): ShaderReference | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
-  if (value.kind === "material") {
+  // Legacy: pre-Plan-037 deform/effect slots accepted material refs
+  // (when materials were shader wrappers). Migrate to a shader ref
+  // when possible; otherwise drop (a PBR material can't satisfy a
+  // deform/effect slot).
+  const candidate = value as {
+    kind?: string;
+    materialDefinitionId?: string;
+    shaderDefinitionId?: string;
+    parameterValues?: Record<string, unknown>;
+    textureBindings?: Record<string, string>;
+  };
+  if (candidate.kind === "material" && candidate.materialDefinitionId) {
     const migratedShaderDefinitionId = projectId
-      ? migrateLegacyShaderWrapperMaterialId(projectId, value.materialDefinitionId)
+      ? migrateLegacyShaderWrapperMaterialId(projectId, candidate.materialDefinitionId)
       : null;
     if (migratedShaderDefinitionId) {
       return {
@@ -613,17 +647,16 @@ function normalizeShaderOrMaterial(
         textureBindings: {}
       };
     }
-    return {
-      kind: "material",
-      materialDefinitionId: value.materialDefinitionId
-    };
+    // Cannot migrate — PBR material in a deform/effect slot is
+    // meaningless post-Plan-037; drop with a warning at the caller.
+    return null;
   }
-  if (value.kind === "shader") {
+  if (candidate.kind === "shader" && candidate.shaderDefinitionId) {
     return {
       kind: "shader",
-      shaderDefinitionId: value.shaderDefinitionId,
-      parameterValues: { ...(value.parameterValues ?? {}) },
-      textureBindings: { ...(value.textureBindings ?? {}) }
+      shaderDefinitionId: candidate.shaderDefinitionId,
+      parameterValues: { ...(candidate.parameterValues ?? {}) },
+      textureBindings: { ...(candidate.textureBindings ?? {}) }
     };
   }
   return null;
@@ -1349,8 +1382,8 @@ export function normalizeContentLibrarySnapshot(
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
       surfaceSlots: normalizeAssetSurfaceSlots(definition.surfaceSlots),
-      deform: normalizeShaderOrMaterial(definition.deform, projectId),
-      effect: normalizeShaderOrMaterial(definition.effect, projectId)
+      deform: normalizeShaderReference(definition.deform, projectId),
+      effect: normalizeShaderReference(definition.effect, projectId)
     })),
     materialDefinitions: mergedMaterialDefinitions,
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({

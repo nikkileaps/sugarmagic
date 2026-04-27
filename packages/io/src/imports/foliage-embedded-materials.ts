@@ -266,7 +266,8 @@ export function deriveFoliageEmbeddedMaterialImport(options: {
       displayName: `${assetDisplayName} ${slotName}`,
       pbr: createDefaultMaterialPbr({
         baseColorMap: textureDefinitionId
-      })
+      }),
+      shaderDefinitionId: null
     });
     surfaceSlots.push({
       slotName,

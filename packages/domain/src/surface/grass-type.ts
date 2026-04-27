@@ -7,7 +7,7 @@
  */
 
 import { createScopedId } from "../shared/identity";
-import type { ShaderOrMaterial } from "./index";
+import type { ShaderReference } from "./index";
 import type { ScatterLodDefinition } from "./lod";
 
 export interface GrassTypeDefinition extends ScatterLodDefinition {
@@ -34,7 +34,7 @@ export interface GrassTypeDefinition extends ScatterLodDefinition {
   tipColor: number;
   baseColor: number;
   colorJitter: number;
-  wind: ShaderOrMaterial | null;
+  wind: ShaderReference | null;
 }
 
 export function createDefaultGrassTypeDefinition(
@@ -45,7 +45,7 @@ export function createDefaultGrassTypeDefinition(
     tipColor?: number;
     baseColor?: number;
     density?: number;
-    wind?: ShaderOrMaterial | null;
+    wind?: ShaderReference | null;
   } = {}
 ): GrassTypeDefinition {
   return {

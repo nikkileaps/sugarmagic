@@ -89,7 +89,8 @@ function makeLandscapeMaterialLibrary(): ContentLibrarySnapshot {
           baseColorMap: "wordlark:texture:grass-base",
           normalMap: "wordlark:texture:grass-normal",
           ormMap: "wordlark:texture:grass-orm"
-        })
+        }),
+        shaderDefinitionId: null
       }
     ]
   };

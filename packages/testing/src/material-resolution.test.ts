@@ -82,7 +82,8 @@ function makeContentLibrary(): ContentLibrarySnapshot {
           baseColorMap: "wordlark:texture:brick-base",
           normalMap: "wordlark:texture:brick-normal",
           ormMap: "wordlark:texture:brick-orm"
-        })
+        }),
+        shaderDefinitionId: null
       }
     ]
   };

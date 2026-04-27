@@ -65,6 +65,7 @@ function makeMaterial(
     definitionKind: "material",
     displayName,
     pbr: materialPbr,
+    shaderDefinitionId: null,
     metadata: { builtIn: true, builtInKey }
   };
 }

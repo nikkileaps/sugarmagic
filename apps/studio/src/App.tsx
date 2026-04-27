@@ -987,7 +987,8 @@ export function App() {
         definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
         definitionKind: "material" as const,
         displayName: `Material ${nextIndex}`,
-        pbr: createDefaultMaterialPbr()
+        pbr: createDefaultMaterialPbr(),
+        shaderDefinitionId: null
       };
 
       projectStore
@@ -1158,7 +1159,8 @@ export function App() {
           roughnessMap: result.textureBindings.roughness_texture ?? null,
           metallicMap: result.textureBindings.metallic_texture ?? null,
           ambientOcclusionMap: result.textureBindings.ao_texture ?? null
-        })
+        }),
+        shaderDefinitionId: null
       };
       nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
       projectStore.getState().updateSession(nextSession);
@@ -1517,6 +1519,7 @@ export function App() {
     activeRenderKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
     shaderDefinitions,
+    textureDefinitions,
     onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,

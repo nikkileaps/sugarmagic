@@ -449,14 +449,25 @@ function applyCreateShaderGraphCommand(
     command.payload.definition.shaderDefinitionId
   ]);
 
+  const insertAfterId = command.payload.insertAfterShaderDefinitionId;
+  const existing = session.contentLibrary.shaderDefinitions;
+  const insertIndex = insertAfterId
+    ? existing.findIndex((d) => d.shaderDefinitionId === insertAfterId)
+    : -1;
+  const nextShaderDefinitions =
+    insertIndex >= 0
+      ? [
+          ...existing.slice(0, insertIndex + 1),
+          command.payload.definition,
+          ...existing.slice(insertIndex + 1)
+        ]
+      : [...existing, command.payload.definition];
+
   return {
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      shaderDefinitions: [
-        ...session.contentLibrary.shaderDefinitions,
-        command.payload.definition
-      ]
+      shaderDefinitions: nextShaderDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2159,7 +2170,8 @@ export function duplicateMaterialDefinitionInSession(
     pbr: {
       ...source.pbr,
       tiling: [...source.pbr.tiling]
-    }
+    },
+    shaderDefinitionId: source.shaderDefinitionId
     // metadata intentionally omitted so the copy is user-owned.
   };
   return {

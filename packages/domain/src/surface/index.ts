@@ -31,10 +31,20 @@ export * from "./grass-type";
 export * from "./flower-type";
 export * from "./rock-type";
 
-export type ShaderOrMaterial = Extract<
-  AppearanceContent,
-  { kind: "material" } | { kind: "shader" }
->;
+/**
+ * A reference to an executable shader graph with its bound parameter
+ * values + texture bindings. The only thing that satisfies the
+ * Deformable / Effectable trait contracts. Pre-Plan-037 those slots
+ * accepted `ShaderOrMaterial` because Materials were shader-wrappers;
+ * post-037 Materials are pure PBR data and have no business in
+ * deform/effect slots.
+ */
+export interface ShaderReference {
+  kind: "shader";
+  shaderDefinitionId: string;
+  parameterValues: Record<string, unknown>;
+  textureBindings: Record<string, string>;
+}
 
 export type SurfaceContext = "universal" | "landscape-only";
 
@@ -70,11 +80,11 @@ export interface Surfaceable {
 }
 
 export interface Deformable {
-  readonly deform: ShaderOrMaterial | null;
+  readonly deform: ShaderReference | null;
 }
 
 export interface Effectable {
-  readonly effect: ShaderOrMaterial | null;
+  readonly effect: ShaderReference | null;
 }
 
 export function deriveSurfaceContext(
@@ -150,9 +160,18 @@ export function createTextureAppearanceContent(
 }
 
 export function createMaterialAppearanceContent(
-  materialDefinitionId: string
+  materialDefinitionId: string,
+  options: {
+    shaderOverrideDefinitionId?: string | null;
+    parameterOverrides?: Record<string, unknown>;
+  } = {}
 ): Extract<AppearanceContent, { kind: "material" }> {
-  return { kind: "material", materialDefinitionId };
+  return {
+    kind: "material",
+    materialDefinitionId,
+    shaderOverrideDefinitionId: options.shaderOverrideDefinitionId ?? null,
+    parameterOverrides: options.parameterOverrides ?? {}
+  };
 }
 
 export function createShaderAppearanceContent(
@@ -259,12 +278,6 @@ export function createReferenceSurfaceBinding<C extends SurfaceContext = Surface
   };
 }
 
-export function isShaderOrMaterialContent(
-  value: AppearanceContent | null | undefined
-): value is ShaderOrMaterial {
-  return value?.kind === "material" || value?.kind === "shader";
-}
-
 /**
  * Narrow compatibility aliases while flat-surface call sites migrate to the
  * explicit AppearanceContent names. These still produce AppearanceContent, not
@@ -274,7 +287,6 @@ export const createColorSurface = createColorAppearanceContent;
 export const createTextureSurface = createTextureAppearanceContent;
 export const createMaterialSurface = createMaterialAppearanceContent;
 export const createShaderSurface = createShaderAppearanceContent;
-export const isShaderOrMaterialSurface = isShaderOrMaterialContent;
 
 export function surfaceBindingUsesLandscapeOnlyMasks(
   binding: SurfaceBinding | null | undefined
