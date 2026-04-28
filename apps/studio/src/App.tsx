@@ -55,6 +55,7 @@ import {
   removeMaterialDefinitionFromSession,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
+  createDefaultMaterialPbr,
   createDefaultSurfaceDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultRegion,
@@ -120,6 +121,7 @@ import { createItemViewport } from "./viewport/itemViewport";
 import { createNPCViewport } from "./viewport/npcViewport";
 import { createPlayerViewport } from "./viewport/playerViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
+import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 import { createWebRenderEngine } from "@sugarmagic/render-web";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
@@ -976,7 +978,7 @@ export function App() {
   );
 
   const handleCreateMaterialDefinition = useCallback(
-    (shaderDefinitionId: string) => {
+    () => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return null;
 
@@ -985,9 +987,8 @@ export function App() {
         definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
         definitionKind: "material" as const,
         displayName: `Material ${nextIndex}`,
-        shaderDefinitionId,
-        parameterValues: {},
-        textureBindings: {}
+        pbr: createDefaultMaterialPbr(),
+        shaderDefinitionId: null
       };
 
       projectStore
@@ -1142,26 +1143,6 @@ export function App() {
         descriptor
       });
 
-      // Pick the right built-in PBR shader variant based on which
-      // files the importer found. "orm" → Standard PBR (ORM);
-      // "separate" → Standard PBR (Separate). Each variant's graph
-      // is authored to sample exactly the textures its workflow
-      // supplies — no runtime branching required on the shader side.
-      const targetBuiltInKey =
-        result.suggestedShaderVariant === "separate"
-          ? "standard-pbr-separate"
-          : "standard-pbr";
-      const targetShaderId =
-        currentSession.contentLibrary.shaderDefinitions.find(
-          (definition) => definition.metadata.builtInKey === targetBuiltInKey
-        )?.shaderDefinitionId ?? null;
-      if (!targetShaderId) {
-        window.alert(
-          `The built-in "${targetBuiltInKey}" shader is missing from the content library.`
-        );
-        return null;
-      }
-
       let nextSession = currentSession;
       for (const textureDefinition of result.textures) {
         nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
@@ -1171,9 +1152,15 @@ export function App() {
         definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
         definitionKind: "material" as const,
         displayName: result.suggestedMaterialDisplayName,
-        shaderDefinitionId: targetShaderId,
-        parameterValues: {},
-        textureBindings: result.textureBindings
+        pbr: createDefaultMaterialPbr({
+          baseColorMap: result.textureBindings.basecolor_texture ?? null,
+          normalMap: result.textureBindings.normal_texture ?? null,
+          ormMap: result.textureBindings.orm_texture ?? null,
+          roughnessMap: result.textureBindings.roughness_texture ?? null,
+          metallicMap: result.textureBindings.metallic_texture ?? null,
+          ambientOcclusionMap: result.textureBindings.ao_texture ?? null
+        }),
+        shaderDefinitionId: null
       };
       nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
       projectStore.getState().updateSession(nextSession);
@@ -1532,6 +1519,7 @@ export function App() {
     activeRenderKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
     shaderDefinitions,
+    textureDefinitions,
     onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,
@@ -1729,6 +1717,30 @@ export function App() {
     <>
       <ProjectManagerDialog opened={phase === "no-project"} onOpen={handleOpenProject} onCreate={handleCreateProject} />
       <CreateRegionDialog opened={createRegionOpen} onClose={() => setCreateRegionOpen(false)} onCreate={handleCreateRegion} />
+      <LibraryPopover
+        shellStore={shellStore}
+        materialDefinitions={materialDefinitions}
+        textureDefinitions={textureDefinitions}
+        shaderDefinitions={shaderDefinitions}
+        assetResolver={studioRenderEngine.assetResolver}
+        isMaterialReferenced={(definitionId) =>
+          session ? materialDefinitionHasReferences(session, definitionId) : false
+        }
+        onCreateMaterialDefinition={handleCreateMaterialDefinition}
+        onImportPbrMaterial={handleImportPbrMaterial}
+        onImportTextureDefinition={handleImportTextureDefinition}
+        onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
+        onEditShaderInGraph={(shaderDefinitionId) => {
+          // Close the popover and route the existing workspace-
+          // navigation handler to the Render workspace's shader
+          // graph editor with this shader pre-selected.
+          shellStore.getState().setActiveLibrary(null);
+          handleWorkspaceNavigation({
+            kind: "shader-graph",
+            shaderDefinitionId
+          });
+        }}
+      />
       <Modal
         opened={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
@@ -1887,6 +1899,17 @@ export function App() {
                 <Menu.Dropdown styles={{ dropdown: { background: "var(--sm-color-surface1)", border: "1px solid var(--sm-panel-border)", minWidth: 200, padding: "var(--sm-space-xs) 0" } }}>
                   <Menu.Item onClick={handleSave} disabled={!isDirty} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘S</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>💾 Save Game</Menu.Item>
                   <Menu.Item onClick={handleUndo} disabled={undoCount === 0} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘Z</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>↩ Undo</Menu.Item>
+                  <Menu.Divider styles={{ divider: { borderColor: "var(--sm-panel-border)" } }} />
+                  <Menu.Sub position="right-start" offset={4}>
+                    <Menu.Sub.Target>
+                      <Menu.Sub.Item styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>📚 Libraries</Menu.Sub.Item>
+                    </Menu.Sub.Target>
+                    <Menu.Sub.Dropdown styles={{ dropdown: { background: "var(--sm-color-surface1)", border: "1px solid var(--sm-panel-border)", minWidth: 200, padding: "var(--sm-space-xs) 0" } }}>
+                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("materials")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🎨 Materials</Menu.Item>
+                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("textures")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🖼 Textures</Menu.Item>
+                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("shaders")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>⚙ Shaders</Menu.Item>
+                    </Menu.Sub.Dropdown>
+                  </Menu.Sub>
                   <Menu.Divider styles={{ divider: { borderColor: "var(--sm-panel-border)" } }} />
                   <Menu.Item onClick={() => setPluginsOpen(true)} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🧩 Plugins</Menu.Item>
                   <Menu.Item onClick={handleReload} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🔄 Reload Project</Menu.Item>

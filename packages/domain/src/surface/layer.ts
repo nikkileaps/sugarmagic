@@ -9,7 +9,7 @@
 import { createUuid } from "../shared/identity";
 import type { Mask } from "./mask";
 import { maskUsesLandscapeOnlyInputs } from "./mask";
-import type { ShaderOrMaterial } from "./index";
+import type { ShaderReference } from "./index";
 
 export type BlendMode = "base" | "mix" | "multiply" | "add" | "overlay";
 
@@ -20,7 +20,22 @@ export type AppearanceContent =
       textureDefinitionId: string;
       tiling: [number, number];
     }
-  | { kind: "material"; materialDefinitionId: string }
+  | {
+      kind: "material";
+      materialDefinitionId: string;
+      /**
+       * Per-use surface shader override. `null`/`undefined` = use
+       * whatever shader the material itself picks (Material.
+       * shaderDefinitionId). When set, this layer renders the
+       * material's PBR data through THIS shader instead, with
+       * material PBR fields auto-bound to shader parameters by
+       * name convention. To customize a shader's other parameters
+       * (warmColor, rimStrength, texture inputs, etc.), fork the
+       * shader in Render > Shaders and edit the parameter defaults
+       * there — there is no per-use parameter-override mechanism.
+       */
+      shaderOverrideDefinitionId?: string | null;
+    }
   | {
       kind: "shader";
       shaderDefinitionId: string;
@@ -60,6 +75,12 @@ export interface AppearanceLayer extends LayerCommon {
 export interface ScatterLayer extends LayerCommon {
   kind: "scatter";
   content: ScatterContent;
+  /**
+   * Optional executable surface shader for this scatter layer's rendered
+   * instances. Kept separate from MaterialDefinition so grass/foliage looks
+   * can use shader graphs without turning materials back into shader wrappers.
+   */
+  shaderDefinitionId: string | null;
   materialDefinitionId: string | null;
   /**
    * Optional wind / deform binding for this specific scatter layer. When
@@ -69,7 +90,7 @@ export interface ScatterLayer extends LayerCommon {
    * a new grass-type. When null, the type-level wind flows through
    * unchanged (backwards-compatible with older authored surfaces).
    */
-  deform?: ShaderOrMaterial | null;
+  deform?: ShaderReference | null;
 }
 
 export interface EmissionLayer extends LayerCommon {
@@ -153,8 +174,9 @@ export function createAppearanceLayer(
 export function createScatterLayer(
   content: ScatterContent,
   overrides: LayerFactoryOverrides & {
+    shaderDefinitionId?: string | null;
     materialDefinitionId?: string | null;
-    deform?: ShaderOrMaterial | null;
+    deform?: ShaderReference | null;
   } = {}
 ): ScatterLayer {
   const common = createLayerCommon(overrides);
@@ -163,6 +185,7 @@ export function createScatterLayer(
     kind: "scatter",
     displayName: overrides.displayName ?? scatterLayerName(content),
     content,
+    shaderDefinitionId: overrides.shaderDefinitionId ?? null,
     materialDefinitionId: overrides.materialDefinitionId ?? null,
     deform: overrides.deform ?? null
   };

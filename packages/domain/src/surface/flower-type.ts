@@ -7,7 +7,7 @@
  */
 
 import { createScopedId } from "../shared/identity";
-import type { ShaderOrMaterial } from "./index";
+import type { ShaderReference } from "./index";
 import type { ScatterLodDefinition } from "./lod";
 
 export interface FlowerTypeDefinition extends ScatterLodDefinition {
@@ -31,7 +31,7 @@ export interface FlowerTypeDefinition extends ScatterLodDefinition {
   petalColor: number;
   centerColor: number;
   colorJitter: number;
-  wind: ShaderOrMaterial | null;
+  wind: ShaderReference | null;
 }
 
 export function createDefaultFlowerTypeDefinition(
@@ -42,7 +42,7 @@ export function createDefaultFlowerTypeDefinition(
     petalColor?: number;
     centerColor?: number;
     density?: number;
-    wind?: ShaderOrMaterial | null;
+    wind?: ShaderReference | null;
   } = {}
 ): FlowerTypeDefinition {
   return {

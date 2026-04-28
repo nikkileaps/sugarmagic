@@ -18,7 +18,7 @@ import {
 import type {
   AssetSurfaceSlot,
   RockTypeDefinition,
-  ShaderOrMaterial,
+  ShaderReference,
   SurfaceBinding
 } from "../surface";
 import {
@@ -69,6 +69,7 @@ import {
   createDefaultVignettePostProcessShaderGraph,
   createBuiltInFlatColorShaderGraph,
   createBuiltInFlatTextureShaderGraph,
+  createBuiltInMaterialPbrShaderGraph,
   createBuiltInCloudShadowEffectShaderGraph
 } from "../shader-graph";
 
@@ -104,8 +105,8 @@ export interface AssetDefinition {
   displayName: string;
   assetKind: AssetKind;
   surfaceSlots: AssetSurfaceSlot[];
-  deform: ShaderOrMaterial | null;
-  effect: ShaderOrMaterial | null;
+  deform: ShaderReference | null;
+  effect: ShaderReference | null;
   source: {
     relativeAssetPath: string;
     fileName: string;
@@ -154,10 +155,43 @@ export interface MaterialDefinition {
   definitionId: string;
   definitionKind: "material";
   displayName: string;
-  shaderDefinitionId: string;
   metadata?: DefinitionMetadata;
-  parameterValues: Record<string, unknown>;
-  textureBindings: Record<string, string>;
+  pbr: MaterialPbrDefinition;
+  /**
+   * The surface shader this material renders through. `null` =
+   * use the engine's standard PBR shader (the routing in
+   * runtime-core picks the right one based on which PBR maps the
+   * material has set). When set, the shader's parameters that
+   * match material PBR fields by name convention (baseColorMap →
+   * baseColorTexture / basecolor_texture, baseColor → baseColor /
+   * color / tint, etc.) get auto-bound from the material's pbr
+   * data; shader-only parameters (warmColor, rimStrength, etc.)
+   * use the shader's authored defaults unless overridden at the
+   * appearance-layer use-site.
+   *
+   * Same trait pattern as Asset.deform / Asset.effect: the
+   * material now satisfies the "Surfaceable" trait by both
+   * providing PBR data AND choosing which surface shader consumes
+   * it.
+   */
+  shaderDefinitionId: string | null;
+}
+
+export interface MaterialPbrDefinition {
+  baseColor: number;
+  baseColorMap: string | null;
+  normalMap: string | null;
+  ormMap: string | null;
+  roughnessMap: string | null;
+  metallicMap: string | null;
+  ambientOcclusionMap: string | null;
+  roughness: number;
+  metallic: number;
+  ambientOcclusion: number;
+  emissiveColor: number;
+  emissiveIntensity: number;
+  emissiveMap: string | null;
+  tiling: [number, number];
 }
 
 export type LightingPreset =
@@ -373,12 +407,31 @@ function normalizeAssetSurfaceSlots(
 }
 
 function normalizeSurfaceDefinitions(
-  definitions: SurfaceDefinition[] | null | undefined
+  definitions: SurfaceDefinition[] | null | undefined,
+  projectId: string
 ): SurfaceDefinition[] {
   return (definitions ?? []).map((definition) => ({
     ...definition,
     surface: (() => {
-      const surface = createSurface(definition.surface.layers, definition.surface.context);
+      const surface = createSurface(
+        definition.surface.layers.map((layer) => {
+          if (layer.kind !== "scatter") {
+            return layer;
+          }
+          const migratedShaderDefinitionId =
+            layer.shaderDefinitionId ??
+            migrateLegacyShaderWrapperMaterialId(projectId, layer.materialDefinitionId);
+          return {
+            ...layer,
+            shaderDefinitionId: migratedShaderDefinitionId,
+            materialDefinitionId: migratedShaderDefinitionId
+              ? null
+              : layer.materialDefinitionId ?? null,
+            deform: normalizeShaderReference(layer.deform, projectId)
+          };
+        }),
+        definition.surface.context
+      );
       assertReusableSurfaceHasNoPaintedMasks(
         surface,
         `SurfaceDefinition "${definition.definitionId}"`
@@ -386,6 +439,35 @@ function normalizeSurfaceDefinitions(
       return surface;
     })()
   }));
+}
+
+function migrateLegacyShaderWrapperMaterialId(
+  projectId: string,
+  materialDefinitionId: string | null | undefined
+): string | null {
+  if (!materialDefinitionId) {
+    return null;
+  }
+  const prefix = `${projectId}:material:`;
+  if (!materialDefinitionId.startsWith(prefix)) {
+    return null;
+  }
+  const key = materialDefinitionId.slice(prefix.length);
+  const shaderKeys = new Set([
+    "meadow-grass",
+    "sunlit-lawn",
+    "autumn-field-grass",
+    "painterly-grass",
+    "grass-surface-2",
+    "grass-surface-3",
+    "grass-surface-4",
+    "grass-surface-6",
+    "still-air",
+    "gentle-breeze",
+    "meadow-breeze",
+    "gusty"
+  ]);
+  return shaderKeys.has(key) ? `${projectId}:shader:${key}` : null;
 }
 
 function normalizeMaskTextureDefinitions(
@@ -402,13 +484,117 @@ function normalizeMaskTextureDefinitions(
   }));
 }
 
+export function createDefaultMaterialPbr(
+  overrides: Partial<MaterialPbrDefinition> = {}
+): MaterialPbrDefinition {
+  const pbr: MaterialPbrDefinition = {
+    baseColor: 0x808080,
+    baseColorMap: null,
+    normalMap: null,
+    ormMap: null,
+    roughnessMap: null,
+    metallicMap: null,
+    ambientOcclusionMap: null,
+    roughness: 0.7,
+    metallic: 0,
+    ambientOcclusion: 1,
+    emissiveColor: 0x000000,
+    emissiveIntensity: 0,
+    emissiveMap: null,
+    tiling: [1, 1],
+    ...overrides
+  };
+  return {
+    ...pbr,
+    tiling: [
+      typeof overrides.tiling?.[0] === "number" ? overrides.tiling[0] : 1,
+      typeof overrides.tiling?.[1] === "number" ? overrides.tiling[1] : 1
+    ]
+  };
+}
+
+function normalizeNullableTextureId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function normalizeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeHexColor(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(0xffffff, Math.round(value)))
+    : fallback;
+}
+
+function normalizeMaterialPbr(value: unknown): MaterialPbrDefinition {
+  const pbr = typeof value === "object" && value !== null
+    ? (value as Partial<MaterialPbrDefinition>)
+    : {};
+  return createDefaultMaterialPbr({
+    baseColor: normalizeHexColor(pbr.baseColor, 0x808080),
+    baseColorMap: normalizeNullableTextureId(pbr.baseColorMap),
+    normalMap: normalizeNullableTextureId(pbr.normalMap),
+    ormMap: normalizeNullableTextureId(pbr.ormMap),
+    roughnessMap: normalizeNullableTextureId(pbr.roughnessMap),
+    metallicMap: normalizeNullableTextureId(pbr.metallicMap),
+    ambientOcclusionMap: normalizeNullableTextureId(pbr.ambientOcclusionMap),
+    roughness: normalizeNumber(pbr.roughness, 0.7),
+    metallic: normalizeNumber(pbr.metallic, 0),
+    ambientOcclusion: normalizeNumber(pbr.ambientOcclusion, 1),
+    emissiveColor: normalizeHexColor(pbr.emissiveColor, 0x000000),
+    emissiveIntensity: normalizeNumber(pbr.emissiveIntensity, 0),
+    emissiveMap: normalizeNullableTextureId(pbr.emissiveMap),
+    tiling: [
+      normalizeNumber(pbr.tiling?.[0], 1),
+      normalizeNumber(pbr.tiling?.[1], 1)
+    ]
+  });
+}
+
+function normalizeMaterialDefinitions(
+  definitions: MaterialDefinition[] | null | undefined
+): MaterialDefinition[] {
+  return (definitions ?? []).map((definition) => {
+    const legacy = definition as MaterialDefinition & {
+      textureBindings?: Record<string, string>;
+      parameterValues?: Record<string, unknown>;
+    };
+    const bindings = legacy.textureBindings ?? {};
+    return {
+      definitionId: definition.definitionId,
+      definitionKind: "material",
+      displayName: definition.displayName,
+      metadata: definition.metadata ? { ...definition.metadata } : undefined,
+      pbr: normalizeMaterialPbr(
+        definition.pbr ?? {
+          baseColorMap: bindings.basecolor_texture ?? bindings.baseColorTexture ?? null,
+          normalMap: bindings.normal_texture ?? bindings.normalTexture ?? null,
+          ormMap: bindings.orm_texture ?? bindings.ormTexture ?? null,
+          roughnessMap: bindings.roughness_texture ?? null,
+          metallicMap: bindings.metallic_texture ?? null,
+          ambientOcclusionMap: bindings.ao_texture ?? null,
+          roughness: legacy.parameterValues?.roughness_scale,
+          metallic: legacy.parameterValues?.metallic_scale,
+          tiling: legacy.parameterValues?.tiling
+        }
+      ),
+      shaderDefinitionId:
+        typeof (definition as unknown as { shaderDefinitionId?: unknown })
+          .shaderDefinitionId === "string"
+          ? ((definition as unknown as { shaderDefinitionId: string }).shaderDefinitionId)
+          : null
+    };
+  });
+}
+
 function normalizeGrassTypeDefinitions(
   definitions: GrassTypeDefinition[] | null | undefined
 ): GrassTypeDefinition[] {
   return (definitions ?? []).map((definition) => ({
     ...definition,
     lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
-    wind: normalizeShaderOrMaterial(definition.wind)
+    wind: normalizeShaderReference(definition.wind)
   }));
 }
 
@@ -418,7 +604,7 @@ function normalizeFlowerTypeDefinitions(
   return (definitions ?? []).map((definition) => ({
     ...definition,
     lodMeshes: cloneScatterLodMeshes(definition.lodMeshes),
-    wind: normalizeShaderOrMaterial(definition.wind)
+    wind: normalizeShaderReference(definition.wind)
   }));
 }
 
@@ -431,24 +617,46 @@ function normalizeRockTypeDefinitions(
   }));
 }
 
-function normalizeShaderOrMaterial(
-  value: ShaderOrMaterial | null | undefined
-): ShaderOrMaterial | null {
-  if (!value) {
+function normalizeShaderReference(
+  value: unknown,
+  projectId?: string
+): ShaderReference | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
-  if (value.kind === "material") {
-    return {
-      kind: "material",
-      materialDefinitionId: value.materialDefinitionId
-    };
+  // Legacy: pre-Plan-037 deform/effect slots accepted material refs
+  // (when materials were shader wrappers). Migrate to a shader ref
+  // when possible; otherwise drop (a PBR material can't satisfy a
+  // deform/effect slot).
+  const candidate = value as {
+    kind?: string;
+    materialDefinitionId?: string;
+    shaderDefinitionId?: string;
+    parameterValues?: Record<string, unknown>;
+    textureBindings?: Record<string, string>;
+  };
+  if (candidate.kind === "material" && candidate.materialDefinitionId) {
+    const migratedShaderDefinitionId = projectId
+      ? migrateLegacyShaderWrapperMaterialId(projectId, candidate.materialDefinitionId)
+      : null;
+    if (migratedShaderDefinitionId) {
+      return {
+        kind: "shader",
+        shaderDefinitionId: migratedShaderDefinitionId,
+        parameterValues: {},
+        textureBindings: {}
+      };
+    }
+    // Cannot migrate — PBR material in a deform/effect slot is
+    // meaningless post-Plan-037; drop with a warning at the caller.
+    return null;
   }
-  if (value.kind === "shader") {
+  if (candidate.kind === "shader" && candidate.shaderDefinitionId) {
     return {
       kind: "shader",
-      shaderDefinitionId: value.shaderDefinitionId,
-      parameterValues: { ...(value.parameterValues ?? {}) },
-      textureBindings: { ...(value.textureBindings ?? {}) }
+      shaderDefinitionId: candidate.shaderDefinitionId,
+      parameterValues: { ...(candidate.parameterValues ?? {}) },
+      textureBindings: { ...(candidate.textureBindings ?? {}) }
     };
   }
   return null;
@@ -1110,11 +1318,7 @@ export function normalizeContentLibrarySnapshot(
   const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   const builtInRockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
   const mergedMaterialDefinitions = mergeBuiltInDefinitions(
-    (contentLibrary.materialDefinitions ?? []).map((definition) => ({
-      ...definition,
-      parameterValues: { ...(definition.parameterValues ?? {}) },
-      textureBindings: { ...(definition.textureBindings ?? {}) }
-    })),
+    normalizeMaterialDefinitions(contentLibrary.materialDefinitions),
     builtInMaterialDefinitions,
     (definition) => definition.definitionId
   );
@@ -1134,7 +1338,7 @@ export function normalizeContentLibrarySnapshot(
     (definition) => definition.definitionId
   );
   const mergedSurfaceDefinitions = mergeBuiltInDefinitions(
-    normalizeSurfaceDefinitions(contentLibrary.surfaceDefinitions),
+    normalizeSurfaceDefinitions(contentLibrary.surfaceDefinitions, projectId),
     createBuiltInSurfaceDefinitions(
       projectId,
       mergedGrassTypeDefinitions,
@@ -1178,8 +1382,8 @@ export function normalizeContentLibrarySnapshot(
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
       surfaceSlots: normalizeAssetSurfaceSlots(definition.surfaceSlots),
-      deform: normalizeShaderOrMaterial(definition.deform),
-      effect: normalizeShaderOrMaterial(definition.effect)
+      deform: normalizeShaderReference(definition.deform, projectId),
+      effect: normalizeShaderReference(definition.effect, projectId)
     })),
     materialDefinitions: mergedMaterialDefinitions,
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
@@ -1324,6 +1528,33 @@ export function normalizeContentLibrarySnapshot(
 }
 
 function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
+  const createWindPreset = (
+    shaderDefinitionId: string,
+    displayName: string,
+    builtInKey: string,
+    values: { windStrength: number; windFrequency: number; windDirection: [number, number] }
+  ): ShaderGraphDocument => {
+    const graph = createDefaultFoliageWindShaderGraph(projectId, {
+      shaderDefinitionId,
+      displayName
+    });
+    return {
+      ...graph,
+      parameters: graph.parameters.map((parameter) => ({
+        ...parameter,
+        defaultValue:
+          parameter.parameterId === "windStrength"
+            ? values.windStrength
+            : parameter.parameterId === "windFrequency"
+              ? values.windFrequency
+              : parameter.parameterId === "windDirection"
+                ? values.windDirection
+                : parameter.defaultValue
+      })),
+      metadata: { builtIn: true, builtInKey }
+    };
+  };
+
   return [
     createBuiltInFlatColorShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:flat-color`,
@@ -1332,6 +1563,10 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createBuiltInFlatTextureShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:flat-texture`,
       displayName: "Flat Texture"
+    }),
+    createBuiltInMaterialPbrShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:material-pbr`,
+      displayName: "Material PBR"
     }),
     createDefaultFoliageSurfaceShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-surface`,
@@ -1380,6 +1615,26 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
       displayName: "Foliage Wind"
+    }),
+    createWindPreset(`${projectId}:shader:still-air`, "Still Air", "still-air", {
+      windStrength: 0,
+      windFrequency: 1,
+      windDirection: [1, 0]
+    }),
+    createWindPreset(`${projectId}:shader:gentle-breeze`, "Gentle Breeze", "gentle-breeze", {
+      windStrength: 0.18,
+      windFrequency: 1.1,
+      windDirection: [1, 0]
+    }),
+    createWindPreset(`${projectId}:shader:meadow-breeze`, "Meadow Breeze", "meadow-breeze", {
+      windStrength: 0.35,
+      windFrequency: 1.6,
+      windDirection: [1, 0.2]
+    }),
+    createWindPreset(`${projectId}:shader:gusty`, "Gusty", "gusty", {
+      windStrength: 0.65,
+      windFrequency: 2.6,
+      windDirection: [1, -0.15]
     }),
     createDefaultFoliageTintShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-tint`,

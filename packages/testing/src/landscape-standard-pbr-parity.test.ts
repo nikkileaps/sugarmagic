@@ -5,6 +5,7 @@ import {
   createLandscapeSurfaceSlot,
   createMaterialSurfaceBinding,
   createDefaultRegionLandscapeState,
+  createDefaultMaterialPbr,
   createDefaultStandardPbrShaderGraph,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
@@ -78,17 +79,15 @@ function makeLandscapeMaterialLibrary(): ContentLibrarySnapshot {
         definitionId: "wordlark:material:grass",
         definitionKind: "material",
         displayName: "Grass",
-        shaderDefinitionId: "wordlark:shader:standard-pbr",
-        parameterValues: {
+        pbr: createDefaultMaterialPbr({
           tiling: [2, 2],
-          roughness_scale: 0.9,
-          metallic_scale: 0
-        },
-        textureBindings: {
-          basecolor_texture: "wordlark:texture:grass-base",
-          normal_texture: "wordlark:texture:grass-normal",
-          orm_texture: "wordlark:texture:grass-orm"
-        }
+          roughness: 0.9,
+          metallic: 0,
+          baseColorMap: "wordlark:texture:grass-base",
+          normalMap: "wordlark:texture:grass-normal",
+          ormMap: "wordlark:texture:grass-orm"
+        }),
+        shaderDefinitionId: null
       }
     ]
   };

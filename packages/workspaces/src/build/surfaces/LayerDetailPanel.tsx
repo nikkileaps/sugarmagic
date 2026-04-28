@@ -32,19 +32,7 @@ import {
 import { ColorField, KindTabs, LabeledSlider } from "@sugarmagic/ui";
 import { MaterialParameterEditor } from "../MaterialParameterEditor";
 
-function mapAppearanceShaderToMaterial(layer: AppearanceLayer): MaterialDefinition | null {
-  if (layer.content.kind !== "shader") {
-    return null;
-  }
-  return {
-    definitionId: `${layer.layerId}:inline-shader`,
-    definitionKind: "material",
-    displayName: layer.displayName,
-    shaderDefinitionId: layer.content.shaderDefinitionId,
-    parameterValues: layer.content.parameterValues,
-    textureBindings: layer.content.textureBindings
-  };
-}
+const SHADER_OVERRIDE_DEFAULT = "__default__";
 
 interface SharedProps {
   allowedContext: SurfaceContext;
@@ -216,30 +204,76 @@ function AppearanceLayerEditor(
           }
           if (kind === "material" && layer.content.kind === "material") {
             const materialContent = layer.content;
+            const boundMaterial = materialDefinitions.find(
+              (material) =>
+                material.definitionId === materialContent.materialDefinitionId
+            );
+            const shaderOverride =
+              materialContent.shaderOverrideDefinitionId ?? null;
+            const materialOwnShaderId = boundMaterial?.shaderDefinitionId ?? null;
+            const materialOwnShaderName = materialOwnShaderId
+              ? surfaceShaders.find(
+                  (s) => s.shaderDefinitionId === materialOwnShaderId
+                )?.displayName ?? "(picked shader)"
+              : "auto (PBR routing)";
             return (
-              <Select
-                size="xs"
-                label="Material"
-                comboboxProps={{ withinPortal: false }}
-                data={materialDefinitions.map((material) => ({
-                  value: material.definitionId,
-                  label: material.displayName
-                }))}
-                value={materialContent.materialDefinitionId}
-                onChange={(next) => {
-                  if (next) {
+              <Stack gap="xs">
+                <Select
+                  size="xs"
+                  label="Material"
+                  comboboxProps={{ withinPortal: false }}
+                  data={materialDefinitions.map((material) => ({
+                    value: material.definitionId,
+                    label: material.displayName
+                  }))}
+                  value={materialContent.materialDefinitionId}
+                  onChange={(next) => {
+                    if (next) {
+                      onChange({
+                        ...layer,
+                        content: createMaterialAppearanceContent(next, {
+                          shaderOverrideDefinitionId: shaderOverride
+                        })
+                      });
+                    }
+                  }}
+                />
+                <Select
+                  size="xs"
+                  label="Shader"
+                  comboboxProps={{ withinPortal: false }}
+                  data={[
+                    { value: SHADER_OVERRIDE_DEFAULT, label: `Default (${materialOwnShaderName})` },
+                    ...surfaceShaders.map((shader) => ({
+                      value: shader.shaderDefinitionId,
+                      label: shader.metadata?.builtIn
+                        ? `${shader.displayName} (built-in)`
+                        : shader.displayName
+                    }))
+                  ]}
+                  value={shaderOverride ?? SHADER_OVERRIDE_DEFAULT}
+                  onChange={(next) => {
+                    const nextOverride =
+                      next === null || next === SHADER_OVERRIDE_DEFAULT
+                        ? null
+                        : next;
                     onChange({
                       ...layer,
-                      content: createMaterialAppearanceContent(next)
+                      content: createMaterialAppearanceContent(
+                        materialContent.materialDefinitionId,
+                        {
+                          shaderOverrideDefinitionId: nextOverride
+                        }
+                      )
                     });
-                  }
-                }}
-              />
+                  }}
+                  allowDeselect={false}
+                />
+              </Stack>
             );
           }
           if (kind === "shader" && layer.content.kind === "shader") {
             const shaderContent = layer.content;
-            const inlineMaterial = mapAppearanceShaderToMaterial(layer);
             return (
               <Stack gap="xs">
                 <Select
@@ -260,56 +294,34 @@ function AppearanceLayerEditor(
                     }
                   }}
                 />
-                {inlineMaterial ? (
-                  <MaterialParameterEditor
-                    materialDefinition={inlineMaterial}
-                    shaderDefinition={
-                      surfaceShaders.find(
-                        (shader) =>
-                          shader.shaderDefinitionId === shaderContent.shaderDefinitionId
-                      ) ?? null
-                    }
-                    textureDefinitions={textureDefinitions}
-                    onChangeParameterValue={(parameter, value) =>
-                      onChange({
-                        ...layer,
-                        content: createShaderAppearanceContent(
-                          shaderContent.shaderDefinitionId,
-                          value === null
-                            ? Object.fromEntries(
-                                Object.entries(shaderContent.parameterValues).filter(
-                                  ([parameterId]) => parameterId !== parameter.parameterId
-                                )
+                <MaterialParameterEditor
+                  shaderDefinition={
+                    surfaceShaders.find(
+                      (shader) =>
+                        shader.shaderDefinitionId === shaderContent.shaderDefinitionId
+                    ) ?? null
+                  }
+                  parameterValues={shaderContent.parameterValues}
+                  onChangeParameterValue={(parameter, value) =>
+                    onChange({
+                      ...layer,
+                      content: createShaderAppearanceContent(
+                        shaderContent.shaderDefinitionId,
+                        value === null
+                          ? Object.fromEntries(
+                              Object.entries(shaderContent.parameterValues).filter(
+                                ([parameterId]) => parameterId !== parameter.parameterId
                               )
-                            : {
-                                ...shaderContent.parameterValues,
-                                [parameter.parameterId]: value
-                              },
-                          shaderContent.textureBindings
-                        )
-                      })
-                    }
-                    onChangeTextureBinding={(parameter, textureDefinitionId) =>
-                      onChange({
-                        ...layer,
-                        content: createShaderAppearanceContent(
-                          shaderContent.shaderDefinitionId,
-                          shaderContent.parameterValues,
-                          textureDefinitionId
-                            ? {
-                                ...shaderContent.textureBindings,
-                                [parameter.parameterId]: textureDefinitionId
-                              }
-                            : Object.fromEntries(
-                                Object.entries(shaderContent.textureBindings).filter(
-                                  ([parameterId]) => parameterId !== parameter.parameterId
-                                )
-                              )
-                        )
-                      })
-                    }
-                  />
-                ) : null}
+                            )
+                          : {
+                              ...shaderContent.parameterValues,
+                              [parameter.parameterId]: value
+                            },
+                        shaderContent.textureBindings
+                      )
+                    })
+                  }
+                />
               </Stack>
             );
           }
@@ -328,31 +340,22 @@ function ScatterLayerEditor(
 ) {
   const {
     layer,
-    materialDefinitions,
     shaderDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
     rockTypeDefinitions,
     onChange
   } = props;
-  const scatterMaterials = materialDefinitions.filter((material) => {
-    const shader = shaderDefinitions.find(
-      (candidate) => candidate.shaderDefinitionId === material.shaderDefinitionId
-    );
-    return shader?.targetKind === "mesh-surface";
-  });
-  // Wind / deform materials: any material whose shader targets mesh-deform.
-  // These are the author-selectable wind presets (Still Air, Gentle Breeze,
-  // Gusty, etc.). Empty selection = inherit whatever wind the grass/flower/
-  // rock type itself carries by default.
-  const deformMaterials = materialDefinitions.filter((material) => {
-    const shader = shaderDefinitions.find(
-      (candidate) => candidate.shaderDefinitionId === material.shaderDefinitionId
-    );
-    return shader?.targetKind === "mesh-deform";
-  });
+  const scatterShaders = shaderDefinitions.filter(
+    (shader) => shader.targetKind === "mesh-surface"
+  );
+  // Wind / deform presets are shaders now. Empty selection = inherit whatever
+  // wind the grass/flower/rock type itself carries by default.
+  const deformShaders = shaderDefinitions.filter(
+    (shader) => shader.targetKind === "mesh-deform"
+  );
   const deformValue =
-    layer.deform?.kind === "material" ? layer.deform.materialDefinitionId : null;
+    layer.deform?.kind === "shader" ? layer.deform.shaderDefinitionId : null;
   return (
     <Stack gap="sm">
       <KindTabs
@@ -412,18 +415,18 @@ function ScatterLayerEditor(
             />
             <Select
               size="xs"
-              label="Material"
+              label="Shader"
               clearable
               comboboxProps={{ withinPortal: false }}
-              data={scatterMaterials.map((definition) => ({
-                value: definition.definitionId,
+              data={scatterShaders.map((definition) => ({
+                value: definition.shaderDefinitionId,
                 label: definition.displayName
               }))}
-              value={layer.materialDefinitionId}
+              value={layer.shaderDefinitionId}
               onChange={(next) =>
                 onChange({
                   ...layer,
-                  materialDefinitionId: next ?? null
+                  shaderDefinitionId: next ?? null
                 })
               }
             />
@@ -450,18 +453,18 @@ function ScatterLayerEditor(
             />
             <Select
               size="xs"
-              label="Material"
+              label="Shader"
               clearable
               comboboxProps={{ withinPortal: false }}
-              data={scatterMaterials.map((definition) => ({
-                value: definition.definitionId,
+              data={scatterShaders.map((definition) => ({
+                value: definition.shaderDefinitionId,
                 label: definition.displayName
               }))}
-              value={layer.materialDefinitionId}
+              value={layer.shaderDefinitionId}
               onChange={(next) =>
                 onChange({
                   ...layer,
-                  materialDefinitionId: next ?? null
+                  shaderDefinitionId: next ?? null
                 })
               }
             />
@@ -488,18 +491,18 @@ function ScatterLayerEditor(
             />
             <Select
               size="xs"
-              label="Material"
+              label="Shader"
               clearable
               comboboxProps={{ withinPortal: false }}
-              data={scatterMaterials.map((definition) => ({
-                value: definition.definitionId,
+              data={scatterShaders.map((definition) => ({
+                value: definition.shaderDefinitionId,
                 label: definition.displayName
               }))}
-              value={layer.materialDefinitionId}
+              value={layer.shaderDefinitionId}
               onChange={(next) =>
                 onChange({
                   ...layer,
-                  materialDefinitionId: next ?? null
+                  shaderDefinitionId: next ?? null
                 })
               }
             />
@@ -513,8 +516,8 @@ function ScatterLayerEditor(
         clearable
         comboboxProps={{ withinPortal: false }}
         placeholder="Inherit from type"
-        data={deformMaterials.map((definition) => ({
-          value: definition.definitionId,
+        data={deformShaders.map((definition) => ({
+          value: definition.shaderDefinitionId,
           label: definition.displayName
         }))}
         value={deformValue}
@@ -522,7 +525,7 @@ function ScatterLayerEditor(
           onChange({
             ...layer,
             deform: next
-              ? { kind: "material", materialDefinitionId: next }
+              ? { kind: "shader", shaderDefinitionId: next, parameterValues: {}, textureBindings: {} }
               : null
           })
         }

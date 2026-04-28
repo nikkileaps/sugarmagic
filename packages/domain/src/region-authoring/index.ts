@@ -2,7 +2,7 @@ import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
 import type {
   LandscapeSurfaceSlot,
-  ShaderOrMaterial
+  ShaderReference
 } from "../surface";
 import { createDefaultSurface, createInlineSurfaceBinding } from "../surface";
 import type {
@@ -97,8 +97,8 @@ export interface RegionLandscapeState {
   size: number;
   subdivisions: number;
   surfaceSlots: LandscapeSurfaceSlot[];
-  deform: ShaderOrMaterial | null;
-  effect: ShaderOrMaterial | null;
+  deform: ShaderReference | null;
+  effect: ShaderReference | null;
   paintPayload: RegionLandscapePaintPayload | null;
 }
 

@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Stack, Text } from "@mantine/core";
+import { Button, Group, Modal, Stack, Text } from "@mantine/core";
 import type {
   SemanticCommand,
   AssetDefinition,
@@ -51,7 +51,6 @@ import { useSpatialWorkspaceView } from "./spatial";
 import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
-import { useMaterialsWorkspaceView } from "./materials";
 import { useSurfaceLibraryView } from "./surfaces";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
@@ -61,7 +60,6 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
   { id: "surfaces", label: "Surfaces", icon: "🪴" },
-  { id: "materials", label: "Materials", icon: "🧱" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
 
@@ -120,7 +118,7 @@ export interface BuildProductModeViewProps {
     slot: "surface" | "deform" | "effect",
     parameterId: string
   ) => void;
-  onCreateMaterialDefinition: (shaderDefinitionId: string) => MaterialDefinition | null;
+  onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
   onCreateMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
@@ -203,8 +201,6 @@ export function useBuildProductModeView(
     onImportTextureDefinition,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
-    onUpdateMaterialDefinition,
-    onDuplicateMaterialDefinition,
     onRemoveMaterialDefinition,
     onCreateSurfaceDefinition,
     onUpdateSurfaceDefinition,
@@ -228,15 +224,6 @@ export function useBuildProductModeView(
     )
       ? selectedAssetDefinitionIdState
       : assetDefinitions[0]?.definitionId ?? null;
-  const [selectedMaterialDefinitionIdState, setSelectedMaterialDefinitionId] =
-    useState<string | null>(materialDefinitions[0]?.definitionId ?? null);
-  const selectedMaterialDefinitionId =
-    selectedMaterialDefinitionIdState &&
-    materialDefinitions.some(
-      (definition) => definition.definitionId === selectedMaterialDefinitionIdState
-    )
-      ? selectedMaterialDefinitionIdState
-      : materialDefinitions[0]?.definitionId ?? null;
 
   const selectedEnvironment = useMemo(() => {
     if (environmentDefinitions.length === 0) return null;
@@ -465,21 +452,6 @@ export function useBuildProductModeView(
       onNavigateToTarget?.({ kind: "shader-graph", shaderDefinitionId })
   });
 
-  const materialsView = useMaterialsWorkspaceView({
-    materialDefinitions,
-    textureDefinitions,
-    shaderDefinitions,
-    selectedMaterialDefinitionId,
-    onSelectMaterialDefinition: setSelectedMaterialDefinitionId,
-    onCreateMaterialDefinition,
-    onImportPbrMaterial,
-    onImportTextureDefinition,
-    onUpdateMaterialDefinition,
-    onDuplicateMaterialDefinition,
-    onRemoveMaterialDefinition,
-    isMaterialReferenced
-  });
-
   const surfacesView = useSurfaceLibraryView({
     surfaceDefinitions,
     materialDefinitions,
@@ -512,9 +484,7 @@ export function useBuildProductModeView(
               ? environmentView
               : activeBuildKind === "surfaces"
                 ? surfacesView
-                : activeBuildKind === "materials"
-                  ? materialsView
-                  : assetsView;
+                : assetsView;
 
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||
@@ -547,12 +517,16 @@ export function useBuildProductModeView(
 
   return {
     subHeaderPanel: (
-      <BuildSubNav
-        workspaceKinds={buildWorkspaceKinds}
-        activeKindId={activeBuildKind}
-        onSelectKind={(id) => onSelectKind(id as BuildWorkspaceKind)}
-        contextSelector={contextSelector}
-      />
+      <>
+        <Group gap="xs" align="center">
+          <BuildSubNav
+            workspaceKinds={buildWorkspaceKinds}
+            activeKindId={activeBuildKind}
+            onSelectKind={(id) => onSelectKind(id as BuildWorkspaceKind)}
+            contextSelector={contextSelector}
+          />
+        </Group>
+      </>
     ),
     leftPanel:
       activeBuildKind === "layout" ? (

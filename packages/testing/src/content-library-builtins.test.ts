@@ -22,18 +22,12 @@ describe("content-library built-ins", () => {
     const shaderDefinitions = snapshot.shaderDefinitions ?? [];
 
     expect(materialDefinitions.map((definition) => definition.displayName)).toEqual([
-      "Meadow Grass",
-      "Sunlit Lawn",
-      "Autumn Field Grass",
-      "Painterly Grass",
-      "Grass Surface 2",
-      "Grass Surface 3",
-      "Grass Surface 4",
-      "Grass Surface 6",
-      "Still Air",
-      "Gentle Breeze",
-      "Meadow Breeze",
-      "Gusty"
+      "Wood",
+      "Metal",
+      "Stone",
+      "Plaster",
+      "Bark",
+      "Plain Painted"
     ]);
     expect(grassTypeDefinitions.map((definition) => definition.displayName)).toEqual([
       "Short Lawn",
@@ -83,7 +77,8 @@ describe("content-library built-ins", () => {
       )
     ).toMatchObject({
       kind: "scatter",
-      materialDefinitionId: "little-world:material:grass-surface-4"
+      shaderDefinitionId: "little-world:shader:painterly-grass",
+      materialDefinitionId: null
     });
   });
 
@@ -100,7 +95,7 @@ describe("content-library built-ins", () => {
       "little-world"
     );
 
-    expect(normalized.materialDefinitions).toHaveLength(12);
+    expect(normalized.materialDefinitions).toHaveLength(6);
     expect(normalized.grassTypeDefinitions).toHaveLength(5);
     expect(normalized.flowerTypeDefinitions).toHaveLength(3);
     expect(normalized.rockTypeDefinitions).toHaveLength(1);

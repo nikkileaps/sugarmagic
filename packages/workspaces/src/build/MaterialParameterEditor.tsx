@@ -1,71 +1,44 @@
 /**
  * MaterialParameterEditor
  *
- * Renders the parameter and texture-binding controls for a single material
- * against its parent shader graph. This keeps MaterialDefinition editing in
- * one reusable place so the Build Material Library stays the single UI
- * enforcer for "shader graph + parameter snapshot" authoring.
+ * Renders parameter controls (color/float/vec2) for a shader graph's
+ * authored parameters. Used by shader-backed surface layers. Texture
+ * inputs are NOT edited here — texture parameters bake into the shader
+ * definition itself (set via the shader inspector's `Texture` parameter
+ * default). To customize a shader's textures, fork the shader in
+ * Render > Shaders and edit the parameter defaults there.
  */
 
 import { Fragment } from "react";
-import { Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Group, NumberInput, Stack, Text } from "@mantine/core";
 import type {
-  MaterialDefinition,
   ShaderGraphDocument,
   ShaderParameter,
-  ShaderParameterValue,
-  TextureDefinition
+  ShaderParameterValue
 } from "@sugarmagic/domain";
 import { ColorField, HDRColorField } from "@sugarmagic/ui";
 
-function parameterValueForMaterial(
-  materialDefinition: MaterialDefinition,
+function parameterValueForShader(
+  parameterValues: Record<string, unknown>,
   parameter: ShaderParameter
 ): ShaderParameterValue {
-  const overrideValue = materialDefinition.parameterValues[parameter.parameterId];
+  const overrideValue = parameterValues[parameter.parameterId];
   return (overrideValue as ShaderParameterValue | undefined) ?? parameter.defaultValue;
 }
 
-function textureOptionLabel(definition: TextureDefinition): string {
-  return `${definition.displayName} (${definition.packing}, ${definition.colorSpace})`;
-}
-
-function textureMatchesRole(
-  definition: TextureDefinition,
-  role: ShaderParameter["textureRole"]
-): boolean {
-  if (!role) {
-    return true;
-  }
-  if (role === "color") {
-    return definition.colorSpace === "srgb";
-  }
-  if (role === "normal") {
-    return definition.packing === "normal";
-  }
-  return definition.colorSpace === "linear";
-}
-
 export interface MaterialParameterEditorProps {
-  materialDefinition: MaterialDefinition;
   shaderDefinition: ShaderGraphDocument | null;
-  textureDefinitions: TextureDefinition[];
+  parameterValues: Record<string, unknown>;
   onChangeParameterValue: (
     parameter: ShaderParameter,
     value: ShaderParameterValue | null
   ) => void;
-  onChangeTextureBinding: (
-    parameter: ShaderParameter,
-    textureDefinitionId: string | null
-  ) => void;
 }
 
 export function MaterialParameterEditor({
-  materialDefinition,
   shaderDefinition,
-  textureDefinitions,
-  onChangeParameterValue,
-  onChangeTextureBinding
+  parameterValues,
+  onChangeParameterValue
 }: MaterialParameterEditorProps) {
   if (!shaderDefinition) {
     return (
@@ -75,71 +48,22 @@ export function MaterialParameterEditor({
     );
   }
 
-  if (shaderDefinition.parameters.length === 0) {
+  const editableParameters = shaderDefinition.parameters.filter(
+    (parameter) => parameter.dataType !== "texture2d"
+  );
+
+  if (editableParameters.length === 0) {
     return (
       <Text size="xs" c="var(--sm-color-overlay0)">
-        The parent shader has no authored parameters.
+        The parent shader has no per-use editable parameters.
       </Text>
     );
   }
 
   return (
     <Stack gap="xs">
-      {shaderDefinition.parameters.map((parameter) => {
-        const value = parameterValueForMaterial(materialDefinition, parameter);
-
-        if (parameter.dataType === "texture2d") {
-          const compatibleTextures = textureDefinitions.filter((definition) =>
-            textureMatchesRole(definition, parameter.textureRole)
-          );
-
-          return (
-            <Stack key={parameter.parameterId} gap={4}>
-              <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-                {parameter.displayName}
-              </Text>
-              <Select
-                size="xs"
-                placeholder="Select texture..."
-                data={[
-                  { value: "__none__", label: "No Texture" },
-                  ...compatibleTextures.map((definition) => ({
-                    value: definition.definitionId,
-                    label: textureOptionLabel(definition)
-                  }))
-                ]}
-                value={
-                  materialDefinition.textureBindings[parameter.parameterId] ?? "__none__"
-                }
-                onChange={(next) =>
-                  onChangeTextureBinding(
-                    parameter,
-                    next && next !== "__none__" ? next : null
-                  )
-                }
-                styles={{
-                  input: {
-                    background: "var(--sm-color-base)",
-                    borderColor: "var(--sm-panel-border)",
-                    color: "var(--sm-color-text)"
-                  },
-                  dropdown: {
-                    background: "var(--sm-color-surface1)",
-                    borderColor: "var(--sm-panel-border)"
-                  },
-                  option: {
-                    color: "var(--sm-color-text)"
-                  }
-                }}
-              />
-              {parameter.textureRole ? (
-                <Text size="xs" c="var(--sm-color-overlay0)">
-                  Expected texture role: {parameter.textureRole}
-                </Text>
-              ) : null}
-            </Stack>
-          );
-        }
+      {editableParameters.map((parameter) => {
+        const value = parameterValueForShader(parameterValues, parameter);
 
         if (parameter.dataType === "color" && Array.isArray(value) && value.length === 3) {
           const field =

@@ -189,16 +189,42 @@ describe("asset management loop", () => {
       ]
     });
 
-    expect(getAllAssetDefinitions(session)[0]?.surfaceSlots).toEqual([
+    expect(getAllAssetDefinitions(session)[0]?.surfaceSlots).toMatchObject([
       {
         slotName: "Roof",
         slotIndex: 0,
-        surface: createMaterialSurfaceBinding("wordlark:material:tile")
+        surface: {
+          kind: "inline",
+          surface: {
+            layers: [
+              {
+                kind: "appearance",
+                content: {
+                  kind: "material",
+                  materialDefinitionId: "wordlark:material:tile"
+                }
+              }
+            ]
+          }
+        }
       },
       {
         slotName: "Wall",
         slotIndex: 1,
-        surface: createMaterialSurfaceBinding("wordlark:material:brick")
+        surface: {
+          kind: "inline",
+          surface: {
+            layers: [
+              {
+                kind: "appearance",
+                content: {
+                  kind: "material",
+                  materialDefinitionId: "wordlark:material:brick"
+                }
+              }
+            ]
+          }
+        }
       },
       {
         slotName: "Trim",

@@ -17,6 +17,7 @@ import {
   createScatterLayer,
   createSurface,
   createDefaultStandardPbrShaderGraph,
+  createDefaultMaterialPbr,
   createEmptyContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import {
@@ -75,16 +76,14 @@ function makeContentLibrary(): ContentLibrarySnapshot {
         definitionId: "wordlark:material:brick",
         definitionKind: "material",
         displayName: "Brick",
-        shaderDefinitionId: standardPbr.shaderDefinitionId,
-        parameterValues: {
+        pbr: createDefaultMaterialPbr({
           tiling: [3, 4],
-          roughness_scale: 0.6
-        },
-        textureBindings: {
-          basecolor_texture: "wordlark:texture:brick-base",
-          normal_texture: "wordlark:texture:brick-normal",
-          orm_texture: "wordlark:texture:brick-orm"
-        }
+          roughness: 0.6,
+          baseColorMap: "wordlark:texture:brick-base",
+          normalMap: "wordlark:texture:brick-normal",
+          ormMap: "wordlark:texture:brick-orm"
+        }),
+        shaderDefinitionId: null
       }
     ]
   };

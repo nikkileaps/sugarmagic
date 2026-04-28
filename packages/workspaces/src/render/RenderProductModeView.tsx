@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Group,
   Menu,
@@ -27,10 +28,12 @@ import type {
   ShaderNodeInstance,
   ShaderParameter,
   ShaderParameterValue,
-  ShaderTargetKind
+  ShaderTargetKind,
+  TextureDefinition
 } from "@sugarmagic/domain";
 import {
   createDefaultShaderGraphDocument,
+  duplicateShaderGraphDocument,
   getShaderNodeDefinition,
   listShaderNodeDefinitions
 } from "@sugarmagic/domain";
@@ -179,6 +182,7 @@ export interface RenderProductModeViewProps {
   activeRenderKind: RenderWorkspaceKind;
   gameProjectId: string | null;
   shaderDefinitions: ShaderGraphDocument[];
+  textureDefinitions: TextureDefinition[];
   onSelectKind: (kind: RenderWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
   navigationTarget?: WorkspaceNavigationTarget | null;
@@ -200,6 +204,7 @@ export function useRenderProductModeView(
     activeRenderKind,
     gameProjectId,
     shaderDefinitions,
+    textureDefinitions,
     onSelectKind,
     onCommand,
     navigationTarget,
@@ -209,6 +214,11 @@ export function useRenderProductModeView(
     shaderDefinitions[0]?.shaderDefinitionId ?? null
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [shaderContextMenu, setShaderContextMenu] = useState<{
+    x: number;
+    y: number;
+    shaderDefinitionId: string;
+  } | null>(null);
   const [nodePaletteOpen, setNodePaletteOpen] = useState(false);
   const [graphContainerElement, setGraphContainerElement] =
     useState<HTMLDivElement | null>(null);
@@ -512,6 +522,63 @@ export function useRenderProductModeView(
     [gameProjectId, onCommand]
   );
 
+  const duplicateShaderById = useCallback(
+    (sourceShaderId: string) => {
+      if (!gameProjectId) {
+        return;
+      }
+      const source = shaderDefinitions.find(
+        (definition) => definition.shaderDefinitionId === sourceShaderId
+      );
+      if (!source) {
+        return;
+      }
+      const definition = duplicateShaderGraphDocument(source, gameProjectId);
+      onCommand({
+        kind: "CreateShaderGraph",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definition.shaderDefinitionId
+        },
+        subject: {
+          subjectKind: "shader-definition",
+          subjectId: definition.shaderDefinitionId
+        },
+        payload: {
+          definition,
+          insertAfterShaderDefinitionId: source.shaderDefinitionId
+        }
+      });
+      setSelectedShaderId(definition.shaderDefinitionId);
+      setSelectedNodeId(null);
+    },
+    [gameProjectId, onCommand, shaderDefinitions]
+  );
+
+  const deleteShaderById = useCallback(
+    (shaderDefinitionId: string) => {
+      onCommand({
+        kind: "DeleteShaderGraph",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: shaderDefinitionId
+        },
+        subject: {
+          subjectKind: "shader-definition",
+          subjectId: shaderDefinitionId
+        },
+        payload: {
+          shaderDefinitionId
+        }
+      });
+      if (selectedShaderId === shaderDefinitionId) {
+        setSelectedShaderId(null);
+        setSelectedNodeId(null);
+      }
+    },
+    [onCommand, selectedShaderId]
+  );
+
   const addNodeDefinition = useCallback(
     (definition: ShaderNodeDefinition) => {
       if (!selectedShader) {
@@ -582,7 +649,7 @@ export function useRenderProductModeView(
             </Menu>
           }
         >
-          <Stack gap="xs">
+          <ScrollArea h="calc(100vh - 220px)" type="auto">
             <Stack gap={4}>
               {shaderDefinitions.map((definition) => {
                 const isSelected = definition.shaderDefinitionId === selectedShader?.shaderDefinitionId;
@@ -598,6 +665,16 @@ export function useRenderProductModeView(
                       });
                       setSelectedShaderId(definition.shaderDefinitionId);
                       setSelectedNodeId(null);
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setSelectedShaderId(definition.shaderDefinitionId);
+                      setSelectedNodeId(null);
+                      setShaderContextMenu({
+                        x: event.clientX,
+                        y: event.clientY,
+                        shaderDefinitionId: definition.shaderDefinitionId
+                      });
                     }}
                     styles={{
                       root: {
@@ -632,8 +709,51 @@ export function useRenderProductModeView(
                 );
               })}
             </Stack>
-          </Stack>
+          </ScrollArea>
         </PanelSection>
+        <Menu
+          opened={Boolean(shaderContextMenu)}
+          onChange={(opened) => {
+            if (!opened) setShaderContextMenu(null);
+          }}
+          withinPortal
+          closeOnItemClick
+          closeOnClickOutside
+          position="bottom-start"
+          offset={4}
+          shadow="md"
+        >
+          <Menu.Target>
+            <Box
+              style={{
+                position: "fixed",
+                left: shaderContextMenu?.x ?? -9999,
+                top: shaderContextMenu?.y ?? -9999,
+                width: 1,
+                height: 1
+              }}
+            />
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item
+              onClick={() => {
+                if (!shaderContextMenu) return;
+                duplicateShaderById(shaderContextMenu.shaderDefinitionId);
+              }}
+            >
+              Duplicate
+            </Menu.Item>
+            <Menu.Item
+              color="red"
+              onClick={() => {
+                if (!shaderContextMenu) return;
+                deleteShaderById(shaderContextMenu.shaderDefinitionId);
+              }}
+            >
+              Delete
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
       </>
     ),
     rightPanel: (
@@ -642,6 +762,7 @@ export function useRenderProductModeView(
           <ShaderInspector
             shader={selectedShader}
             selectedNode={selectedNode}
+            textureDefinitions={textureDefinitions}
             onCommand={onCommand}
             onDeleteSelectedNode={() => {
               if (!selectedNode) {
@@ -773,10 +894,11 @@ export function useRenderProductModeView(
 function ShaderInspector(props: {
   shader: ShaderGraphDocument;
   selectedNode: ShaderNodeInstance | null;
+  textureDefinitions: TextureDefinition[];
   onCommand: (command: SemanticCommand) => void;
   onDeleteSelectedNode: () => void;
 }) {
-  const { shader, selectedNode, onCommand, onDeleteSelectedNode } = props;
+  const { shader, selectedNode, textureDefinitions, onCommand, onDeleteSelectedNode } = props;
   const [draftName, setDraftName] = useState(shader.displayName);
 
   useEffect(() => {
@@ -860,6 +982,7 @@ function ShaderInspector(props: {
               key={parameter.parameterId}
               shaderId={shader.shaderDefinitionId}
               parameter={parameter}
+              textureDefinitions={textureDefinitions}
               onCommand={onCommand}
             />
           ))
@@ -889,9 +1012,11 @@ function ShaderInspector(props: {
 function ShaderParameterEditor(props: {
   shaderId: string;
   parameter: ShaderParameter;
+  textureDefinitions: TextureDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }) {
-  const { shaderId, parameter, onCommand } = props;
+  const { shaderId, parameter, textureDefinitions, onCommand } = props;
+  const isTexture = parameter.dataType === "texture2d";
   return (
     <Stack
       gap={6}
@@ -927,7 +1052,8 @@ function ShaderParameterEditor(props: {
           { value: "vec3", label: "Vec3" },
           { value: "vec4", label: "Vec4" },
           { value: "color", label: "Color" },
-          { value: "bool", label: "Bool" }
+          { value: "bool", label: "Bool" },
+          { value: "texture2d", label: "Texture" }
         ]}
         onChange={(value) => {
           if (!value) return;
@@ -946,26 +1072,59 @@ function ShaderParameterEditor(props: {
           });
         }}
       />
-      <TextInput
-        label="Default"
-        size="xs"
-        value={formatParameterValue(parameter.defaultValue)}
-        onChange={(event) => {
-          const nextValue = parseParameterValue(parameter.dataType, event.currentTarget.value);
-          if (nextValue === null) {
-            return;
+      {isTexture ? (
+        <Select
+          label="Texture"
+          size="xs"
+          placeholder="Select texture..."
+          data={[
+            { value: "__none__", label: "(none)" },
+            ...textureDefinitions.map((definition) => ({
+              value: definition.definitionId,
+              label: definition.displayName
+            }))
+          ]}
+          value={
+            typeof parameter.defaultValue === "string" && parameter.defaultValue.length > 0
+              ? parameter.defaultValue
+              : "__none__"
           }
-          onCommand({
-            kind: "UpdateShaderParameter",
-            target: { aggregateKind: "content-definition", aggregateId: shaderId },
-            subject: { subjectKind: "shader-definition", subjectId: shaderId },
-            payload: {
-              shaderDefinitionId: shaderId,
-              parameter: { ...parameter, defaultValue: nextValue }
+          onChange={(value) => {
+            const nextValue = value === null || value === "__none__" ? null : value;
+            onCommand({
+              kind: "UpdateShaderParameter",
+              target: { aggregateKind: "content-definition", aggregateId: shaderId },
+              subject: { subjectKind: "shader-definition", subjectId: shaderId },
+              payload: {
+                shaderDefinitionId: shaderId,
+                parameter: { ...parameter, defaultValue: nextValue }
+              }
+            });
+          }}
+          allowDeselect={false}
+        />
+      ) : (
+        <TextInput
+          label="Default"
+          size="xs"
+          value={formatParameterValue(parameter.defaultValue)}
+          onChange={(event) => {
+            const nextValue = parseParameterValue(parameter.dataType, event.currentTarget.value);
+            if (nextValue === null) {
+              return;
             }
-          });
-        }}
-      />
+            onCommand({
+              kind: "UpdateShaderParameter",
+              target: { aggregateKind: "content-definition", aggregateId: shaderId },
+              subject: { subjectKind: "shader-definition", subjectId: shaderId },
+              payload: {
+                shaderDefinitionId: shaderId,
+                parameter: { ...parameter, defaultValue: nextValue }
+              }
+            });
+          }}
+        />
+      )}
       {parameter.dataType === "color" ? (
         <ColorSettingInput
           label="Pick Color"
@@ -1153,7 +1312,7 @@ function defaultValueForDataType(dataType: ShaderParameter["dataType"]): ShaderP
     case "bool":
       return false;
     case "texture2d":
-      return "";
+      return null;
     default:
       return 0;
   }

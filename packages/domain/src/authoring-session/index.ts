@@ -449,14 +449,25 @@ function applyCreateShaderGraphCommand(
     command.payload.definition.shaderDefinitionId
   ]);
 
+  const insertAfterId = command.payload.insertAfterShaderDefinitionId;
+  const existing = session.contentLibrary.shaderDefinitions;
+  const insertIndex = insertAfterId
+    ? existing.findIndex((d) => d.shaderDefinitionId === insertAfterId)
+    : -1;
+  const nextShaderDefinitions =
+    insertIndex >= 0
+      ? [
+          ...existing.slice(0, insertIndex + 1),
+          command.payload.definition,
+          ...existing.slice(insertIndex + 1)
+        ]
+      : [...existing, command.payload.definition];
+
   return {
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      shaderDefinitions: [
-        ...session.contentLibrary.shaderDefinitions,
-        command.payload.definition
-      ]
+      shaderDefinitions: nextShaderDefinitions
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2126,11 +2137,10 @@ export function updateMaterialDefinitionInSession(
 
 /**
  * Duplicate an existing MaterialDefinition as a new user-owned material.
- * Creates a fresh `definitionId` via createUuid, copies shader reference,
- * parameter values, and texture bindings. Strips any `metadata.builtIn`
- * marker so the copy is treated as authored content that can be freely
- * edited and persisted. Adds a " (Copy)" suffix to the display name
- * unless caller provides a custom one.
+ * Creates a fresh `definitionId` via createUuid and copies its PBR payload.
+ * Strips any `metadata.builtIn` marker so the copy is treated as authored
+ * content that can be freely edited and persisted. Adds a " (Copy)" suffix
+ * to the display name unless caller provides a custom one.
  *
  * Used by the "Duplicate to edit" flow when the user tries to edit a
  * built-in material — we fork a local copy rather than mutating the
@@ -2157,9 +2167,11 @@ export function duplicateMaterialDefinitionInSession(
     definitionId: newDefinitionId,
     definitionKind: "material",
     displayName,
-    shaderDefinitionId: source.shaderDefinitionId,
-    parameterValues: { ...source.parameterValues },
-    textureBindings: { ...source.textureBindings }
+    pbr: {
+      ...source.pbr,
+      tiling: [...source.pbr.tiling]
+    },
+    shaderDefinitionId: source.shaderDefinitionId
     // metadata intentionally omitted so the copy is user-owned.
   };
   return {

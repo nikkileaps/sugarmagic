@@ -499,7 +499,6 @@ export async function importSourceAsset(
   const embeddedFoliageImport =
     analysis.contract === "foilagemaker-foliage" && glbChunks
       ? deriveFoliageEmbeddedMaterialImport({
-          projectId: request.projectId,
           assetStem: safeStem,
           assetDisplayName: stem,
           authoredAssetsPath: request.descriptor.authoredAssetsPath,
