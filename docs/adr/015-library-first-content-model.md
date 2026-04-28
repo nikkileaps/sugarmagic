@@ -76,6 +76,26 @@ to `Render > Shaders` with the selected shader pre-loaded via the existing
 pattern. Authoring shader graphs is a workspace activity (it needs canvas
 space); the library popover is browse-only for shaders.
 
+### Shaders are libraries-edited-in-app
+
+Shaders are the asymmetric library kind. Materials, Textures, and Assets
+are conceptually authored in external tools (Substance Designer, Photoshop,
+Blender) and imported as project content; sugarmagic just references them.
+Shaders have no external editor of equivalent expressiveness, so they are
+authored *inside* sugarmagic via `Render > Shaders`. They still behave as
+a library in every other respect — project-scoped, fork-to-edit (right-
+click → Duplicate on a built-in produces an editable user copy via the
+`CreateShaderGraph` command with `insertAfterShaderDefinitionId` so the
+fork lands next to its source), built-ins are read-only — but the
+authoring surface is in-app rather than another application. A separate
+"sugarshader" companion app was considered and explicitly deferred; for
+now the in-workspace graph editor is the path. Texture inputs to a shader
+bake into the shader's `texture2d` parameter `defaultValue` (set via the
+shader inspector). The runtime resolver honors that default as the
+texture binding when no use-site binding is provided, so authors customize
+a shader's textures by forking the shader and editing the parameter
+defaults — not by per-use binding overrides.
+
 ## Consequences
 
 - Runtime-core remains the single enforcer that resolves PBR materials into
@@ -132,6 +152,8 @@ from recurring in future epics.
   parameter editing (color picker, sliders for roughness/metallic,
   texture-map pickers) is not implemented. Authors who want to tweak a
   PBR material currently do so by importing a new variant.
-- **Duplicate-to-edit affordance for built-in materials/shaders**.
-  V1 popover has no "Duplicate to Project Library" button on built-ins.
-  Authors who want to derive from a built-in re-create from scratch.
+- **Duplicate-to-edit affordance for built-in materials**.
+  V1 Materials popover has no "Duplicate to Project Library" button on
+  built-ins. Authors who want to derive from a built-in re-create from
+  scratch. (Shaders DO have right-click → Duplicate via the Render >
+  Shaders list.)

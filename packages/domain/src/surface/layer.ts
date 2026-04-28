@@ -29,19 +29,12 @@ export type AppearanceContent =
        * shaderDefinitionId). When set, this layer renders the
        * material's PBR data through THIS shader instead, with
        * material PBR fields auto-bound to shader parameters by
-       * name convention. Same trait pattern as
-       * AssetSurfaceSlot.shaderOverride for deform.
+       * name convention. To customize a shader's other parameters
+       * (warmColor, rimStrength, texture inputs, etc.), fork the
+       * shader in Render > Shaders and edit the parameter defaults
+       * there — there is no per-use parameter-override mechanism.
        */
       shaderOverrideDefinitionId?: string | null;
-      /**
-       * Per-use shader-parameter overrides. For shader parameters
-       * that DON'T match a material PBR field by convention
-       * (warmColor, rimStrength, etc.), authors can set values
-       * here. Material PBR fields still auto-bind to matching
-       * shader parameters; these overrides take precedence even
-       * over the auto-bind.
-       */
-      parameterOverrides?: Record<string, unknown>;
     }
   | {
       kind: "shader";

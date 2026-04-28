@@ -301,8 +301,7 @@ export function resolveMaterialEffectiveShaderBinding(
   diagnostics: ShaderBindingResolutionDiagnostic[] = [],
   textureBindingOverrides: Record<string, string> = {},
   slot: ShaderSlotKind = "surface",
-  shaderOverrideDefinitionId: string | null = null,
-  layerParameterOverrides: Record<string, unknown> = {}
+  shaderOverrideDefinitionId: string | null = null
 ): EffectiveShaderBinding | null {
   return resolveMaterialSurfaceBinding(
     contentLibrary,
@@ -311,8 +310,7 @@ export function resolveMaterialEffectiveShaderBinding(
     diagnostics,
     textureBindingOverrides,
     slot,
-    shaderOverrideDefinitionId,
-    layerParameterOverrides
+    shaderOverrideDefinitionId
   );
 }
 
@@ -510,8 +508,7 @@ export function resolveAppearanceLayer(
         [],
         textureBindingOverrides,
         materialSlot,
-        surface.shaderOverrideDefinitionId ?? null,
-        surface.parameterOverrides ?? {}
+        surface.shaderOverrideDefinitionId ?? null
       ),
       expectedTargetKind
     );
@@ -1020,8 +1017,7 @@ function resolveMaterialSurfaceBinding(
   diagnostics: ShaderBindingResolutionDiagnostic[],
   textureBindingOverrides: Record<string, string> = {},
   slot: ShaderSlotKind = "surface",
-  shaderOverrideDefinitionId: string | null = null,
-  layerParameterOverrides: Record<string, unknown> = {}
+  shaderOverrideDefinitionId: string | null = null
 ): EffectiveShaderBinding | null {
   const materialDefinition = getMaterialDefinition(contentLibrary, materialDefinitionId);
   if (!materialDefinition) {
@@ -1081,13 +1077,11 @@ function resolveMaterialSurfaceBinding(
       parameterOverrides,
       diagnostics,
       {
-        // Auto-bound material PBR fields are the BASE; per-layer
-        // explicit parameter overrides take precedence; explicit
-        // textureBindingOverrides also take precedence on textures.
-        baseParameterValues: {
-          ...conventionBinding.parameterValues,
-          ...layerParameterOverrides
-        },
+        // Auto-bound material PBR fields ARE the base values for the
+        // shader. To customize anything else (warmColor, rim, etc. or
+        // texture inputs), fork the shader and edit the parameter
+        // defaults — there's no per-use parameter-override path.
+        baseParameterValues: conventionBinding.parameterValues,
         textureBindings: {
           ...conventionBinding.textureBindings,
           ...textureBindingOverrides
@@ -1120,10 +1114,7 @@ function resolveMaterialSurfaceBinding(
     parameterOverrides,
     diagnostics,
     {
-      baseParameterValues: {
-        ...materialBinding.parameterValues,
-        ...layerParameterOverrides
-      },
+      baseParameterValues: materialBinding.parameterValues,
       textureBindings: {
         ...materialBinding.textureBindings,
         ...textureBindingOverrides

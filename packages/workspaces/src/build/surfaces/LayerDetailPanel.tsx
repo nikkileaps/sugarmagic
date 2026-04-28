@@ -232,8 +232,7 @@ function AppearanceLayerEditor(
                       onChange({
                         ...layer,
                         content: createMaterialAppearanceContent(next, {
-                          shaderOverrideDefinitionId: shaderOverride,
-                          parameterOverrides: materialContent.parameterOverrides
+                          shaderOverrideDefinitionId: shaderOverride
                         })
                       });
                     }
@@ -263,8 +262,7 @@ function AppearanceLayerEditor(
                       content: createMaterialAppearanceContent(
                         materialContent.materialDefinitionId,
                         {
-                          shaderOverrideDefinitionId: nextOverride,
-                          parameterOverrides: materialContent.parameterOverrides
+                          shaderOverrideDefinitionId: nextOverride
                         }
                       )
                     });
@@ -304,8 +302,6 @@ function AppearanceLayerEditor(
                     ) ?? null
                   }
                   parameterValues={shaderContent.parameterValues}
-                  textureBindings={shaderContent.textureBindings}
-                  textureDefinitions={textureDefinitions}
                   onChangeParameterValue={(parameter, value) =>
                     onChange({
                       ...layer,
@@ -322,25 +318,6 @@ function AppearanceLayerEditor(
                               [parameter.parameterId]: value
                             },
                         shaderContent.textureBindings
-                      )
-                    })
-                  }
-                  onChangeTextureBinding={(parameter, textureDefinitionId) =>
-                    onChange({
-                      ...layer,
-                      content: createShaderAppearanceContent(
-                        shaderContent.shaderDefinitionId,
-                        shaderContent.parameterValues,
-                        textureDefinitionId
-                          ? {
-                              ...shaderContent.textureBindings,
-                              [parameter.parameterId]: textureDefinitionId
-                            }
-                          : Object.fromEntries(
-                              Object.entries(shaderContent.textureBindings).filter(
-                                ([parameterId]) => parameterId !== parameter.parameterId
-                              )
-                            )
                       )
                     })
                   }
