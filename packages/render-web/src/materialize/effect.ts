@@ -20,8 +20,10 @@ import {
   reinhardToneMapping,
   sin,
   smoothstep,
+  step,
   vec2,
-  vec3
+  vec3,
+  viewportLinearDepth
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { materializePerlinLikeNoise2d } from "./noise";
@@ -200,10 +202,33 @@ export function materializeEffectOp(
       const threshold = float(1).sub(coverage as never);
       const lowEdge = (threshold as { sub: (other: unknown) => unknown }).sub(softness as never);
       const highEdge = (threshold as { add: (other: unknown) => unknown }).add(softness as never);
-      const cloudMask = smoothstep(
+      const cloudMaskRaw = smoothstep(
         lowEdge as never,
         highEdge as never,
         cloudRaw as never
+      );
+
+      // Sky-pixel gate. For pixels where nothing was drawn (sky), the
+      // depth buffer holds its cleared maximum, which linearizes to
+      // ~cameraFar. The reconstructed worldPos at the far plane changes
+      // by huge amounts per screen pixel, so noise samples land at wildly
+      // different world XZ positions and produce visible vertical bands
+      // across the sky. Multiplying the cloud mask by `(1 - isSky)`
+      // suppresses cloud shadows on those pixels — they're sky, they
+      // shouldn't be shadowed by clouds anyway.
+      //
+      // We use a hardcoded distance threshold (300 world units) instead
+      // of `cameraFar - epsilon`. The TSL `cameraFar` uniform has been
+      // observed to bind unreliably inside the post-process pass — when
+      // it returned 0, the threshold collapsed and EVERY pixel got
+      // classified as sky (no shadows anywhere). 300 units is well
+      // beyond typical Sugarmagic scene geometry and well short of the
+      // default cameraFar=2000 sky depth, so the gate stays robust.
+      const sceneDepth = context.builtinSceneDepthNode ?? viewportLinearDepth;
+      const isSky = step(float(300), sceneDepth as never);
+      const geometryMask = float(1).sub(isSky as never);
+      const cloudMask = (cloudMaskRaw as { mul: (other: unknown) => unknown }).mul(
+        geometryMask as never
       );
 
       // Per-channel shadow multiplier:
