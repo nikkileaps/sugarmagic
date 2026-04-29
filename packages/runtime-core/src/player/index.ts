@@ -218,20 +218,6 @@ export function createPlayerVisualController(
       action.reset();
       action.play();
       currentAction = action;
-      // eslint-disable-next-line no-console
-      console.warn("[player-anim-debug] switched to slot", {
-        slot,
-        clipName: currentClips.get(slot)?.name,
-        actionEnabled: action.enabled,
-        actionWeight: action.getEffectiveWeight(),
-        mixerTimeScale: currentMixer.timeScale
-      });
-    } else {
-      // eslint-disable-next-line no-console
-      console.warn("[player-anim-debug] requested slot not in clips", {
-        slot,
-        availableSlots: Array.from(currentClips.keys())
-      });
     }
   }
 
@@ -369,24 +355,6 @@ export function createPlayerVisualController(
         currentRoot = modelRoot;
         root.add(modelRoot);
         currentClips = animationClips;
-
-        // eslint-disable-next-line no-console
-        console.warn("[player-anim-debug] model loaded", {
-          clonedSceneName: clonedScene.name,
-          modelBoneNames: (() => {
-            const names: string[] = [];
-            clonedScene.traverse((child) => {
-              if ((child as THREE.Bone).isBone) names.push(child.name);
-            });
-            return names.slice(0, 10);
-          })(),
-          clipTracksBySlot: Array.from(animationClips.entries()).map(
-            ([slot, clip]) => [
-              slot,
-              clip.tracks.slice(0, 5).map((t) => t.name)
-            ]
-          )
-        });
 
         // Create the mixer whenever ANY clips loaded. The host controls
         // which slot plays via setActiveAnimationSlot each frame, so we
