@@ -16,7 +16,7 @@
  * old viewport did.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -110,6 +110,11 @@ export function CharacterPreview({
   const requestedModelIdRef = useRef<string | null>(null);
   const isPlayingRef = useRef<boolean>(isPlaying);
   isPlayingRef.current = isPlaying;
+  // Mirror the active slot in a ref so the async clip-load `.then`
+  // can read the CURRENT slot (not the one captured when the load
+  // started) without depending on activeSlot in its effect deps.
+  const activeSlotRef = useRef<string | null>(activeSlot);
+  activeSlotRef.current = activeSlot;
 
   // One-time scene + lighting + render-loop setup.
   useEffect(() => {
@@ -269,10 +274,36 @@ export function CharacterPreview({
     });
   }, [model, targetHeight, assetSources]);
 
+  // Pure helper: stop the currently-playing action (if any) and start
+  // the action for `slot` from the clip cache. No-op when the cache
+  // doesn't have a clip for that slot — caller doesn't need to know
+  // whether clips have finished loading. Used both by the slot-change
+  // effect AND by the clip-load effect once the cache populates.
+  const applyActiveSlot = useCallback((slot: string | null) => {
+    const mixer = mixerRef.current;
+    if (!mixer) return;
+    const previous = currentActionRef.current;
+    if (previous) {
+      previous.stop();
+      currentActionRef.current = null;
+    }
+    if (!slot) return;
+    const clip = clipCacheRef.current.get(slot);
+    if (!clip) return;
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.play();
+    currentActionRef.current = action;
+  }, []);
+
   // Load the bound animation clips for the currently-loaded model.
   // Re-runs when the slot bindings or the model identity change. We
   // load ALL bound clips up front so slot-swap is a cheap action
-  // change rather than a fresh GLB parse.
+  // change rather than a fresh GLB parse. After the cache populates,
+  // apply the currently-requested slot so the user sees the
+  // animation start playing as soon as the clips arrive — without
+  // this, the slot-change effect ran first against an empty cache
+  // and the model stayed in T-pose forever.
   useEffect(() => {
     const mixer = mixerRef.current;
     if (!mixer || !model) return;
@@ -298,38 +329,32 @@ export function CharacterPreview({
         if (result) cache.set(result.slotValue, result.clip);
       }
       clipCacheRef.current = cache;
+      applyActiveSlot(activeSlotRef.current);
     });
 
     return () => {
       cancelled = true;
     };
     // model.definitionId triggers re-bind; slot identity is captured by
-    // serializing the bound animation ids.
+    // serializing the bound animation ids. activeSlot is read from a
+    // ref so the clip-load isn't re-run on every slot change — the
+    // slot-change effect below handles slot swaps within the cache.
   }, [
     model?.definitionId,
     slots
       .map((s) => `${s.value}:${s.animation?.definitionId ?? ""}`)
       .join("|"),
-    assetSources
+    assetSources,
+    applyActiveSlot
   ]);
 
-  // Switch the playing action when the active slot changes.
+  // Switch the playing action when the active slot changes (after the
+  // clip cache has already populated). Skipped on first paint when the
+  // cache is empty; the clip-load effect above re-applies once it's
+  // ready.
   useEffect(() => {
-    const mixer = mixerRef.current;
-    if (!mixer) return;
-    const previous = currentActionRef.current;
-    if (previous) {
-      previous.stop();
-      currentActionRef.current = null;
-    }
-    if (!activeSlot) return;
-    const clip = clipCacheRef.current.get(activeSlot);
-    if (!clip) return;
-    const action = mixer.clipAction(clip);
-    action.reset();
-    action.play();
-    currentActionRef.current = action;
-  }, [activeSlot, model?.definitionId]);
+    applyActiveSlot(activeSlot);
+  }, [activeSlot, model?.definitionId, applyActiveSlot]);
 
   const dropdownData = [
     { value: "__static__", label: "Static" },

@@ -878,56 +878,19 @@ export function createWebRuntimeHost(
                       idleAnimDef.source.relativeAssetPath
                     ] ?? null
                   : null;
-                console.warn("[npc-anim-debug] resolution", {
-                  instanceId: object.instanceId,
-                  hasPresence: Boolean(presence),
-                  npcDefinitionId: presence?.npcDefinitionId,
-                  hasNpcDefinition: Boolean(npcDefinition),
-                  idleBindingId,
-                  hasIdleAnimDef: Boolean(idleAnimDef),
-                  idleRelativePath: idleAnimDef?.source.relativeAssetPath,
-                  hasIdleSourceUrl: Boolean(idleSourceUrl),
-                  assetSourcesKeyCount: Object.keys(state.assetSources).length
-                });
                 if (idleSourceUrl) {
                   void gltfLoader
                     .loadAsync(idleSourceUrl)
                     .then((animGltf) => {
                       const clip = animGltf.animations[0];
-                      console.warn("[npc-anim-debug] clip loaded", {
-                        instanceId: object.instanceId,
-                        hasClip: Boolean(clip),
-                        clipName: clip?.name,
-                        clipTrackCount: clip?.tracks.length,
-                        clipFirstTracks: clip?.tracks
-                          .slice(0, 5)
-                          .map((t) => t.name),
-                        renderableBoneNames: (() => {
-                          const names: string[] = [];
-                          renderable.traverse((child) => {
-                            if ((child as THREE.Bone).isBone) names.push(child.name);
-                          });
-                          return names.slice(0, 10);
-                        })()
-                      });
                       if (!clip) return;
                       const npcEntry = sceneObjectEntries.get(object.instanceId);
-                      if (!npcEntry) {
-                        console.warn(
-                          "[npc-anim-debug] entry missing when clip loaded"
-                        );
-                        return;
-                      }
+                      if (!npcEntry) return;
                       const mixer = new THREE.AnimationMixer(renderable);
                       const action = mixer.clipAction(clip);
                       action.reset();
                       action.play();
                       npcEntry.mixer = mixer;
-                      console.warn("[npc-anim-debug] mixer attached", {
-                        instanceId: object.instanceId,
-                        actionEnabled: action.enabled,
-                        actionWeight: action.getEffectiveWeight()
-                      });
                     })
                     .catch((error) => {
                       console.error("[web-runtime] npc-animation-load-failed", {
