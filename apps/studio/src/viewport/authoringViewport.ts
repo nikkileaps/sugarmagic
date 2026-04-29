@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   createCapsuleFallback,
   createFallbackMesh,
@@ -255,10 +256,32 @@ async function createRenderableRoot(
     };
   }
 
-  const renderable = gltf.scene.clone(true);
+  // SkeletonUtils.clone (NOT plain Object3D.clone): plain clone shares
+  // the SkinnedMesh skeleton reference with the source gltf, so moving
+  // the wrapper Group via the gizmo doesn't translate the rendered
+  // mesh — the skinning shader anchors to the source bones which were
+  // never added to the scene. SkeletonUtils.clone re-binds the cloned
+  // mesh to the cloned bones so wrapper-Group transforms actually
+  // propagate. Required for any rigged glTF (Player + NPC character
+  // models post-Plan-038); harmless for static-mesh assets.
+  const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
+  // Populate matrixWorld for every node BEFORE measuring the bbox in
+  // normalizeModelScale. SkinnedMesh.computeBoundingBox uses bone
+  // matrixWorlds; without this update they're identity and the bbox
+  // is garbage, leading to wildly wrong scale.
+  renderable.updateMatrixWorld(true);
   if (object.targetModelHeight) {
     normalizeModelScale(renderable, object.targetModelHeight);
   }
+  // Disable frustum culling on skinned meshes — bind-pose bounding
+  // sphere goes stale after rescaling + animation, can pop the model
+  // out of view at certain camera angles. Matches the player + NPC
+  // runtime controllers.
+  renderable.traverse((child) => {
+    if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+      child.frustumCulled = false;
+    }
+  });
   renderView.enableShadowsOnObject(renderable);
   const shaderApplication = createRenderableShaderApplicationState();
   try {

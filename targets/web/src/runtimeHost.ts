@@ -28,6 +28,7 @@
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   type ContentLibrarySnapshot,
   type DocumentDefinition,
@@ -789,7 +790,16 @@ export function createWebRuntimeHost(
             .loadAsync(assetSourceUrl)
             .then((gltf) => {
               if (!scene) return;
-              const renderable = gltf.scene.clone(true);
+              // SkeletonUtils.clone for SkinnedMesh-bearing glTFs:
+              // plain Object3D.clone shares the skeleton with the
+              // source gltf, so the rendered character anchors to the
+              // source bones (always at origin) regardless of the
+              // wrapper Group's transform. SkeletonUtils.clone re-binds
+              // the cloned mesh to cloned bones so wrapper-Group
+              // transforms actually move the rendered mesh. Required
+              // for character models post-Plan-038; harmless for
+              // static-mesh assets.
+              const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
               const validationError = validateRenderableAsset(object, renderable);
               if (validationError) {
                 console.error("[web-runtime] invalid-asset-payload", {
@@ -802,9 +812,22 @@ export function createWebRuntimeHost(
                 rootObject.add(getSceneObjectFallback(object));
                 return;
               }
+              // Populate matrixWorld for every node BEFORE measuring
+              // the bbox. SkinnedMesh.computeBoundingBox uses bone
+              // matrixWorlds; without this update they're identity and
+              // the bbox is garbage, leading to wildly wrong scale.
+              renderable.updateMatrixWorld(true);
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
+              // Disable frustum culling on skinned meshes — bind-pose
+              // bounding sphere goes stale after rescaling + animation,
+              // can pop the model out of view at certain camera angles.
+              renderable.traverse((child) => {
+                if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+                  child.frustumCulled = false;
+                }
+              });
               renderView?.enableShadowsOnObject(renderable);
               ensureShaderSetAppliedToRenderable(
                 renderable,

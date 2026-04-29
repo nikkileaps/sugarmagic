@@ -1,5 +1,6 @@
 import {
   getAssetDefinition,
+  getCharacterModelDefinition,
   type AssetKind,
   type ContentLibrarySnapshot,
   type ItemDefinition,
@@ -275,7 +276,9 @@ function createPlayerSceneObject(
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
   const modelAssetDefinitionId = playerDefinition?.presentation.modelAssetDefinitionId ?? null;
-  const assetDescriptor = getAssetSourceDescriptor(
+  // Player models live in the entity-owned characterModelDefinitions
+  // collection post-Plan-038, NOT in the general assetDefinitions.
+  const assetDescriptor = getCharacterModelSourceDescriptor(
     modelAssetDefinitionId,
     contentLibrary
   );
@@ -332,7 +335,9 @@ function createNPCSceneObject(
   contentLibrary?: ContentLibrarySnapshot
 ): SceneObject {
   const modelAssetDefinitionId = npcDefinition?.presentation.modelAssetDefinitionId ?? null;
-  const assetDescriptor = getAssetSourceDescriptor(
+  // NPC models live in the entity-owned characterModelDefinitions
+  // collection post-Plan-038, NOT in the general assetDefinitions.
+  const assetDescriptor = getCharacterModelSourceDescriptor(
     modelAssetDefinitionId,
     contentLibrary
   );
@@ -434,5 +439,38 @@ function getAssetSourceDescriptor(
     sourcePath: definition?.source.relativeAssetPath ?? null,
     assetKind: definition?.assetKind ?? null,
     definition
+  };
+}
+
+/**
+ * Resolve a Player/NPC `modelAssetDefinitionId` against the entity-
+ * owned `characterModelDefinitions` collection (post-Plan-038). Returns
+ * the same shape as `getAssetSourceDescriptor` so the Player + NPC
+ * scene-object factories can stay structurally identical to the asset
+ * path. `definition` is always `null` because character models don't
+ * carry shader-binding metadata (no surface slots, no deform / effect)
+ * — the downstream `resolveEffectivePresenceShaderBindings` callers
+ * already handle a null AssetDefinition gracefully.
+ */
+function getCharacterModelSourceDescriptor(
+  modelDefinitionId: string | null | undefined,
+  contentLibrary?: ContentLibrarySnapshot
+): {
+  sourcePath: string | null;
+  assetKind: AssetKind | null;
+  definition: ReturnType<typeof getAssetDefinition>;
+} {
+  if (!modelDefinitionId || !contentLibrary) {
+    return { sourcePath: null, assetKind: null, definition: null };
+  }
+
+  const definition = getCharacterModelDefinition(
+    contentLibrary,
+    modelDefinitionId
+  );
+  return {
+    sourcePath: definition?.source.relativeAssetPath ?? null,
+    assetKind: definition ? "model" : null,
+    definition: null
   };
 }
