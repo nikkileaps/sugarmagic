@@ -30,6 +30,7 @@ import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
+  getCharacterAnimationDefinition,
   type ContentLibrarySnapshot,
   type DocumentDefinition,
   type DialogueDefinition,
@@ -145,6 +146,12 @@ interface SceneObjectEntry {
   root: THREE.Group;
   object: SceneObject;
   shaderApplication: RenderableShaderApplicationState;
+  /**
+   * AnimationMixer for NPCs whose definition has bound animation slots.
+   * Driven each frame from the runtime loop. Static-mesh assets and
+   * NPCs without animations leave this null.
+   */
+  mixer: THREE.AnimationMixer | null;
 }
 
 function createCameraSnapshot(
@@ -613,6 +620,13 @@ export function createWebRuntimeHost(
       entry.root.position.set(...snapshot.position);
     }
 
+    // Tick every entry mixer (NPCs with bound idle animations). The
+    // mixer is null for static-mesh assets and for NPCs without
+    // animations, so this loop is cheap when nothing's animated.
+    for (const entry of sceneObjectEntries.values()) {
+      entry.mixer?.update(delta);
+    }
+
     const playerEntities = world.query(PlayerControlled, Position);
     if (playerEntities.length > 0) {
       const pos = world.getComponent(playerEntities[0], Position)!;
@@ -837,6 +851,93 @@ export function createWebRuntimeHost(
                 state.assetSources
               );
               rootObject.add(renderable);
+
+              // For NPCs with bound animations, load the idle clip and
+              // attach an AnimationMixer so the runtime frame loop can
+              // drive it. v1: NPCs default to playing idle forever (no
+              // locomotion-driven slot switching like the player).
+              if (object.kind === "npc") {
+                const presence = region.scene.npcPresences.find(
+                  (p) => p.presenceId === object.instanceId
+                );
+                const npcDefinition = presence
+                  ? state.npcDefinitions.find(
+                      (d) => d.definitionId === presence.npcDefinitionId
+                    )
+                  : null;
+                const idleBindingId =
+                  npcDefinition?.presentation.animationAssetBindings.idle ?? null;
+                const idleAnimDef = idleBindingId
+                  ? getCharacterAnimationDefinition(
+                      state.contentLibrary,
+                      idleBindingId
+                    )
+                  : null;
+                const idleSourceUrl = idleAnimDef
+                  ? state.assetSources[
+                      idleAnimDef.source.relativeAssetPath
+                    ] ?? null
+                  : null;
+                console.warn("[npc-anim-debug] resolution", {
+                  instanceId: object.instanceId,
+                  hasPresence: Boolean(presence),
+                  npcDefinitionId: presence?.npcDefinitionId,
+                  hasNpcDefinition: Boolean(npcDefinition),
+                  idleBindingId,
+                  hasIdleAnimDef: Boolean(idleAnimDef),
+                  idleRelativePath: idleAnimDef?.source.relativeAssetPath,
+                  hasIdleSourceUrl: Boolean(idleSourceUrl),
+                  assetSourcesKeyCount: Object.keys(state.assetSources).length
+                });
+                if (idleSourceUrl) {
+                  void gltfLoader
+                    .loadAsync(idleSourceUrl)
+                    .then((animGltf) => {
+                      const clip = animGltf.animations[0];
+                      console.warn("[npc-anim-debug] clip loaded", {
+                        instanceId: object.instanceId,
+                        hasClip: Boolean(clip),
+                        clipName: clip?.name,
+                        clipTrackCount: clip?.tracks.length,
+                        clipFirstTracks: clip?.tracks
+                          .slice(0, 5)
+                          .map((t) => t.name),
+                        renderableBoneNames: (() => {
+                          const names: string[] = [];
+                          renderable.traverse((child) => {
+                            if ((child as THREE.Bone).isBone) names.push(child.name);
+                          });
+                          return names.slice(0, 10);
+                        })()
+                      });
+                      if (!clip) return;
+                      const npcEntry = sceneObjectEntries.get(object.instanceId);
+                      if (!npcEntry) {
+                        console.warn(
+                          "[npc-anim-debug] entry missing when clip loaded"
+                        );
+                        return;
+                      }
+                      const mixer = new THREE.AnimationMixer(renderable);
+                      const action = mixer.clipAction(clip);
+                      action.reset();
+                      action.play();
+                      npcEntry.mixer = mixer;
+                      console.warn("[npc-anim-debug] mixer attached", {
+                        instanceId: object.instanceId,
+                        actionEnabled: action.enabled,
+                        actionWeight: action.getEffectiveWeight()
+                      });
+                    })
+                    .catch((error) => {
+                      console.error("[web-runtime] npc-animation-load-failed", {
+                        instanceId: object.instanceId,
+                        sourceUrl: idleSourceUrl,
+                        error
+                      });
+                    });
+                }
+              }
             })
             .catch((error) => {
               console.error("[web-runtime] asset-load-failed", {
@@ -859,11 +960,13 @@ export function createWebRuntimeHost(
         }
 
         scene.add(rootObject);
-        sceneObjectEntries.set(object.instanceId, {
+        const entry: SceneObjectEntry = {
           root: rootObject,
           object,
-          shaderApplication
-        });
+          shaderApplication,
+          mixer: null
+        };
+        sceneObjectEntries.set(object.instanceId, entry);
       }
     }
     world = new World();
