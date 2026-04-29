@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   ActionIcon,
   Box,
+  Button,
   Group,
   Menu,
   NumberInput,
@@ -32,7 +33,8 @@ import {
   Tooltip
 } from "@mantine/core";
 import type {
-  AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   NPCAnimationSlot,
   NPCDefinition,
   NPCInteractionMode,
@@ -45,8 +47,8 @@ import type {
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
+import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -57,42 +59,39 @@ export interface NPCWorkspaceViewProps {
     label: string;
     description?: string;
   }>;
-  assetDefinitions: AssetDefinition[];
+  characterModelDefinitions: CharacterModelDefinition[];
+  characterAnimationDefinitions: CharacterAnimationDefinition[];
+  /** path → blob URL map for resolving model + animation glbs. */
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
+  /**
+   * Triggers a file-picker that imports a character model `.glb`
+   * via IO into the project. Resolves to the new
+   * `CharacterModelDefinition` so the inspector can bind it to
+   * the selected NPC's `presentation.modelAssetDefinitionId`.
+   * Resolves to `null` when the user cancels.
+   */
+  onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
+  /**
+   * Triggers a file-picker that imports a character animation `.glb`
+   * via IO into the project. Resolves to the new
+   * `CharacterAnimationDefinition` so the inspector can bind it to a
+   * specific animation slot (idle / walk / run) on the selected NPC.
+   * Resolves to `null` when the user cancels.
+   */
+  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   renderInspectorSections?: (context: {
     selectedNPC: NPCDefinition | null;
     updateNPC: (definition: NPCDefinition) => void;
   }) => ReactNode;
 }
 
-const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
-function toAssetOptions(assetDefinitions: AssetDefinition[]) {
-  return assetDefinitions.map((definition) => ({
-    value: definition.definitionId,
-    label: definition.displayName
-  }));
-}
-
-function boundAnimationSlotOptions(npcDefinition: NPCDefinition | null) {
-  if (!npcDefinition) return [];
-
-  const labels: Record<NPCAnimationSlot, string> = {
-    idle: "Idle",
-    walk: "Walk",
-    run: "Run"
-  };
-
-  return (Object.entries(
-    npcDefinition.presentation.animationAssetBindings
-  ) as Array<[NPCAnimationSlot, string | null]>)
-    .filter(([, definitionId]) => Boolean(definitionId))
-    .map(([slot]) => ({
-      value: slot,
-      label: labels[slot]
-    }));
-}
+const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run"
+};
 
 export function useNPCWorkspaceView(
   props: NPCWorkspaceViewProps
@@ -102,9 +101,13 @@ export function useNPCWorkspaceView(
     gameProjectId,
     npcDefinitions,
     interactionModeOptions,
-    assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onCommand,
+    onImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition,
     renderInspectorSections
   } = props;
 
@@ -125,11 +128,6 @@ export function useNPCWorkspaceView(
   const isAnimationPlaying = useVanillaStoreSelector(
     designPreviewStore,
     (state: DesignPreviewState) => state.isAnimationPlaying
-  );
-  const cameraQuaternion = useVanillaStoreSelector(
-    designPreviewStore,
-    (state: DesignPreviewState) =>
-      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
   );
 
   const effectiveSelectedNpcId = useMemo(() => {
@@ -165,22 +163,38 @@ export function useNPCWorkspaceView(
       definition.displayName.toLowerCase().includes(query)
     );
   }, [npcDefinitions, searchQuery]);
-  const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
-  const animationSlotOptions = useMemo(
-    () => boundAnimationSlotOptions(selectedNPC),
-    [selectedNPC]
-  );
-  const effectiveAnimationSlot = useMemo(() => {
-    if (!selectedNPC) return null;
-    if (
-      activeAnimationSlot &&
-      selectedNPC.presentation.animationAssetBindings[activeAnimationSlot]
-    ) {
-      return activeAnimationSlot;
-    }
-
-    return (animationSlotOptions[0]?.value as NPCAnimationSlot | undefined) ?? null;
-  }, [activeAnimationSlot, animationSlotOptions, selectedNPC]);
+  const boundCharacterModel = useMemo(() => {
+    if (!selectedNPC?.presentation.modelAssetDefinitionId) return null;
+    return (
+      characterModelDefinitions.find(
+        (definition) =>
+          definition.definitionId ===
+          selectedNPC.presentation.modelAssetDefinitionId
+      ) ?? null
+    );
+  }, [characterModelDefinitions, selectedNPC]);
+  // Preview slot list — one entry per NPC animation slot, with each
+  // slot's resolved CharacterAnimationDefinition attached so the
+  // CharacterPreview component can pre-load and cheaply swap clips.
+  const previewSlots = useMemo<CharacterPreviewSlot[]>(() => {
+    if (!selectedNPC) return [];
+    return (Object.keys(NPC_ANIMATION_SLOT_LABELS) as NPCAnimationSlot[]).map(
+      (slot) => {
+        const bindingId =
+          selectedNPC.presentation.animationAssetBindings[slot] ?? null;
+        const animation = bindingId
+          ? characterAnimationDefinitions.find(
+              (definition) => definition.definitionId === bindingId
+            ) ?? null
+          : null;
+        return {
+          value: slot,
+          label: NPC_ANIMATION_SLOT_LABELS[slot],
+          animation
+        };
+      }
+    );
+  }, [selectedNPC, characterAnimationDefinitions]);
 
   const availableInteractionModes = useMemo(
     () => new Set(interactionModeOptions.map((option) => option.value)),
@@ -263,66 +277,23 @@ export function useNPCWorkspaceView(
     }
   }
 
-  const previewOverlay = (
-    <>
-      <Group
-        gap="xs"
-        wrap="nowrap"
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          padding: 8,
-          borderRadius: 8,
-          border: "1px solid var(--sm-panel-border)",
-          background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
-        }}
-      >
-        <Select
-          size="xs"
-          w={140}
-          data={[
-            { value: "__none__", label: "Static" },
-            ...animationSlotOptions
-          ]}
-          value={effectiveAnimationSlot ?? "__none__"}
-          onChange={(value) =>
-            designPreviewStore.getState().setAnimationSlot(
-              value && value !== "__none__"
-                ? (value as NPCAnimationSlot)
-                : null
-            )
-          }
-          styles={{
-            input: {
-              background: "var(--sm-color-base)",
-              borderColor: "var(--sm-panel-border)",
-              color: "var(--sm-color-text)"
-            },
-            dropdown: {
-              background: "var(--sm-color-surface1)",
-              borderColor: "var(--sm-panel-border)"
-            }
-          }}
-        />
-        <Tooltip label={isAnimationPlaying ? "Pause preview" : "Play preview"}>
-          <ActionIcon
-            variant="subtle"
-            color="green"
-            onClick={() =>
-              designPreviewStore
-                .getState()
-                .setAnimationPlaying(!isAnimationPlaying)
-            }
-            aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
-          >
-            {isAnimationPlaying ? "❚❚" : "▶"}
-          </ActionIcon>
-        </Tooltip>
-      </Group>
-      <LayoutOrientationWidget quaternion={cameraQuaternion} />
-    </>
+  const centerPanel = (
+    <CharacterPreview
+      model={boundCharacterModel}
+      targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
+      slots={previewSlots}
+      activeSlot={activeAnimationSlot}
+      onChangeActiveSlot={(slot) =>
+        designPreviewStore
+          .getState()
+          .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
+      }
+      isPlaying={isAnimationPlaying}
+      onChangePlaying={(playing) =>
+        designPreviewStore.getState().setAnimationPlaying(playing)
+      }
+      assetSources={assetSources}
+    />
   );
 
   const leftPanel = (
@@ -526,22 +497,78 @@ export function useNPCWorkspaceView(
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Model
               </Text>
-              <Select
-                label="Model Asset"
-                size="xs"
-                clearable
-                data={assetOptions}
-                value={selectedNPC.presentation.modelAssetDefinitionId}
-                onChange={(value) =>
-                  updateNPC({
-                    ...selectedNPC,
-                    presentation: {
-                      ...selectedNPC.presentation,
-                      modelAssetDefinitionId: value
-                    }
-                  })
-                }
-              />
+              {boundCharacterModel ? (
+                <Stack gap={4}>
+                  <Text size="xs">{boundCharacterModel.displayName}</Text>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {boundCharacterModel.source.relativeAssetPath}
+                  </Text>
+                  <Group gap="xs">
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      onClick={async () => {
+                        const next = await onImportCharacterModelDefinition();
+                        if (!next) return;
+                        updateNPC({
+                          ...selectedNPC,
+                          presentation: {
+                            ...selectedNPC.presentation,
+                            modelAssetDefinitionId: next.definitionId
+                          }
+                        });
+                      }}
+                    >
+                      Replace…
+                    </Button>
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        updateNPC({
+                          ...selectedNPC,
+                          presentation: {
+                            ...selectedNPC.presentation,
+                            modelAssetDefinitionId: null
+                          }
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  </Group>
+                </Stack>
+              ) : (
+                <Stack gap={4}>
+                  {selectedNPC.presentation.modelAssetDefinitionId ? (
+                    <Text size="xs" c="red">
+                      Bound model is missing from the project — re-import.
+                    </Text>
+                  ) : (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      No model bound. The NPC will render as a capsule.
+                    </Text>
+                  )}
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={async () => {
+                      const next = await onImportCharacterModelDefinition();
+                      if (!next) return;
+                      updateNPC({
+                        ...selectedNPC,
+                        presentation: {
+                          ...selectedNPC.presentation,
+                          modelAssetDefinitionId: next.definitionId
+                        }
+                      });
+                    }}
+                  >
+                    Import Character Model…
+                  </Button>
+                </Stack>
+              )}
               <NumberInput
                 label="Model Height"
                 size="xs"
@@ -566,28 +593,100 @@ export function useNPCWorkspaceView(
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Animation Slots
               </Text>
-              {(["idle", "walk", "run"] as NPCAnimationSlot[]).map((slot) => (
-                <Select
-                  key={slot}
-                  label={slot[0]!.toUpperCase() + slot.slice(1)}
-                  size="xs"
-                  clearable
-                  data={assetOptions}
-                  value={selectedNPC.presentation.animationAssetBindings[slot]}
-                  onChange={(value) =>
-                    updateNPC({
-                      ...selectedNPC,
-                      presentation: {
-                        ...selectedNPC.presentation,
-                        animationAssetBindings: {
-                          ...selectedNPC.presentation.animationAssetBindings,
-                          [slot]: value
-                        }
-                      }
-                    })
-                  }
-                />
-              ))}
+              {(["idle", "walk", "run"] as NPCAnimationSlot[]).map((slot) => {
+                const boundId =
+                  selectedNPC.presentation.animationAssetBindings[slot];
+                const bound = boundId
+                  ? characterAnimationDefinitions.find(
+                      (definition) => definition.definitionId === boundId
+                    ) ?? null
+                  : null;
+                const slotLabel = slot[0]!.toUpperCase() + slot.slice(1);
+                return (
+                  <Stack key={slot} gap={4}>
+                    <Text size="xs" fw={500}>
+                      {slotLabel}
+                    </Text>
+                    {bound ? (
+                      <Stack gap={4}>
+                        <Text size="xs">{bound.displayName}</Text>
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          {bound.source.relativeAssetPath}
+                        </Text>
+                        <Group gap="xs">
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            onClick={async () => {
+                              const next = await onImportCharacterAnimationDefinition();
+                              if (!next) return;
+                              updateNPC({
+                                ...selectedNPC,
+                                presentation: {
+                                  ...selectedNPC.presentation,
+                                  animationAssetBindings: {
+                                    ...selectedNPC.presentation.animationAssetBindings,
+                                    [slot]: next.definitionId
+                                  }
+                                }
+                              });
+                            }}
+                          >
+                            Replace…
+                          </Button>
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="red"
+                            onClick={() =>
+                              updateNPC({
+                                ...selectedNPC,
+                                presentation: {
+                                  ...selectedNPC.presentation,
+                                  animationAssetBindings: {
+                                    ...selectedNPC.presentation.animationAssetBindings,
+                                    [slot]: null
+                                  }
+                                }
+                              })
+                            }
+                          >
+                            Clear
+                          </Button>
+                        </Group>
+                      </Stack>
+                    ) : (
+                      <Stack gap={4}>
+                        {boundId ? (
+                          <Text size="xs" c="red">
+                            Bound animation is missing from the project — re-import.
+                          </Text>
+                        ) : null}
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={async () => {
+                            const next = await onImportCharacterAnimationDefinition();
+                            if (!next) return;
+                            updateNPC({
+                              ...selectedNPC,
+                              presentation: {
+                                ...selectedNPC.presentation,
+                                animationAssetBindings: {
+                                  ...selectedNPC.presentation.animationAssetBindings,
+                                  [slot]: next.definitionId
+                                }
+                              }
+                            });
+                          }}
+                        >
+                          Import Animation…
+                        </Button>
+                      </Stack>
+                    )}
+                  </Stack>
+                );
+              })}
             </Stack>
 
             {renderInspectorSections?.({
@@ -602,6 +701,7 @@ export function useNPCWorkspaceView(
         )}
       </Inspector>
     ),
-    viewportOverlay: isActive && selectedNPC ? previewOverlay : null
+    centerPanel: isActive && selectedNPC ? centerPanel : null,
+    viewportOverlay: null
   };
 }

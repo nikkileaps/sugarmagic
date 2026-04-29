@@ -84,6 +84,8 @@ function makeContentLibrary(): ContentLibrarySnapshot {
       version: 1
     },
     assetDefinitions: [],
+    characterAnimationDefinitions: [],
+    characterModelDefinitions: [],
     materialDefinitions: [],
     textureDefinitions: [],
     environmentDefinitions: [

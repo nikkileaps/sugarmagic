@@ -7,11 +7,15 @@
  * runtime foliage behavior or editor-owned sidecar metadata.
  */
 
-import type {
-  AssetDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  TextureDefinition
+import {
+  createDefaultCharacterAnimationDefinition,
+  createDefaultCharacterModelDefinition,
+  type AssetDefinition,
+  type CharacterAnimationDefinition,
+  type CharacterModelDefinition,
+  type MaterialDefinition,
+  type MaskTextureDefinition,
+  type TextureDefinition
 } from "@sugarmagic/domain";
 import { listFilesInDirectory, pickDirectory, pickFile, writeBlobFile } from "../fs-access";
 import type { GameRootDescriptor } from "../game-root";
@@ -60,6 +64,30 @@ export interface ImportTextureDefinitionResult {
   textureDefinition: TextureDefinition;
 }
 
+export interface ImportCharacterModelDefinitionRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  projectId: string;
+  defaultDisplayName?: string;
+}
+
+export interface ImportCharacterModelDefinitionResult {
+  characterModelDefinition: CharacterModelDefinition;
+  warnings: string[];
+}
+
+export interface ImportCharacterAnimationDefinitionRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  projectId: string;
+  defaultDisplayName?: string;
+}
+
+export interface ImportCharacterAnimationDefinitionResult {
+  characterAnimationDefinition: CharacterAnimationDefinition;
+  warnings: string[];
+}
+
 export interface ImportMaskTextureDefinitionRequest {
   projectHandle: FileSystemDirectoryHandle;
   descriptor: GameRootDescriptor;
@@ -98,6 +126,8 @@ export interface ImportPbrTextureSetResult {
 export interface SourceAssetAnalysis {
   assetKind: AssetDefinition["assetKind"];
   contract: "generic-model" | "foilagemaker-foliage";
+  meshCount: number;
+  animationClipNames: string[];
 }
 
 function sanitizeFileNameSegment(value: string): string {
@@ -230,6 +260,17 @@ function collectSurfaceSlots(document: GlbDocument): AssetDefinition["surfaceSlo
   });
 }
 
+function collectAnimationClipNames(document: GlbDocument): string[] {
+  return (document.animations ?? []).map((animation, index) => {
+    const name = animation.name?.trim();
+    return name && name.length > 0 ? name : `Clip ${index + 1}`;
+  });
+}
+
+function countMeshes(document: GlbDocument): number {
+  return document.meshes?.length ?? 0;
+}
+
 async function importTextureDefinitionFromFile(
   sourceFile: File,
   request: ImportTextureDefinitionRequest
@@ -258,6 +299,88 @@ async function importTextureDefinitionFromFile(
       packing: request.packing ?? "rgba",
       colorSpace: request.colorSpace ?? "srgb"
     }
+  };
+}
+
+export async function importCharacterAnimationDefinitionFromFile(
+  sourceFile: File,
+  request: ImportCharacterAnimationDefinitionRequest
+): Promise<ImportCharacterAnimationDefinitionResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  if (ext.toLowerCase() !== ".glb") {
+    throw new Error(
+      "Character animation imports currently accept GLB files only."
+    );
+  }
+
+  const sourceBuffer = await sourceFile.arrayBuffer();
+  const glbChunks = readGlbChunks(sourceBuffer);
+  const clipNames = glbChunks ? collectAnimationClipNames(glbChunks.document) : [];
+  if (clipNames.length === 0) {
+    throw new Error("The selected GLB does not contain any animation clips.");
+  }
+
+  const safeStem = sanitizeFileNameSegment(stem);
+  const targetFileName = `${safeStem}${ext}`;
+  const relativeAssetPath = `${request.descriptor.authoredAssetsPath}/character-animations/${targetFileName}`;
+
+  await writeBlobFile(
+    request.projectHandle,
+    [request.descriptor.authoredAssetsPath, "character-animations", targetFileName],
+    sourceFile
+  );
+
+  return {
+    characterAnimationDefinition: createDefaultCharacterAnimationDefinition(
+      request.projectId,
+      {
+        definitionId: `${request.projectId}:character-animation:${safeStem}`,
+        displayName: request.defaultDisplayName ?? stem,
+        source: {
+          relativeAssetPath,
+          fileName: sourceFile.name,
+          mimeType: sourceFile.type || null
+        },
+        clipNames
+      }
+    ),
+    warnings: []
+  };
+}
+
+export async function importCharacterModelDefinitionFromFile(
+  sourceFile: File,
+  request: ImportCharacterModelDefinitionRequest
+): Promise<ImportCharacterModelDefinitionResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  if (ext.toLowerCase() !== ".glb") {
+    throw new Error("Character model imports currently accept GLB files only.");
+  }
+
+  const safeStem = sanitizeFileNameSegment(stem);
+  const targetFileName = `${safeStem}${ext}`;
+  const relativeAssetPath = `${request.descriptor.authoredAssetsPath}/character-models/${targetFileName}`;
+
+  await writeBlobFile(
+    request.projectHandle,
+    [request.descriptor.authoredAssetsPath, "character-models", targetFileName],
+    sourceFile
+  );
+
+  return {
+    characterModelDefinition: createDefaultCharacterModelDefinition(
+      request.projectId,
+      {
+        definitionId: `${request.projectId}:character-model:${safeStem}`,
+        displayName: request.defaultDisplayName ?? stem,
+        source: {
+          relativeAssetPath,
+          fileName: sourceFile.name,
+          mimeType: sourceFile.type || null
+        }
+      }
+    ),
+    warnings: []
   };
 }
 
@@ -300,6 +423,36 @@ async function pickImageFile(): Promise<File> {
         accept: {
           "image/png": [".png"],
           "image/jpeg": [".jpg", ".jpeg"]
+        }
+      }
+    ]
+  });
+  return fileHandle.getFile();
+}
+
+async function pickCharacterModelFile(): Promise<File> {
+  const fileHandle = await pickFile({
+    types: [
+      {
+        description: "Character Model GLB",
+        accept: {
+          "model/gltf-binary": [".glb"],
+          "application/octet-stream": [".glb"]
+        }
+      }
+    ]
+  });
+  return fileHandle.getFile();
+}
+
+async function pickCharacterAnimationFile(): Promise<File> {
+  const fileHandle = await pickFile({
+    types: [
+      {
+        description: "Character Animation GLB",
+        accept: {
+          "model/gltf-binary": [".glb"],
+          "application/octet-stream": [".glb"]
         }
       }
     ]
@@ -358,7 +511,9 @@ export async function analyzeSourceAssetFile(
   if (ext.toLowerCase() !== ".glb") {
     return {
       assetKind: "model",
-      contract: "generic-model"
+      contract: "generic-model",
+      meshCount: 0,
+      animationClipNames: []
     };
   }
 
@@ -366,15 +521,22 @@ export async function analyzeSourceAssetFile(
   if (!document) {
     return {
       assetKind: "model",
-      contract: "generic-model"
+      contract: "generic-model",
+      meshCount: 0,
+      animationClipNames: []
     };
   }
+
+  const meshCount = countMeshes(document);
+  const animationClipNames = collectAnimationClipNames(document);
 
   const foilageMakerExtras = getFoilageMakerExtras(document);
   if (!foilageMakerExtras) {
     return {
       assetKind: "model",
-      contract: "generic-model"
+      contract: "generic-model",
+      meshCount,
+      animationClipNames
     };
   }
 
@@ -390,7 +552,9 @@ export async function analyzeSourceAssetFile(
 
   return {
     assetKind: "foliage",
-    contract: "foilagemaker-foliage"
+    contract: "foilagemaker-foliage",
+    meshCount,
+    animationClipNames
   };
 }
 
@@ -406,6 +570,20 @@ export async function importMaskTextureDefinition(
 ): Promise<ImportMaskTextureDefinitionResult> {
   const sourceFile = await pickImageFile();
   return importMaskTextureDefinitionFromFile(sourceFile, request);
+}
+
+export async function importCharacterModelDefinition(
+  request: ImportCharacterModelDefinitionRequest
+): Promise<ImportCharacterModelDefinitionResult> {
+  const sourceFile = await pickCharacterModelFile();
+  return importCharacterModelDefinitionFromFile(sourceFile, request);
+}
+
+export async function importCharacterAnimationDefinition(
+  request: ImportCharacterAnimationDefinitionRequest
+): Promise<ImportCharacterAnimationDefinitionResult> {
+  const sourceFile = await pickCharacterAnimationFile();
+  return importCharacterAnimationDefinitionFromFile(sourceFile, request);
 }
 
 export async function importPbrTextureSet(
@@ -520,6 +698,17 @@ export async function importSourceAsset(
     await writeBlobFile(request.projectHandle, file.pathSegments, file.blob);
   }
 
+  const warnings = [...embeddedFoliageImport.warnings];
+  if (
+    ext.toLowerCase() === ".glb" &&
+    analysis.meshCount === 0 &&
+    analysis.animationClipNames.length > 0
+  ) {
+    warnings.push(
+      "This GLB contains animation clips but no meshes. Did you mean to import it as a character animation? Open the Player or NPC inspector and use Import Animation… on a slot."
+    );
+  }
+
   return {
     assetDefinition: {
       definitionId: `asset:${safeStem}`,
@@ -537,6 +726,6 @@ export async function importSourceAsset(
     },
     textureDefinitions: embeddedFoliageImport.textureDefinitions,
     materialDefinitions: embeddedFoliageImport.materialDefinitions,
-    warnings: embeddedFoliageImport.warnings
+    warnings
   };
 }

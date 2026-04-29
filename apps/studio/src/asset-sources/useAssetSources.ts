@@ -1,17 +1,16 @@
 /**
  * useAssetSources
  *
- * Studio-side owner of the authored-asset blob URL map. Asset definitions
- * live in the content library; each one references a file inside the
- * project directory. The Studio needs a resolvable URL per asset so
- * GLTFLoader (and anything else reading from `assetSources[path]`) can
- * fetch the underlying bytes. Blob URLs minted via `URL.createObjectURL`
- * are the mechanism; this module owns their full lifecycle.
+ * Studio-side owner of the authored-asset blob URL map. File-backed content
+ * library definitions (models, animations, textures) reference files inside
+ * the project directory. Studio needs a resolvable URL per path so GLTFLoader
+ * and texture samplers can fetch the bytes. Blob URLs minted via
+ * `URL.createObjectURL` are the mechanism; this module owns their lifecycle.
  *
  * Contract:
  *
  * - Input: a `FileSystemDirectoryHandle` for the project root and the
- *   current list of `AssetDefinition`s.
+ *   current content library file-backed definitions.
  * - Output: a `Record<relativeAssetPath, blobUrl>` — safe for consumers to
  *   look up URLs by asset-definition path.
  * - Stability: the map is re-created ONLY when the set of asset source
@@ -43,6 +42,8 @@ async function createAssetSourceMap(
   const nextSources: Record<string, string> = {};
   const sourceDefinitions = [
     ...contentLibrary.assetDefinitions,
+    ...contentLibrary.characterModelDefinitions,
+    ...contentLibrary.characterAnimationDefinitions,
     ...contentLibrary.textureDefinitions
   ];
   for (const definition of sourceDefinitions) {
@@ -70,6 +71,8 @@ export function useAssetSources(
     () =>
       [
         ...(contentLibrary?.assetDefinitions ?? []),
+        ...(contentLibrary?.characterModelDefinitions ?? []),
+        ...(contentLibrary?.characterAnimationDefinitions ?? []),
         ...(contentLibrary?.textureDefinitions ?? [])
       ]
         .map((definition) => definition.source.relativeAssetPath)
@@ -78,11 +81,15 @@ export function useAssetSources(
     [contentLibrary]
   );
 
-  // The effect only re-fires when the path-set changes, but it needs the
-  // current `assetDefinitions` list at fire time. Ref keeps the latest
-  // value accessible without re-subscribing on every session mutation.
+  // The path-set effect should not resubscribe on every unrelated content
+  // mutation, but it still needs the latest file-backed definitions when it
+  // fires. Keep that snapshot in a ref, and update it in an effect rather
+  // than during render so React's ref-safety lint stays happy.
   const contentLibraryRef = useRef(contentLibrary);
-  contentLibraryRef.current = contentLibrary;
+
+  useEffect(() => {
+    contentLibraryRef.current = contentLibrary;
+  }, [contentLibrary]);
 
   useEffect(() => {
     let disposed = false;

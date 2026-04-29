@@ -196,42 +196,6 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     frameTimings.samples += 1;
 
     if (frameTimings.samples >= 60) {
-      const n = frameTimings.samples;
-      // TEMP DEBUG: scene census so we can correlate cpuRender cost with
-      // how many objects three has to walk through render lists each frame.
-      let sceneObjectCount = 0;
-      let sceneMeshCount = 0;
-      let sceneVisibleMeshCount = 0;
-      let sceneLightCount = 0;
-      scene.traverse((obj) => {
-        sceneObjectCount += 1;
-        if ((obj as THREE.Mesh).isMesh) {
-          sceneMeshCount += 1;
-          if (obj.visible) sceneVisibleMeshCount += 1;
-        }
-        if ((obj as THREE.Light).isLight) sceneLightCount += 1;
-      });
-      // eslint-disable-next-line no-console
-      console.log(
-        "[scene-census]",
-        `objects=${sceneObjectCount}`,
-        `meshes=${sceneMeshCount}`,
-        `visibleMeshes=${sceneVisibleMeshCount}`,
-        `lights=${sceneLightCount}`,
-        `topLevelChildren=${scene.children.length}`
-      );
-      // eslint-disable-next-line no-console
-      console.log(
-        "[render-timing] 60-frame avg:",
-        `total=${(frameTimings.total / n).toFixed(2)}ms`,
-        `cpuRender=${(frameTimings.cpuRenderCall / n).toFixed(2)}ms`,
-        `gpuRender=${(frameTimings.gpuRender / n).toFixed(2)}ms`,
-        `gpuCompute=${(frameTimings.gpuCompute / n).toFixed(2)}ms`,
-        `cpuSync=${(frameTimings.cpuSync / n).toFixed(2)}ms`,
-        `cpuListeners=${(frameTimings.cpuListeners / n).toFixed(2)}ms`,
-        `calls/frame=${(frameTimings.drawCalls / n).toFixed(0)}`,
-        `tris/frame=${(frameTimings.triangles / n).toFixed(0)}`
-      );
       frameTimings.cpuSync = 0;
       frameTimings.cpuListeners = 0;
       frameTimings.cpuRenderCall = 0;

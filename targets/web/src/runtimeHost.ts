@@ -28,7 +28,9 @@
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
+  getCharacterAnimationDefinition,
   type ContentLibrarySnapshot,
   type DocumentDefinition,
   type DialogueDefinition,
@@ -65,6 +67,7 @@ import {
   MovementSystem,
   PlayerControlled,
   Position,
+  Velocity,
   resolveSceneObjects,
   DEFAULT_CAMERA_CONFIG,
   createCameraState,
@@ -143,6 +146,12 @@ interface SceneObjectEntry {
   root: THREE.Group;
   object: SceneObject;
   shaderApplication: RenderableShaderApplicationState;
+  /**
+   * AnimationMixer for NPCs whose definition has bound animation slots.
+   * Driven each frame from the runtime loop. Static-mesh assets and
+   * NPCs without animations leave this null.
+   */
+  mixer: THREE.AnimationMixer | null;
 }
 
 function createCameraSnapshot(
@@ -611,11 +620,39 @@ export function createWebRuntimeHost(
       entry.root.position.set(...snapshot.position);
     }
 
+    // Tick every entry mixer (NPCs with bound idle animations). The
+    // mixer is null for static-mesh assets and for NPCs without
+    // animations, so this loop is cheap when nothing's animated.
+    for (const entry of sceneObjectEntries.values()) {
+      entry.mixer?.update(delta);
+    }
+
     const playerEntities = world.query(PlayerControlled, Position);
     if (playerEntities.length > 0) {
       const pos = world.getComponent(playerEntities[0], Position)!;
       playerVisualController.root.position.set(pos.x, pos.y, pos.z);
       cameraState.targetY = pos.y + playerEyeHeight;
+
+      // Drive locomotion-cycle animation from horizontal velocity. The
+      // controller no-ops if the requested slot's clip isn't bound, so
+      // an unconfigured Player just stays in whatever slot was already
+      // playing. Threshold of 0.1 m/s catches drift in fully-stopped
+      // input but doesn't flicker between idle/walk on slow approach.
+      const velocity = world.getComponent(playerEntities[0], Velocity);
+      const speed = velocity ? Math.hypot(velocity.x, velocity.z) : 0;
+      playerVisualController.setActiveAnimationSlot(
+        speed > 0.1 ? "walk" : "idle"
+      );
+
+      // Face the model in the direction of motion. Same formula as
+      // Sugarengine's RenderSystem (atan2(velocity.x, velocity.z)). Snap
+      // rather than smooth — matches what we had before and avoids a
+      // separate slerp pass for now. Only update when there's actual
+      // movement so standing still keeps the last-faced direction.
+      if (velocity && speed > 0.01) {
+        playerVisualController.root.rotation.y = Math.atan2(velocity.x, velocity.z);
+      }
+
       playerVisualController.update(delta);
 
       const { isDragging } = inputManager.getInput();
@@ -767,7 +804,16 @@ export function createWebRuntimeHost(
             .loadAsync(assetSourceUrl)
             .then((gltf) => {
               if (!scene) return;
-              const renderable = gltf.scene.clone(true);
+              // SkeletonUtils.clone for SkinnedMesh-bearing glTFs:
+              // plain Object3D.clone shares the skeleton with the
+              // source gltf, so the rendered character anchors to the
+              // source bones (always at origin) regardless of the
+              // wrapper Group's transform. SkeletonUtils.clone re-binds
+              // the cloned mesh to cloned bones so wrapper-Group
+              // transforms actually move the rendered mesh. Required
+              // for character models post-Plan-038; harmless for
+              // static-mesh assets.
+              const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
               const validationError = validateRenderableAsset(object, renderable);
               if (validationError) {
                 console.error("[web-runtime] invalid-asset-payload", {
@@ -780,9 +826,22 @@ export function createWebRuntimeHost(
                 rootObject.add(getSceneObjectFallback(object));
                 return;
               }
+              // Populate matrixWorld for every node BEFORE measuring
+              // the bbox. SkinnedMesh.computeBoundingBox uses bone
+              // matrixWorlds; without this update they're identity and
+              // the bbox is garbage, leading to wildly wrong scale.
+              renderable.updateMatrixWorld(true);
               if (object.targetModelHeight) {
                 normalizeModelScale(renderable, object.targetModelHeight);
               }
+              // Disable frustum culling on skinned meshes — bind-pose
+              // bounding sphere goes stale after rescaling + animation,
+              // can pop the model out of view at certain camera angles.
+              renderable.traverse((child) => {
+                if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+                  child.frustumCulled = false;
+                }
+              });
               renderView?.enableShadowsOnObject(renderable);
               ensureShaderSetAppliedToRenderable(
                 renderable,
@@ -792,6 +851,56 @@ export function createWebRuntimeHost(
                 state.assetSources
               );
               rootObject.add(renderable);
+
+              // For NPCs with bound animations, load the idle clip and
+              // attach an AnimationMixer so the runtime frame loop can
+              // drive it. v1: NPCs default to playing idle forever (no
+              // locomotion-driven slot switching like the player).
+              if (object.kind === "npc") {
+                const presence = region.scene.npcPresences.find(
+                  (p) => p.presenceId === object.instanceId
+                );
+                const npcDefinition = presence
+                  ? state.npcDefinitions.find(
+                      (d) => d.definitionId === presence.npcDefinitionId
+                    )
+                  : null;
+                const idleBindingId =
+                  npcDefinition?.presentation.animationAssetBindings.idle ?? null;
+                const idleAnimDef = idleBindingId
+                  ? getCharacterAnimationDefinition(
+                      state.contentLibrary,
+                      idleBindingId
+                    )
+                  : null;
+                const idleSourceUrl = idleAnimDef
+                  ? state.assetSources[
+                      idleAnimDef.source.relativeAssetPath
+                    ] ?? null
+                  : null;
+                if (idleSourceUrl) {
+                  void gltfLoader
+                    .loadAsync(idleSourceUrl)
+                    .then((animGltf) => {
+                      const clip = animGltf.animations[0];
+                      if (!clip) return;
+                      const npcEntry = sceneObjectEntries.get(object.instanceId);
+                      if (!npcEntry) return;
+                      const mixer = new THREE.AnimationMixer(renderable);
+                      const action = mixer.clipAction(clip);
+                      action.reset();
+                      action.play();
+                      npcEntry.mixer = mixer;
+                    })
+                    .catch((error) => {
+                      console.error("[web-runtime] npc-animation-load-failed", {
+                        instanceId: object.instanceId,
+                        sourceUrl: idleSourceUrl,
+                        error
+                      });
+                    });
+                }
+              }
             })
             .catch((error) => {
               console.error("[web-runtime] asset-load-failed", {
@@ -814,11 +923,13 @@ export function createWebRuntimeHost(
         }
 
         scene.add(rootObject);
-        sceneObjectEntries.set(object.instanceId, {
+        const entry: SceneObjectEntry = {
           root: rootObject,
           object,
-          shaderApplication
-        });
+          shaderApplication,
+          mixer: null
+        };
+        sceneObjectEntries.set(object.instanceId, entry);
       }
     }
     world = new World();

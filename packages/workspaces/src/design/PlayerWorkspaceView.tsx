@@ -1,16 +1,15 @@
 import { useEffect, useMemo } from "react";
 import {
-  ActionIcon,
+  Button,
   Group,
   NumberInput,
-  Select,
   Stack,
   Text,
-  TextInput,
-  Tooltip
+  TextInput
 } from "@mantine/core";
 import type {
-  AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   PlayerAnimationSlot,
   PlayerDefinition,
   SemanticCommand
@@ -21,25 +20,35 @@ import type {
 } from "@sugarmagic/shell";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
+import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   playerDefinition: PlayerDefinition | null;
-  assetDefinitions: AssetDefinition[];
+  characterModelDefinitions: CharacterModelDefinition[];
+  characterAnimationDefinitions: CharacterAnimationDefinition[];
+  /** path → blob URL map for resolving model + animation glbs. */
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
-}
-
-const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
-function toAssetOptions(assetDefinitions: AssetDefinition[]) {
-  return assetDefinitions.map((definition) => ({
-    value: definition.definitionId,
-    label: definition.displayName
-  }));
+  /**
+   * Triggers a file-picker that imports a character model `.glb`
+   * via IO into the project. Resolves to the new
+   * `CharacterModelDefinition` so the inspector can bind it to
+   * `playerDefinition.presentation.modelAssetDefinitionId`. Resolves
+   * to `null` when the user cancels the picker.
+   */
+  onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
+  /**
+   * Triggers a file-picker that imports a character animation `.glb`
+   * via IO into the project. Resolves to the new
+   * `CharacterAnimationDefinition` so the inspector can bind it to a
+   * specific animation slot (idle / walk / run). Resolves to `null`
+   * when the user cancels the picker.
+   */
+  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
 }
 
 function parseTagList(value: string): string[] {
@@ -49,24 +58,11 @@ function parseTagList(value: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-function boundAnimationSlotOptions(playerDefinition: PlayerDefinition | null) {
-  if (!playerDefinition) return [];
-
-  const labels: Record<PlayerAnimationSlot, string> = {
-    idle: "Idle",
-    walk: "Walk",
-    run: "Run"
-  };
-
-  return (Object.entries(
-    playerDefinition.presentation.animationAssetBindings
-  ) as Array<[PlayerAnimationSlot, string | null]>)
-    .filter(([, definitionId]) => Boolean(definitionId))
-    .map(([slot]) => ({
-      value: slot,
-      label: labels[slot]
-    }));
-}
+const PLAYER_ANIMATION_SLOT_LABELS: Record<PlayerAnimationSlot, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run"
+};
 
 export function usePlayerWorkspaceView(
   props: PlayerWorkspaceViewProps
@@ -75,9 +71,13 @@ export function usePlayerWorkspaceView(
     isActive,
     gameProjectId,
     playerDefinition,
-    assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition
   } = props;
 
   const activeAnimationSlot = useVanillaStoreSelector(
@@ -89,11 +89,6 @@ export function usePlayerWorkspaceView(
     designPreviewStore,
     (state: DesignPreviewState) => state.isAnimationPlaying
   );
-  const cameraQuaternion = useVanillaStoreSelector(
-    designPreviewStore,
-    (state: DesignPreviewState) =>
-      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
-  );
 
   useEffect(() => {
     if (!isActive || !playerDefinition) return;
@@ -103,22 +98,40 @@ export function usePlayerWorkspaceView(
     };
   }, [designPreviewStore, isActive, playerDefinition]);
 
-  const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
-  const animationSlotOptions = useMemo(
-    () => boundAnimationSlotOptions(playerDefinition),
-    [playerDefinition]
-  );
-  const effectiveAnimationSlot = useMemo(() => {
-    if (!playerDefinition) return null;
-    if (
-      activeAnimationSlot &&
-      playerDefinition.presentation.animationAssetBindings[activeAnimationSlot]
-    ) {
-      return activeAnimationSlot;
-    }
+  const boundCharacterModel = useMemo(() => {
+    if (!playerDefinition?.presentation.modelAssetDefinitionId) return null;
+    return (
+      characterModelDefinitions.find(
+        (definition) =>
+          definition.definitionId ===
+          playerDefinition.presentation.modelAssetDefinitionId
+      ) ?? null
+    );
+  }, [characterModelDefinitions, playerDefinition]);
 
-    return (animationSlotOptions[0]?.value as PlayerAnimationSlot | undefined) ?? null;
-  }, [activeAnimationSlot, animationSlotOptions, playerDefinition]);
+  // Preview slot list — one entry per Player animation slot (idle /
+  // walk / run), with each slot's resolved CharacterAnimationDefinition
+  // attached so CharacterPreview can pre-load all bound clips and swap
+  // cheaply between them.
+  const previewSlots = useMemo<CharacterPreviewSlot[]>(() => {
+    if (!playerDefinition) return [];
+    return (Object.keys(PLAYER_ANIMATION_SLOT_LABELS) as PlayerAnimationSlot[]).map(
+      (slot) => {
+        const bindingId =
+          playerDefinition.presentation.animationAssetBindings[slot] ?? null;
+        const animation = bindingId
+          ? characterAnimationDefinitions.find(
+              (definition) => definition.definitionId === bindingId
+            ) ?? null
+          : null;
+        return {
+          value: slot,
+          label: PLAYER_ANIMATION_SLOT_LABELS[slot],
+          animation
+        };
+      }
+    );
+  }, [playerDefinition, characterAnimationDefinitions]);
 
   function updatePlayerDefinition(nextDefinition: PlayerDefinition) {
     if (!gameProjectId) return;
@@ -138,66 +151,25 @@ export function usePlayerWorkspaceView(
     });
   }
 
-  const previewOverlay = (
-    <>
-      <Group
-        gap="xs"
-        wrap="nowrap"
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          padding: 8,
-          borderRadius: 8,
-          border: "1px solid var(--sm-panel-border)",
-          background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
-        }}
-      >
-        <Select
-          size="xs"
-          w={140}
-          data={[
-            { value: "__none__", label: "Static" },
-            ...animationSlotOptions
-          ]}
-          value={effectiveAnimationSlot ?? "__none__"}
-          onChange={(value) =>
-            designPreviewStore.getState().setAnimationSlot(
-              value && value !== "__none__"
-                ? (value as PlayerAnimationSlot)
-                : null
-            )
-          }
-          styles={{
-            input: {
-              background: "var(--sm-color-base)",
-              borderColor: "var(--sm-panel-border)",
-              color: "var(--sm-color-text)"
-            },
-            dropdown: {
-              background: "var(--sm-color-surface1)",
-              borderColor: "var(--sm-panel-border)"
-            }
-          }}
-        />
-        <Tooltip label={isAnimationPlaying ? "Pause preview" : "Play preview"}>
-          <ActionIcon
-            variant="subtle"
-            color="blue"
-            onClick={() =>
-              designPreviewStore
-                .getState()
-                .setAnimationPlaying(!isAnimationPlaying)
-            }
-            aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
-          >
-            {isAnimationPlaying ? "❚❚" : "▶"}
-          </ActionIcon>
-        </Tooltip>
-      </Group>
-      <LayoutOrientationWidget quaternion={cameraQuaternion} />
-    </>
+  const centerPanel = (
+    <CharacterPreview
+      model={boundCharacterModel}
+      targetHeight={
+        playerDefinition?.physicalProfile.height ?? 1.8
+      }
+      slots={previewSlots}
+      activeSlot={activeAnimationSlot}
+      onChangeActiveSlot={(slot) =>
+        designPreviewStore
+          .getState()
+          .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
+      }
+      isPlaying={isAnimationPlaying}
+      onChangePlaying={(playing) =>
+        designPreviewStore.getState().setAnimationPlaying(playing)
+      }
+      assetSources={assetSources}
+    />
   );
 
   return {
@@ -440,50 +412,178 @@ export function usePlayerWorkspaceView(
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Model
               </Text>
-              <Select
-                label="Model Asset"
-                size="xs"
-                clearable
-                data={assetOptions}
-                value={playerDefinition.presentation.modelAssetDefinitionId}
-                onChange={(value) =>
-                  updatePlayerDefinition({
-                    ...playerDefinition,
-                    presentation: {
-                      ...playerDefinition.presentation,
-                      modelAssetDefinitionId: value
-                    }
-                  })
-                }
-              />
+              {boundCharacterModel ? (
+                <Stack gap={4}>
+                  <Text size="xs">{boundCharacterModel.displayName}</Text>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {boundCharacterModel.source.relativeAssetPath}
+                  </Text>
+                  <Group gap="xs">
+                    <Button
+                      size="compact-xs"
+                      variant="light"
+                      onClick={async () => {
+                        const next = await onImportCharacterModelDefinition();
+                        if (!next) return;
+                        updatePlayerDefinition({
+                          ...playerDefinition,
+                          presentation: {
+                            ...playerDefinition.presentation,
+                            modelAssetDefinitionId: next.definitionId
+                          }
+                        });
+                      }}
+                    >
+                      Replace…
+                    </Button>
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        updatePlayerDefinition({
+                          ...playerDefinition,
+                          presentation: {
+                            ...playerDefinition.presentation,
+                            modelAssetDefinitionId: null
+                          }
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  </Group>
+                </Stack>
+              ) : (
+                <Stack gap={4}>
+                  {playerDefinition.presentation.modelAssetDefinitionId ? (
+                    <Text size="xs" c="red">
+                      Bound model is missing from the project — re-import.
+                    </Text>
+                  ) : (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      No model bound. The player will render as a capsule.
+                    </Text>
+                  )}
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={async () => {
+                      const next = await onImportCharacterModelDefinition();
+                      if (!next) return;
+                      updatePlayerDefinition({
+                        ...playerDefinition,
+                        presentation: {
+                          ...playerDefinition.presentation,
+                          modelAssetDefinitionId: next.definitionId
+                        }
+                      });
+                    }}
+                  >
+                    Import Character Model…
+                  </Button>
+                </Stack>
+              )}
             </Stack>
 
             <Stack gap="xs">
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
                 Animation Slots
               </Text>
-              {(["idle", "walk", "run"] as PlayerAnimationSlot[]).map((slot) => (
-                <Select
-                  key={slot}
-                  label={slot[0]!.toUpperCase() + slot.slice(1)}
-                  size="xs"
-                  clearable
-                  data={assetOptions}
-                  value={playerDefinition.presentation.animationAssetBindings[slot]}
-                  onChange={(value) =>
-                    updatePlayerDefinition({
-                      ...playerDefinition,
-                      presentation: {
-                        ...playerDefinition.presentation,
-                        animationAssetBindings: {
-                          ...playerDefinition.presentation.animationAssetBindings,
-                          [slot]: value
-                        }
-                      }
-                    })
-                  }
-                />
-              ))}
+              {(["idle", "walk", "run"] as PlayerAnimationSlot[]).map((slot) => {
+                const boundId =
+                  playerDefinition.presentation.animationAssetBindings[slot];
+                const bound = boundId
+                  ? characterAnimationDefinitions.find(
+                      (definition) => definition.definitionId === boundId
+                    ) ?? null
+                  : null;
+                const slotLabel = slot[0]!.toUpperCase() + slot.slice(1);
+                return (
+                  <Stack key={slot} gap={4}>
+                    <Text size="xs" fw={500}>
+                      {slotLabel}
+                    </Text>
+                    {bound ? (
+                      <Stack gap={4}>
+                        <Text size="xs">{bound.displayName}</Text>
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          {bound.source.relativeAssetPath}
+                        </Text>
+                        <Group gap="xs">
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            onClick={async () => {
+                              const next = await onImportCharacterAnimationDefinition();
+                              if (!next) return;
+                              updatePlayerDefinition({
+                                ...playerDefinition,
+                                presentation: {
+                                  ...playerDefinition.presentation,
+                                  animationAssetBindings: {
+                                    ...playerDefinition.presentation.animationAssetBindings,
+                                    [slot]: next.definitionId
+                                  }
+                                }
+                              });
+                            }}
+                          >
+                            Replace…
+                          </Button>
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="red"
+                            onClick={() =>
+                              updatePlayerDefinition({
+                                ...playerDefinition,
+                                presentation: {
+                                  ...playerDefinition.presentation,
+                                  animationAssetBindings: {
+                                    ...playerDefinition.presentation.animationAssetBindings,
+                                    [slot]: null
+                                  }
+                                }
+                              })
+                            }
+                          >
+                            Clear
+                          </Button>
+                        </Group>
+                      </Stack>
+                    ) : (
+                      <Stack gap={4}>
+                        {boundId ? (
+                          <Text size="xs" c="red">
+                            Bound animation is missing from the project — re-import.
+                          </Text>
+                        ) : null}
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={async () => {
+                            const next = await onImportCharacterAnimationDefinition();
+                            if (!next) return;
+                            updatePlayerDefinition({
+                              ...playerDefinition,
+                              presentation: {
+                                ...playerDefinition.presentation,
+                                animationAssetBindings: {
+                                  ...playerDefinition.presentation.animationAssetBindings,
+                                  [slot]: next.definitionId
+                                }
+                              }
+                            });
+                          }}
+                        >
+                          Import Animation…
+                        </Button>
+                      </Stack>
+                    )}
+                  </Stack>
+                );
+              })}
             </Stack>
           </Stack>
         ) : (
@@ -493,6 +593,7 @@ export function usePlayerWorkspaceView(
         )}
       </Inspector>
     ),
-    viewportOverlay: isActive ? previewOverlay : null
+    centerPanel: isActive ? centerPanel : null,
+    viewportOverlay: null
   };
 }

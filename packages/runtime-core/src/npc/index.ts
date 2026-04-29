@@ -3,29 +3,25 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type {
   AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   ContentLibrarySnapshot,
   NPCAnimationSlot,
   NPCDefinition
+} from "@sugarmagic/domain";
+import {
+  getCharacterAnimationDefinition,
+  getCharacterModelDefinition
 } from "@sugarmagic/domain";
 
 const gltfLoader = new GLTFLoader();
 const DEFAULT_CAPSULE_COLOR = 0xa6e3a1;
 
-function getAssetDefinition(
-  contentLibrary: ContentLibrarySnapshot,
-  definitionId: string | null | undefined
-): AssetDefinition | null {
-  if (!definitionId) return null;
-
-  return (
-    contentLibrary.assetDefinitions.find(
-      (definition) => definition.definitionId === definitionId
-    ) ?? null
-  );
-}
-
 function getAssetSourceUrl(
-  definition: AssetDefinition | null,
+  definition: Pick<
+    AssetDefinition | CharacterAnimationDefinition | CharacterModelDefinition,
+    "source"
+  > | null,
   assetSources: Record<string, string>
 ): string | null {
   if (!definition) return null;
@@ -65,13 +61,16 @@ function createCapsuleRoot(definition: NPCDefinition): THREE.Group {
 }
 
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
+  // Same shape as Sugarengine's CharacterLoader.normalizeModel.
+  // Requires the upstream loader to use plain Object3D.clone (not
+  // SkeletonUtils.clone) — otherwise SkinnedMesh.computeBoundingBox
+  // produces a garbage bbox driven by a corrupted bind matrix.
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   box.getSize(size);
   if (size.y <= 0) return;
 
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
+  root.scale.multiplyScalar(targetHeight / size.y);
   box.setFromObject(root);
   root.position.y -= box.min.y;
 }
@@ -127,7 +126,7 @@ export function createNPCPreviewController(
   }
 
   async function loadAnimationClip(
-    definition: AssetDefinition,
+    definition: CharacterAnimationDefinition,
     assetSources: Record<string, string>
   ): Promise<THREE.AnimationClip | null> {
     const sourceUrl = getAssetSourceUrl(definition, assetSources);
@@ -156,10 +155,11 @@ export function createNPCPreviewController(
 
       clearCurrent();
 
-      const modelDefinition = getAssetDefinition(
-        contentLibrary,
-        npcDefinition.presentation.modelAssetDefinitionId
-      );
+      const modelDefinitionId =
+        npcDefinition.presentation.modelAssetDefinitionId;
+      const modelDefinition = modelDefinitionId
+        ? getCharacterModelDefinition(contentLibrary, modelDefinitionId)
+        : null;
       const modelSourceUrl = getAssetSourceUrl(modelDefinition, assetSources);
       const availableSlots = (Object.entries(
         npcDefinition.presentation.animationAssetBindings
@@ -171,7 +171,8 @@ export function createNPCPreviewController(
         if (npcDefinition.presentation.modelAssetDefinitionId) {
           warnings.push({
             code: "missing-model",
-            message: "The bound NPC model could not be resolved from the content library."
+            message:
+              "The bound NPC model could not be resolved as a character model. Re-import the model via the NPC inspector."
           });
         }
         const capsuleRoot = createCapsuleRoot(npcDefinition);
@@ -187,8 +188,24 @@ export function createNPCPreviewController(
       try {
         const gltf = await gltfLoader.loadAsync(modelSourceUrl);
         const modelRoot = new THREE.Group();
+        // SkeletonUtils.clone (NOT plain Object3D.clone): plain clone
+        // shares the skeleton reference with the source gltf, so moving
+        // the cloned wrapper doesn't translate the rendered mesh — the
+        // skinning shader anchors to the source bones which never move.
         const clonedScene = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
+        // Populate matrixWorld for every node BEFORE measuring the bbox.
+        // SkinnedMesh.computeBoundingBox uses bone matrixWorlds; without
+        // this update they're identity and the bbox is garbage.
+        clonedScene.updateMatrixWorld(true);
         normalizeModelScale(clonedScene, npcDefinition.presentation.modelHeight);
+        // Disable frustum culling on skinned meshes — bind-pose bounding
+        // sphere goes stale after rescaling + animation, can pop the model
+        // out of view at certain camera angles. Matches Sugarengine.
+        clonedScene.traverse((child) => {
+          if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+            child.frustumCulled = false;
+          }
+        });
         modelRoot.add(clonedScene);
 
         const animationClips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
@@ -196,11 +213,14 @@ export function createNPCPreviewController(
           npcDefinition.presentation.animationAssetBindings
         ) as Array<[NPCAnimationSlot, string | null]>) {
           if (!definitionId) continue;
-          const definition = getAssetDefinition(contentLibrary, definitionId);
+          const definition = getCharacterAnimationDefinition(
+            contentLibrary,
+            definitionId
+          );
           if (!definition) {
             warnings.push({
               code: "missing-animation",
-              message: `The ${slot} animation binding could not be resolved.`
+              message: `The ${slot} animation binding could not be resolved as a character animation. Re-import the clip via the NPC inspector.`
             });
             continue;
           }
@@ -212,7 +232,7 @@ export function createNPCPreviewController(
             } else {
               warnings.push({
                 code: "missing-animation",
-                message: `The ${slot} animation asset does not contain any clips.`
+                message: `The ${slot} animation library entry does not contain any clips.`
               });
             }
           } catch {

@@ -24,6 +24,8 @@ import {
   getActiveRegion,
   getAllRegions,
   getAllAssetDefinitions,
+  getAllCharacterAnimationDefinitions,
+  getAllCharacterModelDefinitions,
   getAllDialogueDefinitions,
   getAllDocumentDefinitions,
   getAllEnvironmentDefinitions,
@@ -43,6 +45,10 @@ import {
   listRockTypeDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
+  addCharacterAnimationDefinitionToSession,
+  addCharacterModelDefinitionToSession,
+  removeCharacterAnimationDefinitionFromSession,
+  removeCharacterModelDefinitionFromSession,
   addEnvironmentDefinitionToSession,
   addMaterialDefinitionToSession,
   addMaskTextureDefinitionToSession,
@@ -80,6 +86,8 @@ import {
   importPbrTextureSet,
   importMaskTextureDefinition,
   importTextureDefinition,
+  importCharacterAnimationDefinition,
+  importCharacterModelDefinition,
   readMaskFile,
   reloadProject,
   importSourceAsset,
@@ -118,8 +126,6 @@ import {
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
-import { createNPCViewport } from "./viewport/npcViewport";
-import { createPlayerViewport } from "./viewport/playerViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
@@ -571,6 +577,14 @@ export function App() {
   const assetDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllAssetDefinitions(session);
+  }, [session]);
+  const characterModelDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllCharacterModelDefinitions(session);
+  }, [session]);
+  const characterAnimationDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllCharacterAnimationDefinitions(session);
   }, [session]);
   const materialDefinitions = useMemo(() => {
     if (!session) return [];
@@ -1025,6 +1039,93 @@ export function App() {
     }
   }, []);
 
+  const handleImportCharacterAnimationDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importCharacterAnimationDefinition({
+        projectHandle: handle,
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addCharacterAnimationDefinitionToSession(
+            currentSession,
+            result.characterAnimationDefinition
+          )
+        );
+      if (result.warnings.length > 0) {
+        window.alert(
+          `Character animation import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
+      }
+      return result.characterAnimationDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Character animation import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleImportCharacterModelDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importCharacterModelDefinition({
+        projectHandle: handle,
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addCharacterModelDefinitionToSession(
+            currentSession,
+            result.characterModelDefinition
+          )
+        );
+      if (result.warnings.length > 0) {
+        window.alert(
+          `Character model import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
+      }
+      return result.characterModelDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Character model import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleRemoveCharacterModelDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeCharacterModelDefinitionFromSession(currentSession, definitionId)
+        );
+    },
+    []
+  );
+
   const handleCreateMaskTextureDefinition = useCallback(async () => {
     const { handle, session: currentSession } = projectStore.getState();
     if (!handle || !currentSession) {
@@ -1267,6 +1368,22 @@ export function App() {
       .updateSession(removeMaterialDefinitionFromSession(currentSession, definitionId));
   }, []);
 
+  const handleRemoveCharacterAnimationDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeCharacterAnimationDefinitionFromSession(
+            currentSession,
+            definitionId
+          )
+        );
+    },
+    []
+  );
+
   const handleCreateEnvironment = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -1467,9 +1584,14 @@ export function App() {
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
+    onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
@@ -1627,40 +1749,27 @@ export function App() {
     if (!viewportRef.current) {
       return;
     }
+    // Player + NPC now provide a self-contained `centerPanel`
+    // (CharacterPreview), so the shared 3D viewport is only mounted
+    // for design > items. Other design kinds (spells, documents,
+    // dialogues, quests) also use centerPanel and the
+    // shouldRenderSharedViewport gate above already short-circuits
+    // those — only items reaches here in design mode.
+    if (activeProductMode === "design" && activeDesignKind !== "items") {
+      return;
+    }
     const viewport =
       activeProductMode === "design"
-        ? activeDesignKind === "npcs"
-          ? createNPCViewport({
-              engine: studioRenderEngine,
-              stores: {
-                projectStore,
-                shellStore,
-                viewportStore,
-                assetSourceStore,
-                designPreviewStore
-              }
-            })
-          : activeDesignKind === "items"
-            ? createItemViewport({
-                engine: studioRenderEngine,
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
-            : createPlayerViewport({
-                engine: studioRenderEngine,
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
+        ? createItemViewport({
+            engine: studioRenderEngine,
+            stores: {
+              projectStore,
+              shellStore,
+              viewportStore,
+              assetSourceStore,
+              designPreviewStore
+            }
+          })
         : createAuthoringViewport({
             engine: studioRenderEngine,
             stores: {

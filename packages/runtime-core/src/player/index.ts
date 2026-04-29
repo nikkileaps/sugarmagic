@@ -3,10 +3,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type {
   AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   ContentLibrarySnapshot,
   PlayerAnimationSlot,
   PlayerDefinition,
   RegionDocument
+} from "@sugarmagic/domain";
+import {
+  getCharacterAnimationDefinition,
+  getCharacterModelDefinition
 } from "@sugarmagic/domain";
 import {
   Caster,
@@ -24,21 +30,11 @@ const gltfLoader = new GLTFLoader();
 
 const DEFAULT_CAPSULE_COLOR = 0x89b4fa;
 
-function getAssetDefinition(
-  contentLibrary: ContentLibrarySnapshot,
-  definitionId: string | null | undefined
-): AssetDefinition | null {
-  if (!definitionId) return null;
-
-  return (
-    contentLibrary.assetDefinitions.find(
-      (definition) => definition.definitionId === definitionId
-    ) ?? null
-  );
-}
-
 function getAssetSourceUrl(
-  definition: AssetDefinition | null,
+  definition: Pick<
+    AssetDefinition | CharacterAnimationDefinition | CharacterModelDefinition,
+    "source"
+  > | null,
   assetSources: Record<string, string>
 ): string | null {
   if (!definition) return null;
@@ -81,16 +77,22 @@ function createCapsuleRoot(definition: PlayerDefinition): THREE.Group {
 }
 
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
+  // Compute the world-space bounding box, then scale the root so the
+  // bbox height matches the player's physical-profile height. This
+  // matches Sugarengine's CharacterLoader.normalizeModel — same
+  // multiplyScalar semantics, same recompute-then-snap-to-floor step.
+  // Requires the upstream loader to use plain Object3D.clone (not
+  // SkeletonUtils.clone), otherwise SkinnedMesh.computeBoundingBox
+  // produces a garbage bbox driven by a corrupted bind matrix and
+  // the resulting scale is wildly wrong.
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   box.getSize(size);
   if (size.y <= 0) return;
 
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
+  root.scale.multiplyScalar(targetHeight / size.y);
   box.setFromObject(root);
-  const minY = box.min.y;
-  root.position.y -= minY;
+  root.position.y -= box.min.y;
 }
 
 export interface PlayerPreviewWarning {
@@ -118,6 +120,15 @@ export interface PlayerPreviewController {
     isPlaying: boolean;
   }) => Promise<PlayerPreviewApplyResult>;
   update: (deltaSeconds: number) => void;
+  /**
+   * Cheap per-frame slot swap: stops the currently-playing animation
+   * action (if any) and starts the action for `slot`, reusing the
+   * already-loaded clip + mixer. No-op when the requested slot
+   * isn't bound, when it's already active, or when no model is
+   * loaded. Used by the gameplay runtime to switch idle ↔ walk based
+   * on player velocity.
+   */
+  setActiveAnimationSlot: (slot: PlayerAnimationSlot | null) => void;
   dispose: () => void;
 }
 
@@ -170,6 +181,14 @@ export function createPlayerVisualController(
 
   let currentRoot: THREE.Group | null = null;
   let currentMixer: THREE.AnimationMixer | null = null;
+  // Map of available clips for the currently-loaded model, keyed by
+  // animation slot. Populated by apply(); consumed by
+  // setActiveAnimationSlot() so the host can swap which animation
+  // plays each frame (e.g. idle ↔ walk based on velocity) without
+  // re-parsing the model GLB.
+  let currentClips = new Map<PlayerAnimationSlot, THREE.AnimationClip>();
+  let currentAction: THREE.AnimationAction | null = null;
+  let activeSlot: PlayerAnimationSlot | null = null;
   let currentApplyVersion = 0;
   let stageTargetHeight = 1.8;
 
@@ -181,10 +200,29 @@ export function createPlayerVisualController(
     }
     currentMixer?.stopAllAction();
     currentMixer = null;
+    currentClips = new Map();
+    currentAction = null;
+    activeSlot = null;
+  }
+
+  function setActiveAnimationSlot(slot: PlayerAnimationSlot | null): void {
+    if (slot === activeSlot) return;
+    if (!currentMixer) return;
+    if (currentAction) {
+      currentAction.stop();
+      currentAction = null;
+    }
+    activeSlot = slot;
+    if (slot && currentClips.has(slot)) {
+      const action = currentMixer.clipAction(currentClips.get(slot)!);
+      action.reset();
+      action.play();
+      currentAction = action;
+    }
   }
 
   async function loadAnimationClip(
-    definition: AssetDefinition,
+    definition: CharacterAnimationDefinition,
     assetSources: Record<string, string>
   ): Promise<THREE.AnimationClip | null> {
     const sourceUrl = getAssetSourceUrl(definition, assetSources);
@@ -213,10 +251,11 @@ export function createPlayerVisualController(
 
       clearCurrent();
 
-      const modelDefinition = getAssetDefinition(
-        contentLibrary,
-        playerDefinition.presentation.modelAssetDefinitionId
-      );
+      const modelDefinitionId =
+        playerDefinition.presentation.modelAssetDefinitionId;
+      const modelDefinition = modelDefinitionId
+        ? getCharacterModelDefinition(contentLibrary, modelDefinitionId)
+        : null;
       const modelSourceUrl = getAssetSourceUrl(modelDefinition, assetSources);
       const availableSlots = (Object.entries(
         playerDefinition.presentation.animationAssetBindings
@@ -229,7 +268,7 @@ export function createPlayerVisualController(
           warnings.push({
             code: "missing-model",
             message:
-              "The bound player model could not be resolved from the content library."
+              "The bound player model could not be resolved as a character model. Re-import the model via the Player inspector."
           });
         }
         const capsuleRoot = createCapsuleRoot(playerDefinition);
@@ -245,8 +284,32 @@ export function createPlayerVisualController(
       try {
         const gltf = await gltfLoader.loadAsync(modelSourceUrl);
         const modelRoot = new THREE.Group();
+        // SkeletonUtils.clone is required for the cloned SkinnedMesh's
+        // skeleton to point at the CLONED bones (rather than the source
+        // gltf's bones). Plain Object3D.clone shares the skeleton ref
+        // with the source per SkinnedMesh.copy, which means moving the
+        // cloned wrapper Group does NOT move the rendered mesh — the
+        // skinning shader follows the source bones, which never moved
+        // because the source tree was never added to the scene.
         const clonedScene = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
+        // Critical: populate matrixWorld for every node BEFORE measuring
+        // the bbox. SkinnedMesh.computeBoundingBox (called by Box3.set
+        // FromObject) evaluates `boneMatrix * inverseBindMatrix * vertex`
+        // per vertex — with un-updated bone matrixWorlds (still identity
+        // from clone) the computed bbox is garbage and normalizeModelScale
+        // then computes a wildly wrong scale.
+        clonedScene.updateMatrixWorld(true);
         normalizeModelScale(clonedScene, playerDefinition.physicalProfile.height);
+        // Disable frustum culling on skinned meshes — their bounding sphere
+        // is computed from the bind-pose geometry and goes stale after
+        // rescaling and once animations deform the mesh, which can make the
+        // model pop out of view at certain camera angles. Same workaround as
+        // Sugarengine's CharacterLoader.
+        clonedScene.traverse((child) => {
+          if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+            child.frustumCulled = false;
+          }
+        });
         modelRoot.add(clonedScene);
 
         const animationClips = new Map<PlayerAnimationSlot, THREE.AnimationClip>();
@@ -254,11 +317,14 @@ export function createPlayerVisualController(
           playerDefinition.presentation.animationAssetBindings
         ) as Array<[PlayerAnimationSlot, string | null]>) {
           if (!definitionId) continue;
-          const definition = getAssetDefinition(contentLibrary, definitionId);
+          const definition = getCharacterAnimationDefinition(
+            contentLibrary,
+            definitionId
+          );
           if (!definition) {
             warnings.push({
               code: "missing-animation",
-              message: `The ${slot} animation binding could not be resolved.`
+              message: `The ${slot} animation binding could not be resolved as a character animation. Re-import the clip via the Player inspector.`
             });
             continue;
           }
@@ -270,7 +336,7 @@ export function createPlayerVisualController(
             } else {
               warnings.push({
                 code: "missing-animation",
-                message: `The ${slot} animation asset does not contain any clips.`
+                message: `The ${slot} animation library entry does not contain any clips.`
               });
             }
           } catch {
@@ -288,15 +354,20 @@ export function createPlayerVisualController(
 
         currentRoot = modelRoot;
         root.add(modelRoot);
+        currentClips = animationClips;
 
-        if (activeAnimationSlot && animationClips.has(activeAnimationSlot)) {
+        // Create the mixer whenever ANY clips loaded. The host controls
+        // which slot plays via setActiveAnimationSlot each frame, so we
+        // can't gate on the initial activeAnimationSlot — a player with
+        // only walk bound (no idle) would otherwise never get a mixer
+        // and every later setActiveAnimationSlot("walk") would silently
+        // no-op.
+        if (animationClips.size > 0) {
           currentMixer = new THREE.AnimationMixer(clonedScene);
-          const action = currentMixer.clipAction(
-            animationClips.get(activeAnimationSlot)!
-          );
-          action.reset();
-          action.play();
           currentMixer.timeScale = isPlaying ? 1 : 0;
+          if (activeAnimationSlot && animationClips.has(activeAnimationSlot)) {
+            setActiveAnimationSlot(activeAnimationSlot);
+          }
         } else {
           currentMixer = null;
         }
@@ -321,6 +392,7 @@ export function createPlayerVisualController(
     update(deltaSeconds) {
       currentMixer?.update(deltaSeconds);
     },
+    setActiveAnimationSlot,
     dispose() {
       currentApplyVersion += 1;
       clearCurrent();

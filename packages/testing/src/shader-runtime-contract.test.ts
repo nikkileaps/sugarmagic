@@ -85,6 +85,8 @@ function createContentLibrary(): ContentLibrarySnapshot {
         }
       }
     ],
+    characterAnimationDefinitions: [],
+    characterModelDefinitions: [],
     materialDefinitions: [],
     textureDefinitions: [],
     environmentDefinitions: [
@@ -355,6 +357,8 @@ describe("shader runtime contracts", () => {
           version: 1
         },
         assetDefinitions: [],
+        characterAnimationDefinitions: [],
+        characterModelDefinitions: [],
         materialDefinitions: [],
         textureDefinitions: [],
         environmentDefinitions: [],
@@ -425,6 +429,8 @@ describe("shader runtime contracts", () => {
           version: 1
         },
         assetDefinitions: [],
+        characterAnimationDefinitions: [],
+        characterModelDefinitions: [],
         materialDefinitions: [],
         textureDefinitions: [
           {
@@ -508,6 +514,8 @@ describe("shader runtime contracts", () => {
           version: 1
         },
         assetDefinitions: [],
+        characterAnimationDefinitions: [],
+        characterModelDefinitions: [],
         materialDefinitions: [],
         textureDefinitions: [],
         environmentDefinitions: [],
@@ -566,6 +574,8 @@ describe("shader runtime contracts", () => {
           version: 1
         },
         assetDefinitions: [],
+        characterAnimationDefinitions: [],
+        characterModelDefinitions: [],
         materialDefinitions: [],
         textureDefinitions: [
           {

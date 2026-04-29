@@ -75,6 +75,7 @@ import {
 
 export type ContentDefinitionKind =
   | "asset"
+  | "animation"
   | "material"
   | "texture"
   | "mask-texture"
@@ -112,6 +113,50 @@ export interface AssetDefinition {
     fileName: string;
     mimeType: string | null;
   };
+}
+
+/**
+ * Character model `.glb` bound to exactly one Player or NPC
+ * definition. Lives in the project file (asset-resolved,
+ * version-controlled, exportable with the project) but is NOT a
+ * library kind — it has no popover and never appears in the
+ * Layout asset list. Authors import it via the file-picker on
+ * the Player/NPC inspector, not via any library surface.
+ *
+ * This is the "entity-owned content kind" pattern: distinct
+ * from library kinds (Materials/Textures/Shaders) which exist
+ * for shared, browseable content. Character models are 1:1
+ * with their character, so browsing across them has no meaning.
+ */
+export interface CharacterModelDefinition {
+  definitionId: string;
+  definitionKind: "character-model";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+}
+
+/**
+ * Character animation `.glb` bound to exactly one Player or NPC
+ * animation slot (idle / walk / run). Same entity-owned shape as
+ * CharacterModelDefinition: lives in the project file, no
+ * library popover, imported via the file-picker on a slot in the
+ * Player/NPC inspector. `clipNames` is captured at import for
+ * future per-clip selection (v1 always plays the first clip).
+ */
+export interface CharacterAnimationDefinition {
+  definitionId: string;
+  definitionKind: "character-animation";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+  clipNames: string[];
 }
 
 export interface TextureDefinition {
@@ -339,6 +384,8 @@ export interface EnvironmentDefinition {
 export interface ContentLibrarySnapshot {
   identity: DocumentIdentity;
   assetDefinitions: AssetDefinition[];
+  characterModelDefinitions: CharacterModelDefinition[];
+  characterAnimationDefinitions: CharacterAnimationDefinition[];
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions?: MaskTextureDefinition[];
@@ -481,6 +528,37 @@ function normalizeMaskTextureDefinitions(
       mimeType: definition.source.mimeType
     },
     resolution: [...definition.resolution] as [number, number]
+  }));
+}
+
+function normalizeCharacterModelDefinitions(
+  definitions: CharacterModelDefinition[] | null | undefined
+): CharacterModelDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    definitionId: definition.definitionId,
+    definitionKind: "character-model",
+    displayName: definition.displayName,
+    source: {
+      relativeAssetPath: definition.source.relativeAssetPath,
+      fileName: definition.source.fileName,
+      mimeType: definition.source.mimeType
+    }
+  }));
+}
+
+function normalizeCharacterAnimationDefinitions(
+  definitions: CharacterAnimationDefinition[] | null | undefined
+): CharacterAnimationDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    definitionId: definition.definitionId,
+    definitionKind: "character-animation",
+    displayName: definition.displayName,
+    source: {
+      relativeAssetPath: definition.source.relativeAssetPath,
+      fileName: definition.source.fileName,
+      mimeType: definition.source.mimeType
+    },
+    clipNames: [...(definition.clipNames ?? [])]
   }));
 }
 
@@ -1271,6 +1349,52 @@ export function createDefaultEnvironmentDefinition(
   return synchronizeEnvironmentDefinition(definition, projectId);
 }
 
+export function createDefaultCharacterModelDefinition(
+  projectId: string,
+  options: {
+    definitionId?: string;
+    displayName?: string;
+    source: CharacterModelDefinition["source"];
+  }
+): CharacterModelDefinition {
+  return {
+    definitionId:
+      options.definitionId ??
+      `${projectId}:character-model:${createScopedId("character-model")}`,
+    definitionKind: "character-model",
+    displayName: options.displayName ?? options.source.fileName,
+    source: {
+      relativeAssetPath: options.source.relativeAssetPath,
+      fileName: options.source.fileName,
+      mimeType: options.source.mimeType
+    }
+  };
+}
+
+export function createDefaultCharacterAnimationDefinition(
+  projectId: string,
+  options: {
+    definitionId?: string;
+    displayName?: string;
+    source: CharacterAnimationDefinition["source"];
+    clipNames?: string[];
+  }
+): CharacterAnimationDefinition {
+  return {
+    definitionId:
+      options.definitionId ??
+      `${projectId}:character-animation:${createScopedId("character-animation")}`,
+    definitionKind: "character-animation",
+    displayName: options.displayName ?? options.source.fileName,
+    source: {
+      relativeAssetPath: options.source.relativeAssetPath,
+      fileName: options.source.fileName,
+      mimeType: options.source.mimeType
+    },
+    clipNames: [...(options.clipNames ?? [])]
+  };
+}
+
 export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
@@ -1286,6 +1410,8 @@ export function createEmptyContentLibrarySnapshot(
       version: 5
     },
     assetDefinitions: [],
+    characterModelDefinitions: [],
+    characterAnimationDefinitions: [],
     materialDefinitions: builtInMaterialDefinitions,
     textureDefinitions: [],
     maskTextureDefinitions: [],
@@ -1385,6 +1511,12 @@ export function normalizeContentLibrarySnapshot(
       deform: normalizeShaderReference(definition.deform, projectId),
       effect: normalizeShaderReference(definition.effect, projectId)
     })),
+    characterModelDefinitions: normalizeCharacterModelDefinitions(
+      contentLibrary.characterModelDefinitions
+    ),
+    characterAnimationDefinitions: normalizeCharacterAnimationDefinitions(
+      contentLibrary.characterAnimationDefinitions
+    ),
     materialDefinitions: mergedMaterialDefinitions,
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
       ...definition,
@@ -1792,6 +1924,40 @@ export function listAssetDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): AssetDefinition[] {
   return [...contentLibrary.assetDefinitions];
+}
+
+export function getCharacterModelDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): CharacterModelDefinition | null {
+  return (
+    contentLibrary.characterModelDefinitions.find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listCharacterModelDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): CharacterModelDefinition[] {
+  return [...contentLibrary.characterModelDefinitions];
+}
+
+export function getCharacterAnimationDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): CharacterAnimationDefinition | null {
+  return (
+    contentLibrary.characterAnimationDefinitions.find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listCharacterAnimationDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): CharacterAnimationDefinition[] {
+  return [...contentLibrary.characterAnimationDefinitions];
 }
 
 export function getMaterialDefinition(
