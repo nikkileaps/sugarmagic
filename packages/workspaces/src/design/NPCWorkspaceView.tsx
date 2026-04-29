@@ -47,8 +47,8 @@ import type {
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
+import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -61,6 +61,8 @@ export interface NPCWorkspaceViewProps {
   }>;
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  /** path → blob URL map for resolving model + animation glbs. */
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
   /**
@@ -85,26 +87,11 @@ export interface NPCWorkspaceViewProps {
   }) => ReactNode;
 }
 
-const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
-function boundAnimationSlotOptions(npcDefinition: NPCDefinition | null) {
-  if (!npcDefinition) return [];
-
-  const labels: Record<NPCAnimationSlot, string> = {
-    idle: "Idle",
-    walk: "Walk",
-    run: "Run"
-  };
-
-  return (Object.entries(
-    npcDefinition.presentation.animationAssetBindings
-  ) as Array<[NPCAnimationSlot, string | null]>)
-    .filter(([, definitionId]) => Boolean(definitionId))
-    .map(([slot]) => ({
-      value: slot,
-      label: labels[slot]
-    }));
-}
+const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run"
+};
 
 export function useNPCWorkspaceView(
   props: NPCWorkspaceViewProps
@@ -116,6 +103,7 @@ export function useNPCWorkspaceView(
     interactionModeOptions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
@@ -140,11 +128,6 @@ export function useNPCWorkspaceView(
   const isAnimationPlaying = useVanillaStoreSelector(
     designPreviewStore,
     (state: DesignPreviewState) => state.isAnimationPlaying
-  );
-  const cameraQuaternion = useVanillaStoreSelector(
-    designPreviewStore,
-    (state: DesignPreviewState) =>
-      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
   );
 
   const effectiveSelectedNpcId = useMemo(() => {
@@ -190,21 +173,28 @@ export function useNPCWorkspaceView(
       ) ?? null
     );
   }, [characterModelDefinitions, selectedNPC]);
-  const animationSlotOptions = useMemo(
-    () => boundAnimationSlotOptions(selectedNPC),
-    [selectedNPC]
-  );
-  const effectiveAnimationSlot = useMemo(() => {
-    if (!selectedNPC) return null;
-    if (
-      activeAnimationSlot &&
-      selectedNPC.presentation.animationAssetBindings[activeAnimationSlot]
-    ) {
-      return activeAnimationSlot;
-    }
-
-    return (animationSlotOptions[0]?.value as NPCAnimationSlot | undefined) ?? null;
-  }, [activeAnimationSlot, animationSlotOptions, selectedNPC]);
+  // Preview slot list — one entry per NPC animation slot, with each
+  // slot's resolved CharacterAnimationDefinition attached so the
+  // CharacterPreview component can pre-load and cheaply swap clips.
+  const previewSlots = useMemo<CharacterPreviewSlot[]>(() => {
+    if (!selectedNPC) return [];
+    return (Object.keys(NPC_ANIMATION_SLOT_LABELS) as NPCAnimationSlot[]).map(
+      (slot) => {
+        const bindingId =
+          selectedNPC.presentation.animationAssetBindings[slot] ?? null;
+        const animation = bindingId
+          ? characterAnimationDefinitions.find(
+              (definition) => definition.definitionId === bindingId
+            ) ?? null
+          : null;
+        return {
+          value: slot,
+          label: NPC_ANIMATION_SLOT_LABELS[slot],
+          animation
+        };
+      }
+    );
+  }, [selectedNPC, characterAnimationDefinitions]);
 
   const availableInteractionModes = useMemo(
     () => new Set(interactionModeOptions.map((option) => option.value)),
@@ -287,66 +277,23 @@ export function useNPCWorkspaceView(
     }
   }
 
-  const previewOverlay = (
-    <>
-      <Group
-        gap="xs"
-        wrap="nowrap"
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          padding: 8,
-          borderRadius: 8,
-          border: "1px solid var(--sm-panel-border)",
-          background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
-        }}
-      >
-        <Select
-          size="xs"
-          w={140}
-          data={[
-            { value: "__none__", label: "Static" },
-            ...animationSlotOptions
-          ]}
-          value={effectiveAnimationSlot ?? "__none__"}
-          onChange={(value) =>
-            designPreviewStore.getState().setAnimationSlot(
-              value && value !== "__none__"
-                ? (value as NPCAnimationSlot)
-                : null
-            )
-          }
-          styles={{
-            input: {
-              background: "var(--sm-color-base)",
-              borderColor: "var(--sm-panel-border)",
-              color: "var(--sm-color-text)"
-            },
-            dropdown: {
-              background: "var(--sm-color-surface1)",
-              borderColor: "var(--sm-panel-border)"
-            }
-          }}
-        />
-        <Tooltip label={isAnimationPlaying ? "Pause preview" : "Play preview"}>
-          <ActionIcon
-            variant="subtle"
-            color="green"
-            onClick={() =>
-              designPreviewStore
-                .getState()
-                .setAnimationPlaying(!isAnimationPlaying)
-            }
-            aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
-          >
-            {isAnimationPlaying ? "❚❚" : "▶"}
-          </ActionIcon>
-        </Tooltip>
-      </Group>
-      <LayoutOrientationWidget quaternion={cameraQuaternion} />
-    </>
+  const centerPanel = (
+    <CharacterPreview
+      model={boundCharacterModel}
+      targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
+      slots={previewSlots}
+      activeSlot={activeAnimationSlot}
+      onChangeActiveSlot={(slot) =>
+        designPreviewStore
+          .getState()
+          .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
+      }
+      isPlaying={isAnimationPlaying}
+      onChangePlaying={(playing) =>
+        designPreviewStore.getState().setAnimationPlaying(playing)
+      }
+      assetSources={assetSources}
+    />
   );
 
   const leftPanel = (
@@ -754,6 +701,7 @@ export function useNPCWorkspaceView(
         )}
       </Inspector>
     ),
-    viewportOverlay: isActive && selectedNPC ? previewOverlay : null
+    centerPanel: isActive && selectedNPC ? centerPanel : null,
+    viewportOverlay: null
   };
 }

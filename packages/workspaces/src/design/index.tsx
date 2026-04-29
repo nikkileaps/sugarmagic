@@ -79,6 +79,7 @@ export interface DesignProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
@@ -125,6 +126,7 @@ export function useDesignProductModeView(
     assetDefinitions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onSelectKind,
     onCommand,
@@ -143,6 +145,7 @@ export function useDesignProductModeView(
     playerDefinition,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
@@ -156,6 +159,7 @@ export function useDesignProductModeView(
     interactionModeOptions: npcInteractionOptions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
@@ -268,6 +272,10 @@ export function useDesignProductModeView(
             ? spellView.centerPanel
           : activeDesignKind === "documents"
             ? documentView.centerPanel
+          : activeDesignKind === "player"
+            ? playerView.centerPanel
+          : activeDesignKind === "npcs"
+            ? npcView.centerPanel
           : undefined,
     viewportOverlay:
       activeDesignKind === "dialogues"

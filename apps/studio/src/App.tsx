@@ -126,8 +126,6 @@ import {
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { createItemViewport } from "./viewport/itemViewport";
-import { createNPCViewport } from "./viewport/npcViewport";
-import { createPlayerViewport } from "./viewport/playerViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
@@ -1588,6 +1586,7 @@ export function App() {
     assetDefinitions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
@@ -1750,40 +1749,27 @@ export function App() {
     if (!viewportRef.current) {
       return;
     }
+    // Player + NPC now provide a self-contained `centerPanel`
+    // (CharacterPreview), so the shared 3D viewport is only mounted
+    // for design > items. Other design kinds (spells, documents,
+    // dialogues, quests) also use centerPanel and the
+    // shouldRenderSharedViewport gate above already short-circuits
+    // those — only items reaches here in design mode.
+    if (activeProductMode === "design" && activeDesignKind !== "items") {
+      return;
+    }
     const viewport =
       activeProductMode === "design"
-        ? activeDesignKind === "npcs"
-          ? createNPCViewport({
-              engine: studioRenderEngine,
-              stores: {
-                projectStore,
-                shellStore,
-                viewportStore,
-                assetSourceStore,
-                designPreviewStore
-              }
-            })
-          : activeDesignKind === "items"
-            ? createItemViewport({
-                engine: studioRenderEngine,
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
-            : createPlayerViewport({
-                engine: studioRenderEngine,
-                stores: {
-                  projectStore,
-                  shellStore,
-                  viewportStore,
-                  assetSourceStore,
-                  designPreviewStore
-                }
-              })
+        ? createItemViewport({
+            engine: studioRenderEngine,
+            stores: {
+              projectStore,
+              shellStore,
+              viewportStore,
+              assetSourceStore,
+              designPreviewStore
+            }
+          })
         : createAuthoringViewport({
             engine: studioRenderEngine,
             stores: {

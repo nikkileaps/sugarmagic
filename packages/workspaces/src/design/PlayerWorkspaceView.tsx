@@ -1,14 +1,11 @@
 import { useEffect, useMemo } from "react";
 import {
-  ActionIcon,
   Button,
   Group,
   NumberInput,
-  Select,
   Stack,
   Text,
-  TextInput,
-  Tooltip
+  TextInput
 } from "@mantine/core";
 import type {
   CharacterAnimationDefinition,
@@ -23,8 +20,8 @@ import type {
 } from "@sugarmagic/shell";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
-import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
+import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
@@ -32,6 +29,8 @@ export interface PlayerWorkspaceViewProps {
   playerDefinition: PlayerDefinition | null;
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  /** path → blob URL map for resolving model + animation glbs. */
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
   /**
@@ -52,8 +51,6 @@ export interface PlayerWorkspaceViewProps {
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
 }
 
-const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
 function parseTagList(value: string): string[] {
   return value
     .split(",")
@@ -61,24 +58,11 @@ function parseTagList(value: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-function boundAnimationSlotOptions(playerDefinition: PlayerDefinition | null) {
-  if (!playerDefinition) return [];
-
-  const labels: Record<PlayerAnimationSlot, string> = {
-    idle: "Idle",
-    walk: "Walk",
-    run: "Run"
-  };
-
-  return (Object.entries(
-    playerDefinition.presentation.animationAssetBindings
-  ) as Array<[PlayerAnimationSlot, string | null]>)
-    .filter(([, definitionId]) => Boolean(definitionId))
-    .map(([slot]) => ({
-      value: slot,
-      label: labels[slot]
-    }));
-}
+const PLAYER_ANIMATION_SLOT_LABELS: Record<PlayerAnimationSlot, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run"
+};
 
 export function usePlayerWorkspaceView(
   props: PlayerWorkspaceViewProps
@@ -89,6 +73,7 @@ export function usePlayerWorkspaceView(
     playerDefinition,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
@@ -103,11 +88,6 @@ export function usePlayerWorkspaceView(
   const isAnimationPlaying = useVanillaStoreSelector(
     designPreviewStore,
     (state: DesignPreviewState) => state.isAnimationPlaying
-  );
-  const cameraQuaternion = useVanillaStoreSelector(
-    designPreviewStore,
-    (state: DesignPreviewState) =>
-      state.cameraFraming?.quaternion ?? IDENTITY_QUATERNION
   );
 
   useEffect(() => {
@@ -128,21 +108,30 @@ export function usePlayerWorkspaceView(
       ) ?? null
     );
   }, [characterModelDefinitions, playerDefinition]);
-  const animationSlotOptions = useMemo(
-    () => boundAnimationSlotOptions(playerDefinition),
-    [playerDefinition]
-  );
-  const effectiveAnimationSlot = useMemo(() => {
-    if (!playerDefinition) return null;
-    if (
-      activeAnimationSlot &&
-      playerDefinition.presentation.animationAssetBindings[activeAnimationSlot]
-    ) {
-      return activeAnimationSlot;
-    }
 
-    return (animationSlotOptions[0]?.value as PlayerAnimationSlot | undefined) ?? null;
-  }, [activeAnimationSlot, animationSlotOptions, playerDefinition]);
+  // Preview slot list — one entry per Player animation slot (idle /
+  // walk / run), with each slot's resolved CharacterAnimationDefinition
+  // attached so CharacterPreview can pre-load all bound clips and swap
+  // cheaply between them.
+  const previewSlots = useMemo<CharacterPreviewSlot[]>(() => {
+    if (!playerDefinition) return [];
+    return (Object.keys(PLAYER_ANIMATION_SLOT_LABELS) as PlayerAnimationSlot[]).map(
+      (slot) => {
+        const bindingId =
+          playerDefinition.presentation.animationAssetBindings[slot] ?? null;
+        const animation = bindingId
+          ? characterAnimationDefinitions.find(
+              (definition) => definition.definitionId === bindingId
+            ) ?? null
+          : null;
+        return {
+          value: slot,
+          label: PLAYER_ANIMATION_SLOT_LABELS[slot],
+          animation
+        };
+      }
+    );
+  }, [playerDefinition, characterAnimationDefinitions]);
 
   function updatePlayerDefinition(nextDefinition: PlayerDefinition) {
     if (!gameProjectId) return;
@@ -162,66 +151,25 @@ export function usePlayerWorkspaceView(
     });
   }
 
-  const previewOverlay = (
-    <>
-      <Group
-        gap="xs"
-        wrap="nowrap"
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 10,
-          padding: 8,
-          borderRadius: 8,
-          border: "1px solid var(--sm-panel-border)",
-          background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
-        }}
-      >
-        <Select
-          size="xs"
-          w={140}
-          data={[
-            { value: "__none__", label: "Static" },
-            ...animationSlotOptions
-          ]}
-          value={effectiveAnimationSlot ?? "__none__"}
-          onChange={(value) =>
-            designPreviewStore.getState().setAnimationSlot(
-              value && value !== "__none__"
-                ? (value as PlayerAnimationSlot)
-                : null
-            )
-          }
-          styles={{
-            input: {
-              background: "var(--sm-color-base)",
-              borderColor: "var(--sm-panel-border)",
-              color: "var(--sm-color-text)"
-            },
-            dropdown: {
-              background: "var(--sm-color-surface1)",
-              borderColor: "var(--sm-panel-border)"
-            }
-          }}
-        />
-        <Tooltip label={isAnimationPlaying ? "Pause preview" : "Play preview"}>
-          <ActionIcon
-            variant="subtle"
-            color="blue"
-            onClick={() =>
-              designPreviewStore
-                .getState()
-                .setAnimationPlaying(!isAnimationPlaying)
-            }
-            aria-label={isAnimationPlaying ? "Pause preview" : "Play preview"}
-          >
-            {isAnimationPlaying ? "❚❚" : "▶"}
-          </ActionIcon>
-        </Tooltip>
-      </Group>
-      <LayoutOrientationWidget quaternion={cameraQuaternion} />
-    </>
+  const centerPanel = (
+    <CharacterPreview
+      model={boundCharacterModel}
+      targetHeight={
+        playerDefinition?.physicalProfile.height ?? 1.8
+      }
+      slots={previewSlots}
+      activeSlot={activeAnimationSlot}
+      onChangeActiveSlot={(slot) =>
+        designPreviewStore
+          .getState()
+          .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
+      }
+      isPlaying={isAnimationPlaying}
+      onChangePlaying={(playing) =>
+        designPreviewStore.getState().setAnimationPlaying(playing)
+      }
+      assetSources={assetSources}
+    />
   );
 
   return {
@@ -645,6 +593,7 @@ export function usePlayerWorkspaceView(
         )}
       </Inspector>
     ),
-    viewportOverlay: isActive ? previewOverlay : null
+    centerPanel: isActive ? centerPanel : null,
+    viewportOverlay: null
   };
 }
