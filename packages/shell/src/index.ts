@@ -79,9 +79,11 @@ export interface ShellSelectionState {
 
 /**
  * Library popover kinds. Surfaces are NOT a library kind — they're
- * the composition layer that references Materials and Shaders, and
- * are authored in the Surfaces workspace, not browsed in a library
- * popover. Per Plan 037.
+ * the composition layer that references library content and are authored
+ * in the Surfaces workspace, not browsed in a library popover. Per Plan
+ * 037. Character models and animations are NOT library kinds either —
+ * they're entity-owned content authored via the Player/NPC inspector
+ * file-pickers. Per Plan 038.
  */
 export type LibraryKind = "materials" | "textures" | "shaders";
 

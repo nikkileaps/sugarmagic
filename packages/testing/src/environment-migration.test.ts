@@ -138,6 +138,8 @@ describe("environment migration", () => {
         version: 2
       },
       assetDefinitions: [],
+      characterAnimationDefinitions: [],
+      characterModelDefinitions: [],
       materialDefinitions: [],
       textureDefinitions: [],
       shaderDefinitions: [],
@@ -205,6 +207,8 @@ describe("environment migration", () => {
         version: 2
       },
       assetDefinitions: [],
+      characterAnimationDefinitions: [],
+      characterModelDefinitions: [],
       materialDefinitions: [],
       textureDefinitions: [],
       shaderDefinitions: [],

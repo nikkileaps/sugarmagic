@@ -2,13 +2,15 @@
  * Library popover.
  *
  * Single owner of the Game > Libraries > {kind} dialog. Renders the
- * three library kinds (Materials / Textures / Shaders — Surfaces are
- * NOT a library kind per Plan 037) with a list-on-left + preview-on-
- * right layout. Reads `activeLibrary` from the shell store; the menu
- * trigger lives in App.tsx's Game menu.
+ * library kinds (Materials / Textures / Shaders — Surfaces are NOT a
+ * library kind per Plan 037; character models + animations are NOT
+ * library kinds per Plan 038, they're entity-owned and authored via
+ * the Player/NPC inspector file-pickers) with a list-on-left +
+ * preview-on-right layout. Reads `activeLibrary` from the shell
+ * store; the menu trigger lives in App.tsx's Game menu.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "zustand";
 import {
   Box,
@@ -102,18 +104,24 @@ export function LibraryPopover({
     if (activeLibrary === "textures") return getTextureItems(textureDefinitions);
     if (activeLibrary === "shaders") return getShaderItems(shaderDefinitions);
     return [];
-  }, [activeLibrary, materialDefinitions, textureDefinitions, shaderDefinitions]);
+  }, [
+    activeLibrary,
+    materialDefinitions,
+    textureDefinitions,
+    shaderDefinitions
+  ]);
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchState, setSearchState] = useState<{
+    library: typeof activeLibrary;
+    query: string;
+  }>({ library: null, query: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [geometryKind, setGeometryKind] = useState<MaterialPreviewGeometryKind>("cube");
-
-  // Reset search whenever the user switches between library kinds
-  // — searches don't conceptually carry across (looking for "bark"
-  // in Materials shouldn't pre-filter Shaders).
-  useEffect(() => {
-    setSearchQuery("");
-  }, [activeLibrary]);
+  // Keep search scoped to the active library without an effect-driven reset.
+  // React's hooks lint rejects synchronous setState in effects, so the query
+  // carries its library key and naturally reads as empty after kind changes.
+  const searchQuery =
+    searchState.library === activeLibrary ? searchState.query : "";
 
   const items: ListItem[] = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -123,33 +131,25 @@ export function LibraryPopover({
     );
   }, [allItems, searchQuery]);
 
-  // Auto-select first item when opening, when the library kind
-  // changes, OR when filtering removes the currently selected item.
-  // If the search query filters out everything, selection becomes
-  // null (preview shows the empty state).
-  useEffect(() => {
-    if (activeLibrary === null) return;
-    if (items.length === 0) {
-      setSelectedId(null);
-      return;
-    }
-    const stillExists = selectedId && items.some((i) => i.id === selectedId);
-    if (!stillExists) {
-      setSelectedId(items[0]!.id);
-    }
-  }, [activeLibrary, items, selectedId]);
+  // Derive fallback selection instead of mutating state when filters or library
+  // kind changes. This preserves the old "first visible item is selected"
+  // behavior while avoiding an auto-select effect.
+  const effectiveSelectedId =
+    activeLibrary !== null && selectedId && items.some((i) => i.id === selectedId)
+      ? selectedId
+      : items[0]?.id ?? null;
 
   const selectedMaterial =
     activeLibrary === "materials"
-      ? materialDefinitions.find((d) => d.definitionId === selectedId) ?? null
+      ? materialDefinitions.find((d) => d.definitionId === effectiveSelectedId) ?? null
       : null;
   const selectedTexture =
     activeLibrary === "textures"
-      ? textureDefinitions.find((d) => d.definitionId === selectedId) ?? null
+      ? textureDefinitions.find((d) => d.definitionId === effectiveSelectedId) ?? null
       : null;
   const selectedShader =
     activeLibrary === "shaders"
-      ? shaderDefinitions.find((d) => d.shaderDefinitionId === selectedId) ?? null
+      ? shaderDefinitions.find((d) => d.shaderDefinitionId === effectiveSelectedId) ?? null
       : null;
 
   const titleText =
@@ -223,13 +223,18 @@ export function LibraryPopover({
               size="xs"
               placeholder={`Search ${titleText.toLowerCase()}...`}
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.currentTarget.value)}
+              onChange={(event) =>
+                setSearchState({
+                  library: activeLibrary,
+                  query: event.currentTarget.value
+                })
+              }
             />
           </Box>
           <ScrollArea style={{ flex: 1, minHeight: 0 }}>
             <Stack gap={2} p="xs">
               {items.map((item) => {
-                const isSelected = item.id === selectedId;
+                const isSelected = item.id === effectiveSelectedId;
                 return (
                   <Box
                     key={item.id}

@@ -67,9 +67,14 @@ export interface GlbBufferViewDocument {
   byteLength?: number;
 }
 
+export interface GlbAnimationDocument {
+  name?: string;
+}
+
 export interface GlbDocument {
   nodes?: GlbNodeDocument[];
   meshes?: GlbMeshDocument[];
+  animations?: GlbAnimationDocument[];
   materials?: GlbMaterialDocument[];
   images?: GlbImageDocument[];
   textures?: GlbTextureDocument[];

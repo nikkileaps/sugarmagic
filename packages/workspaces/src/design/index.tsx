@@ -20,6 +20,8 @@
 import type { ReactNode } from "react";
 import type {
   AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
@@ -75,9 +77,13 @@ export interface DesignProductModeViewProps {
     description?: string;
   }>;
   assetDefinitions: AssetDefinition[];
+  characterModelDefinitions: CharacterModelDefinition[];
+  characterAnimationDefinitions: CharacterAnimationDefinition[];
   designPreviewStore: DesignPreviewStore;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
+  onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
+  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
@@ -117,9 +123,13 @@ export function useDesignProductModeView(
     extraWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
     designPreviewStore,
     onSelectKind,
     onCommand,
+    onImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition,
     navigationTarget,
     onConsumeNavigationTarget,
     onNavigateToTarget,
@@ -131,9 +141,12 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "player",
     gameProjectId,
     playerDefinition,
-    assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition
   });
 
   const npcView = useNPCWorkspaceView({
@@ -141,9 +154,12 @@ export function useDesignProductModeView(
     gameProjectId,
     npcDefinitions,
     interactionModeOptions: npcInteractionOptions,
-    assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
     designPreviewStore,
     onCommand,
+    onImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition,
     renderInspectorSections: renderNPCInspectorSections
   });
 

@@ -65,6 +65,7 @@ import {
   MovementSystem,
   PlayerControlled,
   Position,
+  Velocity,
   resolveSceneObjects,
   DEFAULT_CAMERA_CONFIG,
   createCameraState,
@@ -616,6 +617,27 @@ export function createWebRuntimeHost(
       const pos = world.getComponent(playerEntities[0], Position)!;
       playerVisualController.root.position.set(pos.x, pos.y, pos.z);
       cameraState.targetY = pos.y + playerEyeHeight;
+
+      // Drive locomotion-cycle animation from horizontal velocity. The
+      // controller no-ops if the requested slot's clip isn't bound, so
+      // an unconfigured Player just stays in whatever slot was already
+      // playing. Threshold of 0.1 m/s catches drift in fully-stopped
+      // input but doesn't flicker between idle/walk on slow approach.
+      const velocity = world.getComponent(playerEntities[0], Velocity);
+      const speed = velocity ? Math.hypot(velocity.x, velocity.z) : 0;
+      playerVisualController.setActiveAnimationSlot(
+        speed > 0.1 ? "walk" : "idle"
+      );
+
+      // Face the model in the direction of motion. Same formula as
+      // Sugarengine's RenderSystem (atan2(velocity.x, velocity.z)). Snap
+      // rather than smooth — matches what we had before and avoids a
+      // separate slerp pass for now. Only update when there's actual
+      // movement so standing still keeps the last-faced direction.
+      if (velocity && speed > 0.01) {
+        playerVisualController.root.rotation.y = Math.atan2(velocity.x, velocity.z);
+      }
+
       playerVisualController.update(delta);
 
       const { isDragging } = inputManager.getInput();

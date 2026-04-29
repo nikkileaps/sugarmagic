@@ -11,6 +11,7 @@
     "@sugarmagic/render-web": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
     "@sugarmagic/shell": "workspace:*",
+    "@sugarmagic/workspaces": "workspace:*",
     "three": "^0.183.2"
   },
   "exports": {

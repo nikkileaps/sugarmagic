@@ -208,6 +208,9 @@ importers:
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../shell
+      '@sugarmagic/workspaces':
+        specifier: workspace:*
+        version: link:../workspaces
       three:
         specifier: ^0.183.2
         version: 0.183.2

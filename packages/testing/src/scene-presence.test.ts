@@ -68,6 +68,8 @@ describe("layout scene presences", () => {
           version: 1
         },
         assetDefinitions: [],
+        characterAnimationDefinitions: [],
+        characterModelDefinitions: [],
         materialDefinitions: [],
         textureDefinitions: [],
         environmentDefinitions: [

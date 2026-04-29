@@ -4,7 +4,8 @@
  * Owns the derived "relative authored asset path -> fetchable blob URL" map
  * for Studio. This is not authored truth and it is not render-web runtime
  * state; it is the shell-level bridge between project file handles and the
- * shared viewport/render loaders.
+ * shared viewport/render loaders. File-backed definitions include models,
+ * animation GLBs, textures, and painted mask textures.
  */
 
 import { createStore } from "zustand/vanilla";
@@ -26,8 +27,16 @@ function collectRelativeAssetPaths(
   }
 
   const sources = [
-    ...session.contentLibrary.assetDefinitions.map((definition) => definition.source),
-    ...session.contentLibrary.textureDefinitions.map((definition) => definition.source),
+    ...(session.contentLibrary.assetDefinitions ?? []).map((definition) => definition.source),
+    ...(session.contentLibrary.characterModelDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
+    ...(session.contentLibrary.characterAnimationDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
+    ...(session.contentLibrary.textureDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
     ...(session.contentLibrary.maskTextureDefinitions ?? []).map(
       (definition) => definition.source
     )

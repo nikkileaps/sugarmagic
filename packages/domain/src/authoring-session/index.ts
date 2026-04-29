@@ -67,6 +67,8 @@ import type {
 } from "../commands";
 import type {
   AssetDefinition,
+  CharacterAnimationDefinition,
+  CharacterModelDefinition,
   ContentLibrarySnapshot,
   EnvironmentDefinition,
   MaterialDefinition,
@@ -96,6 +98,8 @@ import {
   createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
   DEFAULT_CLOUD_SHADOW_SETTINGS,
+  listCharacterModelDefinitions as listCharacterModelDefinitionsFromLibrary,
+  listCharacterAnimationDefinitions as listCharacterAnimationDefinitionsFromLibrary,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
   listMaterialDefinitions as listMaterialDefinitionsFromLibrary,
@@ -187,6 +191,18 @@ export function getAllAssetDefinitions(
   session: AuthoringSession
 ): AssetDefinition[] {
   return listAssetDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllCharacterModelDefinitions(
+  session: AuthoringSession
+): CharacterModelDefinition[] {
+  return listCharacterModelDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllCharacterAnimationDefinitions(
+  session: AuthoringSession
+): CharacterAnimationDefinition[] {
+  return listCharacterAnimationDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllEnvironmentDefinitions(
@@ -1950,6 +1966,203 @@ export function removeAssetDefinitionFromSession(
       ...session.contentLibrary,
       assetDefinitions: session.contentLibrary.assetDefinitions.filter(
         (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function addCharacterAnimationDefinitionToSession(
+  session: AuthoringSession,
+  characterAnimationDefinition: CharacterAnimationDefinition
+): AuthoringSession {
+  const existingIndex =
+    session.contentLibrary.characterAnimationDefinitions.findIndex(
+      (definition) =>
+        definition.definitionId === characterAnimationDefinition.definitionId
+    );
+  const nextDefinitions = [
+    ...session.contentLibrary.characterAnimationDefinitions
+  ];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = characterAnimationDefinition;
+  } else {
+    nextDefinitions.push(characterAnimationDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterAnimationDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateCharacterAnimationDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<
+    Pick<CharacterAnimationDefinition, "displayName" | "clipNames" | "source">
+  >
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterAnimationDefinitions:
+        session.contentLibrary.characterAnimationDefinitions.map((definition) =>
+          definition.definitionId === definitionId
+            ? { ...definition, ...patch }
+            : definition
+        )
+    },
+    isDirty: true
+  };
+}
+
+export function removeCharacterAnimationDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  // Mirror the model-removal cascade: clear any Player or NPC slot
+  // bound to this definitionId so the runtime doesn't dereference a
+  // dangling id.
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterAnimationDefinitions:
+        session.contentLibrary.characterAnimationDefinitions.filter(
+          (definition) => definition.definitionId !== definitionId
+        )
+    },
+    gameProject: {
+      ...session.gameProject,
+      playerDefinition: {
+        ...session.gameProject.playerDefinition,
+        presentation: {
+          ...session.gameProject.playerDefinition.presentation,
+          animationAssetBindings: Object.fromEntries(
+            Object.entries(
+              session.gameProject.playerDefinition.presentation
+                .animationAssetBindings
+            ).map(([slot, bindingId]) => [
+              slot,
+              bindingId === definitionId ? null : bindingId
+            ])
+          ) as typeof session.gameProject.playerDefinition.presentation
+            .animationAssetBindings
+        }
+      },
+      npcDefinitions: session.gameProject.npcDefinitions.map(
+        (npcDefinition) => ({
+          ...npcDefinition,
+          presentation: {
+            ...npcDefinition.presentation,
+            animationAssetBindings: Object.fromEntries(
+              Object.entries(
+                npcDefinition.presentation.animationAssetBindings
+              ).map(([slot, bindingId]) => [
+                slot,
+                bindingId === definitionId ? null : bindingId
+              ])
+            ) as typeof npcDefinition.presentation.animationAssetBindings
+          }
+        })
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function addCharacterModelDefinitionToSession(
+  session: AuthoringSession,
+  characterModelDefinition: CharacterModelDefinition
+): AuthoringSession {
+  const existingIndex =
+    session.contentLibrary.characterModelDefinitions.findIndex(
+      (definition) =>
+        definition.definitionId === characterModelDefinition.definitionId
+    );
+  const nextDefinitions = [...session.contentLibrary.characterModelDefinitions];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = characterModelDefinition;
+  } else {
+    nextDefinitions.push(characterModelDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterModelDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateCharacterModelDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<Pick<CharacterModelDefinition, "displayName" | "source">>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterModelDefinitions:
+        session.contentLibrary.characterModelDefinitions.map((definition) =>
+          definition.definitionId === definitionId
+            ? { ...definition, ...patch }
+            : definition
+        )
+    },
+    isDirty: true
+  };
+}
+
+export function removeCharacterModelDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  // Mirror animation-removal: also clear any Player/NPC binding
+  // pointing at this definitionId so we don't leave dangling refs.
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      characterModelDefinitions:
+        session.contentLibrary.characterModelDefinitions.filter(
+          (definition) => definition.definitionId !== definitionId
+        )
+    },
+    gameProject: {
+      ...session.gameProject,
+      playerDefinition: {
+        ...session.gameProject.playerDefinition,
+        presentation: {
+          ...session.gameProject.playerDefinition.presentation,
+          modelAssetDefinitionId:
+            session.gameProject.playerDefinition.presentation
+              .modelAssetDefinitionId === definitionId
+              ? null
+              : session.gameProject.playerDefinition.presentation
+                  .modelAssetDefinitionId
+        }
+      },
+      npcDefinitions: session.gameProject.npcDefinitions.map(
+        (npcDefinition) => ({
+          ...npcDefinition,
+          presentation: {
+            ...npcDefinition.presentation,
+            modelAssetDefinitionId:
+              npcDefinition.presentation.modelAssetDefinitionId === definitionId
+                ? null
+                : npcDefinition.presentation.modelAssetDefinitionId
+          }
+        })
       )
     },
     isDirty: true

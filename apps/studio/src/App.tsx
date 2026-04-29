@@ -24,6 +24,8 @@ import {
   getActiveRegion,
   getAllRegions,
   getAllAssetDefinitions,
+  getAllCharacterAnimationDefinitions,
+  getAllCharacterModelDefinitions,
   getAllDialogueDefinitions,
   getAllDocumentDefinitions,
   getAllEnvironmentDefinitions,
@@ -43,6 +45,10 @@ import {
   listRockTypeDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
+  addCharacterAnimationDefinitionToSession,
+  addCharacterModelDefinitionToSession,
+  removeCharacterAnimationDefinitionFromSession,
+  removeCharacterModelDefinitionFromSession,
   addEnvironmentDefinitionToSession,
   addMaterialDefinitionToSession,
   addMaskTextureDefinitionToSession,
@@ -80,6 +86,8 @@ import {
   importPbrTextureSet,
   importMaskTextureDefinition,
   importTextureDefinition,
+  importCharacterAnimationDefinition,
+  importCharacterModelDefinition,
   readMaskFile,
   reloadProject,
   importSourceAsset,
@@ -572,6 +580,14 @@ export function App() {
     if (!session) return [];
     return getAllAssetDefinitions(session);
   }, [session]);
+  const characterModelDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllCharacterModelDefinitions(session);
+  }, [session]);
+  const characterAnimationDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllCharacterAnimationDefinitions(session);
+  }, [session]);
   const materialDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllMaterialDefinitions(session);
@@ -1025,6 +1041,93 @@ export function App() {
     }
   }, []);
 
+  const handleImportCharacterAnimationDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importCharacterAnimationDefinition({
+        projectHandle: handle,
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addCharacterAnimationDefinitionToSession(
+            currentSession,
+            result.characterAnimationDefinition
+          )
+        );
+      if (result.warnings.length > 0) {
+        window.alert(
+          `Character animation import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
+      }
+      return result.characterAnimationDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Character animation import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleImportCharacterModelDefinition = useCallback(async () => {
+    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importCharacterModelDefinition({
+        projectHandle: handle,
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addCharacterModelDefinitionToSession(
+            currentSession,
+            result.characterModelDefinition
+          )
+        );
+      if (result.warnings.length > 0) {
+        window.alert(
+          `Character model import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
+      }
+      return result.characterModelDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Character model import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleRemoveCharacterModelDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeCharacterModelDefinitionFromSession(currentSession, definitionId)
+        );
+    },
+    []
+  );
+
   const handleCreateMaskTextureDefinition = useCallback(async () => {
     const { handle, session: currentSession } = projectStore.getState();
     if (!handle || !currentSession) {
@@ -1267,6 +1370,22 @@ export function App() {
       .updateSession(removeMaterialDefinitionFromSession(currentSession, definitionId));
   }, []);
 
+  const handleRemoveCharacterAnimationDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeCharacterAnimationDefinitionFromSession(
+            currentSession,
+            definitionId
+          )
+        );
+    },
+    []
+  );
+
   const handleCreateEnvironment = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -1467,9 +1586,13 @@ export function App() {
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
+    characterModelDefinitions,
+    characterAnimationDefinitions,
     designPreviewStore,
     onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
+    onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
+    onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
