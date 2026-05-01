@@ -3,20 +3,22 @@
  */
 
 import type { CSSProperties, JSX } from "react";
+import type { UIBindingExpression } from "@sugarmagic/domain";
+import { useResolvedBinding } from "./useResolvedBinding";
 
 function numeric(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 export function UIProgressBar(props: {
-  value: unknown;
-  min: unknown;
-  max: unknown;
+  value: UIBindingExpression | undefined;
+  min: UIBindingExpression | undefined;
+  max: UIBindingExpression | undefined;
   style: CSSProperties;
 }): JSX.Element {
-  const min = numeric(props.min, 0);
-  const max = numeric(props.max, 1);
-  const value = numeric(props.value, min);
+  const min = numeric(useResolvedBinding(props.min), 0);
+  const max = numeric(useResolvedBinding(props.max), 1);
+  const value = numeric(useResolvedBinding(props.value), min);
   const ratio = max <= min ? 0 : Math.max(0, Math.min(1, (value - min) / (max - min)));
   return (
     <div

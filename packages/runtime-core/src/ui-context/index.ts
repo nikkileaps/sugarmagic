@@ -139,6 +139,21 @@ export interface UIContextSystemOptions {
   getRegion?: () => { id: string; name: string } | null;
 }
 
+function runtimeUIContextsEqual(a: RuntimeUIContext, b: RuntimeUIContext): boolean {
+  return (
+    a.player.battery === b.player.battery &&
+    a.player.maxBattery === b.player.maxBattery &&
+    a.player.health === b.player.health &&
+    a.player.position[0] === b.player.position[0] &&
+    a.player.position[1] === b.player.position[1] &&
+    a.player.position[2] === b.player.position[2] &&
+    a.region.id === b.region.id &&
+    a.region.name === b.region.name &&
+    a.game.visibleMenuKey === b.game.visibleMenuKey &&
+    a.game.isPaused === b.game.isPaused
+  );
+}
+
 export class UIContextSystem extends System {
   constructor(private readonly options: UIContextSystemOptions) {
     super();
@@ -153,7 +168,7 @@ export class UIContextSystem extends System {
       : null;
     const caster = playerEntity ? world.getComponent(playerEntity, Caster) : null;
 
-    this.options.contextStore.setState({
+    const next: RuntimeUIContext = {
       player: {
         battery: caster?.battery ?? 0,
         maxBattery: caster?.maxBattery ?? 1,
@@ -168,6 +183,13 @@ export class UIContextSystem extends System {
         visibleMenuKey: state.visibleMenuKey,
         isPaused: state.isPaused
       }
-    });
+    };
+
+    // Skip the store update when nothing changed: avoids waking every
+    // bound leaf's useSyncExternalStore listener 60×/sec for a no-op.
+    if (runtimeUIContextsEqual(this.options.contextStore.getState(), next)) {
+      return;
+    }
+    this.options.contextStore.setState(next);
   }
 }

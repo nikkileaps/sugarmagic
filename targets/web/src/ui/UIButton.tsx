@@ -3,15 +3,18 @@
  */
 
 import type { CSSProperties, JSX, ReactNode } from "react";
-import type { UIActionExpression } from "@sugarmagic/domain";
+import type { UIActionExpression, UIBindingExpression } from "@sugarmagic/domain";
+import { useUIRuntimeBridge } from "./UIContextProvider";
+import { useResolvedBinding } from "./useResolvedBinding";
 
 export function UIButton(props: {
-  text: unknown;
+  text: UIBindingExpression | undefined;
   style: CSSProperties;
   action?: UIActionExpression;
-  onAction: (action: UIActionExpression) => void;
   children?: ReactNode;
 }): JSX.Element {
+  const { onAction } = useUIRuntimeBridge();
+  const text = useResolvedBinding(props.text);
   return (
     <button
       type="button"
@@ -23,10 +26,10 @@ export function UIButton(props: {
         ...props.style
       }}
       onClick={() => {
-        if (props.action) props.onAction(props.action);
+        if (props.action) onAction(props.action);
       }}
     >
-      {String(props.text ?? "")}
+      {String(text ?? "")}
       {props.children}
     </button>
   );

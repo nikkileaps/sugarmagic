@@ -3,16 +3,20 @@
  */
 
 import type { CSSProperties, JSX } from "react";
+import type { UIBindingExpression } from "@sugarmagic/domain";
+import { useResolvedBinding } from "./useResolvedBinding";
 
 export function UIImage(props: {
-  src: unknown;
-  alt: unknown;
+  src: UIBindingExpression | undefined;
+  alt: UIBindingExpression | undefined;
   style: CSSProperties;
 }): JSX.Element {
+  const src = useResolvedBinding(props.src);
+  const alt = useResolvedBinding(props.alt);
   return (
     <img
-      src={typeof props.src === "string" ? props.src : ""}
-      alt={typeof props.alt === "string" ? props.alt : ""}
+      src={typeof src === "string" ? src : ""}
+      alt={typeof alt === "string" ? alt : ""}
       style={{ display: "block", objectFit: "contain", ...props.style }}
     />
   );

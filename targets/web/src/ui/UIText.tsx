@@ -3,10 +3,13 @@
  */
 
 import type { CSSProperties, JSX } from "react";
+import type { UIBindingExpression } from "@sugarmagic/domain";
+import { useResolvedBinding } from "./useResolvedBinding";
 
 export function UIText(props: {
-  text: unknown;
+  text: UIBindingExpression | undefined;
   style: CSSProperties;
 }): JSX.Element {
-  return <div style={props.style}>{String(props.text ?? "")}</div>;
+  const text = useResolvedBinding(props.text);
+  return <div style={props.style}>{String(text ?? "")}</div>;
 }
