@@ -43,7 +43,8 @@ export type CoreDesignWorkspaceKind =
   | "items"
   | "documents"
   | "dialogues"
-  | "quests";
+  | "quests"
+  | "game-ui";
 
 export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
 export type RenderWorkspaceKind = "shaders" | (string & {});
@@ -55,7 +56,8 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "items",
   "documents",
   "dialogues",
-  "quests"
+  "quests",
+  "game-ui"
 ];
 
 export const VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [

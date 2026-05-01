@@ -143,6 +143,7 @@ import {
 import { readStudioPluginRuntimeEnvironment } from "./runtimeEnv";
 import { SUGARDEPLOY_PLUGIN_ID } from "@sugarmagic/plugins";
 import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
+import { UIPreviewSession } from "./preview/UIPreviewSession";
 
 function renderPluginSectionGroup(
   sections: ReturnType<typeof collectPluginShellContributions>["designSections"],
@@ -490,6 +491,9 @@ async function postPreviewBootMessage(
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
       questDefinitions: session.gameProject.questDefinitions,
+      menuDefinitions: session.gameProject.menuDefinitions,
+      hudDefinition: session.gameProject.hudDefinition,
+      uiTheme: session.gameProject.uiTheme,
       assetSources,
       pluginBootPayloads: {
         sugarlang:
@@ -1581,6 +1585,12 @@ export function App() {
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    menuDefinitions: session?.gameProject.menuDefinitions ?? [],
+    hudDefinition: session?.gameProject.hudDefinition ?? null,
+    uiTheme: session?.gameProject.uiTheme ?? {
+      tokens: {},
+      styles: []
+    },
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
@@ -1592,6 +1602,12 @@ export function App() {
     onCommand: dispatchCommand,
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
+    renderGameUIPreview: ({ initialVisibleMenuKey }) => (
+      <UIPreviewSession
+        project={session?.gameProject ?? null}
+        initialVisibleMenuKey={initialVisibleMenuKey}
+      />
+    ),
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,

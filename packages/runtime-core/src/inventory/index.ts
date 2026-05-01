@@ -146,6 +146,7 @@ export class InventoryManager {
 export interface RuntimeInventoryUI {
   update: (entries: RuntimeInventoryEntry[]) => void;
   isOpen: () => boolean;
+  toggle: () => void;
   setOnOpenChange: (handler: (isOpen: boolean) => void) => void;
   setOnInspectItem: (handler: (itemDefinitionId: string) => void) => void;
   dispose: () => void;
@@ -247,6 +248,9 @@ export function createRuntimeInventoryUI(
     },
     isOpen() {
       return open;
+    },
+    toggle() {
+      setOpen(!open);
     },
     setOnOpenChange(handler) {
       onOpenChange = handler;

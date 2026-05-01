@@ -13,6 +13,7 @@ function escapeHtml(value: string): string {
 export interface RuntimeSpellMenuUI {
   update: () => void;
   isOpen: () => boolean;
+  toggle: () => void;
   setCanOpenProvider: (provider: () => boolean) => void;
   setOnOpenChange: (handler: (isOpen: boolean) => void) => void;
   dispose: () => void;
@@ -326,6 +327,13 @@ export function createRuntimeSpellMenuUI(
     },
     isOpen() {
       return open;
+    },
+    toggle() {
+      // Mirror the keyboard handler's gating: refuse to open when another
+      // gameplay UI (inventory, dialogue, etc.) has the lock; closing is
+      // always allowed.
+      if (!open && !canOpenProvider()) return;
+      setOpen(!open);
     },
     setCanOpenProvider(provider) {
       canOpenProvider = provider;

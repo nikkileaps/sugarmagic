@@ -8,6 +8,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ColorInput,
   ColorPicker,
   ColorSwatch,
   Group,
@@ -61,6 +62,54 @@ export interface ColorFieldProps {
   description?: string;
   disabled?: boolean;
   swatches?: string[];
+}
+
+export interface CssColorFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  description?: string;
+  disabled?: boolean;
+  swatches?: string[];
+  withAlpha?: boolean;
+}
+
+export function CssColorField({
+  label,
+  value,
+  onChange,
+  description,
+  disabled = false,
+  swatches,
+  withAlpha = true
+}: CssColorFieldProps) {
+  return (
+    <Stack gap={4}>
+      <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+        {label}
+      </Text>
+      {description ? (
+        <Text size="xs" c="var(--sm-color-overlay0)">
+          {description}
+        </Text>
+      ) : null}
+      <ColorInput
+        size="xs"
+        value={value}
+        onChange={onChange}
+        format={withAlpha ? "rgba" : "rgb"}
+        swatches={swatches}
+        disabled={disabled}
+        styles={{
+          input: {
+            background: "var(--sm-color-base)",
+            borderColor: "var(--sm-panel-border)",
+            color: "var(--sm-color-text)"
+          }
+        }}
+      />
+    </Stack>
+  );
 }
 
 export interface HDRColorFieldProps {

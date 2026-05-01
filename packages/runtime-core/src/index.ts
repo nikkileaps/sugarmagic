@@ -28,6 +28,8 @@ export * from "./state";
 export * from "./spatial";
 export * from "./streaming";
 export * from "./shader";
+export * from "./ui-actions";
+export * from "./ui-context";
 export * from "./vfx";
 
 export type RuntimeHostKind = "studio" | "published-web";

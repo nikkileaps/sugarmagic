@@ -32,7 +32,7 @@ import {
 } from "@sugarmagic/runtime-core";
 
 function makeProject(): GameProject {
-  return {
+  return normalizeGameProject({
     identity: { id: "project", schema: "GameProject", version: 1 },
     displayName: "Project",
     gameRootPath: ".",
@@ -63,7 +63,7 @@ function makeProject(): GameProject {
     npcDefinitions: [],
     dialogueDefinitions: [],
     questDefinitions: []
-  };
+  });
 }
 
 describe("plugin infrastructure", () => {

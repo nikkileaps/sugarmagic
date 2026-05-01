@@ -38,6 +38,17 @@ import {
   normalizeDeploymentSettings,
   type DeploymentSettings
 } from "../deployment";
+import {
+  createDefaultHUD,
+  createDefaultMenuDefinitions,
+  createDefaultUITheme,
+  normalizeHUDDefinition,
+  normalizeMenuDefinition,
+  normalizeUITheme,
+  type HUDDefinition,
+  type MenuDefinition,
+  type UITheme
+} from "../ui-definition";
 
 export interface GameProject {
   identity: DocumentIdentity;
@@ -54,10 +65,13 @@ export interface GameProject {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  menuDefinitions: MenuDefinition[];
+  hudDefinition: HUDDefinition | null;
+  uiTheme: UITheme;
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "deployment" | "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions"> & {
+  gameProject: GameProject | (Omit<GameProject, "deployment" | "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions" | "menuDefinitions" | "hudDefinition" | "uiTheme"> & {
     deployment?: Partial<DeploymentSettings> | null;
     pluginConfigurations?: Array<PluginConfigurationRecord | PartialPluginConfigurationRecord> | null;
     playerDefinition?: Partial<PlayerDefinition> | null;
@@ -67,8 +81,16 @@ export function normalizeGameProject(
     npcDefinitions?: Array<Partial<NPCDefinition>> | null;
     dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
     questDefinitions?: Array<Partial<QuestDefinition>> | null;
+    menuDefinitions?: Array<Partial<MenuDefinition>> | null;
+    hudDefinition?: Partial<HUDDefinition> | null;
+    uiTheme?: Partial<UITheme> | null;
   })
 ): GameProject {
+  const starterMenus = createDefaultMenuDefinitions(gameProject.identity.id);
+  const sourceMenus =
+    gameProject.menuDefinitions && gameProject.menuDefinitions.length > 0
+      ? gameProject.menuDefinitions
+      : starterMenus;
   return {
     ...gameProject,
     deployment: normalizeDeploymentSettings(gameProject.deployment),
@@ -96,7 +118,15 @@ export function normalizeGameProject(
     ),
     questDefinitions: (gameProject.questDefinitions ?? []).map((definition) =>
       normalizeQuestDefinition(definition)
-    )
+    ),
+    menuDefinitions: sourceMenus.map((definition, index) =>
+      normalizeMenuDefinition(definition, gameProject.identity.id, index)
+    ),
+    hudDefinition: normalizeHUDDefinition(
+      gameProject.hudDefinition ?? createDefaultHUD(gameProject.identity.id),
+      gameProject.identity.id
+    ),
+    uiTheme: normalizeUITheme(gameProject.uiTheme ?? createDefaultUITheme())
   };
 }
 
@@ -118,6 +148,9 @@ export function createDefaultGameProject(
     documentDefinitions: [],
     npcDefinitions: [],
     dialogueDefinitions: [],
-    questDefinitions: []
+    questDefinitions: [],
+    menuDefinitions: createDefaultMenuDefinitions(slug),
+    hudDefinition: createDefaultHUD(slug),
+    uiTheme: createDefaultUITheme()
   };
 }
