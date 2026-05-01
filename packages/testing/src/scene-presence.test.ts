@@ -8,7 +8,8 @@ import {
   createDefaultPlayerDefinition,
   createAuthoringSession,
   applyCommand,
-  getActiveRegion
+  getActiveRegion,
+  normalizeGameProject
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
@@ -44,7 +45,7 @@ function makeRegion(): RegionDocument {
 describe("layout scene presences", () => {
   it("enforces one player presence per region", () => {
     const session = createAuthoringSession(
-      {
+      normalizeGameProject({
         identity: { id: "project", schema: "GameProject", version: 1 },
         displayName: "Project",
         gameRootPath: ".",
@@ -59,7 +60,7 @@ describe("layout scene presences", () => {
         itemDefinitions: [],
         documentDefinitions: [],
         questDefinitions: []
-      },
+      }),
       [makeRegion()],
       {
         identity: {

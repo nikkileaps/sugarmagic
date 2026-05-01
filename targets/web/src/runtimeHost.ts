@@ -26,6 +26,8 @@
  * - only needed to translate shared runtime behavior into web-specific behavior -> target host
  */
 import * as THREE from "three";
+import { createElement } from "react";
+import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { WebGPURenderer } from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -40,7 +42,10 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type SpellDefinition,
-  type RegionDocument
+  type RegionDocument,
+  type HUDDefinition,
+  type MenuDefinition,
+  type UITheme
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
@@ -87,12 +92,21 @@ import {
   type RuntimeBootModel,
   type RuntimeCompileProfile,
   type RuntimeContentSource,
-  type RuntimeHostKind
+  type RuntimeHostKind,
+  UIContextSystem,
+  createUIActionRegistry,
+  createUIContextStore,
+  createUIStateStore,
+  registerDefaultUIActions,
+  type UIActionRegistry,
+  type UIContextStore,
+  type UIStateStore
 } from "@sugarmagic/runtime-core";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
 import { createRuntimeRenderEngineProjector } from "./RenderEngineProjector";
+import { GameUILayer } from "./GameUILayer";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -128,6 +142,9 @@ export interface WebRuntimeStartState {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  menuDefinitions: MenuDefinition[];
+  hudDefinition: HUDDefinition | null;
+  uiTheme: UITheme;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
 }
@@ -532,6 +549,11 @@ export function createWebRuntimeHost(
   let playerEyeHeight = 1.62;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let pluginBannerHost: RuntimePluginBannerHost | null = null;
+  let uiLayerRoot: ReactRoot | null = null;
+  let uiLayerElement: HTMLDivElement | null = null;
+  let uiContextStore: UIContextStore | null = null;
+  let uiStateStore: UIStateStore | null = null;
+  let uiActionRegistry: UIActionRegistry | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
@@ -565,6 +587,15 @@ export function createWebRuntimeHost(
     spellCastFeedbackHost = null;
     pluginBannerHost?.dispose();
     pluginBannerHost = null;
+    uiLayerRoot?.unmount();
+    uiLayerRoot = null;
+    if (uiLayerElement?.parentElement === root) {
+      root.removeChild(uiLayerElement);
+    }
+    uiLayerElement = null;
+    uiContextStore = null;
+    uiStateStore = null;
+    uiActionRegistry = null;
     playerEyeHeight = 1.62;
 
     for (const entry of sceneObjectEntries.values()) {
@@ -592,6 +623,27 @@ export function createWebRuntimeHost(
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderView.resize(width, height);
+  }
+
+  function handlePauseKey(event: KeyboardEvent) {
+    // Q toggles the pause menu. Escape is reserved for dismissing other modal
+    // UIs (inventory, journal, dialogue, etc.), each of which already owns its
+    // own Escape handler — overloading Escape here would double-fire.
+    if (event.key.toLowerCase() !== "q" || !uiStateStore) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+    const current = uiStateStore.getState();
+    if (current.visibleMenuKey === null) {
+      uiStateStore.setState({ isPaused: true, visibleMenuKey: "pause-menu" });
+    } else if (current.visibleMenuKey === "pause-menu") {
+      uiStateStore.setState({ isPaused: false, visibleMenuKey: null });
+    }
   }
 
   function renderFrame(now: number) {
@@ -724,6 +776,7 @@ export function createWebRuntimeHost(
       started = true;
       ownerWindow.addEventListener("resize", handleResize);
       ownerWindow.addEventListener("beforeunload", dispose);
+      ownerWindow.addEventListener("keydown", handlePauseKey);
     }
 
     disposeRuntime();
@@ -933,6 +986,33 @@ export function createWebRuntimeHost(
       }
     }
     world = new World();
+    uiContextStore = createUIContextStore();
+    uiStateStore = createUIStateStore({
+      visibleMenuKey: state.menuDefinitions.some((menu) => menu.menuKey === "start-menu")
+        ? "start-menu"
+        : null,
+      isPaused: state.menuDefinitions.some((menu) => menu.menuKey === "start-menu")
+    });
+    uiActionRegistry = createUIActionRegistry();
+    registerDefaultUIActions(uiActionRegistry, {
+      stateStore: uiStateStore,
+      startMenuKey: "start-menu",
+      pauseMenuKey: "pause-menu",
+      // gameplaySession is assigned later in this same start() call; the
+      // closures capture the live binding so dispatch (post-boot) sees it.
+      onToggleInventory: () => gameplaySession?.toggleInventory(),
+      onToggleCaster: () => gameplaySession?.toggleCaster()
+    });
+    world.addSystem(
+      new UIContextSystem({
+        contextStore: uiContextStore,
+        stateStore: uiStateStore,
+        getRegion: () =>
+          activeRegion
+            ? { id: activeRegion.identity.id, name: activeRegion.displayName }
+            : null
+      })
+    );
     const pluginManager = createResolvedRuntimePluginManager(
       adapter.boot,
       state.installedPluginIds,
@@ -1066,6 +1146,23 @@ export function createWebRuntimeHost(
     );
 
     renderView.mount(root);
+    uiLayerElement = ownerWindow.document.createElement("div");
+    uiLayerElement.dataset.sugarmagicGameUiHost = "true";
+    uiLayerElement.style.position = "absolute";
+    uiLayerElement.style.inset = "0";
+    uiLayerElement.style.pointerEvents = "none";
+    root.appendChild(uiLayerElement);
+    uiLayerRoot = createRoot(uiLayerElement);
+    uiLayerRoot.render(
+      createElement(GameUILayer, {
+        hudDefinition: state.hudDefinition,
+        menuDefinitions: state.menuDefinitions,
+        theme: state.uiTheme,
+        uiContextStore,
+        uiStateStore,
+        onAction: (action) => uiActionRegistry?.dispatch(action, world)
+      })
+    );
     // Runtime host drives its own render loop (renderFrame ticks gameplay
     // then calls renderView.render()). We wait one tick so the view's async init
     // can resolve and create the pipeline before we try to render.
@@ -1082,6 +1179,7 @@ export function createWebRuntimeHost(
 
     ownerWindow.removeEventListener("resize", handleResize);
     ownerWindow.removeEventListener("beforeunload", dispose);
+    ownerWindow.removeEventListener("keydown", handlePauseKey);
 
     disposeRuntime();
     renderEngineProjector.reset();

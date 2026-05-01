@@ -18,7 +18,10 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import type { GameProject } from "@sugarmagic/domain";
-import { createDefaultDeploymentSettings } from "@sugarmagic/domain";
+import {
+  createDefaultDeploymentSettings,
+  normalizeGameProject
+} from "@sugarmagic/domain";
 import {
   createTestDocumentDefinitions,
   createTestSceneAuthoringContext
@@ -34,7 +37,7 @@ function createGameProjectFixture(): { gameProject: GameProject; region: ReturnT
 
   return {
     region: scene.region,
-    gameProject: {
+    gameProject: normalizeGameProject({
       identity: { id: "project-1", schema: "GameProject", version: 1 },
       displayName: "Wordlark Hollow",
       gameRootPath: ".",
@@ -65,7 +68,7 @@ function createGameProjectFixture(): { gameProject: GameProject; region: ReturnT
       npcDefinitions: scene.npcs,
       dialogueDefinitions: scene.dialogues,
       questDefinitions: scene.quests
-    }
+    })
   };
 }
 

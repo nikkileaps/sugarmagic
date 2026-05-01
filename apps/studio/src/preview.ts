@@ -8,6 +8,9 @@ import type {
   PlayerDefinition,
   QuestDefinition,
   SpellDefinition,
+  HUDDefinition,
+  MenuDefinition,
+  UITheme,
   RegionDocument
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
@@ -30,6 +33,9 @@ interface PreviewBootMessage {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  menuDefinitions: MenuDefinition[];
+  hudDefinition: HUDDefinition | null;
+  uiTheme: UITheme;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
 }
@@ -73,6 +79,9 @@ window.addEventListener("message", (event) => {
       npcDefinitions: data.npcDefinitions,
       dialogueDefinitions: data.dialogueDefinitions,
       questDefinitions: data.questDefinitions,
+      menuDefinitions: data.menuDefinitions,
+      hudDefinition: data.hudDefinition,
+      uiTheme: data.uiTheme,
       assetSources: data.assetSources,
       pluginBootPayloads: data.pluginBootPayloads
     });

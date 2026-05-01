@@ -33,6 +33,7 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   let isDragging = false;
   let lastPointerX = 0;
   let lastPointerY = 0;
+  let attachedWindow: Window | null = null;
 
   function isTextInputTarget(event: KeyboardEvent): boolean {
     const target = event.target;
@@ -93,19 +94,24 @@ export function createRuntimeInputManager(): RuntimeInputManager {
     onScroll: null,
 
     attach(el: HTMLElement) {
-      el.addEventListener("keydown", handleKeyDown);
-      el.addEventListener("keyup", handleKeyUp);
+      // Keyboard on window so input survives focus moving to overlay buttons
+      // (start menu, pause menu, etc.). Text-input guard above prevents WASD
+      // hijacking when the user is typing in a Studio inspector field.
+      const win = el.ownerDocument?.defaultView ?? window;
+      win.addEventListener("keydown", handleKeyDown);
+      win.addEventListener("keyup", handleKeyUp);
+      attachedWindow = win;
       el.addEventListener("pointerdown", handlePointerDown);
       el.addEventListener("pointermove", handlePointerMove);
       el.addEventListener("pointerup", handlePointerUp);
       el.addEventListener("wheel", handleWheel, { passive: false });
       el.addEventListener("contextmenu", handleContextMenu);
-      el.tabIndex = 0;
-      el.focus();
     },
 
     detach() {
-      // Listeners will be GC'd with the element (preview window closes)
+      attachedWindow?.removeEventListener("keydown", handleKeyDown);
+      attachedWindow?.removeEventListener("keyup", handleKeyUp);
+      attachedWindow = null;
       keys.clear();
       isDragging = false;
     },

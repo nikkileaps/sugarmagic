@@ -10,8 +10,10 @@ export {
 } from "./BuildSubNav";
 export {
   ColorField,
+  CssColorField,
   HDRColorField,
-  type ColorFieldProps
+  type ColorFieldProps,
+  type CssColorFieldProps
 } from "./ColorField";
 export {
   KindTabs,

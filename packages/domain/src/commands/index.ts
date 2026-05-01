@@ -23,6 +23,12 @@ import type { SpellDefinition } from "../spell-definition";
 import type { DeploymentSettings } from "../deployment";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 import type {
+  HUDDefinition,
+  MenuDefinition,
+  UITheme,
+  UINode
+} from "../ui-definition";
+import type {
   LandscapeSurfaceSlot,
   SurfaceBinding,
   SurfaceContext
@@ -735,6 +741,95 @@ export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateMenuDefinitionCommand = SemanticCommandBase<
+  "CreateMenuDefinition",
+  {
+    definition: MenuDefinition;
+  }
+>;
+
+export type UpdateMenuDefinitionCommand = SemanticCommandBase<
+  "UpdateMenuDefinition",
+  {
+    definitionId: string;
+    patch: Partial<Pick<MenuDefinition, "displayName" | "menuKey" | "root">>;
+  }
+>;
+
+export type DeleteMenuDefinitionCommand = SemanticCommandBase<
+  "DeleteMenuDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type AddMenuNodeCommand = SemanticCommandBase<
+  "AddMenuNode",
+  {
+    definitionId: string;
+    parentNodeId: string;
+    node: UINode;
+  }
+>;
+
+export type UpdateMenuNodeCommand = SemanticCommandBase<
+  "UpdateMenuNode",
+  {
+    definitionId: string;
+    nodeId: string;
+    patch: Partial<Omit<UINode, "nodeId" | "children">> & {
+      children?: UINode[];
+    };
+  }
+>;
+
+export type RemoveMenuNodeCommand = SemanticCommandBase<
+  "RemoveMenuNode",
+  {
+    definitionId: string;
+    nodeId: string;
+  }
+>;
+
+export type UpdateHUDDefinitionCommand = SemanticCommandBase<
+  "UpdateHUDDefinition",
+  {
+    definition: HUDDefinition;
+  }
+>;
+
+export type AddHUDNodeCommand = SemanticCommandBase<
+  "AddHUDNode",
+  {
+    parentNodeId: string;
+    node: UINode;
+  }
+>;
+
+export type UpdateHUDNodeCommand = SemanticCommandBase<
+  "UpdateHUDNode",
+  {
+    nodeId: string;
+    patch: Partial<Omit<UINode, "nodeId" | "children">> & {
+      children?: UINode[];
+    };
+  }
+>;
+
+export type RemoveHUDNodeCommand = SemanticCommandBase<
+  "RemoveHUDNode",
+  {
+    nodeId: string;
+  }
+>;
+
+export type UpdateUIThemeCommand = SemanticCommandBase<
+  "UpdateUITheme",
+  {
+    theme: UITheme;
+  }
+>;
+
 export type SemanticCommand =
   | MovePlacedAssetCommand
   | PlaceAssetInstanceCommand
@@ -818,7 +913,18 @@ export type SemanticCommand =
   | RemovePlacedAssetInspectableCommand
   | UpdatePluginConfigurationCommand
   | DeletePluginConfigurationCommand
-  | UpdateDeploymentSettingsCommand;
+  | UpdateDeploymentSettingsCommand
+  | CreateMenuDefinitionCommand
+  | UpdateMenuDefinitionCommand
+  | DeleteMenuDefinitionCommand
+  | AddMenuNodeCommand
+  | UpdateMenuNodeCommand
+  | RemoveMenuNodeCommand
+  | UpdateHUDDefinitionCommand
+  | AddHUDNodeCommand
+  | UpdateHUDNodeCommand
+  | RemoveHUDNodeCommand
+  | UpdateUIThemeCommand;
 
 export {
   executeCommand,

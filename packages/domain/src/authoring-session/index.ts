@@ -55,6 +55,17 @@ import type {
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
   UpdateDeploymentSettingsCommand,
+  CreateMenuDefinitionCommand,
+  UpdateMenuDefinitionCommand,
+  DeleteMenuDefinitionCommand,
+  AddMenuNodeCommand,
+  UpdateMenuNodeCommand,
+  RemoveMenuNodeCommand,
+  UpdateHUDDefinitionCommand,
+  AddHUDNodeCommand,
+  UpdateHUDNodeCommand,
+  RemoveHUDNodeCommand,
+  UpdateUIThemeCommand,
   SetPlacedAssetShaderOverrideCommand,
   SetNPCPresenceShaderOverrideCommand,
   SetItemPresenceShaderOverrideCommand,
@@ -83,6 +94,16 @@ import type { ItemDefinition } from "../item-definition";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { QuestDefinition } from "../quest-definition";
 import type { SpellDefinition } from "../spell-definition";
+import {
+  normalizeHUDDefinition,
+  normalizeMenuDefinition,
+  normalizeUITheme,
+  normalizeUINode,
+  type HUDDefinition,
+  type MenuDefinition,
+  type UITheme,
+  type UINode
+} from "../ui-definition";
 import {
   assertReusableSurfaceHasNoPaintedMasks,
   type SurfaceDefinition
@@ -273,6 +294,20 @@ export function getAllQuestDefinitions(
   session: AuthoringSession
 ): QuestDefinition[] {
   return session.gameProject.questDefinitions;
+}
+
+export function getAllMenuDefinitions(
+  session: AuthoringSession
+): MenuDefinition[] {
+  return session.gameProject.menuDefinitions;
+}
+
+export function getHUDDefinition(session: AuthoringSession): HUDDefinition | null {
+  return session.gameProject.hudDefinition;
+}
+
+export function getUITheme(session: AuthoringSession): UITheme {
+  return session.gameProject.uiTheme;
 }
 
 export function getAllPluginConfigurations(
@@ -1619,6 +1654,297 @@ function applyDeleteQuestDefinitionCommand(
   };
 }
 
+function commitProjectUICommand(
+  session: AuthoringSession,
+  command: SemanticCommand,
+  nextProject: GameProject,
+  affectedAggregateIds: string[]
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, affectedAggregateIds);
+  return {
+    ...session,
+    gameProject: nextProject,
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function mapUINodeTree(
+  root: UINode,
+  nodeId: string,
+  mapper: (node: UINode) => UINode
+): UINode {
+  if (root.nodeId === nodeId) {
+    return mapper(root);
+  }
+  return {
+    ...root,
+    children: root.children.map((child) => mapUINodeTree(child, nodeId, mapper))
+  };
+}
+
+function removeUINodeFromTree(root: UINode, nodeId: string): UINode {
+  if (root.nodeId === nodeId) return root;
+  return {
+    ...root,
+    children: root.children
+      .filter((child) => child.nodeId !== nodeId)
+      .map((child) => removeUINodeFromTree(child, nodeId))
+  };
+}
+
+function applyCreateMenuDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateMenuDefinitionCommand
+): AuthoringSession {
+  const definition = normalizeMenuDefinition(
+    command.payload.definition,
+    session.gameProject.identity.id,
+    session.gameProject.menuDefinitions.length
+  );
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: [...session.gameProject.menuDefinitions, definition]
+    },
+    [definition.definitionId]
+  );
+}
+
+function applyUpdateMenuDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateMenuDefinitionCommand
+): AuthoringSession {
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: session.gameProject.menuDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? normalizeMenuDefinition(
+              { ...definition, ...command.payload.patch },
+              session.gameProject.identity.id
+            )
+          : definition
+      )
+    },
+    [command.payload.definitionId]
+  );
+}
+
+function applyDeleteMenuDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteMenuDefinitionCommand
+): AuthoringSession {
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: session.gameProject.menuDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    [command.payload.definitionId]
+  );
+}
+
+function applyAddMenuNodeCommand(
+  session: AuthoringSession,
+  command: AddMenuNodeCommand
+): AuthoringSession {
+  const node = normalizeUINode(command.payload.node);
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: session.gameProject.menuDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? {
+              ...definition,
+              root: mapUINodeTree(
+                definition.root,
+                command.payload.parentNodeId,
+                (parent) => ({
+                  ...parent,
+                  children: [...parent.children, node]
+                })
+              )
+            }
+          : definition
+      )
+    },
+    [command.payload.definitionId, node.nodeId]
+  );
+}
+
+function applyUpdateMenuNodeCommand(
+  session: AuthoringSession,
+  command: UpdateMenuNodeCommand
+): AuthoringSession {
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: session.gameProject.menuDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? {
+              ...definition,
+              root: mapUINodeTree(definition.root, command.payload.nodeId, (node) =>
+                normalizeUINode({
+                  ...node,
+                  ...command.payload.patch,
+                  nodeId: node.nodeId,
+                  children: command.payload.patch.children ?? node.children
+                })
+              )
+            }
+          : definition
+      )
+    },
+    [command.payload.definitionId, command.payload.nodeId]
+  );
+}
+
+function applyRemoveMenuNodeCommand(
+  session: AuthoringSession,
+  command: RemoveMenuNodeCommand
+): AuthoringSession {
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      menuDefinitions: session.gameProject.menuDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? {
+              ...definition,
+              root: removeUINodeFromTree(definition.root, command.payload.nodeId)
+            }
+          : definition
+      )
+    },
+    [command.payload.definitionId, command.payload.nodeId]
+  );
+}
+
+function applyUpdateHUDDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateHUDDefinitionCommand
+): AuthoringSession {
+  const hudDefinition = normalizeHUDDefinition(
+    command.payload.definition,
+    session.gameProject.identity.id
+  );
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      hudDefinition
+    },
+    [hudDefinition.definitionId]
+  );
+}
+
+function getExistingHUD(session: AuthoringSession): HUDDefinition {
+  return normalizeHUDDefinition(
+    session.gameProject.hudDefinition,
+    session.gameProject.identity.id
+  );
+}
+
+function applyAddHUDNodeCommand(
+  session: AuthoringSession,
+  command: AddHUDNodeCommand
+): AuthoringSession {
+  const hudDefinition = getExistingHUD(session);
+  const node = normalizeUINode(command.payload.node);
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      hudDefinition: {
+        ...hudDefinition,
+        root: mapUINodeTree(
+          hudDefinition.root,
+          command.payload.parentNodeId,
+          (parent) => ({ ...parent, children: [...parent.children, node] })
+        )
+      }
+    },
+    [hudDefinition.definitionId, node.nodeId]
+  );
+}
+
+function applyUpdateHUDNodeCommand(
+  session: AuthoringSession,
+  command: UpdateHUDNodeCommand
+): AuthoringSession {
+  const hudDefinition = getExistingHUD(session);
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      hudDefinition: {
+        ...hudDefinition,
+        root: mapUINodeTree(hudDefinition.root, command.payload.nodeId, (node) =>
+          normalizeUINode({
+            ...node,
+            ...command.payload.patch,
+            nodeId: node.nodeId,
+            children: command.payload.patch.children ?? node.children
+          })
+        )
+      }
+    },
+    [hudDefinition.definitionId, command.payload.nodeId]
+  );
+}
+
+function applyRemoveHUDNodeCommand(
+  session: AuthoringSession,
+  command: RemoveHUDNodeCommand
+): AuthoringSession {
+  const hudDefinition = getExistingHUD(session);
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      hudDefinition: {
+        ...hudDefinition,
+        root: removeUINodeFromTree(hudDefinition.root, command.payload.nodeId)
+      }
+    },
+    [hudDefinition.definitionId, command.payload.nodeId]
+  );
+}
+
+function applyUpdateUIThemeCommand(
+  session: AuthoringSession,
+  command: UpdateUIThemeCommand
+): AuthoringSession {
+  return commitProjectUICommand(
+    session,
+    command,
+    {
+      ...session.gameProject,
+      uiTheme: normalizeUITheme(command.payload.theme)
+    },
+    [session.gameProject.identity.id]
+  );
+}
+
 export function applyCommand(
   session: AuthoringSession,
   command: SemanticCommand
@@ -1703,6 +2029,50 @@ export function applyCommand(
 
   if (command.kind === "UpdateDeploymentSettings") {
     return applyUpdateDeploymentSettingsCommand(session, command);
+  }
+
+  if (command.kind === "CreateMenuDefinition") {
+    return applyCreateMenuDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdateMenuDefinition") {
+    return applyUpdateMenuDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteMenuDefinition") {
+    return applyDeleteMenuDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "AddMenuNode") {
+    return applyAddMenuNodeCommand(session, command);
+  }
+
+  if (command.kind === "UpdateMenuNode") {
+    return applyUpdateMenuNodeCommand(session, command);
+  }
+
+  if (command.kind === "RemoveMenuNode") {
+    return applyRemoveMenuNodeCommand(session, command);
+  }
+
+  if (command.kind === "UpdateHUDDefinition") {
+    return applyUpdateHUDDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "AddHUDNode") {
+    return applyAddHUDNodeCommand(session, command);
+  }
+
+  if (command.kind === "UpdateHUDNode") {
+    return applyUpdateHUDNodeCommand(session, command);
+  }
+
+  if (command.kind === "RemoveHUDNode") {
+    return applyRemoveHUDNodeCommand(session, command);
+  }
+
+  if (command.kind === "UpdateUITheme") {
+    return applyUpdateUIThemeCommand(session, command);
   }
 
   if (command.kind === "CreateNPCDefinition") {

@@ -22,6 +22,7 @@ import {
   getActiveRegion,
   createDefaultDeploymentSettings,
   createDefaultPlayerDefinition,
+  normalizeGameProject,
   createDefaultEnvironmentDefinition,
   createDefaultRegionLandscapeState,
   createDefaultFoliageWindShaderGraph,
@@ -30,7 +31,7 @@ import {
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
 
 function makeProject(): GameProject {
-  return {
+  return normalizeGameProject({
     identity: { id: "wordlark", schema: "GameProject", version: 1 },
     displayName: "Wordlark",
     gameRootPath: ".",
@@ -45,7 +46,7 @@ function makeProject(): GameProject {
     itemDefinitions: [],
     documentDefinitions: [],
     questDefinitions: []
-  };
+  });
 }
 
 function makeRegion(): RegionDocument {

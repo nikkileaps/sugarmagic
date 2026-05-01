@@ -25,6 +25,8 @@ import type {
   DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
+  HUDDefinition,
+  MenuDefinition,
   NPCDefinition,
   NPCInteractionMode,
   PlayerDefinition,
@@ -32,6 +34,7 @@ import type {
   QuestNodeDefinition,
   RegionDocument,
   SpellDefinition,
+  UITheme,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
@@ -44,6 +47,7 @@ import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
 import { useSpellWorkspaceView } from "./SpellWorkspaceView";
+import { useGameUIWorkspaceView } from "./game-ui";
 
 const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
@@ -52,7 +56,8 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "items", label: "Items", icon: "📦" },
   { id: "documents", label: "Documents", icon: "📚" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
-  { id: "quests", label: "Quests", icon: "📜" }
+  { id: "quests", label: "Quests", icon: "📜" },
+  { id: "game-ui", label: "Game UI", icon: "🖥️" }
 ];
 
 export interface DesignProductModeViewProps {
@@ -66,6 +71,9 @@ export interface DesignProductModeViewProps {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  menuDefinitions: MenuDefinition[];
+  hudDefinition: HUDDefinition | null;
+  uiTheme: UITheme;
   extraWorkspaceItems: Array<{
     workspaceKind: string;
     label: string;
@@ -85,6 +93,7 @@ export interface DesignProductModeViewProps {
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  renderGameUIPreview: (options: { initialVisibleMenuKey: string | null }) => ReactNode;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
@@ -121,6 +130,9 @@ export function useDesignProductModeView(
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    menuDefinitions,
+    hudDefinition,
+    uiTheme,
     extraWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
@@ -132,6 +144,7 @@ export function useDesignProductModeView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    renderGameUIPreview,
     navigationTarget,
     onConsumeNavigationTarget,
     onNavigateToTarget,
@@ -218,6 +231,16 @@ export function useDesignProductModeView(
     renderInspectorSections: renderQuestInspectorSections
   });
 
+  const gameUIView = useGameUIWorkspaceView({
+    isActive: activeDesignKind === "game-ui",
+    gameProjectId,
+    menuDefinitions,
+    hudDefinition,
+    uiTheme,
+    onCommand,
+    renderPreview: renderGameUIPreview
+  });
+
   const allWorkspaceKinds: BuildWorkspaceKindItem[] = [
     ...designWorkspaceKinds,
     ...extraWorkspaceItems.map((workspace) => ({
@@ -238,6 +261,8 @@ export function useDesignProductModeView(
     leftPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.leftPanel
+        : activeDesignKind === "game-ui"
+          ? gameUIView.leftPanel
         : activeDesignKind === "quests"
           ? questView.leftPanel
           : activeDesignKind === "npcs"
@@ -252,6 +277,8 @@ export function useDesignProductModeView(
     rightPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.rightPanel
+        : activeDesignKind === "game-ui"
+          ? gameUIView.rightPanel
         : activeDesignKind === "quests"
           ? questView.rightPanel
           : activeDesignKind === "npcs"
@@ -266,6 +293,8 @@ export function useDesignProductModeView(
     centerPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.centerPanel
+        : activeDesignKind === "game-ui"
+          ? gameUIView.centerPanel
         : activeDesignKind === "quests"
           ? questView.centerPanel
           : activeDesignKind === "spells"
@@ -280,6 +309,8 @@ export function useDesignProductModeView(
     viewportOverlay:
       activeDesignKind === "dialogues"
         ? dialogueView.viewportOverlay
+        : activeDesignKind === "game-ui"
+          ? gameUIView.viewportOverlay
         : activeDesignKind === "quests"
           ? questView.viewportOverlay
           : activeDesignKind === "spells"

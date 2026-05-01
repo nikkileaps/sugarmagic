@@ -176,6 +176,8 @@ export interface RuntimeGameplaySessionController {
   setDebugBillboardsEnabled: (enabled: boolean) => void;
   getDebugHudCardContributions: () => DebugHudCardContribution[];
   getDebugHudSnapshot: () => DebugHudGameplaySessionSnapshot;
+  toggleInventory: () => void;
+  toggleCaster: () => void;
   dispose: () => void;
 }
 
@@ -1541,6 +1543,8 @@ export function createRuntimeGameplaySessionController(
       return debugHudCardContributions;
     },
     getDebugHudSnapshot,
+    toggleInventory: inventoryUi.toggle,
+    toggleCaster: spellMenuUi.toggle,
     dispose() {
       npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
