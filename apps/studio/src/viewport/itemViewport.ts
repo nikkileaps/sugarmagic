@@ -114,9 +114,10 @@ export function createItemViewport(
           if (!projection.itemDefinition || !projection.contentLibrary) {
             return;
           }
-          cameraController.updateTarget(
-            Math.max(projection.itemDefinition.presentation.modelHeight * 0.5, 0.2)
-          );
+          // Items render at their GLB's authored size, so we no longer have a
+          // definition-level height to drive the inspector camera target.
+          // 0.25m centers the preview reasonably for typical-prop-scale GLBs.
+          cameraController.updateTarget(0.25);
           void previewController.apply({
             itemDefinition: projection.itemDefinition,
             contentLibrary: projection.contentLibrary,

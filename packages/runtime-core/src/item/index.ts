@@ -43,30 +43,27 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
-function normalizeModelScale(root: THREE.Object3D, targetHeight: number) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  if (size.y <= 0) return;
+// Stand-in size for the placeholder box rendered when no GLB is bound.
+// Once a model is bound the GLB's authored dimensions are the source of truth.
+const FALLBACK_BOX_HEIGHT = 0.45;
 
-  const scale = targetHeight / size.y;
-  root.scale.setScalar(scale);
-  box.setFromObject(root);
+function rebaseToGround(root: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(root);
+  if (!Number.isFinite(box.min.y)) return;
   root.position.y -= box.min.y;
 }
 
-function createFallbackRoot(definition: ItemDefinition): THREE.Group {
+function createFallbackRoot(): THREE.Group {
   const root = new THREE.Group();
-  const height = Math.max(definition.presentation.modelHeight, 0.1);
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(height * 0.75, height, height * 0.75),
+    new THREE.BoxGeometry(FALLBACK_BOX_HEIGHT * 0.75, FALLBACK_BOX_HEIGHT, FALLBACK_BOX_HEIGHT * 0.75),
     new THREE.MeshStandardMaterial({
       color: DEFAULT_ITEM_COLOR,
       roughness: 0.35,
       metalness: 0.06
     })
   );
-  mesh.position.y = height / 2;
+  mesh.position.y = FALLBACK_BOX_HEIGHT / 2;
   root.add(mesh);
   return root;
 }
@@ -126,7 +123,7 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
             message: "The bound item model could not be resolved from the content library."
           });
         }
-        const fallbackRoot = createFallbackRoot(itemDefinition);
+        const fallbackRoot = createFallbackRoot();
         if (version !== currentApplyVersion) {
           disposeObject(fallbackRoot);
           return { warnings };
@@ -140,7 +137,7 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
         const gltf = await gltfLoader.loadAsync(modelSourceUrl);
         const modelRoot = new THREE.Group();
         const clonedScene = gltf.scene.clone(true);
-        normalizeModelScale(clonedScene, Math.max(itemDefinition.presentation.modelHeight, 0.1));
+        rebaseToGround(clonedScene);
         modelRoot.add(clonedScene);
 
         if (version !== currentApplyVersion) {
@@ -156,7 +153,7 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
           code: "model-load-failed",
           message: "The bound item model failed to load."
         });
-        const fallbackRoot = createFallbackRoot(itemDefinition);
+        const fallbackRoot = createFallbackRoot();
         if (version !== currentApplyVersion) {
           disposeObject(fallbackRoot);
           return { warnings };

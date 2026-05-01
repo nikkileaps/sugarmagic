@@ -437,24 +437,6 @@ export function useItemWorkspaceView(
                   })
                 }
               />
-              <NumberInput
-                label="Model Height"
-                size="xs"
-                min={0.1}
-                max={4}
-                step={0.05}
-                value={selectedItem.presentation.modelHeight}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateItem({
-                    ...selectedItem,
-                    presentation: {
-                      ...selectedItem.presentation,
-                      modelHeight: value
-                    }
-                  });
-                }}
-              />
             </Stack>
 
             <Stack gap="xs">

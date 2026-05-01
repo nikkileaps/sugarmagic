@@ -82,8 +82,7 @@ describe("resolveSceneAuthoringContexts", () => {
                 giftable: false
               },
               presentation: {
-                modelAssetDefinitionId: null,
-                modelHeight: 0.45
+                modelAssetDefinitionId: null
               },
               interactionView: {
                 kind: "readable",

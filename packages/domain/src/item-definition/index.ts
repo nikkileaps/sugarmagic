@@ -11,7 +11,6 @@ export interface ItemInventoryProfile {
 
 export interface ItemPresentationProfile {
   modelAssetDefinitionId: string | null;
-  modelHeight: number;
 }
 
 export interface ItemInteractionView {
@@ -31,8 +30,6 @@ export interface ItemDefinition {
   presentation: ItemPresentationProfile;
   interactionView: ItemInteractionView;
 }
-
-export const DEFAULT_ITEM_MODEL_HEIGHT = 0.45;
 
 export function createItemDefinitionId(): string {
   return createUuid();
@@ -56,8 +53,7 @@ export function createDefaultItemDefinition(
       giftable: false
     },
     presentation: {
-      modelAssetDefinitionId: null,
-      modelHeight: DEFAULT_ITEM_MODEL_HEIGHT
+      modelAssetDefinitionId: null
     },
     interactionView: {
       kind: "none",
@@ -94,10 +90,7 @@ export function normalizeItemDefinition(
     presentation: {
       modelAssetDefinitionId:
         itemDefinition.presentation?.modelAssetDefinitionId ??
-        defaultDefinition.presentation.modelAssetDefinitionId,
-      modelHeight:
-        itemDefinition.presentation?.modelHeight ??
-        defaultDefinition.presentation.modelHeight
+        defaultDefinition.presentation.modelAssetDefinitionId
     },
     interactionView: {
       kind: itemDefinition.interactionView?.kind ?? defaultDefinition.interactionView.kind,
