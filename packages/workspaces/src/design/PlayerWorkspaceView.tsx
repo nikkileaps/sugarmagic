@@ -18,7 +18,7 @@ import type {
   DesignPreviewState,
   DesignPreviewStore
 } from "@sugarmagic/shell";
-import { Inspector } from "@sugarmagic/ui";
+import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
 import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
@@ -408,83 +408,24 @@ export function usePlayerWorkspaceView(
               />
             </Stack>
 
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Model
-              </Text>
-              {boundCharacterModel ? (
-                <Stack gap={4}>
-                  <Text size="xs">{boundCharacterModel.displayName}</Text>
-                  <Text size="xs" c="var(--sm-color-overlay0)">
-                    {boundCharacterModel.source.relativeAssetPath}
-                  </Text>
-                  <Group gap="xs">
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      onClick={async () => {
-                        const next = await onImportCharacterModelDefinition();
-                        if (!next) return;
-                        updatePlayerDefinition({
-                          ...playerDefinition,
-                          presentation: {
-                            ...playerDefinition.presentation,
-                            modelAssetDefinitionId: next.definitionId
-                          }
-                        });
-                      }}
-                    >
-                      Replace…
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="subtle"
-                      color="red"
-                      onClick={() =>
-                        updatePlayerDefinition({
-                          ...playerDefinition,
-                          presentation: {
-                            ...playerDefinition.presentation,
-                            modelAssetDefinitionId: null
-                          }
-                        })
-                      }
-                    >
-                      Clear
-                    </Button>
-                  </Group>
-                </Stack>
-              ) : (
-                <Stack gap={4}>
-                  {playerDefinition.presentation.modelAssetDefinitionId ? (
-                    <Text size="xs" c="red">
-                      Bound model is missing from the project — re-import.
-                    </Text>
-                  ) : (
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      No model bound. The player will render as a capsule.
-                    </Text>
-                  )}
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={async () => {
-                      const next = await onImportCharacterModelDefinition();
-                      if (!next) return;
-                      updatePlayerDefinition({
-                        ...playerDefinition,
-                        presentation: {
-                          ...playerDefinition.presentation,
-                          modelAssetDefinitionId: next.definitionId
-                        }
-                      });
-                    }}
-                  >
-                    Import Character Model…
-                  </Button>
-                </Stack>
-              )}
-            </Stack>
+            <InlineAssetField
+              label="Model"
+              value={boundCharacterModel?.source.relativeAssetPath ?? null}
+              hasBoundId={Boolean(playerDefinition.presentation.modelAssetDefinitionId)}
+              onImport={async () => {
+                const next = await onImportCharacterModelDefinition();
+                return next?.definitionId ?? null;
+              }}
+              onChange={(definitionId) =>
+                updatePlayerDefinition({
+                  ...playerDefinition,
+                  presentation: {
+                    ...playerDefinition.presentation,
+                    modelAssetDefinitionId: definitionId
+                  }
+                })
+              }
+            />
 
             <Stack gap="xs">
               <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">

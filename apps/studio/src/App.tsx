@@ -1602,6 +1602,7 @@ export function App() {
     onCommand: dispatchCommand,
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
+    onImportAsset: handleImportAsset,
     renderGameUIPreview: ({ initialVisibleMenuKey }) => (
       <UIPreviewSession
         project={session?.gameProject ?? null}

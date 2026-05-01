@@ -27,7 +27,7 @@ import type {
   DesignPreviewStore
 } from "@sugarmagic/shell";
 import { createDefaultItemDefinition } from "@sugarmagic/domain";
-import { Inspector } from "@sugarmagic/ui";
+import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
@@ -40,16 +40,10 @@ export interface ItemWorkspaceViewProps {
   assetDefinitions: AssetDefinition[];
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
+  onImportAsset: () => Promise<AssetDefinition | null>;
 }
 
 const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
-function toAssetOptions(assetDefinitions: AssetDefinition[]) {
-  return assetDefinitions.map((definition) => ({
-    value: definition.definitionId,
-    label: definition.displayName
-  }));
-}
 
 function toDocumentOptions(documentDefinitions: DocumentDefinition[]) {
   return documentDefinitions.map((definition) => ({
@@ -82,7 +76,8 @@ export function useItemWorkspaceView(
     documentDefinitions,
     assetDefinitions,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportAsset
   } = props;
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
@@ -135,7 +130,11 @@ export function useItemWorkspaceView(
     );
   }, [itemDefinitions, searchQuery]);
 
-  const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
+  const boundItemModel = useMemo(() => {
+    const id = selectedItem?.presentation.modelAssetDefinitionId;
+    if (!id) return null;
+    return assetDefinitions.find((definition) => definition.definitionId === id) ?? null;
+  }, [assetDefinitions, selectedItem]);
   const documentOptions = useMemo(
     () => toDocumentOptions(documentDefinitions),
     [documentDefinitions]
@@ -420,21 +419,20 @@ export function useItemWorkspaceView(
             </Stack>
 
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Model
-              </Text>
-              <Select
-                label="Model Asset"
-                size="xs"
-                clearable
-                data={assetOptions}
-                value={selectedItem.presentation.modelAssetDefinitionId}
-                onChange={(value) =>
+              <InlineAssetField
+                label="Model"
+                value={boundItemModel?.source.relativeAssetPath ?? null}
+                hasBoundId={Boolean(selectedItem.presentation.modelAssetDefinitionId)}
+                onImport={async () => {
+                  const next = await onImportAsset();
+                  return next?.definitionId ?? null;
+                }}
+                onChange={(definitionId) =>
                   updateItem({
                     ...selectedItem,
                     presentation: {
                       ...selectedItem.presentation,
-                      modelAssetDefinitionId: value
+                      modelAssetDefinitionId: definitionId
                     }
                   })
                 }

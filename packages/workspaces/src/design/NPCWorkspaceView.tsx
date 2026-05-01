@@ -45,7 +45,7 @@ import type {
   DesignPreviewStore
 } from "@sugarmagic/shell";
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
-import { Inspector } from "@sugarmagic/ui";
+import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
 import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
@@ -494,81 +494,24 @@ export function useNPCWorkspaceView(
             </Stack>
 
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Model
-              </Text>
-              {boundCharacterModel ? (
-                <Stack gap={4}>
-                  <Text size="xs">{boundCharacterModel.displayName}</Text>
-                  <Text size="xs" c="var(--sm-color-overlay0)">
-                    {boundCharacterModel.source.relativeAssetPath}
-                  </Text>
-                  <Group gap="xs">
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      onClick={async () => {
-                        const next = await onImportCharacterModelDefinition();
-                        if (!next) return;
-                        updateNPC({
-                          ...selectedNPC,
-                          presentation: {
-                            ...selectedNPC.presentation,
-                            modelAssetDefinitionId: next.definitionId
-                          }
-                        });
-                      }}
-                    >
-                      Replace…
-                    </Button>
-                    <Button
-                      size="compact-xs"
-                      variant="subtle"
-                      color="red"
-                      onClick={() =>
-                        updateNPC({
-                          ...selectedNPC,
-                          presentation: {
-                            ...selectedNPC.presentation,
-                            modelAssetDefinitionId: null
-                          }
-                        })
-                      }
-                    >
-                      Clear
-                    </Button>
-                  </Group>
-                </Stack>
-              ) : (
-                <Stack gap={4}>
-                  {selectedNPC.presentation.modelAssetDefinitionId ? (
-                    <Text size="xs" c="red">
-                      Bound model is missing from the project — re-import.
-                    </Text>
-                  ) : (
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      No model bound. The NPC will render as a capsule.
-                    </Text>
-                  )}
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={async () => {
-                      const next = await onImportCharacterModelDefinition();
-                      if (!next) return;
-                      updateNPC({
-                        ...selectedNPC,
-                        presentation: {
-                          ...selectedNPC.presentation,
-                          modelAssetDefinitionId: next.definitionId
-                        }
-                      });
-                    }}
-                  >
-                    Import Character Model…
-                  </Button>
-                </Stack>
-              )}
+              <InlineAssetField
+                label="Model"
+                value={boundCharacterModel?.source.relativeAssetPath ?? null}
+                hasBoundId={Boolean(selectedNPC.presentation.modelAssetDefinitionId)}
+                onImport={async () => {
+                  const next = await onImportCharacterModelDefinition();
+                  return next?.definitionId ?? null;
+                }}
+                onChange={(definitionId) =>
+                  updateNPC({
+                    ...selectedNPC,
+                    presentation: {
+                      ...selectedNPC.presentation,
+                      modelAssetDefinitionId: definitionId
+                    }
+                  })
+                }
+              />
               <NumberInput
                 label="Model Height"
                 size="xs"

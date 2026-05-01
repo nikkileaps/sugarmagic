@@ -93,6 +93,7 @@ export interface DesignProductModeViewProps {
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  onImportAsset: () => Promise<AssetDefinition | null>;
   renderGameUIPreview: (options: { initialVisibleMenuKey: string | null }) => ReactNode;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
@@ -144,6 +145,7 @@ export function useDesignProductModeView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    onImportAsset,
     renderGameUIPreview,
     navigationTarget,
     onConsumeNavigationTarget,
@@ -187,7 +189,8 @@ export function useDesignProductModeView(
     documentDefinitions,
     assetDefinitions,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportAsset
   });
 
   const spellView = useSpellWorkspaceView({
