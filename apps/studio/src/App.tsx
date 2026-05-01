@@ -12,7 +12,8 @@ import { productModes } from "@sugarmagic/productmodes";
 import type {
   SemanticCommand,
   RegionDocument,
-  SurfaceBinding
+  SurfaceBinding,
+  ItemDefinition
 } from "@sugarmagic/domain";
 import {
   createAuthoringSession,
@@ -92,7 +93,8 @@ import {
   reloadProject,
   importSourceAsset,
   createBlankMaskFile,
-  writeMaskFile
+  writeMaskFile,
+  writeItemThumbnailFile
 } from "@sugarmagic/io";
 import {
   createShellStore,
@@ -130,6 +132,7 @@ import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 import { createWebRenderEngine } from "@sugarmagic/render-web";
+import { renderModelThumbnail } from "@sugarmagic/runtime-core";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
@@ -1117,6 +1120,42 @@ export function App() {
     }
   }, []);
 
+  const handleGenerateItemThumbnail = useCallback(
+    async (item: ItemDefinition): Promise<string | null> => {
+      const { handle, session: currentSession } = projectStore.getState();
+      if (!handle || !currentSession) return null;
+      const modelDefinitionId = item.presentation.modelAssetDefinitionId;
+      if (!modelDefinitionId) return null;
+      const modelDefinition = currentSession.contentLibrary.assetDefinitions.find(
+        (definition) => definition.definitionId === modelDefinitionId
+      );
+      const sources = assetSourceStore.getState().sources;
+      const modelUrl = modelDefinition
+        ? sources[modelDefinition.source.relativeAssetPath]
+        : undefined;
+      if (!modelDefinition || !modelUrl) {
+        window.alert("Cannot generate thumbnail: bound model is not loaded.");
+        return null;
+      }
+      try {
+        const blob = await renderModelThumbnail(modelUrl);
+        const relativePath = await writeItemThumbnailFile(handle, item.definitionId, blob);
+        // Force the asset-source store to mint a fresh blob URL for this
+        // path (overwriting any stale URL from a previous Generate click).
+        await assetSourceStore.getState().refreshPaths([relativePath]);
+        return relativePath;
+      } catch (error) {
+        window.alert(
+          error instanceof Error
+            ? `Thumbnail generation failed: ${error.message}`
+            : `Thumbnail generation failed: ${String(error)}`
+        );
+        return null;
+      }
+    },
+    []
+  );
+
   const handleRemoveCharacterModelDefinition = useCallback(
     (definitionId: string) => {
       const { session: currentSession } = projectStore.getState();
@@ -1603,6 +1642,7 @@ export function App() {
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
     onImportAsset: handleImportAsset,
+    onGenerateItemThumbnail: handleGenerateItemThumbnail,
     renderGameUIPreview: ({ initialVisibleMenuKey }) => (
       <UIPreviewSession
         project={session?.gameProject ?? null}
