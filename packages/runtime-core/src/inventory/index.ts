@@ -41,6 +41,7 @@ export interface RuntimeInventoryEntry {
   quantity: number;
   description?: string;
   viewKind: ItemDefinition["interactionView"]["kind"];
+  thumbnailAssetPath: string | null;
 }
 
 export class InventoryManager {
@@ -129,7 +130,8 @@ export class InventoryManager {
         displayName: definition.displayName,
         quantity,
         description: definition.description,
-        viewKind: definition.interactionView.kind
+        viewKind: definition.interactionView.kind,
+        thumbnailAssetPath: definition.presentation.thumbnailAssetPath
       });
     }
 
@@ -152,8 +154,13 @@ export interface RuntimeInventoryUI {
   dispose: () => void;
 }
 
+export interface RuntimeInventoryUIOptions {
+  getAssetUrl?: (relativePath: string) => string | undefined;
+}
+
 export function createRuntimeInventoryUI(
-  parentContainer: HTMLElement
+  parentContainer: HTMLElement,
+  options: RuntimeInventoryUIOptions = {}
 ): RuntimeInventoryUI {
   injectInventoryStyles();
 
@@ -202,12 +209,21 @@ export function createRuntimeInventoryUI(
       button.type = "button";
       button.className = "sm-inventory-entry";
       button.disabled = entry.viewKind === "none";
+      const thumbnailUrl = entry.thumbnailAssetPath
+        ? options.getAssetUrl?.(entry.thumbnailAssetPath)
+        : null;
+      const thumbnailHtml = thumbnailUrl
+        ? `<img class="sm-inventory-entry-thumbnail" src="${escapeHtml(thumbnailUrl)}" alt="" />`
+        : `<div class="sm-inventory-entry-thumbnail sm-inventory-entry-thumbnail-empty"></div>`;
       button.innerHTML = `
-        <div class="sm-inventory-entry-title-row">
-          <span class="sm-inventory-entry-title">${escapeHtml(entry.displayName)}</span>
-          <span class="sm-inventory-entry-qty">x${entry.quantity}</span>
+        ${thumbnailHtml}
+        <div class="sm-inventory-entry-text">
+          <div class="sm-inventory-entry-title-row">
+            <span class="sm-inventory-entry-title">${escapeHtml(entry.displayName)}</span>
+            <span class="sm-inventory-entry-qty">x${entry.quantity}</span>
+          </div>
+          <div class="sm-inventory-entry-description">${escapeHtml(entry.description ?? "")}</div>
         </div>
-        <div class="sm-inventory-entry-description">${escapeHtml(entry.description ?? "")}</div>
       `;
       button.addEventListener("click", () => {
         if (entry.viewKind === "none") return;
@@ -491,6 +507,9 @@ function injectInventoryStyles() {
     }
 
     .sm-inventory-entry {
+      display: flex;
+      align-items: center;
+      gap: 14px;
       text-align: left;
       border: 1px solid rgba(255,255,255,0.08);
       background: #181825;
@@ -503,6 +522,25 @@ function injectInventoryStyles() {
     .sm-inventory-entry:disabled {
       opacity: 0.75;
       cursor: default;
+    }
+
+    .sm-inventory-entry-thumbnail {
+      width: 56px;
+      height: 56px;
+      flex-shrink: 0;
+      border-radius: 8px;
+      object-fit: contain;
+      background: #11111b;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .sm-inventory-entry-thumbnail-empty {
+      border-style: dashed;
+    }
+
+    .sm-inventory-entry-text {
+      flex: 1;
+      min-width: 0;
     }
 
     .sm-inventory-entry-title-row {

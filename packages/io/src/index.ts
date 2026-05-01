@@ -8,3 +8,4 @@ export * from "./migrations";
 export * from "./project-lifecycle";
 export * from "./publish";
 export * from "./schemas";
+export * from "./thumbnails";

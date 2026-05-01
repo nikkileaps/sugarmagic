@@ -141,6 +141,13 @@ export interface RuntimeGameplaySessionControllerOptions {
   pluginManager?: RuntimePluginManager | null;
   onItemPresenceCollected?: (presenceId: string) => void;
   onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
+  /**
+   * Resolves a project-relative asset path to a fetchable URL (typically a
+   * blob: URL minted from the project file handle). Used by the inventory
+   * UI to render item thumbnails. Stable across the session lifecycle —
+   * the underlying map can change without re-creating the session.
+   */
+  getAssetUrl?: (relativePath: string) => string | undefined;
 }
 
 export interface RuntimeGameplaySessionController {
@@ -342,7 +349,9 @@ export function createRuntimeGameplaySessionController(
   const casterSystem = new CasterSystem(casterManager);
   const spellMenuUi = createRuntimeSpellMenuUI(root, casterManager);
   const inventoryManager = new InventoryManager();
-  const inventoryUi = createRuntimeInventoryUI(root);
+  const inventoryUi = createRuntimeInventoryUI(root, {
+    getAssetUrl: options.getAssetUrl
+  });
   const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
   const itemPickupNotifications = createRuntimeItemPickupNotificationCenter(root);
   const interactionPrompt = createRuntimeInteractionPrompt(root);

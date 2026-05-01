@@ -42,9 +42,13 @@ function collectRelativeAssetPaths(
     )
   ];
 
-  return sources
-    .map((source) => source.relativeAssetPath)
-    .sort();
+  const paths = sources.map((source) => source.relativeAssetPath);
+  for (const itemDefinition of session.gameProject?.itemDefinitions ?? []) {
+    if (itemDefinition.presentation.thumbnailAssetPath) {
+      paths.push(itemDefinition.presentation.thumbnailAssetPath);
+    }
+  }
+  return paths.sort();
 }
 
 async function createAssetSourceMap(

@@ -11,6 +11,12 @@ export interface ItemInventoryProfile {
 
 export interface ItemPresentationProfile {
   modelAssetDefinitionId: string | null;
+  /**
+   * Relative path to a managed PNG file under the project's
+   * `assets/thumbnails/` folder. Generated via the "Generate Thumbnail"
+   * button in the Item inspector — not user-editable directly.
+   */
+  thumbnailAssetPath: string | null;
 }
 
 export interface ItemInteractionView {
@@ -53,7 +59,8 @@ export function createDefaultItemDefinition(
       giftable: false
     },
     presentation: {
-      modelAssetDefinitionId: null
+      modelAssetDefinitionId: null,
+      thumbnailAssetPath: null
     },
     interactionView: {
       kind: "none",
@@ -90,7 +97,10 @@ export function normalizeItemDefinition(
     presentation: {
       modelAssetDefinitionId:
         itemDefinition.presentation?.modelAssetDefinitionId ??
-        defaultDefinition.presentation.modelAssetDefinitionId
+        defaultDefinition.presentation.modelAssetDefinitionId,
+      thumbnailAssetPath:
+        itemDefinition.presentation?.thumbnailAssetPath ??
+        defaultDefinition.presentation.thumbnailAssetPath
     },
     interactionView: {
       kind: itemDefinition.interactionView?.kind ?? defaultDefinition.interactionView.kind,

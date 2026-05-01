@@ -379,7 +379,7 @@ function createNPCSceneObject(
   };
 }
 
-function createItemSceneObject(
+export function createItemSceneObject(
   presence: RegionItemPresence,
   itemDefinition: ItemDefinition | null,
   contentLibrary?: ContentLibrarySnapshot

@@ -132,7 +132,7 @@ import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 import { createWebRenderEngine } from "@sugarmagic/render-web";
-import { renderModelThumbnail } from "@sugarmagic/runtime-core";
+import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
@@ -1138,7 +1138,13 @@ export function App() {
         return null;
       }
       try {
-        const blob = await renderModelThumbnail(modelUrl);
+        const blob = await captureItemThumbnail({
+          engine: studioRenderEngine,
+          item,
+          contentLibrary: currentSession.contentLibrary,
+          assetSources: sources,
+          modelGlbUrl: modelUrl
+        });
         const relativePath = await writeItemThumbnailFile(handle, item.definitionId, blob);
         // Force the asset-source store to mint a fresh blob URL for this
         // path (overwriting any stale URL from a previous Generate click).

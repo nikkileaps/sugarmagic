@@ -75,6 +75,12 @@ export interface ItemPreviewWarning {
 
 export interface ItemPreviewApplyResult {
   warnings: ItemPreviewWarning[];
+  /**
+   * The loaded GLB root, exposed so the caller can apply Sugarmagic shader
+   * bindings on top of the bare materials. Null when the fallback box was
+   * rendered (no GLB bound or load failed).
+   */
+  modelRoot: THREE.Object3D | null;
 }
 
 export interface ItemPreviewController {
@@ -126,11 +132,11 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
         const fallbackRoot = createFallbackRoot();
         if (version !== currentApplyVersion) {
           disposeObject(fallbackRoot);
-          return { warnings };
+          return { warnings, modelRoot: null };
         }
         currentRoot = fallbackRoot;
         root.add(fallbackRoot);
-        return { warnings };
+        return { warnings, modelRoot: null };
       }
 
       try {
@@ -142,12 +148,12 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
 
         if (version !== currentApplyVersion) {
           disposeObject(modelRoot);
-          return { warnings };
+          return { warnings, modelRoot: null };
         }
 
         currentRoot = modelRoot;
         root.add(modelRoot);
-        return { warnings };
+        return { warnings, modelRoot };
       } catch {
         warnings.push({
           code: "model-load-failed",
@@ -156,11 +162,11 @@ export function createItemPreviewController(scene: THREE.Scene): ItemPreviewCont
         const fallbackRoot = createFallbackRoot();
         if (version !== currentApplyVersion) {
           disposeObject(fallbackRoot);
-          return { warnings };
+          return { warnings, modelRoot: null };
         }
         currentRoot = fallbackRoot;
         root.add(fallbackRoot);
-        return { warnings };
+        return { warnings, modelRoot: null };
       }
     },
     dispose() {
