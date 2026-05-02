@@ -1,3 +1,4 @@
+export * from "./document-pages";
 export * from "./documents";
 export * from "./exports";
 export * from "./fs-access";
@@ -8,3 +9,4 @@ export * from "./migrations";
 export * from "./project-lifecycle";
 export * from "./publish";
 export * from "./schemas";
+export * from "./thumbnails";

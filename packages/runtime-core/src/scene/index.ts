@@ -379,7 +379,7 @@ function createNPCSceneObject(
   };
 }
 
-function createItemSceneObject(
+export function createItemSceneObject(
   presence: RegionItemPresence,
   itemDefinition: ItemDefinition | null,
   contentLibrary?: ContentLibrarySnapshot
@@ -389,7 +389,6 @@ function createItemSceneObject(
     modelAssetDefinitionId,
     contentLibrary
   );
-  const height = Math.max(itemDefinition?.presentation.modelHeight ?? 0.45, 0.1);
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
     : { surface: null, deform: null, effect: null };
@@ -408,7 +407,7 @@ function createItemSceneObject(
     assetDefinitionId: modelAssetDefinitionId,
     assetKind: assetDescriptor.assetKind,
     modelSourcePath: assetDescriptor.sourcePath,
-    targetModelHeight: height,
+    targetModelHeight: null,
     effectiveShaders,
     effectiveMaterialSlots,
     effectiveShader: effectiveShaders.surface ?? effectiveShaders.deform ?? effectiveShaders.effect,
@@ -417,7 +416,7 @@ function createItemSceneObject(
       rotation: presence.transform.rotation,
       scale: presence.transform.scale
     },
-    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${height}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
+    representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
     capsule: null
   };
 }

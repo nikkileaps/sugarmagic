@@ -42,15 +42,18 @@ describe("viewport migration structural parity", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps WebGPURenderer construction owned solely by RenderView", () => {
+  it("keeps WebGPURenderer construction limited to the allowed renderer-host sites", () => {
     const renderWebFiles = collectTypeScriptFiles(RENDER_WEB_ROOT);
     const constructorSites = renderWebFiles.filter((file) =>
       sourceOf(file).includes("new WebGPURenderer(")
     );
 
-    expect(constructorSites).toEqual([
-      join(REPO_ROOT, "packages", "render-web", "src", "view", "RenderView.ts")
-    ]);
+    expect(constructorSites.sort()).toEqual([
+      // Live viewports.
+      join(REPO_ROOT, "packages", "render-web", "src", "view", "RenderView.ts"),
+      // One-shot offscreen capture (thumbnails); shares the engine device.
+      join(REPO_ROOT, "packages", "render-web", "src", "captureFrame.ts")
+    ].sort());
   });
 
   it("keeps ShaderRuntime construction owned solely by WebRenderEngine", () => {

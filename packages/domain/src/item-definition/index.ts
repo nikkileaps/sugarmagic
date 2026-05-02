@@ -11,7 +11,12 @@ export interface ItemInventoryProfile {
 
 export interface ItemPresentationProfile {
   modelAssetDefinitionId: string | null;
-  modelHeight: number;
+  /**
+   * Relative path to a managed PNG file under the project's
+   * `assets/thumbnails/` folder. Generated via the "Generate Thumbnail"
+   * button in the Item inspector — not user-editable directly.
+   */
+  thumbnailAssetPath: string | null;
 }
 
 export interface ItemInteractionView {
@@ -31,8 +36,6 @@ export interface ItemDefinition {
   presentation: ItemPresentationProfile;
   interactionView: ItemInteractionView;
 }
-
-export const DEFAULT_ITEM_MODEL_HEIGHT = 0.45;
 
 export function createItemDefinitionId(): string {
   return createUuid();
@@ -57,7 +60,7 @@ export function createDefaultItemDefinition(
     },
     presentation: {
       modelAssetDefinitionId: null,
-      modelHeight: DEFAULT_ITEM_MODEL_HEIGHT
+      thumbnailAssetPath: null
     },
     interactionView: {
       kind: "none",
@@ -95,9 +98,9 @@ export function normalizeItemDefinition(
       modelAssetDefinitionId:
         itemDefinition.presentation?.modelAssetDefinitionId ??
         defaultDefinition.presentation.modelAssetDefinitionId,
-      modelHeight:
-        itemDefinition.presentation?.modelHeight ??
-        defaultDefinition.presentation.modelHeight
+      thumbnailAssetPath:
+        itemDefinition.presentation?.thumbnailAssetPath ??
+        defaultDefinition.presentation.thumbnailAssetPath
     },
     interactionView: {
       kind: itemDefinition.interactionView?.kind ?? defaultDefinition.interactionView.kind,

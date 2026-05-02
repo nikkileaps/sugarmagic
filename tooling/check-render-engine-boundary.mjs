@@ -5,7 +5,9 @@
  *
  * Enforces Epic 036 Stage 0's architectural rules:
  * - render-web stays free of @sugarmagic/shell imports
- * - RenderView is the only WebGPURenderer constructor site
+ * - WebGPURenderer construction is limited to the sanctioned host sites
+ *   (RenderView for live viewports, captureFrame for one-shot offscreen
+ *   capture — both share the engine's device)
  * - WebRenderEngine is the only ShaderRuntime / AuthoredAssetResolver
  *   construction site
  */
@@ -48,15 +50,20 @@ for (const file of renderWebFiles) {
   }
 }
 
+const ALLOWED_RENDERER_SITES = new Set([
+  "packages/render-web/src/view/RenderView.ts",
+  "packages/render-web/src/captureFrame.ts"
+]);
+
 const rendererConstructorSites = renderWebFiles.filter((file) =>
   loadSource(file).includes("new WebGPURenderer(")
 );
-if (
-  rendererConstructorSites.length !== 1 ||
-  rendererConstructorSites[0] !== "packages/render-web/src/view/RenderView.ts"
-) {
+const unauthorizedRendererSites = rendererConstructorSites.filter(
+  (site) => !ALLOWED_RENDERER_SITES.has(site)
+);
+if (unauthorizedRendererSites.length > 0) {
   fail(
-    `Expected exactly one WebGPURenderer constructor site in packages/render-web/src/view/RenderView.ts, found: ${rendererConstructorSites.join(", ") || "none"}.`
+    `Unsanctioned WebGPURenderer constructor site(s): ${unauthorizedRendererSites.join(", ")}.`
   );
 }
 

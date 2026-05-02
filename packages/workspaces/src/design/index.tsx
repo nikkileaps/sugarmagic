@@ -93,6 +93,12 @@ export interface DesignProductModeViewProps {
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  onImportAsset: () => Promise<AssetDefinition | null>;
+  onGenerateItemThumbnail: (item: ItemDefinition) => Promise<string | null>;
+  onAppendDocumentPage: (
+    documentDefinitionId: string,
+    pageIndex: number
+  ) => Promise<string | null>;
   renderGameUIPreview: (options: { initialVisibleMenuKey: string | null }) => ReactNode;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
@@ -144,6 +150,9 @@ export function useDesignProductModeView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    onImportAsset,
+    onGenerateItemThumbnail,
+    onAppendDocumentPage,
     renderGameUIPreview,
     navigationTarget,
     onConsumeNavigationTarget,
@@ -186,8 +195,11 @@ export function useDesignProductModeView(
     itemDefinitions,
     documentDefinitions,
     assetDefinitions,
+    assetSources,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportAsset,
+    onGenerateItemThumbnail
   });
 
   const spellView = useSpellWorkspaceView({
@@ -202,7 +214,9 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "documents",
     gameProjectId,
     documentDefinitions,
-    onCommand
+    assetSources,
+    onCommand,
+    onAppendDocumentPage
   });
 
   const dialogueView = useDialogueWorkspaceView({

@@ -1073,6 +1073,10 @@ export function createWebRuntimeHost(
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
       pluginManager,
+      // Closure over `currentAssetSources` so the inventory UI re-resolves
+      // thumbnail URLs against the current map (which can change when the
+      // user regenerates a thumbnail mid-session).
+      getAssetUrl: (path) => currentAssetSources?.[path],
       onSpellCastSuccess: (feedback) => {
         spellCastFeedbackHost?.show(feedback.message);
       },

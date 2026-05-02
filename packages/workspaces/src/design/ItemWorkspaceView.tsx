@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
   Box,
+  Button,
   Checkbox,
   Group,
   Menu,
@@ -27,7 +28,7 @@ import type {
   DesignPreviewStore
 } from "@sugarmagic/shell";
 import { createDefaultItemDefinition } from "@sugarmagic/domain";
-import { Inspector } from "@sugarmagic/ui";
+import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
@@ -38,18 +39,14 @@ export interface ItemWorkspaceViewProps {
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   assetDefinitions: AssetDefinition[];
+  assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
+  onImportAsset: () => Promise<AssetDefinition | null>;
+  onGenerateItemThumbnail: (item: ItemDefinition) => Promise<string | null>;
 }
 
 const IDENTITY_QUATERNION: [number, number, number, number] = [0, 0, 0, 1];
-
-function toAssetOptions(assetDefinitions: AssetDefinition[]) {
-  return assetDefinitions.map((definition) => ({
-    value: definition.definitionId,
-    label: definition.displayName
-  }));
-}
 
 function toDocumentOptions(documentDefinitions: DocumentDefinition[]) {
   return documentDefinitions.map((definition) => ({
@@ -81,8 +78,11 @@ export function useItemWorkspaceView(
     itemDefinitions,
     documentDefinitions,
     assetDefinitions,
+    assetSources,
     designPreviewStore,
-    onCommand
+    onCommand,
+    onImportAsset,
+    onGenerateItemThumbnail
   } = props;
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
@@ -135,7 +135,11 @@ export function useItemWorkspaceView(
     );
   }, [itemDefinitions, searchQuery]);
 
-  const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
+  const boundItemModel = useMemo(() => {
+    const id = selectedItem?.presentation.modelAssetDefinitionId;
+    if (!id) return null;
+    return assetDefinitions.find((definition) => definition.definitionId === id) ?? null;
+  }, [assetDefinitions, selectedItem]);
   const documentOptions = useMemo(
     () => toDocumentOptions(documentDefinitions),
     [documentDefinitions]
@@ -420,43 +424,71 @@ export function useItemWorkspaceView(
             </Stack>
 
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Model
-              </Text>
-              <Select
-                label="Model Asset"
-                size="xs"
-                clearable
-                data={assetOptions}
-                value={selectedItem.presentation.modelAssetDefinitionId}
-                onChange={(value) =>
+              <InlineAssetField
+                label="Model"
+                value={boundItemModel?.source.relativeAssetPath ?? null}
+                hasBoundId={Boolean(selectedItem.presentation.modelAssetDefinitionId)}
+                onImport={async () => {
+                  const next = await onImportAsset();
+                  return next?.definitionId ?? null;
+                }}
+                onChange={(definitionId) =>
                   updateItem({
                     ...selectedItem,
                     presentation: {
                       ...selectedItem.presentation,
-                      modelAssetDefinitionId: value
+                      modelAssetDefinitionId: definitionId
                     }
                   })
                 }
               />
-              <NumberInput
-                label="Model Height"
-                size="xs"
-                min={0.1}
-                max={4}
-                step={0.05}
-                value={selectedItem.presentation.modelHeight}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateItem({
-                    ...selectedItem,
-                    presentation: {
-                      ...selectedItem.presentation,
-                      modelHeight: value
-                    }
-                  });
-                }}
-              />
+              <Group gap="xs" align="center">
+                {selectedItem.presentation.thumbnailAssetPath &&
+                assetSources[selectedItem.presentation.thumbnailAssetPath] ? (
+                  <img
+                    src={assetSources[selectedItem.presentation.thumbnailAssetPath]}
+                    alt="Item thumbnail"
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 6,
+                      background: "var(--sm-color-base)",
+                      border: "1px solid var(--sm-panel-border)",
+                      objectFit: "contain"
+                    }}
+                  />
+                ) : (
+                  <Box
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 6,
+                      background: "var(--sm-color-base)",
+                      border: "1px dashed var(--sm-panel-border)"
+                    }}
+                  />
+                )}
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  disabled={!selectedItem.presentation.modelAssetDefinitionId}
+                  onClick={async () => {
+                    const path = await onGenerateItemThumbnail(selectedItem);
+                    if (!path) return;
+                    updateItem({
+                      ...selectedItem,
+                      presentation: {
+                        ...selectedItem.presentation,
+                        thumbnailAssetPath: path
+                      }
+                    });
+                  }}
+                >
+                  {selectedItem.presentation.thumbnailAssetPath
+                    ? "Regenerate Thumbnail"
+                    : "Generate Thumbnail"}
+                </Button>
+              </Group>
             </Stack>
 
             <Stack gap="xs">

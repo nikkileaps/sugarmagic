@@ -54,6 +54,10 @@ export {
   type SortableListProps
 } from "./SortableList";
 export {
+  InlineAssetField,
+  type InlineAssetFieldProps
+} from "./InlineAssetField";
+export {
   Inspector,
   type InspectorProps
 } from "./Inspector";

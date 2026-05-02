@@ -1,7 +1,15 @@
 import * as THREE from "three";
-import { createRenderView, type WebRenderEngine } from "@sugarmagic/render-web";
+import { createRegionItemPresence } from "@sugarmagic/domain";
+import {
+  createRenderableShaderApplicationState,
+  createRenderView,
+  ensureShaderSetAppliedToRenderable,
+  type RenderableShaderApplicationState,
+  type WebRenderEngine
+} from "@sugarmagic/render-web";
 import {
   createItemPreviewController,
+  createItemSceneObject,
   type ItemPreviewWarning
 } from "@sugarmagic/runtime-core";
 import {
@@ -72,6 +80,8 @@ export function createItemViewport(
     camera,
     compileProfile: "authoring-preview"
   });
+  const shaderApplication: RenderableShaderApplicationState =
+    createRenderableShaderApplicationState();
   let warnings: ItemPreviewWarning[] = [];
   let unsubscribeProjection: (() => void) | null = null;
   let cameraSyncUnsubscribe: (() => void) | null = null;
@@ -114,19 +124,38 @@ export function createItemViewport(
           if (!projection.itemDefinition || !projection.contentLibrary) {
             return;
           }
-          cameraController.updateTarget(
-            Math.max(projection.itemDefinition.presentation.modelHeight * 0.5, 0.2)
-          );
-          void previewController.apply({
-            itemDefinition: projection.itemDefinition,
-            contentLibrary: projection.contentLibrary,
-            assetSources: projection.assetSources
-          }).then((result) => {
-            warnings = result.warnings;
-            if (warnings.length > 0) {
-              console.warn("[sugarmagic] Item preview warnings", warnings);
-            }
-          });
+          // Items render at their GLB's authored size, so we no longer have a
+          // definition-level height to drive the inspector camera target.
+          // 0.25m centers the preview reasonably for typical-prop-scale GLBs.
+          cameraController.updateTarget(0.25);
+          const itemDefinition = projection.itemDefinition;
+          const contentLibrary = projection.contentLibrary;
+          const assetSources = projection.assetSources;
+          void previewController
+            .apply({ itemDefinition, contentLibrary, assetSources })
+            .then((result) => {
+              warnings = result.warnings;
+              if (warnings.length > 0) {
+                console.warn("[sugarmagic] Item preview warnings", warnings);
+              }
+              if (result.modelRoot) {
+                const presence = createRegionItemPresence({
+                  itemDefinitionId: itemDefinition.definitionId
+                });
+                const sceneObject = createItemSceneObject(
+                  presence,
+                  itemDefinition,
+                  contentLibrary
+                );
+                ensureShaderSetAppliedToRenderable(
+                  result.modelRoot,
+                  sceneObject,
+                  options.engine.shaderRuntime,
+                  shaderApplication,
+                  assetSources
+                );
+              }
+            });
         },
         { equalityFn: shallowEqual }
       );

@@ -11,6 +11,7 @@ export * from "./applyShaderToRenderable";
 export * from "./asset-scatter";
 export * from "./authoredAssetResolver";
 export * from "./billboard";
+export * from "./captureFrame";
 export * from "./engine/WebRenderEngine";
 export * from "./environment";
 export * from "./landscape";

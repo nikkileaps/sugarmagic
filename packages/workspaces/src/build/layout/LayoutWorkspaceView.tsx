@@ -1394,10 +1394,26 @@ export function useLayoutWorkspaceView(
               }}
             />
             <TransformInspector
-              label="Spawn Position"
+              label="Position"
               value={selectedItemPresence.transform.position}
               onChange={(axis, value) =>
                 handleTransformChange(selectedItemPresence.presenceId, "position", axis, value)
+              }
+            />
+            <TransformInspector
+              label="Rotation"
+              value={selectedItemPresence.transform.rotation}
+              step={0.1}
+              onChange={(axis, value) =>
+                handleTransformChange(selectedItemPresence.presenceId, "rotation", axis, value)
+              }
+            />
+            <TransformInspector
+              label="Scale"
+              value={selectedItemPresence.transform.scale}
+              step={0.1}
+              onChange={(axis, value) =>
+                handleTransformChange(selectedItemPresence.presenceId, "scale", axis, value)
               }
             />
           </Stack>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   ActionIcon,
   Box,
+  Button,
   Group,
   Menu,
   ScrollArea,
@@ -18,14 +19,19 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import { createDefaultDocumentDefinition } from "@sugarmagic/domain";
-import { Inspector } from "@sugarmagic/ui";
+import { Inspector, SortableList } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 
 export interface DocumentWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   documentDefinitions: DocumentDefinition[];
+  assetSources: Record<string, string>;
   onCommand: (command: SemanticCommand) => void;
+  onAppendDocumentPage: (
+    documentDefinitionId: string,
+    pageIndex: number
+  ) => Promise<string | null>;
 }
 
 const templateOptions: Array<{ value: DocumentTemplate; label: string }> = [
@@ -35,13 +41,55 @@ const templateOptions: Array<{ value: DocumentTemplate; label: string }> = [
   { value: "postcard", label: "Postcard" },
   { value: "flyer", label: "Flyer" },
   { value: "sign", label: "Sign" },
-  { value: "plaque", label: "Plaque" }
+  { value: "plaque", label: "Plaque" },
+  { value: "image-pages", label: "Image Pages" }
 ];
+
+function reorderImagePages(
+  pages: string[],
+  activeId: string,
+  overId: string
+): string[] {
+  const activeIndex = Number.parseInt(activeId, 10);
+  const overIndex = Number.parseInt(overId, 10);
+  if (
+    !Number.isFinite(activeIndex) ||
+    !Number.isFinite(overIndex) ||
+    activeIndex < 0 ||
+    overIndex < 0 ||
+    activeIndex >= pages.length ||
+    overIndex >= pages.length ||
+    activeIndex === overIndex
+  ) {
+    return pages;
+  }
+  const next = [...pages];
+  const [moved] = next.splice(activeIndex, 1);
+  next.splice(overIndex, 0, moved!);
+  return next;
+}
+
+function nextDocumentPageIndex(pages: string[]): number {
+  const maxExistingPageNumber = pages.reduce((maxPageNumber, path) => {
+    const match = /\/page-(\d+)\.png$/i.exec(path);
+    const pageNumber = match ? Number.parseInt(match[1]!, 10) : 0;
+    return Number.isFinite(pageNumber)
+      ? Math.max(maxPageNumber, pageNumber)
+      : maxPageNumber;
+  }, 0);
+  return maxExistingPageNumber;
+}
 
 export function useDocumentWorkspaceView(
   props: DocumentWorkspaceViewProps
 ): WorkspaceViewContribution {
-  const { gameProjectId, documentDefinitions, onCommand } = props;
+  const {
+    gameProjectId,
+    documentDefinitions,
+    assetSources,
+    onCommand,
+    onAppendDocumentPage
+  } = props;
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
     documentDefinitions[0]?.definitionId ?? null
   );
@@ -282,6 +330,53 @@ export function useDocumentWorkspaceView(
                 {selectedDocument.subtitle}
               </Text>
             )}
+            {selectedDocument.template === "image-pages" ? (
+              selectedDocument.imagePages.length > 0 ? (
+                <Stack gap="md" mt="lg">
+                  {selectedDocument.imagePages.map((path, index) => {
+                    const url = assetSources[path];
+                    return (
+                      <Box
+                        key={`${path}:${index}`}
+                        p="md"
+                        style={{
+                          border: "1px solid var(--sm-panel-border)",
+                          borderRadius: 12,
+                          background: "rgba(255,255,255,0.02)"
+                        }}
+                      >
+                        <Text size="xs" tt="uppercase" fw={700} c="var(--sm-color-subtext)" mb="xs">
+                          Page {index + 1}
+                        </Text>
+                        {url ? (
+                          <img
+                            src={url}
+                            alt={`Page ${index + 1}`}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              maxHeight: 720,
+                              objectFit: "contain",
+                              borderRadius: 8,
+                              background: "var(--sm-color-base)"
+                            }}
+                          />
+                        ) : (
+                          <Text size="xs" c="var(--sm-color-overlay0)">
+                            Page image not loaded yet: {path}
+                          </Text>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              ) : (
+                <Text size="sm" c="var(--sm-color-overlay0)" mt="lg">
+                  This image-pages document has no page images yet.
+                </Text>
+              )
+            ) : (
+              <>
             <Group gap="md" mb="lg">
               {selectedDocument.author.trim().length > 0 && (
                 <Text size="sm" c="var(--sm-color-overlay0)">
@@ -366,6 +461,8 @@ export function useDocumentWorkspaceView(
                 )}
               </Box>
             )}
+              </>
+            )}
           </Box>
         ) : (
           <Stack align="center" justify="center" h="100%" gap="md">
@@ -417,72 +514,163 @@ export function useDocumentWorkspaceView(
               />
             </Stack>
 
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Metadata
-              </Text>
-              <TextInput
-                label="Author"
-                size="xs"
-                value={selectedDocument.author}
-                onChange={(event) =>
-                  updateDocument({ ...selectedDocument, author: event.currentTarget.value })
-                }
-              />
-              <TextInput
-                label="Location Line"
-                size="xs"
-                value={selectedDocument.locationLine}
-                onChange={(event) =>
-                  updateDocument({
-                    ...selectedDocument,
-                    locationLine: event.currentTarget.value
-                  })
-                }
-              />
-              <TextInput
-                label="Date Line"
-                size="xs"
-                value={selectedDocument.dateLine}
-                onChange={(event) =>
-                  updateDocument({ ...selectedDocument, dateLine: event.currentTarget.value })
-                }
-              />
-              <TextInput
-                label="Footer"
-                size="xs"
-                value={selectedDocument.footer}
-                onChange={(event) =>
-                  updateDocument({ ...selectedDocument, footer: event.currentTarget.value })
-                }
-              />
-            </Stack>
+            {selectedDocument.template === "image-pages" ? (
+              <Stack gap="xs">
+                <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                  Pages
+                </Text>
+                {selectedDocument.imagePages.length > 0 ? (
+                  <SortableList
+                    items={selectedDocument.imagePages.map((path, index) => ({
+                      id: String(index),
+                      label: `Page ${index + 1}`
+                    }))}
+                    selectedId={null}
+                    onSelect={() => {}}
+                    onReorder={(activeId, overId) =>
+                      updateDocument({
+                        ...selectedDocument,
+                        imagePages: reorderImagePages(
+                          selectedDocument.imagePages,
+                          activeId,
+                          overId
+                        )
+                      })
+                    }
+                    onDelete={(id) => {
+                      const removeIndex = Number.parseInt(id, 10);
+                      if (!Number.isFinite(removeIndex)) return;
+                      updateDocument({
+                        ...selectedDocument,
+                        imagePages: selectedDocument.imagePages.filter(
+                          (_, index) => index !== removeIndex
+                        )
+                      });
+                    }}
+                    renderLeading={(item) => {
+                      const index = Number.parseInt(item.id, 10);
+                      const path = selectedDocument.imagePages[index];
+                      const url = path ? assetSources[path] : undefined;
+                      return url ? (
+                        <img
+                          src={url}
+                          alt=""
+                          style={{
+                            width: 40,
+                            height: 40,
+                            objectFit: "cover",
+                            borderRadius: 4,
+                            background: "var(--sm-color-base)",
+                            border: "1px solid var(--sm-panel-border)"
+                          }}
+                        />
+                      ) : (
+                        <Box
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 4,
+                            background: "var(--sm-color-base)",
+                            border: "1px dashed var(--sm-panel-border)"
+                          }}
+                        />
+                      );
+                    }}
+                  />
+                ) : (
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    No pages yet. Add the first page to get started.
+                  </Text>
+                )}
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={async () => {
+                    const nextIndex = nextDocumentPageIndex(selectedDocument.imagePages);
+                    const path = await onAppendDocumentPage(
+                      selectedDocument.definitionId,
+                      nextIndex
+                    );
+                    if (!path) return;
+                    updateDocument({
+                      ...selectedDocument,
+                      imagePages: [...selectedDocument.imagePages, path]
+                    });
+                  }}
+                >
+                  Add Page…
+                </Button>
+              </Stack>
+            ) : (
+              <>
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                    Metadata
+                  </Text>
+                  <TextInput
+                    label="Author"
+                    size="xs"
+                    value={selectedDocument.author}
+                    onChange={(event) =>
+                      updateDocument({ ...selectedDocument, author: event.currentTarget.value })
+                    }
+                  />
+                  <TextInput
+                    label="Location Line"
+                    size="xs"
+                    value={selectedDocument.locationLine}
+                    onChange={(event) =>
+                      updateDocument({
+                        ...selectedDocument,
+                        locationLine: event.currentTarget.value
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="Date Line"
+                    size="xs"
+                    value={selectedDocument.dateLine}
+                    onChange={(event) =>
+                      updateDocument({ ...selectedDocument, dateLine: event.currentTarget.value })
+                    }
+                  />
+                  <TextInput
+                    label="Footer"
+                    size="xs"
+                    value={selectedDocument.footer}
+                    onChange={(event) =>
+                      updateDocument({ ...selectedDocument, footer: event.currentTarget.value })
+                    }
+                  />
+                </Stack>
 
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Content
-              </Text>
-              <Textarea
-                label="Body"
-                size="xs"
-                minRows={6}
-                autosize
-                value={selectedDocument.body}
-                onChange={(event) =>
-                  updateDocument({ ...selectedDocument, body: event.currentTarget.value })
-                }
-              />
-              <Textarea
-                label="Back Body"
-                size="xs"
-                minRows={4}
-                autosize
-                value={selectedDocument.backBody}
-                onChange={(event) =>
-                  updateDocument({ ...selectedDocument, backBody: event.currentTarget.value })
-                }
-              />
-            </Stack>
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                    Content
+                  </Text>
+                  <Textarea
+                    label="Body"
+                    size="xs"
+                    minRows={6}
+                    autosize
+                    value={selectedDocument.body}
+                    onChange={(event) =>
+                      updateDocument({ ...selectedDocument, body: event.currentTarget.value })
+                    }
+                  />
+                  <Textarea
+                    label="Back Body"
+                    size="xs"
+                    minRows={4}
+                    autosize
+                    value={selectedDocument.backBody}
+                    onChange={(event) =>
+                      updateDocument({ ...selectedDocument, backBody: event.currentTarget.value })
+                    }
+                  />
+                </Stack>
+              </>
+            )}
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
