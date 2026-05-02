@@ -1,3 +1,4 @@
+export * from "./document-pages";
 export * from "./documents";
 export * from "./exports";
 export * from "./fs-access";

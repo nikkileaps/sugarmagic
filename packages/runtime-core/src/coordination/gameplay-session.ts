@@ -73,7 +73,6 @@ import {
 } from "../quest";
 import { createRuntimeQuestDialogueCoordinator } from "./quest-dialogue";
 import type {
-  DebugEntityBillboardContribution,
   DebugEntityBillboardKind,
   DebugHudCardContribution,
   DebugHudGameplaySessionSnapshot,
@@ -355,7 +354,9 @@ export function createRuntimeGameplaySessionController(
   const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
   const itemPickupNotifications = createRuntimeItemPickupNotificationCenter(root);
   const interactionPrompt = createRuntimeInteractionPrompt(root);
-  const documentReaderUi = createRuntimeDocumentReaderUI(root);
+  const documentReaderUi = createRuntimeDocumentReaderUI(root, {
+    getAssetUrl: options.getAssetUrl
+  });
   const dialogueManager = new DialogueManager(dialoguePanel);
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();

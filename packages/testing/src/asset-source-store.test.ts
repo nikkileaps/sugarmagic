@@ -14,11 +14,15 @@ function createSessionWithSources(options: {
   assetPaths?: string[];
   texturePaths?: string[];
   maskPaths?: string[];
+  itemThumbnailPaths?: string[];
+  documentPagePaths?: string[];
 }) {
   const {
     assetPaths = [],
     texturePaths = [],
-    maskPaths = []
+    maskPaths = [],
+    itemThumbnailPaths = [],
+    documentPagePaths = []
   } = options;
   return {
     contentLibrary: {
@@ -37,6 +41,20 @@ function createSessionWithSources(options: {
           relativeAssetPath
         }
       }))
+    },
+    gameProject: {
+      itemDefinitions: itemThumbnailPaths.map((thumbnailAssetPath) => ({
+        presentation: {
+          thumbnailAssetPath
+        }
+      })),
+      documentDefinitions: documentPagePaths.length > 0
+        ? [
+            {
+              imagePages: documentPagePaths
+            }
+          ]
+        : []
     }
   } as never;
 }
@@ -138,5 +156,32 @@ describe("asset source store", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(
       "blob:paint-project:masks/flower-mask.png:v1"
     );
+  });
+
+  it("serves document-owned image page files without library definitions", async () => {
+    const assetSourceStore = createAssetSourceStore();
+    const projectStore = createProjectStore();
+    const handle = { name: "document-project" } as FileSystemDirectoryHandle;
+    const descriptor = { gameRootPath: "." } as never;
+
+    projectStore.getState().setActive(
+      handle,
+      descriptor,
+      createSessionWithSources({
+        documentPagePaths: [
+          "assets/documents/doc-map/page-1.png",
+          "assets/documents/doc-map/page-2.png"
+        ]
+      })
+    );
+    assetSourceStore.getState().start(handle, projectStore);
+    await flushAsyncWork();
+
+    expect(
+      assetSourceStore.getState().sources["assets/documents/doc-map/page-1.png"]
+    ).toBe("blob:document-project:assets/documents/doc-map/page-1.png");
+    expect(
+      assetSourceStore.getState().sources["assets/documents/doc-map/page-2.png"]
+    ).toBe("blob:document-project:assets/documents/doc-map/page-2.png");
   });
 });

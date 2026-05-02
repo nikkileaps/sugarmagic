@@ -7,7 +7,8 @@ export type DocumentTemplate =
   | "postcard"
   | "flyer"
   | "sign"
-  | "plaque";
+  | "plaque"
+  | "image-pages";
 
 export interface DocumentSection {
   heading: string;
@@ -27,6 +28,13 @@ export interface DocumentDefinition {
   backBody: string;
   pages: string[];
   sections: DocumentSection[];
+  /**
+   * Relative paths to managed page-image files. Populated only when
+   * template is `"image-pages"`. Stored under
+   * `assets/documents/<documentId>/page-N.png`. Not exposed as library
+   * entries; resolved through the asset-source map at runtime.
+   */
+  imagePages: string[];
 }
 
 export function createDocumentDefinitionId(): string {
@@ -52,7 +60,8 @@ export function createDefaultDocumentDefinition(
     footer: "",
     backBody: "",
     pages: [""],
-    sections: [{ heading: "", body: "" }]
+    sections: [{ heading: "", body: "" }],
+    imagePages: []
   };
 }
 
@@ -83,6 +92,10 @@ export function normalizeDocumentDefinition(
             heading: section.heading ?? "",
             body: section.body ?? ""
           }))
-        : fallback.sections
+        : fallback.sections,
+    imagePages:
+      definition.imagePages && definition.imagePages.length > 0
+        ? definition.imagePages.filter((path): path is string => typeof path === "string")
+        : []
   };
 }

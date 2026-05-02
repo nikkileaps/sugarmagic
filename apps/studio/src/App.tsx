@@ -48,8 +48,6 @@ import {
   addAssetDefinitionToSession,
   addCharacterAnimationDefinitionToSession,
   addCharacterModelDefinitionToSession,
-  removeCharacterAnimationDefinitionFromSession,
-  removeCharacterModelDefinitionFromSession,
   addEnvironmentDefinitionToSession,
   addMaterialDefinitionToSession,
   addMaskTextureDefinitionToSession,
@@ -94,7 +92,9 @@ import {
   importSourceAsset,
   createBlankMaskFile,
   writeMaskFile,
-  writeItemThumbnailFile
+  writeItemThumbnailFile,
+  pickFile,
+  writeDocumentPageFile
 } from "@sugarmagic/io";
 import {
   createShellStore,
@@ -1162,15 +1162,46 @@ export function App() {
     []
   );
 
-  const handleRemoveCharacterModelDefinition = useCallback(
-    (definitionId: string) => {
-      const { session: currentSession } = projectStore.getState();
-      if (!currentSession) return;
-      projectStore
-        .getState()
-        .updateSession(
-          removeCharacterModelDefinitionFromSession(currentSession, definitionId)
+  const handleAppendDocumentPage = useCallback(
+    async (
+      documentDefinitionId: string,
+      pageIndex: number
+    ): Promise<string | null> => {
+      const { handle } = projectStore.getState();
+      if (!handle) return null;
+
+      try {
+        const fileHandle = await pickFile({
+          types: [
+            {
+              description: "Document page image",
+              accept: {
+                "image/png": [".png"],
+                "image/jpeg": [".jpg", ".jpeg"]
+              }
+            }
+          ]
+        });
+        const file = await fileHandle.getFile();
+        const relativePath = await writeDocumentPageFile(
+          handle,
+          documentDefinitionId,
+          pageIndex,
+          file
         );
+        await assetSourceStore.getState().refreshPaths([relativePath]);
+        return relativePath;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return null;
+        }
+        window.alert(
+          error instanceof Error
+            ? `Document page import failed: ${error.message}`
+            : `Document page import failed: ${String(error)}`
+        );
+        return null;
+      }
     },
     []
   );
@@ -1417,22 +1448,6 @@ export function App() {
       .updateSession(removeMaterialDefinitionFromSession(currentSession, definitionId));
   }, []);
 
-  const handleRemoveCharacterAnimationDefinition = useCallback(
-    (definitionId: string) => {
-      const { session: currentSession } = projectStore.getState();
-      if (!currentSession) return;
-      projectStore
-        .getState()
-        .updateSession(
-          removeCharacterAnimationDefinitionFromSession(
-            currentSession,
-            definitionId
-          )
-        );
-    },
-    []
-  );
-
   const handleCreateEnvironment = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -1649,6 +1664,7 @@ export function App() {
     onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
     onImportAsset: handleImportAsset,
     onGenerateItemThumbnail: handleGenerateItemThumbnail,
+    onAppendDocumentPage: handleAppendDocumentPage,
     renderGameUIPreview: ({ initialVisibleMenuKey }) => (
       <UIPreviewSession
         project={session?.gameProject ?? null}

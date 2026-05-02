@@ -5,7 +5,8 @@
  * for Studio. This is not authored truth and it is not render-web runtime
  * state; it is the shell-level bridge between project file handles and the
  * shared viewport/render loaders. File-backed definitions include models,
- * animation GLBs, textures, and painted mask textures.
+ * animation GLBs, textures, painted mask textures, item thumbnails, and
+ * document-owned image pages.
  */
 
 import { createStore } from "zustand/vanilla";
@@ -46,6 +47,11 @@ function collectRelativeAssetPaths(
   for (const itemDefinition of session.gameProject?.itemDefinitions ?? []) {
     if (itemDefinition.presentation.thumbnailAssetPath) {
       paths.push(itemDefinition.presentation.thumbnailAssetPath);
+    }
+  }
+  for (const documentDefinition of session.gameProject?.documentDefinitions ?? []) {
+    for (const pagePath of documentDefinition.imagePages) {
+      paths.push(pagePath);
     }
   }
   return paths.sort();

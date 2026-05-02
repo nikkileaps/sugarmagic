@@ -165,7 +165,8 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
       footer: "",
       backBody: "",
       pages: ["Welcome to Wordlark Hollow."],
-      sections: [{ heading: "Entry", body: "Speak to Orrin." }]
+      sections: [{ heading: "Entry", body: "Speak to Orrin." }],
+      imagePages: []
     },
     {
       definitionId: "doc-platform",
@@ -178,7 +179,8 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
       footer: "",
       backBody: "",
       pages: [""],
-      sections: [{ heading: "", body: "" }]
+      sections: [{ heading: "", body: "" }],
+      imagePages: []
     },
     {
       definitionId: "doc-npc",
@@ -191,7 +193,8 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
       footer: "",
       backBody: "",
       pages: [""],
-      sections: [{ heading: "", body: "" }]
+      sections: [{ heading: "", body: "" }],
+      imagePages: []
     },
     {
       definitionId: "doc-ticket",
@@ -204,7 +207,8 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
       footer: "",
       backBody: "",
       pages: [""],
-      sections: [{ heading: "", body: "" }]
+      sections: [{ heading: "", body: "" }],
+      imagePages: []
     }
   ];
 }

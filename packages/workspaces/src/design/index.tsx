@@ -95,6 +95,10 @@ export interface DesignProductModeViewProps {
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onGenerateItemThumbnail: (item: ItemDefinition) => Promise<string | null>;
+  onAppendDocumentPage: (
+    documentDefinitionId: string,
+    pageIndex: number
+  ) => Promise<string | null>;
   renderGameUIPreview: (options: { initialVisibleMenuKey: string | null }) => ReactNode;
   navigationTarget?: WorkspaceNavigationTarget | null;
   onConsumeNavigationTarget?: () => void;
@@ -148,6 +152,7 @@ export function useDesignProductModeView(
     onImportCharacterAnimationDefinition,
     onImportAsset,
     onGenerateItemThumbnail,
+    onAppendDocumentPage,
     renderGameUIPreview,
     navigationTarget,
     onConsumeNavigationTarget,
@@ -209,7 +214,9 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "documents",
     gameProjectId,
     documentDefinitions,
-    onCommand
+    assetSources,
+    onCommand,
+    onAppendDocumentPage
   });
 
   const dialogueView = useDialogueWorkspaceView({
