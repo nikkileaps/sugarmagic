@@ -6,14 +6,34 @@
  * library system as every other imported asset.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Text, Group, Menu, UnstyledButton, Modal, Stack, Switch, Badge } from "@mantine/core";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import {
+  Text,
+  Group,
+  Menu,
+  UnstyledButton,
+  Modal,
+  Stack,
+  Switch,
+  Badge
+} from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import type {
   SemanticCommand,
   RegionDocument,
   SurfaceBinding,
-  ItemDefinition
+  ItemDefinition,
+  AudioClipDefinition,
+  AudioMixerSettings,
+  RuntimeSoundEventKey,
+  SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
   createAuthoringSession,
@@ -25,6 +45,7 @@ import {
   getActiveRegion,
   getAllRegions,
   getAllAssetDefinitions,
+  getAllAudioClipDefinitions,
   getAllCharacterAnimationDefinitions,
   getAllCharacterModelDefinitions,
   getAllDialogueDefinitions,
@@ -32,6 +53,7 @@ import {
   getAllEnvironmentDefinitions,
   getAllItemDefinitions,
   getAllMaterialDefinitions,
+  getAllSoundCueDefinitions,
   getAllNPCDefinitions,
   getAllShaderDefinitions,
   getAllPluginConfigurations,
@@ -46,6 +68,7 @@ import {
   listRockTypeDefinitions,
   getPlayerDefinition,
   addAssetDefinitionToSession,
+  addAudioClipDefinitionToSession,
   addCharacterAnimationDefinitionToSession,
   addCharacterModelDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -53,8 +76,15 @@ import {
   addMaskTextureDefinitionToSession,
   addSurfaceDefinitionToSession,
   addTextureDefinitionToSession,
+  addSoundCueDefinitionToSession,
+  updateAudioClipDefinitionInSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
+  updateSoundCueDefinitionInSession,
+  removeAudioClipDefinitionFromSession,
+  removeSoundCueDefinitionFromSession,
+  setSoundEventBindingInSession,
+  updateAudioMixerInSession,
   duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
@@ -63,6 +93,7 @@ import {
   createDefaultMaterialPbr,
   createDefaultSurfaceDefinition,
   createDefaultEnvironmentDefinition,
+  createDefaultSoundCueDefinition,
   createDefaultRegion,
   createScopedId
 } from "@sugarmagic/domain";
@@ -87,6 +118,7 @@ import {
   importTextureDefinition,
   importCharacterAnimationDefinition,
   importCharacterModelDefinition,
+  importAudioClipDefinition,
   readMaskFile,
   reloadProject,
   importSourceAsset,
@@ -149,9 +181,13 @@ import { resolveNPCInteractionOptions } from "@sugarmagic/workspaces";
 import { UIPreviewSession } from "./preview/UIPreviewSession";
 
 function renderPluginSectionGroup(
-  sections: ReturnType<typeof collectPluginShellContributions>["designSections"],
+  sections: ReturnType<
+    typeof collectPluginShellContributions
+  >["designSections"],
   props: Parameters<
-    ReturnType<typeof collectPluginShellContributions>["designSections"][number]["render"]
+    ReturnType<
+      typeof collectPluginShellContributions
+    >["designSections"][number]["render"]
   >[0]
 ) {
   if (sections.length === 0) {
@@ -209,7 +245,9 @@ async function handleOpenProject() {
       active.regions,
       active.contentLibrary
     );
-    projectStore.getState().setActive(active.handle, active.descriptor, session);
+    projectStore
+      .getState()
+      .setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
     activateDefaultEnvironment(
       session.contentLibrary.environmentDefinitions[0]?.definitionId
@@ -223,14 +261,22 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
   try {
     const handle = await pickDirectory();
     const hasExisting = await checkDirectoryHasProject(handle);
-    if (hasExisting && !window.confirm("This directory already contains a Sugarmagic project. Replace it?")) return;
+    if (
+      hasExisting &&
+      !window.confirm(
+        "This directory already contains a Sugarmagic project. Replace it?"
+      )
+    )
+      return;
     const active = await createProjectInDirectory(handle, input);
     const session = createAuthoringSession(
       active.gameProject,
       active.regions,
       active.contentLibrary
     );
-    projectStore.getState().setActive(active.handle, active.descriptor, session);
+    projectStore
+      .getState()
+      .setActive(active.handle, active.descriptor, session);
     activateRegion(active.regions[0]);
     activateDefaultEnvironment(
       session.contentLibrary.environmentDefinitions[0]?.definitionId
@@ -243,7 +289,10 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
 function dispatchCommand(command: SemanticCommand) {
   const { session } = projectStore.getState();
   if (!session) return;
-  if (command.target.aggregateKind === "region-document" && !getActiveRegion(session)) {
+  if (
+    command.target.aggregateKind === "region-document" &&
+    !getActiveRegion(session)
+  ) {
     return;
   }
   projectStore.getState().updateSession(applyCommand(session, command));
@@ -276,14 +325,12 @@ async function handleSave() {
         .join("\n")}`
     );
     const result = await saveProjectWithManagedFiles(baseSaveInput);
-    projectStore
-      .getState()
-      .updateSession(
-        markSessionClean({
-          ...session,
-          contentLibrary: result.reconciledContentLibrary
-        })
-      );
+    projectStore.getState().updateSession(
+      markSessionClean({
+        ...session,
+        contentLibrary: result.reconciledContentLibrary
+      })
+    );
     return;
   }
 
@@ -319,14 +366,12 @@ async function handleSave() {
     const confirmed = window.confirm(messageParts.join("\n"));
     if (!confirmed) {
       const result = await saveProjectWithManagedFiles(baseSaveInput);
-      projectStore
-        .getState()
-        .updateSession(
-          markSessionClean({
-            ...session,
-            contentLibrary: result.reconciledContentLibrary
-          })
-        );
+      projectStore.getState().updateSession(
+        markSessionClean({
+          ...session,
+          contentLibrary: result.reconciledContentLibrary
+        })
+      );
       return;
     }
   }
@@ -337,14 +382,12 @@ async function handleSave() {
     overwriteManagedFiles: inspection.changedManagedFiles.length > 0
   });
 
-  projectStore
-    .getState()
-    .updateSession(
-      markSessionClean({
-        ...session,
-        contentLibrary: result.reconciledContentLibrary
-      })
-    );
+  projectStore.getState().updateSession(
+    markSessionClean({
+      ...session,
+      contentLibrary: result.reconciledContentLibrary
+    })
+  );
 }
 
 async function handleReload() {
@@ -362,7 +405,9 @@ async function handleReload() {
     reloaded.regions,
     reloaded.contentLibrary
   );
-  projectStore.getState().setActive(reloaded.handle, reloaded.descriptor, newSession);
+  projectStore
+    .getState()
+    .setActive(reloaded.handle, reloaded.descriptor, newSession);
   activateRegion(reloaded.regions[0]);
   activateDefaultEnvironment(
     newSession.contentLibrary.environmentDefinitions[0]?.definitionId
@@ -497,6 +542,8 @@ async function postPreviewBootMessage(
       menuDefinitions: session.gameProject.menuDefinitions,
       hudDefinition: session.gameProject.hudDefinition,
       uiTheme: session.gameProject.uiTheme,
+      soundEventBindings: session.gameProject.soundEventBindings,
+      audioMixer: session.gameProject.audioMixer,
       assetSources,
       pluginBootPayloads: {
         sugarlang:
@@ -516,11 +563,23 @@ async function postPreviewBootMessage(
 export function App() {
   const activeProductMode = useStore(shellStore, (s) => s.activeProductMode);
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
-  const activeBuildKind = useStore(shellStore, (s) => s.activeBuildWorkspaceKind);
-  const activeDesignKind = useStore(shellStore, (s) => s.activeDesignWorkspaceKind);
-  const activeRenderKind = useStore(shellStore, (s) => s.activeRenderWorkspaceKind);
+  const activeBuildKind = useStore(
+    shellStore,
+    (s) => s.activeBuildWorkspaceKind
+  );
+  const activeDesignKind = useStore(
+    shellStore,
+    (s) => s.activeDesignWorkspaceKind
+  );
+  const activeRenderKind = useStore(
+    shellStore,
+    (s) => s.activeRenderWorkspaceKind
+  );
   const activeRegionId = useStore(shellStore, (s) => s.activeRegionId);
-  const activeEnvironmentId = useStore(shellStore, (s) => s.activeEnvironmentId);
+  const activeEnvironmentId = useStore(
+    shellStore,
+    (s) => s.activeEnvironmentId
+  );
   const selectedIds = useStore(shellStore, (s) => s.selection.entityIds);
 
   const phase = useStore(projectStore, (s) => s.phase);
@@ -537,7 +596,10 @@ export function App() {
 
   const regions = useMemo(() => {
     if (!session) return [];
-    return getAllRegions(session).map((r) => ({ id: r.identity.id, displayName: r.displayName }));
+    return getAllRegions(session).map((r) => ({
+      id: r.identity.id,
+      displayName: r.displayName
+    }));
   }, [session]);
   const regionDocuments = useMemo(() => {
     if (!session) return [];
@@ -549,26 +611,32 @@ export function App() {
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
-  const handleWorkspaceNavigation = useCallback((target: WorkspaceNavigationTarget) => {
-    setWorkspaceNavigationTarget(target);
-    const shell = shellStore.getState();
-    if (target.kind === "quest-stage") {
-      shell.setActiveProductMode("design");
-      shell.setActiveDesignWorkspaceKind("quests");
-      return;
-    }
-    if (target.kind === "shader-graph") {
-      shell.setActiveProductMode("render");
-      shell.setActiveRenderWorkspaceKind("shaders");
-      return;
-    }
+  const handleWorkspaceNavigation = useCallback(
+    (target: WorkspaceNavigationTarget) => {
+      setWorkspaceNavigationTarget(target);
+      const shell = shellStore.getState();
+      if (target.kind === "quest-stage") {
+        shell.setActiveProductMode("design");
+        shell.setActiveDesignWorkspaceKind("quests");
+        return;
+      }
+      if (target.kind === "shader-graph") {
+        shell.setActiveProductMode("render");
+        shell.setActiveRenderWorkspaceKind("shaders");
+        return;
+      }
 
-    shell.setActiveProductMode("build");
-    shell.setActiveRegionId(target.regionId);
-    shell.setActiveBuildWorkspaceKind("behavior");
-  }, []);
+      shell.setActiveProductMode("build");
+      shell.setActiveRegionId(target.regionId);
+      shell.setActiveBuildWorkspaceKind("behavior");
+    },
+    []
+  );
 
-  function handleCreateRegion(input: { displayName: string; regionId: string }) {
+  function handleCreateRegion(input: {
+    displayName: string;
+    regionId: string;
+  }) {
     if (!session) return;
     const newRegion = createDefaultRegion({
       regionId: input.regionId,
@@ -576,7 +644,9 @@ export function App() {
       defaultEnvironmentId:
         session.contentLibrary.environmentDefinitions[0]?.definitionId ?? null
     });
-    projectStore.getState().updateSession(addRegionToSession(session, newRegion));
+    projectStore
+      .getState()
+      .updateSession(addRegionToSession(session, newRegion));
     shellStore.getState().setActiveRegionId(input.regionId);
     setCreateRegionOpen(false);
   }
@@ -584,6 +654,14 @@ export function App() {
   const assetDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllAssetDefinitions(session);
+  }, [session]);
+  const audioClipDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllAudioClipDefinitions(session);
+  }, [session]);
+  const soundCueDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllSoundCueDefinitions(session);
   }, [session]);
   const characterModelDefinitions = useMemo(() => {
     if (!session) return [];
@@ -715,7 +793,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!isPreviewRunning || !previewWindow || previewWindow.closed || !session) {
+    if (
+      !isPreviewRunning ||
+      !previewWindow ||
+      previewWindow.closed ||
+      !session
+    ) {
       return;
     }
 
@@ -753,7 +836,10 @@ export function App() {
     session
   ]);
 
-  const discoveredPlugins = useMemo(() => listDiscoveredPluginDefinitions(), []);
+  const discoveredPlugins = useMemo(
+    () => listDiscoveredPluginDefinitions(),
+    []
+  );
   const installedPlugins = useMemo(
     () => resolveInstalledPluginDefinitions(installedPluginIds),
     [installedPluginIds]
@@ -767,9 +853,12 @@ export function App() {
   );
   const pluginShellContributions = useMemo(
     () =>
-      collectPluginShellContributions(pluginConfigurations, (pluginId) =>
-        installedPlugins.find((plugin) => plugin.manifest.pluginId === pluginId)?.shell ??
-        null
+      collectPluginShellContributions(
+        pluginConfigurations,
+        (pluginId) =>
+          installedPlugins.find(
+            (plugin) => plugin.manifest.pluginId === pluginId
+          )?.shell ?? null
       ),
     [installedPlugins, pluginConfigurations]
   );
@@ -782,9 +871,13 @@ export function App() {
     []
   );
   useEffect(() => {
-    (globalThis as Record<string, unknown>).SUGARMAGIC_SUGARLANG_PROXY_BASE_URL =
+    (
+      globalThis as Record<string, unknown>
+    ).SUGARMAGIC_SUGARLANG_PROXY_BASE_URL =
       studioRuntimeEnvironment.SUGARMAGIC_SUGARLANG_PROXY_BASE_URL ?? "";
-    (globalThis as Record<string, unknown>).SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL =
+    (
+      globalThis as Record<string, unknown>
+    ).SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL =
       studioRuntimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL ?? "";
   }, [studioRuntimeEnvironment]);
   const sugarlangTargetLanguage =
@@ -798,29 +891,28 @@ export function App() {
       ),
     [studioPluginWorkspaceDefinitions]
   );
-  const renderablePluginWorkspaceItems = useMemo(
-    () =>
-      {
-        const sectionWorkspaceKinds = new Set(
-          pluginShellContributions.designSections.map(
-            (section) => section.workspaceKind
-          )
-        );
+  const renderablePluginWorkspaceItems = useMemo(() => {
+    const sectionWorkspaceKinds = new Set(
+      pluginShellContributions.designSections.map(
+        (section) => section.workspaceKind
+      )
+    );
 
-        return pluginShellContributions.designWorkspaces.filter(
-          (workspace) =>
-            studioPluginWorkspaceKinds.has(workspace.workspaceKind) ||
-            sectionWorkspaceKinds.has(workspace.workspaceKind)
-        );
-      },
-    [
-      pluginShellContributions.designSections,
-      pluginShellContributions.designWorkspaces,
-      studioPluginWorkspaceKinds
-    ]
-  );
+    return pluginShellContributions.designWorkspaces.filter(
+      (workspace) =>
+        studioPluginWorkspaceKinds.has(workspace.workspaceKind) ||
+        sectionWorkspaceKinds.has(workspace.workspaceKind)
+    );
+  }, [
+    pluginShellContributions.designSections,
+    pluginShellContributions.designWorkspaces,
+    studioPluginWorkspaceKinds
+  ]);
   const npcInteractionOptions = useMemo(
-    () => resolveNPCInteractionOptions(pluginShellContributions.npcInteractionOptions),
+    () =>
+      resolveNPCInteractionOptions(
+        pluginShellContributions.npcInteractionOptions
+      ),
     [pluginShellContributions.npcInteractionOptions]
   );
 
@@ -828,7 +920,9 @@ export function App() {
     if (activeProductMode !== "design") return;
     const availableDesignWorkspaceKinds = new Set<string>([
       ...CORE_DESIGN_WORKSPACE_KINDS,
-      ...renderablePluginWorkspaceItems.map((workspace) => workspace.workspaceKind)
+      ...renderablePluginWorkspaceItems.map(
+        (workspace) => workspace.workspaceKind
+      )
     ]);
     if (availableDesignWorkspaceKinds.has(activeDesignKind)) return;
     shellStore.getState().setActiveDesignWorkspaceKind("player");
@@ -893,7 +987,10 @@ export function App() {
   }
 
   function handleUninstallPlugin(pluginId: string) {
-    const configuration = getPluginConfiguration(pluginConfigurations, pluginId);
+    const configuration = getPluginConfiguration(
+      pluginConfigurations,
+      pluginId
+    );
     if (!configuration) return;
 
     dispatchCommand({
@@ -913,7 +1010,11 @@ export function App() {
   }
 
   const handleImportAsset = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -924,15 +1025,26 @@ export function App() {
       });
       let nextSession = currentSession;
       for (const textureDefinition of result.textureDefinitions) {
-        nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
+        nextSession = addTextureDefinitionToSession(
+          nextSession,
+          textureDefinition
+        );
       }
       for (const materialDefinition of result.materialDefinitions) {
-        nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
+        nextSession = addMaterialDefinitionToSession(
+          nextSession,
+          materialDefinition
+        );
       }
-      nextSession = addAssetDefinitionToSession(nextSession, result.assetDefinition);
+      nextSession = addAssetDefinitionToSession(
+        nextSession,
+        result.assetDefinition
+      );
       projectStore.getState().updateSession(nextSession);
       if (result.warnings.length > 0) {
-        window.alert(`Asset import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`);
+        window.alert(
+          `Asset import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
       }
       return result.assetDefinition;
     } catch (error) {
@@ -952,13 +1064,11 @@ export function App() {
     (definitionId: string, displayName: string) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
-      projectStore
-        .getState()
-        .updateSession(
-          updateAssetDefinitionInSession(currentSession, definitionId, {
-            displayName
-          })
-        );
+      projectStore.getState().updateSession(
+        updateAssetDefinitionInSession(currentSession, definitionId, {
+          displayName
+        })
+      );
     },
     []
   );
@@ -987,41 +1097,43 @@ export function App() {
           : slot
       );
 
-      projectStore
-        .getState()
-        .updateSession(
-          updateAssetDefinitionInSession(currentSession, definitionId, {
-            surfaceSlots: nextSurfaceSlots
-          })
-        );
+      projectStore.getState().updateSession(
+        updateAssetDefinitionInSession(currentSession, definitionId, {
+          surfaceSlots: nextSurfaceSlots
+        })
+      );
     },
     []
   );
 
-  const handleCreateMaterialDefinition = useCallback(
-    () => {
-      const { session: currentSession } = projectStore.getState();
-      if (!currentSession) return null;
+  const handleCreateMaterialDefinition = useCallback(() => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return null;
 
-      const nextIndex = currentSession.contentLibrary.materialDefinitions.length + 1;
-      const materialDefinition = {
-        definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
-        definitionKind: "material" as const,
-        displayName: `Material ${nextIndex}`,
-        pbr: createDefaultMaterialPbr(),
-        shaderDefinitionId: null
-      };
+    const nextIndex =
+      currentSession.contentLibrary.materialDefinitions.length + 1;
+    const materialDefinition = {
+      definitionId: `${currentSession.gameProject.identity.id}:material:${createScopedId("material")}`,
+      definitionKind: "material" as const,
+      displayName: `Material ${nextIndex}`,
+      pbr: createDefaultMaterialPbr(),
+      shaderDefinitionId: null
+    };
 
-      projectStore
-        .getState()
-        .updateSession(addMaterialDefinitionToSession(currentSession, materialDefinition));
-      return materialDefinition;
-    },
-    []
-  );
+    projectStore
+      .getState()
+      .updateSession(
+        addMaterialDefinitionToSession(currentSession, materialDefinition)
+      );
+    return materialDefinition;
+  }, []);
 
   const handleImportTextureDefinition = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -1031,7 +1143,12 @@ export function App() {
       });
       projectStore
         .getState()
-        .updateSession(addTextureDefinitionToSession(currentSession, result.textureDefinition));
+        .updateSession(
+          addTextureDefinitionToSession(
+            currentSession,
+            result.textureDefinition
+          )
+        );
       return result.textureDefinition;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -1047,7 +1164,11 @@ export function App() {
   }, []);
 
   const handleImportCharacterAnimationDefinition = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -1084,7 +1205,11 @@ export function App() {
   }, []);
 
   const handleImportCharacterModelDefinition = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -1120,15 +1245,152 @@ export function App() {
     }
   }, []);
 
+  const handleImportAudioClipDefinition = useCallback(async () => {
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+
+    try {
+      const result = await importAudioClipDefinition({
+        projectHandle: handle,
+        descriptor
+      });
+      projectStore
+        .getState()
+        .updateSession(
+          addAudioClipDefinitionToSession(
+            currentSession,
+            result.audioClipDefinition
+          )
+        );
+      await assetSourceStore
+        .getState()
+        .refreshPaths([result.audioClipDefinition.source.relativeAssetPath]);
+      return result.audioClipDefinition;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Audio import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleUpdateAudioClipDefinition = useCallback(
+    (definitionId: string, patch: Partial<AudioClipDefinition>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateAudioClipDefinitionInSession(
+            currentSession,
+            definitionId,
+            patch
+          )
+        );
+    },
+    []
+  );
+
+  const handleRemoveAudioClipDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      if (!window.confirm("Remove this audio clip from the project?")) return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeAudioClipDefinitionFromSession(currentSession, definitionId)
+        );
+    },
+    []
+  );
+
+  const handleCreateSoundCueDefinition = useCallback(() => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return null;
+    const soundCueDefinitionsForSession =
+      currentSession.contentLibrary.soundCueDefinitions ?? [];
+    const cue = createDefaultSoundCueDefinition({
+      displayName: `Sound Cue ${soundCueDefinitionsForSession.length + 1}`,
+      clips: []
+    });
+    projectStore
+      .getState()
+      .updateSession(addSoundCueDefinitionToSession(currentSession, cue));
+    return cue;
+  }, []);
+
+  const handleUpdateSoundCueDefinition = useCallback(
+    (definitionId: string, patch: Partial<SoundCueDefinition>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateSoundCueDefinitionInSession(currentSession, definitionId, patch)
+        );
+    },
+    []
+  );
+
+  const handleRemoveSoundCueDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    if (!window.confirm("Remove this sound cue from the project?")) return;
+    projectStore
+      .getState()
+      .updateSession(
+        removeSoundCueDefinitionFromSession(currentSession, definitionId)
+      );
+  }, []);
+
+  const handleSetSoundEventBinding = useCallback(
+    (eventKey: RuntimeSoundEventKey, soundCueDefinitionId: string | null) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          setSoundEventBindingInSession(
+            currentSession,
+            eventKey,
+            soundCueDefinitionId
+          )
+        );
+    },
+    []
+  );
+
+  const handleUpdateAudioMixer = useCallback(
+    (patch: Partial<AudioMixerSettings>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(updateAudioMixerInSession(currentSession, patch));
+    },
+    []
+  );
+
   const handleGenerateItemThumbnail = useCallback(
     async (item: ItemDefinition): Promise<string | null> => {
       const { handle, session: currentSession } = projectStore.getState();
       if (!handle || !currentSession) return null;
       const modelDefinitionId = item.presentation.modelAssetDefinitionId;
       if (!modelDefinitionId) return null;
-      const modelDefinition = currentSession.contentLibrary.assetDefinitions.find(
-        (definition) => definition.definitionId === modelDefinitionId
-      );
+      const modelDefinition =
+        currentSession.contentLibrary.assetDefinitions.find(
+          (definition) => definition.definitionId === modelDefinitionId
+        );
       const sources = assetSourceStore.getState().sources;
       const modelUrl = modelDefinition
         ? sources[modelDefinition.source.relativeAssetPath]
@@ -1145,7 +1407,11 @@ export function App() {
           assetSources: sources,
           modelGlbUrl: modelUrl
         });
-        const relativePath = await writeItemThumbnailFile(handle, item.definitionId, blob);
+        const relativePath = await writeItemThumbnailFile(
+          handle,
+          item.definitionId,
+          blob
+        );
         // Force the asset-source store to mint a fresh blob URL for this
         // path (overwriting any stale URL from a previous Generate click).
         await assetSourceStore.getState().refreshPaths([relativePath]);
@@ -1234,7 +1500,9 @@ export function App() {
       };
       projectStore
         .getState()
-        .updateSession(addMaskTextureDefinitionToSession(currentSession, definition));
+        .updateSession(
+          addMaskTextureDefinitionToSession(currentSession, definition)
+        );
       await assetSourceStore.getState().refreshPaths([relativeAssetPath]);
       return definition;
     } catch (error) {
@@ -1248,7 +1516,11 @@ export function App() {
   }, []);
 
   const handleImportMaskTextureDefinition = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -1306,7 +1578,11 @@ export function App() {
       if (!definition) {
         throw new Error(`Missing painted mask definition "${maskTextureId}".`);
       }
-      await writeMaskFile(handle, definition.source.relativeAssetPath, imageData);
+      await writeMaskFile(
+        handle,
+        definition.source.relativeAssetPath,
+        imageData
+      );
       await assetSourceStore
         .getState()
         .refreshPaths([definition.source.relativeAssetPath]);
@@ -1315,7 +1591,11 @@ export function App() {
   );
 
   const handleImportPbrMaterial = useCallback(async () => {
-    const { handle, descriptor, session: currentSession } = projectStore.getState();
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
     if (!handle || !descriptor || !currentSession) return null;
 
     try {
@@ -1326,7 +1606,10 @@ export function App() {
 
       let nextSession = currentSession;
       for (const textureDefinition of result.textures) {
-        nextSession = addTextureDefinitionToSession(nextSession, textureDefinition);
+        nextSession = addTextureDefinitionToSession(
+          nextSession,
+          textureDefinition
+        );
       }
 
       const materialDefinition = {
@@ -1343,10 +1626,15 @@ export function App() {
         }),
         shaderDefinitionId: null
       };
-      nextSession = addMaterialDefinitionToSession(nextSession, materialDefinition);
+      nextSession = addMaterialDefinitionToSession(
+        nextSession,
+        materialDefinition
+      );
       projectStore.getState().updateSession(nextSession);
       if (result.warnings.length > 0) {
-        window.alert(`PBR import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`);
+        window.alert(
+          `PBR import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
+        );
       }
       return materialDefinition;
     } catch (error) {
@@ -1363,7 +1651,10 @@ export function App() {
   }, []);
 
   const handleUpdateMaterialDefinition = useCallback(
-    (definitionId: string, patch: Parameters<typeof updateMaterialDefinitionInSession>[2]) => {
+    (
+      definitionId: string,
+      patch: Parameters<typeof updateMaterialDefinitionInSession>[2]
+    ) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
       projectStore
@@ -1401,12 +1692,17 @@ export function App() {
     );
     projectStore
       .getState()
-      .updateSession(addSurfaceDefinitionToSession(currentSession, surfaceDefinition));
+      .updateSession(
+        addSurfaceDefinitionToSession(currentSession, surfaceDefinition)
+      );
     return surfaceDefinition;
   }, []);
 
   const handleUpdateSurfaceDefinition = useCallback(
-    (definitionId: string, patch: Parameters<typeof updateSurfaceDefinitionInSession>[2]) => {
+    (
+      definitionId: string,
+      patch: Parameters<typeof updateSurfaceDefinitionInSession>[2]
+    ) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
       projectStore
@@ -1426,7 +1722,9 @@ export function App() {
     }
     projectStore
       .getState()
-      .updateSession(removeSurfaceDefinitionFromSession(currentSession, definitionId));
+      .updateSession(
+        removeSurfaceDefinitionFromSession(currentSession, definitionId)
+      );
   }, []);
 
   const handleRemoveMaterialDefinition = useCallback((definitionId: string) => {
@@ -1445,7 +1743,9 @@ export function App() {
 
     projectStore
       .getState()
-      .updateSession(removeMaterialDefinitionFromSession(currentSession, definitionId));
+      .updateSession(
+        removeMaterialDefinitionFromSession(currentSession, definitionId)
+      );
   }, []);
 
   const handleCreateEnvironment = useCallback(() => {
@@ -1485,7 +1785,7 @@ export function App() {
         (definition) => definition.definitionId === editedSurfaceDefinitionId
       )
         ? editedSurfaceDefinitionId
-        : surfaceDefinitions[0]?.definitionId ?? null;
+        : (surfaceDefinitions[0]?.definitionId ?? null);
     if (nextSurfaceDefinitionId === editedSurfaceDefinitionId) {
       return;
     }
@@ -1512,12 +1812,18 @@ export function App() {
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
+    audioClipDefinitions,
+    soundCueDefinitions,
+    assetSources,
+    soundEventBindings: session?.gameProject.soundEventBindings ?? {},
+    audioMixer: session?.gameProject.audioMixer ?? null,
     npcDefinitions,
     questDefinitions,
     getViewportElement: () => viewportRef.current,
     viewportStore,
     regions,
-    onSelectKind: (kind) => shellStore.getState().setActiveBuildWorkspaceKind(kind),
+    onSelectKind: (kind) =>
+      shellStore.getState().setActiveBuildWorkspaceKind(kind),
     onSelectRegion: handleRegionSelect,
     onCreateRegion: () => setCreateRegionOpen(true),
     onSelectEnvironment: (environmentId) =>
@@ -1565,7 +1871,11 @@ export function App() {
           override
         }
       }),
-    onClearAssetDefaultShaderParameterOverride: (definitionId, slot, parameterId) =>
+    onClearAssetDefaultShaderParameterOverride: (
+      definitionId,
+      slot,
+      parameterId
+    ) =>
       dispatchCommand({
         kind: "ClearAssetDefaultShaderParameterOverride",
         target: {
@@ -1593,6 +1903,11 @@ export function App() {
     onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
     onUpdateSurfaceDefinition: handleUpdateSurfaceDefinition,
     onRemoveSurfaceDefinition: handleRemoveSurfaceDefinition,
+    onCreateSoundCueDefinition: handleCreateSoundCueDefinition,
+    onUpdateSoundCueDefinition: handleUpdateSoundCueDefinition,
+    onRemoveSoundCueDefinition: handleRemoveSoundCueDefinition,
+    onSetSoundEventBinding: handleSetSoundEventBinding,
+    onUpdateAudioMixer: handleUpdateAudioMixer,
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
@@ -1605,7 +1920,8 @@ export function App() {
         contentLibrary={session?.contentLibrary ?? null}
         surfaceDefinition={
           surfaceDefinitions.find(
-            (definition) => definition.definitionId === editedSurfaceDefinitionId
+            (definition) =>
+              definition.definitionId === editedSurfaceDefinitionId
           ) ?? null
         }
         previewGeometryKind={surfacePreviewGeometryKind}
@@ -1654,14 +1970,16 @@ export function App() {
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
+    assetSources,
     characterModelDefinitions,
     characterAnimationDefinitions,
-    assetSources,
     designPreviewStore,
-    onSelectKind: (kind) => shellStore.getState().setActiveDesignWorkspaceKind(kind),
+    onSelectKind: (kind) =>
+      shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition: handleImportCharacterAnimationDefinition,
+    onImportCharacterAnimationDefinition:
+      handleImportCharacterAnimationDefinition,
     onImportAsset: handleImportAsset,
     onGenerateItemThumbnail: handleGenerateItemThumbnail,
     onAppendDocumentPage: handleAppendDocumentPage,
@@ -1721,14 +2039,14 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     shaderDefinitions,
     textureDefinitions,
-    onSelectKind: (kind) => shellStore.getState().setActiveRenderWorkspaceKind(kind),
+    onSelectKind: (kind) =>
+      shellStore.getState().setActiveRenderWorkspaceKind(kind),
     onCommand: dispatchCommand,
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
-  const activePluginWorkspaceDefinition = getStudioPluginWorkspaceDefinition(
-    activeDesignKind
-  );
+  const activePluginWorkspaceDefinition =
+    getStudioPluginWorkspaceDefinition(activeDesignKind);
   const activePluginView = useMemo(() => {
     if (!activePluginWorkspaceDefinition) return null;
     return activePluginWorkspaceDefinition.createWorkspaceView({
@@ -1767,7 +2085,8 @@ export function App() {
         <Inspector selectionLabel={workspace.label}>
           <Stack gap="sm">
             <Text size="sm" c="var(--sm-color-subtext)">
-              Plugin-owned authoring surfaces render here through the shared shell contribution seam.
+              Plugin-owned authoring surfaces render here through the shared
+              shell contribution seam.
             </Text>
             <Text size="xs" c="var(--sm-color-overlay0)">
               Target language: {sugarlangTargetLanguage}
@@ -1811,7 +2130,8 @@ export function App() {
     sugarlangTargetLanguage
   ]);
 
-  const activeDesignPanels = activePluginView ?? genericPluginView ?? designView;
+  const activeDesignPanels =
+    activePluginView ?? genericPluginView ?? designView;
   const shouldRenderSharedViewport = shouldShowSharedViewport({
     phase,
     activeProductMode,
@@ -1903,21 +2223,36 @@ export function App() {
 
   return (
     <>
-      <ProjectManagerDialog opened={phase === "no-project"} onOpen={handleOpenProject} onCreate={handleCreateProject} />
-      <CreateRegionDialog opened={createRegionOpen} onClose={() => setCreateRegionOpen(false)} onCreate={handleCreateRegion} />
+      <ProjectManagerDialog
+        opened={phase === "no-project"}
+        onOpen={handleOpenProject}
+        onCreate={handleCreateProject}
+      />
+      <CreateRegionDialog
+        opened={createRegionOpen}
+        onClose={() => setCreateRegionOpen(false)}
+        onCreate={handleCreateRegion}
+      />
       <LibraryPopover
         shellStore={shellStore}
         materialDefinitions={materialDefinitions}
         textureDefinitions={textureDefinitions}
         shaderDefinitions={shaderDefinitions}
+        audioClipDefinitions={audioClipDefinitions}
+        assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
         isMaterialReferenced={(definitionId) =>
-          session ? materialDefinitionHasReferences(session, definitionId) : false
+          session
+            ? materialDefinitionHasReferences(session, definitionId)
+            : false
         }
         onCreateMaterialDefinition={handleCreateMaterialDefinition}
         onImportPbrMaterial={handleImportPbrMaterial}
         onImportTextureDefinition={handleImportTextureDefinition}
+        onImportAudioClipDefinition={handleImportAudioClipDefinition}
+        onUpdateAudioClipDefinition={handleUpdateAudioClipDefinition}
         onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
+        onRemoveAudioClipDefinition={handleRemoveAudioClipDefinition}
         onEditShaderInGraph={(shaderDefinitionId) => {
           // Close the popover and route the existing workspace-
           // navigation handler to the Render workspace's shader
@@ -1935,11 +2270,17 @@ export function App() {
         title="Plugins"
         centered
         styles={{
-          header: { background: "var(--sm-color-surface1)", borderBottom: "1px solid var(--sm-panel-border)" },
+          header: {
+            background: "var(--sm-color-surface1)",
+            borderBottom: "1px solid var(--sm-panel-border)"
+          },
           title: { color: "var(--sm-color-text)", fontWeight: 600 },
           body: { background: "var(--sm-color-surface1)", padding: "20px" },
           content: { background: "var(--sm-color-surface1)" },
-          close: { color: "var(--sm-color-overlay1)", "&:hover": { background: "var(--sm-active-bg)" } }
+          close: {
+            color: "var(--sm-color-overlay1)",
+            "&:hover": { background: "var(--sm-active-bg)" }
+          }
         }}
       >
         <Stack gap="md">
@@ -1953,9 +2294,10 @@ export function App() {
               </Text>
             ) : (
               installedPlugins.map((plugin) => {
-                const configuration = pluginConfigurations.find(
-                  (entry) => entry.pluginId === plugin.manifest.pluginId
-                ) ?? null;
+                const configuration =
+                  pluginConfigurations.find(
+                    (entry) => entry.pluginId === plugin.manifest.pluginId
+                  ) ?? null;
                 return (
                   <Stack
                     key={plugin.manifest.pluginId}
@@ -1983,7 +2325,9 @@ export function App() {
                           label="Enabled"
                         />
                         <UnstyledButton
-                          onClick={() => handleUninstallPlugin(plugin.manifest.pluginId)}
+                          onClick={() =>
+                            handleUninstallPlugin(plugin.manifest.pluginId)
+                          }
                           style={{
                             color: "var(--sm-color-overlay1)",
                             fontSize: "var(--sm-font-size-sm)"
@@ -2003,18 +2347,31 @@ export function App() {
                     {plugin.shell ? (
                       <Stack gap={4}>
                         {(plugin.shell.projectSettings ?? []).map((entry) => (
-                          <Text key={entry.settingsId} size="xs" c="var(--sm-color-subtext)">
+                          <Text
+                            key={entry.settingsId}
+                            size="xs"
+                            c="var(--sm-color-subtext)"
+                          >
                             Project Settings: {entry.label}
                           </Text>
                         ))}
                         {(plugin.shell.designWorkspaces ?? []).map((entry) => (
-                          <Text key={entry.workspaceKind} size="xs" c="var(--sm-color-subtext)">
+                          <Text
+                            key={entry.workspaceKind}
+                            size="xs"
+                            c="var(--sm-color-subtext)"
+                          >
                             Design Workspace: {entry.label}
                           </Text>
                         ))}
                         {(plugin.shell.designSections ?? []).map((entry) => (
-                          <Text key={entry.sectionId} size="xs" c="var(--sm-color-subtext)">
-                            Design Section: {entry.workspaceKind} / {entry.label}
+                          <Text
+                            key={entry.sectionId}
+                            size="xs"
+                            c="var(--sm-color-subtext)"
+                          >
+                            Design Section: {entry.workspaceKind} /{" "}
+                            {entry.label}
                           </Text>
                         ))}
                       </Stack>
@@ -2049,7 +2406,9 @@ export function App() {
                       <Text fw={600}>{plugin.manifest.displayName}</Text>
                     </Stack>
                     <UnstyledButton
-                      onClick={() => handleInstallPlugin(plugin.manifest.pluginId)}
+                      onClick={() =>
+                        handleInstallPlugin(plugin.manifest.pluginId)
+                      }
                       style={{
                         color: "var(--sm-accent-blue)",
                         fontSize: "var(--sm-font-size-sm)",
@@ -2076,39 +2435,224 @@ export function App() {
       <ShellFrame
         headerPanel={
           <Group h={44} px="md" align="center" gap={0} wrap="nowrap">
-            <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">Sugarmagic</Text>
+            <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
+              Sugarmagic
+            </Text>
             {phase === "active" && (
               <Menu position="bottom-start" offset={4}>
                 <Menu.Target>
-                  <UnstyledButton px="md" py={6} styles={{ root: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-accent-blue)", background: "var(--sm-active-bg)", borderRadius: "var(--sm-radius-sm)", marginRight: "var(--sm-space-lg)", "&:hover": { background: "var(--sm-active-bg-hover)" } } }}>
+                  <UnstyledButton
+                    px="md"
+                    py={6}
+                    styles={{
+                      root: {
+                        fontSize: "var(--sm-font-size-lg)",
+                        color: "var(--sm-accent-blue)",
+                        background: "var(--sm-active-bg)",
+                        borderRadius: "var(--sm-radius-sm)",
+                        marginRight: "var(--sm-space-lg)",
+                        "&:hover": { background: "var(--sm-active-bg-hover)" }
+                      }
+                    }}
+                  >
                     📁 Game
                   </UnstyledButton>
                 </Menu.Target>
-                <Menu.Dropdown styles={{ dropdown: { background: "var(--sm-color-surface1)", border: "1px solid var(--sm-panel-border)", minWidth: 200, padding: "var(--sm-space-xs) 0" } }}>
-                  <Menu.Item onClick={handleSave} disabled={!isDirty} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘S</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>💾 Save Game</Menu.Item>
-                  <Menu.Item onClick={handleUndo} disabled={undoCount === 0} rightSection={<Text size="xs" c="var(--sm-color-overlay0)">⌘Z</Text>} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" }, "&[data-disabled]": { color: "var(--sm-color-overlay0)" } } }}>↩ Undo</Menu.Item>
-                  <Menu.Divider styles={{ divider: { borderColor: "var(--sm-panel-border)" } }} />
+                <Menu.Dropdown
+                  styles={{
+                    dropdown: {
+                      background: "var(--sm-color-surface1)",
+                      border: "1px solid var(--sm-panel-border)",
+                      minWidth: 200,
+                      padding: "var(--sm-space-xs) 0"
+                    }
+                  }}
+                >
+                  <Menu.Item
+                    onClick={handleSave}
+                    disabled={!isDirty}
+                    rightSection={
+                      <Text size="xs" c="var(--sm-color-overlay0)">
+                        ⌘S
+                      </Text>
+                    }
+                    styles={{
+                      item: {
+                        fontSize: "var(--sm-font-size-lg)",
+                        color: "var(--sm-color-text)",
+                        padding: "10px 16px",
+                        "&:hover": { background: "var(--sm-active-bg)" },
+                        "&[data-disabled]": {
+                          color: "var(--sm-color-overlay0)"
+                        }
+                      }
+                    }}
+                  >
+                    💾 Save Game
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={handleUndo}
+                    disabled={undoCount === 0}
+                    rightSection={
+                      <Text size="xs" c="var(--sm-color-overlay0)">
+                        ⌘Z
+                      </Text>
+                    }
+                    styles={{
+                      item: {
+                        fontSize: "var(--sm-font-size-lg)",
+                        color: "var(--sm-color-text)",
+                        padding: "10px 16px",
+                        "&:hover": { background: "var(--sm-active-bg)" },
+                        "&[data-disabled]": {
+                          color: "var(--sm-color-overlay0)"
+                        }
+                      }
+                    }}
+                  >
+                    ↩ Undo
+                  </Menu.Item>
+                  <Menu.Divider
+                    styles={{
+                      divider: { borderColor: "var(--sm-panel-border)" }
+                    }}
+                  />
                   <Menu.Sub position="right-start" offset={4}>
                     <Menu.Sub.Target>
-                      <Menu.Sub.Item styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>📚 Libraries</Menu.Sub.Item>
+                      <Menu.Sub.Item
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        📚 Libraries
+                      </Menu.Sub.Item>
                     </Menu.Sub.Target>
-                    <Menu.Sub.Dropdown styles={{ dropdown: { background: "var(--sm-color-surface1)", border: "1px solid var(--sm-panel-border)", minWidth: 200, padding: "var(--sm-space-xs) 0" } }}>
-                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("materials")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🎨 Materials</Menu.Item>
-                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("textures")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🖼 Textures</Menu.Item>
-                      <Menu.Item onClick={() => shellStore.getState().setActiveLibrary("shaders")} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>⚙ Shaders</Menu.Item>
+                    <Menu.Sub.Dropdown
+                      styles={{
+                        dropdown: {
+                          background: "var(--sm-color-surface1)",
+                          border: "1px solid var(--sm-panel-border)",
+                          minWidth: 200,
+                          padding: "var(--sm-space-xs) 0"
+                        }
+                      }}
+                    >
+                      <Menu.Item
+                        onClick={() =>
+                          shellStore.getState().setActiveLibrary("materials")
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        🎨 Materials
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          shellStore.getState().setActiveLibrary("textures")
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        🖼 Textures
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          shellStore.getState().setActiveLibrary("shaders")
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        ⚙ Shaders
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          shellStore.getState().setActiveLibrary("audio")
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        Audio
+                      </Menu.Item>
                     </Menu.Sub.Dropdown>
                   </Menu.Sub>
-                  <Menu.Divider styles={{ divider: { borderColor: "var(--sm-panel-border)" } }} />
-                  <Menu.Item onClick={() => setPluginsOpen(true)} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🧩 Plugins</Menu.Item>
-                  <Menu.Item onClick={handleReload} styles={{ item: { fontSize: "var(--sm-font-size-lg)", color: "var(--sm-color-text)", padding: "10px 16px", "&:hover": { background: "var(--sm-active-bg)" } } }}>🔄 Reload Project</Menu.Item>
+                  <Menu.Divider
+                    styles={{
+                      divider: { borderColor: "var(--sm-panel-border)" }
+                    }}
+                  />
+                  <Menu.Item
+                    onClick={() => setPluginsOpen(true)}
+                    styles={{
+                      item: {
+                        fontSize: "var(--sm-font-size-lg)",
+                        color: "var(--sm-color-text)",
+                        padding: "10px 16px",
+                        "&:hover": { background: "var(--sm-active-bg)" }
+                      }
+                    }}
+                  >
+                    🧩 Plugins
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={handleReload}
+                    styles={{
+                      item: {
+                        fontSize: "var(--sm-font-size-lg)",
+                        color: "var(--sm-color-text)",
+                        padding: "10px 16px",
+                        "&:hover": { background: "var(--sm-active-bg)" }
+                      }
+                    }}
+                  >
+                    🔄 Reload Project
+                  </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
             )}
-            <ModeBar items={modeBarItems} activeId={activeProductMode} onSelect={(id) => shellStore.getState().setActiveProductMode(id as typeof activeProductMode)} />
+            <ModeBar
+              items={modeBarItems}
+              activeId={activeProductMode}
+              onSelect={(id) =>
+                shellStore
+                  .getState()
+                  .setActiveProductMode(id as typeof activeProductMode)
+              }
+            />
             {phase === "active" && (
               <ActionStripe
                 isPreviewRunning={isPreviewRunning}
-                onStartPreview={() => handleStartPreview(assetSources, installedPluginIds)}
+                onStartPreview={() =>
+                  handleStartPreview(assetSources, installedPluginIds)
+                }
                 onStopPreview={handleStopPreview}
                 previewDisabled={!session}
               />
@@ -2123,7 +2667,7 @@ export function App() {
                 ? designView.subHeaderPanel
                 : isRender
                   ? renderView.subHeaderPanel
-                : undefined
+                  : undefined
             : undefined
         }
         leftPanel={
@@ -2145,12 +2689,18 @@ export function App() {
                 : undefined
         }
         bottomPanel={
-          <StatusBar message={statusMessage} severity={phase === "error" ? "error" : "info"} trailing={activeWorkspaceId ?? undefined} />
+          <StatusBar
+            message={statusMessage}
+            severity={phase === "error" ? "error" : "info"}
+            trailing={activeWorkspaceId ?? undefined}
+          />
         }
         centerPanel={
           phase === "active" && isBuild && buildView.centerPanel ? (
             buildView.centerPanel
-          ) : phase === "active" && isDesign && activeDesignPanels.centerPanel ? (
+          ) : phase === "active" &&
+            isDesign &&
+            activeDesignPanels.centerPanel ? (
             activeDesignPanels.centerPanel
           ) : phase === "active" && isRender && renderView.centerPanel ? (
             renderView.centerPanel
@@ -2158,13 +2708,18 @@ export function App() {
             <ViewportFrame>
               {shouldRenderSharedViewport ? (
                 <>
-                  <div ref={viewportRef} style={{ position: "absolute", inset: 0 }} />
+                  <div
+                    ref={viewportRef}
+                    style={{ position: "absolute", inset: 0 }}
+                  />
                   {isBuild && buildView.viewportOverlay}
                   {isDesign && activeDesignPanels.viewportOverlay}
                   {isRender && renderView.viewportOverlay}
                 </>
               ) : (
-                <Text size="sm" c="var(--sm-color-overlay0)">Open or create a project to begin.</Text>
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  Open or create a project to begin.
+                </Text>
               )}
             </ViewportFrame>
           )

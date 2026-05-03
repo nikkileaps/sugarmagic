@@ -12,6 +12,7 @@ import { createAssetSourceStore, createProjectStore } from "@sugarmagic/shell";
 
 function createSessionWithSources(options: {
   assetPaths?: string[];
+  audioPaths?: string[];
   texturePaths?: string[];
   maskPaths?: string[];
   itemThumbnailPaths?: string[];
@@ -19,6 +20,7 @@ function createSessionWithSources(options: {
 }) {
   const {
     assetPaths = [],
+    audioPaths = [],
     texturePaths = [],
     maskPaths = [],
     itemThumbnailPaths = [],
@@ -27,6 +29,11 @@ function createSessionWithSources(options: {
   return {
     contentLibrary: {
       assetDefinitions: assetPaths.map((relativeAssetPath) => ({
+        source: {
+          relativeAssetPath
+        }
+      })),
+      audioClipDefinitions: audioPaths.map((relativeAssetPath) => ({
         source: {
           relativeAssetPath
         }
@@ -48,13 +55,14 @@ function createSessionWithSources(options: {
           thumbnailAssetPath
         }
       })),
-      documentDefinitions: documentPagePaths.length > 0
-        ? [
-            {
-              imagePages: documentPagePaths
-            }
-          ]
-        : []
+      documentDefinitions:
+        documentPagePaths.length > 0
+          ? [
+              {
+                imagePages: documentPagePaths
+              }
+            ]
+          : []
     }
   } as never;
 }
@@ -69,13 +77,35 @@ describe("asset source store", () => {
     readBlobFileMock.mockReset();
     vi.restoreAllMocks();
     vi.spyOn(URL, "createObjectURL").mockImplementation(
-      ((value: { mockUrl?: string }) => value.mockUrl ?? "blob:missing") as typeof URL.createObjectURL
+      ((value: { mockUrl?: string }) =>
+        value.mockUrl ?? "blob:missing") as typeof URL.createObjectURL
     );
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     readBlobFileMock.mockImplementation(
       async (handle: { name?: string }, ...pathSegments: string[]) => ({
         mockUrl: `blob:${handle.name ?? "unknown"}:${pathSegments.join("/")}`
       })
+    );
+  });
+
+  it("collects managed audio clip paths for preview playback", async () => {
+    const assetSourceStore = createAssetSourceStore();
+    const projectStore = createProjectStore();
+    const handle = { name: "audio-project" } as FileSystemDirectoryHandle;
+    const descriptor = { gameRootPath: "." } as never;
+
+    projectStore.getState().setActive(
+      handle,
+      descriptor,
+      createSessionWithSources({
+        audioPaths: ["assets/audio/pickup.wav"]
+      })
+    );
+    assetSourceStore.getState().start(handle, projectStore);
+    await flushAsyncWork();
+
+    expect(assetSourceStore.getState().sources["assets/audio/pickup.wav"]).toBe(
+      "blob:audio-project:assets/audio/pickup.wav"
     );
   });
 

@@ -2,7 +2,7 @@
  * Library popover.
  *
  * Single owner of the Game > Libraries > {kind} dialog. Renders the
- * library kinds (Materials / Textures / Shaders — Surfaces are NOT a
+ * library kinds (Materials / Textures / Shaders / Audio — Surfaces are NOT a
  * library kind per Plan 037; character models + animations are NOT
  * library kinds per Plan 038, they're entity-owned and authored via
  * the Player/NPC inspector file-pickers) with a list-on-left +
@@ -23,13 +23,18 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  AudioClipDefinition,
   MaterialDefinition,
   ShaderGraphDocument,
   TextureDefinition
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
 import type { ShellStore } from "@sugarmagic/shell";
-import { MaterialPreview, type MaterialPreviewGeometryKind } from "./MaterialPreview";
+import { AudioTransport } from "@sugarmagic/ui";
+import {
+  MaterialPreview,
+  type MaterialPreviewGeometryKind
+} from "./MaterialPreview";
 import { TexturePreview } from "./TexturePreview";
 
 export interface LibraryPopoverProps {
@@ -37,13 +42,21 @@ export interface LibraryPopoverProps {
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
+  audioClipDefinitions: AudioClipDefinition[];
+  assetSources: Record<string, string>;
   /** For resolving texture refs in MaterialPreview. */
   assetResolver: AuthoredAssetResolver | null;
   isMaterialReferenced: (definitionId: string) => boolean;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
+  onImportAudioClipDefinition: () => Promise<AudioClipDefinition | null>;
+  onUpdateAudioClipDefinition: (
+    definitionId: string,
+    patch: Partial<AudioClipDefinition>
+  ) => void;
   onRemoveMaterialDefinition: (definitionId: string) => void;
+  onRemoveAudioClipDefinition: (definitionId: string) => void;
   /**
    * Open a shader in the Render workspace's shader-graph editor.
    * Called when the user clicks "Edit in Shader Graph" on a shader
@@ -83,29 +96,46 @@ function getShaderItems(definitions: ShaderGraphDocument[]): ListItem[] {
   }));
 }
 
+function getAudioItems(definitions: AudioClipDefinition[]): ListItem[] {
+  return definitions.map((d) => ({
+    id: d.definitionId,
+    displayName: d.displayName,
+    isBuiltIn: false
+  }));
+}
+
 export function LibraryPopover({
   shellStore,
   materialDefinitions,
   textureDefinitions,
   shaderDefinitions,
+  audioClipDefinitions,
+  assetSources,
   assetResolver,
   isMaterialReferenced,
   onCreateMaterialDefinition,
   onImportPbrMaterial,
   onImportTextureDefinition,
+  onImportAudioClipDefinition,
+  onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
+  onRemoveAudioClipDefinition,
   onEditShaderInGraph
 }: LibraryPopoverProps) {
   const activeLibrary = useStore(shellStore, (s) => s.activeLibrary);
   const onClose = () => shellStore.getState().setActiveLibrary(null);
 
   const allItems: ListItem[] = useMemo(() => {
-    if (activeLibrary === "materials") return getMaterialItems(materialDefinitions);
-    if (activeLibrary === "textures") return getTextureItems(textureDefinitions);
+    if (activeLibrary === "materials")
+      return getMaterialItems(materialDefinitions);
+    if (activeLibrary === "textures")
+      return getTextureItems(textureDefinitions);
     if (activeLibrary === "shaders") return getShaderItems(shaderDefinitions);
+    if (activeLibrary === "audio") return getAudioItems(audioClipDefinitions);
     return [];
   }, [
     activeLibrary,
+    audioClipDefinitions,
     materialDefinitions,
     textureDefinitions,
     shaderDefinitions
@@ -116,7 +146,8 @@ export function LibraryPopover({
     query: string;
   }>({ library: null, query: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [geometryKind, setGeometryKind] = useState<MaterialPreviewGeometryKind>("cube");
+  const [geometryKind, setGeometryKind] =
+    useState<MaterialPreviewGeometryKind>("cube");
   // Keep search scoped to the active library without an effect-driven reset.
   // React's hooks lint rejects synchronous setState in effects, so the query
   // carries its library key and naturally reads as empty after kind changes.
@@ -135,21 +166,35 @@ export function LibraryPopover({
   // kind changes. This preserves the old "first visible item is selected"
   // behavior while avoiding an auto-select effect.
   const effectiveSelectedId =
-    activeLibrary !== null && selectedId && items.some((i) => i.id === selectedId)
+    activeLibrary !== null &&
+    selectedId &&
+    items.some((i) => i.id === selectedId)
       ? selectedId
-      : items[0]?.id ?? null;
+      : (items[0]?.id ?? null);
 
   const selectedMaterial =
     activeLibrary === "materials"
-      ? materialDefinitions.find((d) => d.definitionId === effectiveSelectedId) ?? null
+      ? (materialDefinitions.find(
+          (d) => d.definitionId === effectiveSelectedId
+        ) ?? null)
       : null;
   const selectedTexture =
     activeLibrary === "textures"
-      ? textureDefinitions.find((d) => d.definitionId === effectiveSelectedId) ?? null
+      ? (textureDefinitions.find(
+          (d) => d.definitionId === effectiveSelectedId
+        ) ?? null)
       : null;
   const selectedShader =
     activeLibrary === "shaders"
-      ? shaderDefinitions.find((d) => d.shaderDefinitionId === effectiveSelectedId) ?? null
+      ? (shaderDefinitions.find(
+          (d) => d.shaderDefinitionId === effectiveSelectedId
+        ) ?? null)
+      : null;
+  const selectedAudioClip =
+    activeLibrary === "audio"
+      ? (audioClipDefinitions.find(
+          (d) => d.definitionId === effectiveSelectedId
+        ) ?? null)
       : null;
 
   const titleText =
@@ -159,7 +204,9 @@ export function LibraryPopover({
         ? "Textures"
         : activeLibrary === "shaders"
           ? "Shaders"
-          : "Library";
+          : activeLibrary === "audio"
+            ? "Audio"
+            : "Library";
 
   return (
     <Modal
@@ -202,23 +249,50 @@ export function LibraryPopover({
             background: "var(--sm-color-surface0)"
           }}
         >
-          <Group gap="xs" p="xs" style={{ borderBottom: "1px solid var(--sm-panel-border)", flex: "0 0 auto" }}>
+          <Group
+            gap="xs"
+            p="xs"
+            style={{
+              borderBottom: "1px solid var(--sm-panel-border)",
+              flex: "0 0 auto"
+            }}
+          >
             {activeLibrary === "materials" ? (
               <>
                 <Button size="xs" onClick={() => onCreateMaterialDefinition()}>
                   New
                 </Button>
-                <Button size="xs" variant="light" onClick={() => void onImportPbrMaterial()}>
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => void onImportPbrMaterial()}
+                >
                   Import PBR
                 </Button>
               </>
             ) : activeLibrary === "textures" ? (
-              <Button size="xs" onClick={() => void onImportTextureDefinition()}>
+              <Button
+                size="xs"
+                onClick={() => void onImportTextureDefinition()}
+              >
                 Import Texture
+              </Button>
+            ) : activeLibrary === "audio" ? (
+              <Button
+                size="xs"
+                onClick={() => void onImportAudioClipDefinition()}
+              >
+                Import Audio
               </Button>
             ) : null}
           </Group>
-          <Box p="xs" style={{ borderBottom: "1px solid var(--sm-panel-border)", flex: "0 0 auto" }}>
+          <Box
+            p="xs"
+            style={{
+              borderBottom: "1px solid var(--sm-panel-border)",
+              flex: "0 0 auto"
+            }}
+          >
             <TextInput
               size="xs"
               placeholder={`Search ${titleText.toLowerCase()}...`}
@@ -259,7 +333,12 @@ export function LibraryPopover({
                 );
               })}
               {items.length === 0 ? (
-                <Text size="xs" c="var(--sm-color-overlay0)" ta="center" mt="md">
+                <Text
+                  size="xs"
+                  c="var(--sm-color-overlay0)"
+                  ta="center"
+                  mt="md"
+                >
                   {searchQuery.trim()
                     ? `No ${titleText.toLowerCase()} match "${searchQuery}".`
                     : `No ${titleText.toLowerCase()} yet.`}
@@ -270,11 +349,7 @@ export function LibraryPopover({
         </Stack>
 
         {/* RIGHT: preview + details */}
-        <Stack
-          gap="md"
-          p="md"
-          style={{ flex: 1, minWidth: 0 }}
-        >
+        <Stack gap="md" p="md" style={{ flex: 1, minWidth: 0 }}>
           {activeLibrary === "materials" ? (
             <>
               <MaterialPreview
@@ -290,7 +365,9 @@ export function LibraryPopover({
                     {selectedMaterial.displayName}
                   </Text>
                   <Text size="xs" c="var(--sm-color-overlay0)">
-                    {selectedMaterial.metadata?.builtIn ? "built-in" : "project"}
+                    {selectedMaterial.metadata?.builtIn
+                      ? "built-in"
+                      : "project"}
                   </Text>
                   {!selectedMaterial.metadata?.builtIn ? (
                     <Group gap="xs" mt="xs">
@@ -298,8 +375,14 @@ export function LibraryPopover({
                         size="xs"
                         variant="subtle"
                         color="red"
-                        disabled={isMaterialReferenced(selectedMaterial.definitionId)}
-                        onClick={() => onRemoveMaterialDefinition(selectedMaterial.definitionId)}
+                        disabled={isMaterialReferenced(
+                          selectedMaterial.definitionId
+                        )}
+                        onClick={() =>
+                          onRemoveMaterialDefinition(
+                            selectedMaterial.definitionId
+                          )
+                        }
                       >
                         Delete
                       </Button>
@@ -310,7 +393,10 @@ export function LibraryPopover({
             </>
           ) : activeLibrary === "textures" ? (
             <>
-              <TexturePreview texture={selectedTexture} assetResolver={assetResolver} />
+              <TexturePreview
+                texture={selectedTexture}
+                assetResolver={assetResolver}
+              />
               {selectedTexture ? (
                 <Stack gap={4}>
                   <Text size="md" fw={700}>
@@ -349,10 +435,10 @@ export function LibraryPopover({
                   </Button>
                 </Group>
                 <Text size="xs" c="var(--sm-color-overlay0)">
-                  Shaders don't have a single canonical preview — the
-                  same graph can render differently as a surface,
-                  deform, effect, or post-process. Open the graph in
-                  the Render workspace to inspect or edit.
+                  Shaders don't have a single canonical preview — the same graph
+                  can render differently as a surface, deform, effect, or
+                  post-process. Open the graph in the Render workspace to
+                  inspect or edit.
                 </Text>
               </Stack>
             ) : (
@@ -362,6 +448,58 @@ export function LibraryPopover({
                 </Text>
               </Stack>
             )
+          ) : activeLibrary === "audio" ? (
+            <>
+              <AudioTransport
+                sourceUrl={
+                  selectedAudioClip
+                    ? (assetSources[
+                        selectedAudioClip.source.relativeAssetPath
+                      ] ?? null)
+                    : null
+                }
+                label={selectedAudioClip?.displayName ?? "Audio Preview"}
+                disabledReason="Select or import an audio clip to preview."
+              />
+              {selectedAudioClip ? (
+                <Stack gap="sm">
+                  <TextInput
+                    label="Display Name"
+                    value={selectedAudioClip.displayName}
+                    onChange={(event) =>
+                      onUpdateAudioClipDefinition(
+                        selectedAudioClip.definitionId,
+                        {
+                          displayName: event.currentTarget.value
+                        }
+                      )
+                    }
+                  />
+                  <Stack gap={2}>
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      {selectedAudioClip.source.fileName}
+                    </Text>
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      {selectedAudioClip.source.relativeAssetPath}
+                    </Text>
+                  </Stack>
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        onRemoveAudioClipDefinition(
+                          selectedAudioClip.definitionId
+                        )
+                      }
+                    >
+                      Delete
+                    </Button>
+                  </Group>
+                </Stack>
+              ) : null}
+            </>
           ) : null}
         </Stack>
       </Group>

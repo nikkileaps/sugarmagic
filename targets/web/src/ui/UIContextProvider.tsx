@@ -13,6 +13,7 @@ import type { UIContextStore } from "@sugarmagic/runtime-core";
 interface UIRuntimeBridge {
   contextStore: UIContextStore;
   onAction: (action: UIActionExpression) => void;
+  onHover: (action: UIActionExpression | null) => void;
 }
 
 const UIRuntimeBridgeContext = createContext<UIRuntimeBridge | null>(null);
@@ -20,11 +21,16 @@ const UIRuntimeBridgeContext = createContext<UIRuntimeBridge | null>(null);
 export function UIRuntimeBridgeProvider(props: {
   contextStore: UIContextStore;
   onAction: (action: UIActionExpression) => void;
+  onHover: (action: UIActionExpression | null) => void;
   children: ReactNode;
 }) {
   return (
     <UIRuntimeBridgeContext.Provider
-      value={{ contextStore: props.contextStore, onAction: props.onAction }}
+      value={{
+        contextStore: props.contextStore,
+        onAction: props.onAction,
+        onHover: props.onHover
+      }}
     >
       {props.children}
     </UIRuntimeBridgeContext.Provider>

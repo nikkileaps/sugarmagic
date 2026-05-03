@@ -7,7 +7,7 @@
  */
 
 import type { DocumentIdentity } from "../shared/identity";
-import { createScopedId } from "../shared/identity";
+import { createScopedId, createUuid } from "../shared/identity";
 import {
   createBuiltInMaterialDefinitions,
   createBuiltInFlowerTypeDefinitions,
@@ -75,8 +75,10 @@ import {
 
 export type ContentDefinitionKind =
   | "asset"
+  | "audio-clip"
   | "animation"
   | "material"
+  | "sound-cue"
   | "texture"
   | "mask-texture"
   | "surface"
@@ -159,6 +161,68 @@ export interface CharacterAnimationDefinition {
   clipNames: string[];
 }
 
+export type SoundCategory = "music" | "sfx" | "ambient" | "ui" | "voice";
+
+export type SoundCuePlaybackMode =
+  | "single"
+  | "random"
+  | "sequence"
+  | "loop"
+  | "random-interval";
+
+export type SoundCueRetriggerPolicy =
+  | "overlap"
+  | "restart"
+  | "ignore-while-playing";
+
+export interface AudioClipDefinition {
+  definitionId: string;
+  definitionKind: "audio-clip";
+  displayName: string;
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+  durationSeconds: number | null;
+}
+
+export interface SoundCueClipReference {
+  audioClipDefinitionId: string;
+  weight: number;
+  sprite: { startMs: number; durationMs: number } | null;
+}
+
+export interface SoundCuePlayback {
+  mode: SoundCuePlaybackMode;
+  volume: number;
+  pitch: number;
+  randomVolume: [number, number] | null;
+  randomPitch: [number, number] | null;
+  fadeInMs: number;
+  fadeOutMs: number;
+  maxInstances: number;
+  retrigger: SoundCueRetriggerPolicy;
+  randomIntervalSeconds: [number, number] | null;
+}
+
+export interface SoundCueSpatialSettings {
+  enabled: boolean;
+  refDistance: number;
+  maxDistance: number;
+  rolloffFactor: number;
+}
+
+export interface SoundCueDefinition {
+  definitionId: string;
+  definitionKind: "sound-cue";
+  displayName: string;
+  category: SoundCategory;
+  clips: SoundCueClipReference[];
+  playback: SoundCuePlayback;
+  spatial: SoundCueSpatialSettings;
+}
+
 export interface TextureDefinition {
   definitionId: string;
   definitionKind: "texture";
@@ -169,7 +233,14 @@ export interface TextureDefinition {
     mimeType: string | null;
   };
   colorSpace: "linear" | "srgb";
-  packing: "rgba" | "orm" | "normal" | "roughness" | "metallic" | "ao" | "height";
+  packing:
+    | "rgba"
+    | "orm"
+    | "normal"
+    | "roughness"
+    | "metallic"
+    | "ao"
+    | "height";
 }
 
 export interface MaskTextureDefinition {
@@ -384,9 +455,11 @@ export interface EnvironmentDefinition {
 export interface ContentLibrarySnapshot {
   identity: DocumentIdentity;
   assetDefinitions: AssetDefinition[];
+  audioClipDefinitions?: AudioClipDefinition[];
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
   materialDefinitions: MaterialDefinition[];
+  soundCueDefinitions?: SoundCueDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions?: MaskTextureDefinition[];
   surfaceDefinitions?: SurfaceDefinition[];
@@ -467,13 +540,16 @@ function normalizeSurfaceDefinitions(
           }
           const migratedShaderDefinitionId =
             layer.shaderDefinitionId ??
-            migrateLegacyShaderWrapperMaterialId(projectId, layer.materialDefinitionId);
+            migrateLegacyShaderWrapperMaterialId(
+              projectId,
+              layer.materialDefinitionId
+            );
           return {
             ...layer,
             shaderDefinitionId: migratedShaderDefinitionId,
             materialDefinitionId: migratedShaderDefinitionId
               ? null
-              : layer.materialDefinitionId ?? null,
+              : (layer.materialDefinitionId ?? null),
             deform: normalizeShaderReference(layer.deform, projectId)
           };
         }),
@@ -562,6 +638,171 @@ function normalizeCharacterAnimationDefinitions(
   }));
 }
 
+function clampSoundUnit(value: unknown, fallback: number): number {
+  const numeric =
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function normalizePositiveSoundNumber(
+  value: unknown,
+  fallback: number
+): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function normalizeNonNegativeSoundNumber(
+  value: unknown,
+  fallback: number
+): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : fallback;
+}
+
+function normalizeSoundNumberRange(
+  value: [number, number] | null | undefined,
+  fallback: [number, number] | null,
+  options: { min?: number } = {}
+): [number, number] | null {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return fallback;
+  }
+  const minValue = options.min ?? Number.NEGATIVE_INFINITY;
+  const a =
+    typeof value[0] === "number" && Number.isFinite(value[0]) ? value[0] : null;
+  const b =
+    typeof value[1] === "number" && Number.isFinite(value[1]) ? value[1] : null;
+  if (a === null || b === null) {
+    return fallback;
+  }
+  return [
+    Math.max(minValue, Math.min(a, b)),
+    Math.max(minValue, Math.max(a, b))
+  ];
+}
+
+function normalizeAudioClipDefinitions(
+  definitions: AudioClipDefinition[] | null | undefined
+): AudioClipDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    definitionId: definition.definitionId,
+    definitionKind: "audio-clip",
+    displayName: definition.displayName,
+    source: {
+      relativeAssetPath: definition.source.relativeAssetPath,
+      fileName: definition.source.fileName,
+      mimeType: definition.source.mimeType
+    },
+    durationSeconds:
+      typeof definition.durationSeconds === "number" &&
+      Number.isFinite(definition.durationSeconds) &&
+      definition.durationSeconds >= 0
+        ? definition.durationSeconds
+        : null
+  }));
+}
+
+function normalizeSoundCueCategory(value: unknown): SoundCategory {
+  return value === "music" ||
+    value === "sfx" ||
+    value === "ambient" ||
+    value === "ui" ||
+    value === "voice"
+    ? value
+    : "sfx";
+}
+
+function normalizeSoundCuePlaybackMode(value: unknown): SoundCuePlaybackMode {
+  return value === "single" ||
+    value === "random" ||
+    value === "sequence" ||
+    value === "loop" ||
+    value === "random-interval"
+    ? value
+    : "single";
+}
+
+function normalizeSoundCueRetriggerPolicy(
+  value: unknown
+): SoundCueRetriggerPolicy {
+  return value === "overlap" ||
+    value === "restart" ||
+    value === "ignore-while-playing"
+    ? value
+    : "overlap";
+}
+
+function normalizeSoundCuePlayback(
+  playback: Partial<SoundCuePlayback> | null | undefined
+): SoundCuePlayback {
+  return {
+    mode: normalizeSoundCuePlaybackMode(playback?.mode),
+    volume: clampSoundUnit(playback?.volume, 1),
+    pitch: normalizePositiveSoundNumber(playback?.pitch, 1),
+    randomVolume: normalizeSoundNumberRange(playback?.randomVolume, null, {
+      min: 0
+    }),
+    randomPitch: normalizeSoundNumberRange(playback?.randomPitch, null, {
+      min: 0.01
+    }),
+    fadeInMs: normalizeNonNegativeSoundNumber(playback?.fadeInMs, 0),
+    fadeOutMs: normalizeNonNegativeSoundNumber(playback?.fadeOutMs, 0),
+    maxInstances: Math.max(
+      1,
+      Math.floor(normalizePositiveSoundNumber(playback?.maxInstances, 8))
+    ),
+    retrigger: normalizeSoundCueRetriggerPolicy(playback?.retrigger),
+    randomIntervalSeconds: normalizeSoundNumberRange(
+      playback?.randomIntervalSeconds,
+      null,
+      { min: 0.1 }
+    )
+  };
+}
+
+function normalizeSoundCueSpatialSettings(
+  spatial: Partial<SoundCueSpatialSettings> | null | undefined
+): SoundCueSpatialSettings {
+  return {
+    enabled: spatial?.enabled === true,
+    refDistance: normalizePositiveSoundNumber(spatial?.refDistance, 1),
+    maxDistance: normalizePositiveSoundNumber(spatial?.maxDistance, 40),
+    rolloffFactor: normalizeNonNegativeSoundNumber(spatial?.rolloffFactor, 1)
+  };
+}
+
+function normalizeSoundCueDefinitions(
+  definitions: SoundCueDefinition[] | null | undefined
+): SoundCueDefinition[] {
+  return (definitions ?? []).map((definition) => ({
+    definitionId: definition.definitionId,
+    definitionKind: "sound-cue",
+    displayName: definition.displayName,
+    category: normalizeSoundCueCategory(definition.category),
+    clips: (definition.clips ?? [])
+      .map((clip) => ({
+        audioClipDefinitionId: clip.audioClipDefinitionId,
+        weight: normalizePositiveSoundNumber(clip.weight, 1),
+        sprite:
+          clip.sprite &&
+          Number.isFinite(clip.sprite.startMs) &&
+          Number.isFinite(clip.sprite.durationMs) &&
+          clip.sprite.durationMs > 0
+            ? {
+                startMs: Math.max(0, clip.sprite.startMs),
+                durationMs: Math.max(1, clip.sprite.durationMs)
+              }
+            : null
+      }))
+      .filter((clip) => clip.audioClipDefinitionId.trim().length > 0),
+    playback: normalizeSoundCuePlayback(definition.playback),
+    spatial: normalizeSoundCueSpatialSettings(definition.spatial)
+  }));
+}
+
 export function createDefaultMaterialPbr(
   overrides: Partial<MaterialPbrDefinition> = {}
 ): MaterialPbrDefinition {
@@ -606,9 +847,10 @@ function normalizeHexColor(value: unknown, fallback: number): number {
 }
 
 function normalizeMaterialPbr(value: unknown): MaterialPbrDefinition {
-  const pbr = typeof value === "object" && value !== null
-    ? (value as Partial<MaterialPbrDefinition>)
-    : {};
+  const pbr =
+    typeof value === "object" && value !== null
+      ? (value as Partial<MaterialPbrDefinition>)
+      : {};
   return createDefaultMaterialPbr({
     baseColor: normalizeHexColor(pbr.baseColor, 0x808080),
     baseColorMap: normalizeNullableTextureId(pbr.baseColorMap),
@@ -646,7 +888,8 @@ function normalizeMaterialDefinitions(
       metadata: definition.metadata ? { ...definition.metadata } : undefined,
       pbr: normalizeMaterialPbr(
         definition.pbr ?? {
-          baseColorMap: bindings.basecolor_texture ?? bindings.baseColorTexture ?? null,
+          baseColorMap:
+            bindings.basecolor_texture ?? bindings.baseColorTexture ?? null,
           normalMap: bindings.normal_texture ?? bindings.normalTexture ?? null,
           ormMap: bindings.orm_texture ?? bindings.ormTexture ?? null,
           roughnessMap: bindings.roughness_texture ?? null,
@@ -660,7 +903,8 @@ function normalizeMaterialDefinitions(
       shaderDefinitionId:
         typeof (definition as unknown as { shaderDefinitionId?: unknown })
           .shaderDefinitionId === "string"
-          ? ((definition as unknown as { shaderDefinitionId: string }).shaderDefinitionId)
+          ? (definition as unknown as { shaderDefinitionId: string })
+              .shaderDefinitionId
           : null
     };
   });
@@ -715,7 +959,10 @@ function normalizeShaderReference(
   };
   if (candidate.kind === "material" && candidate.materialDefinitionId) {
     const migratedShaderDefinitionId = projectId
-      ? migrateLegacyShaderWrapperMaterialId(projectId, candidate.materialDefinitionId)
+      ? migrateLegacyShaderWrapperMaterialId(
+          projectId,
+          candidate.materialDefinitionId
+        )
       : null;
     if (migratedShaderDefinitionId) {
       return {
@@ -799,7 +1046,10 @@ export const SKY_PRESET_COLORS: Record<
   night: { topColor: 0x0a0a1a, bottomColor: 0x1a1428 }
 };
 
-export const LIGHTING_PRESET_TEMPLATES: Record<LightingPreset, EnvironmentLighting> = {
+export const LIGHTING_PRESET_TEMPLATES: Record<
+  LightingPreset,
+  EnvironmentLighting
+> = {
   default: {
     preset: "default",
     // Default is the neutral placeholder preset — meant to look "Blender
@@ -983,7 +1233,9 @@ function synchronizeFogBinding(
   projectId: string
 ): PostProcessShaderBinding[] {
   const fogShaderDefinitionId = createBuiltInFogTintShaderId(projectId);
-  const sortedBindings = normalizePostProcessShaderBindings(definition.postProcessShaders);
+  const sortedBindings = normalizePostProcessShaderBindings(
+    definition.postProcessShaders
+  );
   const fogBindingIndex = sortedBindings.findIndex(
     (binding) => binding.shaderDefinitionId === fogShaderDefinitionId
   );
@@ -992,9 +1244,15 @@ function synchronizeFogBinding(
     order: fogBindingIndex >= 0 ? sortedBindings[fogBindingIndex]!.order : 0,
     enabled: definition.atmosphere.fog.enabled,
     parameterOverrides: [
-      { parameterId: "color", value: colorToVector3(definition.atmosphere.fog.color) },
+      {
+        parameterId: "color",
+        value: colorToVector3(definition.atmosphere.fog.color)
+      },
       { parameterId: "density", value: definition.atmosphere.fog.density },
-      { parameterId: "heightFalloff", value: definition.atmosphere.fog.heightFalloff }
+      {
+        parameterId: "heightFalloff",
+        value: definition.atmosphere.fog.heightFalloff
+      }
     ]
   };
 
@@ -1025,11 +1283,13 @@ function synchronizeCloudShadowsBinding(
   const fogIndex = sortedBindings.findIndex(
     (binding) => binding.shaderDefinitionId === fogShaderDefinitionId
   );
-  const insertOrder = fogIndex >= 0 ? sortedBindings[fogIndex]!.order + 0.5 : 0.5;
+  const insertOrder =
+    fogIndex >= 0 ? sortedBindings[fogIndex]!.order + 0.5 : 0.5;
 
   const nextBinding: PostProcessShaderBinding = {
     shaderDefinitionId,
-    order: bindingIndex >= 0 ? sortedBindings[bindingIndex]!.order : insertOrder,
+    order:
+      bindingIndex >= 0 ? sortedBindings[bindingIndex]!.order : insertOrder,
     enabled: cloudShadows.enabled,
     parameterOverrides: [
       { parameterId: "scale", value: cloudShadows.scale },
@@ -1061,7 +1321,11 @@ function ensureBuiltInEffectBinding(
     return bindings;
   }
 
-  if (bindings.some((binding) => binding.shaderDefinitionId === shaderDefinitionId)) {
+  if (
+    bindings.some(
+      (binding) => binding.shaderDefinitionId === shaderDefinitionId
+    )
+  ) {
     return bindings;
   }
 
@@ -1120,7 +1384,9 @@ function migrateLightingFromLegacy(
     // the template is only a fallback for *truly missing* lighting. Before
     // this guard, every v2 normalization pass silently reset the author's
     // sun direction / color / intensity back to the preset template.
-    const candidate = definition.lighting as unknown as Partial<EnvironmentLighting> | undefined;
+    const candidate = definition.lighting as unknown as
+      | Partial<EnvironmentLighting>
+      | undefined;
     if (
       candidate &&
       typeof candidate === "object" &&
@@ -1213,7 +1479,10 @@ export function synchronizeEnvironmentDefinition(
     }
   };
 
-  nextDefinition.postProcessShaders = synchronizeFogBinding(nextDefinition, projectId);
+  nextDefinition.postProcessShaders = synchronizeFogBinding(
+    nextDefinition,
+    projectId
+  );
   nextDefinition.postProcessShaders = synchronizeCloudShadowsBinding(
     nextDefinition.postProcessShaders,
     nextDefinition.atmosphere.cloudShadows,
@@ -1232,7 +1501,9 @@ export function synchronizeEnvironmentDefinition(
  * reach this function, so their sun comes from a preset template; we just
  * need to make sure templates without shadows get defaults.
  */
-function normalizeSunShadows(lighting: EnvironmentLighting): EnvironmentLighting {
+function normalizeSunShadows(
+  lighting: EnvironmentLighting
+): EnvironmentLighting {
   const existing = lighting.sun.shadows;
   const legacyCastShadows = lighting.sun.castShadows;
   const resolved: SunShadowSettings = existing
@@ -1240,7 +1511,7 @@ function normalizeSunShadows(lighting: EnvironmentLighting): EnvironmentLighting
         enabled:
           typeof existing.enabled === "boolean"
             ? existing.enabled
-            : legacyCastShadows ?? DEFAULT_SUN_SHADOWS.enabled,
+            : (legacyCastShadows ?? DEFAULT_SUN_SHADOWS.enabled),
         quality: existing.quality ?? DEFAULT_SUN_SHADOWS.quality,
         distance:
           typeof existing.distance === "number"
@@ -1320,7 +1591,8 @@ export function createDefaultEnvironmentDefinition(
 ): EnvironmentDefinition {
   const preset = options.preset ?? "default";
   const definition: EnvironmentDefinition = {
-    definitionId: options.definitionId ?? createEnvironmentDefinitionId(projectId),
+    definitionId:
+      options.definitionId ?? createEnvironmentDefinitionId(projectId),
     definitionKind: "environment",
     displayName: options.displayName ?? "Default Environment",
     postProcessShaders: [],
@@ -1395,11 +1667,89 @@ export function createDefaultCharacterAnimationDefinition(
   };
 }
 
+export function createDefaultAudioClipDefinition(options: {
+  definitionId?: string;
+  displayName?: string;
+  source: AudioClipDefinition["source"];
+  durationSeconds?: number | null;
+}): AudioClipDefinition {
+  return {
+    definitionId: options.definitionId ?? createUuid(),
+    definitionKind: "audio-clip",
+    displayName: options.displayName ?? options.source.fileName,
+    source: {
+      relativeAssetPath: options.source.relativeAssetPath,
+      fileName: options.source.fileName,
+      mimeType: options.source.mimeType
+    },
+    durationSeconds:
+      typeof options.durationSeconds === "number" &&
+      Number.isFinite(options.durationSeconds) &&
+      options.durationSeconds >= 0
+        ? options.durationSeconds
+        : null
+  };
+}
+
+export function createDefaultSoundCuePlayback(
+  overrides: Partial<SoundCuePlayback> = {}
+): SoundCuePlayback {
+  return normalizeSoundCuePlayback({
+    mode: "single",
+    volume: 1,
+    pitch: 1,
+    randomVolume: null,
+    randomPitch: null,
+    fadeInMs: 0,
+    fadeOutMs: 0,
+    maxInstances: 8,
+    retrigger: "overlap",
+    randomIntervalSeconds: null,
+    ...overrides
+  });
+}
+
+export function createDefaultSoundCueSpatialSettings(
+  overrides: Partial<SoundCueSpatialSettings> = {}
+): SoundCueSpatialSettings {
+  return normalizeSoundCueSpatialSettings({
+    enabled: false,
+    refDistance: 1,
+    maxDistance: 40,
+    rolloffFactor: 1,
+    ...overrides
+  });
+}
+
+export function createDefaultSoundCueDefinition(
+  options: {
+    definitionId?: string;
+    displayName?: string;
+    category?: SoundCategory;
+    clips?: SoundCueClipReference[];
+    playback?: Partial<SoundCuePlayback>;
+    spatial?: Partial<SoundCueSpatialSettings>;
+  } = {}
+): SoundCueDefinition {
+  return normalizeSoundCueDefinitions([
+    {
+      definitionId: options.definitionId ?? createUuid(),
+      definitionKind: "sound-cue",
+      displayName: options.displayName ?? "Sound Cue",
+      category: options.category ?? "sfx",
+      clips: options.clips ?? [],
+      playback: createDefaultSoundCuePlayback(options.playback),
+      spatial: createDefaultSoundCueSpatialSettings(options.spatial)
+    }
+  ])[0]!;
+}
+
 export function createEmptyContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
-  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
+  const builtInMaterialDefinitions =
+    createBuiltInMaterialDefinitions(projectId);
   const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   const rockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
@@ -1407,12 +1757,14 @@ export function createEmptyContentLibrarySnapshot(
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 5
+      version: 6
     },
     assetDefinitions: [],
+    audioClipDefinitions: [],
     characterModelDefinitions: [],
     characterAnimationDefinitions: [],
     materialDefinitions: builtInMaterialDefinitions,
+    soundCueDefinitions: [],
     textureDefinitions: [],
     maskTextureDefinitions: [],
     surfaceDefinitions: createBuiltInSurfaceDefinitions(
@@ -1439,10 +1791,14 @@ export function normalizeContentLibrarySnapshot(
   projectId: string
 ): ContentLibrarySnapshot {
   const builtInShaderDefinitions = createBuiltInShaderDefinitions(projectId);
-  const builtInMaterialDefinitions = createBuiltInMaterialDefinitions(projectId);
-  const builtInGrassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
-  const builtInFlowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
-  const builtInRockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
+  const builtInMaterialDefinitions =
+    createBuiltInMaterialDefinitions(projectId);
+  const builtInGrassTypeDefinitions =
+    createBuiltInGrassTypeDefinitions(projectId);
+  const builtInFlowerTypeDefinitions =
+    createBuiltInFlowerTypeDefinitions(projectId);
+  const builtInRockTypeDefinitions =
+    createBuiltInRockTypeDefinitions(projectId);
   const mergedMaterialDefinitions = mergeBuiltInDefinitions(
     normalizeMaterialDefinitions(contentLibrary.materialDefinitions),
     builtInMaterialDefinitions,
@@ -1473,7 +1829,8 @@ export function normalizeContentLibrarySnapshot(
     (definition) => definition.definitionId
   );
   const authoredShaderDefinitions =
-    contentLibrary.shaderDefinitions?.length && contentLibrary.shaderDefinitions.length > 0
+    contentLibrary.shaderDefinitions?.length &&
+    contentLibrary.shaderDefinitions.length > 0
       ? contentLibrary.shaderDefinitions.map((definition) => ({
           ...definition,
           nodes: definition.nodes.map((node) => ({
@@ -1487,23 +1844,27 @@ export function normalizeContentLibrarySnapshot(
       : [];
   const mergedShaderDefinitions =
     authoredShaderDefinitions.length > 0
-      ? mergeBuiltInShaderDefinitions(authoredShaderDefinitions, builtInShaderDefinitions)
+      ? mergeBuiltInShaderDefinitions(
+          authoredShaderDefinitions,
+          builtInShaderDefinitions
+        )
       : builtInShaderDefinitions;
-  const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions?.length
+  const nextEnvironmentDefinitions = contentLibrary.environmentDefinitions
+    ?.length
     ? [...contentLibrary.environmentDefinitions]
     : [
         createDefaultEnvironmentDefinition(projectId, {
           definitionId: `${projectId}:environment:default`,
           displayName: "Default Environment",
           preset: "default"
-      })
-    ];
+        })
+      ];
   const bloomShaderDefinitionId = createBuiltInBloomShaderId(projectId);
 
   const normalizedContentLibrary: ContentLibrarySnapshot = {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 5)
+      version: Math.max(contentLibrary.identity.version ?? 1, 6)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
@@ -1511,6 +1872,9 @@ export function normalizeContentLibrarySnapshot(
       deform: normalizeShaderReference(definition.deform, projectId),
       effect: normalizeShaderReference(definition.effect, projectId)
     })),
+    audioClipDefinitions: normalizeAudioClipDefinitions(
+      contentLibrary.audioClipDefinitions
+    ),
     characterModelDefinitions: normalizeCharacterModelDefinitions(
       contentLibrary.characterModelDefinitions
     ),
@@ -1518,14 +1882,19 @@ export function normalizeContentLibrarySnapshot(
       contentLibrary.characterAnimationDefinitions
     ),
     materialDefinitions: mergedMaterialDefinitions,
-    textureDefinitions: (contentLibrary.textureDefinitions ?? []).map((definition) => ({
-      ...definition,
-      source: {
-        relativeAssetPath: definition.source.relativeAssetPath,
-        fileName: definition.source.fileName,
-        mimeType: definition.source.mimeType
-      }
-    })),
+    soundCueDefinitions: normalizeSoundCueDefinitions(
+      contentLibrary.soundCueDefinitions
+    ),
+    textureDefinitions: (contentLibrary.textureDefinitions ?? []).map(
+      (definition) => ({
+        ...definition,
+        source: {
+          relativeAssetPath: definition.source.relativeAssetPath,
+          fileName: definition.source.fileName,
+          mimeType: definition.source.mimeType
+        }
+      })
+    ),
     maskTextureDefinitions: normalizeMaskTextureDefinitions(
       contentLibrary.maskTextureDefinitions
     ),
@@ -1545,7 +1914,8 @@ export function normalizeContentLibrarySnapshot(
         atmosphere: {
           fog: {
             enabled:
-              legacyDefinition.atmosphere?.fog?.enabled ?? DEFAULT_FOG_SETTINGS.enabled,
+              legacyDefinition.atmosphere?.fog?.enabled ??
+              DEFAULT_FOG_SETTINGS.enabled,
             density:
               legacyDefinition.atmosphere?.fog?.density ??
               getDefaultFogDensityForPreset(preset),
@@ -1643,12 +2013,17 @@ export function normalizeContentLibrarySnapshot(
         }
         continue;
       }
-      const referencedSurface = (normalizedContentLibrary.surfaceDefinitions ?? []).find(
+      const referencedSurface = (
+        normalizedContentLibrary.surfaceDefinitions ?? []
+      ).find(
         (definition) =>
           slot.surface?.kind === "reference" &&
           definition.definitionId === slot.surface.surfaceDefinitionId
       );
-      if (referencedSurface && referencedSurface.surface.context !== "universal") {
+      if (
+        referencedSurface &&
+        referencedSurface.surface.context !== "universal"
+      ) {
         throw new Error(
           `Asset "${assetDefinition.definitionId}" slot "${slot.slotName}" references landscape-only SurfaceDefinition "${referencedSurface.definitionId}".`
         );
@@ -1659,12 +2034,18 @@ export function normalizeContentLibrarySnapshot(
   return normalizedContentLibrary;
 }
 
-function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[] {
+function createBuiltInShaderDefinitions(
+  projectId: string
+): ShaderGraphDocument[] {
   const createWindPreset = (
     shaderDefinitionId: string,
     displayName: string,
     builtInKey: string,
-    values: { windStrength: number; windFrequency: number; windDirection: [number, number] }
+    values: {
+      windStrength: number;
+      windFrequency: number;
+      windDirection: [number, number];
+    }
   ): ShaderGraphDocument => {
     const graph = createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId,
@@ -1748,21 +2129,36 @@ function createBuiltInShaderDefinitions(projectId: string): ShaderGraphDocument[
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,
       displayName: "Foliage Wind"
     }),
-    createWindPreset(`${projectId}:shader:still-air`, "Still Air", "still-air", {
-      windStrength: 0,
-      windFrequency: 1,
-      windDirection: [1, 0]
-    }),
-    createWindPreset(`${projectId}:shader:gentle-breeze`, "Gentle Breeze", "gentle-breeze", {
-      windStrength: 0.18,
-      windFrequency: 1.1,
-      windDirection: [1, 0]
-    }),
-    createWindPreset(`${projectId}:shader:meadow-breeze`, "Meadow Breeze", "meadow-breeze", {
-      windStrength: 0.35,
-      windFrequency: 1.6,
-      windDirection: [1, 0.2]
-    }),
+    createWindPreset(
+      `${projectId}:shader:still-air`,
+      "Still Air",
+      "still-air",
+      {
+        windStrength: 0,
+        windFrequency: 1,
+        windDirection: [1, 0]
+      }
+    ),
+    createWindPreset(
+      `${projectId}:shader:gentle-breeze`,
+      "Gentle Breeze",
+      "gentle-breeze",
+      {
+        windStrength: 0.18,
+        windFrequency: 1.1,
+        windDirection: [1, 0]
+      }
+    ),
+    createWindPreset(
+      `${projectId}:shader:meadow-breeze`,
+      "Meadow Breeze",
+      "meadow-breeze",
+      {
+        windStrength: 0.35,
+        windFrequency: 1.6,
+        windDirection: [1, 0.2]
+      }
+    ),
     createWindPreset(`${projectId}:shader:gusty`, "Gusty", "gusty", {
       windStrength: 0.65,
       windFrequency: 2.6,
@@ -1859,7 +2255,9 @@ function mergeBuiltInShaderDefinitions(
   for (const builtInDefinition of builtInDefinitions) {
     const builtInKey = builtInDefinition.metadata?.builtInKey;
     const existingIndex = nextDefinitions.findIndex((definition) => {
-      if (definition.shaderDefinitionId === builtInDefinition.shaderDefinitionId) {
+      if (
+        definition.shaderDefinitionId === builtInDefinition.shaderDefinitionId
+      ) {
         return true;
       }
 
@@ -1926,6 +2324,23 @@ export function listAssetDefinitions(
   return [...contentLibrary.assetDefinitions];
 }
 
+export function getAudioClipDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): AudioClipDefinition | null {
+  return (
+    (contentLibrary.audioClipDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listAudioClipDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): AudioClipDefinition[] {
+  return [...(contentLibrary.audioClipDefinitions ?? [])];
+}
+
 export function getCharacterModelDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
@@ -1975,6 +2390,23 @@ export function listMaterialDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): MaterialDefinition[] {
   return [...contentLibrary.materialDefinitions];
+}
+
+export function getSoundCueDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): SoundCueDefinition | null {
+  return (
+    (contentLibrary.soundCueDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function listSoundCueDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): SoundCueDefinition[] {
+  return [...(contentLibrary.soundCueDefinitions ?? [])];
 }
 
 /**

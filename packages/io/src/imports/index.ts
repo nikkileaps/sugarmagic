@@ -8,16 +8,23 @@
  */
 
 import {
+  createDefaultAudioClipDefinition,
   createDefaultCharacterAnimationDefinition,
   createDefaultCharacterModelDefinition,
   type AssetDefinition,
+  type AudioClipDefinition,
   type CharacterAnimationDefinition,
   type CharacterModelDefinition,
   type MaterialDefinition,
   type MaskTextureDefinition,
   type TextureDefinition
 } from "@sugarmagic/domain";
-import { listFilesInDirectory, pickDirectory, pickFile, writeBlobFile } from "../fs-access";
+import {
+  listFilesInDirectory,
+  pickDirectory,
+  pickFile,
+  writeBlobFile
+} from "../fs-access";
 import type { GameRootDescriptor } from "../game-root";
 import {
   colorSpaceForPbrTextureRole,
@@ -86,6 +93,16 @@ export interface ImportCharacterAnimationDefinitionRequest {
 export interface ImportCharacterAnimationDefinitionResult {
   characterAnimationDefinition: CharacterAnimationDefinition;
   warnings: string[];
+}
+
+export interface ImportAudioClipDefinitionRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  defaultDisplayName?: string;
+}
+
+export interface ImportAudioClipDefinitionResult {
+  audioClipDefinition: AudioClipDefinition;
 }
 
 export interface ImportMaskTextureDefinitionRequest {
@@ -210,7 +227,9 @@ function readGlbChunks(
   return { document, binaryChunk };
 }
 
-function getFoilageMakerExtras(document: GlbDocument): Record<string, unknown> | null {
+function getFoilageMakerExtras(
+  document: GlbDocument
+): Record<string, unknown> | null {
   for (const node of document.nodes ?? []) {
     if (!isRecord(node.extras)) continue;
     if (node.extras.foilagemaker_kind === "tree") {
@@ -237,7 +256,8 @@ function collectPrimitiveAttributes(document: GlbDocument): Set<string> {
 
 function hasEmbeddedTextureReference(document: GlbDocument): boolean {
   return (document.materials ?? []).some((material) => {
-    const baseColorTexture = material.pbrMetallicRoughness?.baseColorTexture?.index;
+    const baseColorTexture =
+      material.pbrMetallicRoughness?.baseColorTexture?.index;
     return (
       typeof baseColorTexture === "number" ||
       typeof material.normalTexture?.index === "number" ||
@@ -246,7 +266,9 @@ function hasEmbeddedTextureReference(document: GlbDocument): boolean {
   });
 }
 
-function collectSurfaceSlots(document: GlbDocument): AssetDefinition["surfaceSlots"] {
+function collectSurfaceSlots(
+  document: GlbDocument
+): AssetDefinition["surfaceSlots"] {
   return (document.materials ?? []).map((material, slotIndex) => {
     const rawName =
       typeof material.name === "string" && material.name.trim().length > 0
@@ -315,7 +337,9 @@ export async function importCharacterAnimationDefinitionFromFile(
 
   const sourceBuffer = await sourceFile.arrayBuffer();
   const glbChunks = readGlbChunks(sourceBuffer);
-  const clipNames = glbChunks ? collectAnimationClipNames(glbChunks.document) : [];
+  const clipNames = glbChunks
+    ? collectAnimationClipNames(glbChunks.document)
+    : [];
   if (clipNames.length === 0) {
     throw new Error("The selected GLB does not contain any animation clips.");
   }
@@ -326,7 +350,11 @@ export async function importCharacterAnimationDefinitionFromFile(
 
   await writeBlobFile(
     request.projectHandle,
-    [request.descriptor.authoredAssetsPath, "character-animations", targetFileName],
+    [
+      request.descriptor.authoredAssetsPath,
+      "character-animations",
+      targetFileName
+    ],
     sourceFile
   );
 
@@ -393,7 +421,11 @@ async function importMaskTextureDefinitionFromFile(
   const targetFileName = `${safeStem}${ext}`;
   const relativeAssetPath = `masks/${targetFileName}`;
 
-  await writeBlobFile(request.projectHandle, ["masks", targetFileName], sourceFile);
+  await writeBlobFile(
+    request.projectHandle,
+    ["masks", targetFileName],
+    sourceFile
+  );
 
   const bitmap = await createImageBitmap(sourceFile);
   const resolution: [number, number] = [bitmap.width, bitmap.height];
@@ -453,6 +485,24 @@ async function pickCharacterAnimationFile(): Promise<File> {
         accept: {
           "model/gltf-binary": [".glb"],
           "application/octet-stream": [".glb"]
+        }
+      }
+    ]
+  });
+  return fileHandle.getFile();
+}
+
+async function pickAudioFile(): Promise<File> {
+  const fileHandle = await pickFile({
+    types: [
+      {
+        description: "Audio Clips",
+        accept: {
+          "audio/mpeg": [".mp3"],
+          "audio/ogg": [".ogg"],
+          "audio/wav": [".wav"],
+          "audio/wave": [".wav"],
+          "audio/x-wav": [".wav"]
         }
       }
     ]
@@ -586,6 +636,45 @@ export async function importCharacterAnimationDefinition(
   return importCharacterAnimationDefinitionFromFile(sourceFile, request);
 }
 
+export async function importAudioClipDefinitionFromFile(
+  sourceFile: File,
+  request: ImportAudioClipDefinitionRequest
+): Promise<ImportAudioClipDefinitionResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  const lowerExt = ext.toLowerCase();
+  if (![".mp3", ".ogg", ".wav"].includes(lowerExt)) {
+    throw new Error("Audio imports accept MP3, OGG, or WAV files.");
+  }
+
+  const safeStem = sanitizeFileNameSegment(stem);
+  const targetFileName = `${safeStem}${ext}`;
+  const relativeAssetPath = `${request.descriptor.authoredAssetsPath}/audio/${targetFileName}`;
+
+  await writeBlobFile(
+    request.projectHandle,
+    [request.descriptor.authoredAssetsPath, "audio", targetFileName],
+    sourceFile
+  );
+
+  return {
+    audioClipDefinition: createDefaultAudioClipDefinition({
+      displayName: request.defaultDisplayName ?? stem,
+      source: {
+        relativeAssetPath,
+        fileName: sourceFile.name,
+        mimeType: sourceFile.type || null
+      }
+    })
+  };
+}
+
+export async function importAudioClipDefinition(
+  request: ImportAudioClipDefinitionRequest
+): Promise<ImportAudioClipDefinitionResult> {
+  const sourceFile = await pickAudioFile();
+  return importAudioClipDefinitionFromFile(sourceFile, request);
+}
+
 export async function importPbrTextureSet(
   request: ImportTextureDefinitionRequest
 ): Promise<ImportPbrTextureSetResult> {
@@ -595,11 +684,13 @@ export async function importPbrTextureSet(
   });
   const discoveredSet = discoverPbrTextureSet(sourceFiles);
   const textures: TextureDefinition[] = [];
-  const textureBindings: Partial<Record<StandardPbrTextureParameterId, string>> = {};
+  const textureBindings: Partial<
+    Record<StandardPbrTextureParameterId, string>
+  > = {};
 
-  for (const [role, sourceFile] of Object.entries(discoveredSet.filesByRole) as Array<
-    [PbrTextureRole, File]
-  >) {
+  for (const [role, sourceFile] of Object.entries(
+    discoveredSet.filesByRole
+  ) as Array<[PbrTextureRole, File]>) {
     const parameterId = materialParameterIdForPbrTextureRole(role);
     const imported = (
       await importTextureDefinitionFromFile(sourceFile, {
@@ -627,11 +718,14 @@ export async function importPbrTextureSet(
   const hasOrm = Boolean(textureBindings.orm_texture);
   const hasAnySeparateChannel = Boolean(
     textureBindings.roughness_texture ||
-      textureBindings.metallic_texture ||
-      textureBindings.ao_texture
+    textureBindings.metallic_texture ||
+    textureBindings.ao_texture
   );
-  const suggestedShaderVariant: StandardPbrShaderVariant =
-    hasOrm ? "orm" : hasAnySeparateChannel ? "separate" : "orm";
+  const suggestedShaderVariant: StandardPbrShaderVariant = hasOrm
+    ? "orm"
+    : hasAnySeparateChannel
+      ? "separate"
+      : "orm";
 
   return {
     textures,

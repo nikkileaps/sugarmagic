@@ -4,9 +4,9 @@
  * Owns the derived "relative authored asset path -> fetchable blob URL" map
  * for Studio. This is not authored truth and it is not render-web runtime
  * state; it is the shell-level bridge between project file handles and the
- * shared viewport/render loaders. File-backed definitions include models,
- * animation GLBs, textures, painted mask textures, item thumbnails, and
- * document-owned image pages.
+ * shared viewport/render/audio loaders. File-backed definitions include
+ * models, animation GLBs, audio clips, textures, painted mask textures, item
+ * thumbnails, and document-owned image pages.
  */
 
 import { createStore } from "zustand/vanilla";
@@ -19,16 +19,19 @@ function revokeAssetSources(assetSources: Record<string, string>): void {
   }
 }
 
-function collectRelativeAssetPaths(
-  projectStore: ProjectStore
-): string[] {
+function collectRelativeAssetPaths(projectStore: ProjectStore): string[] {
   const session = projectStore.getState().session;
   if (!session) {
     return [];
   }
 
   const sources = [
-    ...(session.contentLibrary.assetDefinitions ?? []).map((definition) => definition.source),
+    ...(session.contentLibrary.assetDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
+    ...(session.contentLibrary.audioClipDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
     ...(session.contentLibrary.characterModelDefinitions ?? []).map(
       (definition) => definition.source
     ),
@@ -49,7 +52,8 @@ function collectRelativeAssetPaths(
       paths.push(itemDefinition.presentation.thumbnailAssetPath);
     }
   }
-  for (const documentDefinition of session.gameProject?.documentDefinitions ?? []) {
+  for (const documentDefinition of session.gameProject?.documentDefinitions ??
+    []) {
     for (const pagePath of documentDefinition.imagePages) {
       paths.push(pagePath);
     }
@@ -97,8 +101,14 @@ export function createAssetSourceStore() {
   let currentPathsKey = "";
   let generation = 0;
 
-  const store = createStore<AssetSourceState & AssetSourceActions>()((set, get) => {
-    async function syncFromProject(projectStore: ProjectStore, handle: FileSystemDirectoryHandle) {
+  const store = createStore<AssetSourceState & AssetSourceActions>()((
+    set,
+    get
+  ) => {
+    async function syncFromProject(
+      projectStore: ProjectStore,
+      handle: FileSystemDirectoryHandle
+    ) {
       const nextPaths = collectRelativeAssetPaths(projectStore);
       const nextPathsKey = nextPaths.join("|");
       if (nextPathsKey === currentPathsKey) {

@@ -34,7 +34,9 @@ export interface PreviewSession {
   dispose(): void;
 }
 
-export function bootPreviewSession(options: PreviewSessionOptions): PreviewSession {
+export function bootPreviewSession(
+  options: PreviewSessionOptions
+): PreviewSession {
   const contextStore = createUIContextStore(
     createDefaultRuntimeUIContext(options.sampleRuntimeContext)
   );
@@ -45,10 +47,12 @@ export function bootPreviewSession(options: PreviewSessionOptions): PreviewSessi
   const actionRegistry = createUIActionRegistry();
   registerDefaultUIActions(actionRegistry, {
     stateStore,
-    startMenuKey: options.project.menuDefinitions.find((menu) => menu.menuKey === "start-menu")
-      ?.menuKey,
-    pauseMenuKey: options.project.menuDefinitions.find((menu) => menu.menuKey === "pause-menu")
-      ?.menuKey
+    startMenuKey: options.project.menuDefinitions.find(
+      (menu) => menu.menuKey === "start-menu"
+    )?.menuKey,
+    pauseMenuKey: options.project.menuDefinitions.find(
+      (menu) => menu.menuKey === "pause-menu"
+    )?.menuKey
   });
 
   const root: Root = createRoot(options.mountInto);
@@ -62,7 +66,8 @@ export function bootPreviewSession(options: PreviewSessionOptions): PreviewSessi
         theme: project.uiTheme,
         uiContextStore: contextStore,
         uiStateStore: stateStore,
-        onAction: (action) => actionRegistry.dispatch(action, null)
+        onAction: (action) => actionRegistry.dispatch(action, null),
+        onHover: () => {}
       })
     );
   }

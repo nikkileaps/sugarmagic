@@ -10,6 +10,8 @@ import type {
   SpellDefinition,
   HUDDefinition,
   MenuDefinition,
+  SoundEventBindingMap,
+  AudioMixerSettings,
   UITheme,
   RegionDocument
 } from "@sugarmagic/domain";
@@ -36,6 +38,8 @@ interface PreviewBootMessage {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  soundEventBindings: SoundEventBindingMap;
+  audioMixer: AudioMixerSettings;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
 }
@@ -82,6 +86,8 @@ window.addEventListener("message", (event) => {
       menuDefinitions: data.menuDefinitions,
       hudDefinition: data.hudDefinition,
       uiTheme: data.uiTheme,
+      soundEventBindings: data.soundEventBindings,
+      audioMixer: data.audioMixer,
       assetSources: data.assetSources,
       pluginBootPayloads: data.pluginBootPayloads
     });
@@ -89,6 +95,9 @@ window.addEventListener("message", (event) => {
 });
 
 if (window.opener) {
-  const message: PreviewReadyMessage = { type: "PREVIEW_READY", boot: host.boot };
+  const message: PreviewReadyMessage = {
+    type: "PREVIEW_READY",
+    boot: host.boot
+  };
   window.opener.postMessage(message, "*");
 }

@@ -34,6 +34,7 @@ export type BuildWorkspaceKind =
   | "spatial"
   | "behavior"
   | "environment"
+  | "audio"
   | "surfaces"
   | "assets";
 export type CoreDesignWorkspaceKind =
@@ -60,11 +61,8 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "game-ui"
 ];
 
-export const VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
-  "player",
-  "npcs",
-  "items"
-];
+export const VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] =
+  ["player", "npcs", "items"];
 
 export function designWorkspaceRequiresViewport(
   kind: DesignWorkspaceKind
@@ -80,14 +78,14 @@ export interface ShellSelectionState {
 }
 
 /**
- * Library popover kinds. Surfaces are NOT a library kind — they're
- * the composition layer that references library content and are authored
- * in the Surfaces workspace, not browsed in a library popover. Per Plan
- * 037. Character models and animations are NOT library kinds either —
- * they're entity-owned content authored via the Player/NPC inspector
- * file-pickers. Per Plan 038.
+ * Library popover kinds. Project-scoped reusable file-backed and graph-backed
+ * content lives here. Surfaces are NOT a library kind — they're the composition
+ * layer that references library content and are authored in the Surfaces
+ * workspace, not browsed in a library popover. Character models and animations
+ * are NOT library kinds either — they're entity-owned content authored via the
+ * Player/NPC inspector file-pickers.
  */
-export type LibraryKind = "materials" | "textures" | "shaders";
+export type LibraryKind = "materials" | "textures" | "shaders" | "audio";
 
 export interface ShellToolSessionState {
   workspaceId: string | null;
@@ -150,20 +148,19 @@ export function deriveBuildWorkspaceId(
   return `build:${kind}:${contextId}`;
 }
 
-export function deriveDesignWorkspaceId(
-  kind: DesignWorkspaceKind
-): string {
+export function deriveDesignWorkspaceId(kind: DesignWorkspaceKind): string {
   return `design:${kind}`;
 }
 
-export function deriveRenderWorkspaceId(
-  kind: RenderWorkspaceKind
-): string {
+export function deriveRenderWorkspaceId(kind: RenderWorkspaceKind): string {
   return `render:${kind}`;
 }
 
 function getBuildContextId(
-  state: Pick<ShellState, "activeBuildWorkspaceKind" | "activeRegionId" | "activeEnvironmentId">,
+  state: Pick<
+    ShellState,
+    "activeBuildWorkspaceKind" | "activeRegionId" | "activeEnvironmentId"
+  >,
   kind: BuildWorkspaceKind = state.activeBuildWorkspaceKind
 ): string | null {
   if (kind === "environment") {
@@ -212,15 +209,13 @@ export interface ShellModel {
   statusSurface: StatusSurfaceModel;
 }
 
-export function createShellStore(
-  initialProductMode: ProductModeId = "build"
-) {
+export function createShellStore(initialProductMode: ProductModeId = "build") {
   const initialWorkspaceId =
     initialProductMode === "design"
       ? deriveDesignWorkspaceId("player")
       : initialProductMode === "render"
         ? deriveRenderWorkspaceId("shaders")
-      : null;
+        : null;
 
   return createStore<ShellState & ShellActions>()((set, get) => ({
     activeProductMode: initialProductMode,

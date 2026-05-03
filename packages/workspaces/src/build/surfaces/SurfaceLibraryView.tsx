@@ -4,8 +4,8 @@
  * Owns the Build-mode authoring surface for reusable `SurfaceDefinition`s.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
-import { ActionIcon, Button, Menu, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import { type ReactNode } from "react";
+import { Button, Stack, Text, TextInput } from "@mantine/core";
 import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
@@ -16,7 +16,7 @@ import type {
   SurfaceDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
-import { Inspector, PanelSection } from "@sugarmagic/ui";
+import { Inspector, PanelSectionList } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { LayerStackView } from "./LayerStackView";
 
@@ -25,7 +25,10 @@ export interface SurfaceLibraryViewProps {
   materialDefinitions: MaterialDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
+  onCreateMaskTextureDefinition?: () =>
+    | Promise<MaskTextureDefinition | null>
+    | MaskTextureDefinition
+    | null;
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   shaderDefinitions: ShaderGraphDocument[];
   grassTypeDefinitions: GrassTypeDefinition[];
@@ -64,91 +67,37 @@ export function useSurfaceLibraryView(
     centerPanel
   } = props;
 
-  const [searchValue, setSearchValue] = useState("");
-  const filteredDefinitions = useMemo(() => {
-    const normalized = searchValue.trim().toLowerCase();
-    if (!normalized) {
-      return surfaceDefinitions;
-    }
-    return surfaceDefinitions.filter((definition) =>
-      definition.displayName.toLowerCase().includes(normalized)
-    );
-  }, [searchValue, surfaceDefinitions]);
-
   const selectedDefinition =
     surfaceDefinitions.find(
       (definition) => definition.definitionId === selectedSurfaceDefinitionId
-    ) ?? surfaceDefinitions[0] ?? null;
+    ) ??
+    surfaceDefinitions[0] ??
+    null;
 
   return {
     leftPanel: (
-      <PanelSection
+      <PanelSectionList
         title="Surface Library"
         icon="🪴"
-        actions={
-          <Menu shadow="md" withinPortal position="bottom-end">
-            <Menu.Target>
-              <ActionIcon variant="subtle" size="sm" aria-label="Add surface">
-                ＋
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                onClick={() => {
-                  const created = onCreateSurfaceDefinition();
-                  if (created) {
-                    onSelectSurfaceDefinition(created.definitionId);
-                  }
-                }}
-              >
-                New Surface
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
+        items={surfaceDefinitions}
+        selectedId={selectedDefinition?.definitionId ?? null}
+        getId={(definition) => definition.definitionId}
+        getLabel={(definition) => definition.displayName}
+        getDescription={(definition) =>
+          `${definition.surface.layers.length} layer${
+            definition.surface.layers.length === 1 ? "" : "s"
+          }`
         }
-      >
-        <Stack gap="xs">
-          <TextInput
-            size="xs"
-            placeholder="Search surfaces..."
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.currentTarget.value)}
-          />
-          <Stack gap={4}>
-            {filteredDefinitions.map((definition) => {
-              const isSelected = definition.definitionId === selectedDefinition?.definitionId;
-              return (
-                <UnstyledButton
-                  key={definition.definitionId}
-                  onClick={() => onSelectSurfaceDefinition(definition.definitionId)}
-                  styles={{
-                    root: {
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 2,
-                      padding: "6px 8px",
-                      borderRadius: "var(--sm-radius-sm)",
-                      background: isSelected ? "var(--sm-active-bg)" : "transparent",
-                      color: isSelected
-                        ? "var(--sm-accent-blue)"
-                        : "var(--sm-color-text)"
-                    }
-                  }}
-                >
-                  <Text size="xs" fw={isSelected ? 600 : 500}>
-                    {definition.displayName}
-                  </Text>
-                  <Text size="xs" c="var(--sm-color-overlay0)">
-                    {definition.surface.layers.length} layer
-                    {definition.surface.layers.length === 1 ? "" : "s"}
-                  </Text>
-                </UnstyledButton>
-              );
-            })}
-          </Stack>
-        </Stack>
-      </PanelSection>
+        onSelect={(definitionId) => onSelectSurfaceDefinition(definitionId)}
+        searchPlaceholder="Search surfaces..."
+        createLabel="Add surface"
+        onCreate={() => {
+          const created = onCreateSurfaceDefinition();
+          if (created) {
+            onSelectSurfaceDefinition(created.definitionId);
+          }
+        }}
+      />
     ),
     rightPanel: (
       <Inspector selectionLabel={selectedDefinition?.displayName ?? null}>
@@ -189,7 +138,9 @@ export function useSurfaceLibraryView(
               variant="subtle"
               color="red"
               justify="flex-start"
-              onClick={() => onRemoveSurfaceDefinition(selectedDefinition.definitionId)}
+              onClick={() =>
+                onRemoveSurfaceDefinition(selectedDefinition.definitionId)
+              }
             >
               Remove Surface
             </Button>

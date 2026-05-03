@@ -16,7 +16,11 @@ import type {
 } from "@sugarmagic/domain";
 import type { UIContextStore, UIStateStore } from "@sugarmagic/runtime-core";
 import { compileLayout } from "./ui/layout";
-import { compileStyleDefinition, compileThemeVariables, findStyle } from "./ui/applyTheme";
+import {
+  compileStyleDefinition,
+  compileThemeVariables,
+  findStyle
+} from "./ui/applyTheme";
 import { UIContainer } from "./ui/UIContainer";
 import { UIText } from "./ui/UIText";
 import { UIButton } from "./ui/UIButton";
@@ -32,6 +36,7 @@ export interface GameUILayerProps {
   uiContextStore: UIContextStore;
   uiStateStore: UIStateStore;
   onAction: (action: UIActionExpression) => void;
+  onHover: (action: UIActionExpression | null) => void;
 }
 
 function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
@@ -44,7 +49,9 @@ function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
 function renderNode(input: { node: UINode; theme: UITheme }): JSX.Element {
   const { node, theme } = input;
   const style = nodeStyle(node, theme);
-  const children = node.children.map((child) => renderNode({ node: child, theme }));
+  const children = node.children.map((child) =>
+    renderNode({ node: child, theme })
+  );
 
   if (node.kind === "text") {
     return <UIText key={node.nodeId} text={node.props.text} style={style} />;
@@ -110,14 +117,15 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
   const visibleMenu =
     state.visibleMenuKey === null
       ? null
-      : props.menuDefinitions.find(
+      : (props.menuDefinitions.find(
           (definition) => definition.menuKey === state.visibleMenuKey
-        ) ?? null;
+        ) ?? null);
 
   return (
     <UIRuntimeBridgeProvider
       contextStore={props.uiContextStore}
       onAction={props.onAction}
+      onHover={props.onHover}
     >
       <div
         data-sugarmagic-game-ui-layer

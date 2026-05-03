@@ -45,6 +45,12 @@ import type {
   DeleteLandscapeChannelCommand,
   PaintLandscapeCommand,
   ConfigureLandscapeCommand,
+  CreateRegionSoundEmitterCommand,
+  UpdateRegionSoundEmitterCommand,
+  DeleteRegionSoundEmitterCommand,
+  CreateRegionAmbienceZoneCommand,
+  UpdateRegionAmbienceZoneCommand,
+  DeleteRegionAmbienceZoneCommand,
   CreatePlayerPresenceCommand,
   TransformPlayerPresenceCommand,
   RemovePlayerPresenceCommand,
@@ -160,7 +166,10 @@ function applyPlaceAssetInstance(
     ...region,
     scene: {
       ...region.scene,
-      placedAssets: [...region.scene.placedAssets, createPlacedAssetFromCommand(command)]
+      placedAssets: [
+        ...region.scene.placedAssets,
+        createPlacedAssetFromCommand(command)
+      ]
     }
   };
 }
@@ -276,7 +285,10 @@ function applyUpdatePlacedAssetInspectable(
     scene: {
       ...region.scene,
       placedAssets: region.scene.placedAssets.map((asset) => {
-        if (asset.instanceId !== command.payload.instanceId || !asset.inspectable) {
+        if (
+          asset.instanceId !== command.payload.instanceId ||
+          !asset.inspectable
+        ) {
           return asset;
         }
 
@@ -451,7 +463,9 @@ function upsertShaderBindingOverride(
   overrides: ShaderBindingOverride[],
   nextOverride: { shaderDefinitionId: string; slot: ShaderSlotKind }
 ): ShaderBindingOverride[] {
-  const next = overrides.filter((override) => override.slot !== nextOverride.slot);
+  const next = overrides.filter(
+    (override) => override.slot !== nextOverride.slot
+  );
   next.push(nextOverride);
   return next;
 }
@@ -497,7 +511,10 @@ function applySetPlacedAssetShaderParameterOverride(
               ...asset,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 asset.shaderParameterOverrides,
-                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
+                {
+                  ...command.payload.override,
+                  slot: command.payload.override.slot ?? command.payload.slot
+                }
               )
             }
           : asset
@@ -573,7 +590,10 @@ function applySetNPCPresenceShaderParameterOverride(
               ...presence,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 presence.shaderParameterOverrides,
-                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
+                {
+                  ...command.payload.override,
+                  slot: command.payload.override.slot ?? command.payload.slot
+                }
               )
             }
           : presence
@@ -594,13 +614,14 @@ function applyClearNPCPresenceShaderParameterOverride(
         presence.presenceId === command.payload.presenceId
           ? {
               ...presence,
-              shaderParameterOverrides: presence.shaderParameterOverrides.filter(
-                (override) =>
-                  !(
-                    override.parameterId === command.payload.parameterId &&
-                    override.slot === command.payload.slot
-                  )
-              )
+              shaderParameterOverrides:
+                presence.shaderParameterOverrides.filter(
+                  (override) =>
+                    !(
+                      override.parameterId === command.payload.parameterId &&
+                      override.slot === command.payload.slot
+                    )
+                )
             }
           : presence
       )
@@ -649,7 +670,10 @@ function applySetItemPresenceShaderParameterOverride(
               ...presence,
               shaderParameterOverrides: upsertShaderParameterOverride(
                 presence.shaderParameterOverrides,
-                { ...command.payload.override, slot: command.payload.override.slot ?? command.payload.slot }
+                {
+                  ...command.payload.override,
+                  slot: command.payload.override.slot ?? command.payload.slot
+                }
               )
             }
           : presence
@@ -670,13 +694,14 @@ function applyClearItemPresenceShaderParameterOverride(
         presence.presenceId === command.payload.presenceId
           ? {
               ...presence,
-              shaderParameterOverrides: presence.shaderParameterOverrides.filter(
-                (override) =>
-                  !(
-                    override.parameterId === command.payload.parameterId &&
-                    override.slot === command.payload.slot
-                  )
-              )
+              shaderParameterOverrides:
+                presence.shaderParameterOverrides.filter(
+                  (override) =>
+                    !(
+                      override.parameterId === command.payload.parameterId &&
+                      override.slot === command.payload.slot
+                    )
+                )
             }
           : presence
       )
@@ -692,7 +717,10 @@ function applyCreateNPCPresence(
     ...region,
     scene: {
       ...region.scene,
-      npcPresences: [...region.scene.npcPresences, createNPCPresenceFromCommand(command)]
+      npcPresences: [
+        ...region.scene.npcPresences,
+        createNPCPresenceFromCommand(command)
+      ]
     }
   };
 }
@@ -744,7 +772,10 @@ function applyCreateItemPresence(
     ...region,
     scene: {
       ...region.scene,
-      itemPresences: [...region.scene.itemPresences, createItemPresenceFromCommand(command)]
+      itemPresences: [
+        ...region.scene.itemPresences,
+        createItemPresenceFromCommand(command)
+      ]
     }
   };
 }
@@ -1051,8 +1082,12 @@ function updateLandscapeChannel(
           displayName: command.payload.displayName,
           slotName: command.payload.slotName ?? command.payload.displayName
         }),
-    ...(command.payload.slotName === undefined ? {} : { slotName: command.payload.slotName }),
-    ...(command.payload.surface === undefined ? {} : { surface: command.payload.surface }),
+    ...(command.payload.slotName === undefined
+      ? {}
+      : { slotName: command.payload.slotName }),
+    ...(command.payload.surface === undefined
+      ? {}
+      : { surface: command.payload.surface }),
     ...(command.payload.tilingScale === undefined
       ? {}
       : { tilingScale: command.payload.tilingScale })
@@ -1131,6 +1166,105 @@ function applyConfigureLandscape(
   };
 }
 
+function applyCreateRegionSoundEmitter(
+  region: RegionDocument,
+  command: CreateRegionSoundEmitterCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: [...(region.audio?.emitters ?? []), command.payload.emitter],
+      ambienceZones: region.audio?.ambienceZones ?? []
+    }
+  };
+}
+
+function applyUpdateRegionSoundEmitter(
+  region: RegionDocument,
+  command: UpdateRegionSoundEmitterCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: (region.audio?.emitters ?? []).map((emitter) =>
+        emitter.emitterId === command.payload.emitterId
+          ? { ...emitter, ...command.payload.patch }
+          : emitter
+      ),
+      ambienceZones: region.audio?.ambienceZones ?? []
+    }
+  };
+}
+
+function applyDeleteRegionSoundEmitter(
+  region: RegionDocument,
+  command: DeleteRegionSoundEmitterCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: (region.audio?.emitters ?? []).filter(
+        (emitter) => emitter.emitterId !== command.payload.emitterId
+      ),
+      ambienceZones: region.audio?.ambienceZones ?? []
+    }
+  };
+}
+
+function applyCreateRegionAmbienceZone(
+  region: RegionDocument,
+  command: CreateRegionAmbienceZoneCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: region.audio?.emitters ?? [],
+      ambienceZones: [
+        ...(region.audio?.ambienceZones ?? []),
+        command.payload.zone
+      ]
+    }
+  };
+}
+
+function applyUpdateRegionAmbienceZone(
+  region: RegionDocument,
+  command: UpdateRegionAmbienceZoneCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: region.audio?.emitters ?? [],
+      ambienceZones: (region.audio?.ambienceZones ?? []).map((zone) =>
+        zone.zoneId === command.payload.zoneId
+          ? { ...zone, ...command.payload.patch }
+          : zone
+      )
+    }
+  };
+}
+
+function applyDeleteRegionAmbienceZone(
+  region: RegionDocument,
+  command: DeleteRegionAmbienceZoneCommand
+): RegionDocument {
+  return {
+    ...region,
+    audio: {
+      ...region.audio,
+      emitters: region.audio?.emitters ?? [],
+      ambienceZones: (region.audio?.ambienceZones ?? []).filter(
+        (zone) => zone.zoneId !== command.payload.zoneId
+      )
+    }
+  };
+}
+
 export function executeCommand(
   region: RegionDocument,
   command: SemanticCommand
@@ -1169,10 +1303,16 @@ export function executeCommand(
       updatedRegion = applySetPlacedAssetShaderOverride(region, command);
       break;
     case "SetPlacedAssetShaderParameterOverride":
-      updatedRegion = applySetPlacedAssetShaderParameterOverride(region, command);
+      updatedRegion = applySetPlacedAssetShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "ClearPlacedAssetShaderParameterOverride":
-      updatedRegion = applyClearPlacedAssetShaderParameterOverride(region, command);
+      updatedRegion = applyClearPlacedAssetShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "CreateSceneFolder":
       updatedRegion = applyCreateSceneFolder(region, command);
@@ -1219,6 +1359,24 @@ export function executeCommand(
     case "ConfigureLandscape":
       updatedRegion = applyConfigureLandscape(region, command);
       break;
+    case "CreateRegionSoundEmitter":
+      updatedRegion = applyCreateRegionSoundEmitter(region, command);
+      break;
+    case "UpdateRegionSoundEmitter":
+      updatedRegion = applyUpdateRegionSoundEmitter(region, command);
+      break;
+    case "DeleteRegionSoundEmitter":
+      updatedRegion = applyDeleteRegionSoundEmitter(region, command);
+      break;
+    case "CreateRegionAmbienceZone":
+      updatedRegion = applyCreateRegionAmbienceZone(region, command);
+      break;
+    case "UpdateRegionAmbienceZone":
+      updatedRegion = applyUpdateRegionAmbienceZone(region, command);
+      break;
+    case "DeleteRegionAmbienceZone":
+      updatedRegion = applyDeleteRegionAmbienceZone(region, command);
+      break;
     case "CreatePlayerPresence":
       updatedRegion = applyCreatePlayerPresence(region, command);
       break;
@@ -1238,10 +1396,16 @@ export function executeCommand(
       updatedRegion = applySetNPCPresenceShaderOverride(region, command);
       break;
     case "SetNPCPresenceShaderParameterOverride":
-      updatedRegion = applySetNPCPresenceShaderParameterOverride(region, command);
+      updatedRegion = applySetNPCPresenceShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "ClearNPCPresenceShaderParameterOverride":
-      updatedRegion = applyClearNPCPresenceShaderParameterOverride(region, command);
+      updatedRegion = applyClearNPCPresenceShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "RemoveNPCPresence":
       updatedRegion = applyRemoveNPCPresence(region, command);
@@ -1259,10 +1423,16 @@ export function executeCommand(
       updatedRegion = applySetItemPresenceShaderOverride(region, command);
       break;
     case "SetItemPresenceShaderParameterOverride":
-      updatedRegion = applySetItemPresenceShaderParameterOverride(region, command);
+      updatedRegion = applySetItemPresenceShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "ClearItemPresenceShaderParameterOverride":
-      updatedRegion = applyClearItemPresenceShaderParameterOverride(region, command);
+      updatedRegion = applyClearItemPresenceShaderParameterOverride(
+        region,
+        command
+      );
       break;
     case "RemoveItemPresence":
       updatedRegion = applyRemoveItemPresence(region, command);

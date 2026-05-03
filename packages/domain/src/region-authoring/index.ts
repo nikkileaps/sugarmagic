@@ -1,9 +1,6 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
-import type {
-  LandscapeSurfaceSlot,
-  ShaderReference
-} from "../surface";
+import type { LandscapeSurfaceSlot, ShaderReference } from "../surface";
 import { createDefaultSurface, createInlineSurfaceBinding } from "../surface";
 import type {
   ShaderBindingOverride,
@@ -114,6 +111,37 @@ export interface RegionGameplayPlacement {
   definitionId: string;
 }
 
+export type RegionAudioTrigger =
+  | "always"
+  | "on-enter"
+  | "random-interval"
+  | "scripted";
+
+export interface RegionSoundEmitter {
+  emitterId: string;
+  displayName: string;
+  cueDefinitionId: string | null;
+  position: [number, number, number];
+  radius: number;
+  trigger: RegionAudioTrigger;
+  enabled: boolean;
+}
+
+export interface RegionAmbienceZone {
+  zoneId: string;
+  displayName: string;
+  cueDefinitionId: string | null;
+  center: [number, number, number];
+  size: [number, number, number];
+  trigger: "on-enter" | "always";
+  enabled: boolean;
+}
+
+export interface RegionAudioState {
+  emitters: RegionSoundEmitter[];
+  ambienceZones: RegionAmbienceZone[];
+}
+
 export type RegionAreaKind =
   | "zone"
   | "interior"
@@ -208,6 +236,7 @@ export interface RegionDocument {
   areas: RegionAreaDefinition[];
   behaviors: RegionNPCBehaviorDefinition[];
   landscape: RegionLandscapeState;
+  audio?: RegionAudioState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
 }
@@ -313,19 +342,23 @@ export function createRegionNPCBehaviorTask(
     taskId: overrides.taskId ?? createRegionNPCBehaviorTaskId(),
     displayName: overrides.displayName ?? "Behavior Task",
     description:
-      typeof overrides.description === "string" && overrides.description.trim().length > 0
+      typeof overrides.description === "string" &&
+      overrides.description.trim().length > 0
         ? overrides.description
         : null,
     targetAreaId:
-      typeof overrides.targetAreaId === "string" && overrides.targetAreaId.trim().length > 0
+      typeof overrides.targetAreaId === "string" &&
+      overrides.targetAreaId.trim().length > 0
         ? overrides.targetAreaId.trim()
         : null,
     currentActivity:
-      typeof overrides.currentActivity === "string" && overrides.currentActivity.trim().length > 0
+      typeof overrides.currentActivity === "string" &&
+      overrides.currentActivity.trim().length > 0
         ? overrides.currentActivity.trim()
         : "idle",
     currentGoal:
-      typeof overrides.currentGoal === "string" && overrides.currentGoal.trim().length > 0
+      typeof overrides.currentGoal === "string" &&
+      overrides.currentGoal.trim().length > 0
         ? overrides.currentGoal.trim()
         : "idle",
     activation: createRegionBehaviorQuestBinding(overrides.activation)
@@ -334,7 +367,7 @@ export function createRegionNPCBehaviorTask(
 
 export function createRegionNPCBehaviorDefinition(
   overrides: Partial<RegionNPCBehaviorDefinition> &
-    Pick<RegionNPCBehaviorDefinition, "npcDefinitionId">,
+    Pick<RegionNPCBehaviorDefinition, "npcDefinitionId">
 ): RegionNPCBehaviorDefinition {
   return {
     behaviorId: overrides.behaviorId ?? createRegionNPCBehaviorId(),
@@ -352,7 +385,7 @@ export function createLandscapeChannelId(): string {
 
 export function createPlacedAssetInstance(
   overrides: Partial<PlacedAssetInstance> &
-    Pick<PlacedAssetInstance, "assetDefinitionId">,
+    Pick<PlacedAssetInstance, "assetDefinitionId">
 ): PlacedAssetInstance {
   return {
     instanceId: overrides.instanceId ?? createPlacedAssetInstanceIdValue(),
@@ -397,6 +430,55 @@ export function createInspectableBehaviorId(): string {
   return createUuid();
 }
 
+export function createRegionSoundEmitterId(): string {
+  return createUuid();
+}
+
+export function createRegionAmbienceZoneId(): string {
+  return createUuid();
+}
+
+export function createRegionSoundEmitter(
+  overrides: Partial<RegionSoundEmitter> = {}
+): RegionSoundEmitter {
+  return {
+    emitterId: overrides.emitterId ?? createRegionSoundEmitterId(),
+    displayName: overrides.displayName ?? "Sound Emitter",
+    cueDefinitionId: overrides.cueDefinitionId ?? null,
+    position: overrides.position ?? [0, 0, 0],
+    radius: Math.max(0.1, overrides.radius ?? 8),
+    trigger: overrides.trigger ?? "always",
+    enabled: overrides.enabled ?? true
+  };
+}
+
+export function createRegionAmbienceZone(
+  overrides: Partial<RegionAmbienceZone> = {}
+): RegionAmbienceZone {
+  return {
+    zoneId: overrides.zoneId ?? createRegionAmbienceZoneId(),
+    displayName: overrides.displayName ?? "Ambience Zone",
+    cueDefinitionId: overrides.cueDefinitionId ?? null,
+    center: overrides.center ?? [0, DEFAULT_REGION_AREA_HEIGHT / 2, 0],
+    size: overrides.size ?? [12, DEFAULT_REGION_AREA_HEIGHT, 12],
+    trigger: overrides.trigger ?? "on-enter",
+    enabled: overrides.enabled ?? true
+  };
+}
+
+export function createRegionAudioState(
+  overrides: Partial<RegionAudioState> = {}
+): RegionAudioState {
+  return {
+    emitters: (overrides.emitters ?? []).map((emitter) =>
+      createRegionSoundEmitter(emitter)
+    ),
+    ambienceZones: (overrides.ambienceZones ?? []).map((zone) =>
+      createRegionAmbienceZone(zone)
+    )
+  };
+}
+
 export function createRegionPlayerPresence(
   overrides: Partial<RegionPlayerPresence> = {}
 ): RegionPlayerPresence {
@@ -407,7 +489,8 @@ export function createRegionPlayerPresence(
 }
 
 export function createRegionNPCPresence(
-  overrides: Partial<RegionNPCPresence> & Pick<RegionNPCPresence, "npcDefinitionId">
+  overrides: Partial<RegionNPCPresence> &
+    Pick<RegionNPCPresence, "npcDefinitionId">
 ): RegionNPCPresence {
   return {
     presenceId: overrides.presenceId ?? createNPCPresenceId(),
@@ -443,7 +526,9 @@ export function createLandscapeSurfaceSlot(
     slotName: overrides.slotName ?? overrides.displayName ?? "Channel",
     surface:
       overrides.surface ??
-      createInlineSurfaceBinding(createDefaultSurface(DEFAULT_REGION_LANDSCAPE_GRASS_COLOR)),
+      createInlineSurfaceBinding(
+        createDefaultSurface(DEFAULT_REGION_LANDSCAPE_GRASS_COLOR)
+      ),
     tilingScale:
       overrides.tilingScale === undefined ? null : overrides.tilingScale
   };
@@ -520,6 +605,7 @@ export function createDefaultRegion(options: {
     areas: [],
     behaviors: [],
     landscape: createDefaultRegionLandscapeState(),
+    audio: createRegionAudioState(),
     markers: [],
     gameplayPlacements: []
   };
