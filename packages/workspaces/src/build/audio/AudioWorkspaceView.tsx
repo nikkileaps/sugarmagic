@@ -8,17 +8,14 @@
 
 import { useMemo, useState } from "react";
 import {
-  ActionIcon,
   Button,
   Group,
-  Menu,
   NumberInput,
   Select,
   Stack,
   Switch,
   Text,
-  TextInput,
-  UnstyledButton
+  TextInput
 } from "@mantine/core";
 import {
   type AudioClipDefinition,
@@ -29,7 +26,12 @@ import {
   type SoundCuePlaybackMode,
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
-import { AudioTransport, Inspector, PanelSection } from "@sugarmagic/ui";
+import {
+  AudioTransport,
+  Inspector,
+  PanelSection,
+  PanelSectionList
+} from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 
 export interface AudioWorkspaceViewProps {
@@ -103,8 +105,6 @@ export function useAudioWorkspaceView(
   const [selectedId, setSelectedId] = useState<string | null>(
     soundCueDefinitions[0]?.definitionId ?? null
   );
-  const [searchValue, setSearchValue] = useState("");
-  const [contextMenuCueId, setContextMenuCueId] = useState<string | null>(null);
 
   const selectedCue =
     soundCueDefinitions.find(
@@ -121,15 +121,6 @@ export function useAudioWorkspaceView(
       })),
     [audioClipDefinitions]
   );
-  const filteredCueDefinitions = useMemo(() => {
-    const normalized = searchValue.trim().toLowerCase();
-    if (!normalized) {
-      return soundCueDefinitions;
-    }
-    return soundCueDefinitions.filter((definition) =>
-      definition.displayName.toLowerCase().includes(normalized)
-    );
-  }, [searchValue, soundCueDefinitions]);
   const cueOptions = useMemo(
     () =>
       soundCueDefinitions.map((definition) => ({
@@ -204,94 +195,29 @@ export function useAudioWorkspaceView(
 
   return {
     leftPanel: (
-      <PanelSection
+      <PanelSectionList
         title="Cues"
         icon="🔊"
-        actions={
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            aria-label="Add cue"
-            onClick={createCue}
-          >
-            ＋
-          </ActionIcon>
+        items={soundCueDefinitions}
+        selectedId={selectedCue?.definitionId ?? null}
+        getId={(definition) => definition.definitionId}
+        getLabel={(definition) => definition.displayName}
+        getDescription={(definition) =>
+          `${definition.category} · ${definition.playback.mode}`
         }
-      >
-        <Stack gap="xs">
-          <TextInput
-            size="xs"
-            placeholder="Search cues..."
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.currentTarget.value)}
-          />
-          <Stack gap={4}>
-            {filteredCueDefinitions.map((definition) => {
-              const isSelected =
-                definition.definitionId === selectedCue?.definitionId;
-              const opened = contextMenuCueId === definition.definitionId;
-              return (
-                <Menu
-                  key={definition.definitionId}
-                  opened={opened}
-                  onChange={(next) =>
-                    setContextMenuCueId(next ? definition.definitionId : null)
-                  }
-                  withinPortal
-                >
-                  <Menu.Target>
-                    <UnstyledButton
-                      onClick={() => setSelectedId(definition.definitionId)}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        setSelectedId(definition.definitionId);
-                        setContextMenuCueId(definition.definitionId);
-                      }}
-                      styles={{
-                        root: {
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-start",
-                          gap: 2,
-                          padding: "6px 8px",
-                          borderRadius: "var(--sm-radius-sm)",
-                          background: isSelected
-                            ? "var(--sm-active-bg)"
-                            : "transparent",
-                          color: isSelected
-                            ? "var(--sm-accent-blue)"
-                            : "var(--sm-color-text)",
-                          width: "100%"
-                        }
-                      }}
-                    >
-                      <Text size="xs" fw={isSelected ? 600 : 500}>
-                        {definition.displayName}
-                      </Text>
-                      <Text size="xs" c="var(--sm-color-overlay0)">
-                        {definition.category} · {definition.playback.mode}
-                      </Text>
-                    </UnstyledButton>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Item
-                      color="red"
-                      onClick={() => deleteCue(definition.definitionId)}
-                    >
-                      Delete
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-              );
-            })}
-            {soundCueDefinitions.length === 0 ? (
-              <Text size="xs" c="var(--sm-color-overlay0)" ta="center" mt="md">
-                Add a cue, then choose clips from Library &gt; Audio.
-              </Text>
-            ) : null}
-          </Stack>
-        </Stack>
-      </PanelSection>
+        onSelect={(definitionId) => setSelectedId(definitionId)}
+        searchPlaceholder="Search cues..."
+        createLabel="Add cue"
+        onCreate={createCue}
+        emptyText="Add a cue, then choose clips from Library > Audio."
+        contextActions={[
+          {
+            label: "Delete",
+            color: "red",
+            onSelect: (definition) => deleteCue(definition.definitionId)
+          }
+        ]}
+      />
     ),
     rightPanel: (
       <Inspector selectionLabel={selectedCue?.displayName ?? "Audio"}>

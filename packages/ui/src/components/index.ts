@@ -23,6 +23,11 @@ export {
 export { ModeBar, type ModeBarItem, type ModeBarProps } from "./ModeBar";
 export { PanelSection, type PanelSectionProps } from "./PanelSection";
 export {
+  PanelSectionList,
+  type PanelSectionListContextAction,
+  type PanelSectionListProps
+} from "./PanelSectionList";
+export {
   ProjectManagerDialog,
   type ProjectManagerDialogProps
 } from "./ProjectManagerDialog";
