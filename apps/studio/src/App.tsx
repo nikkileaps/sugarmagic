@@ -1317,22 +1317,11 @@ export function App() {
   const handleCreateSoundCueDefinition = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return null;
-    const audioClipDefinitionsForSession =
-      currentSession.contentLibrary.audioClipDefinitions ?? [];
     const soundCueDefinitionsForSession =
       currentSession.contentLibrary.soundCueDefinitions ?? [];
-    const firstClip = audioClipDefinitionsForSession[0] ?? null;
     const cue = createDefaultSoundCueDefinition({
       displayName: `Sound Cue ${soundCueDefinitionsForSession.length + 1}`,
-      clips: firstClip
-        ? [
-            {
-              audioClipDefinitionId: firstClip.definitionId,
-              weight: 1,
-              sprite: null
-            }
-          ]
-        : []
+      clips: []
     });
     projectStore
       .getState()

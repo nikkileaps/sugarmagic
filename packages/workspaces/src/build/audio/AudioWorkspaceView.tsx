@@ -121,14 +121,6 @@ export function useAudioWorkspaceView(
       })),
     [audioClipDefinitions]
   );
-  const cueOptions = useMemo(
-    () =>
-      soundCueDefinitions.map((definition) => ({
-        value: definition.definitionId,
-        label: definition.displayName
-      })),
-    [soundCueDefinitions]
-  );
   const selectedCueClip = selectedCue?.clips[0]
     ? (audioClipDefinitions.find(
         (definition) =>
@@ -179,16 +171,13 @@ export function useAudioWorkspaceView(
 
   function addCueClip() {
     if (!selectedCue) return;
-    const firstClip = audioClipDefinitions[0];
-    if (!firstClip) return;
+    // Leave the slot empty so the Select renders its placeholder and the
+    // user is forced to explicitly pick a clip — silently defaulting to
+    // the first library clip caused real authoring miswires (see plan 041).
     updateCue({
       clips: [
         ...selectedCue.clips,
-        {
-          audioClipDefinitionId: firstClip.definitionId,
-          weight: 1,
-          sprite: null
-        }
+        { audioClipDefinitionId: "", weight: 1, sprite: null }
       ]
     });
   }
@@ -254,61 +243,6 @@ export function useAudioWorkspaceView(
                     })
                   }
                 />
-                <Stack gap="xs">
-                  <Group justify="space-between">
-                    <Text size="xs" fw={600}>
-                      Clips
-                    </Text>
-                    <Button
-                      size="compact-xs"
-                      variant="light"
-                      onClick={addCueClip}
-                      disabled={audioClipDefinitions.length === 0}
-                    >
-                      Add Clip
-                    </Button>
-                  </Group>
-                  {selectedCue.clips.length === 0 ? (
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      Import clips in Library &gt; Audio, then add them here.
-                    </Text>
-                  ) : null}
-                  {selectedCue.clips.map((clip, index) => (
-                    <Group key={`${clip.audioClipDefinitionId}:${index}`} grow>
-                      <Select
-                        label={`Clip ${index + 1}`}
-                        data={clipOptions}
-                        value={clip.audioClipDefinitionId}
-                        onChange={(value) =>
-                          value &&
-                          updateCueClip(index, {
-                            audioClipDefinitionId: value
-                          })
-                        }
-                        placeholder="Select clip..."
-                      />
-                      <NumberInput
-                        label="Weight"
-                        min={0}
-                        step={0.25}
-                        value={clip.weight}
-                        onChange={(value) =>
-                          updateCueClip(index, {
-                            weight: typeof value === "number" ? value : 1
-                          })
-                        }
-                      />
-                      <Button
-                        mt="lg"
-                        color="red"
-                        variant="subtle"
-                        onClick={() => removeCueClip(index)}
-                      >
-                        Remove
-                      </Button>
-                    </Group>
-                  ))}
-                </Stack>
                 <NumberInput
                   label="Volume"
                   min={0}
@@ -603,21 +537,31 @@ export function useAudioWorkspaceView(
             </PanelSection>
             <PanelSection title="Event Bindings">
               <Stack gap="xs">
-                {eventOptions.map((eventOption) => (
-                  <Select
-                    key={eventOption.value}
-                    label={eventOption.label}
-                    data={
-                      cueOptions.length > 0
-                        ? [{ value: "", label: "None" }, ...cueOptions]
-                        : [{ value: "", label: "None" }]
-                    }
-                    value={soundEventBindings[eventOption.value] ?? ""}
-                    onChange={(value) =>
-                      onSetSoundEventBinding(eventOption.value, value || null)
-                    }
-                  />
-                ))}
+                {eventOptions.map((eventOption) => {
+                  const boundCueId =
+                    soundEventBindings[eventOption.value] ?? null;
+                  const isBoundToSelectedCue =
+                    boundCueId === selectedCue.definitionId;
+                  return (
+                    <Switch
+                      key={eventOption.value}
+                      label={eventOption.label}
+                      checked={isBoundToSelectedCue}
+                      onChange={(event) => {
+                        if (event.currentTarget.checked) {
+                          onSetSoundEventBinding(
+                            eventOption.value,
+                            selectedCue.definitionId
+                          );
+                          return;
+                        }
+                        if (isBoundToSelectedCue) {
+                          onSetSoundEventBinding(eventOption.value, null);
+                        }
+                      }}
+                    />
+                  );
+                })}
               </Stack>
             </PanelSection>
             {audioMixer ? (
@@ -665,7 +609,7 @@ export function useAudioWorkspaceView(
       </Inspector>
     ),
     centerPanel: (
-      <Stack p="xl" gap="md">
+      <Stack p="xl" gap="lg">
         <Stack gap={4}>
           <Text fw={700}>Cue Audition</Text>
         </Stack>
@@ -674,7 +618,7 @@ export function useAudioWorkspaceView(
           label={selectedCue?.displayName ?? "Cue Preview"}
           disabledReason={
             selectedCue
-              ? "Choose an Audio Library clip in the cue inspector."
+              ? "Choose an Audio Library clip below."
               : "Create or select a sound cue to preview."
           }
           loop={selectedCue?.playback.mode === "loop"}
@@ -687,6 +631,77 @@ export function useAudioWorkspaceView(
           <Text size="xs" c="var(--sm-color-overlay0)">
             Clip: {selectedCueClip.displayName}
           </Text>
+        ) : null}
+        {selectedCue ? (
+          <Stack gap="sm">
+            <Group justify="space-between" align="center">
+              <Text fw={700}>Clips</Text>
+              <Button
+                size="compact-sm"
+                variant="light"
+                onClick={addCueClip}
+                disabled={audioClipDefinitions.length === 0}
+              >
+                Add Clip
+              </Button>
+            </Group>
+            {selectedCue.clips.length === 0 ? (
+              <Text size="sm" c="var(--sm-color-overlay0)">
+                {audioClipDefinitions.length === 0
+                  ? "Import clips in Library > Audio, then add them here."
+                  : "No clips yet. Click Add Clip to bind one."}
+              </Text>
+            ) : (
+              <Stack gap="md">
+                {selectedCue.clips.map((clip, index) => (
+                  <Stack
+                    key={`${clip.audioClipDefinitionId || "empty"}:${index}`}
+                    gap="xs"
+                    p="md"
+                    style={{
+                      border: "1px solid var(--sm-panel-border)",
+                      borderRadius: 8,
+                      background: "var(--sm-color-bg)"
+                    }}
+                  >
+                    <Select
+                      label={`Clip ${index + 1}`}
+                      data={clipOptions}
+                      value={clip.audioClipDefinitionId || null}
+                      onChange={(value) =>
+                        value &&
+                        updateCueClip(index, { audioClipDefinitionId: value })
+                      }
+                      placeholder="Select clip..."
+                      searchable
+                    />
+                    <Group align="end" gap="md">
+                      <NumberInput
+                        label="Weight"
+                        description="Random/sequence selection weight"
+                        min={0}
+                        step={0.25}
+                        value={clip.weight}
+                        onChange={(value) =>
+                          updateCueClip(index, {
+                            weight: typeof value === "number" ? value : 1
+                          })
+                        }
+                        w={160}
+                      />
+                      <Button
+                        color="red"
+                        variant="subtle"
+                        onClick={() => removeCueClip(index)}
+                      >
+                        Remove
+                      </Button>
+                    </Group>
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+          </Stack>
         ) : null}
       </Stack>
     ),
