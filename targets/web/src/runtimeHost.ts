@@ -45,6 +45,8 @@ import {
   type RegionDocument,
   type HUDDefinition,
   type MenuDefinition,
+  type SoundEventBindingMap,
+  type AudioMixerSettings,
   type UITheme
 } from "@sugarmagic/domain";
 import {
@@ -107,6 +109,7 @@ import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
 import { createRuntimeRenderEngineProjector } from "./RenderEngineProjector";
 import { GameUILayer } from "./GameUILayer";
+import { WebAudioAdapter } from "./audio";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -145,6 +148,8 @@ export interface WebRuntimeStartState {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  soundEventBindings: SoundEventBindingMap;
+  audioMixer: AudioMixerSettings;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
 }
@@ -287,7 +292,10 @@ function foliageMaterialHasTexture(material: THREE.Material): boolean {
   return Boolean(material.map || material.alphaMap || material.emissiveMap);
 }
 
-function validateRenderableAsset(object: SceneObject, renderable: THREE.Object3D): string | null {
+function validateRenderableAsset(
+  object: SceneObject,
+  renderable: THREE.Object3D
+): string | null {
   if (object.assetKind !== "foliage") {
     return null;
   }
@@ -297,7 +305,9 @@ function validateRenderableAsset(object: SceneObject, renderable: THREE.Object3D
     return "Foliage GLB loaded without any mesh primitives.";
   }
 
-  const hasUv = meshes.some((mesh) => Boolean(mesh.geometry.getAttribute("uv")));
+  const hasUv = meshes.some((mesh) =>
+    Boolean(mesh.geometry.getAttribute("uv"))
+  );
   if (!hasUv) {
     return "Foliage GLB is missing UV data required for leaf texturing.";
   }
@@ -347,7 +357,9 @@ function readRendererDebugStats(renderer: WebGPURenderer): {
   };
 }
 
-function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost {
+function createSpellCastFeedbackHost(
+  parent: HTMLElement
+): SpellCastFeedbackHost {
   if (!document.getElementById("sm-web-spell-cast-feedback-styles")) {
     const style = document.createElement("style");
     style.id = "sm-web-spell-cast-feedback-styles";
@@ -425,7 +437,9 @@ function createSpellCastFeedbackHost(parent: HTMLElement): SpellCastFeedbackHost
   };
 }
 
-function createRuntimePluginBannerHost(parent: HTMLElement): RuntimePluginBannerHost {
+function createRuntimePluginBannerHost(
+  parent: HTMLElement
+): RuntimePluginBannerHost {
   if (!document.getElementById("sm-web-plugin-banner-styles")) {
     const style = document.createElement("style");
     style.id = "sm-web-plugin-banner-styles";
@@ -485,7 +499,9 @@ function getActiveRegion(
   activeRegionId: string | null | undefined
 ): RegionDocument | null {
   if (activeRegionId) {
-    const activeRegion = regions.find((region) => region.identity.id === activeRegionId);
+    const activeRegion = regions.find(
+      (region) => region.identity.id === activeRegionId
+    );
     if (activeRegion) return activeRegion;
   }
   return regions[0] ?? null;
@@ -523,10 +539,16 @@ export function createWebRuntimeHost(
     compileProfile: request.compileProfile,
     logger: {
       warn(message: string, payload?: Record<string, unknown>) {
-        console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        console.warn("[web-runtime] shader-runtime", {
+          message,
+          ...(payload ?? {})
+        });
       },
       debug(message: string, payload?: Record<string, unknown>) {
-        console.debug("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+        console.debug("[web-runtime] shader-runtime", {
+          message,
+          ...(payload ?? {})
+        });
       }
     }
   });
@@ -535,7 +557,9 @@ export function createWebRuntimeHost(
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
-  let playerVisualController: ReturnType<typeof createPlayerVisualController> | null = null;
+  let playerVisualController: ReturnType<
+    typeof createPlayerVisualController
+  > | null = null;
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
@@ -543,9 +567,9 @@ export function createWebRuntimeHost(
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
   let debugHud: ReturnType<typeof createRuntimeDebugHud> | null = null;
-  let gameplayAssembly:
-    | ReturnType<typeof createRuntimeGameplayAssembly>
-    | null = null;
+  let gameplayAssembly: ReturnType<
+    typeof createRuntimeGameplayAssembly
+  > | null = null;
   let playerEyeHeight = 1.62;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let pluginBannerHost: RuntimePluginBannerHost | null = null;
@@ -554,6 +578,7 @@ export function createWebRuntimeHost(
   let uiContextStore: UIContextStore | null = null;
   let uiStateStore: UIStateStore | null = null;
   let uiActionRegistry: UIActionRegistry | null = null;
+  let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
   let started = false;
@@ -596,6 +621,8 @@ export function createWebRuntimeHost(
     uiContextStore = null;
     uiStateStore = null;
     uiActionRegistry = null;
+    webAudioAdapter?.dispose();
+    webAudioAdapter = null;
     playerEyeHeight = 1.62;
 
     for (const entry of sceneObjectEntries.values()) {
@@ -640,9 +667,41 @@ export function createWebRuntimeHost(
     }
     const current = uiStateStore.getState();
     if (current.visibleMenuKey === null) {
+      const previousMenuKey = current.visibleMenuKey;
       uiStateStore.setState({ isPaused: true, visibleMenuKey: "pause-menu" });
+      emitMenuSoundTransition(previousMenuKey, "pause-menu");
     } else if (current.visibleMenuKey === "pause-menu") {
+      const previousMenuKey = current.visibleMenuKey;
       uiStateStore.setState({ isPaused: false, visibleMenuKey: null });
+      emitMenuSoundTransition(previousMenuKey, null);
+    }
+  }
+
+  function emitMenuSoundTransition(
+    previousMenuKey: string | null,
+    nextMenuKey: string | null
+  ) {
+    if (previousMenuKey === nextMenuKey) {
+      return;
+    }
+    if (previousMenuKey !== null) {
+      gameplaySession?.audioController.stopInstance("game.menu-open");
+      gameplaySession?.audioController.emitEvent("game.menu-close", {
+        instanceKey: "game.menu-close"
+      });
+    }
+    if (nextMenuKey !== null) {
+      gameplaySession?.audioController.emitEvent("game.menu-open", {
+        instanceKey: "game.menu-open"
+      });
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (ownerWindow.document.visibilityState === "hidden") {
+      webAudioAdapter?.pauseAll();
+    } else {
+      webAudioAdapter?.resumeAll();
     }
   }
 
@@ -702,7 +761,10 @@ export function createWebRuntimeHost(
       // separate slerp pass for now. Only update when there's actual
       // movement so standing still keeps the last-faced direction.
       if (velocity && speed > 0.01) {
-        playerVisualController.root.rotation.y = Math.atan2(velocity.x, velocity.z);
+        playerVisualController.root.rotation.y = Math.atan2(
+          velocity.x,
+          velocity.z
+        );
       }
 
       playerVisualController.update(delta);
@@ -727,6 +789,21 @@ export function createWebRuntimeHost(
       root.clientWidth || 1,
       root.clientHeight || 1
     );
+    gameplaySession?.audioController.setListenerPose({
+      mode: "player",
+      position: playerVisualController
+        ? [
+            playerVisualController.root.position.x,
+            playerVisualController.root.position.y + playerEyeHeight,
+            playerVisualController.root.position.z
+          ]
+        : [camera.position.x, camera.position.y, camera.position.z],
+      forward: [
+        cameraSnapshot.forward.x,
+        cameraSnapshot.forward.y,
+        cameraSnapshot.forward.z
+      ]
+    });
     gameplaySession?.syncBillboards(cameraSnapshot, delta);
     const renderBindings = new Map<number, THREE.Object3D>();
     for (const binding of gameplaySession?.getBillboardBindings() ?? []) {
@@ -777,10 +854,24 @@ export function createWebRuntimeHost(
       ownerWindow.addEventListener("resize", handleResize);
       ownerWindow.addEventListener("beforeunload", dispose);
       ownerWindow.addEventListener("keydown", handlePauseKey);
+      ownerWindow.document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
     }
 
     disposeRuntime();
     currentAssetSources = state.assetSources;
+    webAudioAdapter = new WebAudioAdapter({
+      ownerWindow,
+      root,
+      logger: console
+    });
+    webAudioAdapter.syncProject({
+      contentLibrary: state.contentLibrary,
+      assetSources: state.assetSources,
+      mixer: state.audioMixer
+    });
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -790,7 +881,10 @@ export function createWebRuntimeHost(
       ownerWindow,
       logger: {
         warn(message, payload) {
-          console.warn("[web-runtime] billboard-asset", { message, ...(payload ?? {}) });
+          console.warn("[web-runtime] billboard-asset", {
+            message,
+            ...(payload ?? {})
+          });
         }
       }
     });
@@ -814,10 +908,16 @@ export function createWebRuntimeHost(
       compileProfile: request.compileProfile,
       logger: {
         warn(message: string, payload?: Record<string, unknown>) {
-          console.warn("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+          console.warn("[web-runtime] shader-runtime", {
+            message,
+            ...(payload ?? {})
+          });
         },
         debug(message: string, payload?: Record<string, unknown>) {
-          console.debug("[web-runtime] shader-runtime", { message, ...(payload ?? {}) });
+          console.debug("[web-runtime] shader-runtime", {
+            message,
+            ...(payload ?? {})
+          });
         }
       }
     });
@@ -866,8 +966,13 @@ export function createWebRuntimeHost(
               // transforms actually move the rendered mesh. Required
               // for character models post-Plan-038; harmless for
               // static-mesh assets.
-              const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
-              const validationError = validateRenderableAsset(object, renderable);
+              const renderable = cloneSkinnedObject(
+                gltf.scene
+              ) as THREE.Object3D;
+              const validationError = validateRenderableAsset(
+                object,
+                renderable
+              );
               if (validationError) {
                 console.error("[web-runtime] invalid-asset-payload", {
                   instanceId: object.instanceId,
@@ -919,7 +1024,8 @@ export function createWebRuntimeHost(
                     )
                   : null;
                 const idleBindingId =
-                  npcDefinition?.presentation.animationAssetBindings.idle ?? null;
+                  npcDefinition?.presentation.animationAssetBindings.idle ??
+                  null;
                 const idleAnimDef = idleBindingId
                   ? getCharacterAnimationDefinition(
                       state.contentLibrary,
@@ -927,9 +1033,8 @@ export function createWebRuntimeHost(
                     )
                   : null;
                 const idleSourceUrl = idleAnimDef
-                  ? state.assetSources[
-                      idleAnimDef.source.relativeAssetPath
-                    ] ?? null
+                  ? (state.assetSources[idleAnimDef.source.relativeAssetPath] ??
+                    null)
                   : null;
                 if (idleSourceUrl) {
                   void gltfLoader
@@ -937,7 +1042,9 @@ export function createWebRuntimeHost(
                     .then((animGltf) => {
                       const clip = animGltf.animations[0];
                       if (!clip) return;
-                      const npcEntry = sceneObjectEntries.get(object.instanceId);
+                      const npcEntry = sceneObjectEntries.get(
+                        object.instanceId
+                      );
                       if (!npcEntry) return;
                       const mixer = new THREE.AnimationMixer(renderable);
                       const action = mixer.clipAction(clip);
@@ -988,10 +1095,14 @@ export function createWebRuntimeHost(
     world = new World();
     uiContextStore = createUIContextStore();
     uiStateStore = createUIStateStore({
-      visibleMenuKey: state.menuDefinitions.some((menu) => menu.menuKey === "start-menu")
+      visibleMenuKey: state.menuDefinitions.some(
+        (menu) => menu.menuKey === "start-menu"
+      )
         ? "start-menu"
         : null,
-      isPaused: state.menuDefinitions.some((menu) => menu.menuKey === "start-menu")
+      isPaused: state.menuDefinitions.some(
+        (menu) => menu.menuKey === "start-menu"
+      )
     });
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
@@ -1018,7 +1129,7 @@ export function createWebRuntimeHost(
       state.installedPluginIds,
       state.pluginConfigurations,
       state.pluginRuntimeEnvironment ?? {},
-      state.pluginBootPayloads ?? {},
+      state.pluginBootPayloads ?? {}
     );
     console.info("[web-runtime] plugin-bootstrap", {
       installedPluginIds: state.installedPluginIds,
@@ -1026,7 +1137,9 @@ export function createWebRuntimeHost(
         pluginId: configuration.pluginId,
         enabled: configuration.enabled
       })),
-      runtimePluginIds: pluginManager.getPlugins().map((plugin) => plugin.pluginId),
+      runtimePluginIds: pluginManager
+        .getPlugins()
+        .map((plugin) => plugin.pluginId),
       conversationProviderContributionIds: pluginManager
         .getContributions("conversation.provider")
         .map((contribution) => contribution.payload.providerId)
@@ -1043,7 +1156,8 @@ export function createWebRuntimeHost(
       playerDefinition: state.playerDefinition,
       contentLibrary: state.contentLibrary,
       assetSources: state.assetSources,
-      activeAnimationSlot: state.playerDefinition.presentation.animationAssetBindings.idle
+      activeAnimationSlot: state.playerDefinition.presentation
+        .animationAssetBindings.idle
         ? "idle"
         : null,
       isPlaying: true
@@ -1072,6 +1186,9 @@ export function createWebRuntimeHost(
       npcDefinitions: state.npcDefinitions,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
+      contentLibrary: state.contentLibrary,
+      soundEventBindings: state.soundEventBindings,
+      audioMixer: state.audioMixer,
       pluginManager,
       // Closure over `currentAssetSources` so the inventory UI re-resolves
       // thumbnail URLs against the current map (which can change when the
@@ -1079,6 +1196,9 @@ export function createWebRuntimeHost(
       getAssetUrl: (path) => currentAssetSources?.[path],
       onSpellCastSuccess: (feedback) => {
         spellCastFeedbackHost?.show(feedback.message);
+      },
+      onAudioCommands: (commands) => {
+        webAudioAdapter?.handleCommands(commands);
       },
       onItemPresenceCollected: (presenceId) => {
         const entry = sceneObjectEntries.get(presenceId);
@@ -1089,6 +1209,16 @@ export function createWebRuntimeHost(
       }
     });
     gameplaySession = gameplayAssembly.gameplaySession;
+    emitMenuSoundTransition(null, uiStateStore.getState().visibleMenuKey);
+    movementSystem.setPlayerMovementChangeHandler((isMoving) => {
+      if (isMoving) {
+        gameplaySession?.audioController.emitEvent("player.footstep", {
+          instanceKey: "player.footstep"
+        });
+      } else {
+        gameplaySession?.audioController.stopInstance("player.footstep");
+      }
+    });
     if (adapter.boot.hostKind === "studio") {
       gameplaySession.initializeDebugBillboards();
       debugHud = createRuntimeDebugHud({
@@ -1105,16 +1235,17 @@ export function createWebRuntimeHost(
           }
           return readRendererDebugStats(renderer);
         },
-        getGameplaySessionSnapshot: () => gameplaySession?.getDebugHudSnapshot() ?? {
-          activeEntityCount: 0,
-          activeSystemCount: 0,
-          activeNpcCount: 0,
-          activeQuestCount: 0,
-          currentSceneId: null,
-          currentAreaDisplayName: null,
-          playerPosition: null,
-          dialogueActive: false
-        },
+        getGameplaySessionSnapshot: () =>
+          gameplaySession?.getDebugHudSnapshot() ?? {
+            activeEntityCount: 0,
+            activeSystemCount: 0,
+            activeNpcCount: 0,
+            activeQuestCount: 0,
+            currentSceneId: null,
+            currentAreaDisplayName: null,
+            playerPosition: null,
+            dialogueActive: false
+          },
         setDebugBillboardsEnabled: (enabled) => {
           gameplaySession?.setDebugBillboardsEnabled(enabled);
         },
@@ -1164,7 +1295,23 @@ export function createWebRuntimeHost(
         theme: state.uiTheme,
         uiContextStore,
         uiStateStore,
-        onAction: (action) => uiActionRegistry?.dispatch(action, world)
+        onAction: (action) => {
+          const previousMenuKey =
+            uiStateStore?.getState().visibleMenuKey ?? null;
+          gameplaySession?.audioController.emitEvent("ui.click", {
+            instanceKey: `ui.click:${action.action}`
+          });
+          uiActionRegistry?.dispatch(action, world);
+          emitMenuSoundTransition(
+            previousMenuKey,
+            uiStateStore?.getState().visibleMenuKey ?? null
+          );
+        },
+        onHover: (action) => {
+          gameplaySession?.audioController.emitEvent("ui.hover", {
+            instanceKey: `ui.hover:${action?.action ?? "passive"}`
+          });
+        }
       })
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay
@@ -1184,6 +1331,10 @@ export function createWebRuntimeHost(
     ownerWindow.removeEventListener("resize", handleResize);
     ownerWindow.removeEventListener("beforeunload", dispose);
     ownerWindow.removeEventListener("keydown", handlePauseKey);
+    ownerWindow.document.removeEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
 
     disposeRuntime();
     renderEngineProjector.reset();

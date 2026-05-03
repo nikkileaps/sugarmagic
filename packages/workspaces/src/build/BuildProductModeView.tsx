@@ -12,6 +12,8 @@ import { Button, Group, Modal, Stack, Text } from "@mantine/core";
 import type {
   SemanticCommand,
   AssetDefinition,
+  AudioClipDefinition,
+  AudioMixerSettings,
   DocumentDefinition,
   EnvironmentDefinition,
   FlowerTypeDefinition,
@@ -26,6 +28,9 @@ import type {
   SurfaceBinding,
   ShaderParameterOverride,
   ShaderGraphDocument,
+  RuntimeSoundEventKey,
+  SoundCueDefinition,
+  SoundEventBindingMap,
   TextureDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
@@ -51,6 +56,7 @@ import { useSpatialWorkspaceView } from "./spatial";
 import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
 import { useAssetsWorkspaceView } from "./assets";
+import { useAudioWorkspaceView } from "./audio";
 import { useSurfaceLibraryView } from "./surfaces";
 
 const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
@@ -59,6 +65,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "spatial", label: "Spatial", icon: "🗺️" },
   { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
+  { id: "audio", label: "Audio", icon: "🔊" },
   { id: "surfaces", label: "Surfaces", icon: "🪴" },
   { id: "assets", label: "Assets", icon: "📦" }
 ];
@@ -80,6 +87,11 @@ export interface BuildProductModeViewProps {
   documentDefinitions: DocumentDefinition[];
   environmentDefinitions: EnvironmentDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
+  audioClipDefinitions: AudioClipDefinition[];
+  soundCueDefinitions: SoundCueDefinition[];
+  assetSources: Record<string, string>;
+  soundEventBindings: SoundEventBindingMap;
+  audioMixer: AudioMixerSettings | null;
   npcDefinitions: NPCDefinition[];
   questDefinitions: QuestDefinition[];
   getViewportElement: () => HTMLElement | null;
@@ -135,6 +147,17 @@ export interface BuildProductModeViewProps {
     patch: Partial<SurfaceDefinition>
   ) => void;
   onRemoveSurfaceDefinition: (definitionId: string) => void;
+  onCreateSoundCueDefinition: () => SoundCueDefinition | null;
+  onUpdateSoundCueDefinition: (
+    definitionId: string,
+    patch: Partial<SoundCueDefinition>
+  ) => void;
+  onRemoveSoundCueDefinition: (definitionId: string) => void;
+  onSetSoundEventBinding: (
+    eventKey: RuntimeSoundEventKey,
+    soundCueDefinitionId: string | null
+  ) => void;
+  onUpdateAudioMixer: (patch: Partial<AudioMixerSettings>) => void;
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string | null) => void;
   activeMaskPaintTarget: PaintedMaskTargetAddress | null;
@@ -175,6 +198,11 @@ export function useBuildProductModeView(
     documentDefinitions,
     environmentDefinitions,
     shaderDefinitions,
+    audioClipDefinitions,
+    soundCueDefinitions,
+    assetSources,
+    soundEventBindings,
+    audioMixer,
     npcDefinitions,
     questDefinitions,
     getViewportElement,
@@ -205,6 +233,11 @@ export function useBuildProductModeView(
     onCreateSurfaceDefinition,
     onUpdateSurfaceDefinition,
     onRemoveSurfaceDefinition,
+    onCreateSoundCueDefinition,
+    onUpdateSoundCueDefinition,
+    onRemoveSoundCueDefinition,
+    onSetSoundEventBinding,
+    onUpdateAudioMixer,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     activeMaskPaintTarget,
@@ -223,7 +256,7 @@ export function useBuildProductModeView(
       (definition) => definition.definitionId === selectedAssetDefinitionIdState
     )
       ? selectedAssetDefinitionIdState
-      : assetDefinitions[0]?.definitionId ?? null;
+      : (assetDefinitions[0]?.definitionId ?? null);
 
   const selectedEnvironment = useMemo(() => {
     if (environmentDefinitions.length === 0) return null;
@@ -236,7 +269,8 @@ export function useBuildProductModeView(
 
   const layoutView = useLayoutWorkspaceView({
     isActive: activeBuildKind === "layout",
-    getViewportElement: activeBuildKind === "layout" ? getViewportElement : () => null,
+    getViewportElement:
+      activeBuildKind === "layout" ? getViewportElement : () => null,
     viewportStore,
     selectedIds,
     onSelect,
@@ -247,6 +281,7 @@ export function useBuildProductModeView(
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     documentDefinitions,
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
+    soundCueDefinitions,
     onImportAsset,
     renderInspectorSections: renderLayoutInspectorSections,
     onEditAssetDefinition: (definitionId) => {
@@ -424,10 +459,24 @@ export function useBuildProductModeView(
     onNavigateToTarget
   });
 
+  const audioView = useAudioWorkspaceView({
+    audioClipDefinitions,
+    soundCueDefinitions,
+    assetSources,
+    soundEventBindings,
+    audioMixer,
+    onCreateSoundCueDefinition,
+    onUpdateSoundCueDefinition,
+    onRemoveSoundCueDefinition,
+    onSetSoundEventBinding,
+    onUpdateAudioMixer
+  });
+
   const assetsView = useAssetsWorkspaceView({
     assetDefinitions,
     contentLibrary:
-      session?.contentLibrary ?? createEmptyContentLibrarySnapshot("empty:content-library"),
+      session?.contentLibrary ??
+      createEmptyContentLibrarySnapshot("empty:content-library"),
     surfaceDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
@@ -479,18 +528,21 @@ export function useBuildProductModeView(
         : activeBuildKind === "spatial"
           ? spatialView
           : activeBuildKind === "behavior"
-          ? behaviorView
-            : activeBuildKind === "environment"
-              ? environmentView
-              : activeBuildKind === "surfaces"
-                ? surfacesView
-                : assetsView;
+            ? behaviorView
+            : activeBuildKind === "audio"
+              ? audioView
+              : activeBuildKind === "environment"
+                ? environmentView
+                : activeBuildKind === "surfaces"
+                  ? surfacesView
+                  : assetsView;
 
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||
     activeBuildKind === "landscape" ||
     activeBuildKind === "spatial" ||
-    activeBuildKind === "behavior"
+    activeBuildKind === "behavior" ||
+    activeBuildKind === "audio"
       ? {
           items: regions,
           activeId: activeRegionId,
@@ -543,14 +595,16 @@ export function useBuildProductModeView(
           )}
           {activeView.leftPanel}
         </Stack>
-      ) : activeView.leftPanel ?? null,
+      ) : (
+        (activeView.leftPanel ?? null)
+      ),
 
     rightPanel: activeView.rightPanel,
     centerPanel: activeView.centerPanel,
     viewportOverlay: activeView.viewportOverlay,
     environmentOverrideId:
       activeBuildKind === "environment"
-        ? selectedEnvironment?.definitionId ?? null
+        ? (selectedEnvironment?.definitionId ?? null)
         : null
   };
 }

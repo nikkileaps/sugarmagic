@@ -9,7 +9,14 @@
  * Accepts plugin-owned inspector sections so build-side shell contributions can extend the region inspector without duplicating layout state.
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  type ReactNode
+} from "react";
 import {
   ActionIcon,
   Box,
@@ -30,7 +37,8 @@ import type {
   NPCDefinition,
   PlayerDefinition,
   SemanticCommand,
-  RegionDocument
+  RegionDocument,
+  SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
   createInspectableBehaviorId,
@@ -54,6 +62,7 @@ import type { ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
+import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 
@@ -76,6 +85,7 @@ export interface LayoutWorkspaceViewProps {
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
+  soundCueDefinitions: SoundCueDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   renderInspectorSections?: (context: {
@@ -94,10 +104,19 @@ function buildSceneTree(
   npcDefinitions: NPCDefinition[]
 ): SceneExplorerNode[] {
   const assetKindsByDefinitionId = new Map(
-    assetDefinitions.map((definition) => [definition.definitionId, definition.assetKind])
+    assetDefinitions.map((definition) => [
+      definition.definitionId,
+      definition.assetKind
+    ])
   );
-  const foldersByParent = new Map<string | null, RegionDocument["scene"]["folders"]>();
-  const assetsByParent = new Map<string | null, RegionDocument["scene"]["placedAssets"]>();
+  const foldersByParent = new Map<
+    string | null,
+    RegionDocument["scene"]["folders"]
+  >();
+  const assetsByParent = new Map<
+    string | null,
+    RegionDocument["scene"]["placedAssets"]
+  >();
 
   for (const folder of region.scene.folders) {
     const siblings = foldersByParent.get(folder.parentFolderId) ?? [];
@@ -111,35 +130,43 @@ function buildSceneTree(
     assetsByParent.set(asset.parentFolderId, siblings);
   }
 
-  const buildChildren = (parentFolderId: string | null): SceneExplorerNode[] => {
-    const childFolders = (foldersByParent.get(parentFolderId) ?? []).map((folder) => ({
-      type: "folder" as const,
-      folderId: folder.folderId,
-      displayName: folder.displayName,
-      children: buildChildren(folder.folderId)
-    }));
+  const buildChildren = (
+    parentFolderId: string | null
+  ): SceneExplorerNode[] => {
+    const childFolders = (foldersByParent.get(parentFolderId) ?? []).map(
+      (folder) => ({
+        type: "folder" as const,
+        folderId: folder.folderId,
+        displayName: folder.displayName,
+        children: buildChildren(folder.folderId)
+      })
+    );
 
-    const childAssets = (assetsByParent.get(parentFolderId) ?? []).map((asset) => {
-      const documentDefinition = asset.inspectable
-        ? documentDefinitions.find(
-            (definition) =>
-              definition.definitionId === asset.inspectable?.documentDefinitionId
-          ) ?? null
-        : null;
+    const childAssets = (assetsByParent.get(parentFolderId) ?? []).map(
+      (asset) => {
+        const documentDefinition = asset.inspectable
+          ? (documentDefinitions.find(
+              (definition) =>
+                definition.definitionId ===
+                asset.inspectable?.documentDefinitionId
+            ) ?? null)
+          : null;
 
-      return {
-        type: "entity" as const,
-        instanceId: asset.instanceId,
-        displayName:
-          asset.inspectable && documentDefinition
-            ? `${asset.displayName} · ${documentDefinition.displayName}`
-            : asset.displayName,
-        entityKind: "asset" as const,
-        assetKind: assetKindsByDefinitionId.get(asset.assetDefinitionId) ?? "asset",
-        assetDefinitionId: asset.assetDefinitionId,
-        visible: true
-      };
-    });
+        return {
+          type: "entity" as const,
+          instanceId: asset.instanceId,
+          displayName:
+            asset.inspectable && documentDefinition
+              ? `${asset.displayName} · ${documentDefinition.displayName}`
+              : asset.displayName,
+          entityKind: "asset" as const,
+          assetKind:
+            assetKindsByDefinitionId.get(asset.assetDefinitionId) ?? "asset",
+          assetDefinitionId: asset.assetDefinitionId,
+          visible: true
+        };
+      }
+    );
 
     return [...childFolders, ...childAssets];
   };
@@ -228,6 +255,7 @@ export function useLayoutWorkspaceView(
     itemDefinitions,
     documentDefinitions,
     npcDefinitions,
+    soundCueDefinitions,
     onEditAssetDefinition,
     onImportAsset,
     renderInspectorSections
@@ -271,7 +299,9 @@ export function useLayoutWorkspaceView(
 
   useEffect(() => {
     if (!isActive) return;
-    getLayoutWorkspaceForViewport(getViewportElementRef.current())?.syncOverlays();
+    getLayoutWorkspaceForViewport(
+      getViewportElementRef.current()
+    )?.syncOverlays();
   }, [isActive, selectedIds, region]);
 
   useEffect(() => {
@@ -424,17 +454,20 @@ export function useLayoutWorkspaceView(
     return (
       documentDefinitions.find(
         (definition) =>
-          definition.definitionId === selectedAsset.inspectable?.documentDefinitionId
+          definition.definitionId ===
+          selectedAsset.inspectable?.documentDefinitionId
       ) ?? null
     );
   }, [documentDefinitions, selectedAsset]);
 
   const selectedSceneLabel =
     (selectedIds.length === 0 && selectedFolderId === SCENE_ROOT_FOLDER_ID
-      ? region?.displayName ?? null
+      ? (region?.displayName ?? null)
       : null) ??
     selectedAsset?.displayName ??
-    (selectedPlayerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
+    (selectedPlayerPresence
+      ? (playerDefinition?.displayName ?? "Player")
+      : null) ??
     selectedNPCDefinition?.displayName ??
     selectedItemDefinition?.displayName ??
     null;
@@ -471,8 +504,12 @@ export function useLayoutWorkspaceView(
       const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
       if (!source) return;
 
-      const nextPosition: [number, number, number] = [...source.transform.position];
-      const nextRotation: [number, number, number] = [...source.transform.rotation];
+      const nextPosition: [number, number, number] = [
+        ...source.transform.position
+      ];
+      const nextRotation: [number, number, number] = [
+        ...source.transform.rotation
+      ];
       const nextScale: [number, number, number] = [...source.transform.scale];
 
       if (transformKind === "position") nextPosition[axis] = value;
@@ -599,166 +636,193 @@ export function useLayoutWorkspaceView(
     [getRegion, onCommand]
   );
 
-  const handleDuplicateAsset = useCallback((instanceId: string) => {
-    if (!region) return;
-    const asset = region.scene.placedAssets.find(
-      (candidate) => candidate.instanceId === instanceId
-    );
-    if (!asset) return;
+  const handleDuplicateAsset = useCallback(
+    (instanceId: string) => {
+      if (!region) return;
+      const asset = region.scene.placedAssets.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      if (!asset) return;
 
-    const duplicatedInstanceId = createPlacedAssetInstanceId(asset.displayName);
-    onCommand({
-      kind: "DuplicatePlacedAsset",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: duplicatedInstanceId
-      },
-      payload: {
-        sourceInstanceId: asset.instanceId,
-        duplicatedInstanceId,
-        positionOffset: [1, 0, 1]
-      }
-    });
-    onSelect([duplicatedInstanceId]);
-  }, [onCommand, onSelect, region]);
-
-  const handleDeleteEntityFromScene = useCallback((instanceId: string) => {
-    if (!region) return;
-    const asset = region.scene.placedAssets.find(
-      (candidate) => candidate.instanceId === instanceId
-    );
-    const playerPresence =
-      region.scene.playerPresence?.presenceId === instanceId
-        ? region.scene.playerPresence
-        : null;
-    const npcPresence =
-      region.scene.npcPresences.find(
-        (candidate) => candidate.presenceId === instanceId
-      ) ?? null;
-    const itemPresence =
-      region.scene.itemPresences.find(
-        (candidate) => candidate.presenceId === instanceId
-      ) ?? null;
-
-    const label =
-      asset?.displayName ??
-      (playerPresence ? playerDefinition?.displayName ?? "Player" : null) ??
-      (npcPresence
-        ? npcDefinitions.find(
-            (definition) => definition.definitionId === npcPresence.npcDefinitionId
-          )?.displayName ?? "NPC"
-        : null) ??
-      (itemPresence
-        ? itemDefinitions.find(
-            (definition) => definition.definitionId === itemPresence.itemDefinitionId
-          )?.displayName ?? "Item"
-        : null);
-
-    if (!label) return;
-    if (!window.confirm(`Remove ${label} from this scene?`)) return;
-
-    if (asset) {
+      const duplicatedInstanceId = createPlacedAssetInstanceId(
+        asset.displayName
+      );
       onCommand({
-        kind: "RemovePlacedAsset",
+        kind: "DuplicatePlacedAsset",
         target: {
           aggregateKind: "region-document",
           aggregateId: region.identity.id
         },
         subject: {
           subjectKind: "placed-asset",
-          subjectId: asset.instanceId
+          subjectId: duplicatedInstanceId
         },
         payload: {
-          instanceId: asset.instanceId
+          sourceInstanceId: asset.instanceId,
+          duplicatedInstanceId,
+          positionOffset: [1, 0, 1]
         }
       });
-    } else if (playerPresence) {
+      onSelect([duplicatedInstanceId]);
+    },
+    [onCommand, onSelect, region]
+  );
+
+  const handleDeleteEntityFromScene = useCallback(
+    (instanceId: string) => {
+      if (!region) return;
+      const asset = region.scene.placedAssets.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      const playerPresence =
+        region.scene.playerPresence?.presenceId === instanceId
+          ? region.scene.playerPresence
+          : null;
+      const npcPresence =
+        region.scene.npcPresences.find(
+          (candidate) => candidate.presenceId === instanceId
+        ) ?? null;
+      const itemPresence =
+        region.scene.itemPresences.find(
+          (candidate) => candidate.presenceId === instanceId
+        ) ?? null;
+
+      const label =
+        asset?.displayName ??
+        (playerPresence ? (playerDefinition?.displayName ?? "Player") : null) ??
+        (npcPresence
+          ? (npcDefinitions.find(
+              (definition) =>
+                definition.definitionId === npcPresence.npcDefinitionId
+            )?.displayName ?? "NPC")
+          : null) ??
+        (itemPresence
+          ? (itemDefinitions.find(
+              (definition) =>
+                definition.definitionId === itemPresence.itemDefinitionId
+            )?.displayName ?? "Item")
+          : null);
+
+      if (!label) return;
+      if (!window.confirm(`Remove ${label} from this scene?`)) return;
+
+      if (asset) {
+        onCommand({
+          kind: "RemovePlacedAsset",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "placed-asset",
+            subjectId: asset.instanceId
+          },
+          payload: {
+            instanceId: asset.instanceId
+          }
+        });
+      } else if (playerPresence) {
+        onCommand({
+          kind: "RemovePlayerPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "player-presence",
+            subjectId: playerPresence.presenceId
+          },
+          payload: {
+            presenceId: playerPresence.presenceId
+          }
+        });
+      } else if (npcPresence) {
+        onCommand({
+          kind: "RemoveNPCPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "npc-presence",
+            subjectId: npcPresence.presenceId
+          },
+          payload: {
+            presenceId: npcPresence.presenceId
+          }
+        });
+      } else if (itemPresence) {
+        onCommand({
+          kind: "RemoveItemPresence",
+          target: {
+            aggregateKind: "region-document",
+            aggregateId: region.identity.id
+          },
+          subject: {
+            subjectKind: "item-presence",
+            subjectId: itemPresence.presenceId
+          },
+          payload: {
+            presenceId: itemPresence.presenceId
+          }
+        });
+      }
+
+      onSelect([]);
+    },
+    [
+      itemDefinitions,
+      npcDefinitions,
+      onCommand,
+      onSelect,
+      playerDefinition,
+      region
+    ]
+  );
+
+  const handleDeleteFolder = useCallback(
+    (folderId: string) => {
+      if (!region) return;
+      if (
+        !window.confirm(
+          "Delete this folder? Items inside it will move to the parent folder."
+        )
+      ) {
+        return;
+      }
+
       onCommand({
-        kind: "RemovePlayerPresence",
+        kind: "DeleteSceneFolder",
         target: {
           aggregateKind: "region-document",
           aggregateId: region.identity.id
         },
-        subject: {
-          subjectKind: "player-presence",
-          subjectId: playerPresence.presenceId
-        },
-        payload: {
-          presenceId: playerPresence.presenceId
-        }
+        subject: { subjectKind: "scene-folder", subjectId: folderId },
+        payload: { folderId }
       });
-    } else if (npcPresence) {
-      onCommand({
-        kind: "RemoveNPCPresence",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: region.identity.id
-        },
-        subject: {
-          subjectKind: "npc-presence",
-          subjectId: npcPresence.presenceId
-        },
-        payload: {
-          presenceId: npcPresence.presenceId
-        }
-      });
-    } else if (itemPresence) {
-      onCommand({
-        kind: "RemoveItemPresence",
-        target: {
-          aggregateKind: "region-document",
-          aggregateId: region.identity.id
-        },
-        subject: {
-          subjectKind: "item-presence",
-          subjectId: itemPresence.presenceId
-        },
-        payload: {
-          presenceId: itemPresence.presenceId
-        }
-      });
-    }
 
-    onSelect([]);
-  }, [itemDefinitions, npcDefinitions, onCommand, onSelect, playerDefinition, region]);
+      if (selectedFolderId === folderId) {
+        setSelectedFolderState({
+          regionId: region.identity.id,
+          folderId: SCENE_ROOT_FOLDER_ID
+        });
+      }
+      onSelect([]);
+    },
+    [onCommand, onSelect, region, selectedFolderId]
+  );
 
-  const handleDeleteFolder = useCallback((folderId: string) => {
-    if (!region) return;
-    if (!window.confirm("Delete this folder? Items inside it will move to the parent folder.")) {
-      return;
-    }
-
-    onCommand({
-      kind: "DeleteSceneFolder",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: { subjectKind: "scene-folder", subjectId: folderId },
-      payload: { folderId }
-    });
-
-    if (selectedFolderId === folderId) {
-      setSelectedFolderState({
-        regionId: region.identity.id,
-        folderId: SCENE_ROOT_FOLDER_ID
-      });
-    }
-    onSelect([]);
-  }, [onCommand, onSelect, region, selectedFolderId]);
-
-  const handleEditEntityFromExplorer = useCallback((instanceId: string) => {
-    if (!region) return;
-    const asset = region.scene.placedAssets.find(
-      (candidate) => candidate.instanceId === instanceId
-    );
-    if (!asset) return;
-    onEditAssetDefinition(asset.assetDefinitionId);
-  }, [onEditAssetDefinition, region]);
+  const handleEditEntityFromExplorer = useCallback(
+    (instanceId: string) => {
+      if (!region) return;
+      const asset = region.scene.placedAssets.find(
+        (candidate) => candidate.instanceId === instanceId
+      );
+      if (!asset) return;
+      onEditAssetDefinition(asset.assetDefinitionId);
+    },
+    [onEditAssetDefinition, region]
+  );
 
   const handleImportAssetFromExplorer = useCallback(async () => {
     if (!region) return;
@@ -977,7 +1041,11 @@ export function useLayoutWorkspaceView(
           <>
             <Menu shadow="md" withinPortal position="bottom-end">
               <Menu.Target>
-                <ActionIcon variant="subtle" size="sm" aria-label="Add scene thing">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  aria-label="Add scene thing"
+                >
                   ＋
                 </ActionIcon>
               </Menu.Target>
@@ -1184,13 +1252,23 @@ export function useLayoutWorkspaceView(
               }}
             />
             <Stack gap={2}>
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Region ID
               </Text>
               <Text size="xs" c="var(--sm-color-overlay0)">
                 {region.identity.id}
               </Text>
             </Stack>
+            <LayoutAudioPlacementSection
+              region={region}
+              soundCueDefinitions={soundCueDefinitions}
+              onCommand={onCommand}
+            />
           </Stack>
         ) : selectedAsset ? (
           <Stack gap="md">
@@ -1198,7 +1276,12 @@ export function useLayoutWorkspaceView(
               label="Position"
               value={selectedAsset.transform.position}
               onChange={(axis, value) =>
-                handleTransformChange(selectedAsset.instanceId, "position", axis, value)
+                handleTransformChange(
+                  selectedAsset.instanceId,
+                  "position",
+                  axis,
+                  value
+                )
               }
             />
             <TransformInspector
@@ -1206,7 +1289,12 @@ export function useLayoutWorkspaceView(
               value={selectedAsset.transform.rotation}
               step={0.1}
               onChange={(axis, value) =>
-                handleTransformChange(selectedAsset.instanceId, "rotation", axis, value)
+                handleTransformChange(
+                  selectedAsset.instanceId,
+                  "rotation",
+                  axis,
+                  value
+                )
               }
             />
             <TransformInspector
@@ -1214,11 +1302,21 @@ export function useLayoutWorkspaceView(
               value={selectedAsset.transform.scale}
               step={0.1}
               onChange={(axis, value) =>
-                handleTransformChange(selectedAsset.instanceId, "scale", axis, value)
+                handleTransformChange(
+                  selectedAsset.instanceId,
+                  "scale",
+                  axis,
+                  value
+                )
               }
             />
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Inspectable
               </Text>
               {selectedAsset.inspectable ? (
@@ -1242,7 +1340,9 @@ export function useLayoutWorkspaceView(
                         },
                         subject: {
                           subjectKind: "placed-asset-inspectable",
-                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                          subjectId:
+                            selectedAsset.inspectable?.behaviorId ??
+                            selectedAsset.instanceId
                         },
                         payload: {
                           instanceId: selectedAsset.instanceId,
@@ -1266,7 +1366,9 @@ export function useLayoutWorkspaceView(
                         },
                         subject: {
                           subjectKind: "placed-asset-inspectable",
-                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                          subjectId:
+                            selectedAsset.inspectable?.behaviorId ??
+                            selectedAsset.instanceId
                         },
                         payload: {
                           instanceId: selectedAsset.instanceId,
@@ -1293,7 +1395,9 @@ export function useLayoutWorkspaceView(
                         },
                         subject: {
                           subjectKind: "placed-asset-inspectable",
-                          subjectId: selectedAsset.inspectable?.behaviorId ?? selectedAsset.instanceId
+                          subjectId:
+                            selectedAsset.inspectable?.behaviorId ??
+                            selectedAsset.instanceId
                         },
                         payload: {
                           instanceId: selectedAsset.instanceId
@@ -1347,7 +1451,12 @@ export function useLayoutWorkspaceView(
               label="Spawn Position"
               value={selectedPlayerPresence.transform.position}
               onChange={(axis, value) =>
-                handleTransformChange(selectedPlayerPresence.presenceId, "position", axis, value)
+                handleTransformChange(
+                  selectedPlayerPresence.presenceId,
+                  "position",
+                  axis,
+                  value
+                )
               }
             />
           </Stack>
@@ -1360,7 +1469,12 @@ export function useLayoutWorkspaceView(
               label="Spawn Position"
               value={selectedNPCPresence.transform.position}
               onChange={(axis, value) =>
-                handleTransformChange(selectedNPCPresence.presenceId, "position", axis, value)
+                handleTransformChange(
+                  selectedNPCPresence.presenceId,
+                  "position",
+                  axis,
+                  value
+                )
               }
             />
           </Stack>
@@ -1397,7 +1511,12 @@ export function useLayoutWorkspaceView(
               label="Position"
               value={selectedItemPresence.transform.position}
               onChange={(axis, value) =>
-                handleTransformChange(selectedItemPresence.presenceId, "position", axis, value)
+                handleTransformChange(
+                  selectedItemPresence.presenceId,
+                  "position",
+                  axis,
+                  value
+                )
               }
             />
             <TransformInspector
@@ -1405,7 +1524,12 @@ export function useLayoutWorkspaceView(
               value={selectedItemPresence.transform.rotation}
               step={0.1}
               onChange={(axis, value) =>
-                handleTransformChange(selectedItemPresence.presenceId, "rotation", axis, value)
+                handleTransformChange(
+                  selectedItemPresence.presenceId,
+                  "rotation",
+                  axis,
+                  value
+                )
               }
             />
             <TransformInspector
@@ -1413,7 +1537,12 @@ export function useLayoutWorkspaceView(
               value={selectedItemPresence.transform.scale}
               step={0.1}
               onChange={(axis, value) =>
-                handleTransformChange(selectedItemPresence.presenceId, "scale", axis, value)
+                handleTransformChange(
+                  selectedItemPresence.presenceId,
+                  "scale",
+                  axis,
+                  value
+                )
               }
             />
           </Stack>

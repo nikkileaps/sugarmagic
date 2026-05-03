@@ -4,11 +4,7 @@
  */
 
 import { System, World } from "../core";
-import {
-  Position,
-  Velocity,
-  PlayerControlled
-} from "../components";
+import { Position, Velocity, PlayerControlled } from "../components";
 
 export interface InputState {
   moveX: number;
@@ -23,6 +19,8 @@ export class MovementSystem extends System {
   private getInput: () => InputState = () => ({ moveX: 0, moveY: 0 });
   // Default yaw matches Sugarengine's fallback: Math.PI / 4
   private getCameraYaw: () => number = () => Math.PI / 4;
+  private onPlayerMovementChanged: ((isMoving: boolean) => void) | null = null;
+  private wasPlayerMoving = false;
 
   setInputProvider(fn: () => InputState): void {
     this.getInput = fn;
@@ -32,8 +30,15 @@ export class MovementSystem extends System {
     this.getCameraYaw = fn;
   }
 
+  setPlayerMovementChangeHandler(
+    fn: ((isMoving: boolean) => void) | null
+  ): void {
+    this.onPlayerMovementChanged = fn;
+  }
+
   update(world: World, delta: number): void {
     const input = this.getInput();
+    let isPlayerMoving = false;
     // Exact formula from Sugarengine MovementSystem.ts.
     // cameraYaw is the yaw rig rotation (yawPivot.rotation.y).
     // moveY is -1 for W (forward), +1 for S (backward).
@@ -51,6 +56,12 @@ export class MovementSystem extends System {
         (-input.moveX * Math.sin(cameraYaw) +
           input.moveY * Math.cos(cameraYaw)) *
         pc.speed;
+      isPlayerMoving ||= Math.hypot(vel.x, vel.z) > 0.01;
+    }
+
+    if (isPlayerMoving !== this.wasPlayerMoving) {
+      this.wasPlayerMoving = isPlayerMoving;
+      this.onPlayerMovementChanged?.(isPlayerMoving);
     }
 
     // Apply velocity to position for all entities with both

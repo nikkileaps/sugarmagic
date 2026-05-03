@@ -11,10 +11,7 @@ import {
   normalizeQuestDefinition,
   type QuestDefinition
 } from "../quest-definition";
-import {
-  normalizeNPCDefinition,
-  type NPCDefinition
-} from "../npc-definition";
+import { normalizeNPCDefinition, type NPCDefinition } from "../npc-definition";
 import {
   normalizeItemDefinition,
   type ItemDefinition
@@ -49,6 +46,79 @@ import {
   type MenuDefinition,
   type UITheme
 } from "../ui-definition";
+import type { SoundCategory } from "../content-library";
+
+export type RuntimeSoundEventKey =
+  | "game.menu-open"
+  | "game.menu-close"
+  | "ui.click"
+  | "ui.hover"
+  | "player.footstep"
+  | "item.pickup"
+  | "interaction.activate"
+  | "spell.cast-success"
+  | "spell.cast-fail"
+  | "quest.reward";
+
+export type SoundEventBindingMap = Partial<
+  Record<RuntimeSoundEventKey, string | null>
+>;
+
+export type AudioMixerSettings = Record<"master" | SoundCategory, number>;
+
+export function createDefaultAudioMixerSettings(): AudioMixerSettings {
+  return {
+    master: 1,
+    music: 0.7,
+    sfx: 1,
+    ambient: 0.5,
+    ui: 1,
+    voice: 1
+  };
+}
+
+export function normalizeAudioMixerSettings(
+  mixer: Partial<AudioMixerSettings> | null | undefined
+): AudioMixerSettings {
+  const defaults = createDefaultAudioMixerSettings();
+  return Object.fromEntries(
+    Object.entries(defaults).map(([key, fallback]) => {
+      const value = mixer?.[key as keyof AudioMixerSettings];
+      return [
+        key,
+        typeof value === "number" && Number.isFinite(value)
+          ? Math.max(0, Math.min(1, value))
+          : fallback
+      ];
+    })
+  ) as AudioMixerSettings;
+}
+
+export function normalizeSoundEventBindings(
+  bindings: Partial<Record<string, string | null>> | null | undefined
+): SoundEventBindingMap {
+  const validKeys: RuntimeSoundEventKey[] = [
+    "game.menu-open",
+    "game.menu-close",
+    "ui.click",
+    "ui.hover",
+    "player.footstep",
+    "item.pickup",
+    "interaction.activate",
+    "spell.cast-success",
+    "spell.cast-fail",
+    "quest.reward"
+  ];
+  return Object.fromEntries(
+    validKeys.map((key) => {
+      const value = bindings?.[key];
+      return [
+        key,
+        typeof value === "string" && value.trim().length > 0 ? value : null
+      ];
+    })
+  ) as SoundEventBindingMap;
+}
 
 export interface GameProject {
   identity: DocumentIdentity;
@@ -68,23 +138,47 @@ export interface GameProject {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  soundEventBindings: SoundEventBindingMap;
+  audioMixer: AudioMixerSettings;
 }
 
 export function normalizeGameProject(
-  gameProject: GameProject | (Omit<GameProject, "deployment" | "pluginConfigurations" | "playerDefinition" | "spellDefinitions" | "itemDefinitions" | "documentDefinitions" | "npcDefinitions" | "dialogueDefinitions" | "questDefinitions" | "menuDefinitions" | "hudDefinition" | "uiTheme"> & {
-    deployment?: Partial<DeploymentSettings> | null;
-    pluginConfigurations?: Array<PluginConfigurationRecord | PartialPluginConfigurationRecord> | null;
-    playerDefinition?: Partial<PlayerDefinition> | null;
-    spellDefinitions?: Array<Partial<SpellDefinition>> | null;
-    itemDefinitions?: Array<Partial<ItemDefinition>> | null;
-    documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
-    npcDefinitions?: Array<Partial<NPCDefinition>> | null;
-    dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
-    questDefinitions?: Array<Partial<QuestDefinition>> | null;
-    menuDefinitions?: Array<Partial<MenuDefinition>> | null;
-    hudDefinition?: Partial<HUDDefinition> | null;
-    uiTheme?: Partial<UITheme> | null;
-  })
+  gameProject:
+    | GameProject
+    | (Omit<
+        GameProject,
+        | "deployment"
+        | "pluginConfigurations"
+        | "playerDefinition"
+        | "spellDefinitions"
+        | "itemDefinitions"
+        | "documentDefinitions"
+        | "npcDefinitions"
+        | "dialogueDefinitions"
+        | "questDefinitions"
+        | "menuDefinitions"
+        | "hudDefinition"
+        | "uiTheme"
+        | "soundEventBindings"
+        | "audioMixer"
+      > & {
+        deployment?: Partial<DeploymentSettings> | null;
+        pluginConfigurations?: Array<
+          PluginConfigurationRecord | PartialPluginConfigurationRecord
+        > | null;
+        playerDefinition?: Partial<PlayerDefinition> | null;
+        spellDefinitions?: Array<Partial<SpellDefinition>> | null;
+        itemDefinitions?: Array<Partial<ItemDefinition>> | null;
+        documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
+        npcDefinitions?: Array<Partial<NPCDefinition>> | null;
+        dialogueDefinitions?: Array<Partial<DialogueDefinition>> | null;
+        questDefinitions?: Array<Partial<QuestDefinition>> | null;
+        menuDefinitions?: Array<Partial<MenuDefinition>> | null;
+        hudDefinition?: Partial<HUDDefinition> | null;
+        uiTheme?: Partial<UITheme> | null;
+        soundEventBindings?: Partial<Record<string, string | null>> | null;
+        audioMixer?: Partial<AudioMixerSettings> | null;
+      })
 ): GameProject {
   const starterMenus = createDefaultMenuDefinitions(gameProject.identity.id);
   const sourceMenus =
@@ -107,14 +201,14 @@ export function normalizeGameProject(
     itemDefinitions: (gameProject.itemDefinitions ?? []).map((definition) =>
       normalizeItemDefinition(definition)
     ),
-    documentDefinitions: (gameProject.documentDefinitions ?? []).map((definition) =>
-      normalizeDocumentDefinition(definition)
+    documentDefinitions: (gameProject.documentDefinitions ?? []).map(
+      (definition) => normalizeDocumentDefinition(definition)
     ),
     npcDefinitions: (gameProject.npcDefinitions ?? []).map((definition) =>
       normalizeNPCDefinition(definition)
     ),
-    dialogueDefinitions: (gameProject.dialogueDefinitions ?? []).map((definition) =>
-      normalizeDialogueDefinition(definition)
+    dialogueDefinitions: (gameProject.dialogueDefinitions ?? []).map(
+      (definition) => normalizeDialogueDefinition(definition)
     ),
     questDefinitions: (gameProject.questDefinitions ?? []).map((definition) =>
       normalizeQuestDefinition(definition)
@@ -126,7 +220,11 @@ export function normalizeGameProject(
       gameProject.hudDefinition ?? createDefaultHUD(gameProject.identity.id),
       gameProject.identity.id
     ),
-    uiTheme: normalizeUITheme(gameProject.uiTheme ?? createDefaultUITheme())
+    uiTheme: normalizeUITheme(gameProject.uiTheme ?? createDefaultUITheme()),
+    soundEventBindings: normalizeSoundEventBindings(
+      gameProject.soundEventBindings
+    ),
+    audioMixer: normalizeAudioMixerSettings(gameProject.audioMixer)
   };
 }
 
@@ -151,6 +249,8 @@ export function createDefaultGameProject(
     questDefinitions: [],
     menuDefinitions: createDefaultMenuDefinitions(slug),
     hudDefinition: createDefaultHUD(slug),
-    uiTheme: createDefaultUITheme()
+    uiTheme: createDefaultUITheme(),
+    soundEventBindings: normalizeSoundEventBindings(null),
+    audioMixer: createDefaultAudioMixerSettings()
   };
 }

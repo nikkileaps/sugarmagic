@@ -1,7 +1,9 @@
 import type { DocumentDefinition } from "../document-definition";
 import type {
   RegionNPCBehaviorDefinition,
-  RegionLandscapePaintPayload
+  RegionLandscapePaintPayload,
+  RegionAmbienceZone,
+  RegionSoundEmitter
 } from "../region-authoring";
 import type { EnvironmentDefinition } from "../content-library";
 import type {
@@ -223,6 +225,50 @@ export type ConfigureLandscapeCommand = SemanticCommandBase<
   }
 >;
 
+export type CreateRegionSoundEmitterCommand = SemanticCommandBase<
+  "CreateRegionSoundEmitter",
+  {
+    emitter: RegionSoundEmitter;
+  }
+>;
+
+export type UpdateRegionSoundEmitterCommand = SemanticCommandBase<
+  "UpdateRegionSoundEmitter",
+  {
+    emitterId: string;
+    patch: Partial<Omit<RegionSoundEmitter, "emitterId">>;
+  }
+>;
+
+export type DeleteRegionSoundEmitterCommand = SemanticCommandBase<
+  "DeleteRegionSoundEmitter",
+  {
+    emitterId: string;
+  }
+>;
+
+export type CreateRegionAmbienceZoneCommand = SemanticCommandBase<
+  "CreateRegionAmbienceZone",
+  {
+    zone: RegionAmbienceZone;
+  }
+>;
+
+export type UpdateRegionAmbienceZoneCommand = SemanticCommandBase<
+  "UpdateRegionAmbienceZone",
+  {
+    zoneId: string;
+    patch: Partial<Omit<RegionAmbienceZone, "zoneId">>;
+  }
+>;
+
+export type DeleteRegionAmbienceZoneCommand = SemanticCommandBase<
+  "DeleteRegionAmbienceZone",
+  {
+    zoneId: string;
+  }
+>;
+
 export type UpdateEnvironmentDefinitionCommand = SemanticCommandBase<
   "UpdateEnvironmentDefinition",
   {
@@ -326,14 +372,15 @@ export type SetAssetDefaultShaderParameterOverrideCommand = SemanticCommandBase<
   }
 >;
 
-export type ClearAssetDefaultShaderParameterOverrideCommand = SemanticCommandBase<
-  "ClearAssetDefaultShaderParameterOverride",
-  {
-    definitionId: string;
-    slot: ShaderSlotKind;
-    parameterId: string;
-  }
->;
+export type ClearAssetDefaultShaderParameterOverrideCommand =
+  SemanticCommandBase<
+    "ClearAssetDefaultShaderParameterOverride",
+    {
+      definitionId: string;
+      slot: ShaderSlotKind;
+      parameterId: string;
+    }
+  >;
 
 export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
   "SetPlacedAssetShaderOverride",
@@ -371,14 +418,15 @@ export type SetPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase<
   }
 >;
 
-export type ClearPlacedAssetShaderParameterOverrideCommand = SemanticCommandBase<
-  "ClearPlacedAssetShaderParameterOverride",
-  {
-    instanceId: string;
-    slot: ShaderSlotKind;
-    parameterId: string;
-  }
->;
+export type ClearPlacedAssetShaderParameterOverrideCommand =
+  SemanticCommandBase<
+    "ClearPlacedAssetShaderParameterOverride",
+    {
+      instanceId: string;
+      slot: ShaderSlotKind;
+      parameterId: string;
+    }
+  >;
 
 export type SetNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   "SetNPCPresenceShaderParameterOverride",
@@ -389,14 +437,15 @@ export type SetNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   }
 >;
 
-export type ClearNPCPresenceShaderParameterOverrideCommand = SemanticCommandBase<
-  "ClearNPCPresenceShaderParameterOverride",
-  {
-    presenceId: string;
-    slot: ShaderSlotKind;
-    parameterId: string;
-  }
->;
+export type ClearNPCPresenceShaderParameterOverrideCommand =
+  SemanticCommandBase<
+    "ClearNPCPresenceShaderParameterOverride",
+    {
+      presenceId: string;
+      slot: ShaderSlotKind;
+      parameterId: string;
+    }
+  >;
 
 export type SetItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   "SetItemPresenceShaderParameterOverride",
@@ -407,14 +456,15 @@ export type SetItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
   }
 >;
 
-export type ClearItemPresenceShaderParameterOverrideCommand = SemanticCommandBase<
-  "ClearItemPresenceShaderParameterOverride",
-  {
-    presenceId: string;
-    slot: ShaderSlotKind;
-    parameterId: string;
-  }
->;
+export type ClearItemPresenceShaderParameterOverrideCommand =
+  SemanticCommandBase<
+    "ClearItemPresenceShaderParameterOverride",
+    {
+      presenceId: string;
+      slot: ShaderSlotKind;
+      parameterId: string;
+    }
+  >;
 
 export type AddPostProcessShaderCommand = SemanticCommandBase<
   "AddPostProcessShader",
@@ -852,6 +902,12 @@ export type SemanticCommand =
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
+  | CreateRegionSoundEmitterCommand
+  | UpdateRegionSoundEmitterCommand
+  | DeleteRegionSoundEmitterCommand
+  | CreateRegionAmbienceZoneCommand
+  | UpdateRegionAmbienceZoneCommand
+  | DeleteRegionAmbienceZoneCommand
   | UpdateEnvironmentDefinitionCommand
   | CreateShaderGraphCommand
   | RenameShaderGraphCommand

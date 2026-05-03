@@ -19,20 +19,30 @@
 
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
+  createDefaultAudioMixerSettings,
+  createEmptyContentLibrarySnapshot,
   type DocumentDefinition,
   type DialogueDefinition,
+  type AudioMixerSettings,
+  type ContentLibrarySnapshot,
   type ItemDefinition,
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
   type SpellDefinition,
-  type RegionDocument
+  type RegionDocument,
+  type SoundEventBindingMap
 } from "@sugarmagic/domain";
 import {
   CasterManager,
   CasterSystem,
   createRuntimeSpellMenuUI
 } from "../caster";
+import {
+  createRuntimeAudioController,
+  type RuntimeAudioController,
+  type RuntimeSoundCommand
+} from "../audio";
 import { type World, type Entity, Position } from "../ecs";
 import {
   BillboardComponent,
@@ -50,7 +60,10 @@ import {
   createRuntimeDialoguePanel,
   DialogueManager
 } from "../dialogue";
-import { createDocumentDefinitionFromItem, createRuntimeDocumentReaderUI } from "../document";
+import {
+  createDocumentDefinitionFromItem,
+  createRuntimeDocumentReaderUI
+} from "../document";
 import { type RuntimeInputManager } from "../input";
 import {
   createRuntimeInventoryUI,
@@ -106,9 +119,7 @@ import {
   type RuntimeBlackboard
 } from "../state";
 import { PlayerControlled } from "../ecs";
-import {
-  buildLocationReference
-} from "../spatial";
+import { buildLocationReference } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 
 export interface RuntimeSpellCastFeedback {
@@ -137,9 +148,13 @@ export interface RuntimeGameplaySessionControllerOptions {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  contentLibrary?: ContentLibrarySnapshot;
+  soundEventBindings?: SoundEventBindingMap;
+  audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
   onItemPresenceCollected?: (presenceId: string) => void;
   onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
+  onAudioCommands?: (commands: RuntimeSoundCommand[]) => void;
   /**
    * Resolves a project-relative asset path to a fetchable URL (typically a
    * blob: URL minted from the project file handle). Used by the inventory
@@ -155,6 +170,7 @@ export interface RuntimeGameplaySessionController {
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
+  readonly audioController: RuntimeAudioController;
   update: (deltaSeconds?: number) => void;
   syncBillboards: (
     cameraSnapshot: CameraSnapshot,
@@ -187,8 +203,7 @@ export interface RuntimeGameplaySessionController {
   dispose: () => void;
 }
 
-export interface RuntimeGameplayAssemblyOptions
-  extends RuntimeGameplaySessionControllerOptions {
+export interface RuntimeGameplayAssemblyOptions extends RuntimeGameplaySessionControllerOptions {
   pluginManager?: RuntimePluginManager | null;
 }
 
@@ -317,15 +332,20 @@ export function createRuntimeGameplaySessionController(
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    contentLibrary,
+    soundEventBindings,
+    audioMixer,
     pluginManager,
     onItemPresenceCollected,
-    onSpellCastSuccess
+    onSpellCastSuccess,
+    onAudioCommands
   } = options;
 
   const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
   ).sort((a, b) => a.priority - b.priority);
-  const debugHudCardContributions = pluginManager?.getContributions("debug.hudCard") ?? [];
+  const debugHudCardContributions =
+    pluginManager?.getContributions("debug.hudCard") ?? [];
   const debugEntityBillboardContributions =
     pluginManager?.getContributions("debug.entityBillboard") ?? [];
   const entryDecorators = decoratorContributions.map((c) => c.payload.decorate);
@@ -334,12 +354,17 @@ export function createRuntimeGameplaySessionController(
     .filter((h): h is NonNullable<typeof h> => h != null);
   const dialoguePanel = createRuntimeDialoguePanel(root, {
     entryDecorators,
-    onTermHover: hoverHandlers.length > 0
-      ? (event) => {
-          const hoverEvent = { term: event.term, lang: "", dwellMs: event.dwellMs };
-          for (const handler of hoverHandlers) handler(hoverEvent);
-        }
-      : undefined
+    onTermHover:
+      hoverHandlers.length > 0
+        ? (event) => {
+            const hoverEvent = {
+              term: event.term,
+              lang: "",
+              dwellMs: event.dwellMs
+            };
+            for (const handler of hoverHandlers) handler(hoverEvent);
+          }
+        : undefined
   });
   const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root);
@@ -352,7 +377,8 @@ export function createRuntimeGameplaySessionController(
     getAssetUrl: options.getAssetUrl
   });
   const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
-  const itemPickupNotifications = createRuntimeItemPickupNotificationCenter(root);
+  const itemPickupNotifications =
+    createRuntimeItemPickupNotificationCenter(root);
   const interactionPrompt = createRuntimeInteractionPrompt(root);
   const documentReaderUi = createRuntimeDocumentReaderUI(root, {
     getAssetUrl: options.getAssetUrl
@@ -361,23 +387,37 @@ export function createRuntimeGameplaySessionController(
   const questManager = new QuestManager();
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
+  const audioController = createRuntimeAudioController({
+    contentLibrary:
+      contentLibrary ?? createEmptyContentLibrarySnapshot("runtime-audio"),
+    soundEventBindings: soundEventBindings ?? {},
+    mixer: audioMixer ?? createDefaultAudioMixerSettings(),
+    activeRegion
+  });
+  function flushAudioCommands() {
+    const commands = audioController.drainCommands();
+    if (commands.length > 0) {
+      onAudioCommands?.(commands);
+    }
+  }
+  flushAudioCommands();
   const blackboard = createRuntimeBlackboard({
     definitions: [
       ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
-      ...(pluginManager?.getPlugins().flatMap(
-        (plugin) => plugin.blackboardFactDefinitions ?? []
-      ) ?? [])
+      ...(pluginManager
+        ?.getPlugins()
+        .flatMap((plugin) => plugin.blackboardFactDefinitions ?? []) ?? [])
     ]
   });
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
-    pluginManager?.getContributions("conversation.provider").map(
-      (entry) => entry.payload.provider
-    ) ?? [];
+    pluginManager
+      ?.getContributions("conversation.provider")
+      .map((entry) => entry.payload.provider) ?? [];
   const conversationMiddlewares: ConversationMiddleware[] =
-    pluginManager?.getContributions("conversation.middleware").map(
-      (entry) => entry.payload.middleware
-    ) ?? [];
+    pluginManager
+      ?.getContributions("conversation.middleware")
+      .map((entry) => entry.payload.middleware) ?? [];
   const npcInteractableEntities = new Map<
     string,
     { npcDefinitionId: string; entity: number }
@@ -399,18 +439,17 @@ export function createRuntimeGameplaySessionController(
   const debugBillboardWarningKeys = new Set<string>();
   let debugBillboardsInitialized = false;
   let debugBillboardsEnabled = false;
-  const spatialResolverSystem =
-    activeRegion
-      ? createRuntimeSpatialResolverSystem({
-          blackboard,
-          region: activeRegion,
-          playerEntityId: playerDefinition.definitionId,
-          confirmationFrames: SPATIAL_AREA_CONFIRMATION_FRAMES,
-          logDebug(event, payload) {
-            console.info(`[runtime-core] ${event}`, payload ?? {});
-          }
-        })
-      : null;
+  const spatialResolverSystem = activeRegion
+    ? createRuntimeSpatialResolverSystem({
+        blackboard,
+        region: activeRegion,
+        playerEntityId: playerDefinition.definitionId,
+        confirmationFrames: SPATIAL_AREA_CONFIRMATION_FRAMES,
+        logDebug(event, payload) {
+          console.info(`[runtime-core] ${event}`, payload ?? {});
+        }
+      })
+    : null;
 
   function logConversationDebug(
     event: string,
@@ -458,8 +497,14 @@ export function createRuntimeGameplaySessionController(
   }
 
   function getDebugHudSnapshot(): DebugHudGameplaySessionSnapshot {
-    const playerPosition = getEntityPosition(blackboard, playerDefinition.definitionId);
-    const playerArea = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
+    const playerPosition = getEntityPosition(
+      blackboard,
+      playerDefinition.definitionId
+    );
+    const playerArea = getEntityCurrentArea(
+      blackboard,
+      playerDefinition.definitionId
+    );
 
     return {
       activeEntityCount: world.getEntities().size,
@@ -468,14 +513,13 @@ export function createRuntimeGameplaySessionController(
       activeQuestCount: questManager.getJournalData().active.length,
       currentSceneId: activeRegion?.identity.id ?? null,
       currentAreaDisplayName: playerArea?.area?.displayName ?? null,
-      playerPosition:
-        playerPosition
-          ? {
-              x: playerPosition.x,
-              y: playerPosition.y,
-              z: playerPosition.z
-            }
-          : null,
+      playerPosition: playerPosition
+        ? {
+            x: playerPosition.x,
+            y: playerPosition.y,
+            z: playerPosition.z
+          }
+        : null,
       dialogueActive: dialogueManager.isDialogueActive()
     };
   }
@@ -490,7 +534,8 @@ export function createRuntimeGameplaySessionController(
     spatialResolverSystem.sync({
       playerPosition: { x: playerX, y: playerY, z: playerZ },
       npcPositions: region.scene.npcPresences.map((presence) => {
-        const runtimeNpcEntity = npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
+        const runtimeNpcEntity =
+          npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
         const runtimePosition =
           runtimeNpcEntity !== null
             ? world.getComponent(runtimeNpcEntity, Position)
@@ -556,54 +601,64 @@ export function createRuntimeGameplaySessionController(
     stage: "context",
     prepare(context) {
       const trackedQuest = getTrackedQuestFact(blackboard);
-      const activeQuestStage =
-        trackedQuest ? getActiveQuestStage(blackboard, trackedQuest.questId) : null;
-      const activeQuestObjectives =
-        trackedQuest ? getActiveQuestObjectives(blackboard, trackedQuest.questId) : null;
-      const playerLocation = getEntityLocation(blackboard, playerDefinition.definitionId);
-      const playerPosition = getEntityPosition(blackboard, playerDefinition.definitionId);
-      const playerArea = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
-      const npcLocation =
-        context.selection.npcDefinitionId
-          ? getEntityLocation(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcPosition =
-        context.selection.npcDefinitionId
-          ? getEntityPosition(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcArea =
-        context.selection.npcDefinitionId
-          ? getEntityCurrentArea(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcPlayerRelation =
-        context.selection.npcDefinitionId
-          ? getEntityPlayerSpatialRelation(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcMovement =
-        context.selection.npcDefinitionId
-          ? getEntityMovement(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcCurrentTask =
-        context.selection.npcDefinitionId
-          ? npcBehaviorSystem?.getCurrentTask(context.selection.npcDefinitionId) ?? null
-          : null;
-      const npcCurrentActivity =
-        context.selection.npcDefinitionId
-          ? getEntityCurrentActivity(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcCurrentGoal =
-        context.selection.npcDefinitionId
-          ? getEntityCurrentGoal(blackboard, context.selection.npcDefinitionId)
-          : null;
-      const npcBehavior =
-        context.selection.npcDefinitionId
-          ? {
-              movement: npcMovement,
-              task: npcCurrentTask,
-              activity: npcCurrentActivity,
-              goal: npcCurrentGoal
-            }
-          : null;
+      const activeQuestStage = trackedQuest
+        ? getActiveQuestStage(blackboard, trackedQuest.questId)
+        : null;
+      const activeQuestObjectives = trackedQuest
+        ? getActiveQuestObjectives(blackboard, trackedQuest.questId)
+        : null;
+      const playerLocation = getEntityLocation(
+        blackboard,
+        playerDefinition.definitionId
+      );
+      const playerPosition = getEntityPosition(
+        blackboard,
+        playerDefinition.definitionId
+      );
+      const playerArea = getEntityCurrentArea(
+        blackboard,
+        playerDefinition.definitionId
+      );
+      const npcLocation = context.selection.npcDefinitionId
+        ? getEntityLocation(blackboard, context.selection.npcDefinitionId)
+        : null;
+      const npcPosition = context.selection.npcDefinitionId
+        ? getEntityPosition(blackboard, context.selection.npcDefinitionId)
+        : null;
+      const npcArea = context.selection.npcDefinitionId
+        ? getEntityCurrentArea(blackboard, context.selection.npcDefinitionId)
+        : null;
+      const npcPlayerRelation = context.selection.npcDefinitionId
+        ? getEntityPlayerSpatialRelation(
+            blackboard,
+            context.selection.npcDefinitionId
+          )
+        : null;
+      const npcMovement = context.selection.npcDefinitionId
+        ? getEntityMovement(blackboard, context.selection.npcDefinitionId)
+        : null;
+      const npcCurrentTask = context.selection.npcDefinitionId
+        ? (npcBehaviorSystem?.getCurrentTask(
+            context.selection.npcDefinitionId
+          ) ?? null)
+        : null;
+      const npcCurrentActivity = context.selection.npcDefinitionId
+        ? getEntityCurrentActivity(
+            blackboard,
+            context.selection.npcDefinitionId
+          )
+        : null;
+      const npcCurrentGoal = context.selection.npcDefinitionId
+        ? getEntityCurrentGoal(blackboard, context.selection.npcDefinitionId)
+        : null;
+      const npcBehavior = context.selection.npcDefinitionId
+        ? {
+            movement: npcMovement,
+            task: npcCurrentTask,
+            activity: npcCurrentActivity,
+            goal: npcCurrentGoal
+          }
+        : null;
       const runtimeContext: ConversationRuntimeContext = {
         here:
           playerLocation?.location ??
@@ -638,13 +693,17 @@ export function createRuntimeGameplaySessionController(
       (speaker) => speaker.speakerId === speakerId
     );
     if (builtInSpeaker) {
-      if (builtInSpeaker.kind === "player" || builtInSpeaker.kind === "player-vo") {
+      if (
+        builtInSpeaker.kind === "player" ||
+        builtInSpeaker.kind === "player-vo"
+      ) {
         return playerDefinition.displayName;
       }
       return builtInSpeaker.displayName;
     }
 
-    return npcDefinitions.find((npc) => npc.definitionId === speakerId)?.displayName;
+    return npcDefinitions.find((npc) => npc.definitionId === speakerId)
+      ?.displayName;
   }
 
   function syncQuestUi() {
@@ -653,7 +712,10 @@ export function createRuntimeGameplaySessionController(
   }
 
   function syncNpcInteractionAvailability() {
-    for (const { npcDefinitionId, entity } of npcInteractableEntities.values()) {
+    for (const {
+      npcDefinitionId,
+      entity
+    } of npcInteractableEntities.values()) {
       const interactable = world.getComponent(entity, Interactable);
       if (!interactable) continue;
       const npcDefinition = npcDefinitions.find(
@@ -673,8 +735,9 @@ export function createRuntimeGameplaySessionController(
     npcDefinitionId: string
   ): ConversationSelectionContext | null {
     const npcDefinition =
-      npcDefinitions.find((candidate) => candidate.definitionId === npcDefinitionId) ??
-      null;
+      npcDefinitions.find(
+        (candidate) => candidate.definitionId === npcDefinitionId
+      ) ?? null;
     if (!npcDefinition) {
       logConversationDebug("conversation-selection-missing-npc", {
         npcDefinitionId
@@ -684,12 +747,17 @@ export function createRuntimeGameplaySessionController(
 
     if (npcDefinition.interactionMode === "scripted") {
       const dialogueDefinitionId =
-        questDialogueCoordinator.resolveNpcDialogueDefinitionId(npcDefinitionId);
+        questDialogueCoordinator.resolveNpcDialogueDefinitionId(
+          npcDefinitionId
+        );
       if (!dialogueDefinitionId) {
-        logConversationDebug("conversation-selection-scripted-missing-dialogue", {
-          npcDefinitionId,
-          interactionMode: npcDefinition.interactionMode
-        });
+        logConversationDebug(
+          "conversation-selection-scripted-missing-dialogue",
+          {
+            npcDefinitionId,
+            interactionMode: npcDefinition.interactionMode
+          }
+        );
         return null;
       }
       const selection = createConversationSelectionFromNpc({
@@ -756,7 +824,10 @@ export function createRuntimeGameplaySessionController(
         return;
       default: {
         const exhaustive: never = proposal;
-        console.debug("[runtime-core] unhandled conversation action proposal", exhaustive);
+        console.debug(
+          "[runtime-core] unhandled conversation action proposal",
+          exhaustive
+        );
       }
     }
   }
@@ -791,7 +862,10 @@ export function createRuntimeGameplaySessionController(
         (definition) => definition.definitionId === presence.npcDefinitionId
       );
       const interactableEntity = world.createEntity();
-      world.addComponent(interactableEntity, new Position(...presence.transform.position));
+      world.addComponent(
+        interactableEntity,
+        new Position(...presence.transform.position)
+      );
       world.addComponent(
         interactableEntity,
         new Interactable(
@@ -800,7 +874,9 @@ export function createRuntimeGameplaySessionController(
           presence.npcDefinitionId,
           `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
           2.0,
-          questDialogueCoordinator.isNpcInteractableAvailable(presence.npcDefinitionId)
+          questDialogueCoordinator.isNpcInteractableAvailable(
+            presence.npcDefinitionId
+          )
         )
       );
       npcInteractableEntities.set(presence.presenceId, {
@@ -818,7 +894,10 @@ export function createRuntimeGameplaySessionController(
         (definition) => definition.definitionId === presence.itemDefinitionId
       );
       const interactableEntity = world.createEntity();
-      world.addComponent(interactableEntity, new Position(...presence.transform.position));
+      world.addComponent(
+        interactableEntity,
+        new Position(...presence.transform.position)
+      );
       world.addComponent(
         interactableEntity,
         new Interactable(
@@ -882,7 +961,12 @@ export function createRuntimeGameplaySessionController(
     );
     if (!itemDefinition) return;
 
-    if (!inventoryManager.addItem(itemDefinition.definitionId, itemPresence.quantity)) {
+    if (
+      !inventoryManager.addItem(
+        itemDefinition.definitionId,
+        itemPresence.quantity
+      )
+    ) {
       return;
     }
 
@@ -892,7 +976,13 @@ export function createRuntimeGameplaySessionController(
     }
     world.destroyEntity(itemPresence.entity);
     itemInteractableEntities.delete(presenceId);
-    itemPickupNotifications.push(itemDefinition.displayName, itemPresence.quantity);
+    itemPickupNotifications.push(
+      itemDefinition.displayName,
+      itemPresence.quantity
+    );
+    audioController.emitEvent("item.pickup", {
+      instanceKey: `item.pickup:${presenceId}`
+    });
     onItemPresenceCollected?.(presenceId);
     syncInteractionPrompt();
   }
@@ -914,7 +1004,11 @@ export function createRuntimeGameplaySessionController(
       } else {
         world.addComponent(
           targetEntity,
-          new Position(options.position.x, options.position.y, options.position.z)
+          new Position(
+            options.position.x,
+            options.position.y,
+            options.position.z
+          )
         );
       }
     } else if (!existingPosition) {
@@ -923,9 +1017,15 @@ export function createRuntimeGameplaySessionController(
       );
     }
 
-    const existingBillboard = world.getComponent(targetEntity, BillboardComponent);
+    const existingBillboard = world.getComponent(
+      targetEntity,
+      BillboardComponent
+    );
     if (existingBillboard) {
-      const next = new BillboardComponent(options.descriptor, options.component);
+      const next = new BillboardComponent(
+        options.descriptor,
+        options.component
+      );
       existingBillboard.descriptor = next.descriptor;
       existingBillboard.orientation = next.orientation;
       existingBillboard.displayMode = next.displayMode;
@@ -972,14 +1072,23 @@ export function createRuntimeGameplaySessionController(
     };
   }
 
-  function buildCoreDebugBillboardLines(binding: DebugBillboardBinding): string[] {
+  function buildCoreDebugBillboardLines(
+    binding: DebugBillboardBinding
+  ): string[] {
     const lines = [binding.displayName];
 
     if (binding.entityKind === "npc" && binding.definitionId) {
-      const currentTask = npcBehaviorSystem?.getCurrentTask(binding.definitionId) ?? null;
-      const activity = getEntityCurrentActivity(blackboard, binding.definitionId);
+      const currentTask =
+        npcBehaviorSystem?.getCurrentTask(binding.definitionId) ?? null;
+      const activity = getEntityCurrentActivity(
+        blackboard,
+        binding.definitionId
+      );
       const area = getEntityCurrentArea(blackboard, binding.definitionId);
-      const relation = getEntityPlayerSpatialRelation(blackboard, binding.definitionId);
+      const relation = getEntityPlayerSpatialRelation(
+        blackboard,
+        binding.definitionId
+      );
 
       if (currentTask?.displayName) {
         lines.push(`task: ${currentTask.displayName}`);
@@ -997,8 +1106,14 @@ export function createRuntimeGameplaySessionController(
     }
 
     if (binding.entityKind === "player") {
-      const area = getEntityCurrentArea(blackboard, playerDefinition.definitionId);
-      const position = getEntityPosition(blackboard, playerDefinition.definitionId);
+      const area = getEntityCurrentArea(
+        blackboard,
+        playerDefinition.definitionId
+      );
+      const position = getEntityPosition(
+        blackboard,
+        playerDefinition.definitionId
+      );
       if (area?.area?.displayName) {
         lines.push(`area: ${area.area.displayName}`);
       }
@@ -1012,7 +1127,9 @@ export function createRuntimeGameplaySessionController(
     return lines;
   }
 
-  function buildPluginDebugBillboardLines(binding: DebugBillboardBinding): string[] {
+  function buildPluginDebugBillboardLines(
+    binding: DebugBillboardBinding
+  ): string[] {
     const context = buildEntityBillboardContext(binding);
     const groupedLines: string[][] = [];
 
@@ -1066,7 +1183,11 @@ export function createRuntimeGameplaySessionController(
       });
       createBillboard({
         entity: playerEntity,
-        descriptor: { kind: "text", content: playerDefinition.displayName, style: DEBUG_BILLBOARD_STYLE },
+        descriptor: {
+          kind: "text",
+          content: playerDefinition.displayName,
+          style: DEBUG_BILLBOARD_STYLE
+        },
         component: {
           orientation: "spherical",
           displayMode: "overlay",
@@ -1079,8 +1200,9 @@ export function createRuntimeGameplaySessionController(
 
     for (const entry of npcInteractableEntities.values()) {
       const npcDefinition =
-        npcDefinitions.find((candidate) => candidate.definitionId === entry.npcDefinitionId) ??
-        null;
+        npcDefinitions.find(
+          (candidate) => candidate.definitionId === entry.npcDefinitionId
+        ) ?? null;
       debugBillboardBindings.set(entry.entity, {
         entity: entry.entity,
         entityKind: "npc",
@@ -1190,7 +1312,10 @@ export function createRuntimeGameplaySessionController(
     }
   });
 
-  questDialogueCoordinator.loadDefinitions(dialogueDefinitions, questDefinitions);
+  questDialogueCoordinator.loadDefinitions(
+    dialogueDefinitions,
+    questDefinitions
+  );
   questDialogueCoordinator.attach(dialogueManager, questManager, {
     hasItem: (itemDefinitionId, count) =>
       inventoryManager.hasItem(itemDefinitionId, count),
@@ -1206,8 +1331,8 @@ export function createRuntimeGameplaySessionController(
   questManager.setHasSpellProvider((spellDefinitionId) =>
     casterManager.hasSpell(spellDefinitionId)
   );
-  questManager.setCanCastSpellProvider((spellDefinitionId) =>
-    casterManager.canCastSpell(spellDefinitionId).canCast
+  questManager.setCanCastSpellProvider(
+    (spellDefinitionId) => casterManager.canCastSpell(spellDefinitionId).canCast
   );
   questManager.setNarrativeHandler((node) => {
     if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
@@ -1225,8 +1350,9 @@ export function createRuntimeGameplaySessionController(
         : typeof action.value === "string" && action.value.trim().length > 0
           ? Number(action.value)
           : NaN;
-    const count =
-      Number.isFinite(numericValue) ? Math.max(1, Math.floor(numericValue)) : 1;
+    const count = Number.isFinite(numericValue)
+      ? Math.max(1, Math.floor(numericValue))
+      : 1;
 
     if (action.type === "giveItem" && action.targetId) {
       inventoryManager.addItem(action.targetId, count);
@@ -1245,6 +1371,11 @@ export function createRuntimeGameplaySessionController(
   });
   questManager.setEventHandler((event) => {
     questNotificationCenter.push(event);
+    if (event.type === "quest-complete") {
+      audioController.emitEvent("quest.reward", {
+        instanceKey: `quest.reward:${event.questDefinitionId}`
+      });
+    }
   });
 
   questJournal.setOnOpenChange((isOpen) => {
@@ -1295,7 +1426,9 @@ export function createRuntimeGameplaySessionController(
       if (!documentDefinition) {
         return;
       }
-      documentReaderUi.show(documentDefinition, { kicker: "Inventory document" });
+      documentReaderUi.show(documentDefinition, {
+        kicker: "Inventory document"
+      });
       return;
     }
 
@@ -1370,6 +1503,9 @@ export function createRuntimeGameplaySessionController(
     logConversationDebug("interact-handler-invoked", {
       nearby
     });
+    audioController.emitEvent("interaction.activate", {
+      instanceKey: `interaction.activate:${nearby.type}:${nearby.instanceId}`
+    });
     if (nearby.type === "npc") {
       const selection = resolveNpcConversationSelection(nearby.targetId);
       if (!selection) {
@@ -1394,11 +1530,14 @@ export function createRuntimeGameplaySessionController(
     }
 
     if (nearby.type === "inspectable") {
-      const inspectable = inspectableInteractableEntities.get(nearby.instanceId);
+      const inspectable = inspectableInteractableEntities.get(
+        nearby.instanceId
+      );
       if (!inspectable) return;
 
       const documentDefinition = documentDefinitions.find(
-        (definition) => definition.definitionId === inspectable.documentDefinitionId
+        (definition) =>
+          definition.definitionId === inspectable.documentDefinitionId
       );
       if (!documentDefinition) return;
 
@@ -1415,6 +1554,9 @@ export function createRuntimeGameplaySessionController(
   casterManager.registerDefinitions(spellDefinitions);
   casterManager.setSpellCastHandler((spell, result) => {
     questManager.notifySpellCast(spell.definitionId);
+    audioController.emitEvent("spell.cast-success", {
+      instanceKey: `spell.cast-success:${spell.definitionId}`
+    });
     onSpellCastSuccess?.(formatRuntimeSpellCastFeedback(spell));
     for (const effect of result.effects) {
       if (effect.type === "event" && effect.targetId) {
@@ -1447,11 +1589,13 @@ export function createRuntimeGameplaySessionController(
       world,
       blackboard,
       getNpcEntities: () =>
-        Array.from(npcInteractableEntities.entries()).map(([presenceId, entry]) => ({
-          presenceId,
-          npcDefinitionId: entry.npcDefinitionId,
-          entity: entry.entity
-        })),
+        Array.from(npcInteractableEntities.entries()).map(
+          ([presenceId, entry]) => ({
+            presenceId,
+            npcDefinitionId: entry.npcDefinitionId,
+            entity: entry.entity
+          })
+        ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
       logDebug(event, payload) {
         console.info(`[runtime-core] ${event}`, payload ?? {});
@@ -1475,6 +1619,7 @@ export function createRuntimeGameplaySessionController(
     interactionSystem,
     questSystem,
     blackboard,
+    audioController,
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
       const trackedQuest = questManager.getTrackedQuest();
@@ -1490,6 +1635,7 @@ export function createRuntimeGameplaySessionController(
       syncBlackboardSpatialFacts();
       syncBlackboardQuestFacts();
       spellMenuUi.update();
+      flushAudioCommands();
     },
     syncBillboards(cameraSnapshot, deltaSeconds = 1 / 60) {
       billboardSystem.update(world, deltaSeconds, cameraSnapshot);
@@ -1524,7 +1670,10 @@ export function createRuntimeGameplaySessionController(
           kind: "item"
         });
       }
-      for (const [instanceId, entry] of inspectableInteractableEntities.entries()) {
+      for (const [
+        instanceId,
+        entry
+      ] of inspectableInteractableEntities.entries()) {
         bindings.push({
           entity: entry.entity,
           sceneInstanceId: instanceId,
@@ -1534,17 +1683,25 @@ export function createRuntimeGameplaySessionController(
       return bindings;
     },
     getNpcRuntimeSnapshots() {
-      return Array.from(npcInteractableEntities.entries()).flatMap(([presenceId, entry]) => {
-        const position = world.getComponent(entry.entity, Position);
-        if (!position) {
-          return [];
+      return Array.from(npcInteractableEntities.entries()).flatMap(
+        ([presenceId, entry]) => {
+          const position = world.getComponent(entry.entity, Position);
+          if (!position) {
+            return [];
+          }
+          return [
+            {
+              presenceId,
+              npcDefinitionId: entry.npcDefinitionId,
+              position: [position.x, position.y, position.z] as [
+                number,
+                number,
+                number
+              ]
+            }
+          ];
         }
-        return [{
-          presenceId,
-          npcDefinitionId: entry.npcDefinitionId,
-          position: [position.x, position.y, position.z] as [number, number, number]
-        }];
-      });
+      );
     },
     initializeDebugBillboards,
     refreshDebugBillboards,

@@ -7,8 +7,15 @@
  * not replace it as the source of truth.
  */
 
-import type { GameProject } from "../game-project";
-import { normalizeGameProject } from "../game-project";
+import type {
+  AudioMixerSettings,
+  GameProject,
+  RuntimeSoundEventKey
+} from "../game-project";
+import {
+  normalizeAudioMixerSettings,
+  normalizeGameProject
+} from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { RegionDocument } from "../region-authoring";
 import { normalizeRegionDocumentForLoad } from "../io";
@@ -78,12 +85,14 @@ import type {
 } from "../commands";
 import type {
   AssetDefinition,
+  AudioClipDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   ContentLibrarySnapshot,
   EnvironmentDefinition,
   MaterialDefinition,
   MaskTextureDefinition,
+  SoundCueDefinition,
   TextureDefinition
 } from "../content-library";
 import {
@@ -119,6 +128,7 @@ import {
   createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
   DEFAULT_CLOUD_SHADOW_SETTINGS,
+  listAudioClipDefinitions as listAudioClipDefinitionsFromLibrary,
   listCharacterModelDefinitions as listCharacterModelDefinitionsFromLibrary,
   listCharacterAnimationDefinitions as listCharacterAnimationDefinitionsFromLibrary,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
@@ -127,11 +137,15 @@ import {
   listMaskTextureDefinitions as listMaskTextureDefinitionsFromLibrary,
   listSurfaceDefinitions as listSurfaceDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
+  listSoundCueDefinitions as listSoundCueDefinitionsFromLibrary,
   listTextureDefinitions as listTextureDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot,
   synchronizeEnvironmentDefinition
 } from "../content-library";
-import type { ShaderGraphDocument, ShaderParameterOverride } from "../shader-graph";
+import type {
+  ShaderGraphDocument,
+  ShaderParameterOverride
+} from "../shader-graph";
 import {
   createEmptyShaderSlotBindingMap,
   validateShaderGraphDocument
@@ -199,7 +213,9 @@ function restoreCheckpoint(
   };
 }
 
-export function getActiveRegion(session: AuthoringSession): RegionDocument | null {
+export function getActiveRegion(
+  session: AuthoringSession
+): RegionDocument | null {
   if (!session.activeRegionId) return null;
   return session.regions.get(session.activeRegionId) ?? null;
 }
@@ -212,6 +228,12 @@ export function getAllAssetDefinitions(
   session: AuthoringSession
 ): AssetDefinition[] {
   return listAssetDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllAudioClipDefinitions(
+  session: AuthoringSession
+): AudioClipDefinition[] {
+  return listAudioClipDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllCharacterModelDefinitions(
@@ -236,6 +258,12 @@ export function getAllMaterialDefinitions(
   session: AuthoringSession
 ): MaterialDefinition[] {
   return listMaterialDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllSoundCueDefinitions(
+  session: AuthoringSession
+): SoundCueDefinition[] {
+  return listSoundCueDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllSurfaceDefinitions(
@@ -266,15 +294,21 @@ export function getPlayerDefinition(session: AuthoringSession) {
   return session.gameProject.playerDefinition;
 }
 
-export function getAllNPCDefinitions(session: AuthoringSession): NPCDefinition[] {
+export function getAllNPCDefinitions(
+  session: AuthoringSession
+): NPCDefinition[] {
   return session.gameProject.npcDefinitions;
 }
 
-export function getAllItemDefinitions(session: AuthoringSession): ItemDefinition[] {
+export function getAllItemDefinitions(
+  session: AuthoringSession
+): ItemDefinition[] {
   return session.gameProject.itemDefinitions;
 }
 
-export function getAllSpellDefinitions(session: AuthoringSession): SpellDefinition[] {
+export function getAllSpellDefinitions(
+  session: AuthoringSession
+): SpellDefinition[] {
   return session.gameProject.spellDefinitions;
 }
 
@@ -302,7 +336,9 @@ export function getAllMenuDefinitions(
   return session.gameProject.menuDefinitions;
 }
 
-export function getHUDDefinition(session: AuthoringSession): HUDDefinition | null {
+export function getHUDDefinition(
+  session: AuthoringSession
+): HUDDefinition | null {
   return session.gameProject.hudDefinition;
 }
 
@@ -368,9 +404,10 @@ function applyEnvironmentDefinitionCommand(
   session: AuthoringSession,
   command: UpdateEnvironmentDefinitionCommand
 ): AuthoringSession {
-  const definitionIndex = session.contentLibrary.environmentDefinitions.findIndex(
-    (definition) => definition.definitionId === command.payload.definitionId
-  );
+  const definitionIndex =
+    session.contentLibrary.environmentDefinitions.findIndex(
+      (definition) => definition.definitionId === command.payload.definitionId
+    );
   if (definitionIndex < 0) {
     return session;
   }
@@ -380,7 +417,9 @@ function applyEnvironmentDefinitionCommand(
     command.payload.definition,
     session.gameProject.identity.id
   );
-  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
 
   return {
     ...session,
@@ -400,10 +439,7 @@ function replaceShaderOverride<
     shaderOverride: { shaderDefinitionId: string } | null;
     shaderParameterOverrides: ShaderParameterOverride[];
   }
->(
-  value: T,
-  shaderDefinitionId: string | null
-): T {
+>(value: T, shaderDefinitionId: string | null): T {
   return {
     ...value,
     shaderOverride: shaderDefinitionId ? { shaderDefinitionId } : null
@@ -446,7 +482,8 @@ function applyShaderGraphMutation(
     return session;
   }
 
-  const currentDefinition = session.contentLibrary.shaderDefinitions[definitionIndex]!;
+  const currentDefinition =
+    session.contentLibrary.shaderDefinitions[definitionIndex]!;
   const nextDefinition = mutate(currentDefinition);
   if (!nextDefinition) {
     return session;
@@ -466,7 +503,9 @@ function applyShaderGraphMutation(
 
   const nextDefinitions = [...session.contentLibrary.shaderDefinitions];
   nextDefinitions[definitionIndex] = nextDefinition;
-  const transaction = createTransactionForCommand(command, [shaderDefinitionId]);
+  const transaction = createTransactionForCommand(command, [
+    shaderDefinitionId
+  ]);
 
   return {
     ...session,
@@ -551,7 +590,9 @@ function applyDeleteShaderGraphCommand(
     (definition) =>
       definition.shaderDefinitionId !== command.payload.shaderDefinitionId
   );
-  if (nextDefinitions.length === session.contentLibrary.shaderDefinitions.length) {
+  if (
+    nextDefinitions.length === session.contentLibrary.shaderDefinitions.length
+  ) {
     return session;
   }
 
@@ -563,36 +604,44 @@ function applyDeleteShaderGraphCommand(
     contentLibrary: {
       ...session.contentLibrary,
       shaderDefinitions: nextDefinitions,
-      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) => ({
-        ...definition,
-        surfaceSlots: definition.surfaceSlots.map((slot) =>
-          slot.surface?.kind === "inline" &&
-          slot.surface.surface.layers.some(
-            (layer) =>
-              layer.kind === "appearance" &&
-              layer.content.kind === "shader" &&
-              layer.content.shaderDefinitionId === command.payload.shaderDefinitionId
+      assetDefinitions: session.contentLibrary.assetDefinitions.map(
+        (definition) => ({
+          ...definition,
+          surfaceSlots: definition.surfaceSlots.map((slot) =>
+            slot.surface?.kind === "inline" &&
+            slot.surface.surface.layers.some(
+              (layer) =>
+                layer.kind === "appearance" &&
+                layer.content.kind === "shader" &&
+                layer.content.shaderDefinitionId ===
+                  command.payload.shaderDefinitionId
+            )
+              ? { ...slot, surface: null }
+              : slot
+          ),
+          deform:
+            definition.deform?.kind === "shader" &&
+            definition.deform.shaderDefinitionId ===
+              command.payload.shaderDefinitionId
+              ? null
+              : definition.deform,
+          effect:
+            definition.effect?.kind === "shader" &&
+            definition.effect.shaderDefinitionId ===
+              command.payload.shaderDefinitionId
+              ? null
+              : definition.effect
+        })
+      ),
+      environmentDefinitions: session.contentLibrary.environmentDefinitions.map(
+        (definition) => ({
+          ...definition,
+          postProcessShaders: definition.postProcessShaders.filter(
+            (binding) =>
+              binding.shaderDefinitionId !== command.payload.shaderDefinitionId
           )
-            ? { ...slot, surface: null }
-            : slot
-        ),
-        deform:
-          definition.deform?.kind === "shader" &&
-          definition.deform.shaderDefinitionId === command.payload.shaderDefinitionId
-            ? null
-            : definition.deform,
-        effect:
-          definition.effect?.kind === "shader" &&
-          definition.effect.shaderDefinitionId === command.payload.shaderDefinitionId
-            ? null
-            : definition.effect
-      })),
-      environmentDefinitions: session.contentLibrary.environmentDefinitions.map((definition) => ({
-        ...definition,
-        postProcessShaders: definition.postProcessShaders.filter(
-          (binding) => binding.shaderDefinitionId !== command.payload.shaderDefinitionId
-        )
-      }))
+        })
+      )
     },
     regions: new Map(
       Array.from(session.regions.entries()).map(([regionId, region]) => [
@@ -604,13 +653,15 @@ function applyDeleteShaderGraphCommand(
             placedAssets: region.scene.placedAssets.map((asset) =>
               (asset.shaderOverrides ?? []).some(
                 (override) =>
-                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+                  override.shaderDefinitionId ===
+                  command.payload.shaderDefinitionId
               )
                 ? {
                     ...asset,
                     shaderOverrides: (asset.shaderOverrides ?? []).filter(
                       (override) =>
-                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                        override.shaderDefinitionId !==
+                        command.payload.shaderDefinitionId
                     ),
                     shaderParameterOverrides: []
                   }
@@ -619,13 +670,15 @@ function applyDeleteShaderGraphCommand(
             npcPresences: region.scene.npcPresences.map((presence) =>
               (presence.shaderOverrides ?? []).some(
                 (override) =>
-                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+                  override.shaderDefinitionId ===
+                  command.payload.shaderDefinitionId
               )
                 ? {
                     ...presence,
                     shaderOverrides: (presence.shaderOverrides ?? []).filter(
                       (override) =>
-                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                        override.shaderDefinitionId !==
+                        command.payload.shaderDefinitionId
                     ),
                     shaderParameterOverrides: []
                   }
@@ -634,13 +687,15 @@ function applyDeleteShaderGraphCommand(
             itemPresences: region.scene.itemPresences.map((presence) =>
               (presence.shaderOverrides ?? []).some(
                 (override) =>
-                  override.shaderDefinitionId === command.payload.shaderDefinitionId
+                  override.shaderDefinitionId ===
+                  command.payload.shaderDefinitionId
               )
                 ? {
                     ...presence,
                     shaderOverrides: (presence.shaderOverrides ?? []).filter(
                       (override) =>
-                        override.shaderDefinitionId !== command.payload.shaderDefinitionId
+                        override.shaderDefinitionId !==
+                        command.payload.shaderDefinitionId
                     ),
                     shaderParameterOverrides: []
                   }
@@ -694,7 +749,9 @@ function applyRemoveShaderNodeCommand(
     command.payload.shaderDefinitionId,
     (definition) => ({
       ...definition,
-      nodes: definition.nodes.filter((node) => node.nodeId !== command.payload.nodeId),
+      nodes: definition.nodes.filter(
+        (node) => node.nodeId !== command.payload.nodeId
+      ),
       edges: definition.edges.filter(
         (edge) =>
           edge.sourceNodeId !== command.payload.nodeId &&
@@ -716,7 +773,9 @@ function applyAddShaderEdgeCommand(
     (definition) => ({
       ...definition,
       edges: [
-        ...definition.edges.filter((edge) => edge.edgeId !== command.payload.edge.edgeId),
+        ...definition.edges.filter(
+          (edge) => edge.edgeId !== command.payload.edge.edgeId
+        ),
         command.payload.edge
       ],
       revision: definition.revision + 1
@@ -734,7 +793,9 @@ function applyRemoveShaderEdgeCommand(
     command.payload.shaderDefinitionId,
     (definition) => ({
       ...definition,
-      edges: definition.edges.filter((edge) => edge.edgeId !== command.payload.edgeId),
+      edges: definition.edges.filter(
+        (edge) => edge.edgeId !== command.payload.edgeId
+      ),
       revision: definition.revision + 1
     }),
     command
@@ -750,7 +811,8 @@ function applyUpdateShaderParameterCommand(
     command.payload.shaderDefinitionId,
     (definition) => {
       const existingIndex = definition.parameters.findIndex(
-        (parameter) => parameter.parameterId === command.payload.parameter.parameterId
+        (parameter) =>
+          parameter.parameterId === command.payload.parameter.parameterId
       );
       const nextParameters = [...definition.parameters];
       if (existingIndex < 0) {
@@ -797,36 +859,39 @@ function applySetAssetDefaultShaderCommand(
   session: AuthoringSession,
   command: SetAssetDefaultShaderCommand
 ): AuthoringSession {
-  const nextDefinitions = session.contentLibrary.assetDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definitionId
-      ? {
-          ...definition,
-          deform:
-            command.payload.slot === "deform"
-              ? command.payload.shaderDefinitionId
-                ? {
-                    kind: "shader" as const,
-                    shaderDefinitionId: command.payload.shaderDefinitionId,
-                    parameterValues: {},
-                    textureBindings: {}
-                  }
-                : null
-              : definition.deform,
-          effect:
-            command.payload.slot === "effect"
-              ? command.payload.shaderDefinitionId
-                ? {
-                    kind: "shader" as const,
-                    shaderDefinitionId: command.payload.shaderDefinitionId,
-                    parameterValues: {},
-                    textureBindings: {}
-                  }
-                : null
-              : definition.effect
-        }
-      : definition
+  const nextDefinitions = session.contentLibrary.assetDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definitionId
+        ? {
+            ...definition,
+            deform:
+              command.payload.slot === "deform"
+                ? command.payload.shaderDefinitionId
+                  ? {
+                      kind: "shader" as const,
+                      shaderDefinitionId: command.payload.shaderDefinitionId,
+                      parameterValues: {},
+                      textureBindings: {}
+                    }
+                  : null
+                : definition.deform,
+            effect:
+              command.payload.slot === "effect"
+                ? command.payload.shaderDefinitionId
+                  ? {
+                      kind: "shader" as const,
+                      shaderDefinitionId: command.payload.shaderDefinitionId,
+                      parameterValues: {},
+                      textureBindings: {}
+                    }
+                  : null
+                : definition.effect
+          }
+        : definition
   );
-  const transaction = createTransactionForCommand(command, [command.payload.definitionId]);
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
 
   return {
     ...session,
@@ -876,7 +941,8 @@ function applyAddPostProcessShaderCommand(
         postProcessShaders: [
           ...definition.postProcessShaders.filter(
             (binding) =>
-              binding.shaderDefinitionId !== command.payload.binding.shaderDefinitionId
+              binding.shaderDefinitionId !==
+              command.payload.binding.shaderDefinitionId
           ),
           command.payload.binding
         ]
@@ -896,20 +962,25 @@ function applyUpdatePostProcessShaderOrderCommand(
       definitionId: command.payload.environmentDefinitionId,
       definition:
         session.contentLibrary.environmentDefinitions.find(
-          (definition) => definition.definitionId === command.payload.environmentDefinitionId
+          (definition) =>
+            definition.definitionId === command.payload.environmentDefinitionId
         ) === undefined
           ? session.contentLibrary.environmentDefinitions[0]!
           : {
               ...session.contentLibrary.environmentDefinitions.find(
-                (definition) => definition.definitionId === command.payload.environmentDefinitionId
+                (definition) =>
+                  definition.definitionId ===
+                  command.payload.environmentDefinitionId
               )!,
               postProcessShaders: session.contentLibrary.environmentDefinitions
                 .find(
                   (definition) =>
-                    definition.definitionId === command.payload.environmentDefinitionId
+                    definition.definitionId ===
+                    command.payload.environmentDefinitionId
                 )!
                 .postProcessShaders.map((binding) =>
-                  binding.shaderDefinitionId === command.payload.shaderDefinitionId
+                  binding.shaderDefinitionId ===
+                  command.payload.shaderDefinitionId
                     ? { ...binding, order: command.payload.order }
                     : binding
                 )
@@ -965,26 +1036,25 @@ function updatePostProcessBindingOverride(
             ...currentFog,
             color:
               command.payload.override.parameterId === "color"
-                ? ((
-                    () => {
-                      const value = command.payload.override.value;
-                      if (
-                        Array.isArray(value) &&
-                        value.length >= 3 &&
-                        value.every(
-                          (channel) =>
-                            typeof channel === "number" && Number.isFinite(channel)
-                        )
-                      ) {
-                        return (
-                          (Math.round((value[0] ?? 0) * 255) << 16) |
-                          (Math.round((value[1] ?? 0) * 255) << 8) |
-                          Math.round((value[2] ?? 0) * 255)
-                        );
-                      }
-                      return currentFog.color;
-                    })()
-                  )
+                ? (() => {
+                    const value = command.payload.override.value;
+                    if (
+                      Array.isArray(value) &&
+                      value.length >= 3 &&
+                      value.every(
+                        (channel) =>
+                          typeof channel === "number" &&
+                          Number.isFinite(channel)
+                      )
+                    ) {
+                      return (
+                        (Math.round((value[0] ?? 0) * 255) << 16) |
+                        (Math.round((value[1] ?? 0) * 255) << 8) |
+                        Math.round((value[2] ?? 0) * 255)
+                      );
+                    }
+                    return currentFog.color;
+                  })()
                 : currentFog.color,
             density:
               command.payload.override.parameterId === "density" &&
@@ -1093,7 +1163,8 @@ function updatePostProcessBindingOverride(
     nextDefinition = {
       ...definition,
       postProcessShaders: definition.postProcessShaders.filter(
-        (binding) => binding.shaderDefinitionId !== command.payload.shaderDefinitionId
+        (binding) =>
+          binding.shaderDefinitionId !== command.payload.shaderDefinitionId
       )
     };
     if (
@@ -1228,7 +1299,10 @@ function applyCreateNPCDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      npcDefinitions: [...session.gameProject.npcDefinitions, normalizedDefinition]
+      npcDefinitions: [
+        ...session.gameProject.npcDefinitions,
+        normalizedDefinition
+      ]
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -1364,10 +1438,11 @@ function applyUpdateNPCDefinitionCommand(
   const normalizedDefinition = normalizeNPCDefinitionForWrite(
     command.payload.definition
   );
-  const nextDefinitions = session.gameProject.npcDefinitions.map((definition) =>
-    definition.definitionId === normalizedDefinition.definitionId
-      ? normalizedDefinition
-      : definition
+  const nextDefinitions = session.gameProject.npcDefinitions.map(
+    (definition) =>
+      definition.definitionId === normalizedDefinition.definitionId
+        ? normalizedDefinition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     normalizedDefinition.definitionId
@@ -1390,10 +1465,11 @@ function applyUpdateItemDefinitionCommand(
   session: AuthoringSession,
   command: UpdateItemDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.itemDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
-      : definition
+  const nextDefinitions = session.gameProject.itemDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definition.definitionId
+        ? command.payload.definition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1416,10 +1492,11 @@ function applyUpdateSpellDefinitionCommand(
   session: AuthoringSession,
   command: UpdateSpellDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.spellDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
-      : definition
+  const nextDefinitions = session.gameProject.spellDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definition.definitionId
+        ? command.payload.definition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1442,10 +1519,11 @@ function applyUpdateDocumentDefinitionCommand(
   session: AuthoringSession,
   command: UpdateDocumentDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.documentDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
-      : definition
+  const nextDefinitions = session.gameProject.documentDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definition.definitionId
+        ? command.payload.definition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1468,10 +1546,11 @@ function applyUpdateDialogueDefinitionCommand(
   session: AuthoringSession,
   command: UpdateDialogueDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.dialogueDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
-      : definition
+  const nextDefinitions = session.gameProject.dialogueDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definition.definitionId
+        ? command.payload.definition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1494,10 +1573,11 @@ function applyUpdateQuestDefinitionCommand(
   session: AuthoringSession,
   command: UpdateQuestDefinitionCommand
 ): AuthoringSession {
-  const nextDefinitions = session.gameProject.questDefinitions.map((definition) =>
-    definition.definitionId === command.payload.definition.definitionId
-      ? command.payload.definition
-      : definition
+  const nextDefinitions = session.gameProject.questDefinitions.map(
+    (definition) =>
+      definition.definitionId === command.payload.definition.definitionId
+        ? command.payload.definition
+        : definition
   );
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1660,7 +1740,10 @@ function commitProjectUICommand(
   nextProject: GameProject,
   affectedAggregateIds: string[]
 ): AuthoringSession {
-  const transaction = createTransactionForCommand(command, affectedAggregateIds);
+  const transaction = createTransactionForCommand(
+    command,
+    affectedAggregateIds
+  );
   return {
     ...session,
     gameProject: nextProject,
@@ -1797,13 +1880,16 @@ function applyUpdateMenuNodeCommand(
         definition.definitionId === command.payload.definitionId
           ? {
               ...definition,
-              root: mapUINodeTree(definition.root, command.payload.nodeId, (node) =>
-                normalizeUINode({
-                  ...node,
-                  ...command.payload.patch,
-                  nodeId: node.nodeId,
-                  children: command.payload.patch.children ?? node.children
-                })
+              root: mapUINodeTree(
+                definition.root,
+                command.payload.nodeId,
+                (node) =>
+                  normalizeUINode({
+                    ...node,
+                    ...command.payload.patch,
+                    nodeId: node.nodeId,
+                    children: command.payload.patch.children ?? node.children
+                  })
               )
             }
           : definition
@@ -1826,7 +1912,10 @@ function applyRemoveMenuNodeCommand(
         definition.definitionId === command.payload.definitionId
           ? {
               ...definition,
-              root: removeUINodeFromTree(definition.root, command.payload.nodeId)
+              root: removeUINodeFromTree(
+                definition.root,
+                command.payload.nodeId
+              )
             }
           : definition
       )
@@ -1897,13 +1986,16 @@ function applyUpdateHUDNodeCommand(
       ...session.gameProject,
       hudDefinition: {
         ...hudDefinition,
-        root: mapUINodeTree(hudDefinition.root, command.payload.nodeId, (node) =>
-          normalizeUINode({
-            ...node,
-            ...command.payload.patch,
-            nodeId: node.nodeId,
-            children: command.payload.patch.children ?? node.children
-          })
+        root: mapUINodeTree(
+          hudDefinition.root,
+          command.payload.nodeId,
+          (node) =>
+            normalizeUINode({
+              ...node,
+              ...command.payload.patch,
+              nodeId: node.nodeId,
+              children: command.payload.patch.children ?? node.children
+            })
         )
       }
     },
@@ -1992,7 +2084,10 @@ export function applyCommand(
     return applySetAssetDefaultShaderParameterOverrideCommand(session, command);
   }
   if (command.kind === "ClearAssetDefaultShaderParameterOverride") {
-    return applyClearAssetDefaultShaderParameterOverrideCommand(session, command);
+    return applyClearAssetDefaultShaderParameterOverrideCommand(
+      session,
+      command
+    );
   }
 
   if (command.kind === "UpdateEnvironmentDefinition") {
@@ -2166,9 +2261,7 @@ export function applyCommand(
   };
 }
 
-export function undoSession(
-  session: AuthoringSession
-): AuthoringSession {
+export function undoSession(session: AuthoringSession): AuthoringSession {
   if (session.undoStack.length === 0) return session;
 
   const previous = session.undoStack[session.undoStack.length - 1];
@@ -2187,9 +2280,7 @@ export function undoSession(
   );
 }
 
-export function redoSession(
-  session: AuthoringSession
-): AuthoringSession {
+export function redoSession(session: AuthoringSession): AuthoringSession {
   if (session.redoStack.length === 0) return session;
 
   const next = session.redoStack[session.redoStack.length - 1];
@@ -2247,13 +2338,17 @@ export function addAssetDefinitionToSession(
     (definition) => definition.definitionId === assetDefinition.definitionId
   );
   const existingDefinition =
-    existingIndex >= 0 ? session.contentLibrary.assetDefinitions[existingIndex] ?? null : null;
+    existingIndex >= 0
+      ? (session.contentLibrary.assetDefinitions[existingIndex] ?? null)
+      : null;
   const nextSurfaceSlots = assetDefinition.surfaceSlots.map((binding) => ({
     ...binding,
     surface:
       existingDefinition?.surfaceSlots?.find(
         (candidate) => candidate.slotName === binding.slotName
-      )?.surface ?? binding.surface ?? null
+      )?.surface ??
+      binding.surface ??
+      null
   }));
 
   const nextDefinitions = [...session.contentLibrary.assetDefinitions];
@@ -2284,7 +2379,8 @@ export function addEnvironmentDefinitionToSession(
   environmentDefinition: EnvironmentDefinition
 ): AuthoringSession {
   const existingIndex = session.contentLibrary.environmentDefinitions.findIndex(
-    (definition) => definition.definitionId === environmentDefinition.definitionId
+    (definition) =>
+      definition.definitionId === environmentDefinition.definitionId
   );
 
   const nextDefinitions = [...session.contentLibrary.environmentDefinitions];
@@ -2307,19 +2403,22 @@ export function addEnvironmentDefinitionToSession(
 export function updateAssetDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
-  patch: Partial<Pick<AssetDefinition, "displayName" | "surfaceSlots" | "deform" | "effect">>
+  patch: Partial<
+    Pick<AssetDefinition, "displayName" | "surfaceSlots" | "deform" | "effect">
+  >
 ): AuthoringSession {
   return {
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      assetDefinitions: session.contentLibrary.assetDefinitions.map((definition) =>
-        definition.definitionId === definitionId
-          ? {
-              ...definition,
-              ...patch
-            }
-          : definition
+      assetDefinitions: session.contentLibrary.assetDefinitions.map(
+        (definition) =>
+          definition.definitionId === definitionId
+            ? {
+                ...definition,
+                ...patch
+              }
+            : definition
       )
     },
     isDirty: true
@@ -2337,6 +2436,208 @@ export function removeAssetDefinitionFromSession(
       assetDefinitions: session.contentLibrary.assetDefinitions.filter(
         (definition) => definition.definitionId !== definitionId
       )
+    },
+    isDirty: true
+  };
+}
+
+export function addAudioClipDefinitionToSession(
+  session: AuthoringSession,
+  audioClipDefinition: AudioClipDefinition
+): AuthoringSession {
+  const existingIndex = (
+    session.contentLibrary.audioClipDefinitions ?? []
+  ).findIndex(
+    (definition) => definition.definitionId === audioClipDefinition.definitionId
+  );
+  const nextDefinitions = [
+    ...(session.contentLibrary.audioClipDefinitions ?? [])
+  ];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = audioClipDefinition;
+  } else {
+    nextDefinitions.push(audioClipDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      audioClipDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateAudioClipDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<
+    Pick<AudioClipDefinition, "displayName" | "source" | "durationSeconds">
+  >
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      audioClipDefinitions: (
+        session.contentLibrary.audioClipDefinitions ?? []
+      ).map((definition) =>
+        definition.definitionId === definitionId
+          ? { ...definition, ...patch }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeAudioClipDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      audioClipDefinitions: (
+        session.contentLibrary.audioClipDefinitions ?? []
+      ).filter((definition) => definition.definitionId !== definitionId),
+      soundCueDefinitions: (
+        session.contentLibrary.soundCueDefinitions ?? []
+      ).map((cue) => ({
+        ...cue,
+        clips: cue.clips.filter(
+          (clip) => clip.audioClipDefinitionId !== definitionId
+        )
+      }))
+    },
+    isDirty: true
+  };
+}
+
+export function addSoundCueDefinitionToSession(
+  session: AuthoringSession,
+  soundCueDefinition: SoundCueDefinition
+): AuthoringSession {
+  const existingIndex = (
+    session.contentLibrary.soundCueDefinitions ?? []
+  ).findIndex(
+    (definition) => definition.definitionId === soundCueDefinition.definitionId
+  );
+  const nextDefinitions = [
+    ...(session.contentLibrary.soundCueDefinitions ?? [])
+  ];
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = soundCueDefinition;
+  } else {
+    nextDefinitions.push(soundCueDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      soundCueDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateSoundCueDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<SoundCueDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      soundCueDefinitions: (
+        session.contentLibrary.soundCueDefinitions ?? []
+      ).map((definition) =>
+        definition.definitionId === definitionId
+          ? { ...definition, ...patch, definitionId }
+          : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeSoundCueDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  const clearCue = (cueDefinitionId: string | null | undefined) =>
+    cueDefinitionId === definitionId ? null : (cueDefinitionId ?? null);
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      soundCueDefinitions: (
+        session.contentLibrary.soundCueDefinitions ?? []
+      ).filter((definition) => definition.definitionId !== definitionId)
+    },
+    gameProject: {
+      ...session.gameProject,
+      soundEventBindings: Object.fromEntries(
+        Object.entries(session.gameProject.soundEventBindings ?? {}).map(
+          ([eventKey, cueDefinitionId]) => [eventKey, clearCue(cueDefinitionId)]
+        )
+      )
+    },
+    regions: new Map(
+      Array.from(session.regions.entries()).map(([regionId, region]) => [
+        regionId,
+        {
+          ...region,
+          audio: {
+            ...region.audio,
+            emitters: (region.audio?.emitters ?? []).filter(
+              (emitter) => emitter.cueDefinitionId !== definitionId
+            ),
+            ambienceZones: (region.audio?.ambienceZones ?? []).filter(
+              (zone) => zone.cueDefinitionId !== definitionId
+            )
+          }
+        }
+      ])
+    ),
+    isDirty: true
+  };
+}
+
+export function setSoundEventBindingInSession(
+  session: AuthoringSession,
+  eventKey: RuntimeSoundEventKey,
+  soundCueDefinitionId: string | null
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      soundEventBindings: {
+        ...session.gameProject.soundEventBindings,
+        [eventKey]: soundCueDefinitionId
+      }
+    },
+    isDirty: true
+  };
+}
+
+export function updateAudioMixerInSession(
+  session: AuthoringSession,
+  patch: Partial<AudioMixerSettings>
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      audioMixer: normalizeAudioMixerSettings({
+        ...session.gameProject.audioMixer,
+        ...patch
+      })
     },
     isDirty: true
   };
@@ -2382,10 +2683,11 @@ export function updateCharacterAnimationDefinitionInSession(
     contentLibrary: {
       ...session.contentLibrary,
       characterAnimationDefinitions:
-        session.contentLibrary.characterAnimationDefinitions.map((definition) =>
-          definition.definitionId === definitionId
-            ? { ...definition, ...patch }
-            : definition
+        session.contentLibrary.characterAnimationDefinitions.map(
+          (definition) =>
+            definition.definitionId === definitionId
+              ? { ...definition, ...patch }
+              : definition
         )
     },
     isDirty: true
@@ -2422,8 +2724,7 @@ export function removeCharacterAnimationDefinitionFromSession(
               slot,
               bindingId === definitionId ? null : bindingId
             ])
-          ) as typeof session.gameProject.playerDefinition.presentation
-            .animationAssetBindings
+          ) as typeof session.gameProject.playerDefinition.presentation.animationAssetBindings
         }
       },
       npcDefinitions: session.gameProject.npcDefinitions.map(
@@ -2567,9 +2868,11 @@ export function addMaskTextureDefinitionToSession(
   session: AuthoringSession,
   maskTextureDefinition: MaskTextureDefinition
 ): AuthoringSession {
-  const existingDefinitions = session.contentLibrary.maskTextureDefinitions ?? [];
+  const existingDefinitions =
+    session.contentLibrary.maskTextureDefinitions ?? [];
   const existingIndex = existingDefinitions.findIndex(
-    (definition) => definition.definitionId === maskTextureDefinition.definitionId
+    (definition) =>
+      definition.definitionId === maskTextureDefinition.definitionId
   );
   const nextDefinitions = [...existingDefinitions];
   if (existingIndex >= 0) {
@@ -2667,13 +2970,14 @@ export function updateSurfaceDefinitionInSession(
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).map((definition) =>
-        definition.definitionId === definitionId
-          ? {
-              ...definition,
-              ...patch
-            }
-          : definition
+      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).map(
+        (definition) =>
+          definition.definitionId === definitionId
+            ? {
+                ...definition,
+                ...patch
+              }
+            : definition
       )
     },
     isDirty: true
@@ -2688,9 +2992,9 @@ export function removeSurfaceDefinitionFromSession(
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      surfaceDefinitions: (session.contentLibrary.surfaceDefinitions ?? []).filter(
-        (definition) => definition.definitionId !== definitionId
-      )
+      surfaceDefinitions: (
+        session.contentLibrary.surfaceDefinitions ?? []
+      ).filter((definition) => definition.definitionId !== definitionId)
     },
     isDirty: true
   };
@@ -2705,13 +3009,14 @@ export function updateMaterialDefinitionInSession(
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      materialDefinitions: session.contentLibrary.materialDefinitions.map((definition) =>
-        definition.definitionId === definitionId
-          ? {
-              ...definition,
-              ...patch
-            }
-          : definition
+      materialDefinitions: session.contentLibrary.materialDefinitions.map(
+        (definition) =>
+          definition.definitionId === definitionId
+            ? {
+                ...definition,
+                ...patch
+              }
+            : definition
       )
     },
     isDirty: true
@@ -2744,8 +3049,7 @@ export function duplicateMaterialDefinitionInSession(
   const projectScope = session.gameProject.identity.id;
   const newDefinitionId =
     options.newDefinitionId ?? `${projectScope}:material:${createUuid()}`;
-  const displayName =
-    options.displayName ?? `${source.displayName} (Copy)`;
+  const displayName = options.displayName ?? `${source.displayName} (Copy)`;
   const copy: MaterialDefinition = {
     definitionId: newDefinitionId,
     definitionKind: "material",
@@ -2798,14 +3102,15 @@ export function updateMaskTextureDefinitionInSession(
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).map(
-        (definition) =>
-          definition.definitionId === definitionId
-            ? {
-                ...definition,
-                ...patch
-              }
-            : definition
+      maskTextureDefinitions: (
+        session.contentLibrary.maskTextureDefinitions ?? []
+      ).map((definition) =>
+        definition.definitionId === definitionId
+          ? {
+              ...definition,
+              ...patch
+            }
+          : definition
       )
     },
     isDirty: true
@@ -2820,9 +3125,9 @@ export function removeMaskTextureDefinitionFromSession(
     ...session,
     contentLibrary: {
       ...session.contentLibrary,
-      maskTextureDefinitions: (session.contentLibrary.maskTextureDefinitions ?? []).filter(
-        (definition) => definition.definitionId !== definitionId
-      )
+      maskTextureDefinitions: (
+        session.contentLibrary.maskTextureDefinitions ?? []
+      ).filter((definition) => definition.definitionId !== definitionId)
     },
     isDirty: true
   };
@@ -2852,17 +3157,18 @@ export function materialDefinitionHasReferences(
   session: AuthoringSession,
   definitionId: string
 ): boolean {
-  const boundInAssets = session.contentLibrary.assetDefinitions.some((assetDefinition) =>
-    assetDefinition.surfaceSlots.some(
-      (binding) =>
-        binding.surface?.kind === "inline" &&
-        binding.surface.surface.layers.some(
-          (layer) =>
-            (layer.kind === "appearance" || layer.kind === "emission") &&
-            layer.content.kind === "material" &&
-            layer.content.materialDefinitionId === definitionId
-        )
-    )
+  const boundInAssets = session.contentLibrary.assetDefinitions.some(
+    (assetDefinition) =>
+      assetDefinition.surfaceSlots.some(
+        (binding) =>
+          binding.surface?.kind === "inline" &&
+          binding.surface.surface.layers.some(
+            (layer) =>
+              (layer.kind === "appearance" || layer.kind === "emission") &&
+              layer.content.kind === "material" &&
+              layer.content.materialDefinitionId === definitionId
+          )
+      )
   );
   if (boundInAssets) {
     return true;
@@ -2894,8 +3200,6 @@ export function createSceneFolderId(): string {
   return createScopedId("scene-folder");
 }
 
-export function markSessionClean(
-  session: AuthoringSession
-): AuthoringSession {
+export function markSessionClean(session: AuthoringSession): AuthoringSession {
   return { ...session, isDirty: false };
 }

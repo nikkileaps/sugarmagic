@@ -99,12 +99,13 @@ describe("environment migration", () => {
         binding.shaderDefinitionId === createBuiltInFogTintShaderId("project")
     );
 
-    expect(normalized.identity.version).toBe(5);
+    expect(normalized.identity.version).toBe(6);
     expect(fogBinding).toBeTruthy();
     expect(fogBinding?.enabled).toBe(true);
     expect(
-      fogBinding?.parameterOverrides.find((override) => override.parameterId === "density")
-        ?.value
+      fogBinding?.parameterOverrides.find(
+        (override) => override.parameterId === "density"
+      )?.value
     ).toBe(0.008);
     expect(definition.atmosphere.fog.color).toBeGreaterThan(0);
   });
@@ -122,10 +123,13 @@ describe("environment migration", () => {
 
     expect(bloomBinding).toBeTruthy();
     expect(
-      bloomBinding?.parameterOverrides.find((override) => override.parameterId === "strength")
-        ?.value
+      bloomBinding?.parameterOverrides.find(
+        (override) => override.parameterId === "strength"
+      )?.value
     ).toBe(0.6);
-    expect("bloom" in (definition.atmosphere as Record<string, unknown>)).toBe(false);
+    expect("bloom" in (definition.atmosphere as Record<string, unknown>)).toBe(
+      false
+    );
   });
 
   it("fills in DEFAULT_SUN_SHADOWS on a v2 document missing the shadows block", () => {
@@ -162,8 +166,18 @@ describe("environment migration", () => {
             ambient: { mode: "flat", color: 0xffffff, intensity: 0.6 }
           },
           atmosphere: {
-            fog: { enabled: false, density: 0.008, color: 0x808080, heightFalloff: 0 },
-            ssao: { enabled: false, kernelRadius: 8, minDistance: 0.005, maxDistance: 0.1 },
+            fog: {
+              enabled: false,
+              density: 0.008,
+              color: 0x808080,
+              heightFalloff: 0
+            },
+            ssao: {
+              enabled: false,
+              kernelRadius: 8,
+              minDistance: 0.005,
+              maxDistance: 0.1
+            },
             sky: {
               enabled: true,
               mode: "gradient",
@@ -232,8 +246,18 @@ describe("environment migration", () => {
             ambient: { mode: "flat", color: 0xffffff, intensity: 0.6 }
           },
           atmosphere: {
-            fog: { enabled: false, density: 0.008, color: 0x808080, heightFalloff: 0 },
-            ssao: { enabled: false, kernelRadius: 8, minDistance: 0.005, maxDistance: 0.1 },
+            fog: {
+              enabled: false,
+              density: 0.008,
+              color: 0x808080,
+              heightFalloff: 0
+            },
+            ssao: {
+              enabled: false,
+              kernelRadius: 8,
+              minDistance: 0.005,
+              maxDistance: 0.1
+            },
             sky: {
               enabled: true,
               mode: "gradient",

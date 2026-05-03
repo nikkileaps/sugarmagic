@@ -15,6 +15,7 @@ import {
   createDefaultRegionLandscapeState,
   createPlacedAssetInstance,
   createRegionAreaDefinition,
+  createRegionAudioState,
   createRegionItemPresence,
   createLandscapeSurfaceSlot,
   createRegionNPCBehaviorDefinition,
@@ -30,7 +31,9 @@ import {
   type SurfaceContext
 } from "../surface";
 
-function defaultEnvironmentId(contentLibrary: ContentLibrarySnapshot): string | null {
+function defaultEnvironmentId(
+  contentLibrary: ContentLibrarySnapshot
+): string | null {
   return contentLibrary.environmentDefinitions[0]?.definitionId ?? null;
 }
 
@@ -132,7 +135,9 @@ function normalizeShaderReferenceForLoad(
   };
 }
 
-function normalizeSurfaceBindingForLoad<C extends SurfaceContext = SurfaceContext>(
+function normalizeSurfaceBindingForLoad<
+  C extends SurfaceContext = SurfaceContext
+>(
   ownerLabel: string,
   field: string,
   value: SurfaceBinding<C> | null | undefined
@@ -163,22 +168,31 @@ export function normalizeRegionDocumentForLoad(
   region: RegionDocument,
   contentLibrary: ContentLibrarySnapshot
 ): RegionDocument {
-  const legacyLandscape = (region as RegionDocument & {
-    landscape?: Partial<ReturnType<typeof createDefaultRegionLandscapeState>> & {
-      baseColor?: number;
-    };
-  }).landscape;
+  const legacyLandscape = (
+    region as RegionDocument & {
+      landscape?: Partial<
+        ReturnType<typeof createDefaultRegionLandscapeState>
+      > & {
+        baseColor?: number;
+      };
+    }
+  ).landscape;
   const defaultLandscape = createDefaultRegionLandscapeState({
-    surfaceSlots: createDefaultRegionLandscapeSurfaceSlots(legacyLandscape?.baseColor)
+    surfaceSlots: createDefaultRegionLandscapeSurfaceSlots(
+      legacyLandscape?.baseColor
+    )
   });
-  const normalizedBinding = (region as RegionDocument & {
-    environmentBinding?: { defaultEnvironmentId?: string | null };
-  }).environmentBinding;
+  const normalizedBinding = (
+    region as RegionDocument & {
+      environmentBinding?: { defaultEnvironmentId?: string | null };
+    }
+  ).environmentBinding;
 
   return {
     ...region,
     lorePageId:
-      typeof region.lorePageId === "string" && region.lorePageId.trim().length > 0
+      typeof region.lorePageId === "string" &&
+      region.lorePageId.trim().length > 0
         ? region.lorePageId.trim()
         : null,
     scene: {
@@ -208,17 +222,20 @@ export function normalizeRegionDocumentForLoad(
     },
     environmentBinding: {
       defaultEnvironmentId:
-        normalizedBinding?.defaultEnvironmentId ?? defaultEnvironmentId(contentLibrary)
+        normalizedBinding?.defaultEnvironmentId ??
+        defaultEnvironmentId(contentLibrary)
     },
     areas: (region.areas ?? []).map((area) =>
       createRegionAreaDefinition({
         ...area,
         lorePageId:
-          typeof area.lorePageId === "string" && area.lorePageId.trim().length > 0
+          typeof area.lorePageId === "string" &&
+          area.lorePageId.trim().length > 0
             ? area.lorePageId.trim()
             : null,
         parentAreaId:
-          typeof area.parentAreaId === "string" && area.parentAreaId.trim().length > 0
+          typeof area.parentAreaId === "string" &&
+          area.parentAreaId.trim().length > 0
             ? area.parentAreaId.trim()
             : null
       })
@@ -227,18 +244,21 @@ export function normalizeRegionDocumentForLoad(
       createRegionNPCBehaviorDefinition({
         ...behavior,
         displayName:
-          typeof behavior.displayName === "string" && behavior.displayName.trim().length > 0
+          typeof behavior.displayName === "string" &&
+          behavior.displayName.trim().length > 0
             ? behavior.displayName.trim()
             : undefined,
         tasks: (behavior.tasks ?? []).map((task) =>
           createRegionNPCBehaviorTask({
             ...task,
             displayName:
-              typeof task.displayName === "string" && task.displayName.trim().length > 0
+              typeof task.displayName === "string" &&
+              task.displayName.trim().length > 0
                 ? task.displayName.trim()
                 : undefined,
             description:
-              typeof task.description === "string" && task.description.trim().length > 0
+              typeof task.description === "string" &&
+              task.description.trim().length > 0
                 ? task.description
                 : null,
             currentActivity:
@@ -275,7 +295,8 @@ export function normalizeRegionDocumentForLoad(
                       valueType:
                         task.activation.worldFlagEquals.valueType ?? "boolean",
                       value:
-                        typeof task.activation.worldFlagEquals.value === "string" &&
+                        typeof task.activation.worldFlagEquals.value ===
+                          "string" &&
                         task.activation.worldFlagEquals.value.trim().length > 0
                           ? task.activation.worldFlagEquals.value.trim()
                           : null
@@ -313,6 +334,13 @@ export function normalizeRegionDocumentForLoad(
         legacyLandscape?.effect ?? null
       ),
       paintPayload: legacyLandscape?.paintPayload ?? null
-    })
+    }),
+    audio: createRegionAudioState(
+      (
+        region as RegionDocument & {
+          audio?: Parameters<typeof createRegionAudioState>[0];
+        }
+      ).audio
+    )
   };
 }
