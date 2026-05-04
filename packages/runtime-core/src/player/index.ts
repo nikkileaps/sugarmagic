@@ -6,6 +6,7 @@ import type {
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   ContentLibrarySnapshot,
+  MechanicsDefinition,
   PlayerAnimationSlot,
   PlayerDefinition,
   RegionDocument
@@ -24,7 +25,7 @@ import {
   type Entity,
   type World
 } from "../ecs";
-import { DEFAULT_MAX_BATTERY, MAX_RESONANCE } from "../caster";
+import { createStatCarrier } from "../mechanics";
 
 const gltfLoader = new GLTFLoader();
 
@@ -64,7 +65,12 @@ function createCapsuleRoot(definition: PlayerDefinition): THREE.Group {
   );
 
   const capsule = new THREE.Mesh(
-    new THREE.CapsuleGeometry(radius, Math.max(0.05, height - radius * 2), 8, 16),
+    new THREE.CapsuleGeometry(
+      radius,
+      Math.max(0.05, height - radius * 2),
+      8,
+      16
+    ),
     new THREE.MeshStandardMaterial({
       color: DEFAULT_CAPSULE_COLOR,
       roughness: 0.35,
@@ -141,10 +147,13 @@ export interface RuntimePlayerSpawn {
 export function spawnRuntimePlayerEntity(
   world: World,
   region: RegionDocument | null,
-  playerDefinition: PlayerDefinition
+  playerDefinition: PlayerDefinition,
+  mechanics: MechanicsDefinition
 ): RuntimePlayerSpawn {
   const entity = world.createEntity();
-  const position = region?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+  const position = region?.scene.playerPresence?.transform.position ?? [
+    0, 0, 0
+  ];
   world.addComponent(entity, new Position(...position));
   world.addComponent(entity, new Velocity());
   world.addComponent(
@@ -154,10 +163,7 @@ export function spawnRuntimePlayerEntity(
   world.addComponent(
     entity,
     new Caster(
-      Math.max(0, Math.min(DEFAULT_MAX_BATTERY, playerDefinition.casterProfile.initialBattery)),
-      DEFAULT_MAX_BATTERY,
-      playerDefinition.casterProfile.rechargeRate,
-      Math.max(0, Math.min(MAX_RESONANCE, playerDefinition.casterProfile.initialResonance)),
+      createStatCarrier(mechanics),
       [...playerDefinition.casterProfile.allowedSpellTags],
       [...playerDefinition.casterProfile.blockedSpellTags]
     )
@@ -257,9 +263,11 @@ export function createPlayerVisualController(
         ? getCharacterModelDefinition(contentLibrary, modelDefinitionId)
         : null;
       const modelSourceUrl = getAssetSourceUrl(modelDefinition, assetSources);
-      const availableSlots = (Object.entries(
-        playerDefinition.presentation.animationAssetBindings
-      ) as Array<[PlayerAnimationSlot, string | null]>)
+      const availableSlots = (
+        Object.entries(
+          playerDefinition.presentation.animationAssetBindings
+        ) as Array<[PlayerAnimationSlot, string | null]>
+      )
         .filter(([, definitionId]) => Boolean(definitionId))
         .map(([slot]) => slot);
 
@@ -299,7 +307,10 @@ export function createPlayerVisualController(
         // from clone) the computed bbox is garbage and normalizeModelScale
         // then computes a wildly wrong scale.
         clonedScene.updateMatrixWorld(true);
-        normalizeModelScale(clonedScene, playerDefinition.physicalProfile.height);
+        normalizeModelScale(
+          clonedScene,
+          playerDefinition.physicalProfile.height
+        );
         // Disable frustum culling on skinned meshes — their bounding sphere
         // is computed from the bind-pose geometry and goes stale after
         // rescaling and once animations deform the mesh, which can make the
@@ -312,7 +323,10 @@ export function createPlayerVisualController(
         });
         modelRoot.add(clonedScene);
 
-        const animationClips = new Map<PlayerAnimationSlot, THREE.AnimationClip>();
+        const animationClips = new Map<
+          PlayerAnimationSlot,
+          THREE.AnimationClip
+        >();
         for (const [slot, definitionId] of Object.entries(
           playerDefinition.presentation.animationAssetBindings
         ) as Array<[PlayerAnimationSlot, string | null]>) {
@@ -376,7 +390,8 @@ export function createPlayerVisualController(
       } catch {
         warnings.push({
           code: "model-load-failed",
-          message: "The bound player model failed to load; showing capsule preview instead."
+          message:
+            "The bound player model failed to load; showing capsule preview instead."
         });
 
         const capsuleRoot = createCapsuleRoot(playerDefinition);

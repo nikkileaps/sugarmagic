@@ -78,6 +78,7 @@ const allowedInternalDeps = {
     "@sugarmagic/ui"
   ]),
   "@sugarmagic/testing": new Set([
+    "@sugarmagic/studio",
     "@sugarmagic/target-web",
     "@sugarmagic/domain",
     "@sugarmagic/io",

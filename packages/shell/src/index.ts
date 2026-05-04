@@ -45,6 +45,7 @@ export type CoreDesignWorkspaceKind =
   | "documents"
   | "dialogues"
   | "quests"
+  | "mechanics"
   | "game-ui";
 
 export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
@@ -58,6 +59,7 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "documents",
   "dialogues",
   "quests",
+  "mechanics",
   "game-ui"
 ];
 

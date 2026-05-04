@@ -6,7 +6,7 @@ function escapeHtml(value: string): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
+    .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
 
@@ -163,7 +163,10 @@ export function createRuntimeSpellMenuUI(
     container.classList.toggle("visible", open);
     if (open) {
       currentSpells = casterManager.getAvailableSpells();
-      selectedIndex = Math.min(selectedIndex, Math.max(0, currentSpells.length - 1));
+      selectedIndex = Math.min(
+        selectedIndex,
+        Math.max(0, currentSpells.length - 1)
+      );
       render();
     }
     onOpenChange?.(open);
@@ -175,7 +178,8 @@ export function createRuntimeSpellMenuUI(
 
   function moveSelection(delta: number) {
     if (currentSpells.length === 0) return;
-    selectedIndex = (selectedIndex + delta + currentSpells.length) % currentSpells.length;
+    selectedIndex =
+      (selectedIndex + delta + currentSpells.length) % currentSpells.length;
     render();
   }
 
@@ -183,7 +187,10 @@ export function createRuntimeSpellMenuUI(
     const battery = casterManager.getBattery();
     const maxBattery = Math.max(casterManager.getMaxBattery(), 1);
     const resonance = casterManager.getResonance();
-    const batteryPercent = Math.max(0, Math.min(100, (battery / maxBattery) * 100));
+    const batteryPercent = Math.max(
+      0,
+      Math.min(100, (battery / maxBattery) * 100)
+    );
     const resonancePercent = Math.max(0, Math.min(100, resonance));
     header.innerHTML = `
       <div>
@@ -218,9 +225,13 @@ export function createRuntimeSpellMenuUI(
       button.type = "button";
       button.className = `sm-spell-menu-card${index === selectedIndex ? " selected" : ""}`;
       button.disabled = !availability.canCast;
+      const costLabel =
+        typeof spell.castable.args.batteryCost === "number"
+          ? `Cost ${spell.castable.args.batteryCost}`
+          : "Castable";
       button.innerHTML = `
         <div class="sm-spell-menu-card-title">${escapeHtml(spell.displayName)}</div>
-        <div class="sm-spell-menu-card-meta">Cost ${spell.batteryCost} · ${escapeHtml(spell.tags.join(", ") || "No tags")}</div>
+        <div class="sm-spell-menu-card-meta">${escapeHtml(costLabel)} · ${escapeHtml(spell.tags.join(", ") || "No tags")}</div>
       `;
       button.addEventListener("click", () => {
         castSpellAtIndex(index);

@@ -26,6 +26,7 @@ import {
   type AudioMixerSettings,
   type ContentLibrarySnapshot,
   type ItemDefinition,
+  type MechanicsDefinition,
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
@@ -43,6 +44,7 @@ import {
   type RuntimeAudioController,
   type RuntimeSoundCommand
 } from "../audio";
+import { assertValidMechanicsDefinition } from "../mechanics";
 import { type World, type Entity, Position } from "../ecs";
 import {
   BillboardComponent,
@@ -148,6 +150,7 @@ export interface RuntimeGameplaySessionControllerOptions {
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
+  mechanics: MechanicsDefinition;
   contentLibrary?: ContentLibrarySnapshot;
   soundEventBindings?: SoundEventBindingMap;
   audioMixer?: AudioMixerSettings;
@@ -332,6 +335,7 @@ export function createRuntimeGameplaySessionController(
     npcDefinitions,
     dialogueDefinitions,
     questDefinitions,
+    mechanics,
     contentLibrary,
     soundEventBindings,
     audioMixer,
@@ -340,6 +344,12 @@ export function createRuntimeGameplaySessionController(
     onSpellCastSuccess,
     onAudioCommands
   } = options;
+  assertValidMechanicsDefinition(mechanics, {
+    consumers: spellDefinitions.map((spell) => ({
+      label: `/spellDefinitions/${spell.definitionId}/castable`,
+      invocation: spell.castable
+    }))
+  });
 
   const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
@@ -1551,6 +1561,7 @@ export function createRuntimeGameplaySessionController(
   world.addSystem(questSystem);
   world.addSystem(casterSystem);
   casterManager.setWorld(world);
+  casterManager.registerMechanics(mechanics);
   casterManager.registerDefinitions(spellDefinitions);
   casterManager.setSpellCastHandler((spell, result) => {
     questManager.notifySpellCast(spell.definitionId);

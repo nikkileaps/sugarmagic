@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   type DeploymentActionExecutionResult,
@@ -17,7 +18,9 @@ interface SugarDeployActionRequest {
   };
 }
 
-function readJsonBody(req: import("node:http").IncomingMessage): Promise<unknown> {
+function readJsonBody(
+  req: import("node:http").IncomingMessage
+): Promise<unknown> {
   return new Promise((resolveBody, rejectBody) => {
     let buffer = "";
     req.on("data", (chunk) => {
@@ -85,113 +88,146 @@ function createSugarDeployHostPlugin(): Plugin {
   return {
     name: "sugardeploy-host-actions",
     configureServer(server) {
-      server.middlewares.use("/__sugardeploy/action", async (req, res, next) => {
-        if (req.method !== "POST") {
-          next();
-          return;
-        }
+      server.middlewares.use(
+        "/__sugardeploy/action",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
 
-        try {
-          const body = (await readJsonBody(req)) as Partial<SugarDeployActionRequest>;
-          const actionKind = body.actionKind;
-          if (
-            actionKind !== "deploy" &&
-            actionKind !== "stop" &&
-            actionKind !== "status" &&
-            actionKind !== "health"
-          ) {
-            sendJson(res, 400, {
-              ok: false,
-              message: "Invalid SugarDeploy action."
+          try {
+            const body = (await readJsonBody(
+              req
+            )) as Partial<SugarDeployActionRequest>;
+            const actionKind = body.actionKind;
+            if (
+              actionKind !== "deploy" &&
+              actionKind !== "stop" &&
+              actionKind !== "status" &&
+              actionKind !== "health"
+            ) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "Invalid SugarDeploy action."
+              });
+              return;
+            }
+
+            const deploymentSettings = normalizeDeploymentSettings(
+              body.gameProject?.deployment as never
+            );
+            const descriptor = resolveDeploymentActionFromSettings(
+              deploymentSettings,
+              actionKind
+            );
+
+            if (!descriptor.supported) {
+              sendJson(res, 400, {
+                ok: false,
+                descriptor,
+                exitCode: null,
+                stdout: "",
+                stderr: "",
+                message:
+                  descriptor.reason ?? "SugarDeploy action is not supported."
+              } satisfies DeploymentActionExecutionResult);
+              return;
+            }
+
+            if (!descriptor.command) {
+              sendJson(res, 200, {
+                ok: true,
+                descriptor,
+                exitCode: 0,
+                stdout: "",
+                stderr: "",
+                message:
+                  descriptor.healthUrl != null
+                    ? `SugarDeploy resolved ${actionKind} without a shell command.`
+                    : "SugarDeploy action completed."
+              } satisfies DeploymentActionExecutionResult);
+              return;
+            }
+
+            const resolvedCwd = resolve(descriptor.command.cwd);
+            if (!existsSync(resolvedCwd)) {
+              sendJson(res, 400, {
+                ok: false,
+                descriptor,
+                exitCode: null,
+                stdout: "",
+                stderr: "",
+                message:
+                  `Working directory does not exist: ${resolvedCwd}. ` +
+                  "Save the project first and make sure the Working Directory override points at the game root on disk."
+              } satisfies DeploymentActionExecutionResult);
+              return;
+            }
+
+            const runResult = await runHostCommand({
+              ...descriptor.command,
+              cwd: resolvedCwd
             });
-            return;
-          }
-
-          const deploymentSettings = normalizeDeploymentSettings(
-            body.gameProject?.deployment as never
-          );
-          const descriptor = resolveDeploymentActionFromSettings(
-            deploymentSettings,
-            actionKind
-          );
-
-          if (!descriptor.supported) {
-            sendJson(res, 400, {
-              ok: false,
-              descriptor,
-              exitCode: null,
-              stdout: "",
-              stderr: "",
-              message: descriptor.reason ?? "SugarDeploy action is not supported."
-            } satisfies DeploymentActionExecutionResult);
-            return;
-          }
-
-          if (!descriptor.command) {
-            sendJson(res, 200, {
-              ok: true,
-              descriptor,
-              exitCode: 0,
-              stdout: "",
-              stderr: "",
+            sendJson(res, runResult.exitCode === 0 ? 200 : 500, {
+              ok: runResult.exitCode === 0,
+              descriptor: {
+                ...descriptor,
+                command: {
+                  ...descriptor.command,
+                  cwd: resolvedCwd
+                }
+              },
+              exitCode: runResult.exitCode,
+              stdout: runResult.stdout,
+              stderr: runResult.stderr,
               message:
-                descriptor.healthUrl != null
-                  ? `SugarDeploy resolved ${actionKind} without a shell command.`
-                  : "SugarDeploy action completed."
+                runResult.exitCode === 0
+                  ? `SugarDeploy ${actionKind} completed successfully.`
+                  : `SugarDeploy ${actionKind} failed with exit code ${runResult.exitCode ?? "unknown"}.`
             } satisfies DeploymentActionExecutionResult);
-            return;
-          }
-
-          const resolvedCwd = resolve(descriptor.command.cwd);
-          if (!existsSync(resolvedCwd)) {
-            sendJson(res, 400, {
+          } catch (error) {
+            sendJson(res, 500, {
               ok: false,
-              descriptor,
-              exitCode: null,
-              stdout: "",
-              stderr: "",
-              message:
-                `Working directory does not exist: ${resolvedCwd}. ` +
-                "Save the project first and make sure the Working Directory override points at the game root on disk."
-            } satisfies DeploymentActionExecutionResult);
-            return;
+              message: error instanceof Error ? error.message : String(error)
+            });
           }
-
-          const runResult = await runHostCommand({
-            ...descriptor.command,
-            cwd: resolvedCwd
-          });
-          sendJson(res, runResult.exitCode === 0 ? 200 : 500, {
-            ok: runResult.exitCode === 0,
-            descriptor: {
-              ...descriptor,
-              command: {
-                ...descriptor.command,
-                cwd: resolvedCwd
-              }
-            },
-            exitCode: runResult.exitCode,
-            stdout: runResult.stdout,
-            stderr: runResult.stderr,
-            message:
-              runResult.exitCode === 0
-                ? `SugarDeploy ${actionKind} completed successfully.`
-                : `SugarDeploy ${actionKind} failed with exit code ${runResult.exitCode ?? "unknown"}.`
-          } satisfies DeploymentActionExecutionResult);
-        } catch (error) {
-          sendJson(res, 500, {
-            ok: false,
-            message: error instanceof Error ? error.message : String(error)
-          });
         }
-      });
+      );
+    }
+  };
+}
+
+function createMechanicsSchemaPlugin(): Plugin {
+  const schemaPath = new URL(
+    "../../packages/domain/schemas/mechanics.schema.json",
+    import.meta.url
+  ).pathname;
+  return {
+    name: "sugarmagic-mechanics-schema",
+    configureServer(server) {
+      server.middlewares.use(
+        "/schemas/mechanics.schema.json",
+        async (_req, res) => {
+          res.statusCode = 200;
+          res.setHeader(
+            "content-type",
+            "application/schema+json; charset=utf-8"
+          );
+          res.end(await readFile(schemaPath, "utf8"));
+        }
+      );
     }
   };
 }
 
 export default defineConfig({
   envDir: "../..",
-  plugins: [react(), createSugarDeployHostPlugin()],
+  plugins: [
+    react(),
+    createSugarDeployHostPlugin(),
+    createMechanicsSchemaPlugin()
+  ],
   resolve: {
     alias: {
       "@sugarmagic/target-web": new URL(

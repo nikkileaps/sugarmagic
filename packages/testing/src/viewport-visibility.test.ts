@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { shouldShowSharedViewport } from "../../../apps/studio/src/viewport/viewportVisibility";
+import { shouldShowSharedViewport } from "@sugarmagic/studio";
 
 describe("Studio shared viewport visibility", () => {
   it("hides the shared viewport while Surfaces owns the center panel", () => {

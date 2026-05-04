@@ -45,6 +45,7 @@ import {
   type RegionDocument,
   type HUDDefinition,
   type MenuDefinition,
+  type MechanicsDefinition,
   type SoundEventBindingMap,
   type AudioMixerSettings,
   type UITheme
@@ -138,6 +139,7 @@ export interface WebRuntimeStartState {
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
+  mechanics: MechanicsDefinition;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -1147,7 +1149,8 @@ export function createWebRuntimeHost(
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,
-      state.playerDefinition
+      state.playerDefinition,
+      state.mechanics
     );
     playerEyeHeight = playerSpawn.eyeHeight;
 
@@ -1187,6 +1190,7 @@ export function createWebRuntimeHost(
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
       contentLibrary: state.contentLibrary,
+      mechanics: state.mechanics,
       soundEventBindings: state.soundEventBindings,
       audioMixer: state.audioMixer,
       pluginManager,

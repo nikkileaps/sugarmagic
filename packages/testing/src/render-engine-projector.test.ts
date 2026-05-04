@@ -23,7 +23,7 @@ import {
   type ProjectionStores
 } from "@sugarmagic/shell";
 import { createWebRenderEngine } from "@sugarmagic/render-web";
-import { connectStudioRenderEngineProjector } from "../../../apps/studio/src/viewport/RenderEngineProjector";
+import { connectStudioRenderEngineProjector } from "@sugarmagic/studio";
 
 const TEST_DESCRIPTOR: GameRootDescriptor = {
   rootPath: "/tmp/test-project",

@@ -21,6 +21,11 @@ import {
   type SpellDefinition
 } from "../spell-definition";
 import {
+  createDefaultMechanicsDefinition,
+  normalizeMechanicsDefinition,
+  type MechanicsDefinition
+} from "../mechanics";
+import {
   createDefaultPlayerDefinition,
   normalizePlayerDefinition,
   type PlayerDefinition
@@ -140,6 +145,7 @@ export interface GameProject {
   uiTheme: UITheme;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
+  mechanics: MechanicsDefinition;
 }
 
 export function normalizeGameProject(
@@ -161,6 +167,7 @@ export function normalizeGameProject(
         | "uiTheme"
         | "soundEventBindings"
         | "audioMixer"
+        | "mechanics"
       > & {
         deployment?: Partial<DeploymentSettings> | null;
         pluginConfigurations?: Array<
@@ -178,8 +185,10 @@ export function normalizeGameProject(
         uiTheme?: Partial<UITheme> | null;
         soundEventBindings?: Partial<Record<string, string | null>> | null;
         audioMixer?: Partial<AudioMixerSettings> | null;
+        mechanics?: Partial<MechanicsDefinition> | null;
       })
 ): GameProject {
+  const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
   const starterMenus = createDefaultMenuDefinitions(gameProject.identity.id);
   const sourceMenus =
     gameProject.menuDefinitions && gameProject.menuDefinitions.length > 0
@@ -224,7 +233,8 @@ export function normalizeGameProject(
     soundEventBindings: normalizeSoundEventBindings(
       gameProject.soundEventBindings
     ),
-    audioMixer: normalizeAudioMixerSettings(gameProject.audioMixer)
+    audioMixer: normalizeAudioMixerSettings(gameProject.audioMixer),
+    mechanics
   };
 }
 
@@ -251,6 +261,7 @@ export function createDefaultGameProject(
     hudDefinition: createDefaultHUD(slug),
     uiTheme: createDefaultUITheme(),
     soundEventBindings: normalizeSoundEventBindings(null),
-    audioMixer: createDefaultAudioMixerSettings()
+    audioMixer: createDefaultAudioMixerSettings(),
+    mechanics: createDefaultMechanicsDefinition()
   };
 }

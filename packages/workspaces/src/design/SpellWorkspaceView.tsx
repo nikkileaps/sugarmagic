@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   ActionIcon,
   Box,
+  Checkbox,
   Group,
   Menu,
   NumberInput,
@@ -15,6 +16,7 @@ import {
 } from "@mantine/core";
 import type {
   AssetDefinition,
+  MechanicsDefinition,
   SemanticCommand,
   SpellDefinition,
   SpellEffectDefinition,
@@ -22,7 +24,10 @@ import type {
 } from "@sugarmagic/domain";
 import {
   createDefaultSpellDefinition,
-  createDefaultSpellEffectDefinition
+  createDefaultSpellEffectDefinition,
+  type CastableDefinition,
+  type CastableInput,
+  type JsonValue
 } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
@@ -31,6 +36,7 @@ export interface SpellWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   spellDefinitions: SpellDefinition[];
+  mechanics: MechanicsDefinition;
   assetDefinitions: AssetDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
@@ -59,6 +65,30 @@ function stringifyValue(value: unknown): string {
   return "";
 }
 
+function defaultCastableArg(input: CastableInput): JsonValue {
+  if (input.default !== undefined) return input.default;
+  if (input.type === "number") return 0;
+  if (input.type === "boolean") return false;
+  if (input.type === "object") return {};
+  return "";
+}
+
+function createDefaultCastableArgs(
+  castable: CastableDefinition | null | undefined
+): Record<string, JsonValue> {
+  if (!castable) return {};
+  return Object.fromEntries(
+    castable.inputs.map((input) => [input.id, defaultCastableArg(input)])
+  );
+}
+
+function formatInputLabel(input: CastableInput): string {
+  return input.id
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function parseTagList(value: string): string[] {
   return value
     .split(",")
@@ -69,7 +99,13 @@ function parseTagList(value: string): string[] {
 export function useSpellWorkspaceView(
   props: SpellWorkspaceViewProps
 ): WorkspaceViewContribution {
-  const { gameProjectId, spellDefinitions, assetDefinitions, onCommand } = props;
+  const {
+    gameProjectId,
+    spellDefinitions,
+    mechanics,
+    assetDefinitions,
+    onCommand
+  } = props;
   const [selectedSpellId, setSelectedSpellId] = useState<string | null>(
     spellDefinitions[0]?.definitionId ?? null
   );
@@ -84,7 +120,9 @@ export function useSpellWorkspaceView(
     if (spellDefinitions.length === 0) return null;
     if (
       selectedSpellId &&
-      spellDefinitions.some((definition) => definition.definitionId === selectedSpellId)
+      spellDefinitions.some(
+        (definition) => definition.definitionId === selectedSpellId
+      )
     ) {
       return selectedSpellId;
     }
@@ -110,12 +148,38 @@ export function useSpellWorkspaceView(
     );
   }, [searchQuery, spellDefinitions]);
 
-  const assetOptions = useMemo(() => toAssetOptions(assetDefinitions), [assetDefinitions]);
+  const assetOptions = useMemo(
+    () => toAssetOptions(assetDefinitions),
+    [assetDefinitions]
+  );
+  const castableOptions = useMemo(
+    () =>
+      mechanics.castables.map((definition) => ({
+        value: definition.id,
+        label: definition.displayName
+      })),
+    [mechanics.castables]
+  );
+
+  const selectedCastable = useMemo(
+    () =>
+      selectedSpell
+        ? (mechanics.castables.find(
+            (definition) => definition.id === selectedSpell.castable.id
+          ) ?? null)
+        : null,
+    [mechanics.castables, selectedSpell]
+  );
 
   function createSpell() {
     if (!gameProjectId) return;
+    const castable = mechanics.castables[0] ?? null;
     const definition = createDefaultSpellDefinition({
-      displayName: `Spell ${spellDefinitions.length + 1}`
+      displayName: `Spell ${spellDefinitions.length + 1}`,
+      castable: {
+        id: castable?.id ?? "",
+        args: createDefaultCastableArgs(castable)
+      }
     });
     onCommand({
       kind: "CreateSpellDefinition",
@@ -182,6 +246,97 @@ export function useSpellWorkspaceView(
     });
   }
 
+  function updateCastableArg(
+    definition: SpellDefinition,
+    input: CastableInput,
+    value: JsonValue
+  ) {
+    updateSpell({
+      ...definition,
+      castable: {
+        ...definition.castable,
+        args: {
+          ...definition.castable.args,
+          [input.id]: value
+        }
+      }
+    });
+  }
+
+  function renderCastableArgEditor(
+    definition: SpellDefinition,
+    input: CastableInput
+  ) {
+    const label = formatInputLabel(input);
+    const description = input.description;
+    const value = definition.castable.args[input.id];
+
+    if (input.type === "number") {
+      return (
+        <NumberInput
+          key={input.id}
+          label={label}
+          description={description}
+          value={typeof value === "number" ? value : 0}
+          onChange={(nextValue) => {
+            if (typeof nextValue !== "number") return;
+            updateCastableArg(definition, input, nextValue);
+          }}
+        />
+      );
+    }
+
+    if (input.type === "boolean") {
+      return (
+        <Checkbox
+          key={input.id}
+          label={label}
+          description={description}
+          checked={value === true}
+          onChange={(event) =>
+            updateCastableArg(definition, input, event.currentTarget.checked)
+          }
+        />
+      );
+    }
+
+    if (input.type === "object") {
+      return (
+        <Textarea
+          key={input.id}
+          label={label}
+          description={description ?? "JSON object"}
+          minRows={3}
+          value={JSON.stringify(
+            value && typeof value === "object" ? value : {},
+            null,
+            2
+          )}
+          onChange={(event) => {
+            try {
+              const parsed = JSON.parse(event.currentTarget.value) as JsonValue;
+              updateCastableArg(definition, input, parsed);
+            } catch {
+              // Keep invalid JSON local in the text field until the author fixes it.
+            }
+          }}
+        />
+      );
+    }
+
+    return (
+      <TextInput
+        key={input.id}
+        label={label}
+        description={description}
+        value={typeof value === "string" ? value : ""}
+        onChange={(event) =>
+          updateCastableArg(definition, input, event.currentTarget.value)
+        }
+      />
+    );
+  }
+
   function renderEffectEditor(
     definition: SpellDefinition,
     key: "effects" | "chaosEffects",
@@ -234,7 +389,9 @@ export function useSpellWorkspaceView(
                     color="red"
                     onClick={() =>
                       updateEffectList(definition, key, (current) =>
-                        current.filter((candidate) => candidate.effectId !== effect.effectId)
+                        current.filter(
+                          (candidate) => candidate.effectId !== effect.effectId
+                        )
                       )
                     }
                     aria-label="Delete effect"
@@ -308,7 +465,12 @@ export function useSpellWorkspaceView(
 
   return {
     leftPanel: (
-      <Stack gap={0} h="100%" style={{ minHeight: 0 }} onClick={() => setContextMenu(null)}>
+      <Stack
+        gap={0}
+        h="100%"
+        style={{ minHeight: 0 }}
+        onClick={() => setContextMenu(null)}
+      >
         <Group
           justify="space-between"
           px="md"
@@ -322,12 +484,20 @@ export function useSpellWorkspaceView(
             Spells
           </Text>
           <Tooltip label="Add Spell">
-            <ActionIcon variant="subtle" size="sm" onClick={createSpell} aria-label="Add Spell">
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={createSpell}
+              aria-label="Add Spell"
+            >
               +
             </ActionIcon>
           </Tooltip>
         </Group>
-        <Box p="sm" style={{ borderBottom: "1px solid var(--sm-panel-border)" }}>
+        <Box
+          p="sm"
+          style={{ borderBottom: "1px solid var(--sm-panel-border)" }}
+        >
           <TextInput
             size="xs"
             placeholder="Search spells..."
@@ -338,7 +508,8 @@ export function useSpellWorkspaceView(
         <ScrollArea style={{ flex: 1, minHeight: 0 }}>
           <Stack gap={4} p="xs">
             {filteredSpells.map((definition) => {
-              const isSelected = effectiveSelectedSpellId === definition.definitionId;
+              const isSelected =
+                effectiveSelectedSpellId === definition.definitionId;
               return (
                 <Box
                   key={definition.definitionId}
@@ -347,8 +518,12 @@ export function useSpellWorkspaceView(
                   style={{
                     borderRadius: 8,
                     cursor: "pointer",
-                    background: isSelected ? "var(--sm-active-bg)" : "transparent",
-                    color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)"
+                    background: isSelected
+                      ? "var(--sm-active-bg)"
+                      : "transparent",
+                    color: isSelected
+                      ? "var(--sm-accent-blue)"
+                      : "var(--sm-color-text)"
                   }}
                   onClick={() => setSelectedSpellId(definition.definitionId)}
                   onContextMenu={(event) => {
@@ -472,20 +647,45 @@ export function useSpellWorkspaceView(
                     })
                   }
                 />
-                <NumberInput
-                  label="Battery Cost"
-                  min={0}
-                  step={1}
-                  value={selectedSpell.batteryCost}
-                  onChange={(value) => {
-                    if (typeof value !== "number") return;
-                    updateSpell({
-                      ...selectedSpell,
-                      batteryCost: value
-                    });
-                  }}
-                />
               </Group>
+              <Select
+                label="Castable"
+                data={castableOptions}
+                value={selectedSpell.castable.id}
+                onChange={(value) => {
+                  const nextCastable =
+                    mechanics.castables.find(
+                      (definition) => definition.id === value
+                    ) ?? null;
+                  updateSpell({
+                    ...selectedSpell,
+                    castable: {
+                      id: value ?? "",
+                      args: createDefaultCastableArgs(nextCastable)
+                    }
+                  });
+                }}
+              />
+              {selectedCastable ? (
+                <Stack gap="xs">
+                  <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+                    Castable Args
+                  </Text>
+                  {selectedCastable.inputs.length === 0 ? (
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      This castable does not require arguments.
+                    </Text>
+                  ) : (
+                    selectedCastable.inputs.map((input) =>
+                      renderCastableArgEditor(selectedSpell, input)
+                    )
+                  )}
+                </Stack>
+              ) : (
+                <Text size="xs" c="var(--sm-color-red)">
+                  Select a valid castable before saving or previewing.
+                </Text>
+              )}
               <TextInput
                 label="Tags"
                 description="Comma-separated tags"
@@ -498,7 +698,11 @@ export function useSpellWorkspaceView(
                 }
               />
               {renderEffectEditor(selectedSpell, "effects", "Effects")}
-              {renderEffectEditor(selectedSpell, "chaosEffects", "Chaos Effects")}
+              {renderEffectEditor(
+                selectedSpell,
+                "chaosEffects",
+                "Chaos Effects"
+              )}
             </Stack>
           </Box>
         ) : (
@@ -516,20 +720,46 @@ export function useSpellWorkspaceView(
         {selectedSpell ? (
           <Stack gap="lg">
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Summary
               </Text>
-              <Text size="sm">{selectedSpell.description || "No description yet."}</Text>
+              <Text size="sm">
+                {selectedSpell.description || "No description yet."}
+              </Text>
             </Stack>
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Casting
               </Text>
-              <Text size="sm">Battery Cost: {selectedSpell.batteryCost}</Text>
-              <Text size="sm">Tags: {selectedSpell.tags.join(", ") || "None"}</Text>
+              <Text size="sm">
+                Castable: {selectedCastable?.displayName ?? "Invalid"}
+              </Text>
+              {typeof selectedSpell.castable.args.batteryCost === "number" ? (
+                <Text size="sm">
+                  Battery Cost: {selectedSpell.castable.args.batteryCost}
+                </Text>
+              ) : null}
+              <Text size="sm">
+                Tags: {selectedSpell.tags.join(", ") || "None"}
+              </Text>
             </Stack>
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Effects
               </Text>
               <Text size="sm">Primary: {selectedSpell.effects.length}</Text>

@@ -166,6 +166,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
       three:
         specifier: ^0.183.2
         version: 0.183.2
@@ -208,6 +211,9 @@ importers:
       '@sugarmagic/shell':
         specifier: workspace:*
         version: link:../shell
+      '@sugarmagic/studio':
+        specifier: workspace:*
+        version: link:../../apps/studio
       '@sugarmagic/workspaces':
         specifier: workspace:*
         version: link:../workspaces

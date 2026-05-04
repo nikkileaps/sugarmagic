@@ -1,0 +1,64 @@
+{
+  // The default Sugarmagic caster expressed as authored mechanics.
+  stats: [
+    {
+      id: "battery",
+      displayName: "Battery",
+      default: 100,
+      min: 0,
+      max: 100,
+      decay: null,
+      recharge: { ratePerSecond: 0.0166666667 },
+      display: "battery",
+      role: "battery"
+    },
+    {
+      id: "resonance",
+      displayName: "Resonance",
+      default: 0,
+      min: 0,
+      max: 100,
+      decay: null,
+      recharge: null,
+      display: "bar",
+      role: "resonance"
+    }
+  ],
+  castables: [
+    {
+      id: "spell",
+      displayName: "Spell",
+      description: "Consumes battery, rolls chaos, and emits an outcome.",
+      inputs: [
+        {
+          id: "batteryCost",
+          type: "number",
+          required: true,
+          default: 1,
+          description: "Battery consumed by this spell."
+        },
+        {
+          id: "chaosBase",
+          type: "number",
+          required: true,
+          default: 0,
+          description: "Base chaos chance from 0 to 100."
+        }
+      ],
+      cost: "caster.battery >= self.batteryCost",
+      acceptsTarget: false,
+      onCast: [
+        { op: "consume", target: "caster.battery", amount: "self.batteryCost" },
+        {
+          op: "branch",
+          condition: "roll(1d100) <= clamp(self.chaosBase - caster.resonance * 0.8, 0, 100)",
+          then: [
+            { op: "emit", kind: "spell-chaos" },
+            { op: "set", target: "caster.resonance", value: "0" }
+          ],
+          else: [{ op: "emit", kind: "spell-success" }]
+        }
+      ]
+    }
+  ]
+}

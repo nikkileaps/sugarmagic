@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sugarmagic.local/mechanics.schema.json",
+  "title": "Sugarmagic MechanicsDefinition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["stats", "castables"],
+  "properties": {
+    "stats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/statDefinition" }
+    },
+    "castables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/castableDefinition" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$"
+    },
+    "expression": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Sugarmagic mechanics expression string. Parsed semantically by runtime-core."
+    },
+    "jsonValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    },
+    "statRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ratePerSecond"],
+      "properties": {
+        "ratePerSecond": { "type": "number", "minimum": 0 }
+      }
+    },
+    "statDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "default",
+        "min",
+        "max",
+        "decay",
+        "recharge",
+        "display",
+        "role"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "default": { "type": "number" },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] },
+        "decay": {
+          "anyOf": [{ "$ref": "#/$defs/statRate" }, { "type": "null" }]
+        },
+        "recharge": {
+          "anyOf": [{ "$ref": "#/$defs/statRate" }, { "type": "null" }]
+        },
+        "display": {
+          "type": "string",
+          "enum": ["battery", "bar", "number", "percentage"]
+        },
+        "role": {
+          "type": ["string", "null"],
+          "enum": ["battery", "resonance", null]
+        }
+      }
+    },
+    "castableInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "required"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": {
+          "type": "string",
+          "enum": ["number", "string", "boolean", "object"]
+        },
+        "required": { "type": "boolean" },
+        "default": { "$ref": "#/$defs/jsonValue" },
+        "description": { "type": "string" }
+      }
+    },
+    "consumeOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "target", "amount"],
+      "properties": {
+        "op": { "const": "consume" },
+        "target": { "type": "string", "minLength": 1 },
+        "amount": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "setOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "target", "value"],
+      "properties": {
+        "op": { "const": "set" },
+        "target": { "type": "string", "minLength": 1 },
+        "value": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "branchOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "condition", "then", "else"],
+      "properties": {
+        "op": { "const": "branch" },
+        "condition": { "$ref": "#/$defs/expression" },
+        "then": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/castableOp" }
+        },
+        "else": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/castableOp" }
+        }
+      }
+    },
+    "emitOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "kind"],
+      "properties": {
+        "op": { "const": "emit" },
+        "kind": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      }
+    },
+    "castableOp": {
+      "oneOf": [
+        { "$ref": "#/$defs/consumeOp" },
+        { "$ref": "#/$defs/setOp" },
+        { "$ref": "#/$defs/branchOp" },
+        { "$ref": "#/$defs/emitOp" }
+      ]
+    },
+    "castableDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "inputs",
+        "cost",
+        "acceptsTarget",
+        "onCast"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/castableInput" }
+        },
+        "cost": {
+          "anyOf": [{ "$ref": "#/$defs/expression" }, { "type": "null" }]
+        },
+        "acceptsTarget": { "type": "boolean" },
+        "onCast": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/castableOp" }
+        }
+      }
+    },
+    "castableInvocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "args"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "args": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      }
+    }
+  }
+}

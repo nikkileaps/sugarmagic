@@ -1,12 +1,18 @@
-import type { SpellDefinition, SpellEffectDefinition } from "@sugarmagic/domain";
+import {
+  type MechanicsDefinition,
+  STAT_ROLE_BATTERY,
+  STAT_ROLE_RESONANCE,
+  type StatRole,
+  type SpellDefinition,
+  type SpellEffectDefinition
+} from "@sugarmagic/domain";
 import { Caster, PlayerControlled, type World } from "../ecs";
 import {
-  applyBatteryRechargePerMinute,
-  clampResonance,
-  resolveBatteryTier,
-  rollChaos,
-  type BatteryTier
-} from "./math";
+  createCastableExecutor,
+  evaluateExpression,
+  type CastableExecutionResult
+} from "../mechanics";
+import { resolveBatteryTier, type BatteryTier } from "./math";
 
 export interface SpellCastResult {
   success: boolean;
@@ -18,7 +24,10 @@ export interface SpellCastResult {
   error?: string;
 }
 
-export type SpellCastHandler = (spell: SpellDefinition, result: SpellCastResult) => void;
+export type SpellCastHandler = (
+  spell: SpellDefinition,
+  result: SpellCastResult
+) => void;
 
 function cloneSpellFallback(spellDefinitionId: string): SpellDefinition {
   return {
@@ -27,7 +36,10 @@ function cloneSpellFallback(spellDefinitionId: string): SpellDefinition {
     description: "",
     iconAssetDefinitionId: null,
     tags: [],
-    batteryCost: 0,
+    castable: {
+      id: "",
+      args: {}
+    },
     effects: [],
     chaosEffects: []
   };
@@ -35,6 +47,7 @@ function cloneSpellFallback(spellDefinitionId: string): SpellDefinition {
 
 export class CasterManager {
   private world: World | null = null;
+  private mechanics: MechanicsDefinition | null = null;
   private spellDefinitions = new Map<string, SpellDefinition>();
   private onSpellCast: SpellCastHandler | null = null;
 
@@ -47,6 +60,10 @@ export class CasterManager {
     for (const definition of definitions) {
       this.spellDefinitions.set(definition.definitionId, definition);
     }
+  }
+
+  registerMechanics(mechanics: MechanicsDefinition): void {
+    this.mechanics = mechanics;
   }
 
   setSpellCastHandler(handler: SpellCastHandler | null): void {
@@ -64,19 +81,23 @@ export class CasterManager {
   }
 
   getAvailableSpells(): SpellDefinition[] {
-    return this.getAllSpells().filter((definition) => this.isSpellAllowed(definition));
+    return this.getAllSpells().filter((definition) =>
+      this.isSpellAllowed(definition)
+    );
   }
 
   getBattery(): number {
-    return this.getCasterComponent()?.battery ?? 0;
+    return this.getPrimaryStatValue(STAT_ROLE_BATTERY);
   }
 
   getMaxBattery(): number {
-    return this.getCasterComponent()?.maxBattery ?? 0;
+    const caster = this.getCasterComponent();
+    const statId = this.getPrimaryStatId(STAT_ROLE_BATTERY);
+    return statId ? (caster?.stats.getDefinition(statId)?.max ?? 1) : 1;
   }
 
   getResonance(): number {
-    return this.getCasterComponent()?.resonance ?? 0;
+    return this.getPrimaryStatValue(STAT_ROLE_RESONANCE);
   }
 
   getBatteryTier(): BatteryTier {
@@ -86,15 +107,13 @@ export class CasterManager {
   recharge(deltaSeconds: number): void {
     const caster = this.getCasterComponent();
     if (!caster) return;
-    caster.battery = applyBatteryRechargePerMinute(
-      caster.battery,
-      caster.rechargeRate,
-      deltaSeconds,
-      caster.maxBattery
-    );
+    caster.stats.tick(deltaSeconds);
   }
 
-  canCastSpell(spellDefinitionId: string): { canCast: boolean; reason?: string } {
+  canCastSpell(spellDefinitionId: string): {
+    canCast: boolean;
+    reason?: string;
+  } {
     const caster = this.getCasterComponent();
     if (!caster) {
       return { canCast: false, reason: "No caster available" };
@@ -109,8 +128,29 @@ export class CasterManager {
       return { canCast: false, reason: "Spell is not allowed" };
     }
 
-    if (caster.battery < spell.batteryCost) {
-      return { canCast: false, reason: "Not enough battery" };
+    const mechanics = this.mechanics;
+    const castable = mechanics?.castables.find(
+      (definition) => definition.id === spell.castable.id
+    );
+    if (!mechanics || !castable) {
+      return { canCast: false, reason: "Castable not found" };
+    }
+
+    if (castable.cost) {
+      try {
+        const canPayCost = evaluateExpression(castable.cost, {
+          scope: {
+            caster: caster.stats.snapshot(),
+            self: spell.castable.args,
+            target: null
+          }
+        });
+        if (canPayCost !== true) {
+          return { canCast: false, reason: "Cost requirement failed" };
+        }
+      } catch {
+        return { canCast: false, reason: "Cost requirement failed" };
+      }
     }
 
     return { canCast: true };
@@ -118,7 +158,9 @@ export class CasterManager {
 
   castSpell(spellDefinitionId: string): SpellCastResult {
     const canCast = this.canCastSpell(spellDefinitionId);
-    const spell = this.spellDefinitions.get(spellDefinitionId) ?? cloneSpellFallback(spellDefinitionId);
+    const spell =
+      this.spellDefinitions.get(spellDefinitionId) ??
+      cloneSpellFallback(spellDefinitionId);
     const caster = this.getCasterComponent();
 
     if (!canCast.canCast || !caster) {
@@ -133,20 +175,51 @@ export class CasterManager {
       };
     }
 
-    const batteryBefore = caster.battery;
-    const resonanceConsumed = clampResonance(caster.resonance);
-    caster.battery = Math.max(0, caster.battery - spell.batteryCost);
-    caster.resonance = 0;
+    const mechanics = this.mechanics;
+    if (!mechanics) {
+      return {
+        success: false,
+        chaos: false,
+        spell,
+        effects: [],
+        batteryRemaining: this.getBattery(),
+        resonanceConsumed: 0,
+        error: "Mechanics not registered"
+      };
+    }
 
-    const chaos = rollChaos(batteryBefore, resonanceConsumed, caster.maxBattery);
-    const effects =
-      chaos && spell.chaosEffects.length > 0 ? spell.chaosEffects : spell.effects;
+    const resonanceConsumed = this.getResonance();
+    let chaos = false;
+    let effects: SpellEffectDefinition[] = [];
+    const executor = createCastableExecutor({
+      mechanics,
+      emit: (kind) => {
+        if (kind === "spell-chaos") {
+          chaos = true;
+          effects =
+            spell.chaosEffects.length > 0 ? spell.chaosEffects : spell.effects;
+          return;
+        }
+        if (kind === "spell-success") {
+          effects = spell.effects;
+        }
+      }
+    });
+    const execution = executor.execute({
+      invocation: spell.castable,
+      caster: caster.stats,
+      target: null
+    });
+    if (execution.status !== "success") {
+      return this.failedCastResult(spell, execution, resonanceConsumed);
+    }
+
     const result: SpellCastResult = {
       success: true,
       chaos,
       spell,
       effects,
-      batteryRemaining: caster.battery,
+      batteryRemaining: this.getBattery(),
       resonanceConsumed
     };
     this.onSpellCast?.(spell, result);
@@ -161,17 +234,53 @@ export class CasterManager {
     return this.world.getComponent(entity, Caster) ?? null;
   }
 
+  private failedCastResult(
+    spell: SpellDefinition,
+    execution: CastableExecutionResult,
+    resonanceConsumed: number
+  ): SpellCastResult {
+    return {
+      success: false,
+      chaos: false,
+      spell,
+      effects: [],
+      batteryRemaining: this.getBattery(),
+      resonanceConsumed,
+      error:
+        execution.status === "cost-failed"
+          ? "Cost requirement failed"
+          : (execution.error ?? "Cast failed")
+    };
+  }
+
+  private getPrimaryStatId(role: StatRole): string | null {
+    return (
+      this.mechanics?.stats.find((definition) => definition.role === role)
+        ?.id ?? null
+    );
+  }
+
+  private getPrimaryStatValue(role: StatRole): number {
+    const caster = this.getCasterComponent();
+    const statId = this.getPrimaryStatId(role);
+    return statId ? (caster?.stats.get(statId) ?? 0) : 0;
+  }
+
   private isSpellAllowed(spell: SpellDefinition): boolean {
     const caster = this.getCasterComponent();
     if (!caster) return false;
 
     if (caster.allowedSpellTags.length > 0) {
-      const hasAllowedTag = spell.tags.some((tag) => caster.allowedSpellTags.includes(tag));
+      const hasAllowedTag = spell.tags.some((tag) =>
+        caster.allowedSpellTags.includes(tag)
+      );
       if (!hasAllowedTag) return false;
     }
 
     if (caster.blockedSpellTags.length > 0) {
-      const hasBlockedTag = spell.tags.some((tag) => caster.blockedSpellTags.includes(tag));
+      const hasBlockedTag = spell.tags.some((tag) =>
+        caster.blockedSpellTags.includes(tag)
+      );
       if (hasBlockedTag) return false;
     }
 

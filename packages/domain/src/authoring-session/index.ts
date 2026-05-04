@@ -42,6 +42,7 @@ import type {
   UpdateQuestDefinitionCommand,
   UpdateSpellDefinitionCommand,
   UpdatePlayerDefinitionCommand,
+  UpdateMechanicsDefinitionCommand,
   CreateShaderGraphCommand,
   RenameShaderGraphCommand,
   DeleteShaderGraphCommand,
@@ -1284,6 +1285,27 @@ function applyPlayerDefinitionCommand(
   };
 }
 
+function applyMechanicsDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateMechanicsDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    session.gameProject.identity.id
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      mechanics: command.payload.mechanics
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyCreateNPCDefinitionCommand(
   session: AuthoringSession,
   command: CreateNPCDefinitionCommand
@@ -2112,6 +2134,10 @@ export function applyCommand(
 
   if (command.kind === "UpdatePlayerDefinition") {
     return applyPlayerDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdateMechanicsDefinition") {
+    return applyMechanicsDefinitionCommand(session, command);
   }
 
   if (command.kind === "UpdatePluginConfiguration") {

@@ -94,6 +94,7 @@ import {
   createDefaultSurfaceDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultSoundCueDefinition,
+  createDefaultMechanicsDefinition,
   createDefaultRegion,
   createScopedId
 } from "@sugarmagic/domain";
@@ -128,6 +129,7 @@ import {
   pickFile,
   writeDocumentPageFile
 } from "@sugarmagic/io";
+import { validateMechanicsDefinition } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
   createProjectStore,
@@ -301,6 +303,23 @@ function dispatchCommand(command: SemanticCommand) {
 async function handleSave() {
   const { handle, descriptor, session } = projectStore.getState();
   if (!handle || !descriptor || !session) return;
+  const mechanicsValidation = validateMechanicsDefinition(
+    session.gameProject.mechanics,
+    {
+      consumers: session.gameProject.spellDefinitions.map((spell) => ({
+        label: `/spellDefinitions/${spell.definitionId}/castable`,
+        invocation: spell.castable
+      }))
+    }
+  );
+  if (!mechanicsValidation.valid) {
+    window.alert(
+      `Project mechanics are invalid and the project was not saved:\n\n${mechanicsValidation.issues
+        .map((issue) => `- ${issue.path}: ${issue.message}`)
+        .join("\n")}`
+    );
+    return;
+  }
   const baseSaveInput = {
     handle,
     descriptor,
@@ -532,6 +551,7 @@ async function postPreviewBootMessage(
       pluginRuntimeEnvironment: runtimeEnvironment,
       pluginConfigurations: session.gameProject.pluginConfigurations,
       contentLibrary: session.contentLibrary,
+      mechanics: session.gameProject.mechanics,
       playerDefinition: session.gameProject.playerDefinition,
       spellDefinitions: session.gameProject.spellDefinitions,
       itemDefinitions: session.gameProject.itemDefinitions,
@@ -1967,6 +1987,8 @@ export function App() {
       tokens: {},
       styles: []
     },
+    mechanics:
+      session?.gameProject.mechanics ?? createDefaultMechanicsDefinition(),
     extraWorkspaceItems: renderablePluginWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,

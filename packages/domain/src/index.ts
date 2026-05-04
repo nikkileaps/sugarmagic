@@ -12,6 +12,8 @@ export * from "./io/index";
 export * from "./item-definition/index";
 export * from "./landscape-mask";
 export * from "./landscape-splatmap";
+export * from "./mechanics/index";
+export * from "./mechanics/schema";
 export * from "./npc-definition/index";
 export * from "./plugins/index";
 export * from "./player-definition/index";
