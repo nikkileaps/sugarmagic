@@ -2,10 +2,8 @@ import { useMemo, useState } from "react";
 import {
   ActionIcon,
   Box,
-  Checkbox,
   Group,
   Menu,
-  NumberInput,
   ScrollArea,
   Select,
   Stack,
@@ -25,12 +23,13 @@ import type {
 import {
   createDefaultSpellDefinition,
   createDefaultSpellEffectDefinition,
-  type CastableDefinition,
-  type CastableInput,
-  type JsonValue
 } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
+import {
+  CastableInvocationEditor,
+  createDefaultInvocationForCastable
+} from "./CastableInvocationEditor";
 
 export interface SpellWorkspaceViewProps {
   isActive: boolean;
@@ -63,30 +62,6 @@ function stringifyValue(value: unknown): string {
     return String(value);
   }
   return "";
-}
-
-function defaultCastableArg(input: CastableInput): JsonValue {
-  if (input.default !== undefined) return input.default;
-  if (input.type === "number") return 0;
-  if (input.type === "boolean") return false;
-  if (input.type === "object") return {};
-  return "";
-}
-
-function createDefaultCastableArgs(
-  castable: CastableDefinition | null | undefined
-): Record<string, JsonValue> {
-  if (!castable) return {};
-  return Object.fromEntries(
-    castable.inputs.map((input) => [input.id, defaultCastableArg(input)])
-  );
-}
-
-function formatInputLabel(input: CastableInput): string {
-  return input.id
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function parseTagList(value: string): string[] {
@@ -152,15 +127,6 @@ export function useSpellWorkspaceView(
     () => toAssetOptions(assetDefinitions),
     [assetDefinitions]
   );
-  const castableOptions = useMemo(
-    () =>
-      mechanics.castables.map((definition) => ({
-        value: definition.id,
-        label: definition.displayName
-      })),
-    [mechanics.castables]
-  );
-
   const selectedCastable = useMemo(
     () =>
       selectedSpell
@@ -176,10 +142,7 @@ export function useSpellWorkspaceView(
     const castable = mechanics.castables[0] ?? null;
     const definition = createDefaultSpellDefinition({
       displayName: `Spell ${spellDefinitions.length + 1}`,
-      castable: {
-        id: castable?.id ?? "",
-        args: createDefaultCastableArgs(castable)
-      }
+      castable: createDefaultInvocationForCastable(castable)
     });
     onCommand({
       kind: "CreateSpellDefinition",
@@ -244,97 +207,6 @@ export function useSpellWorkspaceView(
       ...definition,
       [key]: updater(definition[key])
     });
-  }
-
-  function updateCastableArg(
-    definition: SpellDefinition,
-    input: CastableInput,
-    value: JsonValue
-  ) {
-    updateSpell({
-      ...definition,
-      castable: {
-        ...definition.castable,
-        args: {
-          ...definition.castable.args,
-          [input.id]: value
-        }
-      }
-    });
-  }
-
-  function renderCastableArgEditor(
-    definition: SpellDefinition,
-    input: CastableInput
-  ) {
-    const label = formatInputLabel(input);
-    const description = input.description;
-    const value = definition.castable.args[input.id];
-
-    if (input.type === "number") {
-      return (
-        <NumberInput
-          key={input.id}
-          label={label}
-          description={description}
-          value={typeof value === "number" ? value : 0}
-          onChange={(nextValue) => {
-            if (typeof nextValue !== "number") return;
-            updateCastableArg(definition, input, nextValue);
-          }}
-        />
-      );
-    }
-
-    if (input.type === "boolean") {
-      return (
-        <Checkbox
-          key={input.id}
-          label={label}
-          description={description}
-          checked={value === true}
-          onChange={(event) =>
-            updateCastableArg(definition, input, event.currentTarget.checked)
-          }
-        />
-      );
-    }
-
-    if (input.type === "object") {
-      return (
-        <Textarea
-          key={input.id}
-          label={label}
-          description={description ?? "JSON object"}
-          minRows={3}
-          value={JSON.stringify(
-            value && typeof value === "object" ? value : {},
-            null,
-            2
-          )}
-          onChange={(event) => {
-            try {
-              const parsed = JSON.parse(event.currentTarget.value) as JsonValue;
-              updateCastableArg(definition, input, parsed);
-            } catch {
-              // Keep invalid JSON local in the text field until the author fixes it.
-            }
-          }}
-        />
-      );
-    }
-
-    return (
-      <TextInput
-        key={input.id}
-        label={label}
-        description={description}
-        value={typeof value === "string" ? value : ""}
-        onChange={(event) =>
-          updateCastableArg(definition, input, event.currentTarget.value)
-        }
-      />
-    );
   }
 
   function renderEffectEditor(
@@ -648,44 +520,11 @@ export function useSpellWorkspaceView(
                   }
                 />
               </Group>
-              <Select
-                label="Castable"
-                data={castableOptions}
-                value={selectedSpell.castable.id}
-                onChange={(value) => {
-                  const nextCastable =
-                    mechanics.castables.find(
-                      (definition) => definition.id === value
-                    ) ?? null;
-                  updateSpell({
-                    ...selectedSpell,
-                    castable: {
-                      id: value ?? "",
-                      args: createDefaultCastableArgs(nextCastable)
-                    }
-                  });
-                }}
+              <CastableInvocationEditor
+                mechanics={mechanics}
+                invocation={selectedSpell.castable}
+                onChange={(castable) => updateSpell({ ...selectedSpell, castable })}
               />
-              {selectedCastable ? (
-                <Stack gap="xs">
-                  <Text size="xs" fw={600} c="var(--sm-color-subtext)">
-                    Castable Args
-                  </Text>
-                  {selectedCastable.inputs.length === 0 ? (
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      This castable does not require arguments.
-                    </Text>
-                  ) : (
-                    selectedCastable.inputs.map((input) =>
-                      renderCastableArgEditor(selectedSpell, input)
-                    )
-                  )}
-                </Stack>
-              ) : (
-                <Text size="xs" c="var(--sm-color-red)">
-                  Select a valid castable before saving or previewing.
-                </Text>
-              )}
               <TextInput
                 label="Tags"
                 description="Comma-separated tags"

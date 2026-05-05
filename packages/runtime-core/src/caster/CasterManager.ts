@@ -10,7 +10,8 @@ import { Caster, PlayerControlled, type World } from "../ecs";
 import {
   createCastableExecutor,
   evaluateExpression,
-  type CastableExecutionResult
+  type CastableExecutionResult,
+  type StatCarrier
 } from "../mechanics";
 import { resolveBatteryTier, type BatteryTier } from "./math";
 
@@ -28,6 +29,13 @@ export type SpellCastHandler = (
   spell: SpellDefinition,
   result: SpellCastResult
 ) => void;
+
+export type MechanicsEmitFanoutHandler = (input: {
+  emitKind: string;
+  payload: Record<string, unknown> | undefined;
+  caster: StatCarrier;
+  target: StatCarrier | null;
+}) => void;
 
 function cloneSpellFallback(spellDefinitionId: string): SpellDefinition {
   return {
@@ -50,6 +58,7 @@ export class CasterManager {
   private mechanics: MechanicsDefinition | null = null;
   private spellDefinitions = new Map<string, SpellDefinition>();
   private onSpellCast: SpellCastHandler | null = null;
+  private onMechanicsEmit: MechanicsEmitFanoutHandler | null = null;
 
   setWorld(world: World): void {
     this.world = world;
@@ -68,6 +77,10 @@ export class CasterManager {
 
   setSpellCastHandler(handler: SpellCastHandler | null): void {
     this.onSpellCast = handler;
+  }
+
+  setMechanicsEmitHandler(handler: MechanicsEmitFanoutHandler | null): void {
+    this.onMechanicsEmit = handler;
   }
 
   getAllSpells(): SpellDefinition[] {
@@ -193,7 +206,13 @@ export class CasterManager {
     let effects: SpellEffectDefinition[] = [];
     const executor = createCastableExecutor({
       mechanics,
-      emit: (kind) => {
+      emit: (kind, payload) => {
+        this.onMechanicsEmit?.({
+          emitKind: kind,
+          payload,
+          caster: caster.stats,
+          target: null
+        });
         if (kind === "spell-chaos") {
           chaos = true;
           effects =

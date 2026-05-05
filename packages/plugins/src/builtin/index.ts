@@ -5,6 +5,11 @@ import {
 } from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import type { DiscoveredPluginDefinition } from "../sdk";
+export {
+  createFirefliesRuntimePlugin,
+  FIREFLIES_PLUGIN_ID,
+  parseFirefliesPluginConfig
+} from "../catalog/fireflies";
 export { HELLO_PLUGIN_ID, normalizeHelloPluginConfig } from "../catalog/hello";
 export {
   SUGARAGENT_PLUGIN_ID,

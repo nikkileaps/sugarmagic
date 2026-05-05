@@ -204,6 +204,7 @@ export function useDesignProductModeView(
     gameProjectId,
     itemDefinitions,
     documentDefinitions,
+    mechanics,
     assetDefinitions,
     assetSources,
     designPreviewStore,
@@ -270,6 +271,7 @@ export function useDesignProductModeView(
     gameProjectId,
     mechanics,
     spellDefinitions,
+    itemDefinitions,
     onCommand
   });
 

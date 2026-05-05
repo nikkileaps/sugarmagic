@@ -6,7 +6,8 @@
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
-    "@sugarmagic/ui": "workspace:*"
+    "@sugarmagic/ui": "workspace:*",
+    "ajv": "^8.18.0"
   },
   "exports": {
     ".": "./src/index.ts"

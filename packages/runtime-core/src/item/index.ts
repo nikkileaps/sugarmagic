@@ -6,6 +6,8 @@ import type {
   ItemDefinition
 } from "@sugarmagic/domain";
 
+export * from "./trigger-castable";
+
 const gltfLoader = new GLTFLoader();
 const DEFAULT_ITEM_COLOR = 0xf9e2af;
 

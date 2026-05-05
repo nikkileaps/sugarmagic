@@ -1,7 +1,16 @@
 import { createUuid } from "../shared/identity";
+import {
+  normalizeCastableInvocation,
+  type CastableInvocation
+} from "../mechanics";
 
 export type ItemCategory = "quest" | "gift" | "key" | "misc";
-export type ItemViewKind = "none" | "readable" | "examine" | "consumable";
+export type ItemViewKind =
+  | "none"
+  | "readable"
+  | "examine"
+  | "consumable"
+  | "trigger-castable";
 
 export interface ItemInventoryProfile {
   stackable: boolean;
@@ -25,6 +34,7 @@ export interface ItemInteractionView {
   body: string;
   consumeLabel: string;
   documentDefinitionId: string | null;
+  castableInvocation: CastableInvocation;
 }
 
 export interface ItemDefinition {
@@ -67,7 +77,11 @@ export function createDefaultItemDefinition(
       title: "",
       body: "",
       consumeLabel: "Use",
-      documentDefinitionId: null
+      documentDefinitionId: null,
+      castableInvocation: {
+        id: "",
+        args: {}
+      }
     }
   };
 }
@@ -112,7 +126,11 @@ export function normalizeItemDefinition(
         defaultDefinition.interactionView.consumeLabel,
       documentDefinitionId:
         itemDefinition.interactionView?.documentDefinitionId ??
-        defaultDefinition.interactionView.documentDefinitionId
+        defaultDefinition.interactionView.documentDefinitionId,
+      castableInvocation: normalizeCastableInvocation(
+        itemDefinition.interactionView?.castableInvocation,
+        defaultDefinition.interactionView.castableInvocation.id
+      )
     }
   };
 }

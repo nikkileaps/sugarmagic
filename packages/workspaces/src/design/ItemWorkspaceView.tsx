@@ -21,6 +21,7 @@ import type {
   ItemCategory,
   ItemDefinition,
   ItemViewKind,
+  MechanicsDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import type {
@@ -32,12 +33,17 @@ import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
+import {
+  CastableInvocationEditor,
+  createDefaultInvocationForCastable
+} from "./CastableInvocationEditor";
 
 export interface ItemWorkspaceViewProps {
   isActive: boolean;
   gameProjectId: string | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
+  mechanics: MechanicsDefinition;
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
@@ -66,7 +72,8 @@ const viewKindOptions: Array<{ value: ItemViewKind; label: string }> = [
   { value: "none", label: "None" },
   { value: "readable", label: "Readable" },
   { value: "examine", label: "Examine" },
-  { value: "consumable", label: "Consumable" }
+  { value: "consumable", label: "Consumable" },
+  { value: "trigger-castable", label: "Trigger Castable" }
 ];
 
 export function useItemWorkspaceView(
@@ -77,6 +84,7 @@ export function useItemWorkspaceView(
     gameProjectId,
     itemDefinitions,
     documentDefinitions,
+    mechanics,
     assetDefinitions,
     assetSources,
     designPreviewStore,
@@ -144,6 +152,7 @@ export function useItemWorkspaceView(
     () => toDocumentOptions(documentDefinitions),
     [documentDefinitions]
   );
+  const defaultCastable = mechanics.castables[0] ?? null;
 
   function createItem() {
     if (!gameProjectId) return;
@@ -512,7 +521,12 @@ export function useItemWorkspaceView(
                           ? selectedItem.interactionView.documentDefinitionId ??
                             documentDefinitions[0]?.definitionId ??
                             null
-                          : selectedItem.interactionView.documentDefinitionId
+                          : selectedItem.interactionView.documentDefinitionId,
+                      castableInvocation:
+                        value === "trigger-castable" &&
+                        !selectedItem.interactionView.castableInvocation.id
+                          ? createDefaultInvocationForCastable(defaultCastable)
+                          : selectedItem.interactionView.castableInvocation
                     }
                   })
                 }
@@ -597,6 +611,21 @@ export function useItemWorkspaceView(
                       interactionView: {
                         ...selectedItem.interactionView,
                         consumeLabel: event.currentTarget.value
+                      }
+                    })
+                  }
+                />
+              )}
+              {selectedItem.interactionView.kind === "trigger-castable" && (
+                <CastableInvocationEditor
+                  mechanics={mechanics}
+                  invocation={selectedItem.interactionView.castableInvocation}
+                  onChange={(castableInvocation) =>
+                    updateItem({
+                      ...selectedItem,
+                      interactionView: {
+                        ...selectedItem.interactionView,
+                        castableInvocation
                       }
                     })
                   }

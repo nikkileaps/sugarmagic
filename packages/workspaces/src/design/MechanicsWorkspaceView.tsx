@@ -8,11 +8,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import type {
+  ItemDefinition,
   MechanicsDefinition,
   SemanticCommand,
   SpellDefinition
 } from "@sugarmagic/domain";
 import {
+  collectMechanicsConsumerInvocations,
   parseMechanicsJson5Input,
   validateMechanicsDefinition
 } from "@sugarmagic/runtime-core";
@@ -23,6 +25,7 @@ export interface MechanicsWorkspaceViewProps {
   gameProjectId: string | null;
   mechanics: MechanicsDefinition;
   spellDefinitions: SpellDefinition[];
+  itemDefinitions: ItemDefinition[];
   onCommand: (command: SemanticCommand) => void;
 }
 
@@ -33,7 +36,7 @@ function stringifyMechanics(mechanics: MechanicsDefinition): string {
 export function useMechanicsWorkspaceView(
   props: MechanicsWorkspaceViewProps
 ): WorkspaceViewContribution {
-  const { gameProjectId, mechanics, spellDefinitions, onCommand } = props;
+  const { gameProjectId, mechanics, spellDefinitions, itemDefinitions, onCommand } = props;
   const [text, setText] = useState(() => stringifyMechanics(mechanics));
 
   useEffect(() => {
@@ -44,10 +47,10 @@ export function useMechanicsWorkspaceView(
     try {
       const parsed = parseMechanicsJson5Input(text);
       const result = validateMechanicsDefinition(parsed, {
-        consumers: spellDefinitions.map((spell) => ({
-          label: `/spellDefinitions/${spell.definitionId}/castable`,
-          invocation: spell.castable
-        }))
+        consumers: collectMechanicsConsumerInvocations({
+          spellDefinitions,
+          itemDefinitions
+        })
       });
       return { parsed, result };
     } catch (error) {
@@ -64,7 +67,7 @@ export function useMechanicsWorkspaceView(
         }
       };
     }
-  }, [spellDefinitions, text]);
+  }, [itemDefinitions, spellDefinitions, text]);
 
   function saveMechanics() {
     if (!gameProjectId || !validation.result.valid || !validation.parsed) {

@@ -129,7 +129,10 @@ import {
   pickFile,
   writeDocumentPageFile
 } from "@sugarmagic/io";
-import { validateMechanicsDefinition } from "@sugarmagic/runtime-core";
+import {
+  collectMechanicsConsumerInvocations,
+  validateMechanicsDefinition
+} from "@sugarmagic/runtime-core";
 import {
   createShellStore,
   createProjectStore,
@@ -306,10 +309,10 @@ async function handleSave() {
   const mechanicsValidation = validateMechanicsDefinition(
     session.gameProject.mechanics,
     {
-      consumers: session.gameProject.spellDefinitions.map((spell) => ({
-        label: `/spellDefinitions/${spell.definitionId}/castable`,
-        invocation: spell.castable
-      }))
+      consumers: collectMechanicsConsumerInvocations({
+        spellDefinitions: session.gameProject.spellDefinitions,
+        itemDefinitions: session.gameProject.itemDefinitions
+      })
     }
   );
   if (!mechanicsValidation.valid) {

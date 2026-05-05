@@ -8,7 +8,9 @@
 import type {
   CastableDefinition,
   CastableInvocation,
-  MechanicsDefinition
+  ItemDefinition,
+  MechanicsDefinition,
+  SpellDefinition
 } from "@sugarmagic/domain";
 import type { ExpressionAst } from "../expression/ast";
 import { parseExpression } from "../expression/parser";
@@ -24,6 +26,28 @@ export interface MechanicsConsumerInvocation {
 
 export interface MechanicsSemanticValidationOptions {
   consumers?: MechanicsConsumerInvocation[];
+}
+
+export function collectMechanicsConsumerInvocations(options: {
+  spellDefinitions?: SpellDefinition[];
+  itemDefinitions?: ItemDefinition[];
+}): MechanicsConsumerInvocation[] {
+  const spellConsumers =
+    options.spellDefinitions?.map((spell) => ({
+      label: `/spellDefinitions/${spell.definitionId}/castable`,
+      invocation: spell.castable
+    })) ?? [];
+  const itemConsumers =
+    options.itemDefinitions
+      ?.filter(
+        (item) => item.interactionView.kind === "trigger-castable"
+      )
+      .map((item) => ({
+        label: `/itemDefinitions/${item.definitionId}/interactionView/castableInvocation`,
+        invocation: item.interactionView.castableInvocation
+      })) ?? [];
+
+  return [...spellConsumers, ...itemConsumers];
 }
 
 function walkExpression(

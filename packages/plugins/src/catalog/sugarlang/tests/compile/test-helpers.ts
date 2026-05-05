@@ -320,7 +320,8 @@ export function createTestSceneAuthoringContext(
           title: "Ticket",
           body: "Wordlark Hollow - North Platform",
           consumeLabel: "Read",
-          documentDefinitionId: "doc-ticket"
+          documentDefinitionId: "doc-ticket",
+          castableInvocation: { id: "", args: {} }
         }
       }
     ];

@@ -19,6 +19,7 @@
 
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
+  type CastableInvocation,
   createDefaultAudioMixerSettings,
   createEmptyContentLibrarySnapshot,
   type DocumentDefinition,
@@ -44,8 +45,14 @@ import {
   type RuntimeAudioController,
   type RuntimeSoundCommand
 } from "../audio";
-import { assertValidMechanicsDefinition } from "../mechanics";
-import { type World, type Entity, Position } from "../ecs";
+import {
+  assertValidMechanicsDefinition,
+  collectMechanicsConsumerInvocations,
+  createCastableExecutor,
+  type CastableExecutionResult,
+  type StatCarrier
+} from "../mechanics";
+import { type World, type Entity, Caster, Position } from "../ecs";
 import {
   BillboardComponent,
   BillboardSystem,
@@ -67,6 +74,7 @@ import {
   createRuntimeDocumentReaderUI
 } from "../document";
 import { type RuntimeInputManager } from "../input";
+import { executeTriggerCastableItemInteraction } from "../item";
 import {
   createRuntimeInventoryUI,
   createRuntimeItemPickupNotificationCenter,
@@ -92,6 +100,7 @@ import type {
   DebugHudCardContribution,
   DebugHudGameplaySessionSnapshot,
   EntityBillboardContext,
+  MechanicsEmitDispatch,
   RuntimePluginManager
 } from "../plugins";
 import { RuntimePluginSystem } from "../plugins";
@@ -345,10 +354,10 @@ export function createRuntimeGameplaySessionController(
     onAudioCommands
   } = options;
   assertValidMechanicsDefinition(mechanics, {
-    consumers: spellDefinitions.map((spell) => ({
-      label: `/spellDefinitions/${spell.definitionId}/castable`,
-      invocation: spell.castable
-    }))
+    consumers: collectMechanicsConsumerInvocations({
+      spellDefinitions,
+      itemDefinitions
+    })
   });
 
   const decoratorContributions = (
@@ -504,6 +513,82 @@ export function createRuntimeGameplaySessionController(
 
   function resolvePlayerEntity(): Entity | null {
     return world.query(PlayerControlled, Position)[0] ?? null;
+  }
+
+  function resolvePlayerStatCarrier(): StatCarrier | null {
+    const playerEntity = resolvePlayerEntity();
+    if (playerEntity === null) return null;
+    return world.getComponent(playerEntity, Caster)?.stats ?? null;
+  }
+
+  const mechanicsEmitContributions =
+    pluginManager?.getContributions("mechanics.emitHandler") ?? [];
+  const pluginConfigById = new Map(
+    pluginManager
+      ?.getPlugins()
+      .map((plugin) => [plugin.pluginId, plugin.config ?? {}]) ?? []
+  );
+  const mechanicsEmitHandlers = new Map<
+    string,
+    Array<(dispatch: MechanicsEmitDispatch) => void>
+  >();
+  const mechanicsEmitDisposers: Array<() => void> = [];
+
+  function dispatchCastableFromPlugin(
+    invocation: CastableInvocation
+  ): CastableExecutionResult {
+    const caster = resolvePlayerStatCarrier();
+    if (!caster) {
+      return {
+        status: "runtime-error",
+        castable: null,
+        error: "No player caster available."
+      };
+    }
+    const executor = createCastableExecutor({
+      mechanics,
+      emit: (kind, payload) =>
+        dispatchMechanicsEmit({
+          emitKind: kind,
+          payload,
+          caster,
+          target: null
+        })
+    });
+    return executor.execute({
+      invocation,
+      caster,
+      target: null
+    });
+  }
+
+  function dispatchMechanicsEmit(dispatch: MechanicsEmitDispatch): void {
+    const handlers = mechanicsEmitHandlers.get(dispatch.emitKind) ?? [];
+    for (const handler of handlers) {
+      handler(dispatch);
+    }
+  }
+
+  function setupMechanicsEmitHandlers(): void {
+    for (const contribution of mechanicsEmitContributions) {
+      const setupResult = contribution.payload.setup({
+        mountRoot: root,
+        config: pluginConfigById.get(contribution.pluginId) ?? {},
+        dispatchCastable: dispatchCastableFromPlugin,
+        claimInput: (lockId) => inputManager.addMovementLock(lockId),
+        releaseInput: (lockId) => inputManager.removeMovementLock(lockId)
+      });
+
+      const subscribedKinds = new Set(contribution.payload.emitKinds);
+      for (const emitKind of subscribedKinds) {
+        const existing = mechanicsEmitHandlers.get(emitKind) ?? [];
+        existing.push(setupResult.handle);
+        mechanicsEmitHandlers.set(emitKind, existing);
+      }
+      if (setupResult.dispose) {
+        mechanicsEmitDisposers.push(setupResult.dispose);
+      }
+    }
   }
 
   function getDebugHudSnapshot(): DebugHudGameplaySessionSnapshot {
@@ -903,6 +988,11 @@ export function createRuntimeGameplaySessionController(
       const itemDefinition = itemDefinitions.find(
         (definition) => definition.definitionId === presence.itemDefinitionId
       );
+      const promptText =
+        itemDefinition?.interactionView.kind === "trigger-castable"
+          ? itemDefinition.interactionView.title.trim() ||
+            `Interact with ${itemDefinition.displayName}`
+          : `Pick up ${itemDefinition?.displayName ?? "Item"}`;
       const interactableEntity = world.createEntity();
       world.addComponent(
         interactableEntity,
@@ -914,7 +1004,7 @@ export function createRuntimeGameplaySessionController(
           "item",
           presence.presenceId,
           presence.itemDefinitionId,
-          `Pick up ${itemDefinition?.displayName ?? "Item"}`,
+          promptText,
           1.6,
           true
         )
@@ -995,6 +1085,44 @@ export function createRuntimeGameplaySessionController(
     });
     onItemPresenceCollected?.(presenceId);
     syncInteractionPrompt();
+  }
+
+  function executeItemCastableInteraction(presenceId: string): void {
+    const itemPresence = itemInteractableEntities.get(presenceId);
+    if (!itemPresence) return;
+    const itemDefinition = itemDefinitions.find(
+      (definition) => definition.definitionId === itemPresence.itemDefinitionId
+    );
+    if (!itemDefinition) return;
+    const caster = resolvePlayerStatCarrier();
+    if (!caster) {
+      logConversationDebug("item-castable-missing-caster", {
+        presenceId,
+        itemDefinitionId: itemDefinition.definitionId
+      });
+      return;
+    }
+
+    const result = executeTriggerCastableItemInteraction({
+      mechanics,
+      itemDefinition,
+      caster,
+      emit: (kind, payload) =>
+        dispatchMechanicsEmit({
+          emitKind: kind,
+          payload,
+          caster,
+          target: null
+        })
+    });
+    if (result.status !== "success") {
+      logConversationDebug("item-castable-execution-failed", {
+        presenceId,
+        itemDefinitionId: itemDefinition.definitionId,
+        status: result.status,
+        error: result.error ?? null
+      });
+    }
   }
 
   function createBillboard(options: {
@@ -1535,6 +1663,13 @@ export function createRuntimeGameplaySessionController(
     }
 
     if (nearby.type === "item") {
+      const itemDefinition = itemDefinitions.find(
+        (definition) => definition.definitionId === nearby.targetId
+      );
+      if (itemDefinition?.interactionView.kind === "trigger-castable") {
+        executeItemCastableInteraction(nearby.instanceId);
+        return;
+      }
       collectItemPresence(nearby.instanceId);
       return;
     }
@@ -1563,6 +1698,8 @@ export function createRuntimeGameplaySessionController(
   casterManager.setWorld(world);
   casterManager.registerMechanics(mechanics);
   casterManager.registerDefinitions(spellDefinitions);
+  casterManager.setMechanicsEmitHandler(dispatchMechanicsEmit);
+  setupMechanicsEmitHandlers();
   casterManager.setSpellCastHandler((spell, result) => {
     questManager.notifySpellCast(spell.definitionId);
     audioController.emitEvent("spell.cast-success", {
@@ -1724,6 +1861,11 @@ export function createRuntimeGameplaySessionController(
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
     dispose() {
+      for (const dispose of [...mechanicsEmitDisposers].reverse()) {
+        dispose();
+      }
+      mechanicsEmitDisposers.length = 0;
+      mechanicsEmitHandlers.clear();
       npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
       debugBillboardWarningKeys.clear();

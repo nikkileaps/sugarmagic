@@ -90,7 +90,6 @@ export type ContentDefinitionKind =
   | "quest"
   | "item"
   | "inspection"
-  | "resonance-point"
   | "vfx"
   | "environment"
   | "shader";

@@ -27,6 +27,7 @@ import type {
   DocumentDefinition,
   DialogueDefinition,
   ItemDefinition,
+  CastableInvocation,
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
@@ -34,6 +35,7 @@ import type {
   SpellDefinition
 } from "@sugarmagic/domain";
 import { System, type Entity, type World } from "../ecs";
+import type { CastableExecutionResult, StatCarrier } from "../mechanics";
 
 export type RuntimePluginContributionKind =
   | "conversation.provider"
@@ -44,7 +46,8 @@ export type RuntimePluginContributionKind =
   | "runtime.banner"
   | "design.workspace"
   | "design.section"
-  | "project.settings";
+  | "project.settings"
+  | "mechanics.emitHandler";
 
 interface RuntimePluginContributionBase<TKind extends RuntimePluginContributionKind, TPayload> {
   pluginId: string;
@@ -109,6 +112,34 @@ export type ProjectSettingsContribution = RuntimePluginContributionBase<
   {
     settingsId: string;
     summary: string;
+  }
+>;
+
+export interface MechanicsEmitDispatch {
+  emitKind: string;
+  payload: Record<string, unknown> | undefined;
+  caster: StatCarrier;
+  target: StatCarrier | null;
+}
+
+export interface MechanicsEmitHandlerContext {
+  mountRoot: HTMLElement;
+  config: Record<string, unknown>;
+  dispatchCastable: (
+    invocation: CastableInvocation
+  ) => CastableExecutionResult;
+  claimInput: (lockId: string) => void;
+  releaseInput: (lockId: string) => void;
+}
+
+export type MechanicsEmitHandlerContribution = RuntimePluginContributionBase<
+  "mechanics.emitHandler",
+  {
+    emitKinds: string[];
+    setup: (context: MechanicsEmitHandlerContext) => {
+      handle: (dispatch: MechanicsEmitDispatch) => void;
+      dispose?: () => void;
+    };
   }
 >;
 
@@ -194,7 +225,8 @@ export type RuntimePluginContribution =
   | RuntimeBannerContribution
   | DesignWorkspaceContribution
   | DesignSectionContribution
-  | ProjectSettingsContribution;
+  | ProjectSettingsContribution
+  | MechanicsEmitHandlerContribution;
 
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
@@ -213,6 +245,7 @@ export interface RuntimePluginContext {
 export interface RuntimePluginInstance {
   pluginId: string;
   displayName: string;
+  config?: Record<string, unknown>;
   contributions: RuntimePluginContribution[];
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
   init?: (context: RuntimePluginContext) => Promise<void> | void;
