@@ -1,4 +1,9 @@
 import { createUuid } from "../shared/identity";
+import {
+  DEFAULT_SPELL_CASTABLE_ID,
+  normalizeCastableInvocation,
+  type CastableInvocation
+} from "../mechanics";
 
 export type SpellEffectType =
   | "event"
@@ -21,7 +26,7 @@ export interface SpellDefinition {
   description: string;
   iconAssetDefinitionId: string | null;
   tags: string[];
-  batteryCost: number;
+  castable: CastableInvocation;
   effects: SpellEffectDefinition[];
   chaosEffects: SpellEffectDefinition[];
 }
@@ -54,9 +59,17 @@ export function createDefaultSpellDefinition(
     description: options.description ?? "Spell description...",
     iconAssetDefinitionId: options.iconAssetDefinitionId ?? null,
     tags: [...(options.tags ?? [])],
-    batteryCost: options.batteryCost ?? 1,
-    effects: (options.effects ?? [createDefaultSpellEffectDefinition()]).map((effect) =>
-      normalizeSpellEffectDefinition(effect)
+    castable: options.castable
+      ? normalizeCastableInvocation(options.castable, "")
+      : {
+          id: DEFAULT_SPELL_CASTABLE_ID,
+          args: {
+            batteryCost: 1,
+            chaosBase: 0
+          }
+        },
+    effects: (options.effects ?? [createDefaultSpellEffectDefinition()]).map(
+      (effect) => normalizeSpellEffectDefinition(effect)
     ),
     chaosEffects: (options.chaosEffects ?? []).map((effect) =>
       normalizeSpellEffectDefinition(effect)
@@ -88,22 +101,25 @@ export function normalizeSpellDefinition(
     return defaultDefinition;
   }
 
+  const normalizedCastable = normalizeCastableInvocation(
+    definition.castable,
+    ""
+  );
+
   return {
     definitionId: definition.definitionId ?? defaultDefinition.definitionId,
     displayName: definition.displayName ?? defaultDefinition.displayName,
     description: definition.description ?? defaultDefinition.description,
     iconAssetDefinitionId:
-      definition.iconAssetDefinitionId ?? defaultDefinition.iconAssetDefinitionId,
+      definition.iconAssetDefinitionId ??
+      defaultDefinition.iconAssetDefinitionId,
     tags: [...(definition.tags ?? defaultDefinition.tags)],
-    batteryCost:
-      typeof definition.batteryCost === "number"
-        ? Math.max(0, definition.batteryCost)
-        : defaultDefinition.batteryCost,
+    castable: normalizedCastable,
     effects: (definition.effects ?? defaultDefinition.effects).map((effect) =>
       normalizeSpellEffectDefinition(effect)
     ),
-    chaosEffects: (definition.chaosEffects ?? defaultDefinition.chaosEffects).map((effect) =>
-      normalizeSpellEffectDefinition(effect)
-    )
+    chaosEffects: (
+      definition.chaosEffects ?? defaultDefinition.chaosEffects
+    ).map((effect) => normalizeSpellEffectDefinition(effect))
   };
 }

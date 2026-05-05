@@ -19,6 +19,7 @@ import type { DialogueDefinition } from "../dialogue-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
 import type { PlayerDefinition } from "../player-definition";
+import type { MechanicsDefinition } from "../mechanics";
 import type { QuestDefinition } from "../quest-definition";
 import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
@@ -516,6 +517,13 @@ export type UpdatePlayerDefinitionCommand = SemanticCommandBase<
   }
 >;
 
+export type UpdateMechanicsDefinitionCommand = SemanticCommandBase<
+  "UpdateMechanicsDefinition",
+  {
+    mechanics: MechanicsDefinition;
+  }
+>;
+
 export type CreatePlayerPresenceCommand = SemanticCommandBase<
   "CreatePlayerPresence",
   {
@@ -936,6 +944,7 @@ export type SemanticCommand =
   | TogglePostProcessShaderCommand
   | RemovePostProcessShaderCommand
   | UpdatePlayerDefinitionCommand
+  | UpdateMechanicsDefinitionCommand
   | CreatePlayerPresenceCommand
   | TransformPlayerPresenceCommand
   | RemovePlayerPresenceCommand

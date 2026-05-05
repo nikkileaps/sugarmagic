@@ -27,6 +27,7 @@ import type {
   ItemDefinition,
   HUDDefinition,
   MenuDefinition,
+  MechanicsDefinition,
   NPCDefinition,
   NPCInteractionMode,
   PlayerDefinition,
@@ -46,6 +47,7 @@ import type { WorkspaceNavigationTarget } from "../workspace-view";
 import { useDialogueWorkspaceView } from "./DialogueWorkspaceView";
 import { useDocumentWorkspaceView } from "./DocumentWorkspaceView";
 import { useItemWorkspaceView } from "./ItemWorkspaceView";
+import { useMechanicsWorkspaceView } from "./MechanicsWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
@@ -60,6 +62,7 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "documents", label: "Documents", icon: "📚" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
   { id: "quests", label: "Quests", icon: "📜" },
+  { id: "mechanics", label: "Mechanics", icon: "🎲" },
   { id: "game-ui", label: "Game UI", icon: "🖥️" }
 ];
 
@@ -77,6 +80,7 @@ export interface DesignProductModeViewProps {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  mechanics: MechanicsDefinition;
   extraWorkspaceItems: Array<{
     workspaceKind: string;
     label: string;
@@ -144,6 +148,7 @@ export function useDesignProductModeView(
     menuDefinitions,
     hudDefinition,
     uiTheme,
+    mechanics,
     extraWorkspaceItems,
     npcInteractionOptions,
     assetDefinitions,
@@ -199,6 +204,7 @@ export function useDesignProductModeView(
     gameProjectId,
     itemDefinitions,
     documentDefinitions,
+    mechanics,
     assetDefinitions,
     assetSources,
     designPreviewStore,
@@ -211,6 +217,7 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "spells",
     gameProjectId,
     spellDefinitions,
+    mechanics,
     assetDefinitions,
     onCommand
   });
@@ -260,6 +267,14 @@ export function useDesignProductModeView(
     renderPreview: renderGameUIPreview
   });
 
+  const mechanicsView = useMechanicsWorkspaceView({
+    gameProjectId,
+    mechanics,
+    spellDefinitions,
+    itemDefinitions,
+    onCommand
+  });
+
   const allWorkspaceKinds: BuildWorkspaceKindItem[] = [
     ...designWorkspaceKinds,
     ...extraWorkspaceItems.map((workspace) => ({
@@ -280,67 +295,75 @@ export function useDesignProductModeView(
     leftPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.leftPanel
-        : activeDesignKind === "game-ui"
-          ? gameUIView.leftPanel
-          : activeDesignKind === "quests"
-            ? questView.leftPanel
-            : activeDesignKind === "npcs"
-              ? npcView.leftPanel
-              : activeDesignKind === "spells"
-                ? spellView.leftPanel
-                : activeDesignKind === "items"
-                  ? itemView.leftPanel
-                  : activeDesignKind === "documents"
-                    ? documentView.leftPanel
-                    : playerView.leftPanel,
+        : activeDesignKind === "mechanics"
+          ? mechanicsView.leftPanel
+          : activeDesignKind === "game-ui"
+            ? gameUIView.leftPanel
+            : activeDesignKind === "quests"
+              ? questView.leftPanel
+              : activeDesignKind === "npcs"
+                ? npcView.leftPanel
+                : activeDesignKind === "spells"
+                  ? spellView.leftPanel
+                  : activeDesignKind === "items"
+                    ? itemView.leftPanel
+                    : activeDesignKind === "documents"
+                      ? documentView.leftPanel
+                      : playerView.leftPanel,
     rightPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.rightPanel
-        : activeDesignKind === "game-ui"
-          ? gameUIView.rightPanel
-          : activeDesignKind === "quests"
-            ? questView.rightPanel
-            : activeDesignKind === "npcs"
-              ? npcView.rightPanel
-              : activeDesignKind === "spells"
-                ? spellView.rightPanel
-                : activeDesignKind === "items"
-                  ? itemView.rightPanel
-                  : activeDesignKind === "documents"
-                    ? documentView.rightPanel
-                    : playerView.rightPanel,
+        : activeDesignKind === "mechanics"
+          ? mechanicsView.rightPanel
+          : activeDesignKind === "game-ui"
+            ? gameUIView.rightPanel
+            : activeDesignKind === "quests"
+              ? questView.rightPanel
+              : activeDesignKind === "npcs"
+                ? npcView.rightPanel
+                : activeDesignKind === "spells"
+                  ? spellView.rightPanel
+                  : activeDesignKind === "items"
+                    ? itemView.rightPanel
+                    : activeDesignKind === "documents"
+                      ? documentView.rightPanel
+                      : playerView.rightPanel,
     centerPanel:
       activeDesignKind === "dialogues"
         ? dialogueView.centerPanel
-        : activeDesignKind === "game-ui"
-          ? gameUIView.centerPanel
-          : activeDesignKind === "quests"
-            ? questView.centerPanel
-            : activeDesignKind === "spells"
-              ? spellView.centerPanel
-              : activeDesignKind === "documents"
-                ? documentView.centerPanel
-                : activeDesignKind === "player"
-                  ? playerView.centerPanel
-                  : activeDesignKind === "npcs"
-                    ? npcView.centerPanel
-                    : undefined,
+        : activeDesignKind === "mechanics"
+          ? mechanicsView.centerPanel
+          : activeDesignKind === "game-ui"
+            ? gameUIView.centerPanel
+            : activeDesignKind === "quests"
+              ? questView.centerPanel
+              : activeDesignKind === "spells"
+                ? spellView.centerPanel
+                : activeDesignKind === "documents"
+                  ? documentView.centerPanel
+                  : activeDesignKind === "player"
+                    ? playerView.centerPanel
+                    : activeDesignKind === "npcs"
+                      ? npcView.centerPanel
+                      : undefined,
     viewportOverlay:
       activeDesignKind === "dialogues"
         ? dialogueView.viewportOverlay
-        : activeDesignKind === "game-ui"
-          ? gameUIView.viewportOverlay
-          : activeDesignKind === "quests"
-            ? questView.viewportOverlay
-            : activeDesignKind === "spells"
-              ? spellView.viewportOverlay
-              : activeDesignKind === "documents"
-                ? documentView.viewportOverlay
-                : activeDesignKind === "npcs"
-                  ? npcView.viewportOverlay
-                  : activeDesignKind === "items"
-                    ? itemView.viewportOverlay
-                    : playerView.viewportOverlay
+        : activeDesignKind === "mechanics"
+          ? mechanicsView.viewportOverlay
+          : activeDesignKind === "game-ui"
+            ? gameUIView.viewportOverlay
+            : activeDesignKind === "quests"
+              ? questView.viewportOverlay
+              : activeDesignKind === "spells"
+                ? spellView.viewportOverlay
+                : activeDesignKind === "documents"
+                  ? documentView.viewportOverlay
+                  : activeDesignKind === "npcs"
+                    ? npcView.viewportOverlay
+                    : activeDesignKind === "items"
+                      ? itemView.viewportOverlay
+                      : playerView.viewportOverlay
   };
 }
 

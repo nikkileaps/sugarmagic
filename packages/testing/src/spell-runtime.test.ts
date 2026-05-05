@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
+import {
+  createDefaultMechanicsDefinition,
+  createDefaultPlayerDefinition
+} from "@sugarmagic/domain";
 import {
   Caster,
   World,
@@ -40,12 +43,18 @@ describe("runtime caster math", () => {
     playerDefinition.casterProfile.initialBattery = 35;
     playerDefinition.casterProfile.initialResonance = 40;
 
-    const spawn = spawnRuntimePlayerEntity(world, null, playerDefinition);
+    const mechanics = createDefaultMechanicsDefinition();
+    const spawn = spawnRuntimePlayerEntity(
+      world,
+      null,
+      playerDefinition,
+      mechanics
+    );
     const caster = world.getComponent(spawn.entity, Caster);
 
     expect(caster).not.toBeNull();
-    expect(caster?.battery).toBe(35);
-    expect(caster?.maxBattery).toBe(100);
-    expect(caster?.resonance).toBe(40);
+    expect(caster?.stats.get("battery")).toBe(100);
+    expect(caster?.stats.getDefinition("battery")?.max).toBe(100);
+    expect(caster?.stats.get("resonance")).toBe(0);
   });
 });

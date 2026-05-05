@@ -1,0 +1,77 @@
+{
+  // A different game shape: no caster battery, just HP / AC and d20 attacks.
+  stats: [
+    {
+      id: "hp",
+      displayName: "Hit Points",
+      default: 12,
+      min: 0,
+      max: 12,
+      decay: null,
+      recharge: null,
+      display: "bar",
+      role: null
+    },
+    {
+      id: "ac",
+      displayName: "Armor Class",
+      default: 12,
+      min: 0,
+      max: null,
+      decay: null,
+      recharge: null,
+      display: "number",
+      role: null
+    },
+    {
+      id: "fatigue",
+      displayName: "Fatigue",
+      default: 0,
+      min: 0,
+      max: 6,
+      decay: null,
+      recharge: null,
+      display: "number",
+      role: null
+    },
+    {
+      id: "charisma",
+      displayName: "Charisma",
+      default: 2,
+      min: -5,
+      max: 10,
+      decay: null,
+      recharge: null,
+      display: "number",
+      role: null
+    }
+  ],
+  castables: [
+    {
+      id: "weapon-attack",
+      displayName: "Weapon Attack",
+      inputs: [
+        { id: "strengthMod", type: "number", required: true, default: 2 },
+        { id: "damageBonus", type: "number", required: true, default: 0 }
+      ],
+      cost: "caster.fatigue < 6",
+      acceptsTarget: true,
+      onCast: [
+        {
+          op: "branch",
+          condition: "roll(1d20) + self.strengthMod >= target.ac",
+          then: [
+            {
+              op: "consume",
+              target: "target.hp",
+              amount: "roll(1d8) + self.damageBonus"
+            },
+            { op: "emit", kind: "attack-hit" }
+          ],
+          else: [{ op: "emit", kind: "attack-miss" }]
+        },
+        { op: "set", target: "caster.fatigue", value: "caster.fatigue + 1" }
+      ]
+    }
+  ]
+}

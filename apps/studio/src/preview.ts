@@ -10,6 +10,7 @@ import type {
   SpellDefinition,
   HUDDefinition,
   MenuDefinition,
+  MechanicsDefinition,
   SoundEventBindingMap,
   AudioMixerSettings,
   UITheme,
@@ -28,6 +29,7 @@ interface PreviewBootMessage {
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibrary: ContentLibrarySnapshot;
+  mechanics: MechanicsDefinition;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -76,6 +78,7 @@ window.addEventListener("message", (event) => {
       pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
       pluginConfigurations: data.pluginConfigurations,
       contentLibrary: data.contentLibrary,
+      mechanics: data.mechanics,
       playerDefinition: data.playerDefinition,
       spellDefinitions: data.spellDefinitions,
       itemDefinitions: data.itemDefinitions,

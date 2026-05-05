@@ -24,6 +24,7 @@
       "@sugarmagic/runtime-core": ["packages/runtime-core/src/index.ts"],
       "@sugarmagic/runtime-core/*": ["packages/runtime-core/src/*"],
       "@sugarmagic/shell": ["packages/shell/src/index.ts"],
+      "@sugarmagic/studio": ["apps/studio/src/index.ts"],
       "@sugarmagic/target-web": ["targets/web/src/index.ts"],
       "@sugarmagic/testing": ["packages/testing/src/index.ts"],
       "@sugarmagic/ui": ["packages/ui/src/index.ts"],

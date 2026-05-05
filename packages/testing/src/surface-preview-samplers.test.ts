@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSurfacePreviewGeometry } from "../../../apps/studio/src/viewport/surface-preview-samplers";
+import { createSurfacePreviewGeometry } from "@sugarmagic/studio";
 
 describe("surface preview samplers", () => {
   it("builds upward-facing plane samples", () => {

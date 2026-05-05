@@ -43,6 +43,7 @@ function createStaticRuntimePluginInstance(
   return {
     pluginId: configuration.pluginId,
     displayName,
+    config: configuration.config,
     contributions: filtered,
     serializeState: () => ({ enabled: configuration.enabled })
   };
@@ -73,7 +74,10 @@ export function createRuntimePluginInstances(
     );
 
     if (instance) {
-      instances.push(instance);
+      instances.push({
+        ...instance,
+        config: instance.config ?? configuration.config
+      });
     }
   }
 

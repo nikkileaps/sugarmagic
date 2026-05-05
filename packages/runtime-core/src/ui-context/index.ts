@@ -8,6 +8,7 @@
  */
 
 import type { UIBindingExpression } from "@sugarmagic/domain";
+import { STAT_ROLE_BATTERY } from "@sugarmagic/domain";
 import { Caster, PlayerControlled, Position } from "../ecs/components";
 import { System, type World } from "../ecs/core";
 
@@ -39,7 +40,9 @@ export interface RuntimeStore<TState> {
   subscribe(listener: () => void): () => void;
 }
 
-function createRuntimeStore<TState>(initialState: TState): RuntimeStore<TState> {
+function createRuntimeStore<TState>(
+  initialState: TState
+): RuntimeStore<TState> {
   let state = initialState;
   const listeners = new Set<() => void>();
   return {
@@ -47,9 +50,10 @@ function createRuntimeStore<TState>(initialState: TState): RuntimeStore<TState> 
       return state;
     },
     setState(next) {
-      state = typeof next === "function"
-        ? (next as (current: TState) => TState)(state)
-        : next;
+      state =
+        typeof next === "function"
+          ? (next as (current: TState) => TState)(state)
+          : next;
       for (const listener of listeners) {
         listener();
       }
@@ -139,7 +143,10 @@ export interface UIContextSystemOptions {
   getRegion?: () => { id: string; name: string } | null;
 }
 
-function runtimeUIContextsEqual(a: RuntimeUIContext, b: RuntimeUIContext): boolean {
+function runtimeUIContextsEqual(
+  a: RuntimeUIContext,
+  b: RuntimeUIContext
+): boolean {
   return (
     a.player.battery === b.player.battery &&
     a.player.maxBattery === b.player.maxBattery &&
@@ -166,12 +173,23 @@ export class UIContextSystem extends System {
     const position = playerEntity
       ? world.getComponent(playerEntity, Position)
       : null;
-    const caster = playerEntity ? world.getComponent(playerEntity, Caster) : null;
+    const caster = playerEntity
+      ? world.getComponent(playerEntity, Caster)
+      : null;
+    const casterStats = caster?.stats.snapshot() ?? {};
+    const batteryStatId =
+      Object.keys(casterStats).find(
+        (statId) =>
+          caster?.stats.getDefinition(statId)?.role === STAT_ROLE_BATTERY
+      ) ?? null;
+    const batteryDefinition = batteryStatId
+      ? caster?.stats.getDefinition(batteryStatId)
+      : null;
 
     const next: RuntimeUIContext = {
       player: {
-        battery: caster?.battery ?? 0,
-        maxBattery: caster?.maxBattery ?? 1,
+        battery: batteryStatId ? (caster?.stats.get(batteryStatId) ?? 0) : 0,
+        maxBattery: batteryDefinition?.max ?? 1,
         health: 1,
         position: position ? [position.x, position.y, position.z] : [0, 0, 0]
       },

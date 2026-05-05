@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
+    "json5": "^2.2.3",
     "three": "^0.183.2"
   },
   "exports": {

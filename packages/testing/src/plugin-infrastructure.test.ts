@@ -11,6 +11,7 @@ import {
 import {
   collectPluginShellContributions,
   createRuntimePluginInstances,
+  FIREFLIES_PLUGIN_ID,
   HELLO_PLUGIN_ID,
   resolveDeploymentAction,
   SUGARAGENT_PLUGIN_ID,
@@ -219,6 +220,7 @@ describe("plugin infrastructure", () => {
 
   it("lists only actually installed plugins in the app registry", () => {
     expect(listDiscoveredPluginDefinitions().map((plugin) => plugin.manifest.pluginId)).toEqual([
+      FIREFLIES_PLUGIN_ID,
       HELLO_PLUGIN_ID,
       SUGARAGENT_PLUGIN_ID,
       SUGARDEPLOY_PLUGIN_ID,

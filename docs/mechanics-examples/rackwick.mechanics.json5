@@ -1,0 +1,59 @@
+{
+  // Rackwick-style magic: resonance strongly dampens chaos, but resets on a
+  // chaotic cast.
+  stats: [
+    {
+      id: "battery",
+      displayName: "Battery",
+      default: 100,
+      min: 0,
+      max: 100,
+      decay: null,
+      recharge: { ratePerSecond: 0.025 },
+      display: "battery",
+      role: "battery"
+    },
+    {
+      id: "resonance",
+      displayName: "Resonance",
+      default: 25,
+      min: 0,
+      max: 100,
+      decay: { ratePerSecond: 0.01 },
+      recharge: null,
+      display: "bar",
+      role: "resonance"
+    }
+  ],
+  castables: [
+    {
+      id: "rackwick-spell",
+      displayName: "Rackwick Spell",
+      inputs: [
+        { id: "batteryCost", type: "number", required: true, default: 10 },
+        { id: "chaosBase", type: "number", required: true, default: 35 }
+      ],
+      cost: "caster.battery >= self.batteryCost",
+      acceptsTarget: false,
+      onCast: [
+        { op: "consume", target: "caster.battery", amount: "self.batteryCost" },
+        {
+          op: "branch",
+          condition: "roll(1d100) <= clamp(self.chaosBase - caster.resonance, 0, 100)",
+          then: [
+            { op: "emit", kind: "spell-chaos" },
+            { op: "set", target: "caster.resonance", value: "0" }
+          ],
+          else: [
+            { op: "emit", kind: "spell-success" },
+            {
+              op: "set",
+              target: "caster.resonance",
+              value: "min(100, caster.resonance + 5)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

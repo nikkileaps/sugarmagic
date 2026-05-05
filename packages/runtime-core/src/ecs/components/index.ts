@@ -4,6 +4,7 @@
  */
 
 import type { Component } from "../core";
+import type { StatCarrier } from "../../mechanics";
 
 export class Position implements Component {
   static readonly type = "Position";
@@ -49,10 +50,7 @@ export class Caster implements Component {
   static readonly type = "Caster";
   readonly type = Caster.type;
   constructor(
-    public battery: number = 0,
-    public maxBattery: number = 0,
-    public rechargeRate: number = 0,
-    public resonance: number = 0,
+    public stats: StatCarrier,
     public allowedSpellTags: string[] = [],
     public blockedSpellTags: string[] = []
   ) {}
