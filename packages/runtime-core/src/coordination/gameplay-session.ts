@@ -46,6 +46,11 @@ import {
   type RuntimeSoundCommand
 } from "../audio";
 import {
+  VFXDispatcher,
+  VFXManager,
+  type RuntimeVFXEmitterSnapshot
+} from "../vfx";
+import {
   assertValidMechanicsDefinition,
   collectMechanicsConsumerInvocations,
   createCastableExecutor,
@@ -183,6 +188,7 @@ export interface RuntimeGameplaySessionController {
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
   readonly audioController: RuntimeAudioController;
+  readonly vfxManager: VFXManager;
   update: (deltaSeconds?: number) => void;
   syncBillboards: (
     cameraSnapshot: CameraSnapshot,
@@ -210,6 +216,7 @@ export interface RuntimeGameplaySessionController {
   setDebugBillboardsEnabled: (enabled: boolean) => void;
   getDebugHudCardContributions: () => DebugHudCardContribution[];
   getDebugHudSnapshot: () => DebugHudGameplaySessionSnapshot;
+  getVFXEmitterSnapshots: () => RuntimeVFXEmitterSnapshot[];
   toggleInventory: () => void;
   toggleCaster: () => void;
   dispose: () => void;
@@ -411,6 +418,14 @@ export function createRuntimeGameplaySessionController(
       contentLibrary ?? createEmptyContentLibrarySnapshot("runtime-audio"),
     soundEventBindings: soundEventBindings ?? {},
     mixer: audioMixer ?? createDefaultAudioMixerSettings(),
+    activeRegion
+  });
+  const vfxContentLibrary =
+    contentLibrary ?? createEmptyContentLibrarySnapshot("runtime-vfx");
+  const vfxManager = new VFXManager(vfxContentLibrary);
+  const vfxDispatcher = new VFXDispatcher({
+    manager: vfxManager,
+    itemDefinitions,
     activeRegion
   });
   function flushAudioCommands() {
@@ -1768,8 +1783,11 @@ export function createRuntimeGameplaySessionController(
     questSystem,
     blackboard,
     audioController,
+    vfxManager,
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
+      vfxDispatcher.sync();
+      vfxManager.update(deltaSeconds);
       const trackedQuest = questManager.getTrackedQuest();
       npcBehaviorSystem?.sync({
         deltaSeconds,
@@ -1858,6 +1876,9 @@ export function createRuntimeGameplaySessionController(
       return debugHudCardContributions;
     },
     getDebugHudSnapshot,
+    getVFXEmitterSnapshots() {
+      return vfxManager.getSnapshots();
+    },
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
     dispose() {
@@ -1866,6 +1887,7 @@ export function createRuntimeGameplaySessionController(
       }
       mechanicsEmitDisposers.length = 0;
       mechanicsEmitHandlers.clear();
+      vfxManager.clear();
       npcBehaviorSystem?.reset();
       spatialResolverSystem?.reset();
       debugBillboardWarningKeys.clear();

@@ -38,7 +38,8 @@ import type {
   PlayerDefinition,
   SemanticCommand,
   RegionDocument,
-  SoundCueDefinition
+  SoundCueDefinition,
+  VFXDefinition
 } from "@sugarmagic/domain";
 import {
   createInspectableBehaviorId,
@@ -63,6 +64,7 @@ import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
+import { LayoutVFXPlacementSection } from "./LayoutVFXPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 
@@ -86,6 +88,7 @@ export interface LayoutWorkspaceViewProps {
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   soundCueDefinitions: SoundCueDefinition[];
+  vfxDefinitions: VFXDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
   renderInspectorSections?: (context: {
@@ -256,6 +259,7 @@ export function useLayoutWorkspaceView(
     documentDefinitions,
     npcDefinitions,
     soundCueDefinitions,
+    vfxDefinitions,
     onEditAssetDefinition,
     onImportAsset,
     renderInspectorSections
@@ -1267,6 +1271,11 @@ export function useLayoutWorkspaceView(
             <LayoutAudioPlacementSection
               region={region}
               soundCueDefinitions={soundCueDefinitions}
+              onCommand={onCommand}
+            />
+            <LayoutVFXPlacementSection
+              region={region}
+              vfxDefinitions={vfxDefinitions}
               onCommand={onCommand}
             />
           </Stack>

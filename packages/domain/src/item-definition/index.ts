@@ -3,6 +3,10 @@ import {
   normalizeCastableInvocation,
   type CastableInvocation
 } from "../mechanics";
+import {
+  normalizeVFXBinding,
+  type VFXBinding
+} from "../content-library/vfx-definition";
 
 export type ItemCategory = "quest" | "gift" | "key" | "misc";
 export type ItemViewKind =
@@ -26,6 +30,7 @@ export interface ItemPresentationProfile {
    * button in the Item inspector — not user-editable directly.
    */
   thumbnailAssetPath: string | null;
+  vfxBindings: VFXBinding[];
 }
 
 export interface ItemInteractionView {
@@ -70,7 +75,8 @@ export function createDefaultItemDefinition(
     },
     presentation: {
       modelAssetDefinitionId: null,
-      thumbnailAssetPath: null
+      thumbnailAssetPath: null,
+      vfxBindings: []
     },
     interactionView: {
       kind: "none",
@@ -114,7 +120,10 @@ export function normalizeItemDefinition(
         defaultDefinition.presentation.modelAssetDefinitionId,
       thumbnailAssetPath:
         itemDefinition.presentation?.thumbnailAssetPath ??
-        defaultDefinition.presentation.thumbnailAssetPath
+        defaultDefinition.presentation.thumbnailAssetPath,
+      vfxBindings: (itemDefinition.presentation?.vfxBindings ?? [])
+        .map((binding) => normalizeVFXBinding(binding))
+        .filter((binding): binding is VFXBinding => binding !== null)
     },
     interactionView: {
       kind: itemDefinition.interactionView?.kind ?? defaultDefinition.interactionView.kind,

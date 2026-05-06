@@ -17,7 +17,9 @@ import {
   Button,
   Group,
   Modal,
+  NumberInput,
   ScrollArea,
+  Select,
   Stack,
   Text,
   TextInput
@@ -26,11 +28,14 @@ import type {
   AudioClipDefinition,
   MaterialDefinition,
   ShaderGraphDocument,
-  TextureDefinition
+  TextureDefinition,
+  VFXColor,
+  VFXDefinition,
+  VFXVector3
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
 import type { ShellStore } from "@sugarmagic/shell";
-import { AudioTransport } from "@sugarmagic/ui";
+import { AudioTransport, ColorField } from "@sugarmagic/ui";
 import {
   MaterialPreview,
   type MaterialPreviewGeometryKind
@@ -43,6 +48,7 @@ export interface LibraryPopoverProps {
   textureDefinitions: TextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   audioClipDefinitions: AudioClipDefinition[];
+  vfxDefinitions: VFXDefinition[];
   assetSources: Record<string, string>;
   /** For resolving texture refs in MaterialPreview. */
   assetResolver: AuthoredAssetResolver | null;
@@ -57,6 +63,13 @@ export interface LibraryPopoverProps {
   ) => void;
   onRemoveMaterialDefinition: (definitionId: string) => void;
   onRemoveAudioClipDefinition: (definitionId: string) => void;
+  onCreateVFXDefinition: () => VFXDefinition | null;
+  onDuplicateVFXDefinition: (definitionId: string) => string | null;
+  onUpdateVFXDefinition: (
+    definitionId: string,
+    patch: Partial<VFXDefinition>
+  ) => void;
+  onRemoveVFXDefinition: (definitionId: string) => void;
   /**
    * Open a shader in the Render workspace's shader-graph editor.
    * Called when the user clicks "Edit in Shader Graph" on a shader
@@ -104,12 +117,288 @@ function getAudioItems(definitions: AudioClipDefinition[]): ListItem[] {
   }));
 }
 
+function getVFXItems(definitions: VFXDefinition[]): ListItem[] {
+  return definitions.map((d) => ({
+    id: d.definitionId,
+    displayName: d.displayName,
+    isBuiltIn: Boolean(d.metadata?.builtIn)
+  }));
+}
+
+function colorToNumber(color: VFXColor): number {
+  const r = Math.round(Math.max(0, Math.min(1, color.r)) * 255);
+  const g = Math.round(Math.max(0, Math.min(1, color.g)) * 255);
+  const b = Math.round(Math.max(0, Math.min(1, color.b)) * 255);
+  return (r << 16) | (g << 8) | b;
+}
+
+function numberToColor(value: number, alpha: number): VFXColor {
+  return {
+    r: ((value >> 16) & 0xff) / 255,
+    g: ((value >> 8) & 0xff) / 255,
+    b: (value & 0xff) / 255,
+    a: alpha
+  };
+}
+
+function VectorInput({
+  label,
+  value,
+  disabled,
+  onChange
+}: {
+  label: string;
+  value: VFXVector3;
+  disabled: boolean;
+  onChange: (value: VFXVector3) => void;
+}) {
+  return (
+    <Stack gap={4}>
+      <Text size="xs" fw={600}>
+        {label}
+      </Text>
+      <Group gap="xs" grow>
+        {(["x", "y", "z"] as const).map((axis) => (
+          <NumberInput
+            key={axis}
+            size="xs"
+            label={axis.toUpperCase()}
+            disabled={disabled}
+            value={value[axis]}
+            onChange={(nextValue) => {
+              if (typeof nextValue !== "number") return;
+              onChange({ ...value, [axis]: nextValue });
+            }}
+          />
+        ))}
+      </Group>
+    </Stack>
+  );
+}
+
+function VFXDefinitionForm({
+  definition,
+  readOnly,
+  onUpdate
+}: {
+  definition: VFXDefinition;
+  readOnly: boolean;
+  onUpdate: (patch: Partial<VFXDefinition>) => void;
+}) {
+  return (
+    <Stack gap="sm">
+      <TextInput
+        label="Display Name"
+        size="xs"
+        disabled={readOnly}
+        value={definition.displayName}
+        onChange={(event) => onUpdate({ displayName: event.currentTarget.value })}
+      />
+      <TextInput
+        label="Description"
+        size="xs"
+        disabled={readOnly}
+        value={definition.description}
+        onChange={(event) => onUpdate({ description: event.currentTarget.value })}
+      />
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Emission / sec"
+          size="xs"
+          min={0}
+          disabled={readOnly}
+          value={definition.emissionRatePerSecond}
+          onChange={(value) =>
+            typeof value === "number" &&
+            onUpdate({ emissionRatePerSecond: Math.max(0, value) })
+          }
+        />
+        <NumberInput
+          label="Max Particles"
+          size="xs"
+          min={1}
+          disabled={readOnly}
+          value={definition.maxParticles}
+          onChange={(value) =>
+            typeof value === "number" &&
+            onUpdate({ maxParticles: Math.max(1, Math.floor(value)) })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Lifetime Min"
+          size="xs"
+          min={0.01}
+          disabled={readOnly}
+          value={definition.lifetimeMinSeconds}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ lifetimeMinSeconds: value })
+          }
+        />
+        <NumberInput
+          label="Lifetime Max"
+          size="xs"
+          min={0.01}
+          disabled={readOnly}
+          value={definition.lifetimeMaxSeconds}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ lifetimeMaxSeconds: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <ColorField
+          label="Start Color"
+          value={colorToNumber(definition.colorStart)}
+          disabled={readOnly}
+          onChange={(value) =>
+            onUpdate({
+              colorStart: numberToColor(value, definition.colorStart.a)
+            })
+          }
+        />
+        <NumberInput
+          label="Start Alpha"
+          size="xs"
+          min={0}
+          max={1}
+          step={0.05}
+          disabled={readOnly}
+          value={definition.colorStart.a}
+          onChange={(value) =>
+            typeof value === "number" &&
+            onUpdate({
+              colorStart: { ...definition.colorStart, a: value }
+            })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <ColorField
+          label="End Color"
+          value={colorToNumber(definition.colorEnd)}
+          disabled={readOnly}
+          onChange={(value) =>
+            onUpdate({
+              colorEnd: numberToColor(value, definition.colorEnd.a)
+            })
+          }
+        />
+        <NumberInput
+          label="End Alpha"
+          size="xs"
+          min={0}
+          max={1}
+          step={0.05}
+          disabled={readOnly}
+          value={definition.colorEnd.a}
+          onChange={(value) =>
+            typeof value === "number" &&
+            onUpdate({
+              colorEnd: { ...definition.colorEnd, a: value }
+            })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Size Start"
+          size="xs"
+          min={0}
+          disabled={readOnly}
+          value={definition.sizeStart}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ sizeStart: Math.max(0, value) })
+          }
+        />
+        <NumberInput
+          label="Size End"
+          size="xs"
+          min={0}
+          disabled={readOnly}
+          value={definition.sizeEnd}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ sizeEnd: Math.max(0, value) })
+          }
+        />
+      </Group>
+      <VectorInput
+        label="Initial Velocity"
+        value={definition.initialVelocity}
+        disabled={readOnly}
+        onChange={(initialVelocity) => onUpdate({ initialVelocity })}
+      />
+      <VectorInput
+        label="Gravity"
+        value={definition.gravity}
+        disabled={readOnly}
+        onChange={(gravity) => onUpdate({ gravity })}
+      />
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Velocity Randomness"
+          size="xs"
+          min={0}
+          max={1}
+          step={0.05}
+          disabled={readOnly}
+          value={definition.velocityRandomness}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ velocityRandomness: value })
+          }
+        />
+        <NumberInput
+          label="Spread Cone"
+          size="xs"
+          min={0}
+          max={360}
+          disabled={readOnly}
+          value={definition.spreadConeDegrees}
+          onChange={(value) =>
+            typeof value === "number" && onUpdate({ spreadConeDegrees: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <Select
+          label="Blend Mode"
+          size="xs"
+          disabled={readOnly}
+          data={[
+            { value: "additive", label: "Additive" },
+            { value: "normal", label: "Normal" }
+          ]}
+          value={definition.blendMode}
+          onChange={(value) =>
+            value && onUpdate({ blendMode: value as VFXDefinition["blendMode"] })
+          }
+        />
+        <Select
+          label="Shape"
+          size="xs"
+          disabled={readOnly}
+          data={[
+            { value: "circle", label: "Circle" },
+            { value: "square", label: "Square" }
+          ]}
+          value={definition.shape}
+          onChange={(value) =>
+            value && onUpdate({ shape: value as VFXDefinition["shape"] })
+          }
+        />
+      </Group>
+    </Stack>
+  );
+}
+
 export function LibraryPopover({
   shellStore,
   materialDefinitions,
   textureDefinitions,
   shaderDefinitions,
   audioClipDefinitions,
+  vfxDefinitions,
   assetSources,
   assetResolver,
   isMaterialReferenced,
@@ -120,6 +409,10 @@ export function LibraryPopover({
   onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
   onRemoveAudioClipDefinition,
+  onCreateVFXDefinition,
+  onDuplicateVFXDefinition,
+  onUpdateVFXDefinition,
+  onRemoveVFXDefinition,
   onEditShaderInGraph
 }: LibraryPopoverProps) {
   const activeLibrary = useStore(shellStore, (s) => s.activeLibrary);
@@ -132,13 +425,15 @@ export function LibraryPopover({
       return getTextureItems(textureDefinitions);
     if (activeLibrary === "shaders") return getShaderItems(shaderDefinitions);
     if (activeLibrary === "audio") return getAudioItems(audioClipDefinitions);
+    if (activeLibrary === "vfx") return getVFXItems(vfxDefinitions);
     return [];
   }, [
     activeLibrary,
     audioClipDefinitions,
     materialDefinitions,
     textureDefinitions,
-    shaderDefinitions
+    shaderDefinitions,
+    vfxDefinitions
   ]);
 
   const [searchState, setSearchState] = useState<{
@@ -196,6 +491,11 @@ export function LibraryPopover({
           (d) => d.definitionId === effectiveSelectedId
         ) ?? null)
       : null;
+  const selectedVFX =
+    activeLibrary === "vfx"
+      ? (vfxDefinitions.find((d) => d.definitionId === effectiveSelectedId) ??
+        null)
+      : null;
 
   const titleText =
     activeLibrary === "materials"
@@ -206,6 +506,8 @@ export function LibraryPopover({
           ? "Shaders"
           : activeLibrary === "audio"
             ? "Audio"
+            : activeLibrary === "vfx"
+              ? "VFX"
             : "Library";
 
   return (
@@ -284,6 +586,32 @@ export function LibraryPopover({
               >
                 Import Audio
               </Button>
+            ) : activeLibrary === "vfx" ? (
+              <>
+                <Button
+                  size="xs"
+                  onClick={() => {
+                    const next = onCreateVFXDefinition();
+                    if (next) setSelectedId(next.definitionId);
+                  }}
+                >
+                  New
+                </Button>
+                <Button
+                  size="xs"
+                  variant="light"
+                  disabled={!selectedVFX}
+                  onClick={() => {
+                    if (!selectedVFX) return;
+                    const nextId = onDuplicateVFXDefinition(
+                      selectedVFX.definitionId
+                    );
+                    if (nextId) setSelectedId(nextId);
+                  }}
+                >
+                  Duplicate
+                </Button>
+              </>
             ) : null}
           </Group>
           <Box
@@ -500,6 +828,50 @@ export function LibraryPopover({
                 </Stack>
               ) : null}
             </>
+          ) : activeLibrary === "vfx" ? (
+            selectedVFX ? (
+              <Stack gap="sm">
+                <Stack gap={2}>
+                  <Text size="md" fw={700}>
+                    {selectedVFX.displayName}
+                  </Text>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {selectedVFX.metadata?.builtIn ? "built-in" : "project"}
+                  </Text>
+                </Stack>
+                <VFXDefinitionForm
+                  definition={selectedVFX}
+                  readOnly={selectedVFX.metadata?.builtIn === true}
+                  onUpdate={(patch) =>
+                    onUpdateVFXDefinition(selectedVFX.definitionId, patch)
+                  }
+                />
+                {selectedVFX.metadata?.builtIn ? (
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    Duplicate this built-in VFX to make an editable project copy.
+                  </Text>
+                ) : (
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        onRemoveVFXDefinition(selectedVFX.definitionId)
+                      }
+                    >
+                      Delete
+                    </Button>
+                  </Group>
+                )}
+              </Stack>
+            ) : (
+              <Stack h="100%" align="center" justify="center">
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  Select or create a VFX definition.
+                </Text>
+              </Stack>
+            )
           ) : null}
         </Stack>
       </Group>

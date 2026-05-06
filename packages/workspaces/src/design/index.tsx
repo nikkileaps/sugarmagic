@@ -36,6 +36,7 @@ import type {
   RegionDocument,
   SpellDefinition,
   UITheme,
+  VFXDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import { BuildSubNav, type BuildWorkspaceKindItem } from "@sugarmagic/ui";
@@ -73,6 +74,7 @@ export interface DesignProductModeViewProps {
   playerDefinition: PlayerDefinition | null;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
+  vfxDefinitions: VFXDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
   dialogueDefinitions: DialogueDefinition[];
@@ -141,6 +143,7 @@ export function useDesignProductModeView(
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
+    vfxDefinitions,
     documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
@@ -203,6 +206,7 @@ export function useDesignProductModeView(
     isActive: activeDesignKind === "items",
     gameProjectId,
     itemDefinitions,
+    vfxDefinitions,
     documentDefinitions,
     mechanics,
     assetDefinitions,

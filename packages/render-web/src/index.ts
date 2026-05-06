@@ -19,4 +19,5 @@ export * from "./render";
 export * from "./renderableFallbacks";
 export * from "./renderableTransforms";
 export * from "./scatter";
+export * from "./vfx";
 export * from "./view/RenderView";

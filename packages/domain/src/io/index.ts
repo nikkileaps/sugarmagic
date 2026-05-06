@@ -16,6 +16,7 @@ import {
   createPlacedAssetInstance,
   createRegionAreaDefinition,
   createRegionAudioState,
+  createRegionVFXState,
   createRegionItemPresence,
   createLandscapeSurfaceSlot,
   createRegionNPCBehaviorDefinition,
@@ -341,6 +342,13 @@ export function normalizeRegionDocumentForLoad(
           audio?: Parameters<typeof createRegionAudioState>[0];
         }
       ).audio
+    ),
+    vfx: createRegionVFXState(
+      (
+        region as RegionDocument & {
+          vfx?: Parameters<typeof createRegionVFXState>[0];
+        }
+      ).vfx
     )
   };
 }

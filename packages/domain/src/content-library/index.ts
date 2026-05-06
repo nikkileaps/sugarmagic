@@ -72,6 +72,13 @@ import {
   createBuiltInMaterialPbrShaderGraph,
   createBuiltInCloudShadowEffectShaderGraph
 } from "../shader-graph";
+export * from "./vfx-definition";
+import {
+  createDefaultFlameVFX,
+  createDefaultSparkleVFX,
+  normalizeVFXDefinition,
+  type VFXDefinition
+} from "./vfx-definition";
 
 export type ContentDefinitionKind =
   | "asset"
@@ -459,6 +466,7 @@ export interface ContentLibrarySnapshot {
   characterAnimationDefinitions: CharacterAnimationDefinition[];
   materialDefinitions: MaterialDefinition[];
   soundCueDefinitions?: SoundCueDefinition[];
+  vfxDefinitions?: VFXDefinition[];
   textureDefinitions: TextureDefinition[];
   maskTextureDefinitions?: MaskTextureDefinition[];
   surfaceDefinitions?: SurfaceDefinition[];
@@ -800,6 +808,59 @@ function normalizeSoundCueDefinitions(
     playback: normalizeSoundCuePlayback(definition.playback),
     spatial: normalizeSoundCueSpatialSettings(definition.spatial)
   }));
+}
+
+function normalizeVFXDefinitions(
+  definitions: VFXDefinition[] | null | undefined
+): VFXDefinition[] {
+  return (definitions ?? []).map((definition) =>
+    normalizeVFXDefinition(definition)
+  );
+}
+
+function createBuiltInVFXDefinitions(
+  existingDefinitions: VFXDefinition[] | null | undefined = null
+): VFXDefinition[] {
+  const existingByKey = new Map(
+    (existingDefinitions ?? [])
+      .filter((definition) => definition.metadata?.builtInKey)
+      .map((definition) => [definition.metadata!.builtInKey!, definition])
+  );
+
+  return [
+    createDefaultFlameVFX({
+      definitionId: existingByKey.get("default-flame")?.definitionId
+    }),
+    createDefaultSparkleVFX({
+      definitionId: existingByKey.get("default-sparkle")?.definitionId
+    })
+  ];
+}
+
+function mergeBuiltInVFXDefinitions(
+  authoredDefinitions: VFXDefinition[],
+  builtInDefinitions: VFXDefinition[]
+): VFXDefinition[] {
+  const nextDefinitions = [...authoredDefinitions];
+  for (const builtInDefinition of builtInDefinitions) {
+    const builtInKey = builtInDefinition.metadata?.builtInKey;
+    const existingIndex = nextDefinitions.findIndex(
+      (definition) =>
+        definition.definitionId === builtInDefinition.definitionId ||
+        (builtInKey &&
+          definition.metadata?.builtIn === true &&
+          definition.metadata.builtInKey === builtInKey)
+    );
+    if (existingIndex >= 0) {
+      nextDefinitions[existingIndex] = {
+        ...builtInDefinition,
+        definitionId: nextDefinitions[existingIndex]!.definitionId
+      };
+      continue;
+    }
+    nextDefinitions.push(builtInDefinition);
+  }
+  return nextDefinitions;
 }
 
 export function createDefaultMaterialPbr(
@@ -1752,11 +1813,12 @@ export function createEmptyContentLibrarySnapshot(
   const grassTypeDefinitions = createBuiltInGrassTypeDefinitions(projectId);
   const flowerTypeDefinitions = createBuiltInFlowerTypeDefinitions(projectId);
   const rockTypeDefinitions = createBuiltInRockTypeDefinitions(projectId);
+  const builtInVFXDefinitions = createBuiltInVFXDefinitions();
   return {
     identity: {
       id: `${projectId}:content-library`,
       schema: "ContentLibrary",
-      version: 6
+      version: 7
     },
     assetDefinitions: [],
     audioClipDefinitions: [],
@@ -1764,6 +1826,7 @@ export function createEmptyContentLibrarySnapshot(
     characterAnimationDefinitions: [],
     materialDefinitions: builtInMaterialDefinitions,
     soundCueDefinitions: [],
+    vfxDefinitions: builtInVFXDefinitions,
     textureDefinitions: [],
     maskTextureDefinitions: [],
     surfaceDefinitions: createBuiltInSurfaceDefinitions(
@@ -1798,6 +1861,9 @@ export function normalizeContentLibrarySnapshot(
     createBuiltInFlowerTypeDefinitions(projectId);
   const builtInRockTypeDefinitions =
     createBuiltInRockTypeDefinitions(projectId);
+  const builtInVFXDefinitions = createBuiltInVFXDefinitions(
+    contentLibrary.vfxDefinitions
+  );
   const mergedMaterialDefinitions = mergeBuiltInDefinitions(
     normalizeMaterialDefinitions(contentLibrary.materialDefinitions),
     builtInMaterialDefinitions,
@@ -1863,7 +1929,7 @@ export function normalizeContentLibrarySnapshot(
   const normalizedContentLibrary: ContentLibrarySnapshot = {
     identity: {
       ...contentLibrary.identity,
-      version: Math.max(contentLibrary.identity.version ?? 1, 6)
+      version: Math.max(contentLibrary.identity.version ?? 1, 7)
     },
     assetDefinitions: contentLibrary.assetDefinitions.map((definition) => ({
       ...definition,
@@ -1883,6 +1949,10 @@ export function normalizeContentLibrarySnapshot(
     materialDefinitions: mergedMaterialDefinitions,
     soundCueDefinitions: normalizeSoundCueDefinitions(
       contentLibrary.soundCueDefinitions
+    ),
+    vfxDefinitions: mergeBuiltInVFXDefinitions(
+      normalizeVFXDefinitions(contentLibrary.vfxDefinitions),
+      builtInVFXDefinitions
     ),
     textureDefinitions: (contentLibrary.textureDefinitions ?? []).map(
       (definition) => ({
@@ -2406,6 +2476,36 @@ export function listSoundCueDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): SoundCueDefinition[] {
   return [...(contentLibrary.soundCueDefinitions ?? [])];
+}
+
+export function getVFXDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): VFXDefinition | null {
+  return (
+    (contentLibrary.vfxDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
+}
+
+export function findBuiltInVFXDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  builtInKey: string
+): VFXDefinition | null {
+  return (
+    (contentLibrary.vfxDefinitions ?? []).find(
+      (definition) =>
+        definition.metadata?.builtIn === true &&
+        definition.metadata.builtInKey === builtInKey
+    ) ?? null
+  );
+}
+
+export function listVFXDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): VFXDefinition[] {
+  return [...(contentLibrary.vfxDefinitions ?? [])];
 }
 
 /**

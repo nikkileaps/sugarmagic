@@ -33,7 +33,8 @@ import type {
   AudioClipDefinition,
   AudioMixerSettings,
   RuntimeSoundEventKey,
-  SoundCueDefinition
+  SoundCueDefinition,
+  VFXDefinition
 } from "@sugarmagic/domain";
 import {
   createAuthoringSession,
@@ -54,6 +55,7 @@ import {
   getAllItemDefinitions,
   getAllMaterialDefinitions,
   getAllSoundCueDefinitions,
+  getAllVFXDefinitions,
   getAllNPCDefinitions,
   getAllShaderDefinitions,
   getAllPluginConfigurations,
@@ -77,15 +79,19 @@ import {
   addSurfaceDefinitionToSession,
   addTextureDefinitionToSession,
   addSoundCueDefinitionToSession,
+  addVFXDefinitionToSession,
   updateAudioClipDefinitionInSession,
   updateAssetDefinitionInSession,
   updateMaterialDefinitionInSession,
   updateSoundCueDefinitionInSession,
+  updateVFXDefinitionInSession,
   removeAudioClipDefinitionFromSession,
   removeSoundCueDefinitionFromSession,
+  removeVFXDefinitionFromSession,
   setSoundEventBindingInSession,
   updateAudioMixerInSession,
   duplicateMaterialDefinitionInSession,
+  duplicateVFXDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
   removeSurfaceDefinitionFromSession,
@@ -94,6 +100,7 @@ import {
   createDefaultSurfaceDefinition,
   createDefaultEnvironmentDefinition,
   createDefaultSoundCueDefinition,
+  createDefaultVFXDefinition,
   createDefaultMechanicsDefinition,
   createDefaultRegion,
   createScopedId
@@ -685,6 +692,10 @@ export function App() {
   const soundCueDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllSoundCueDefinitions(session);
+  }, [session]);
+  const vfxDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllVFXDefinitions(session);
   }, [session]);
   const characterModelDefinitions = useMemo(() => {
     if (!session) return [];
@@ -1376,6 +1387,53 @@ export function App() {
       );
   }, []);
 
+  const handleCreateVFXDefinition = useCallback(() => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return null;
+    const existing = currentSession.contentLibrary.vfxDefinitions ?? [];
+    const definition = createDefaultVFXDefinition({
+      displayName: `VFX ${existing.length + 1}`
+    });
+    projectStore
+      .getState()
+      .updateSession(addVFXDefinitionToSession(currentSession, definition));
+    return definition;
+  }, []);
+
+  const handleDuplicateVFXDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return null;
+    const result = duplicateVFXDefinitionInSession(
+      currentSession,
+      definitionId
+    );
+    if (!result) return null;
+    projectStore.getState().updateSession(result.session);
+    return result.newDefinitionId;
+  }, []);
+
+  const handleUpdateVFXDefinition = useCallback(
+    (definitionId: string, patch: Partial<VFXDefinition>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateVFXDefinitionInSession(currentSession, definitionId, patch)
+        );
+    },
+    []
+  );
+
+  const handleRemoveVFXDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    if (!window.confirm("Remove this VFX definition from the project?")) return;
+    projectStore
+      .getState()
+      .updateSession(removeVFXDefinitionFromSession(currentSession, definitionId));
+  }, []);
+
   const handleSetSoundEventBinding = useCallback(
     (eventKey: RuntimeSoundEventKey, soundCueDefinitionId: string | null) => {
       const { session: currentSession } = projectStore.getState();
@@ -1837,6 +1895,7 @@ export function App() {
     shaderDefinitions,
     audioClipDefinitions,
     soundCueDefinitions,
+    vfxDefinitions,
     assetSources,
     soundEventBindings: session?.gameProject.soundEventBindings ?? {},
     audioMixer: session?.gameProject.audioMixer ?? null,
@@ -1980,6 +2039,7 @@ export function App() {
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
+    vfxDefinitions,
     documentDefinitions,
     npcDefinitions,
     dialogueDefinitions,
@@ -2264,6 +2324,7 @@ export function App() {
         textureDefinitions={textureDefinitions}
         shaderDefinitions={shaderDefinitions}
         audioClipDefinitions={audioClipDefinitions}
+        vfxDefinitions={vfxDefinitions}
         assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
         isMaterialReferenced={(definitionId) =>
@@ -2278,6 +2339,10 @@ export function App() {
         onUpdateAudioClipDefinition={handleUpdateAudioClipDefinition}
         onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
         onRemoveAudioClipDefinition={handleRemoveAudioClipDefinition}
+        onCreateVFXDefinition={handleCreateVFXDefinition}
+        onDuplicateVFXDefinition={handleDuplicateVFXDefinition}
+        onUpdateVFXDefinition={handleUpdateVFXDefinition}
+        onRemoveVFXDefinition={handleRemoveVFXDefinition}
         onEditShaderInGraph={(shaderDefinitionId) => {
           // Close the popover and route the existing workspace-
           // navigation handler to the Render workspace's shader
@@ -2626,6 +2691,21 @@ export function App() {
                         }}
                       >
                         Audio
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() =>
+                          shellStore.getState().setActiveLibrary("vfx")
+                        }
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color: "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        VFX
                       </Menu.Item>
                     </Menu.Sub.Dropdown>
                   </Menu.Sub>

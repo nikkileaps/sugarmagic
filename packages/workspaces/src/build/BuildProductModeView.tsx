@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Group, Stack, Text } from "@mantine/core";
 import type {
   SemanticCommand,
   AssetDefinition,
@@ -32,7 +32,8 @@ import type {
   SoundCueDefinition,
   SoundEventBindingMap,
   TextureDefinition,
-  RegionDocument
+  RegionDocument,
+  VFXDefinition
 } from "@sugarmagic/domain";
 import {
   createEmptyContentLibrarySnapshot,
@@ -89,6 +90,7 @@ export interface BuildProductModeViewProps {
   shaderDefinitions: ShaderGraphDocument[];
   audioClipDefinitions: AudioClipDefinition[];
   soundCueDefinitions: SoundCueDefinition[];
+  vfxDefinitions: VFXDefinition[];
   assetSources: Record<string, string>;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings | null;
@@ -200,6 +202,7 @@ export function useBuildProductModeView(
     shaderDefinitions,
     audioClipDefinitions,
     soundCueDefinitions,
+    vfxDefinitions,
     assetSources,
     soundEventBindings,
     audioMixer,
@@ -224,12 +227,8 @@ export function useBuildProductModeView(
     onSetAssetDefaultShader,
     onSetAssetDefaultShaderParameterOverride,
     onClearAssetDefaultShaderParameterOverride,
-    onCreateMaterialDefinition,
-    onImportPbrMaterial,
-    onImportTextureDefinition,
     onCreateMaskTextureDefinition,
     onImportMaskTextureDefinition,
-    onRemoveMaterialDefinition,
     onCreateSurfaceDefinition,
     onUpdateSurfaceDefinition,
     onRemoveSurfaceDefinition,
@@ -243,7 +242,6 @@ export function useBuildProductModeView(
     activeMaskPaintTarget,
     onSetMaskPaintTarget,
     surfaceCenterPanel,
-    isMaterialReferenced,
     renderLayoutInspectorSections
   } = props;
 
@@ -282,6 +280,7 @@ export function useBuildProductModeView(
     documentDefinitions,
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     soundCueDefinitions,
+    vfxDefinitions,
     onImportAsset,
     renderInspectorSections: renderLayoutInspectorSections,
     onEditAssetDefinition: (definitionId) => {

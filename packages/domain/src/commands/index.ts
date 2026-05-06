@@ -3,9 +3,10 @@ import type {
   RegionNPCBehaviorDefinition,
   RegionLandscapePaintPayload,
   RegionAmbienceZone,
-  RegionSoundEmitter
+  RegionSoundEmitter,
+  VFXSpawn
 } from "../region-authoring";
-import type { EnvironmentDefinition } from "../content-library";
+import type { EnvironmentDefinition, VFXDefinition } from "../content-library";
 import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
@@ -267,6 +268,58 @@ export type DeleteRegionAmbienceZoneCommand = SemanticCommandBase<
   "DeleteRegionAmbienceZone",
   {
     zoneId: string;
+  }
+>;
+
+export type CreateRegionVFXSpawnCommand = SemanticCommandBase<
+  "CreateRegionVFXSpawn",
+  {
+    spawn: VFXSpawn;
+  }
+>;
+
+export type UpdateRegionVFXSpawnCommand = SemanticCommandBase<
+  "UpdateRegionVFXSpawn",
+  {
+    spawnId: string;
+    patch: Partial<Omit<VFXSpawn, "spawnId">>;
+  }
+>;
+
+export type DeleteRegionVFXSpawnCommand = SemanticCommandBase<
+  "DeleteRegionVFXSpawn",
+  {
+    spawnId: string;
+  }
+>;
+
+export type CreateVFXDefinitionCommand = SemanticCommandBase<
+  "CreateVFXDefinition",
+  {
+    definition: VFXDefinition;
+  }
+>;
+
+export type UpdateVFXDefinitionCommand = SemanticCommandBase<
+  "UpdateVFXDefinition",
+  {
+    definitionId: string;
+    patch: Partial<VFXDefinition>;
+  }
+>;
+
+export type DeleteVFXDefinitionCommand = SemanticCommandBase<
+  "DeleteVFXDefinition",
+  {
+    definitionId: string;
+  }
+>;
+
+export type DuplicateVFXDefinitionCommand = SemanticCommandBase<
+  "DuplicateVFXDefinition",
+  {
+    sourceDefinitionId: string;
+    definition: VFXDefinition;
   }
 >;
 
@@ -916,6 +969,13 @@ export type SemanticCommand =
   | CreateRegionAmbienceZoneCommand
   | UpdateRegionAmbienceZoneCommand
   | DeleteRegionAmbienceZoneCommand
+  | CreateRegionVFXSpawnCommand
+  | UpdateRegionVFXSpawnCommand
+  | DeleteRegionVFXSpawnCommand
+  | CreateVFXDefinitionCommand
+  | UpdateVFXDefinitionCommand
+  | DeleteVFXDefinitionCommand
+  | DuplicateVFXDefinitionCommand
   | UpdateEnvironmentDefinitionCommand
   | CreateShaderGraphCommand
   | RenameShaderGraphCommand

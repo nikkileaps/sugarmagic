@@ -87,7 +87,12 @@ export interface ShellSelectionState {
  * are NOT library kinds either — they're entity-owned content authored via the
  * Player/NPC inspector file-pickers.
  */
-export type LibraryKind = "materials" | "textures" | "shaders" | "audio";
+export type LibraryKind =
+  | "materials"
+  | "textures"
+  | "shaders"
+  | "audio"
+  | "vfx";
 
 export interface ShellToolSessionState {
   workspaceId: string | null;

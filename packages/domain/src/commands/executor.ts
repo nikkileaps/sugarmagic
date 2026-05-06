@@ -51,6 +51,9 @@ import type {
   CreateRegionAmbienceZoneCommand,
   UpdateRegionAmbienceZoneCommand,
   DeleteRegionAmbienceZoneCommand,
+  CreateRegionVFXSpawnCommand,
+  UpdateRegionVFXSpawnCommand,
+  DeleteRegionVFXSpawnCommand,
   CreatePlayerPresenceCommand,
   TransformPlayerPresenceCommand,
   RemovePlayerPresenceCommand,
@@ -1265,6 +1268,51 @@ function applyDeleteRegionAmbienceZone(
   };
 }
 
+function applyCreateRegionVFXSpawn(
+  region: RegionDocument,
+  command: CreateRegionVFXSpawnCommand
+): RegionDocument {
+  return {
+    ...region,
+    vfx: {
+      ...region.vfx,
+      spawns: [...(region.vfx?.spawns ?? []), command.payload.spawn]
+    }
+  };
+}
+
+function applyUpdateRegionVFXSpawn(
+  region: RegionDocument,
+  command: UpdateRegionVFXSpawnCommand
+): RegionDocument {
+  return {
+    ...region,
+    vfx: {
+      ...region.vfx,
+      spawns: (region.vfx?.spawns ?? []).map((spawn) =>
+        spawn.spawnId === command.payload.spawnId
+          ? { ...spawn, ...command.payload.patch }
+          : spawn
+      )
+    }
+  };
+}
+
+function applyDeleteRegionVFXSpawn(
+  region: RegionDocument,
+  command: DeleteRegionVFXSpawnCommand
+): RegionDocument {
+  return {
+    ...region,
+    vfx: {
+      ...region.vfx,
+      spawns: (region.vfx?.spawns ?? []).filter(
+        (spawn) => spawn.spawnId !== command.payload.spawnId
+      )
+    }
+  };
+}
+
 export function executeCommand(
   region: RegionDocument,
   command: SemanticCommand
@@ -1376,6 +1424,15 @@ export function executeCommand(
       break;
     case "DeleteRegionAmbienceZone":
       updatedRegion = applyDeleteRegionAmbienceZone(region, command);
+      break;
+    case "CreateRegionVFXSpawn":
+      updatedRegion = applyCreateRegionVFXSpawn(region, command);
+      break;
+    case "UpdateRegionVFXSpawn":
+      updatedRegion = applyUpdateRegionVFXSpawn(region, command);
+      break;
+    case "DeleteRegionVFXSpawn":
+      updatedRegion = applyDeleteRegionVFXSpawn(region, command);
       break;
     case "CreatePlayerPresence":
       updatedRegion = applyCreatePlayerPresence(region, command);

@@ -4,6 +4,7 @@ import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUt
 import {
   createCapsuleFallback,
   createFallbackMesh,
+  InstancedParticleRenderer,
   createRenderView,
   createRenderableShaderApplicationState,
   disposeRenderableObject,
@@ -36,6 +37,8 @@ import {
 import {
   resolveSceneObjects,
   computeSceneDelta,
+  VFXDispatcher,
+  VFXManager,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import type {
@@ -372,6 +375,10 @@ export function createAuthoringViewport(
 
   const objectMap = new Map<string, SceneObjectEntry>();
   const pendingRenderableLoads = new Set<string>();
+  const vfxRenderer = new InstancedParticleRenderer(scene);
+  let vfxManager: VFXManager | null = null;
+  let vfxDispatcher: VFXDispatcher | null = null;
+  let lastVFXFrameTime = performance.now();
   let previousObjects: SceneObject[] = [];
   let currentAssetSources: Record<string, string> = {};
   let renderGeneration = 0;
@@ -454,6 +461,8 @@ export function createAuthoringViewport(
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;
       previousObjects = [];
+      vfxManager?.clear();
+      vfxRenderer.sync([], activeCamera);
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
         disposeRenderableObject(entry.root);
@@ -465,6 +474,22 @@ export function createAuthoringViewport(
 
     const { region, contentLibrary, playerDefinition, itemDefinitions, npcDefinitions } =
       projection;
+    if (!vfxManager) {
+      vfxManager = new VFXManager(contentLibrary);
+      vfxDispatcher = new VFXDispatcher({
+        manager: vfxManager,
+        itemDefinitions,
+        activeRegion: region
+      });
+    } else {
+      vfxManager.setContentLibrary(contentLibrary);
+      vfxDispatcher?.setSceneState({
+        itemDefinitions,
+        activeRegion: region
+      });
+    }
+    vfxDispatcher?.sync();
+
     const landscape = projection.landscapeOverride ?? region.landscape;
     renderView.landscapeController.applyLandscape(
       landscape,
@@ -580,6 +605,12 @@ export function createAuthoringViewport(
           renderView.shaderRuntime,
           currentAssetSources
         );
+        const now = performance.now();
+        const deltaSeconds = Math.min(0.25, Math.max(0, (now - lastVFXFrameTime) / 1000));
+        lastVFXFrameTime = now;
+        vfxDispatcher?.sync();
+        vfxManager?.update(deltaSeconds);
+        vfxRenderer.sync(vfxManager?.getSnapshots() ?? [], activeCamera);
       });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
@@ -698,6 +729,8 @@ export function createAuthoringViewport(
       }
       objectMap.clear();
       pendingRenderableLoads.clear();
+      vfxManager?.clear();
+      vfxRenderer.sync([], activeCamera);
       for (const teardown of overlayTeardowns) {
         teardown();
       }
@@ -707,6 +740,7 @@ export function createAuthoringViewport(
       unsubscribeProjection?.();
       unsubscribeProjection = null;
       renderView.unmount();
+      lastVFXFrameTime = performance.now();
     },
 
     resize(width, height) {

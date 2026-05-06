@@ -73,16 +73,7 @@ import type {
   AddHUDNodeCommand,
   UpdateHUDNodeCommand,
   RemoveHUDNodeCommand,
-  UpdateUIThemeCommand,
-  SetPlacedAssetShaderOverrideCommand,
-  SetNPCPresenceShaderOverrideCommand,
-  SetItemPresenceShaderOverrideCommand,
-  SetPlacedAssetShaderParameterOverrideCommand,
-  ClearPlacedAssetShaderParameterOverrideCommand,
-  SetNPCPresenceShaderParameterOverrideCommand,
-  ClearNPCPresenceShaderParameterOverrideCommand,
-  SetItemPresenceShaderParameterOverrideCommand,
-  ClearItemPresenceShaderParameterOverrideCommand
+  UpdateUIThemeCommand
 } from "../commands";
 import type {
   AssetDefinition,
@@ -94,7 +85,8 @@ import type {
   MaterialDefinition,
   MaskTextureDefinition,
   SoundCueDefinition,
-  TextureDefinition
+  TextureDefinition,
+  VFXDefinition
 } from "../content-library";
 import {
   normalizeNPCDefinitionForWrite,
@@ -139,6 +131,7 @@ import {
   listSurfaceDefinitions as listSurfaceDefinitionsFromLibrary,
   listShaderDefinitions as listShaderDefinitionsFromLibrary,
   listSoundCueDefinitions as listSoundCueDefinitionsFromLibrary,
+  listVFXDefinitions as listVFXDefinitionsFromLibrary,
   listTextureDefinitions as listTextureDefinitionsFromLibrary,
   normalizeContentLibrarySnapshot,
   synchronizeEnvironmentDefinition
@@ -147,10 +140,7 @@ import type {
   ShaderGraphDocument,
   ShaderParameterOverride
 } from "../shader-graph";
-import {
-  createEmptyShaderSlotBindingMap,
-  validateShaderGraphDocument
-} from "../shader-graph";
+import { validateShaderGraphDocument } from "../shader-graph";
 import { createScopedId, createUuid } from "../shared";
 import { executeCommand, pushTransaction } from "../commands/executor";
 import { createEmptyHistory } from "../commands/executor";
@@ -265,6 +255,12 @@ export function getAllSoundCueDefinitions(
   session: AuthoringSession
 ): SoundCueDefinition[] {
   return listSoundCueDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllVFXDefinitions(
+  session: AuthoringSession
+): VFXDefinition[] {
+  return listVFXDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllSurfaceDefinitions(
@@ -435,18 +431,6 @@ function applyEnvironmentDefinitionCommand(
   };
 }
 
-function replaceShaderOverride<
-  T extends {
-    shaderOverride: { shaderDefinitionId: string } | null;
-    shaderParameterOverrides: ShaderParameterOverride[];
-  }
->(value: T, shaderDefinitionId: string | null): T {
-  return {
-    ...value,
-    shaderOverride: shaderDefinitionId ? { shaderDefinitionId } : null
-  };
-}
-
 function upsertShaderParameterOverride(
   overrides: ShaderParameterOverride[],
   nextOverride: ShaderParameterOverride
@@ -461,13 +445,6 @@ function upsertShaderParameterOverride(
   const next = [...overrides];
   next[existingIndex] = nextOverride;
   return next;
-}
-
-function removeShaderParameterOverride(
-  overrides: ShaderParameterOverride[],
-  parameterId: string
-): ShaderParameterOverride[] {
-  return overrides.filter((override) => override.parameterId !== parameterId);
 }
 
 function applyShaderGraphMutation(
@@ -911,6 +888,7 @@ function applySetAssetDefaultShaderParameterOverrideCommand(
   session: AuthoringSession,
   command: SetAssetDefaultShaderParameterOverrideCommand
 ): AuthoringSession {
+  void command;
   return session;
 }
 
@@ -918,6 +896,7 @@ function applyClearAssetDefaultShaderParameterOverrideCommand(
   session: AuthoringSession,
   command: ClearAssetDefaultShaderParameterOverrideCommand
 ): AuthoringSession {
+  void command;
   return session;
 }
 
@@ -2268,6 +2247,29 @@ export function applyCommand(
     return applyDeleteQuestDefinitionCommand(session, command);
   }
 
+  if (command.kind === "CreateVFXDefinition") {
+    return addVFXDefinitionToSession(session, command.payload.definition);
+  }
+
+  if (command.kind === "UpdateVFXDefinition") {
+    return updateVFXDefinitionInSession(
+      session,
+      command.payload.definitionId,
+      command.payload.patch
+    );
+  }
+
+  if (command.kind === "DeleteVFXDefinition") {
+    return removeVFXDefinitionFromSession(
+      session,
+      command.payload.definitionId
+    );
+  }
+
+  if (command.kind === "DuplicateVFXDefinition") {
+    return addVFXDefinitionToSession(session, command.payload.definition);
+  }
+
   const activeRegion = getActiveRegion(session);
   if (!activeRegion) return session;
 
@@ -2625,6 +2627,129 @@ export function removeSoundCueDefinitionFromSession(
             ),
             ambienceZones: (region.audio?.ambienceZones ?? []).filter(
               (zone) => zone.cueDefinitionId !== definitionId
+            )
+          }
+        }
+      ])
+    ),
+    isDirty: true
+  };
+}
+
+export function addVFXDefinitionToSession(
+  session: AuthoringSession,
+  vfxDefinition: VFXDefinition
+): AuthoringSession {
+  const existingDefinitions = session.contentLibrary.vfxDefinitions ?? [];
+  const existingIndex = existingDefinitions.findIndex(
+    (definition) => definition.definitionId === vfxDefinition.definitionId
+  );
+  const nextDefinitions = [...existingDefinitions];
+  const authoredDefinition: VFXDefinition = {
+    ...vfxDefinition,
+    metadata: vfxDefinition.metadata ? { ...vfxDefinition.metadata } : undefined
+  };
+  if (existingIndex >= 0) {
+    nextDefinitions[existingIndex] = authoredDefinition;
+  } else {
+    nextDefinitions.push(authoredDefinition);
+  }
+
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      vfxDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateVFXDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<VFXDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      vfxDefinitions: (session.contentLibrary.vfxDefinitions ?? []).map(
+        (definition) =>
+          definition.definitionId === definitionId &&
+          definition.metadata?.builtIn !== true
+            ? {
+                ...definition,
+                ...patch,
+                definitionId,
+                definitionKind: "vfx",
+                metadata: definition.metadata
+              }
+            : definition
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function duplicateVFXDefinitionInSession(
+  session: AuthoringSession,
+  sourceDefinitionId: string,
+  options: { displayName?: string; newDefinitionId?: string } = {}
+): { session: AuthoringSession; newDefinitionId: string } | null {
+  const source = (session.contentLibrary.vfxDefinitions ?? []).find(
+    (definition) => definition.definitionId === sourceDefinitionId
+  );
+  if (!source) {
+    return null;
+  }
+  const newDefinitionId = options.newDefinitionId ?? createUuid();
+  const copy: VFXDefinition = {
+    ...source,
+    definitionId: newDefinitionId,
+    displayName: options.displayName ?? `${source.displayName} (Copy)`,
+    metadata: undefined
+  };
+  return {
+    session: addVFXDefinitionToSession(session, copy),
+    newDefinitionId
+  };
+}
+
+export function removeVFXDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      vfxDefinitions: (session.contentLibrary.vfxDefinitions ?? []).filter(
+        (definition) =>
+          definition.definitionId !== definitionId ||
+          definition.metadata?.builtIn === true
+      )
+    },
+    gameProject: {
+      ...session.gameProject,
+      itemDefinitions: session.gameProject.itemDefinitions.map((item) => ({
+        ...item,
+        presentation: {
+          ...item.presentation,
+          vfxBindings: item.presentation.vfxBindings.filter(
+            (binding) => binding.vfxDefinitionId !== definitionId
+          )
+        }
+      }))
+    },
+    regions: new Map(
+      Array.from(session.regions.entries()).map(([regionId, region]) => [
+        regionId,
+        {
+          ...region,
+          vfx: {
+            spawns: (region.vfx?.spawns ?? []).filter(
+              (spawn) => spawn.vfxDefinitionId !== definitionId
             )
           }
         }

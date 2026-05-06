@@ -99,7 +99,7 @@ describe("environment migration", () => {
         binding.shaderDefinitionId === createBuiltInFogTintShaderId("project")
     );
 
-    expect(normalized.identity.version).toBe(6);
+    expect(normalized.identity.version).toBe(7);
     expect(fogBinding).toBeTruthy();
     expect(fogBinding?.enabled).toBe(true);
     expect(

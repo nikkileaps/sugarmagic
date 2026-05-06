@@ -22,13 +22,17 @@ import type {
   ItemDefinition,
   ItemViewKind,
   MechanicsDefinition,
-  SemanticCommand
+  SemanticCommand,
+  VFXDefinition
 } from "@sugarmagic/domain";
 import type {
   DesignPreviewState,
   DesignPreviewStore
 } from "@sugarmagic/shell";
-import { createDefaultItemDefinition } from "@sugarmagic/domain";
+import {
+  createDefaultItemDefinition,
+  createVFXBinding
+} from "@sugarmagic/domain";
 import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { LayoutOrientationWidget } from "../build/layout/LayoutOrientationWidget";
@@ -44,6 +48,7 @@ export interface ItemWorkspaceViewProps {
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   mechanics: MechanicsDefinition;
+  vfxDefinitions: VFXDefinition[];
   assetDefinitions: AssetDefinition[];
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
@@ -85,6 +90,7 @@ export function useItemWorkspaceView(
     itemDefinitions,
     documentDefinitions,
     mechanics,
+    vfxDefinitions,
     assetDefinitions,
     assetSources,
     designPreviewStore,
@@ -153,6 +159,14 @@ export function useItemWorkspaceView(
     [documentDefinitions]
   );
   const defaultCastable = mechanics.castables[0] ?? null;
+  const vfxOptions = useMemo(
+    () =>
+      vfxDefinitions.map((definition) => ({
+        value: definition.definitionId,
+        label: definition.displayName
+      })),
+    [vfxDefinitions]
+  );
 
   function createItem() {
     if (!gameProjectId) return;
@@ -498,6 +512,128 @@ export function useItemWorkspaceView(
                     : "Generate Thumbnail"}
                 </Button>
               </Group>
+            </Stack>
+
+            <Stack gap="xs">
+              <Group justify="space-between" align="center">
+                <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                  VFX Bindings
+                </Text>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  disabled={vfxDefinitions.length === 0}
+                  onClick={() =>
+                    updateItem({
+                      ...selectedItem,
+                      presentation: {
+                        ...selectedItem.presentation,
+                        vfxBindings: [
+                          ...selectedItem.presentation.vfxBindings,
+                          createVFXBinding({
+                            vfxDefinitionId: vfxDefinitions[0]?.definitionId ?? "",
+                            localOffset: { x: 0, y: 0.2, z: 0 }
+                          })
+                        ]
+                      }
+                    })
+                  }
+                >
+                  Add VFX
+                </Button>
+              </Group>
+              {selectedItem.presentation.vfxBindings.length === 0 ? (
+                <Text size="xs" c="var(--sm-color-overlay0)">
+                  Bind reusable VFX definitions from Library &gt; VFX to this item.
+                </Text>
+              ) : null}
+              {selectedItem.presentation.vfxBindings.map((binding) => (
+                <Stack
+                  key={binding.bindingId}
+                  gap="xs"
+                  p="xs"
+                  style={{
+                    border: "1px solid var(--sm-panel-border)",
+                    borderRadius: 8
+                  }}
+                >
+                  <Group gap="xs" align="end">
+                    <Select
+                      label="Definition"
+                      size="xs"
+                      searchable
+                      data={vfxOptions}
+                      value={binding.vfxDefinitionId || null}
+                      onChange={(value) =>
+                        updateItem({
+                          ...selectedItem,
+                          presentation: {
+                            ...selectedItem.presentation,
+                            vfxBindings:
+                              selectedItem.presentation.vfxBindings.map((entry) =>
+                                entry.bindingId === binding.bindingId
+                                  ? { ...entry, vfxDefinitionId: value ?? "" }
+                                  : entry
+                              )
+                          }
+                        })
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="red"
+                      aria-label="Remove VFX binding"
+                      onClick={() =>
+                        updateItem({
+                          ...selectedItem,
+                          presentation: {
+                            ...selectedItem.presentation,
+                            vfxBindings:
+                              selectedItem.presentation.vfxBindings.filter(
+                                (entry) => entry.bindingId !== binding.bindingId
+                              )
+                          }
+                        })
+                      }
+                    >
+                      x
+                    </ActionIcon>
+                  </Group>
+                  <Group gap="xs" grow>
+                    {(["x", "y", "z"] as const).map((axis) => (
+                      <NumberInput
+                        key={axis}
+                        label={`Offset ${axis.toUpperCase()}`}
+                        size="xs"
+                        value={binding.localOffset[axis]}
+                        onChange={(value) => {
+                          if (typeof value !== "number") return;
+                          updateItem({
+                            ...selectedItem,
+                            presentation: {
+                              ...selectedItem.presentation,
+                              vfxBindings:
+                                selectedItem.presentation.vfxBindings.map((entry) =>
+                                  entry.bindingId === binding.bindingId
+                                    ? {
+                                        ...entry,
+                                        localOffset: {
+                                          ...entry.localOffset,
+                                          [axis]: value
+                                        }
+                                      }
+                                    : entry
+                                )
+                            }
+                          });
+                        }}
+                      />
+                    ))}
+                  </Group>
+                </Stack>
+              ))}
             </Stack>
 
             <Stack gap="xs">

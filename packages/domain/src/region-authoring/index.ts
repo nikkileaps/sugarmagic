@@ -1,5 +1,11 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
+import {
+  createVFXSpawn,
+  normalizeRegionVFXState,
+  type RegionVFXState,
+  type VFXSpawn
+} from "../content-library/vfx-definition";
 import type { LandscapeSurfaceSlot, ShaderReference } from "../surface";
 import { createDefaultSurface, createInlineSurfaceBinding } from "../surface";
 import type {
@@ -142,6 +148,8 @@ export interface RegionAudioState {
   ambienceZones: RegionAmbienceZone[];
 }
 
+export type { RegionVFXState, VFXSpawn };
+
 export type RegionAreaKind =
   | "zone"
   | "interior"
@@ -237,6 +245,7 @@ export interface RegionDocument {
   behaviors: RegionNPCBehaviorDefinition[];
   landscape: RegionLandscapeState;
   audio?: RegionAudioState;
+  vfx?: RegionVFXState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
 }
@@ -270,10 +279,6 @@ export function createRegionNPCBehaviorId(): string {
 
 function createPlacedAssetInstanceIdValue(): string {
   return createScopedId("placed-asset");
-}
-
-function createSceneFolderIdValue(): string {
-  return createScopedId("scene-folder");
 }
 
 export function createRegionNPCBehaviorTaskId(): string {
@@ -438,6 +443,10 @@ export function createRegionAmbienceZoneId(): string {
   return createUuid();
 }
 
+export function createRegionVFXSpawnId(): string {
+  return createUuid();
+}
+
 export function createRegionSoundEmitter(
   overrides: Partial<RegionSoundEmitter> = {}
 ): RegionSoundEmitter {
@@ -477,6 +486,24 @@ export function createRegionAudioState(
       createRegionAmbienceZone(zone)
     )
   };
+}
+
+export function createRegionVFXSpawn(
+  overrides: Partial<VFXSpawn> = {}
+): VFXSpawn {
+  return createVFXSpawn({
+    spawnId: overrides.spawnId ?? createRegionVFXSpawnId(),
+    vfxDefinitionId: overrides.vfxDefinitionId,
+    position: overrides.position
+  });
+}
+
+export function createRegionVFXState(
+  overrides: Partial<RegionVFXState> = {}
+): RegionVFXState {
+  return normalizeRegionVFXState({
+    spawns: (overrides.spawns ?? []).map((spawn) => createRegionVFXSpawn(spawn))
+  });
 }
 
 export function createRegionPlayerPresence(
@@ -606,6 +633,7 @@ export function createDefaultRegion(options: {
     behaviors: [],
     landscape: createDefaultRegionLandscapeState(),
     audio: createRegionAudioState(),
+    vfx: createRegionVFXState(),
     markers: [],
     gameplayPlacements: []
   };
