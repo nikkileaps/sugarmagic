@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { abs, attribute, length, max, smoothstep, uv, vec2 } from "three/tsl";
-import type { VFXDefinition } from "@sugarmagic/domain";
+import type { ParticleEmitterDefinition } from "@sugarmagic/domain";
 
 interface ScalarNodeLike {
   mul: (other: unknown) => unknown;
@@ -22,14 +22,15 @@ interface Vec2NodeLike {
 }
 
 export function createParticleMaterial(
-  definition: VFXDefinition
+  definition: ParticleEmitterDefinition
 ): MeshBasicNodeMaterial {
+  const params = definition.emitter;
   const material = new MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
     blending:
-      definition.blendMode === "additive"
+      params.blendMode === "additive"
         ? THREE.AdditiveBlending
         : THREE.NormalBlending
   });
@@ -42,7 +43,7 @@ export function createParticleMaterial(
   const offset = (uv() as unknown as Vec2NodeLike).sub(vec2(0.5, 0.5));
   const radial = length(offset as never);
   const boxDist = max(abs(offset.x as never), abs(offset.y as never));
-  const dist = definition.shape === "square" ? boxDist : radial;
+  const dist = params.shape === "square" ? boxDist : radial;
   const shapeAlpha = smoothstep(0.5, 0.0, dist as never);
   const opacityAttr = attribute(
     "particleOpacity",

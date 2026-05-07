@@ -4,7 +4,7 @@ import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUt
 import {
   createCapsuleFallback,
   createFallbackMesh,
-  InstancedParticleRenderer,
+  VFXRendererRegistry,
   createRenderView,
   createRenderableShaderApplicationState,
   disposeRenderableObject,
@@ -375,7 +375,7 @@ export function createAuthoringViewport(
 
   const objectMap = new Map<string, SceneObjectEntry>();
   const pendingRenderableLoads = new Set<string>();
-  const vfxRenderer = new InstancedParticleRenderer(scene);
+  const vfxRenderer = new VFXRendererRegistry(scene);
   let vfxManager: VFXManager | null = null;
   let vfxDispatcher: VFXDispatcher | null = null;
   let lastVFXFrameTime = performance.now();

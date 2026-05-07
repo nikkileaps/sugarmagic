@@ -11,6 +11,7 @@ import type {
   VFXVector3
 } from "@sugarmagic/domain";
 import { VFXManager } from "./VFXManager";
+import type { RuntimeVFXHost } from "./types";
 
 function addVector(a: VFXVector3, b: VFXVector3): VFXVector3 {
   return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
@@ -59,11 +60,7 @@ export class VFXDispatcher {
         definition
       ])
     );
-    const hosts: Array<{
-      hostId: string;
-      definitionId: string;
-      position: VFXVector3;
-    }> = [];
+    const hosts: RuntimeVFXHost[] = [];
 
     for (const presence of region.scene.itemPresences ?? []) {
       const definition = itemsById.get(presence.itemDefinitionId);
@@ -73,7 +70,8 @@ export class VFXDispatcher {
         hosts.push({
           hostId: `item:${presence.presenceId}:vfx:${binding.bindingId}`,
           definitionId: binding.vfxDefinitionId,
-          position: addVector(basePosition, binding.localOffset)
+          position: addVector(basePosition, binding.localOffset),
+          renderOrder: binding.renderOrder
         });
       }
     }
@@ -82,7 +80,8 @@ export class VFXDispatcher {
       hosts.push({
         hostId: `region:${region.identity.id}:vfx:${spawn.spawnId}`,
         definitionId: spawn.vfxDefinitionId,
-        position: spawn.position
+        position: spawn.position,
+        renderOrder: spawn.renderOrder
       });
     }
 

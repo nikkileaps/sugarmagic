@@ -74,7 +74,11 @@ describe("VFX end-to-end binding", () => {
 
     const snapshots = manager.getSnapshots();
     expect(snapshots).toHaveLength(1);
-    expect(snapshots[0]?.definition.definitionId).toBe(flame!.definitionId);
-    expect(snapshots[0]?.particles.length).toBeGreaterThan(0);
+    const first = snapshots[0]!;
+    expect(first.kind).toBe("particle-emitter");
+    expect(first.definition.definitionId).toBe(flame!.definitionId);
+    if (first.kind === "particle-emitter") {
+      expect(first.particles.length).toBeGreaterThan(0);
+    }
   });
 });

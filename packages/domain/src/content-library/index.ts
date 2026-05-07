@@ -74,8 +74,11 @@ import {
 } from "../shader-graph";
 export * from "./vfx-definition";
 import {
+  createDefaultAuraVFX,
   createDefaultFlameVFX,
+  createDefaultGlowLightVFX,
   createDefaultSparkleVFX,
+  createDefaultStreamersVFX,
   normalizeVFXDefinition,
   type VFXDefinition
 } from "./vfx-definition";
@@ -833,6 +836,15 @@ function createBuiltInVFXDefinitions(
     }),
     createDefaultSparkleVFX({
       definitionId: existingByKey.get("default-sparkle")?.definitionId
+    }),
+    createDefaultAuraVFX({
+      definitionId: existingByKey.get("default-aura")?.definitionId
+    }),
+    createDefaultStreamersVFX({
+      definitionId: existingByKey.get("default-streamers")?.definitionId
+    }),
+    createDefaultGlowLightVFX({
+      definitionId: existingByKey.get("default-glow-light")?.definitionId
     })
   ];
 }

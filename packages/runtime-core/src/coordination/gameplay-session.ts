@@ -48,7 +48,7 @@ import {
 import {
   VFXDispatcher,
   VFXManager,
-  type RuntimeVFXEmitterSnapshot
+  type RuntimeVFXSnapshot
 } from "../vfx";
 import {
   assertValidMechanicsDefinition,
@@ -216,7 +216,7 @@ export interface RuntimeGameplaySessionController {
   setDebugBillboardsEnabled: (enabled: boolean) => void;
   getDebugHudCardContributions: () => DebugHudCardContribution[];
   getDebugHudSnapshot: () => DebugHudGameplaySessionSnapshot;
-  getVFXEmitterSnapshots: () => RuntimeVFXEmitterSnapshot[];
+  getVFXSnapshots: () => RuntimeVFXSnapshot[];
   toggleInventory: () => void;
   toggleCaster: () => void;
   dispose: () => void;
@@ -1876,7 +1876,7 @@ export function createRuntimeGameplaySessionController(
       return debugHudCardContributions;
     },
     getDebugHudSnapshot,
-    getVFXEmitterSnapshots() {
+    getVFXSnapshots() {
       return vfxManager.getSnapshots();
     },
     toggleInventory: inventoryUi.toggle,

@@ -34,7 +34,7 @@ import type {
   AudioMixerSettings,
   RuntimeSoundEventKey,
   SoundCueDefinition,
-  VFXDefinition
+  VFXDefinitionPatch
 } from "@sugarmagic/domain";
 import {
   createAuthoringSession,
@@ -1413,7 +1413,7 @@ export function App() {
   }, []);
 
   const handleUpdateVFXDefinition = useCallback(
-    (definitionId: string, patch: Partial<VFXDefinition>) => {
+    (definitionId: string, patch: VFXDefinitionPatch) => {
       const { session: currentSession } = projectStore.getState();
       if (!currentSession) return;
       projectStore

@@ -95,7 +95,8 @@ describe("runtime VFX", () => {
             {
               spawnId: "spawn:one",
               vfxDefinitionId: definition.definitionId,
-              position: { x: 4, y: 5, z: 6 }
+              position: { x: 4, y: 5, z: 6 },
+              renderOrder: 0
             }
           ]
         }

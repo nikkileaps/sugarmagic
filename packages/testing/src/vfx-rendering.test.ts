@@ -18,9 +18,11 @@ describe("InstancedParticleRenderer", () => {
       maxParticles: 4
     });
     const renderer = new InstancedParticleRenderer(scene);
-    const snapshot = {
+    const snapshot: import("@sugarmagic/runtime-core").RuntimeVFXEmitterSnapshot = {
+      kind: "particle-emitter",
       emitterId: "emitter",
       hostId: "host",
+      renderOrder: 0,
       definition,
       particles: [
         {

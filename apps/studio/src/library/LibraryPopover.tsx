@@ -27,10 +27,15 @@ import {
 import type {
   AudioClipDefinition,
   MaterialDefinition,
+  ParticleEmitterDefinition,
+  PointLightDefinition,
+  RibbonStreamerDefinition,
+  ShaderBillboardDefinition,
   ShaderGraphDocument,
   TextureDefinition,
   VFXColor,
   VFXDefinition,
+  VFXDefinitionPatch,
   VFXVector3
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
@@ -67,7 +72,7 @@ export interface LibraryPopoverProps {
   onDuplicateVFXDefinition: (definitionId: string) => string | null;
   onUpdateVFXDefinition: (
     definitionId: string,
-    patch: Partial<VFXDefinition>
+    patch: VFXDefinitionPatch
   ) => void;
   onRemoveVFXDefinition: (definitionId: string) => void;
   /**
@@ -183,7 +188,7 @@ function VFXDefinitionForm({
 }: {
   definition: VFXDefinition;
   readOnly: boolean;
-  onUpdate: (patch: Partial<VFXDefinition>) => void;
+  onUpdate: (patch: VFXDefinitionPatch) => void;
 }) {
   return (
     <Stack gap="sm">
@@ -201,16 +206,62 @@ function VFXDefinitionForm({
         value={definition.description}
         onChange={(event) => onUpdate({ description: event.currentTarget.value })}
       />
+      <Text size="xs" c="dimmed">
+        Kind: {definition.kind}
+      </Text>
+      {definition.kind === "particle-emitter" ? (
+        <ParticleEmitterFields
+          definition={definition}
+          readOnly={readOnly}
+          onUpdate={onUpdate}
+        />
+      ) : definition.kind === "shader-billboard" ? (
+        <ShaderBillboardFields
+          definition={definition}
+          readOnly={readOnly}
+          onUpdate={onUpdate}
+        />
+      ) : definition.kind === "ribbon-streamer" ? (
+        <RibbonStreamerFields
+          definition={definition}
+          readOnly={readOnly}
+          onUpdate={onUpdate}
+        />
+      ) : (
+        <PointLightFields
+          definition={definition}
+          readOnly={readOnly}
+          onUpdate={onUpdate}
+        />
+      )}
+    </Stack>
+  );
+}
+
+function ParticleEmitterFields({
+  definition,
+  readOnly,
+  onUpdate
+}: {
+  definition: ParticleEmitterDefinition;
+  readOnly: boolean;
+  onUpdate: (patch: VFXDefinitionPatch) => void;
+}) {
+  const params = definition.emitter;
+  const patch = (sub: VFXDefinitionPatch["emitter"]) =>
+    onUpdate({ emitter: sub });
+  return (
+    <Stack gap="sm">
       <Group gap="xs" grow>
         <NumberInput
           label="Emission / sec"
           size="xs"
           min={0}
           disabled={readOnly}
-          value={definition.emissionRatePerSecond}
+          value={params.emissionRatePerSecond}
           onChange={(value) =>
             typeof value === "number" &&
-            onUpdate({ emissionRatePerSecond: Math.max(0, value) })
+            patch({ emissionRatePerSecond: Math.max(0, value) })
           }
         />
         <NumberInput
@@ -218,10 +269,10 @@ function VFXDefinitionForm({
           size="xs"
           min={1}
           disabled={readOnly}
-          value={definition.maxParticles}
+          value={params.maxParticles}
           onChange={(value) =>
             typeof value === "number" &&
-            onUpdate({ maxParticles: Math.max(1, Math.floor(value)) })
+            patch({ maxParticles: Math.max(1, Math.floor(value)) })
           }
         />
       </Group>
@@ -231,9 +282,9 @@ function VFXDefinitionForm({
           size="xs"
           min={0.01}
           disabled={readOnly}
-          value={definition.lifetimeMinSeconds}
+          value={params.lifetimeMinSeconds}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ lifetimeMinSeconds: value })
+            typeof value === "number" && patch({ lifetimeMinSeconds: value })
           }
         />
         <NumberInput
@@ -241,20 +292,20 @@ function VFXDefinitionForm({
           size="xs"
           min={0.01}
           disabled={readOnly}
-          value={definition.lifetimeMaxSeconds}
+          value={params.lifetimeMaxSeconds}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ lifetimeMaxSeconds: value })
+            typeof value === "number" && patch({ lifetimeMaxSeconds: value })
           }
         />
       </Group>
       <Group gap="xs" grow>
         <ColorField
           label="Start Color"
-          value={colorToNumber(definition.colorStart)}
+          value={colorToNumber(params.colorStart)}
           disabled={readOnly}
           onChange={(value) =>
-            onUpdate({
-              colorStart: numberToColor(value, definition.colorStart.a)
+            patch({
+              colorStart: numberToColor(value, params.colorStart.a)
             })
           }
         />
@@ -265,11 +316,11 @@ function VFXDefinitionForm({
           max={1}
           step={0.05}
           disabled={readOnly}
-          value={definition.colorStart.a}
+          value={params.colorStart.a}
           onChange={(value) =>
             typeof value === "number" &&
-            onUpdate({
-              colorStart: { ...definition.colorStart, a: value }
+            patch({
+              colorStart: { ...params.colorStart, a: value }
             })
           }
         />
@@ -277,11 +328,11 @@ function VFXDefinitionForm({
       <Group gap="xs" grow>
         <ColorField
           label="End Color"
-          value={colorToNumber(definition.colorEnd)}
+          value={colorToNumber(params.colorEnd)}
           disabled={readOnly}
           onChange={(value) =>
-            onUpdate({
-              colorEnd: numberToColor(value, definition.colorEnd.a)
+            patch({
+              colorEnd: numberToColor(value, params.colorEnd.a)
             })
           }
         />
@@ -292,11 +343,11 @@ function VFXDefinitionForm({
           max={1}
           step={0.05}
           disabled={readOnly}
-          value={definition.colorEnd.a}
+          value={params.colorEnd.a}
           onChange={(value) =>
             typeof value === "number" &&
-            onUpdate({
-              colorEnd: { ...definition.colorEnd, a: value }
+            patch({
+              colorEnd: { ...params.colorEnd, a: value }
             })
           }
         />
@@ -307,9 +358,9 @@ function VFXDefinitionForm({
           size="xs"
           min={0}
           disabled={readOnly}
-          value={definition.sizeStart}
+          value={params.sizeStart}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ sizeStart: Math.max(0, value) })
+            typeof value === "number" && patch({ sizeStart: Math.max(0, value) })
           }
         />
         <NumberInput
@@ -317,23 +368,23 @@ function VFXDefinitionForm({
           size="xs"
           min={0}
           disabled={readOnly}
-          value={definition.sizeEnd}
+          value={params.sizeEnd}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ sizeEnd: Math.max(0, value) })
+            typeof value === "number" && patch({ sizeEnd: Math.max(0, value) })
           }
         />
       </Group>
       <VectorInput
         label="Initial Velocity"
-        value={definition.initialVelocity}
+        value={params.initialVelocity}
         disabled={readOnly}
-        onChange={(initialVelocity) => onUpdate({ initialVelocity })}
+        onChange={(initialVelocity) => patch({ initialVelocity })}
       />
       <VectorInput
         label="Gravity"
-        value={definition.gravity}
+        value={params.gravity}
         disabled={readOnly}
-        onChange={(gravity) => onUpdate({ gravity })}
+        onChange={(gravity) => patch({ gravity })}
       />
       <Group gap="xs" grow>
         <NumberInput
@@ -343,9 +394,9 @@ function VFXDefinitionForm({
           max={1}
           step={0.05}
           disabled={readOnly}
-          value={definition.velocityRandomness}
+          value={params.velocityRandomness}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ velocityRandomness: value })
+            typeof value === "number" && patch({ velocityRandomness: value })
           }
         />
         <NumberInput
@@ -354,9 +405,9 @@ function VFXDefinitionForm({
           min={0}
           max={360}
           disabled={readOnly}
-          value={definition.spreadConeDegrees}
+          value={params.spreadConeDegrees}
           onChange={(value) =>
-            typeof value === "number" && onUpdate({ spreadConeDegrees: value })
+            typeof value === "number" && patch({ spreadConeDegrees: value })
           }
         />
       </Group>
@@ -369,9 +420,9 @@ function VFXDefinitionForm({
             { value: "additive", label: "Additive" },
             { value: "normal", label: "Normal" }
           ]}
-          value={definition.blendMode}
+          value={params.blendMode}
           onChange={(value) =>
-            value && onUpdate({ blendMode: value as VFXDefinition["blendMode"] })
+            value && patch({ blendMode: value as "additive" | "normal" })
           }
         />
         <Select
@@ -382,12 +433,313 @@ function VFXDefinitionForm({
             { value: "circle", label: "Circle" },
             { value: "square", label: "Square" }
           ]}
-          value={definition.shape}
+          value={params.shape}
           onChange={(value) =>
-            value && onUpdate({ shape: value as VFXDefinition["shape"] })
+            value && patch({ shape: value as "circle" | "square" })
           }
         />
       </Group>
+    </Stack>
+  );
+}
+
+function ShaderBillboardFields({
+  definition,
+  readOnly,
+  onUpdate
+}: {
+  definition: ShaderBillboardDefinition;
+  readOnly: boolean;
+  onUpdate: (patch: VFXDefinitionPatch) => void;
+}) {
+  const params = definition.billboard;
+  const patch = (sub: VFXDefinitionPatch["billboard"]) =>
+    onUpdate({ billboard: sub });
+  return (
+    <Stack gap="sm">
+      <Group gap="xs" grow>
+        <ColorField
+          label="Core Color"
+          value={colorToNumber(params.coreColor)}
+          disabled={readOnly}
+          onChange={(value) =>
+            patch({ coreColor: numberToColor(value, params.coreColor.a) })
+          }
+        />
+        <ColorField
+          label="Halo Color"
+          value={colorToNumber(params.haloColor)}
+          disabled={readOnly}
+          onChange={(value) =>
+            patch({ haloColor: numberToColor(value, params.haloColor.a) })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Core Radius"
+          size="xs"
+          min={0.001}
+          max={1}
+          step={0.01}
+          disabled={readOnly}
+          value={params.coreRadius}
+          onChange={(value) =>
+            typeof value === "number" && patch({ coreRadius: value })
+          }
+        />
+        <NumberInput
+          label="Halo Radius"
+          size="xs"
+          min={0.01}
+          max={1}
+          step={0.01}
+          disabled={readOnly}
+          value={params.haloRadius}
+          onChange={(value) =>
+            typeof value === "number" && patch({ haloRadius: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Pulse Rate (Hz)"
+          size="xs"
+          min={0}
+          step={0.1}
+          disabled={readOnly}
+          value={params.pulseRate}
+          onChange={(value) =>
+            typeof value === "number" && patch({ pulseRate: value })
+          }
+        />
+        <NumberInput
+          label="Rotation Rate (rad/s)"
+          size="xs"
+          step={0.05}
+          disabled={readOnly}
+          value={params.rotationRate}
+          onChange={(value) =>
+            typeof value === "number" && patch({ rotationRate: value })
+          }
+        />
+      </Group>
+      <NumberInput
+        label="Size"
+        size="xs"
+        min={0.001}
+        step={0.05}
+        disabled={readOnly}
+        value={params.size}
+        onChange={(value) => typeof value === "number" && patch({ size: value })}
+      />
+      <Select
+        label="Blend Mode"
+        size="xs"
+        disabled={readOnly}
+        data={[
+          { value: "additive", label: "Additive" },
+          { value: "normal", label: "Normal" }
+        ]}
+        value={params.blendMode}
+        onChange={(value) =>
+          value && patch({ blendMode: value as "additive" | "normal" })
+        }
+      />
+    </Stack>
+  );
+}
+
+function RibbonStreamerFields({
+  definition,
+  readOnly,
+  onUpdate
+}: {
+  definition: RibbonStreamerDefinition;
+  readOnly: boolean;
+  onUpdate: (patch: VFXDefinitionPatch) => void;
+}) {
+  const params = definition.streamer;
+  const patch = (sub: VFXDefinitionPatch["streamer"]) =>
+    onUpdate({ streamer: sub });
+  return (
+    <Stack gap="sm">
+      <ColorField
+        label="Color"
+        value={colorToNumber(params.color)}
+        disabled={readOnly}
+        onChange={(value) =>
+          patch({ color: numberToColor(value, params.color.a) })
+        }
+      />
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Count"
+          size="xs"
+          min={1}
+          disabled={readOnly}
+          value={params.count}
+          onChange={(value) =>
+            typeof value === "number" &&
+            patch({ count: Math.max(1, Math.floor(value)) })
+          }
+        />
+        <NumberInput
+          label="Length"
+          size="xs"
+          min={0.01}
+          step={0.05}
+          disabled={readOnly}
+          value={params.length}
+          onChange={(value) =>
+            typeof value === "number" && patch({ length: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Width"
+          size="xs"
+          min={0.001}
+          step={0.005}
+          disabled={readOnly}
+          value={params.width}
+          onChange={(value) =>
+            typeof value === "number" && patch({ width: value })
+          }
+        />
+        <NumberInput
+          label="Orbit Speed (rad/s)"
+          size="xs"
+          step={0.1}
+          disabled={readOnly}
+          value={params.orbitSpeed}
+          onChange={(value) =>
+            typeof value === "number" && patch({ orbitSpeed: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Vertical Drift (m/s)"
+          size="xs"
+          step={0.01}
+          disabled={readOnly}
+          value={params.verticalDrift}
+          onChange={(value) =>
+            typeof value === "number" && patch({ verticalDrift: value })
+          }
+        />
+        <Select
+          label="Ease Shape"
+          size="xs"
+          disabled={readOnly}
+          data={[
+            { value: "linear", label: "Linear" },
+            { value: "ease-out", label: "Ease Out" }
+          ]}
+          value={params.easeShape}
+          onChange={(value) =>
+            value && patch({ easeShape: value as "linear" | "ease-out" })
+          }
+        />
+      </Group>
+      <Select
+        label="Blend Mode"
+        size="xs"
+        disabled={readOnly}
+        data={[
+          { value: "additive", label: "Additive" },
+          { value: "normal", label: "Normal" }
+        ]}
+        value={params.blendMode}
+        onChange={(value) =>
+          value && patch({ blendMode: value as "additive" | "normal" })
+        }
+      />
+    </Stack>
+  );
+}
+
+function PointLightFields({
+  definition,
+  readOnly,
+  onUpdate
+}: {
+  definition: PointLightDefinition;
+  readOnly: boolean;
+  onUpdate: (patch: VFXDefinitionPatch) => void;
+}) {
+  const params = definition.light;
+  const patch = (sub: VFXDefinitionPatch["light"]) => onUpdate({ light: sub });
+  return (
+    <Stack gap="sm">
+      <ColorField
+        label="Color"
+        value={colorToNumber(params.color)}
+        disabled={readOnly}
+        onChange={(value) => patch({ color: numberToColor(value, 1) })}
+      />
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Intensity"
+          size="xs"
+          min={0}
+          step={0.1}
+          disabled={readOnly}
+          value={params.intensity}
+          onChange={(value) =>
+            typeof value === "number" && patch({ intensity: value })
+          }
+        />
+        <NumberInput
+          label="Distance"
+          size="xs"
+          min={0}
+          step={0.5}
+          disabled={readOnly}
+          value={params.distance}
+          onChange={(value) =>
+            typeof value === "number" && patch({ distance: value })
+          }
+        />
+      </Group>
+      <Group gap="xs" grow>
+        <NumberInput
+          label="Decay"
+          size="xs"
+          min={0}
+          step={0.1}
+          disabled={readOnly}
+          value={params.decay}
+          onChange={(value) =>
+            typeof value === "number" && patch({ decay: value })
+          }
+        />
+        <NumberInput
+          label="Pulse Rate (Hz)"
+          size="xs"
+          min={0}
+          step={0.1}
+          disabled={readOnly}
+          value={params.pulseRate ?? 0}
+          onChange={(value) =>
+            typeof value === "number" && patch({ pulseRate: value })
+          }
+        />
+      </Group>
+      <NumberInput
+        label="Pulse Amount (0-1)"
+        size="xs"
+        min={0}
+        max={1}
+        step={0.05}
+        disabled={readOnly}
+        value={params.pulseAmount ?? 0}
+        onChange={(value) =>
+          typeof value === "number" && patch({ pulseAmount: value })
+        }
+      />
     </Stack>
   );
 }

@@ -77,7 +77,7 @@ export class InstancedParticleRenderer {
       const requestedCapacity = Math.max(
         1,
         entries.reduce(
-          (total, entry) => total + entry.definition.maxParticles,
+          (total, entry) => total + entry.definition.emitter.maxParticles,
           0
         )
       );

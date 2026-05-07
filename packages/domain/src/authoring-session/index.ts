@@ -86,7 +86,8 @@ import type {
   MaskTextureDefinition,
   SoundCueDefinition,
   TextureDefinition,
-  VFXDefinition
+  VFXDefinition,
+  VFXDefinitionPatch
 } from "../content-library";
 import {
   normalizeNPCDefinitionForWrite,
@@ -117,6 +118,7 @@ import {
 } from "../plugins";
 import type { TimestampIso } from "../shared";
 import {
+  applyVFXDefinitionPatch,
   createBuiltInCloudShadowsShaderId,
   createBuiltInFogTintShaderId,
   createEmptyContentLibrarySnapshot,
@@ -2636,6 +2638,38 @@ export function removeSoundCueDefinitionFromSession(
   };
 }
 
+function cloneVFXDefinition(vfxDefinition: VFXDefinition): VFXDefinition {
+  const clonedMetadata = vfxDefinition.metadata
+    ? { ...vfxDefinition.metadata }
+    : undefined;
+  switch (vfxDefinition.kind) {
+    case "particle-emitter":
+      return {
+        ...vfxDefinition,
+        metadata: clonedMetadata,
+        emitter: { ...vfxDefinition.emitter }
+      };
+    case "shader-billboard":
+      return {
+        ...vfxDefinition,
+        metadata: clonedMetadata,
+        billboard: { ...vfxDefinition.billboard }
+      };
+    case "ribbon-streamer":
+      return {
+        ...vfxDefinition,
+        metadata: clonedMetadata,
+        streamer: { ...vfxDefinition.streamer }
+      };
+    case "point-light":
+      return {
+        ...vfxDefinition,
+        metadata: clonedMetadata,
+        light: { ...vfxDefinition.light }
+      };
+  }
+}
+
 export function addVFXDefinitionToSession(
   session: AuthoringSession,
   vfxDefinition: VFXDefinition
@@ -2645,10 +2679,7 @@ export function addVFXDefinitionToSession(
     (definition) => definition.definitionId === vfxDefinition.definitionId
   );
   const nextDefinitions = [...existingDefinitions];
-  const authoredDefinition: VFXDefinition = {
-    ...vfxDefinition,
-    metadata: vfxDefinition.metadata ? { ...vfxDefinition.metadata } : undefined
-  };
+  const authoredDefinition = cloneVFXDefinition(vfxDefinition);
   if (existingIndex >= 0) {
     nextDefinitions[existingIndex] = authoredDefinition;
   } else {
@@ -2668,7 +2699,7 @@ export function addVFXDefinitionToSession(
 export function updateVFXDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
-  patch: Partial<VFXDefinition>
+  patch: VFXDefinitionPatch
 ): AuthoringSession {
   return {
     ...session,
@@ -2678,13 +2709,7 @@ export function updateVFXDefinitionInSession(
         (definition) =>
           definition.definitionId === definitionId &&
           definition.metadata?.builtIn !== true
-            ? {
-                ...definition,
-                ...patch,
-                definitionId,
-                definitionKind: "vfx",
-                metadata: definition.metadata
-              }
+            ? applyVFXDefinitionPatch(definition, patch)
             : definition
       )
     },
@@ -2704,14 +2729,12 @@ export function duplicateVFXDefinitionInSession(
     return null;
   }
   const newDefinitionId = options.newDefinitionId ?? createUuid();
-  const copy: VFXDefinition = {
-    ...source,
-    definitionId: newDefinitionId,
-    displayName: options.displayName ?? `${source.displayName} (Copy)`,
-    metadata: undefined
-  };
+  const cloned = cloneVFXDefinition(source);
+  cloned.definitionId = newDefinitionId;
+  cloned.displayName = options.displayName ?? `${source.displayName} (Copy)`;
+  cloned.metadata = undefined;
   return {
-    session: addVFXDefinitionToSession(session, copy),
+    session: addVFXDefinitionToSession(session, cloned),
     newDefinitionId
   };
 }

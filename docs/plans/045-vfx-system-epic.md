@@ -759,15 +759,17 @@ cleanly).
   only)
 - `packages/testing/src/vfx-end-to-end.test.ts` (new)
 
-### 045.7 — Layered VFX stack (aura + streamers + sparkles)
+### 045.7 — Layered VFX stack (aura + streamers + sparkles + light)
 
 This story generalizes `VFXDefinition` from "particle emitter
 only" to "any additive visual layer", and ships a layered
 effect stack — translucent **aura** sphere + animated
-**streamers** + small **sparkle** particles — that can be
-bound to an item OR placed at a region position. The
-resonance-point look from the magical-orb references is the
-target.
+**streamers** + small **sparkle** particles + a soft warm
+**point light** — that can be bound to an item OR placed at
+a region position. The resonance-point look from the
+magical-orb references is the target. The light layer makes
+the orb contribute real scene illumination (especially at
+night) instead of just rendering as additive transparency.
 
 **Conceptual frame.** VFX is the additive composition layer
 on top of the asset pipeline. An item / region position can
@@ -787,7 +789,8 @@ that bakes in independence).
   type VFXDefinitionKind =
     | "particle-emitter"
     | "shader-billboard"
-    | "ribbon-streamer";
+    | "ribbon-streamer"
+    | "point-light";
   ```
   Existing flame / sparkle definitions become
   `kind: "particle-emitter"` (zero behavior change for
@@ -812,10 +815,15 @@ that bakes in independence).
     kind: "ribbon-streamer";
     streamer: RibbonStreamerParams;
   }
+  interface PointLightDefinition extends VFXDefinitionBase {
+    kind: "point-light";
+    light: PointLightParams;
+  }
   type VFXDefinition =
     | ParticleEmitterDefinition
     | ShaderBillboardDefinition
-    | RibbonStreamerDefinition;
+    | RibbonStreamerDefinition
+    | PointLightDefinition;
   ```
   Each kind owns a sub-record so kind-specific fields don't
   leak across the union.
@@ -829,6 +837,17 @@ that bakes in independence).
   `easeShape` (`"linear" | "ease-out"`). Renders as N
   trail-style ribbon meshes orbiting / streaming away from
   the host position.
+- `PointLightParams`: `color` (hex / RGB), `intensity`
+  (scalar, in the same units the rest of the engine's lights
+  use), `distance` (falloff radius; 0 = infinite per Three's
+  convention), `decay` (default 2 for physically-correct
+  inverse-square), `pulseRate?` (optional Hz; intensity
+  oscillates ±10% if set), `pulseAmount?` (default 0.1).
+  Renders as a `THREE.PointLight` parented to the host
+  transform; contributes to scene illumination via Three's
+  forward lighting (no transparent-pass entry, so
+  `renderOrder` is inert for this kind — keep it on the
+  binding for shape consistency, just unused).
 - Add explicit render-order plumbing on the binding side
   (NOT on the definition):
   ```ts
@@ -856,6 +875,10 @@ that bakes in independence).
   body.
 - `createDefaultStreamersVFX()` — `kind: "ribbon-streamer"`,
   4 streamers, slow orbit, soft rim color.
+- `createDefaultGlowLightVFX()` — `kind: "point-light"`,
+  warm color (~3000K equivalent), moderate intensity,
+  modest falloff radius, slow pulse. Tuned to "the orb is
+  glowing" — visible at night, subtle in day.
 - (Existing `createDefaultFlameVFX` and
   `createDefaultSparkleVFX` keep their current shape under
   `kind: "particle-emitter"`.)
@@ -876,14 +899,23 @@ that bakes in independence).
   computed from orbit angle + streamer index in TSL or CPU
   per frame (depending on count; start CPU for v1, defer
   GPU compute).
+- New `LightVFXRenderer` — wraps `THREE.PointLight`. On
+  bind: instantiate light, parent to host transform, push
+  to `scene`. On unbind: remove + dispose. Per-frame: if
+  `pulseRate` is set, modulate `intensity` via
+  `baseIntensity * (1 + pulseAmount * sin(time * 2π *
+  pulseRate))`. No transparent-pass participation; no
+  WebGPURenderer construction site (Three's existing
+  forward lighting handles it).
 - `VFXManager` (runtime-core) gains a renderer-binding-kind
   switch so it dispatches each binding to the right
-  renderer and respects `renderOrder`. The dispatcher does
-  NOT type-check definition kind — it routes by
+  renderer and respects `renderOrder` (where applicable —
+  point lights ignore it). The dispatcher does NOT
+  type-check definition kind — it routes by
   `definition.kind` at runtime so future kinds slot in
   without an exhaustive switch.
 - `InstancedParticleRenderer` is unchanged behaviorally;
-  just becomes one of three peer renderers under a shared
+  just becomes one of four peer renderers under a shared
   `VFXRendererRegistry` (or equivalent dispatch helper).
 
 **Studio surface:**
@@ -895,6 +927,8 @@ that bakes in independence).
   - `shader-billboard` → core/halo color pickers, radius
     sliders, pulse rate
   - `ribbon-streamer` → count, length, width, orbit speed
+  - `point-light` → color, intensity, distance, decay,
+    optional pulse rate + amount
 - New-VFX flow gets a kind picker first, then the
   appropriate parameter form.
 - Item inspector "VFX Bindings" panel (Story 045.5) gains a
@@ -923,21 +957,26 @@ that bakes in independence).
 
 - Wordlarky's Resonance Point item updates its
   `presentation.vfxBindings` from a single flame to a
-  three-binding stack: aura (`renderOrder: 0`), streamers
-  (`renderOrder: 1`), sparkles (`renderOrder: 2`). The
-  flame definition stays in the library; this story just
-  changes which definitions the resonance point binds. Day-
-  scene readability of the orb is the validation.
+  four-binding stack: aura (`renderOrder: 0`), streamers
+  (`renderOrder: 1`), sparkles (`renderOrder: 2`), glow
+  light (`renderOrder: 0` — inert for lights). The flame
+  definition stays in the library; this story just changes
+  which definitions the resonance point binds. Day-scene
+  readability of the orb + visible light contribution at
+  night are both validation criteria.
 
 **Tests:**
 
 - Domain: tagged-union round-trip + normalizer (each kind
   preserves its sub-record; normalizer fills `kind:
   "particle-emitter"` and `renderOrder: 0` on legacy data).
-- Runtime: a single host with three bindings of distinct
-  kinds spins up the right renderer for each; teardown
-  releases all three cleanly; render order is honored
-  across the transparent pass.
+- Runtime: a single host with four bindings of distinct
+  kinds (billboard + streamer + particle + light) spins up
+  the right renderer for each; teardown releases all four
+  cleanly; render order is honored across the transparent
+  pass for the three drawing kinds; the point light is
+  added to / removed from the scene's light set on
+  bind / unbind without leaks.
 - Studio: kind picker on new-VFX flow; per-kind parameter
   form switches when selection changes.
 - End-to-end: resonance-point fixture renders all three
@@ -947,8 +986,8 @@ that bakes in independence).
 **Files touched:**
 - `packages/domain/src/content-library/vfx-definition.ts`
   (refactor to tagged union, add `ShaderBillboardParams` +
-  `RibbonStreamerParams`, add `kind` discriminator + factory
-  functions for new built-ins)
+  `RibbonStreamerParams` + `PointLightParams`, add `kind`
+  discriminator + factory functions for new built-ins)
 - `packages/domain/src/item-definition/index.ts` (add
   `renderOrder: number` to `VFXBinding`)
 - `packages/domain/src/region-authoring/index.ts` (add
@@ -963,6 +1002,7 @@ that bakes in independence).
   (new)
 - `packages/render-web/src/vfx/RibbonStreamerRenderer.ts`
   (new)
+- `packages/render-web/src/vfx/LightVFXRenderer.ts` (new)
 - `packages/render-web/src/vfx/VFXRendererRegistry.ts` (new
   — dispatch helper)
 - `packages/render-web/src/vfx/index.ts` (re-export new
@@ -981,14 +1021,168 @@ that bakes in independence).
   `SetVFXBindingRenderOrder`,
   `SetVFXSpawnRenderOrder` commands)
 - `/Users/nikki/projects/wordlarky/project.sgrmagic` (
-  resonance-point binds aura + streamers + sparkles; data
-  only)
+  resonance-point binds aura + streamers + sparkles +
+  light; data only)
 - `packages/testing/src/vfx-domain.test.ts` (extend with
-  union round-trip + normalizer cases)
+  union round-trip + normalizer cases for all four kinds)
 - `packages/testing/src/vfx-layered-stack.test.ts` (new —
-  three-binding host)
+  four-binding host)
 - `packages/testing/src/vfx-end-to-end.test.ts` (extend
-  with resonance-point layered render)
+  with resonance-point layered render + light contribution
+  assertion)
+
+### 045.8 — Projector decal VFX kind
+
+Add `decal` as a fifth `VFXDefinitionKind` for projecting
+animated textures onto scene geometry — magic circles, glow
+patches under the host, projected runes. Distinct enough
+from the four kinds in 045.7 to deserve its own story
+because it touches the scene-depth pipeline.
+
+**Why projector and not geometry decals.** Three's built-in
+`DecalGeometry` produces static geometry conformed to a
+target mesh, which means re-projection on parameter change
+and a target-mesh dependency. We instead use the
+projector pattern: a screen-space quad with a TSL fragment
+that samples scene depth, reconstructs world-space
+position, and discards pixels outside an oriented decal
+box. This lets decals project onto any geometry under them
+(landscape + placed assets) without per-target geometry
+generation, and animates cheaply via TSL. The scene-depth
+infrastructure already exists in render-web — see the
+existing usage of `RuntimeRenderPipeline.getSceneDepthNode`
+in landscape / post-process code (per the project memory
+note: TSL post-process depth must be wired explicitly via
+`scenePass`, never `viewportLinearDepth`).
+
+**Domain extensions:**
+
+- Extend `VFXDefinitionKind` to add `"decal"`:
+  ```ts
+  type VFXDefinitionKind =
+    | "particle-emitter"
+    | "shader-billboard"
+    | "ribbon-streamer"
+    | "point-light"
+    | "decal";
+  ```
+- New tagged-union arm:
+  ```ts
+  interface DecalDefinition extends VFXDefinitionBase {
+    kind: "decal";
+    decal: DecalParams;
+  }
+  ```
+- `DecalParams`:
+  - `size: { x: number; y: number }` — extent of the decal
+    box on its projection plane
+  - `depth: number` — extrusion of the decal box along its
+    projection normal (how far above/below the plane the
+    box catches geometry)
+  - `projectionNormal: "down" | "up" | "host-forward"` —
+    which way the decal projects (default `"down"` = magic
+    circle on the ground)
+  - `colorMap: AssetReference | null` — texture asset
+    sampled for the projected color
+  - `tint: ColorRGBA` — multiplied into the sampled color;
+    alpha drives blend strength
+  - `rotationRate?: number` — radians/sec; rotates the
+    sampled UVs (slowly-spinning runes)
+  - `pulseRate?: number` — Hz; oscillates alpha
+  - `blendMode: "additive" | "normal"` — how the decal
+    composites with what's underneath
+
+**Built-in additions:**
+
+- `createDefaultRuneCircleDecal()` — `kind: "decal"`,
+  procedural rune-circle texture (or asset-bundled), slow
+  rotation, soft pulse. Used as the resonance-point ground
+  glyph.
+
+**Renderer:**
+
+- New `DecalVFXRenderer` (`packages/render-web/src/vfx/DecalVFXRenderer.ts`).
+  Per active decal binding: a screen-space quad
+  (`PlaneGeometry(2,2)` in NDC, depth-prepass-adjacent in
+  the transparent pass — TBD during implementation whether
+  it needs its own pass slot or fits in the existing
+  transparent pass). TSL fragment:
+  1. Reads scene depth at this fragment via
+     `RuntimeRenderPipeline.getSceneDepthNode` (NOT
+     `viewportLinearDepth` — per the memory note).
+  2. Reconstructs world-space position from depth + screen
+     UV + inverse-projection matrix.
+  3. Transforms world position into decal-local space (
+     subtract host translation, rotate by host orientation,
+     scale by decal box extent).
+  4. Discards fragments where any local-space coord is
+     outside `[-0.5, 0.5]`.
+  5. Samples `colorMap` using the local-space xy as UVs
+     (with `rotationRate` applied to the UV space).
+  6. Outputs `tint * sampled.rgb`, alpha modulated by
+     `pulseRate` and box-edge softening.
+- Same render-engine boundary lint treatment as the other
+  renderers (no new WebGPURenderer; uses shared
+  `WebRenderEngine`).
+- Registers under `VFXRendererRegistry` as the
+  `"decal"`-kind handler. Render order applies in the
+  transparent pass.
+
+**Studio surface:**
+
+- `LibraryPopover` parameter form gains a `decal` arm:
+  size sliders, depth, projection-normal select, color map
+  asset picker, tint, optional rotation/pulse rates, blend
+  mode.
+- New-VFX kind picker offers "decal" as a fifth choice.
+
+**Resonance Point gains a fifth binding:**
+
+- Add a `default-rune-circle` decal binding to the
+  resonance-point stack, projecting onto the ground under
+  the orb (`renderOrder: -1` so it renders before the
+  aura billboard so the billboard can layer over it).
+
+**Tests:**
+
+- Domain: round-trip + normalizer for the `decal` kind.
+- Render: scene-depth sampling produces correct
+  world-space reconstruction (regression test against a
+  known camera + landscape configuration); fragments
+  outside the decal box discard; UV rotation matches
+  expected angle at given times.
+- End-to-end: resonance-point fixture renders the decal
+  on the landscape under the orb at the expected position;
+  the decal moves with the host transform.
+
+**Files touched:**
+- `packages/domain/src/content-library/vfx-definition.ts`
+  (add `DecalParams` + `DecalDefinition` arm + factory)
+- `packages/domain/schemas/vfx-definition.schema.json`
+  (extend union)
+- `packages/runtime-core/src/vfx/types.ts` (snapshot
+  shapes for decal)
+- `packages/runtime-core/src/vfx/VFXManager.ts` (dispatch
+  arm for decal)
+- `packages/render-web/src/vfx/DecalVFXRenderer.ts` (new)
+- `packages/render-web/src/vfx/VFXRendererRegistry.ts`
+  (register decal handler)
+- `packages/render-web/src/vfx/index.ts` (re-export)
+- `apps/studio/src/library/LibraryPopover.tsx` (decal
+  branch in kind switch)
+- `apps/studio/src/library/VFXDefinitionForm.tsx` (decal
+  parameter form)
+- `packages/domain/src/commands/index.ts` (decal-kind
+  fields in create/update commands)
+- `/Users/nikki/projects/wordlarky/project.sgrmagic` (
+  resonance-point gains rune-circle decal binding; data
+  only)
+- `packages/testing/src/vfx-domain.test.ts` (decal
+  round-trip + normalizer)
+- `packages/testing/src/vfx-decal-projection.test.ts`
+  (new — depth-reconstruction correctness)
+- `packages/testing/src/vfx-end-to-end.test.ts` (extend
+  with decal validation)
 
 ## Success criteria
 

@@ -6,7 +6,11 @@ import type {
   RegionSoundEmitter,
   VFXSpawn
 } from "../region-authoring";
-import type { EnvironmentDefinition, VFXDefinition } from "../content-library";
+import type {
+  EnvironmentDefinition,
+  VFXDefinition,
+  VFXDefinitionPatch
+} from "../content-library";
 import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
@@ -304,7 +308,7 @@ export type UpdateVFXDefinitionCommand = SemanticCommandBase<
   "UpdateVFXDefinition",
   {
     definitionId: string;
-    patch: Partial<VFXDefinition>;
+    patch: VFXDefinitionPatch;
   }
 >;
 

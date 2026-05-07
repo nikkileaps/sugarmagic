@@ -63,7 +63,7 @@ import {
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
-  InstancedParticleRenderer,
+  VFXRendererRegistry,
   normalizeModelScale,
   type RenderableShaderApplicationState,
   type RenderView,
@@ -557,7 +557,7 @@ export function createWebRuntimeHost(
   });
   const renderEngineProjector = createRuntimeRenderEngineProjector(engine);
   let renderView: RenderView | null = null;
-  let vfxRenderer: InstancedParticleRenderer | null = null;
+  let vfxRenderer: VFXRendererRegistry | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
@@ -837,10 +837,7 @@ export function createWebRuntimeHost(
       viewportWidth: root.clientWidth || 1,
       viewportHeight: root.clientHeight || 1
     });
-    vfxRenderer?.sync(
-      gameplaySession?.getVFXEmitterSnapshots() ?? [],
-      camera
-    );
+    vfxRenderer?.sync(gameplaySession?.getVFXSnapshots() ?? [], camera);
 
     ensureShaderSetsAppliedToRenderables(
       sceneObjectEntries.values(),
@@ -931,7 +928,7 @@ export function createWebRuntimeHost(
         }
       }
     });
-    vfxRenderer = new InstancedParticleRenderer(scene);
+    vfxRenderer = new VFXRendererRegistry(scene);
 
     const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
     renderEngineProjector.push(state);

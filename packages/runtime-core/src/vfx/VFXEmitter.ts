@@ -6,7 +6,12 @@
  * published runtime targets.
  */
 
-import type { VFXColor, VFXDefinition, VFXVector3 } from "@sugarmagic/domain";
+import type {
+  ParticleEmitterDefinition,
+  ParticleEmitterParams,
+  VFXColor,
+  VFXVector3
+} from "@sugarmagic/domain";
 import type { RuntimeVFXEmitterSnapshot, RuntimeVFXParticle } from "./types";
 
 interface ParticleState {
@@ -38,25 +43,25 @@ function randomSigned(): number {
   return Math.random() * 2 - 1;
 }
 
-function randomLifetime(definition: VFXDefinition): number {
-  const min = definition.lifetimeMinSeconds;
-  const max = Math.max(min, definition.lifetimeMaxSeconds);
+function randomLifetime(params: ParticleEmitterParams): number {
+  const min = params.lifetimeMinSeconds;
+  const max = Math.max(min, params.lifetimeMaxSeconds);
   return min + Math.random() * (max - min);
 }
 
-function randomVelocity(definition: VFXDefinition): VFXVector3 {
-  const coneRadians = (definition.spreadConeDegrees * Math.PI) / 180;
+function randomVelocity(params: ParticleEmitterParams): VFXVector3 {
+  const coneRadians = (params.spreadConeDegrees * Math.PI) / 180;
   const spread = Math.sin(coneRadians / 2);
-  const randomness = definition.velocityRandomness;
+  const randomness = params.velocityRandomness;
   return {
     x:
-      definition.initialVelocity.x +
+      params.initialVelocity.x +
       randomSigned() * spread * randomness,
     y:
-      definition.initialVelocity.y +
+      params.initialVelocity.y +
       randomSigned() * spread * randomness,
     z:
-      definition.initialVelocity.z +
+      params.initialVelocity.z +
       randomSigned() * spread * randomness
   };
 }
@@ -64,7 +69,8 @@ function randomVelocity(definition: VFXDefinition): VFXVector3 {
 export class VFXEmitter {
   readonly emitterId: string;
   readonly hostId: string;
-  readonly definition: VFXDefinition;
+  readonly definition: ParticleEmitterDefinition;
+  renderOrder: number;
 
   private basePosition: VFXVector3;
   private readonly particles: ParticleState[];
@@ -73,15 +79,17 @@ export class VFXEmitter {
   constructor(options: {
     emitterId: string;
     hostId: string;
-    definition: VFXDefinition;
+    definition: ParticleEmitterDefinition;
     position: VFXVector3;
+    renderOrder?: number;
   }) {
     this.emitterId = options.emitterId;
     this.hostId = options.hostId;
     this.definition = options.definition;
+    this.renderOrder = options.renderOrder ?? 0;
     this.basePosition = cloneVector(options.position);
     this.particles = Array.from(
-      { length: Math.max(1, options.definition.maxParticles) },
+      { length: Math.max(1, options.definition.emitter.maxParticles) },
       () => ({
         active: false,
         ageSeconds: 0,
@@ -115,6 +123,7 @@ export class VFXEmitter {
   }
 
   update(deltaSeconds: number): void {
+    const params = this.definition.emitter;
     const delta = Math.max(0, Math.min(deltaSeconds, 0.25));
     for (const particle of this.particles) {
       if (!particle.active) continue;
@@ -123,15 +132,15 @@ export class VFXEmitter {
         particle.active = false;
         continue;
       }
-      particle.velocity.x += this.definition.gravity.x * delta;
-      particle.velocity.y += this.definition.gravity.y * delta;
-      particle.velocity.z += this.definition.gravity.z * delta;
+      particle.velocity.x += params.gravity.x * delta;
+      particle.velocity.y += params.gravity.y * delta;
+      particle.velocity.z += params.gravity.z * delta;
       particle.position.x += particle.velocity.x * delta;
       particle.position.y += particle.velocity.y * delta;
       particle.position.z += particle.velocity.z * delta;
     }
 
-    this.emissionAccumulator += this.definition.emissionRatePerSecond * delta;
+    this.emissionAccumulator += params.emissionRatePerSecond * delta;
     const spawnCount = Math.floor(this.emissionAccumulator);
     this.emissionAccumulator -= spawnCount;
     for (let index = 0; index < spawnCount; index += 1) {
@@ -142,6 +151,7 @@ export class VFXEmitter {
   }
 
   snapshot(): RuntimeVFXEmitterSnapshot {
+    const params = this.definition.emitter;
     const particles: RuntimeVFXParticle[] = [];
     for (const particle of this.particles) {
       if (!particle.active) continue;
@@ -153,13 +163,15 @@ export class VFXEmitter {
         position: cloneVector(particle.position),
         ageSeconds: particle.ageSeconds,
         lifetimeSeconds: particle.lifetimeSeconds,
-        size: lerp(this.definition.sizeStart, this.definition.sizeEnd, t),
-        color: lerpColor(this.definition.colorStart, this.definition.colorEnd, t)
+        size: lerp(params.sizeStart, params.sizeEnd, t),
+        color: lerpColor(params.colorStart, params.colorEnd, t)
       });
     }
     return {
+      kind: "particle-emitter",
       emitterId: this.emitterId,
       hostId: this.hostId,
+      renderOrder: this.renderOrder,
       definition: this.definition,
       particles
     };
@@ -172,9 +184,9 @@ export class VFXEmitter {
     }
     particle.active = true;
     particle.ageSeconds = 0;
-    particle.lifetimeSeconds = randomLifetime(this.definition);
+    particle.lifetimeSeconds = randomLifetime(this.definition.emitter);
     particle.position = cloneVector(this.basePosition);
-    particle.velocity = randomVelocity(this.definition);
+    particle.velocity = randomVelocity(this.definition.emitter);
     return true;
   }
 }
