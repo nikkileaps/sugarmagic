@@ -214,7 +214,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       if (missing.length > 0) {
         throw new Error(
           `[sugaragent] SugarAgent plugin is enabled but required environment variables are missing: ${missing.join(", ")}. ` +
-          `Add them to your .env file and restart the dev server.`
+          `Add them to the repo-root .env file (Vite reads envDir "../.." from apps/studio) and restart the dev server.`
         );
       }
 

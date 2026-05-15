@@ -302,7 +302,7 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       <Alert color="blue" variant="light" title="Local .env">
         <Stack gap={4}>
           <Text size="sm">
-            Set these in your local Studio <Code>.env</Code> file:
+            Set these in the Sugarmagic repo-root <Code>.env</Code> file (Studio reads env from the monorepo root via Vite's <Code>envDir</Code>):
           </Text>
           <Code block>
             {`# Optional proxy mode through SugarDeploy\nVITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787\n\n# Direct browser-to-vendor mode (still supported)\nVITE_SUGARMAGIC_ANTHROPIC_API_KEY=...\nVITE_SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5\nVITE_SUGARMAGIC_OPENAI_API_KEY=...\nVITE_SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small\nVITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID=...`}

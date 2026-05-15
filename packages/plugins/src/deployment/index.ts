@@ -1477,7 +1477,7 @@ function buildLocalManagedFiles(
         "Local Target Notes:",
         "- Copy .env.example to .env before starting the stack.",
         "- Run `docker compose up --build` inside this directory to bring up the generated gateway scaffold.",
-        "- For Studio preview to use the local gateway, set `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787` in the Studio .env file.",
+        "- For Studio preview to use the local gateway, set `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787` in the Sugarmagic repo-root .env file (Studio's vite.config.ts uses envDir `../..`).",
         "- If you change SugarAgent's lore source path, save the project and redeploy SugarDeploy so the gateway remounts the lore wiki repo.",
         "- Use the SugarAgent workspace to inspect discovered pages and overwrite-ingest the live vector store after lore wiki edits.",
         "- Set a Working Directory override in the SugarDeploy workspace so host-side deploy actions know which game root to operate on.",
