@@ -14,3 +14,6 @@ __pycache__/
 *.pyo
 
 *.rar
+
+# Playwright MCP working directory — console logs, page snapshots, CSV exports
+.playwright-mcp/
