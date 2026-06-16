@@ -63,6 +63,21 @@ function defaultDeploymentSlug(gameProject: Pick<GameProject, "displayName" | "i
   return slugify(gameProject.displayName || gameProject.identity.id || "sugarmagic-game");
 }
 
+function resolveMajorVersion(
+  gameProject: Pick<GameProject, "majorVersion"> | undefined
+): number {
+  const raw = gameProject?.majorVersion;
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 1
+    ? Math.floor(raw)
+    : 1;
+}
+
+function defaultVersionedDeploymentSlug(
+  gameProject: Pick<GameProject, "displayName" | "identity" | "majorVersion">
+): string {
+  return `${defaultDeploymentSlug(gameProject)}-v${resolveMajorVersion(gameProject)}`;
+}
+
 export function normalizeLocalDeploymentTargetOverrides(
   input: Record<string, unknown> | null | undefined,
   gameProject?: Pick<GameProject, "displayName" | "identity">
@@ -85,11 +100,11 @@ export function normalizeLocalDeploymentTargetOverrides(
 
 export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   input: Record<string, unknown> | null | undefined,
-  gameProject?: Pick<GameProject, "displayName" | "identity">
+  gameProject?: Pick<GameProject, "displayName" | "identity" | "majorVersion">
 ): GoogleCloudRunDeploymentTargetOverrides {
-  const fallbackSlug = gameProject
-    ? defaultDeploymentSlug(gameProject)
-    : "sugarmagic";
+  const versionedSlug = gameProject
+    ? defaultVersionedDeploymentSlug(gameProject)
+    : `sugarmagic-v${resolveMajorVersion(gameProject)}`;
   const ingress =
     input?.ingress === "internal" ||
     input?.ingress === "internal-and-cloud-load-balancing" ||
@@ -99,11 +114,10 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   return {
     workingDirectory:
       typeof input?.workingDirectory === "string" ? input.workingDirectory.trim() : "",
-    projectId:
-      typeof input?.projectId === "string" ? input.projectId.trim() : "",
+    projectId: slugify(asNonEmptyString(input?.projectId, versionedSlug)),
     region: asNonEmptyString(input?.region, "us-central1"),
     serviceNamePrefix: slugify(
-      asNonEmptyString(input?.serviceNamePrefix, `${fallbackSlug}-gateway`)
+      asNonEmptyString(input?.serviceNamePrefix, versionedSlug)
     ),
     containerPort: clampInteger(input?.containerPort, 8080, {
       min: 1024,

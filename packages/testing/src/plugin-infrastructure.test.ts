@@ -540,6 +540,100 @@ describe("plugin infrastructure", () => {
     );
   });
 
+  it("derives version-namespaced Cloud Run defaults from the game's majorVersion", () => {
+    // 45.1 exit criterion: wordlark with majorVersion: 1 and no overrides resolves
+    // to projectId/serviceNamePrefix `wordlark-v1`, producing service name
+    // `wordlark-v1-gateway`. Bumping majorVersion to 2 slots the deployment into
+    // `wordlark-v2` automatically without touching any override.
+    const wordlarkV1 = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+
+    expect(wordlarkV1.targetOverrides).toMatchObject({
+      projectId: "wordlark-v1",
+      serviceNamePrefix: "wordlark-v1"
+    });
+    // The full Cloud Run service name is `${serviceNamePrefix}-${serviceUnitId}`.
+    // The gateway service unit is `sugarmagic-gateway` in the default plan, so the
+    // final name on Cloud Run is `wordlark-v1-sugarmagic-gateway`. What matters
+    // for 45.1 is the `-v1-` namespace baked into the name.
+    const v1ServiceYaml = wordlarkV1.managedFiles.find((file) =>
+      file.relativePath.endsWith("/service.yaml")
+    );
+    expect(v1ServiceYaml?.content).toContain("name: wordlark-v1-sugarmagic-gateway");
+    const v1DeployScript = wordlarkV1.managedFiles.find((file) =>
+      file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(v1DeployScript?.content).toContain("wordlark-v1-sugarmagic-gateway");
+    expect(v1DeployScript?.content).toContain("PROJECT_ID=\"${SUGARMAGIC_GCP_PROJECT_ID:-wordlark-v1}\"");
+
+    const wordlarkV2 = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 2,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkV2.targetOverrides).toMatchObject({
+      projectId: "wordlark-v2",
+      serviceNamePrefix: "wordlark-v2"
+    });
+
+    // Override still wins — wordlark-v1's existing GCP project can be reused.
+    const wordlarkWithLegacyProject = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": { projectId: "wordlark" }
+          }
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkWithLegacyProject.targetOverrides).toMatchObject({
+      projectId: "wordlark"
+    });
+  });
+
+  it("defaults missing majorVersion to 1 on load via normalizeGameProject", () => {
+    const projectMissingField = normalizeGameProject({
+      ...makeProject(),
+      // intentionally drop majorVersion — older project.sgrmagic files lack it
+      majorVersion: undefined
+    } as unknown as Parameters<typeof normalizeGameProject>[0]);
+    expect(projectMissingField.majorVersion).toBe(1);
+  });
+
   it("resolves local deployment actions from target overrides", () => {
     const plan = planGameDeployment(
       normalizeGameProject({

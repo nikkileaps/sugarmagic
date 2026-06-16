@@ -16,7 +16,8 @@ import {
   assertReusableSurfaceHasNoPaintedMasks,
   createDefaultGameProject,
   createDefaultRegion,
-  createEmptyContentLibrarySnapshot
+  createEmptyContentLibrarySnapshot,
+  normalizeGameProject
 } from "@sugarmagic/domain";
 import {
   deleteFile,
@@ -230,12 +231,13 @@ export async function openProject(): Promise<ActiveProject> {
 export async function loadProjectFromHandle(
   handle: FileSystemDirectoryHandle
 ): Promise<ActiveProject> {
-  const project = await readJsonFile<GameProject>(handle, PROJECT_FILE);
-  if (!project) {
+  const rawProject = await readJsonFile<GameProject>(handle, PROJECT_FILE);
+  if (!rawProject) {
     throw new Error(
       `No ${PROJECT_FILE} found in selected directory. Is this a Sugarmagic game root?`
     );
   }
+  const project = normalizeGameProject(rawProject);
 
   const contentLibrary =
     (await readJsonFile<ContentLibrarySnapshot>(handle, CONTENT_LIBRARY_FILE)) ??

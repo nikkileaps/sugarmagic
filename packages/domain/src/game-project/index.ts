@@ -128,6 +128,7 @@ export function normalizeSoundEventBindings(
 export interface GameProject {
   identity: DocumentIdentity;
   displayName: string;
+  majorVersion: number;
   gameRootPath: string;
   deployment: DeploymentSettings;
   regionRegistry: RegionReference[];
@@ -153,6 +154,7 @@ export function normalizeGameProject(
     | GameProject
     | (Omit<
         GameProject,
+        | "majorVersion"
         | "deployment"
         | "pluginConfigurations"
         | "playerDefinition"
@@ -169,6 +171,7 @@ export function normalizeGameProject(
         | "audioMixer"
         | "mechanics"
       > & {
+        majorVersion?: number | null;
         deployment?: Partial<DeploymentSettings> | null;
         pluginConfigurations?: Array<
           PluginConfigurationRecord | PartialPluginConfigurationRecord
@@ -194,8 +197,14 @@ export function normalizeGameProject(
     gameProject.menuDefinitions && gameProject.menuDefinitions.length > 0
       ? gameProject.menuDefinitions
       : starterMenus;
+  const rawMajor = gameProject.majorVersion;
+  const majorVersion =
+    typeof rawMajor === "number" && Number.isFinite(rawMajor) && rawMajor >= 1
+      ? Math.floor(rawMajor)
+      : 1;
   return {
     ...gameProject,
+    majorVersion,
     deployment: normalizeDeploymentSettings(gameProject.deployment),
     pluginConfigurations: normalizePluginConfigurationRecords(
       gameProject.pluginConfigurations
@@ -245,6 +254,7 @@ export function createDefaultGameProject(
   return {
     identity: { id: slug, schema: "GameProject", version: 1 },
     displayName: gameName,
+    majorVersion: 1,
     gameRootPath: ".",
     deployment: createDefaultDeploymentSettings(),
     regionRegistry: [],

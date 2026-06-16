@@ -1622,8 +1622,14 @@ done
 `;
 }
 
-function buildGoogleCloudRunManagedFiles(plan: DeploymentPlan): ManagedProjectFile[] {
-  const overrides = normalizeGoogleCloudRunDeploymentTargetOverrides(plan.targetOverrides);
+function buildGoogleCloudRunManagedFiles(
+  plan: DeploymentPlan,
+  gameProject: GameProject
+): ManagedProjectFile[] {
+  const overrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+    plan.targetOverrides,
+    gameProject
+  );
   const files: ManagedProjectFile[] = [
     asTextFile(
       "deployment/google-cloud-run/README.md",

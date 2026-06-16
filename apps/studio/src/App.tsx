@@ -2463,205 +2463,226 @@ export function App() {
             <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
               Sugarmagic
             </Text>
-            {phase === "active" && (
-              <Menu position="bottom-start" offset={4}>
-                <Menu.Target>
-                  <UnstyledButton
-                    px="md"
-                    py={6}
-                    styles={{
-                      root: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-accent-blue)",
-                        background: "var(--sm-active-bg)",
-                        borderRadius: "var(--sm-radius-sm)",
-                        marginRight: "var(--sm-space-lg)",
-                        "&:hover": { background: "var(--sm-active-bg-hover)" }
-                      }
-                    }}
-                  >
-                    📁 Game
-                  </UnstyledButton>
-                </Menu.Target>
-                <Menu.Dropdown
-                  styles={{
-                    dropdown: {
-                      background: "var(--sm-color-surface1)",
-                      border: "1px solid var(--sm-panel-border)",
-                      minWidth: 200,
-                      padding: "var(--sm-space-xs) 0"
-                    }
-                  }}
-                >
-                  <Menu.Item
-                    onClick={handleSave}
-                    disabled={!isDirty}
-                    rightSection={
-                      <Text size="xs" c="var(--sm-color-overlay0)">
-                        ⌘S
-                      </Text>
-                    }
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" },
-                        "&[data-disabled]": {
-                          color: "var(--sm-color-overlay0)"
-                        }
-                      }
-                    }}
-                  >
-                    💾 Save Game
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleUndo}
-                    disabled={undoCount === 0}
-                    rightSection={
-                      <Text size="xs" c="var(--sm-color-overlay0)">
-                        ⌘Z
-                      </Text>
-                    }
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" },
-                        "&[data-disabled]": {
-                          color: "var(--sm-color-overlay0)"
-                        }
-                      }
-                    }}
-                  >
-                    ↩ Undo
-                  </Menu.Item>
-                  <Menu.Divider
-                    styles={{
-                      divider: { borderColor: "var(--sm-panel-border)" }
-                    }}
-                  />
-                  <Menu.Sub position="right-start" offset={4}>
-                    <Menu.Sub.Target>
-                      <Menu.Sub.Item
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        📚 Libraries
-                      </Menu.Sub.Item>
-                    </Menu.Sub.Target>
-                    <Menu.Sub.Dropdown
+            {phase === "active" && session && (
+              <Group
+                gap={6}
+                align="center"
+                mr="var(--sm-space-lg)"
+                wrap="nowrap"
+              >
+                <Menu position="bottom-start" offset={4}>
+                  <Menu.Target>
+                    <UnstyledButton
+                      px="md"
+                      py={6}
                       styles={{
-                        dropdown: {
-                          background: "var(--sm-color-surface1)",
-                          border: "1px solid var(--sm-panel-border)",
-                          minWidth: 200,
-                          padding: "var(--sm-space-xs) 0"
+                        root: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-accent-blue)",
+                          background: "var(--sm-active-bg)",
+                          borderRadius: "var(--sm-radius-sm)",
+                          "&:hover": { background: "var(--sm-active-bg-hover)" }
                         }
                       }}
                     >
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("materials")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        🎨 Materials
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("textures")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        🖼 Textures
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("shaders")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        ⚙ Shaders
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("audio")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        Audio
-                      </Menu.Item>
-                    </Menu.Sub.Dropdown>
-                  </Menu.Sub>
-                  <Menu.Divider
+                      📁 {session.gameProject.displayName}
+                    </UnstyledButton>
+                  </Menu.Target>
+                  <Menu.Dropdown
                     styles={{
-                      divider: { borderColor: "var(--sm-panel-border)" }
-                    }}
-                  />
-                  <Menu.Item
-                    onClick={() => setPluginsOpen(true)}
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" }
+                      dropdown: {
+                        background: "var(--sm-color-surface1)",
+                        border: "1px solid var(--sm-panel-border)",
+                        minWidth: 200,
+                        padding: "var(--sm-space-xs) 0"
                       }
                     }}
                   >
-                    🧩 Plugins
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleReload}
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" }
+                    <Menu.Item
+                      onClick={handleSave}
+                      disabled={!isDirty}
+                      rightSection={
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          ⌘S
+                        </Text>
                       }
-                    }}
-                  >
-                    🔄 Reload Project
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" },
+                          "&[data-disabled]": {
+                            color: "var(--sm-color-overlay0)"
+                          }
+                        }
+                      }}
+                    >
+                      💾 Save Game
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={handleUndo}
+                      disabled={undoCount === 0}
+                      rightSection={
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          ⌘Z
+                        </Text>
+                      }
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" },
+                          "&[data-disabled]": {
+                            color: "var(--sm-color-overlay0)"
+                          }
+                        }
+                      }}
+                    >
+                      ↩ Undo
+                    </Menu.Item>
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Sub position="right-start" offset={4}>
+                      <Menu.Sub.Target>
+                        <Menu.Sub.Item
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          📚 Libraries
+                        </Menu.Sub.Item>
+                      </Menu.Sub.Target>
+                      <Menu.Sub.Dropdown
+                        styles={{
+                          dropdown: {
+                            background: "var(--sm-color-surface1)",
+                            border: "1px solid var(--sm-panel-border)",
+                            minWidth: 200,
+                            padding: "var(--sm-space-xs) 0"
+                          }
+                        }}
+                      >
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("materials")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          🎨 Materials
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("textures")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          🖼 Textures
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("shaders")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          ⚙ Shaders
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("audio")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          Audio
+                        </Menu.Item>
+                      </Menu.Sub.Dropdown>
+                    </Menu.Sub>
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Item
+                      onClick={() => setPluginsOpen(true)}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      🧩 Plugins
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={handleReload}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      🔄 Reload Project
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+                <Badge
+                  variant="light"
+                  color="blue"
+                  size="sm"
+                  styles={{
+                    root: {
+                      background: "var(--sm-active-bg)",
+                      color: "var(--sm-accent-blue)",
+                      fontWeight: 600,
+                      textTransform: "none"
+                    }
+                  }}
+                >
+                  v{session.gameProject.majorVersion}
+                </Badge>
+              </Group>
             )}
             <ModeBar
               items={modeBarItems}
