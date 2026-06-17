@@ -94,7 +94,12 @@ interface DeploymentTargetHandler {
   buildManagedFiles: (plan: DeploymentPlan, gameProject: GameProject) => ManagedProjectFile[];
 }
 
-export { normalizeGoogleCloudRunDeploymentTargetOverrides, normalizeLocalDeploymentTargetOverrides } from "./overrides";
+export {
+  GITHUB_REPO_REGEX,
+  normalizeGoogleCloudRunDeploymentTargetOverrides,
+  normalizeLocalDeploymentTargetOverrides,
+  stripGithubRepoPrefixes
+} from "./overrides";
 export {
   CLOUD_RUN_TEMPLATE_VERSION,
   TERRAFORM_RENAME_LEDGER,

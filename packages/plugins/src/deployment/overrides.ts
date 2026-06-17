@@ -146,16 +146,32 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   };
 }
 
-// Strip common paste forms (https://github.com/, git@github.com:, trailing .git)
-// then validate as owner/repo. Empty / unparseable values become "" so terraform
-// validate still passes against the un-filled-in state; the actual deploy-time
-// requirement is enforced by the host action that runs `terraform apply`.
-function normalizeGithubRepoOverride(value: unknown): string {
-  if (typeof value !== "string") return "";
+// Canonical GitHub `owner/repo` shape. Single source of truth used by both the
+// override normalizer (for tfvars / persistence) and the Studio field (for
+// inline validation feedback). GitHub OIDC's `repository` claim and terraform's
+// `attribute.repository == "..."` condition both expect this exact form.
+export const GITHUB_REPO_REGEX = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+
+// Paste-forgiveness for GitHub references: strip the prefix/suffix variants
+// users commonly paste (browser URL, https clone URL, ssh clone URL) and return
+// what's left. Validation is the caller's job — this is only the trim step.
+// Single source of truth used by the override normalizer below AND by the
+// Studio form field's onChange handler.
+export function stripGithubRepoPrefixes(value: string): string {
   let trimmed = value.trim();
-  if (trimmed.length === 0) return "";
   trimmed = trimmed.replace(/^https?:\/\/github\.com\//i, "");
   trimmed = trimmed.replace(/^git@github\.com:/i, "");
   trimmed = trimmed.replace(/\.git$/i, "");
-  return /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(trimmed) ? trimmed : "";
+  return trimmed;
+}
+
+// Strip then validate as owner/repo. Empty / unparseable values become "" so
+// terraform validate still passes against the un-filled-in state; the actual
+// deploy-time requirement is enforced by the host action that runs
+// `terraform apply`.
+function normalizeGithubRepoOverride(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const stripped = stripGithubRepoPrefixes(value);
+  if (stripped.length === 0) return "";
+  return GITHUB_REPO_REGEX.test(stripped) ? stripped : "";
 }

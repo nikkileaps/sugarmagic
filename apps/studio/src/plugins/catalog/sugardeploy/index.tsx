@@ -17,10 +17,12 @@ import type { DeploymentSettings } from "@sugarmagic/domain";
 import {
   type DeploymentActionExecutionResult,
   type DeploymentActionKind,
+  GITHUB_REPO_REGEX,
   listDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
   planGameDeployment,
+  stripGithubRepoPrefixes,
   SUGARDEPLOY_PLUGIN_ID
 } from "@sugarmagic/plugins";
 import type {
@@ -68,6 +70,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     gameProject?.deployment.targetOverrides["google-cloud-run"],
     gameProject ?? undefined
   );
+  // Raw persisted overrides (pre-normalize). Form fields bind their `value`
+  // here so blank stays blank visually; the normalized value above shows up
+  // as the placeholder so users can see what the auto-derived default would
+  // be without it pretending to be their input.
+  const rawCloudRunOverrides = (gameProject?.deployment.targetOverrides[
+    "google-cloud-run"
+  ] ?? {}) as Record<string, unknown>;
+  function rawCloudRunString(key: string): string {
+    const value = rawCloudRunOverrides[key];
+    return typeof value === "string" ? value : "";
+  }
+  const rawGithubRepo = rawCloudRunString("githubRepo");
+  const githubRepoError =
+    rawGithubRepo.length > 0 && !GITHUB_REPO_REGEX.test(rawGithubRepo)
+      ? "Expected owner/repo (e.g. nikki/wordlark)"
+      : null;
 
   function updateSettings(nextSettings: DeploymentSettings) {
     if (!gameProjectId || !gameProject) return;
@@ -295,7 +313,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           />
           <TextInput
             label="GCP Project Id"
-            value={cloudRunOverrides.projectId}
+            description="Leave blank to auto-derive from project identity and major version."
+            placeholder={cloudRunOverrides.projectId}
+            value={rawCloudRunString("projectId")}
             onChange={(event) =>
               updateTargetOverrides("google-cloud-run", {
                 projectId: event.currentTarget.value
@@ -304,7 +324,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           />
           <TextInput
             label="Region"
-            value={cloudRunOverrides.region}
+            description="GCP region for Cloud Run and Artifact Registry."
+            placeholder={cloudRunOverrides.region}
+            value={rawCloudRunString("region")}
             onChange={(event) =>
               updateTargetOverrides("google-cloud-run", {
                 region: event.currentTarget.value
@@ -313,10 +335,35 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           />
           <TextInput
             label="Service Name Prefix"
-            value={cloudRunOverrides.serviceNamePrefix}
+            description="Leave blank to auto-derive from project identity and major version. Used for Artifact Registry repo, Secret Manager containers, and the WIF pool name."
+            placeholder={cloudRunOverrides.serviceNamePrefix}
+            value={rawCloudRunString("serviceNamePrefix")}
             onChange={(event) =>
               updateTargetOverrides("google-cloud-run", {
                 serviceNamePrefix: event.currentTarget.value
+              })
+            }
+          />
+          <TextInput
+            label="GitHub Repository"
+            description="owner/repo form. Drives the Workload Identity Federation binding so GitHub Actions in this repo can deploy. Pasting a full GitHub URL or git@ clone URL is fine — the prefix and trailing .git get stripped automatically."
+            placeholder="nikki/wordlark"
+            value={rawGithubRepo}
+            error={githubRepoError}
+            onChange={(event) =>
+              updateTargetOverrides("google-cloud-run", {
+                githubRepo: stripGithubRepoPrefixes(event.currentTarget.value)
+              })
+            }
+          />
+          <TextInput
+            label="Runtime Service Account Name"
+            description="Optional. The account_id (left of @) for the Cloud Run runtime service account. Leave blank to auto-derive as ${serviceNamePrefix}-runtime."
+            placeholder={`${cloudRunOverrides.serviceNamePrefix}-runtime`}
+            value={rawCloudRunString("runtimeServiceAccountName")}
+            onChange={(event) =>
+              updateTargetOverrides("google-cloud-run", {
+                runtimeServiceAccountName: event.currentTarget.value
               })
             }
           />

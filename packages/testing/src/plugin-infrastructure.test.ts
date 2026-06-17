@@ -25,10 +25,13 @@ import {
   collectPluginShellContributions,
   createRuntimePluginInstances,
   FIREFLIES_PLUGIN_ID,
+  GITHUB_REPO_REGEX,
   HELLO_PLUGIN_ID,
+  normalizeGoogleCloudRunDeploymentTargetOverrides,
   parseTemplateVersionStamp,
   resolveDeploymentAction,
   resolveSecretManagerName,
+  stripGithubRepoPrefixes,
   SUGARAGENT_PLUGIN_ID,
   SUGARDEPLOY_PLUGIN_ID,
   SUGARLANG_PLUGIN_ID,
@@ -769,6 +772,53 @@ describe("plugin infrastructure", () => {
     },
     120_000
   );
+
+  it("stripGithubRepoPrefixes handles every common paste form", () => {
+    // 45.3 paste-forgiveness: canonical form passes through, all the common
+    // URL/clone forms get reduced to owner/repo.
+    expect(stripGithubRepoPrefixes("nikki/wordlark")).toBe("nikki/wordlark");
+    expect(stripGithubRepoPrefixes("  nikki/wordlark  ")).toBe("nikki/wordlark");
+    expect(stripGithubRepoPrefixes("https://github.com/nikki/wordlark")).toBe(
+      "nikki/wordlark"
+    );
+    expect(stripGithubRepoPrefixes("http://github.com/nikki/wordlark")).toBe(
+      "nikki/wordlark"
+    );
+    expect(stripGithubRepoPrefixes("https://github.com/nikki/wordlark.git")).toBe(
+      "nikki/wordlark"
+    );
+    expect(stripGithubRepoPrefixes("git@github.com:nikki/wordlark.git")).toBe(
+      "nikki/wordlark"
+    );
+    // Non-GitHub URLs are NOT stripped — the regex validation will reject them.
+    expect(stripGithubRepoPrefixes("https://gitlab.com/foo/bar")).toBe(
+      "https://gitlab.com/foo/bar"
+    );
+    expect(GITHUB_REPO_REGEX.test("https://gitlab.com/foo/bar")).toBe(false);
+    // Empty input stays empty.
+    expect(stripGithubRepoPrefixes("")).toBe("");
+  });
+
+  it("normalize routes the paste-forgiveness through to the persisted githubRepo", () => {
+    // The strip-then-validate path the normalizer uses: any of the common
+    // paste forms ends up persisted as the canonical owner/repo.
+    const fromHttps = normalizeGoogleCloudRunDeploymentTargetOverrides({
+      githubRepo: "https://github.com/nikki/wordlark.git"
+    });
+    expect(fromHttps.githubRepo).toBe("nikki/wordlark");
+
+    const fromSsh = normalizeGoogleCloudRunDeploymentTargetOverrides({
+      githubRepo: "git@github.com:nikki/wordlark.git"
+    });
+    expect(fromSsh.githubRepo).toBe("nikki/wordlark");
+
+    // Invalid input falls back to empty string (terraform validate still passes;
+    // the user sees a UI error in the Studio field and resolves it before deploy).
+    const fromGarbage = normalizeGoogleCloudRunDeploymentTargetOverrides({
+      githubRepo: "this is not a repo"
+    });
+    expect(fromGarbage.githubRepo).toBe("");
+  });
 
   it("parseTemplateVersionStamp finds the SUGARMAGIC TEMPLATE VERSION line", () => {
     expect(parseTemplateVersionStamp(null)).toBeNull();
