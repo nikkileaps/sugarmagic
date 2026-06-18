@@ -7,7 +7,13 @@ import {
   normalizeLocalDeploymentTargetOverrides
 } from "./overrides";
 
-export type DeploymentActionKind = "deploy" | "stop" | "status" | "health";
+export type DeploymentActionKind =
+  | "deploy"
+  | "stop"
+  | "status"
+  | "health"
+  | "setup-infra"
+  | "teardown-infra";
 
 export interface DeploymentHostCommand {
   command: string;
@@ -105,6 +111,15 @@ function resolveLocalAction(
         supported: true,
         healthUrl: `http://localhost:${healthPort}/healthz`
       };
+    case "setup-infra":
+    case "teardown-infra":
+      return {
+        targetId: "local",
+        actionKind,
+        supported: false,
+        reason:
+          "Setup Infra / Teardown Infra are Cloud Run-only; the Local target uses docker compose lifecycle (deploy / stop) instead."
+      };
   }
 }
 
@@ -183,6 +198,37 @@ function resolveGoogleCloudRunAction(
         supported: false,
         reason:
           "Google Cloud Run health requires a deployed service URL; SugarDeploy does not resolve that automatically yet."
+      };
+    case "setup-infra":
+      // Multi-step on the host side (terraform init + terraform apply). The
+      // descriptor advertises the action as supported and points at the
+      // terraform working directory; the middleware orchestrates the actual
+      // command sequence and enforces the terraform-on-PATH precondition.
+      return {
+        targetId: "google-cloud-run",
+        actionKind,
+        supported: true,
+        command: {
+          command: "terraform",
+          args: ["apply", "-auto-approve", "-input=false"],
+          cwd: joinPath(cwd, "terraform")
+        }
+      };
+    case "teardown-infra":
+      // Multi-step on the host side: delete every declared Cloud Run service
+      // first (each tolerating not-found), THEN run `terraform destroy`. The
+      // service-delete pass is computed by the middleware against the plan,
+      // not represented in this descriptor — the descriptor advertises the
+      // terminal terraform destroy command for transparency / UI rendering.
+      return {
+        targetId: "google-cloud-run",
+        actionKind,
+        supported: true,
+        command: {
+          command: "terraform",
+          args: ["destroy", "-auto-approve", "-input=false"],
+          cwd: joinPath(cwd, "terraform")
+        }
       };
   }
 }

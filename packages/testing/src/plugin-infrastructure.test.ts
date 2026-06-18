@@ -25,12 +25,22 @@ import {
   collectPluginShellContributions,
   createRuntimePluginInstances,
   FIREFLIES_PLUGIN_ID,
+  GCP_PROJECT_ID_REGEX,
+  GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH,
+  GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
   HELLO_PLUGIN_ID,
+  REQUIRED_GCP_APIS,
+  buildGcpProjectName,
+  classifyProjectListResult,
+  isValidGcpProjectId,
+  isValidGcpServiceAccountId,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
+  parseBillingAccountList,
   parseTemplateVersionStamp,
   resolveDeploymentAction,
   resolveSecretManagerName,
+  stripBillingAccountPrefix,
   stripGithubRepoPrefixes,
   SUGARAGENT_PLUGIN_ID,
   SUGARDEPLOY_PLUGIN_ID,
@@ -244,6 +254,47 @@ describe("plugin infrastructure", () => {
       SUGARDEPLOY_PLUGIN_ID,
       SUGARLANG_PLUGIN_ID
     ]);
+  });
+
+  it("SugarDeploy plugin definition exposes a hostMiddleware contribution", async () => {
+    // 45.4.6: Studio's vite.config.ts mounts plugin host middleware
+    // generically via the registry. SugarDeploy's plugin definition must
+    // expose `hostMiddleware.createMiddleware()` returning at least one
+    // Vite plugin with a configureServer hook. The factory is async
+    // because the middleware module uses node-only APIs and must be
+    // loaded via dynamic import to keep it out of the browser bundle —
+    // see the comment on PluginHostMiddlewareDefinition in the SDK.
+    const definition = getDiscoveredPluginDefinition(SUGARDEPLOY_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    expect(definition?.hostMiddleware).toBeDefined();
+    expect(typeof definition?.hostMiddleware?.createMiddleware).toBe("function");
+    const contributedPlugins = await definition!.hostMiddleware!.createMiddleware();
+    expect(Array.isArray(contributedPlugins)).toBe(true);
+    expect(contributedPlugins.length).toBeGreaterThan(0);
+    for (const plugin of contributedPlugins) {
+      expect(typeof plugin.name).toBe("string");
+      expect(typeof plugin.configureServer).toBe("function");
+    }
+    // SugarDeploy specifically contributes three middleware plugins:
+    // the action dispatcher (/__sugardeploy/action), the billing list
+    // (/__sugardeploy/list-billing-accounts), and the GCP project
+    // lifecycle (/__sugardeploy/probe-gcp-project + /create-gcp-project).
+    expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
+      "sugardeploy-gcp-billing-list",
+      "sugardeploy-gcp-project-lifecycle",
+      "sugardeploy-host-actions"
+    ]);
+  });
+
+  it("only SugarDeploy contributes host middleware in the current registry", () => {
+    // 45.4.6 exit signal: SugarLang, SugarAgent, Fireflies, Hello don't
+    // shell out to host binaries and shouldn't grow a hostMiddleware
+    // contribution accidentally. Future plugins that need one update this
+    // test along with their definition.
+    const idsWithHostMiddleware = listDiscoveredPluginDefinitions()
+      .filter((definition) => definition.hostMiddleware != null)
+      .map((definition) => definition.manifest.pluginId);
+    expect(idsWithHostMiddleware).toEqual([SUGARDEPLOY_PLUGIN_ID]);
   });
 
   it("lists SugarDeploy deployment targets with local as the implemented baseline", () => {
@@ -643,6 +694,145 @@ describe("plugin infrastructure", () => {
     });
   });
 
+  it("includes versionedProjectIdentifiers suffix in Cloud Run id derivation when present", () => {
+    // 45.4.7 — per-major-version random suffix that collision-resists GCP's
+    // globally-unique project id constraint. When the game project has a
+    // recorded suffix for the current major version, it's appended to both
+    // projectId and serviceNamePrefix.
+    const wordlarkWithSuffix = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkWithSuffix.targetOverrides).toMatchObject({
+      projectId: "wordlark-v1-k3m9p",
+      serviceNamePrefix: "wordlark-v1-k3m9p"
+    });
+    // Service name resolution flows through the same prefix, so the gateway
+    // service ends up as `wordlark-v1-k3m9p-sugarmagic-gateway` on Cloud Run.
+    const v1ServiceYaml = wordlarkWithSuffix.managedFiles.find((file) =>
+      file.relativePath.endsWith("/service.yaml")
+    );
+    expect(v1ServiceYaml?.content).toContain(
+      "name: wordlark-v1-k3m9p-sugarmagic-gateway"
+    );
+
+    // Historical map keys the lookup by major. A v2 project carries v1's old
+    // suffix in the map (preserved forever for worktree round-trip) but
+    // resolves to its OWN v2 suffix in the current derivation.
+    const wordlarkV2 = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 2,
+        versionedProjectIdentifiers: { v1: "k3m9p", v2: "wt7qz" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkV2.targetOverrides).toMatchObject({
+      projectId: "wordlark-v2-wt7qz",
+      serviceNamePrefix: "wordlark-v2-wt7qz"
+    });
+
+    // Empty map / missing entry for the current major falls back to the
+    // pre-45.4.7 `${slug}-v${major}` form so older project files keep
+    // resolving to the GCP project they always did until they're opened
+    // in the SugarDeploy view (which then generates and persists a suffix).
+    const wordlarkNoSuffix = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: {},
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkNoSuffix.targetOverrides).toMatchObject({
+      projectId: "wordlark-v1",
+      serviceNamePrefix: "wordlark-v1"
+    });
+
+    // Explicit Project Id override wins over the suffix path entirely.
+    const wordlarkOverride = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": { projectId: "wordlark-manual" }
+          }
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(wordlarkOverride.targetOverrides).toMatchObject({
+      projectId: "wordlark-manual"
+    });
+  });
+
+  it("normalizeGameProject defaults missing versionedProjectIdentifiers to {} and filters corrupt entries", () => {
+    // 45.4.7 — older project files load with the field missing (back-compat).
+    const projectMissingField = normalizeGameProject({
+      ...makeProject(),
+      versionedProjectIdentifiers: undefined
+    } as unknown as Parameters<typeof normalizeGameProject>[0]);
+    expect(projectMissingField.versionedProjectIdentifiers).toEqual({});
+
+    // Corrupt entries (bad keys, non-string values, wrong-length suffixes)
+    // get filtered out silently — load shouldn't fail on bad persisted data,
+    // but the bad entries don't make it into the canonical model either.
+    const projectWithJunk = normalizeGameProject({
+      ...makeProject(),
+      versionedProjectIdentifiers: {
+        v1: "k3m9p", // valid
+        v2: "TOOLONG", // wrong length
+        v3: 42, // wrong type
+        "not-a-version-key": "abcde", // bad key shape
+        v4: "AbCdE", // uppercase not allowed
+        v5: "12345" // valid (digits only)
+      }
+    } as unknown as Parameters<typeof normalizeGameProject>[0]);
+    expect(projectWithJunk.versionedProjectIdentifiers).toEqual({
+      v1: "k3m9p",
+      v5: "12345"
+    });
+  });
+
   it("emits plugin-owned Cloud Run terraform under deployment/google-cloud-run/terraform/", () => {
     // 45.2 exit: saving wordlark produces a populated terraform directory with
     // the GENERATED header and # SUGARMAGIC TEMPLATE VERSION: 1 stamp.
@@ -842,6 +1032,228 @@ describe("plugin infrastructure", () => {
     ).toBeNull();
   });
 
+  it("stripBillingAccountPrefix strips the gcloud `billingAccounts/` prefix", () => {
+    // 45.4.5: gcloud billing accounts list returns names as
+    // `billingAccounts/<id>`, but the --billing-account flag wants the bare id.
+    expect(stripBillingAccountPrefix("billingAccounts/0139AB-705A0F-FCBB0F")).toBe(
+      "0139AB-705A0F-FCBB0F"
+    );
+    // Defensive: already-bare ids pass through unchanged.
+    expect(stripBillingAccountPrefix("0139AB-705A0F-FCBB0F")).toBe(
+      "0139AB-705A0F-FCBB0F"
+    );
+    // Non-string and empty input collapse to empty string, never throw.
+    expect(stripBillingAccountPrefix(null)).toBe("");
+    expect(stripBillingAccountPrefix(undefined)).toBe("");
+    expect(stripBillingAccountPrefix(42)).toBe("");
+    expect(stripBillingAccountPrefix("")).toBe("");
+  });
+
+  it("parseBillingAccountList filters to open accounts and projects to the button shape", () => {
+    // 45.4.5: real shape from `gcloud billing accounts list --format=json`,
+    // mirroring nikki's actual two-account host (one open, one closed).
+    const stdout = JSON.stringify([
+      {
+        currencyCode: "USD",
+        displayName: "FoxLeapMoon Biling",
+        masterBillingAccount: "",
+        name: "billingAccounts/0139AB-705A0F-FCBB0F",
+        open: true,
+        parent: "organizations/645494120938"
+      },
+      {
+        currencyCode: "USD",
+        displayName: "My Billing Account",
+        masterBillingAccount: "",
+        name: "billingAccounts/01DDF6-1241DF-A48BC4",
+        open: false,
+        parent: "organizations/645494120938"
+      }
+    ]);
+    const accounts = parseBillingAccountList(stdout);
+    expect(accounts).toEqual([
+      {
+        id: "0139AB-705A0F-FCBB0F",
+        displayName: "FoxLeapMoon Biling",
+        currencyCode: "USD",
+        masterBillingAccountId: null
+      }
+    ]);
+  });
+
+  it("parseBillingAccountList accepts the pre-parsed array and tolerates malformed input", () => {
+    // Caller may have already JSON.parsed — accept either shape.
+    expect(
+      parseBillingAccountList([
+        {
+          name: "billingAccounts/AAA-BBB-CCC",
+          displayName: "Solo",
+          open: true,
+          masterBillingAccount: "billingAccounts/DDD-EEE-FFF",
+          currencyCode: "USD"
+        }
+      ])
+    ).toEqual([
+      {
+        id: "AAA-BBB-CCC",
+        displayName: "Solo",
+        currencyCode: "USD",
+        masterBillingAccountId: "DDD-EEE-FFF"
+      }
+    ]);
+
+    // Garbage in → empty array out (the middleware surfaces a "no open accounts" UX, not a crash).
+    expect(parseBillingAccountList("not json")).toEqual([]);
+    expect(parseBillingAccountList(null)).toEqual([]);
+    expect(parseBillingAccountList({})).toEqual([]);
+    expect(parseBillingAccountList([])).toEqual([]);
+    // Entry missing required name field is silently skipped.
+    expect(
+      parseBillingAccountList([{ displayName: "Nameless", open: true }])
+    ).toEqual([]);
+    // displayName falls back to the id when missing.
+    expect(
+      parseBillingAccountList([
+        { name: "billingAccounts/RAW-ID", open: true }
+      ])
+    ).toEqual([
+      {
+        id: "RAW-ID",
+        displayName: "RAW-ID",
+        currencyCode: undefined,
+        masterBillingAccountId: null
+      }
+    ]);
+  });
+
+  it("GCP_PROJECT_ID_REGEX enforces GCP's globally-unique project id rule", () => {
+    // 45.4.5 pre-flight: the form-level validation rejects invalid ids before
+    // we issue `gcloud projects create` so the user sees the rule, not a
+    // confusing gcloud failure.
+    expect(isValidGcpProjectId("wordlark-v1")).toBe(true);
+    expect(isValidGcpProjectId("wordlark-v1-staging")).toBe(true);
+    // 30 chars exactly — the upper bound.
+    expect(isValidGcpProjectId("abcdef-ghijkl-mnopqr-stuvwx-yz")).toBe(true);
+
+    // 5 chars — below the 6-char minimum.
+    expect(isValidGcpProjectId("short")).toBe(false);
+    // Must start with a lowercase letter.
+    expect(isValidGcpProjectId("1wordlark")).toBe(false);
+    expect(isValidGcpProjectId("-wordlark")).toBe(false);
+    // No uppercase.
+    expect(isValidGcpProjectId("Wordlark")).toBe(false);
+    // No underscores.
+    expect(isValidGcpProjectId("wordlark_v1")).toBe(false);
+    // Must end with letter or digit, not hyphen.
+    expect(isValidGcpProjectId("wordlark-")).toBe(false);
+    // 31+ chars exceeds GCP's 30-char limit.
+    expect(isValidGcpProjectId("a".repeat(31))).toBe(false);
+    // Non-string input.
+    expect(isValidGcpProjectId(null)).toBe(false);
+    expect(isValidGcpProjectId(42)).toBe(false);
+
+    // Regex is also exposed for direct use (e.g., the form field's onChange).
+    expect(GCP_PROJECT_ID_REGEX.test("wordlark-v1")).toBe(true);
+  });
+
+  it("REQUIRED_GCP_APIS locks down the 8 APIs the create-gcp-project sequence enables", () => {
+    // 45.4.5 contract: the create-gcp-project host action shells out to
+    // `gcloud services enable <list>` with exactly these. If the terraform
+    // generator (or any consumer downstream) ever needs an additional API,
+    // it lands in this list AND its motivation gets called out in the diff.
+    expect([...REQUIRED_GCP_APIS]).toEqual([
+      "run.googleapis.com",
+      "artifactregistry.googleapis.com",
+      "iam.googleapis.com",
+      "iamcredentials.googleapis.com",
+      "secretmanager.googleapis.com",
+      "sts.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "serviceusage.googleapis.com"
+    ]);
+  });
+
+  it("buildGcpProjectName produces `${displayName} v${majorVersion}`", () => {
+    // 45.4.5: human-facing name on `gcloud projects create --name`.
+    expect(buildGcpProjectName("Wordlark", 1)).toBe("Wordlark v1");
+    expect(buildGcpProjectName("Wordlark Hollow", 2)).toBe("Wordlark Hollow v2");
+    // Free-form text passes through; gcloud rejects > 30 chars at the API
+    // layer so we let it surface the error instead of silently clamping.
+    expect(buildGcpProjectName("A Very Very Long Game Name", 11)).toBe(
+      "A Very Very Long Game Name v11"
+    );
+  });
+
+  it("GCP_SERVICE_ACCOUNT_ID_REGEX enforces the 6–30 char SA account_id rule", () => {
+    // 45.4.7 fix add-on — validate the runtime SA name inline in the form
+    // so users see GCP's rule before a confusing gcloud failure during
+    // Setup Infra. Same shape as project id (lowercase letter start,
+    // alphanumeric + hyphens, end with letter/digit, 6–30 chars).
+    expect(GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH).toBe(30);
+    expect(isValidGcpServiceAccountId("wordlark-v1-k3m9p-runtime")).toBe(true);
+    expect(isValidGcpServiceAccountId("runtime")).toBe(true);
+    expect(isValidGcpServiceAccountId("gateway-runtime")).toBe(true);
+    // Exactly 30 chars — the upper bound.
+    expect(isValidGcpServiceAccountId("a".repeat(30))).toBe(true);
+
+    // 31 chars — over the limit. This is the case the form's auto-derived
+    // path catches (e.g., a long slug + version + suffix + `-runtime`).
+    expect(isValidGcpServiceAccountId("a".repeat(31))).toBe(false);
+    // 5 chars — below minimum.
+    expect(isValidGcpServiceAccountId("short")).toBe(false);
+    // Leading digit / hyphen.
+    expect(isValidGcpServiceAccountId("1runtime")).toBe(false);
+    expect(isValidGcpServiceAccountId("-runtime")).toBe(false);
+    // Uppercase / underscore not allowed.
+    expect(isValidGcpServiceAccountId("Runtime")).toBe(false);
+    expect(isValidGcpServiceAccountId("my_runtime")).toBe(false);
+    // Trailing hyphen.
+    expect(isValidGcpServiceAccountId("runtime-")).toBe(false);
+    // Non-string input.
+    expect(isValidGcpServiceAccountId(null)).toBe(false);
+    expect(isValidGcpServiceAccountId(undefined)).toBe(false);
+
+    // Regex exposed for direct use in form-field onChange.
+    expect(GCP_SERVICE_ACCOUNT_ID_REGEX.test("wordlark-v1-k3m9p-runtime")).toBe(
+      true
+    );
+  });
+
+  it("classifyProjectListResult maps gcloud ownership-probe output to the button state", () => {
+    // 45.4.7 fix — the original probe used `gcloud projects describe`, but
+    // GCP intentionally returns PERMISSION_DENIED for BOTH "doesn't exist"
+    // and "no access" (security: doesn't leak project existence). The new
+    // probe uses `gcloud projects list --filter="projectId:<id>"` which
+    // cleanly answers "do I own this?" — empty array = no, non-empty = yes.
+
+    // Owned: list returns a single project record.
+    expect(
+      classifyProjectListResult(
+        0,
+        JSON.stringify([
+          {
+            projectId: "wordlark-v1-k3m9p",
+            name: "Wordlark v1",
+            lifecycleState: "ACTIVE"
+          }
+        ])
+      )
+    ).toBe("owned");
+
+    // Not-owned: empty array. Could be "doesn't exist" or "someone else has
+    // the global id" — we can't tell, and that's fine because the create
+    // attempt will resolve the ambiguity by trying it.
+    expect(classifyProjectListResult(0, "[]")).toBe("not-owned");
+
+    // Non-zero exit from gcloud (network failure, auth invalidated, etc.).
+    expect(classifyProjectListResult(1, "")).toBe("unknown");
+    expect(classifyProjectListResult(null, "")).toBe("unknown");
+
+    // Exit 0 but malformed stdout — unknown rather than crashing.
+    expect(classifyProjectListResult(0, "not json")).toBe("unknown");
+    expect(classifyProjectListResult(0, '{"not": "an array"}')).toBe("unknown");
+  });
+
   it("defaults missing majorVersion to 1 on load via normalizeGameProject", () => {
     const projectMissingField = normalizeGameProject({
       ...makeProject(),
@@ -849,6 +1261,105 @@ describe("plugin infrastructure", () => {
       majorVersion: undefined
     } as unknown as Parameters<typeof normalizeGameProject>[0]);
     expect(projectMissingField.majorVersion).toBe(1);
+  });
+
+  it("resolves setup-infra and teardown-infra as supported on Cloud Run", () => {
+    // 45.4: both action kinds advertise terraform commands rooted in the
+    // terraform/ subdirectory of the Working Directory. The middleware's
+    // terraform-on-PATH check is what enforces the runtime prereq; the
+    // resolver just says the action is supported in principle.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": {
+              workingDirectory: "/tmp/wordlark",
+              githubRepo: "nikki/wordlark"
+            }
+          }
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+
+    const setup = resolveDeploymentAction(plan, "setup-infra");
+    expect(setup).toMatchObject({
+      targetId: "google-cloud-run",
+      actionKind: "setup-infra",
+      supported: true,
+      command: {
+        command: "terraform",
+        args: ["apply", "-auto-approve", "-input=false"],
+        cwd: "/tmp/wordlark/deployment/google-cloud-run/terraform"
+      }
+    });
+
+    const teardown = resolveDeploymentAction(plan, "teardown-infra");
+    expect(teardown).toMatchObject({
+      targetId: "google-cloud-run",
+      actionKind: "teardown-infra",
+      supported: true,
+      command: {
+        command: "terraform",
+        args: ["destroy", "-auto-approve", "-input=false"],
+        cwd: "/tmp/wordlark/deployment/google-cloud-run/terraform"
+      }
+    });
+  });
+
+  it("rejects setup-infra / teardown-infra on the Local target with a clear reason", () => {
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "local",
+          targetOverrides: {
+            local: { workingDirectory: "/tmp/wordlark" }
+          }
+        }
+      })
+    );
+    const setup = resolveDeploymentAction(plan, "setup-infra");
+    expect(setup.supported).toBe(false);
+    expect(setup.reason).toMatch(/Cloud Run-only/);
+    const teardown = resolveDeploymentAction(plan, "teardown-infra");
+    expect(teardown.supported).toBe(false);
+    expect(teardown.reason).toMatch(/Cloud Run-only/);
+  });
+
+  it("getCloudRunServiceNamesForPlan returns the gcloud-deletable names", async () => {
+    // 45.4 teardown ordering: middleware needs the list of declared service
+    // names to gcloud-delete each one before terraform destroy runs.
+    const { getCloudRunServiceNamesForPlan } = await import("@sugarmagic/plugins");
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const names = getCloudRunServiceNamesForPlan(plan);
+    // Default unit id `sugarmagic-gateway` + version-namespaced prefix
+    // `wordlark-v1` → `wordlark-v1-sugarmagic-gateway`.
+    expect(names).toContain("wordlark-v1-sugarmagic-gateway");
   });
 
   it("resolves local deployment actions from target overrides", () => {

@@ -129,6 +129,17 @@ export interface GameProject {
   identity: DocumentIdentity;
   displayName: string;
   majorVersion: number;
+  /**
+   * Per-major-version random suffixes that collision-resist the auto-derived
+   * GCP project id. Keys are `v${majorVersion}` strings (e.g., `"v1"`, `"v2"`);
+   * values are 5-character lowercase alphanumeric (base36) suffixes generated
+   * client-side via `crypto.getRandomValues`. Generated lazily on first
+   * SugarDeploy form mount per version and via the Cut New Major Version flow.
+   * Historical entries are preserved forever so worktrees / `git checkout
+   * v1.0.0` resolve back to the original v1 GCP project. Empty `{}` default
+   * preserves back-compat for older project files. Story 45.4.7.
+   */
+  versionedProjectIdentifiers: Record<string, string>;
   gameRootPath: string;
   deployment: DeploymentSettings;
   regionRegistry: RegionReference[];
@@ -149,12 +160,33 @@ export interface GameProject {
   mechanics: MechanicsDefinition;
 }
 
+/**
+ * Validate and project the persisted `versionedProjectIdentifiers` map to its
+ * canonical shape. Entries that don't pass the `v\d+` key + 5-char alphanumeric
+ * value shape are dropped silently (corrupt entries shouldn't break load).
+ * Missing field collapses to `{}`. Used by `normalizeGameProject` so the
+ * back-compat path for older project files survives.
+ */
+export function normalizeVersionedProjectIdentifiers(
+  input: unknown
+): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!/^v\d+$/.test(key)) continue;
+    if (typeof value !== "string" || !/^[a-z0-9]{5}$/.test(value)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 export function normalizeGameProject(
   gameProject:
     | GameProject
     | (Omit<
         GameProject,
         | "majorVersion"
+        | "versionedProjectIdentifiers"
         | "deployment"
         | "pluginConfigurations"
         | "playerDefinition"
@@ -172,6 +204,7 @@ export function normalizeGameProject(
         | "mechanics"
       > & {
         majorVersion?: number | null;
+        versionedProjectIdentifiers?: unknown;
         deployment?: Partial<DeploymentSettings> | null;
         pluginConfigurations?: Array<
           PluginConfigurationRecord | PartialPluginConfigurationRecord
@@ -205,6 +238,9 @@ export function normalizeGameProject(
   return {
     ...gameProject,
     majorVersion,
+    versionedProjectIdentifiers: normalizeVersionedProjectIdentifiers(
+      gameProject.versionedProjectIdentifiers
+    ),
     deployment: normalizeDeploymentSettings(gameProject.deployment),
     pluginConfigurations: normalizePluginConfigurationRecords(
       gameProject.pluginConfigurations
@@ -255,6 +291,7 @@ export function createDefaultGameProject(
     identity: { id: slug, schema: "GameProject", version: 1 },
     displayName: gameName,
     majorVersion: 1,
+    versionedProjectIdentifiers: {},
     gameRootPath: ".",
     deployment: createDefaultDeploymentSettings(),
     regionRegistry: [],

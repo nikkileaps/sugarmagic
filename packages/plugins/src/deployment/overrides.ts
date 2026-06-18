@@ -84,9 +84,23 @@ function resolveMajorVersion(
 }
 
 function defaultVersionedDeploymentSlug(
-  gameProject: Pick<GameProject, "identity" | "majorVersion">
+  gameProject: Pick<
+    GameProject,
+    "identity" | "majorVersion" | "versionedProjectIdentifiers"
+  >
 ): string {
-  return `${defaultDeploymentSlug(gameProject)}-v${resolveMajorVersion(gameProject)}`;
+  const slug = defaultDeploymentSlug(gameProject);
+  const major = resolveMajorVersion(gameProject);
+  // Story 45.4.7 — collision-resistant suffix. When the project has a recorded
+  // suffix for the current major version (set lazily by the SugarDeploy form
+  // on first mount, or by Cut New Major Version per 45.8), include it in the
+  // derivation: `${slug}-v${major}-${suffix}`. When absent — older project
+  // files that haven't been opened in SugarDeploy yet, or non-Cloud-Run
+  // targets — fall back to the pre-45.4.7 `${slug}-v${major}` form so
+  // existing GCP projects remain reachable until the form mounts and
+  // generates a suffix.
+  const suffix = gameProject.versionedProjectIdentifiers?.[`v${major}`];
+  return suffix ? `${slug}-v${major}-${suffix}` : `${slug}-v${major}`;
 }
 
 export function normalizeLocalDeploymentTargetOverrides(
@@ -111,7 +125,10 @@ export function normalizeLocalDeploymentTargetOverrides(
 
 export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   input: Record<string, unknown> | null | undefined,
-  gameProject?: Pick<GameProject, "identity" | "majorVersion">
+  gameProject?: Pick<
+    GameProject,
+    "identity" | "majorVersion" | "versionedProjectIdentifiers"
+  >
 ): GoogleCloudRunDeploymentTargetOverrides {
   const versionedSlug = gameProject
     ? defaultVersionedDeploymentSlug(gameProject)

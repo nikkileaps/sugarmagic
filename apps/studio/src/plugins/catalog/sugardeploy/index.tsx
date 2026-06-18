@@ -5,18 +5,22 @@ import {
   Button,
   Code,
   Group,
+  Modal,
   NumberInput,
   Select,
   Stack,
   Switch,
   Text,
-  TextInput
+  TextInput,
+  Tooltip
 } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DeploymentSettings } from "@sugarmagic/domain";
 import {
   type DeploymentActionExecutionResult,
   type DeploymentActionKind,
+  GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH,
+  GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
   listDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
@@ -31,6 +35,39 @@ import type {
 } from "../../sdk";
 
 type SugarDeployCenterPanelProps = PluginWorkspaceViewProps;
+
+// Story 45.4.5 — state shapes for the Create GCP Project button.
+// Status semantics changed in 45.4.7 fix: GCP intentionally can't
+// distinguish "doesn't exist" from "no access" on its project APIs (it
+// would leak existence info), so the probe collapses to "do I own this?"
+// The "globally taken by someone else" case surfaces only when the create
+// attempt itself fails — see the create endpoint's stderr-pattern check.
+type GcpProjectProbeStatus = "owned" | "not-owned" | "unknown";
+
+interface ProbeState {
+  phase: "idle" | "probing" | "done";
+  status: GcpProjectProbeStatus | null;
+  message: string | null;
+}
+
+interface BillingAccountSummary {
+  id: string;
+  displayName: string;
+  currencyCode?: string;
+}
+
+interface CreateProjectState {
+  phase: "idle" | "listing-billing" | "picking-billing" | "creating" | "result";
+  billingAccounts: BillingAccountSummary[];
+  selectedBillingAccountId: string | null;
+  result: {
+    ok: boolean;
+    message: string;
+    stdout?: string;
+    stderr?: string;
+  } | null;
+  error: string | null;
+}
 
 function isDeploymentActionExecutionResult(
   value: unknown
@@ -60,6 +97,20 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     running: false
   });
 
+  // Story 45.4.5 — Create GCP Project button state machine.
+  const [probeState, setProbeState] = useState<ProbeState>({
+    phase: "idle",
+    status: null,
+    message: null
+  });
+  const [createState, setCreateState] = useState<CreateProjectState>({
+    phase: "idle",
+    billingAccounts: [],
+    selectedBillingAccountId: null,
+    result: null,
+    error: null
+  });
+
   const plan = gameProject ? planGameDeployment(gameProject) : null;
   const selectedTargetId = gameProject?.deployment.deploymentTargetId ?? null;
   const localOverrides = normalizeLocalDeploymentTargetOverrides(
@@ -86,6 +137,74 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     rawGithubRepo.length > 0 && !GITHUB_REPO_REGEX.test(rawGithubRepo)
       ? "Expected owner/repo (e.g. nikki/wordlark)"
       : null;
+
+  // Runtime SA account_id validation. Two cases the user can hit:
+  // (1) override IS filled in but doesn't match GCP's rules → show what
+  //     the rule is so the user can fix the string.
+  // (2) override is blank AND the auto-derived `${serviceNamePrefix}-runtime`
+  //     would exceed GCP's 30-char limit → tell the user the autoderived
+  //     value won't fit and they need to set the override.
+  // Both surface inline as `error` on the TextInput so the user doesn't
+  // discover the problem via a confusing gcloud failure during Setup Infra.
+  const rawRuntimeServiceAccount = rawCloudRunString("runtimeServiceAccountName");
+  const autoDerivedRuntimeServiceAccount = `${cloudRunOverrides.serviceNamePrefix}-runtime`;
+  const runtimeServiceAccountError = (() => {
+    if (rawRuntimeServiceAccount.length > 0) {
+      return GCP_SERVICE_ACCOUNT_ID_REGEX.test(rawRuntimeServiceAccount)
+        ? null
+        : `Must be 6–${GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH} chars, lowercase, start with a letter, end with letter/digit, only [a-z0-9-].`;
+    }
+    if (autoDerivedRuntimeServiceAccount.length > GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH) {
+      return `Auto-derived "${autoDerivedRuntimeServiceAccount}" is ${autoDerivedRuntimeServiceAccount.length} chars (over GCP's ${GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH}-char limit). Set an override below (e.g. \`runtime\`).`;
+    }
+    return null;
+  })();
+
+  // Story 45.4.7 — lazy-generate the per-major-version GCP project id suffix.
+  // 36^5 = ~60M combinations is plenty for one-developer collision avoidance;
+  // generated client-side via crypto.getRandomValues and persisted via the
+  // idempotent EnsureVersionedProjectIdentifier command (never overwrites
+  // existing entries, so worktrees / `git checkout v1.0.0` keep their
+  // historical suffix).
+  function generateProjectIdSuffix(): string {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return (buf[0] % 60466176).toString(36).padStart(5, "0");
+  }
+
+  useEffect(() => {
+    if (
+      !gameProjectId ||
+      !gameProject ||
+      selectedTargetId !== "google-cloud-run"
+    ) {
+      return;
+    }
+    const key = `v${gameProject.majorVersion}`;
+    if (gameProject.versionedProjectIdentifiers[key]) return;
+    onCommand({
+      kind: "EnsureVersionedProjectIdentifier",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: gameProjectId
+      },
+      subject: {
+        subjectKind: "game-project",
+        subjectId: gameProjectId
+      },
+      payload: {
+        majorVersion: gameProject.majorVersion,
+        suffix: generateProjectIdSuffix()
+      }
+    });
+    // onCommand is stable from props; gameProject changes drive re-eval.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    gameProjectId,
+    selectedTargetId,
+    gameProject?.majorVersion,
+    gameProject?.versionedProjectIdentifiers
+  ]);
 
   function updateSettings(nextSettings: DeploymentSettings) {
     if (!gameProjectId || !gameProject) return;
@@ -200,6 +319,176 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   }
 
   const hostActionsAvailable = import.meta.env.DEV;
+
+  // Story 45.4.5 — probe the resolved GCP project id and let the result drive
+  // both the Create GCP Project button's state and the Setup Infra gate. The
+  // resolved id comes from the same normalizer the tfvars generator uses, so
+  // probe / create / terraform all hit the same project.
+  const resolvedGcpProjectId = cloudRunOverrides.projectId;
+
+  async function probeProject() {
+    if (!resolvedGcpProjectId) return;
+    setProbeState({ phase: "probing", status: null, message: null });
+    try {
+      const response = await fetch("/__sugardeploy/probe-gcp-project", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId: resolvedGcpProjectId })
+      });
+      const payload = (await response
+        .json()
+        .catch(() => null)) as {
+        ok?: boolean;
+        status?: GcpProjectProbeStatus;
+        message?: string;
+      } | null;
+      setProbeState({
+        phase: "done",
+        status: payload?.status ?? "unknown",
+        message:
+          payload?.message ??
+          (response.ok ? null : `Probe failed (HTTP ${response.status}).`)
+      });
+    } catch (error) {
+      setProbeState({
+        phase: "done",
+        status: "unknown",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (
+      selectedTargetId === "google-cloud-run" &&
+      resolvedGcpProjectId &&
+      hostActionsAvailable
+    ) {
+      void probeProject();
+    } else {
+      setProbeState({ phase: "idle", status: null, message: null });
+    }
+    // probeProject closes over the resolved id; re-run on id / target change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTargetId, resolvedGcpProjectId, hostActionsAvailable]);
+
+  async function handleCreateGcpProjectClick() {
+    if (!gameProject || !resolvedGcpProjectId) return;
+    setCreateState((prev) => ({
+      ...prev,
+      phase: "listing-billing",
+      error: null,
+      result: null
+    }));
+    try {
+      const response = await fetch("/__sugardeploy/list-billing-accounts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        accounts?: BillingAccountSummary[];
+        message?: string;
+      } | null;
+      if (!response.ok || !payload?.ok) {
+        setCreateState((prev) => ({
+          ...prev,
+          phase: "idle",
+          error:
+            payload?.message ??
+            `list-billing-accounts failed (HTTP ${response.status}).`
+        }));
+        return;
+      }
+      const accounts = payload.accounts ?? [];
+      if (accounts.length === 0) {
+        setCreateState((prev) => ({
+          ...prev,
+          phase: "idle",
+          error:
+            "No open billing accounts found. Create one at https://console.cloud.google.com/billing then retry."
+        }));
+        return;
+      }
+      if (accounts.length === 1) {
+        // Single open account — auto-pick, no modal.
+        await runCreateProject(accounts[0].id);
+        return;
+      }
+      // 2+ open accounts — open the selector modal.
+      setCreateState((prev) => ({
+        ...prev,
+        phase: "picking-billing",
+        billingAccounts: accounts,
+        selectedBillingAccountId: accounts[0].id,
+        error: null
+      }));
+    } catch (error) {
+      setCreateState((prev) => ({
+        ...prev,
+        phase: "idle",
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  }
+
+  async function runCreateProject(billingAccountId: string) {
+    if (!gameProject || !resolvedGcpProjectId) return;
+    setCreateState((prev) => ({
+      ...prev,
+      phase: "creating",
+      selectedBillingAccountId: billingAccountId,
+      error: null
+    }));
+    try {
+      const response = await fetch("/__sugardeploy/create-gcp-project", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: resolvedGcpProjectId,
+          displayName: gameProject.displayName,
+          majorVersion: gameProject.majorVersion,
+          billingAccountId
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        stdout?: string;
+        stderr?: string;
+      } | null;
+      const ok = response.ok && payload?.ok === true;
+      setCreateState((prev) => ({
+        ...prev,
+        phase: "result",
+        result: {
+          ok,
+          message:
+            payload?.message ??
+            (ok
+              ? "GCP project ready."
+              : `create-gcp-project failed (HTTP ${response.status}).`),
+          stdout: payload?.stdout,
+          stderr: payload?.stderr
+        }
+      }));
+      if (ok) {
+        // Re-probe so the button flips to "GCP Project ready ✓".
+        await probeProject();
+      }
+    } catch (error) {
+      setCreateState((prev) => ({
+        ...prev,
+        phase: "result",
+        result: {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }));
+    }
+  }
+
   const actionBlockedReason = (() => {
     if (!hostActionsAvailable) {
       return "Host deployment actions are available in Studio dev mode only.";
@@ -219,6 +508,59 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     return null;
   })();
   const actionsDisabled = actionBlockedReason != null;
+
+  // Story 45.4.5: derive the Create GCP Project button's label / variant /
+  // disabled state from probe + create phases. Precedence: in-flight create
+  // > in-flight billing list > in-flight probe > final probe status.
+  const createButtonInfo: {
+    label: string;
+    variant: "filled" | "subtle" | "outline";
+    color?: string;
+    loading: boolean;
+    disabled: boolean;
+  } = (() => {
+    if (createState.phase === "creating") {
+      return {
+        label: "Creating GCP Project…",
+        variant: "filled",
+        loading: true,
+        disabled: true
+      };
+    }
+    if (createState.phase === "listing-billing") {
+      return {
+        label: "Looking up billing…",
+        variant: "filled",
+        loading: true,
+        disabled: true
+      };
+    }
+    if (probeState.phase === "probing") {
+      return {
+        label: "Checking GCP Project…",
+        variant: "subtle",
+        loading: true,
+        disabled: true
+      };
+    }
+    if (probeState.status === "owned") {
+      return {
+        label: "GCP Project ready ✓",
+        variant: "subtle",
+        loading: false,
+        disabled: true
+      };
+    }
+    return {
+      label: "Create GCP Project",
+      variant: "filled",
+      loading: false,
+      disabled: actionsDisabled
+    };
+  })();
+
+  const setupInfraBlockedByProbe =
+    selectedTargetId === "google-cloud-run" && probeState.status !== "owned";
 
   return (
     <Stack
@@ -359,8 +701,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           <TextInput
             label="Runtime Service Account Name"
             description="Optional. The account_id (left of @) for the Cloud Run runtime service account. Leave blank to auto-derive as ${serviceNamePrefix}-runtime."
-            placeholder={`${cloudRunOverrides.serviceNamePrefix}-runtime`}
-            value={rawCloudRunString("runtimeServiceAccountName")}
+            placeholder={autoDerivedRuntimeServiceAccount}
+            value={rawRuntimeServiceAccount}
+            error={runtimeServiceAccountError}
             onChange={(event) =>
               updateTargetOverrides("google-cloud-run", {
                 runtimeServiceAccountName: event.currentTarget.value
@@ -435,6 +778,76 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Deployment Actions
         </Text>
+        {selectedTargetId === "google-cloud-run" ? (
+          <Group>
+            <Tooltip
+              label={
+                probeState.status === "owned"
+                  ? `\`${resolvedGcpProjectId}\` is provisioned and ready.`
+                  : probeState.status === "unknown"
+                    ? probeState.message ?? "Could not determine project ownership."
+                    : "Run gcloud projects create + billing link + services enable. Idempotent — safe to re-run."
+              }
+              withinPortal
+              multiline
+              w={320}
+            >
+              <Button
+                size="xs"
+                variant={createButtonInfo.variant}
+                color={createButtonInfo.color}
+                onClick={handleCreateGcpProjectClick}
+                loading={createButtonInfo.loading}
+                disabled={createButtonInfo.disabled}
+              >
+                {createButtonInfo.label}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              label={
+                actionBlockedReason ??
+                "Create the GCP Project first — Setup Infra runs terraform against it."
+              }
+              disabled={!setupInfraBlockedByProbe && !actionsDisabled}
+              withinPortal
+              multiline
+              w={320}
+            >
+              <Button
+                size="xs"
+                variant="filled"
+                onClick={() => runAction("setup-infra")}
+                loading={
+                  actionState.running && actionState.kind === "setup-infra"
+                }
+                disabled={actionsDisabled || setupInfraBlockedByProbe}
+                title="Run terraform init + apply against the GCP project to stand up Artifact Registry, runtime SA, IAM, WIF, and empty Secret Manager containers. Idempotent — safe to re-run."
+              >
+                Setup Infra
+              </Button>
+            </Tooltip>
+            <Button
+              size="xs"
+              variant="outline"
+              color="red"
+              onClick={() => {
+                const confirmed = window.confirm(
+                  "Teardown Infra will delete every declared Cloud Run service in this project AND run `terraform destroy` against all SugarDeploy-managed infrastructure (Artifact Registry, runtime SA, IAM bindings, WIF, Secret Manager containers).\n\n" +
+                    "Secret VALUES are destroyed with the containers. The GCP project itself stays.\n\n" +
+                    "This is destructive. Proceed?"
+                );
+                if (confirmed) runAction("teardown-infra");
+              }}
+              loading={
+                actionState.running && actionState.kind === "teardown-infra"
+              }
+              disabled={actionsDisabled}
+              title="Delete Cloud Run services first, then `terraform destroy`. The GCP project itself is not deleted (use `gcloud projects delete` for that)."
+            >
+              Teardown Infra
+            </Button>
+          </Group>
+        ) : null}
         <Group>
           <Button
             size="xs"
@@ -548,6 +961,110 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           </Stack>
         </Box>
       ) : null}
+
+      {createState.error ? (
+        <Box
+          p="md"
+          style={{
+            background: "rgba(160, 40, 40, 0.28)",
+            border: "1px solid rgba(220, 80, 80, 0.45)",
+            borderRadius: 8
+          }}
+        >
+          <Stack gap="xs">
+            <Text fw={700} size="sm">
+              Create GCP Project failed
+            </Text>
+            <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+              {createState.error}
+            </Text>
+          </Stack>
+        </Box>
+      ) : null}
+
+      {createState.result ? (
+        <Box
+          p="md"
+          style={{
+            background: createState.result.ok
+              ? "rgba(30, 110, 50, 0.28)"
+              : "rgba(160, 40, 40, 0.28)",
+            border: createState.result.ok
+              ? "1px solid rgba(70, 180, 90, 0.45)"
+              : "1px solid rgba(220, 80, 80, 0.45)",
+            borderRadius: 8
+          }}
+        >
+          <Stack gap="xs">
+            <Text fw={700} size="sm">
+              {createState.result.ok
+                ? "Create GCP Project succeeded"
+                : "Create GCP Project failed"}
+            </Text>
+            <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+              {createState.result.message}
+            </Text>
+            {createState.result.stdout?.trim() ? (
+              <Code block>{createState.result.stdout}</Code>
+            ) : null}
+            {createState.result.stderr?.trim() ? (
+              <Code block>{createState.result.stderr}</Code>
+            ) : null}
+          </Stack>
+        </Box>
+      ) : null}
+
+      <Modal
+        opened={createState.phase === "picking-billing"}
+        onClose={() =>
+          setCreateState((prev) => ({ ...prev, phase: "idle" }))
+        }
+        title="Select Billing Account"
+        centered
+        size="md"
+      >
+        <Stack>
+          <Text size="sm">
+            More than one open billing account on this host. Pick the one to
+            charge for{" "}
+            <Code>{resolvedGcpProjectId}</Code>.
+          </Text>
+          <Select
+            label="Billing Account"
+            data={createState.billingAccounts.map((acct) => ({
+              value: acct.id,
+              label: `${acct.displayName} (${acct.id})`
+            }))}
+            value={createState.selectedBillingAccountId}
+            onChange={(value) =>
+              setCreateState((prev) => ({
+                ...prev,
+                selectedBillingAccountId: value
+              }))
+            }
+          />
+          <Group justify="flex-end">
+            <Button
+              variant="light"
+              onClick={() =>
+                setCreateState((prev) => ({ ...prev, phase: "idle" }))
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (createState.selectedBillingAccountId) {
+                  void runCreateProject(createState.selectedBillingAccountId);
+                }
+              }}
+              disabled={!createState.selectedBillingAccountId}
+            >
+              Use This Account
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       {plan?.warnings.length ? (
         <Alert color="yellow" variant="light" title="Plan Warnings">

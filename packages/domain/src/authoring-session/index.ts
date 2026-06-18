@@ -63,6 +63,7 @@ import type {
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
   UpdateDeploymentSettingsCommand,
+  EnsureVersionedProjectIdentifierCommand,
   CreateMenuDefinitionCommand,
   UpdateMenuDefinitionCommand,
   DeleteMenuDefinitionCommand,
@@ -1264,6 +1265,40 @@ function applyUpdateDeploymentSettingsCommand(
   };
 }
 
+function applyEnsureVersionedProjectIdentifierCommand(
+  session: AuthoringSession,
+  command: EnsureVersionedProjectIdentifierCommand
+): AuthoringSession {
+  // Story 45.4.7 — idempotent: never overwrite an existing entry. Historical
+  // suffixes are part of the persistent record so worktrees / `git checkout
+  // v1.0.0` resolve back to the correct historical GCP project. The
+  // shape-validation (key `v\d+`, value 5-char alphanumeric) lives in
+  // normalizeVersionedProjectIdentifiers, which is what produces the map we
+  // mutate here. A no-change call returns the session unchanged so we don't
+  // pollute the undo stack with no-ops.
+  const key = `v${command.payload.majorVersion}`;
+  if (session.gameProject.versionedProjectIdentifiers[key] != null) {
+    return session;
+  }
+  const transaction = createTransactionForCommand(command, [
+    session.gameProject.identity.id
+  ]);
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      versionedProjectIdentifiers: {
+        ...session.gameProject.versionedProjectIdentifiers,
+        [key]: command.payload.suffix
+      }
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyPlayerDefinitionCommand(
   session: AuthoringSession,
   command: UpdatePlayerDefinitionCommand
@@ -2150,6 +2185,9 @@ export function applyCommand(
 
   if (command.kind === "UpdateDeploymentSettings") {
     return applyUpdateDeploymentSettingsCommand(session, command);
+  }
+  if (command.kind === "EnsureVersionedProjectIdentifier") {
+    return applyEnsureVersionedProjectIdentifierCommand(session, command);
   }
 
   if (command.kind === "CreateMenuDefinition") {

@@ -5,6 +5,11 @@ import {
 } from "@sugarmagic/domain";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import type { DiscoveredPluginDefinition } from "../sdk";
+import { pluginDefinition as firefliesPluginDefinition } from "../catalog/fireflies";
+import { pluginDefinition as helloPluginDefinition } from "../catalog/hello";
+import { pluginDefinition as sugaragentPluginDefinition } from "../catalog/sugaragent";
+import { pluginDefinition as sugardeployPluginDefinition } from "../catalog/sugardeploy";
+import { pluginDefinition as sugarlangPluginDefinition } from "../catalog/sugarlang";
 export {
   createFirefliesRuntimePlugin,
   FIREFLIES_PLUGIN_ID,
@@ -22,20 +27,25 @@ export {
   resolveSugarLangTargetLanguage
 } from "../catalog/sugarlang";
 
-interface PluginModule {
-  pluginDefinition: DiscoveredPluginDefinition;
-}
-
-const discoveredModules = import.meta.glob<PluginModule>(
-  "../catalog/*/index.ts",
-  { eager: true }
+// Plugin registry — single source of truth for every plugin Sugarmagic
+// ships. Previously used `import.meta.glob("../catalog/*/index.ts")` for
+// automatic discovery, but that's a Vite-specific transform that doesn't
+// run during Vite's config-load phase (esbuild bundles vite.config.ts
+// without applying Vite's transforms). With explicit imports the
+// discovery works in every bundling context — runtime, vitest, and
+// config-load — so plugin host-middleware contributions (45.4.6+) can
+// reach this list from Studio's vite.config.ts without breakage. New
+// plugins land here by adding the import + entry below; the explicit
+// list also functions as the audit trail for "what ships in the box."
+const discoveredPlugins: DiscoveredPluginDefinition[] = [
+  firefliesPluginDefinition,
+  helloPluginDefinition,
+  sugaragentPluginDefinition,
+  sugardeployPluginDefinition,
+  sugarlangPluginDefinition
+].sort((left, right) =>
+  left.manifest.displayName.localeCompare(right.manifest.displayName)
 );
-
-const discoveredPlugins = Object.values(discoveredModules)
-  .map((module) => module.pluginDefinition)
-  .sort((left, right) =>
-    left.manifest.displayName.localeCompare(right.manifest.displayName)
-  );
 
 export function listDiscoveredPluginDefinitions(): DiscoveredPluginDefinition[] {
   return discoveredPlugins;

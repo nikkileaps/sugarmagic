@@ -799,6 +799,22 @@ export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
   }
 >;
 
+/**
+ * Idempotently set the random suffix for a major version's GCP project id.
+ * Story 45.4.7. The apply function is a no-op when the entry already exists —
+ * historical suffixes are preserved forever so git worktrees and `git checkout
+ * v1.0.0` resolve back to the original v1 GCP project. Generation lives in the
+ * Studio (via `crypto.getRandomValues`); the domain just persists what it
+ * receives after shape-validating it.
+ */
+export type EnsureVersionedProjectIdentifierCommand = SemanticCommandBase<
+  "EnsureVersionedProjectIdentifier",
+  {
+    majorVersion: number;
+    suffix: string;
+  }
+>;
+
 export type CreateMenuDefinitionCommand = SemanticCommandBase<
   "CreateMenuDefinition",
   {
@@ -979,6 +995,7 @@ export type SemanticCommand =
   | UpdatePluginConfigurationCommand
   | DeletePluginConfigurationCommand
   | UpdateDeploymentSettingsCommand
+  | EnsureVersionedProjectIdentifierCommand
   | CreateMenuDefinitionCommand
   | UpdateMenuDefinitionCommand
   | DeleteMenuDefinitionCommand
