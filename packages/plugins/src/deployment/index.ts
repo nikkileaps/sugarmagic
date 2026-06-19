@@ -6,6 +6,7 @@ import type {
   SecretRequirement,
   TopologyRequirement
 } from "@sugarmagic/domain";
+import { createDeploymentRequirementId } from "../../../domain/src/index";
 import type { DeploymentSettings, DeploymentTargetId, GameProject } from "@sugarmagic/domain";
 // IMPORTANT — these VALUE imports use the relative path on purpose. The
 // SugarDeploy host middleware (catalog/sugardeploy/host/) is reachable
@@ -20,6 +21,7 @@ import {
   normalizeDeploymentRequirements
 } from "../../../domain/src/index";
 import { getDiscoveredPluginDefinition } from "../builtin";
+import { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 import {
   type GoogleCloudRunDeploymentTargetOverrides,
   type LocalDeploymentTargetOverrides,
@@ -335,7 +337,8 @@ function buildGatewayDockerFile(
 function buildGatewayServerFile(
   targetId: DeploymentTargetId,
   unit: DeploymentServiceUnit,
-  containerPort: number
+  containerPort: number,
+  gatewayAuthMode: "none" | "bearer" = "none"
 ): ManagedProjectFile {
   // TODO: Move this generated gateway scaffold out of the inline template string
   // and into dedicated template/source files so the gateway implementation can be
@@ -345,6 +348,7 @@ import { createServer } from "node:http";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, relative } from "node:path";
+import { timingSafeEqual } from "node:crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -417,6 +421,30 @@ function sendMethodNotAllowed(res, allowed) {
 
 function normalizePath(url) {
   return (url || "/").split("?")[0] || "/";
+}
+
+// Story 45.5.8 — bearer-token authorization. Constant-time compare via
+// node:crypto.timingSafeEqual prevents timing-based token guessing. Length
+// mismatch short-circuits with false (timingSafeEqual requires equal-length
+// buffers). The expected token comes from the deployment secret env var
+// resolved at request time; missing env var (e.g. secret wasn't Set Value'd
+// after enabling bearer mode) means the gate denies everything except /health.
+function authorizeBearer(req) {
+  const expected = process.env.SUGARMAGIC_GATEWAY_SHARED_TOKEN || "";
+  if (!expected) return false;
+  const header = (req.headers && req.headers["authorization"]) || "";
+  const prefix = "Bearer ";
+  if (typeof header !== "string" || !header.startsWith(prefix)) return false;
+  const presented = header.slice(prefix.length).trim();
+  if (!presented) return false;
+  const expectedBuf = Buffer.from(expected, "utf8");
+  const presentedBuf = Buffer.from(presented, "utf8");
+  if (expectedBuf.length !== presentedBuf.length) return false;
+  try {
+    return timingSafeEqual(expectedBuf, presentedBuf);
+  } catch {
+    return false;
+  }
 }
 
 function resolveEnv(name, fallback = "") {
@@ -1337,6 +1365,21 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Story 45.5.8 — bearer-token auth gate. Generated based on the
+  // gatewayAuthMode override at plan time. /health stays public above; this
+  // gate runs on EVERY other path before the route dispatcher.
+${gatewayAuthMode === "bearer" ? `  if (!authorizeBearer(req)) {
+    logInfo("gateway:unauthorized", { path });
+    sendJson(res, 401, {
+      ok: false,
+      error: "Unauthorized",
+      message: "Missing or invalid Authorization header. This gateway requires a Bearer token; set the gateway-shared-token deployment secret and send \\"Authorization: Bearer <token>\\" on every request."
+    });
+    return;
+  }` : `  // gatewayAuthMode === "none" — no auth check; all routes are public.
+  // Set gatewayAuthMode to "bearer" in the Studio's Cloud Run section to
+  // gate plugin routes behind the gateway-shared-token deployment secret.`}
+
   const match = findManagedRoute(path);
   if (!match) {
     logInfo("gateway:route-not-managed", {
@@ -1479,12 +1522,13 @@ function buildGatewayRoutesFile(
 function buildGatewayScaffoldFiles(
   targetId: DeploymentTargetId,
   unit: DeploymentServiceUnit,
-  containerPort: number
+  containerPort: number,
+  gatewayAuthMode: "none" | "bearer" = "none"
 ): ManagedProjectFile[] {
   return [
     buildGatewayPackageFile(targetId, unit),
     buildGatewayRoutesFile(targetId, unit),
-    buildGatewayServerFile(targetId, unit, containerPort),
+    buildGatewayServerFile(targetId, unit, containerPort, gatewayAuthMode),
     buildGatewayDockerFile(targetId, unit, containerPort)
   ];
 }
@@ -1787,10 +1831,11 @@ function buildGoogleCloudRunManagedFiles(
         `- Gateway auth mode: ${overrides.gatewayAuthMode}`,
         ...(overrides.gatewayAuthMode === "none"
           ? [
-              "  The deployed gateway has NO app-layer auth check — any HTTP caller that finds the URL can hit any route. terraform creates the org-policy override + project IAM binding allowing `allUsers` to invoke the Cloud Run service. This is by design until Plan 046 ships the identity-provider plugin model (Supabase, Auth0, etc.). For pre-Plan-046 deploys, treat any plugin route that costs money (LLM proxy, etc.) as exposed and budget accordingly.",
-              "  When Plan 046 lands, this field expands to a selectable enum (\"supabase\" / \"auth0\" / etc.) and the gateway's server.mjs gains middleware that validates JWTs or cookies before any plugin route runs."
+              "  The deployed gateway has NO app-layer auth check — any HTTP caller that finds the URL can hit any route. Treat any plugin route that costs money (LLM proxy, etc.) as exposed and budget accordingly. Flip the auth mode to `bearer` in the Studio Cloud Run section to add the shared-token gate."
             ]
-          : [])
+          : [
+              "  Every request EXCEPT /health requires `Authorization: Bearer <token>`. The expected token is the `gateway-shared-token` deployment secret (`SUGARMAGIC_GATEWAY_SHARED_TOKEN` in the running container). Set it via the SugarDeploy Secrets section's Set Value modal; rotate by setting a new value (the previous version is retained in Secret Manager but only `:latest` is bound at deploy time). Game/CI/devtools clients must send the token on every request. Single shared token across all callers — appropriate for solo-dev alpha but not real per-player identity; for that, see Plan 046."
+            ])
       ])
     ),
     asTextFile(
@@ -1828,7 +1873,7 @@ function buildGoogleCloudRunManagedFiles(
 
   for (const unit of plan.serviceUnits) {
     const serviceDir = getServiceDirectory("google-cloud-run", unit);
-    files.push(...buildGatewayScaffoldFiles("google-cloud-run", unit, overrides.containerPort));
+    files.push(...buildGatewayScaffoldFiles("google-cloud-run", unit, overrides.containerPort, overrides.gatewayAuthMode));
     files.push(
       asTextFile(
         `${serviceDir}/service.yaml`,
@@ -2122,6 +2167,47 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
     requirements,
     targetId
   );
+
+  // Story 45.5.8 — bearer-token auth secret injection. When the Cloud Run
+  // target's gatewayAuthMode is "bearer", inject the gateway-shared-token
+  // SecretRequirement into the gateway service unit's secrets list so it
+  // flows through the existing terraform tfvars + deploy.sh --set-secrets +
+  // Studio Set Value paths. Single shared token across all callers; not
+  // per-user identity (that's Plan 046's job).
+  if (targetId === "google-cloud-run") {
+    const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+      gameProject.deployment.targetOverrides["google-cloud-run"],
+      gameProject
+    );
+    if (cloudRunOverrides.gatewayAuthMode === "bearer") {
+      const bearerSecret: SecretRequirement = {
+        requirementId: createDeploymentRequirementId({
+          ownerId: SUGARDEPLOY_PLUGIN_ID,
+          kind: "secret",
+          key: "gateway-shared-token"
+        }),
+        ownerId: SUGARDEPLOY_PLUGIN_ID,
+        ownerKind: "plugin",
+        kind: "secret",
+        required: true,
+        secretKey: "gateway-shared-token",
+        consumption: "server-only",
+        exposure: "private",
+        mappingHint: "SUGARMAGIC_GATEWAY_SHARED_TOKEN",
+        description:
+          "Shared bearer token gating every plugin route on the deployed Cloud Run gateway. Clients (game build, CI, devtools) send `Authorization: Bearer <token>`; the gateway compares against this value using a constant-time check. Story 45.5.8.",
+        tags: ["auth", "gateway"]
+      };
+      for (const unit of serviceUnits) {
+        if (
+          unit.executionModel === "request-response" &&
+          unit.isolation === "shared-allowed"
+        ) {
+          unit.secrets = [...unit.secrets, bearerSecret];
+        }
+      }
+    }
+  }
 
   const conflicts = [...sourceConflicts, ...serviceConflicts];
   const warnings: string[] = [];

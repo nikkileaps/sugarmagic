@@ -1197,6 +1197,116 @@ describe("plugin infrastructure", () => {
     );
   });
 
+  it("planner injects the gateway-shared-token secret + emits auth middleware when gatewayAuthMode=bearer", () => {
+    // 45.5.8 — bearer auth mode adds:
+    // (1) a gateway-shared-token SecretRequirement on the gateway service unit
+    //     so terraform creates the container and deploy.sh --set-secrets binds it
+    // (2) an authorizeBearer() middleware in the generated server.mjs that
+    //     401s every non-/health request without a valid Bearer token.
+    const wordlarkBearer = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": { gatewayAuthMode: "bearer" }
+          }
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+
+    // Gateway unit picks up the new secret alongside SugarAgent's secrets.
+    const gatewayUnit = wordlarkBearer.serviceUnits.find(
+      (unit) => unit.serviceUnitId === "sugarmagic-gateway"
+    );
+    expect(gatewayUnit).toBeDefined();
+    const secretKeys = gatewayUnit!.secrets.map((s) => s.secretKey).sort();
+    expect(secretKeys).toContain("gateway-shared-token");
+
+    // The shared-token secret has the correct shape so it flows through
+    // the existing terraform tfvars + deploy.sh --set-secrets + Set Value
+    // paths the same way SugarAgent's secrets do.
+    const sharedToken = gatewayUnit!.secrets.find(
+      (s) => s.secretKey === "gateway-shared-token"
+    );
+    expect(sharedToken).toMatchObject({
+      mappingHint: "SUGARMAGIC_GATEWAY_SHARED_TOKEN",
+      consumption: "server-only",
+      exposure: "private",
+      ownerId: "sugardeploy"
+    });
+
+    // Generated server.mjs has the authorizeBearer middleware + the 401
+    // gate around plugin routes. /health stays public above the gate.
+    const serverFile = wordlarkBearer.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/services/sugarmagic-gateway/server.mjs"
+    );
+    expect(serverFile).toBeDefined();
+    const content = serverFile!.content;
+    expect(content).toContain('import { timingSafeEqual } from "node:crypto"');
+    expect(content).toContain("function authorizeBearer(req)");
+    expect(content).toContain("SUGARMAGIC_GATEWAY_SHARED_TOKEN");
+    expect(content).toContain("timingSafeEqual(expectedBuf, presentedBuf)");
+    expect(content).toContain("if (!authorizeBearer(req))");
+    expect(content).toContain('error: "Unauthorized"');
+
+    // The deploy.sh's --set-secrets list includes the shared token binding.
+    const deployScript = wordlarkBearer.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript?.content).toContain(
+      "--set-secrets=SUGARMAGIC_GATEWAY_SHARED_TOKEN=wordlark-v1-k3m9p-gateway-shared-token:latest"
+    );
+  });
+
+  it("planner does NOT inject the bearer secret when gatewayAuthMode=none (the default)", () => {
+    // 45.5.8 — defaulting to "none" preserves the 45.5.5 baseline behavior:
+    // no auth middleware, no gateway-shared-token secret container created.
+    const wordlarkNone = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          // gatewayAuthMode not set → defaults to "none"
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(HELLO_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const gatewayUnit = wordlarkNone.serviceUnits.find(
+      (unit) => unit.serviceUnitId === "sugarmagic-gateway"
+    );
+    expect(gatewayUnit?.secrets).toEqual([]);
+
+    const serverFile = wordlarkNone.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/services/sugarmagic-gateway/server.mjs"
+    );
+    expect(serverFile?.content).not.toContain("if (!authorizeBearer(req))");
+    // authorizeBearer function itself is still defined (the import + helper
+    // are mode-agnostic and unused in "none" mode), but the gate that calls
+    // it isn't emitted. Verifying the gate's absence is the load-bearing
+    // assertion.
+  });
+
   it("planner does NOT inject the baseline when no deployment target is selected", () => {
     // 45.5.5 guard: baseline is per-deployment-target. Until the user
     // picks a target, plan.serviceUnits stays empty (nothing to deploy

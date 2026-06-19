@@ -12,14 +12,26 @@ export type GoogleCloudRunIngress =
   | "internal-and-cloud-load-balancing";
 
 /**
- * Auth mode the deployed gateway runs in. Currently the only valid value is
- * `"none"` — the gateway is publicly reachable with no auth check, which is
- * how 45.5.7 unblocks the deployment-verification path while we punt on the
- * identity-provider design. When Plan 046 lands, the enum expands to include
- * concrete identity-provider ids (`"supabase"`, `"auth0"`, etc.) and the
- * gateway's middleware switches based on this value.
+ * Auth mode the deployed gateway runs in.
+ *
+ * - `"none"` (45.5.7) — gateway is publicly reachable with no app-layer check.
+ *   Fine for verification or zero-cost endpoints; dangerous for plugin routes
+ *   that cost money (LLM proxy, etc.) because anyone with the URL can drain
+ *   the budget.
+ * - `"bearer"` (45.5.8) — gateway requires `Authorization: Bearer <token>` on
+ *   every request except `/health`. The token is a deployment secret
+ *   (`gateway-shared-token`, exposed as `SUGARMAGIC_GATEWAY_SHARED_TOKEN`) the
+ *   user sets via the existing Set Value modal. Single shared token across
+ *   all callers — appropriate for solo-dev alpha where the threat model is
+ *   drive-by abuse, not malicious authenticated users.
+ *
+ * When [Plan 046](046-identity-provider-plugin-model-epic.md) lands the
+ * proper identity-provider plugin model, this enum expands to include real
+ * provider ids (`"supabase"`, `"auth0"`, etc.) and the gateway middleware
+ * switches based on the value. `"bearer"` retroactively becomes the first
+ * concrete provider in that SDK.
  */
-export type GatewayAuthMode = "none";
+export type GatewayAuthMode = "none" | "bearer";
 
 export interface GoogleCloudRunDeploymentTargetOverrides {
   workingDirectory: string;
@@ -177,11 +189,10 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
       typeof input?.runtimeServiceAccountName === "string"
         ? input.runtimeServiceAccountName.trim()
         : "",
-    // Story 45.5.7 — only "none" is valid right now. Plan 046 expands the
-    // enum; until then any non-"none" persisted value gets normalized back
-    // to "none" so old project files load cleanly when the enum changes.
+    // Story 45.5.8 — "none" | "bearer". Anything else normalizes to "none"
+    // so old project files load cleanly when the enum expands in Plan 046.
     gatewayAuthMode:
-      input?.gatewayAuthMode === "none" ? "none" : "none"
+      input?.gatewayAuthMode === "bearer" ? "bearer" : "none"
   };
 }
 

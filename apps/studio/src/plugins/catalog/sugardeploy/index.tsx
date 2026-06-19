@@ -1046,11 +1046,20 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               })
             }
           />
-          <TextInput
+          <Select
             label="Gateway Auth Mode"
-            description='Story 45.5.7: currently "none" — the deployed gateway is publicly reachable with no app-layer auth check. terraform creates the org-policy override + project IAM binding so allUsers can invoke. Identity-provider plugins (Supabase, Auth0, etc.) ship in Plan 046 and will expand this enum.'
+            description='"none" leaves the deployed gateway publicly reachable — fine for verification, dangerous for plugin routes that cost money. "bearer" gates every route except /health behind a shared deployment secret (gateway-shared-token); set the value via the Secrets section. Plan 046 expands this enum with real per-user identity providers (Supabase, Auth0, etc.).'
+            data={[
+              { value: "none", label: "None (public, no auth check)" },
+              { value: "bearer", label: "Bearer (shared deployment token)" }
+            ]}
             value={cloudRunOverrides.gatewayAuthMode}
-            readOnly
+            onChange={(value) =>
+              updateTargetOverrides("google-cloud-run", {
+                gatewayAuthMode:
+                  value === "bearer" ? "bearer" : "none"
+              })
+            }
           />
         </Stack>
       ) : null}
