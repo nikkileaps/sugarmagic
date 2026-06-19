@@ -118,6 +118,49 @@ function collectUniqueSecretKeys(plan: DeploymentPlan): string[] {
   return Array.from(seen).sort();
 }
 
+/**
+ * Resolve the env-var-name → Secret-Manager-name bindings for `gcloud run
+ * deploy --set-secrets=KEY=NAME:latest`. The env var name comes from each
+ * SecretRequirement's `mappingHint` (e.g. `SUGARMAGIC_ANTHROPIC_API_KEY`);
+ * when absent we derive it as `secretKey.toUpperCase().replace(/-/g, "_")`
+ * so the binding still works for plugins that haven't bothered with the
+ * hint. Story 45.5. Single source of truth used by the deploy-script
+ * generator AND (when 45.5's set-secret-value action lands) by the host
+ * action to look up the Secret Manager name from the requirement.
+ */
+export interface SecretEnvBinding {
+  secretKey: string;
+  envVarName: string;
+  secretManagerName: string;
+}
+
+export function collectSecretEnvBindings(
+  plan: DeploymentPlan,
+  serviceNamePrefix: string
+): SecretEnvBinding[] {
+  const byKey = new Map<string, SecretEnvBinding>();
+  for (const unit of plan.serviceUnits) {
+    for (const secret of unit.secrets) {
+      if (!secret.secretKey || byKey.has(secret.secretKey)) continue;
+      const envVarName =
+        secret.mappingHint && secret.mappingHint.trim().length > 0
+          ? secret.mappingHint.trim()
+          : secret.secretKey.toUpperCase().replace(/-/g, "_");
+      byKey.set(secret.secretKey, {
+        secretKey: secret.secretKey,
+        envVarName,
+        secretManagerName: resolveSecretManagerName(
+          serviceNamePrefix,
+          secret.secretKey
+        )
+      });
+    }
+  }
+  return Array.from(byKey.values()).sort((left, right) =>
+    left.secretKey.localeCompare(right.secretKey)
+  );
+}
+
 function resolveRuntimeServiceAccountId(
   overrides: GoogleCloudRunDeploymentTargetOverrides
 ): string {

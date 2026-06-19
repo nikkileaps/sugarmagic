@@ -31,7 +31,8 @@ import {
   buildCloudRunTerraformMainFile,
   buildCloudRunTerraformOutputsFile,
   buildCloudRunTerraformTfvarsFile,
-  buildCloudRunTerraformVariablesFile
+  buildCloudRunTerraformVariablesFile,
+  collectSecretEnvBindings
 } from "./cloud-run-terraform";
 
 export interface ManagedProjectFile {
@@ -130,8 +131,10 @@ export {
   buildCloudRunTerraformOutputsFile,
   buildCloudRunTerraformTfvarsFile,
   buildCloudRunTerraformVariablesFile,
+  collectSecretEnvBindings,
   parseTemplateVersionStamp,
-  resolveSecretManagerName
+  resolveSecretManagerName,
+  type SecretEnvBinding
 } from "./cloud-run-terraform";
 
 export {
@@ -1650,34 +1653,108 @@ function formatCloudRunDeployScript(
   const serviceLines = services
     .map((service) => `  "${service.serviceName}|${service.serviceDir}"`)
     .join("\n");
+  const secretBindings = collectSecretEnvBindings(plan, overrides.serviceNamePrefix);
+  const secretArgLines = secretBindings
+    .map(
+      (binding) =>
+        `  "--set-secrets=${binding.envVarName}=${binding.secretManagerName}:latest"`
+    )
+    .join("\n");
+  const ingressArg = `--ingress=${overrides.ingress}`;
+  const allowUnauthArg = overrides.allowUnauthenticated
+    ? "--allow-unauthenticated"
+    : "--no-allow-unauthenticated";
+  // Story 45.5 baked-in defaults. cpu, memory, cpu-throttling are not yet
+  // exposed as form fields (deferred to the 45.8.5 lifecycle UX overhaul);
+  // these values are the right-sized shape for a thin HTTP proxy gateway.
+  // min/max instances ARE exposed (the form's normalized defaults are now
+  // 1/4 per the same 45.5 conversation).
   return `#!/usr/bin/env bash
-set -euo pipefail
+# ${DEPLOYMENT_HEADER}
+# Re-save the project in Studio to regenerate this file.
+# Intentionally NOT using \`set -u\` (nounset) — macOS ships bash 3.2 which
+# treats expanding an empty array (\`\${arr[@]}\`) as "unbound variable" and
+# crashes the script before it does anything useful. The critical values
+# that would benefit from \`-u\` (terraform outputs) are explicitly null-
+# checked below; that's a stronger guard than \`-u\` would give us anyway.
+set -eo pipefail
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[sugardeploy] jq is required to parse terraform outputs; install via brew/apt before running deploy.sh" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+TERRAFORM_DIR="\${SCRIPT_DIR}/terraform"
+
+if [ ! -d "\${TERRAFORM_DIR}" ]; then
+  echo "[sugardeploy] terraform directory not found at \${TERRAFORM_DIR}" >&2
+  echo "[sugardeploy] run Setup Infra from the SugarDeploy workspace first" >&2
+  exit 1
+fi
+
+# Read authoritative deploy-time values from terraform outputs. Terraform
+# is the single source of truth for resolved resource names; we don't
+# duplicate them here.
+TF_OUTPUTS="$(terraform -chdir="\${TERRAFORM_DIR}" output -json)"
+ARTIFACT_REGISTRY_URL="$(echo "\${TF_OUTPUTS}" | jq -r '.artifact_registry_url.value')"
+RUNTIME_SA_EMAIL="$(echo "\${TF_OUTPUTS}" | jq -r '.runtime_sa_email.value')"
+
+if [ -z "\${ARTIFACT_REGISTRY_URL}" ] || [ "\${ARTIFACT_REGISTRY_URL}" = "null" ]; then
+  echo "[sugardeploy] terraform output 'artifact_registry_url' is empty; did Setup Infra finish?" >&2
+  exit 1
+fi
+if [ -z "\${RUNTIME_SA_EMAIL}" ] || [ "\${RUNTIME_SA_EMAIL}" = "null" ]; then
+  echo "[sugardeploy] terraform output 'runtime_sa_email' is empty; did Setup Infra finish?" >&2
+  exit 1
+fi
 
 PROJECT_ID="\${SUGARMAGIC_GCP_PROJECT_ID:-${overrides.projectId || "your-gcp-project"}}"
 REGION="\${SUGARMAGIC_GCP_REGION:-${overrides.region}}"
-ALLOW_UNAUTHENTICATED="\${SUGARMAGIC_GCP_ALLOW_UNAUTHENTICATED:-${overrides.allowUnauthenticated ? "true" : "false"}}"
+
+# Secret bindings: env-var-name → Secret Manager secret id. The actual secret
+# values live in Secret Manager (written via the SugarDeploy "Set Value" UI),
+# NOT in this script. \`--set-secrets\` binds them at request time via the
+# runtime SA's \`roles/secretmanager.secretAccessor\` grant (set up by
+# terraform). Empty array when no plugin declares secrets.
+SECRET_ARGS=(
+${secretArgLines}
+)
 
 services=(
 ${serviceLines}
 )
 
+if [ \${#services[@]} -eq 0 ]; then
+  echo "[sugardeploy] No runtime service units declared by enabled plugins." >&2
+  echo "[sugardeploy] Enable a plugin with a runtime service (SugarAgent, etc.) and re-save the project to regenerate this script with services to deploy." >&2
+  exit 0
+fi
+
 for entry in "\${services[@]}"; do
-  IFS='|' read -r service_name service_dir <<<"$entry"
-  image="gcr.io/\${PROJECT_ID}/\${service_name}"
+  IFS='|' read -r service_name service_dir <<<"\$entry"
+  image="\${ARTIFACT_REGISTRY_URL}/\${service_name}:latest"
+
   echo "[sugardeploy] building \${service_name} from \${service_dir}"
-  gcloud builds submit "\${service_dir}" --tag "\${image}" --project "\${PROJECT_ID}"
+  gcloud builds submit "\${service_dir}" \\
+    --tag "\${image}" \\
+    --project "\${PROJECT_ID}"
 
-  rendered_yaml="$(sed "s|IMAGE_PLACEHOLDER|\${image}|g" "\${service_dir}/service.yaml")"
-  echo "$rendered_yaml" | gcloud run services replace - --region "\${REGION}" --project "\${PROJECT_ID}"
-
-  if [ "\${ALLOW_UNAUTHENTICATED}" = "true" ]; then
-    gcloud run services add-iam-policy-binding "\${service_name}" \
-      --member="allUsers" \
-      --role="roles/run.invoker" \
-      --region "\${REGION}" \
-      --project "\${PROJECT_ID}"
-  fi
-
+  echo "[sugardeploy] deploying \${service_name}"
+  gcloud run deploy "\${service_name}" \\
+    --image "\${image}" \\
+    --project "\${PROJECT_ID}" \\
+    --region "\${REGION}" \\
+    --service-account "\${RUNTIME_SA_EMAIL}" \\
+    --port=${overrides.containerPort} \\
+    --cpu=1 \\
+    --memory=512Mi \\
+    --cpu-throttling \\
+    --min-instances=${overrides.minInstances} \\
+    --max-instances=${overrides.maxInstances} \\
+    ${ingressArg} \\
+    ${allowUnauthArg} \\
+    "\${SECRET_ARGS[@]}"
 done
 `;
 }
@@ -1890,7 +1967,8 @@ function collectRequirementSources(
 }
 
 function buildServiceUnits(
-  requirements: DeploymentRequirement[]
+  requirements: DeploymentRequirement[],
+  deploymentTargetId: DeploymentTargetId | null
 ): {
   serviceUnits: DeploymentServiceUnit[];
   conflicts: DeploymentConflict[];
@@ -1992,6 +2070,31 @@ function buildServiceUnits(
     });
   }
 
+  // Story 45.5.5 — baseline gateway. When no enabled plugin contributes a
+  // shared-allowed request-response runtime-service requirement AND a
+  // deployment target is selected, inject a default `sugarmagic-gateway`
+  // service unit. Gives every deployment a guaranteed-deployable artifact
+  // with the existing /healthz endpoint, so the build+push+deploy pipeline
+  // is verifiable end-to-end without first committing to a plugin. Plugin
+  // contributions still merge in normally when other plugins are enabled
+  // (those go through the bucket logic above and produce their own unit,
+  // so this branch is skipped).
+  if (serviceUnits.length === 0 && deploymentTargetId !== null) {
+    serviceUnits.push({
+      serviceUnitId: "sugarmagic-gateway",
+      label: "Sugarmagic Gateway",
+      runtimeFamily: null,
+      executionModel: "request-response",
+      isolation: "shared-allowed",
+      ownerIds: ["sugardeploy"],
+      requirements: [],
+      serviceRequirements: [],
+      secrets: [],
+      proxyRoutes: [],
+      topology: []
+    });
+  }
+
   return {
     serviceUnits,
     conflicts
@@ -2002,7 +2105,10 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   const { sources, conflicts: sourceConflicts } = collectRequirementSources(gameProject);
   const targetId = gameProject.deployment.deploymentTargetId;
   const requirements = sources.flatMap((source) => source.requirements);
-  const { serviceUnits, conflicts: serviceConflicts } = buildServiceUnits(requirements);
+  const { serviceUnits, conflicts: serviceConflicts } = buildServiceUnits(
+    requirements,
+    targetId
+  );
 
   const conflicts = [...sourceConflicts, ...serviceConflicts];
   const warnings: string[] = [];

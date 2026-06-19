@@ -7,6 +7,7 @@ import {
   Group,
   Modal,
   NumberInput,
+  PasswordInput,
   Select,
   Stack,
   Switch,
@@ -22,10 +23,12 @@ import {
   GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH,
   GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
+  collectSecretEnvBindings,
   listDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
   planGameDeployment,
+  type SecretEnvBinding,
   stripGithubRepoPrefixes,
   SUGARDEPLOY_PLUGIN_ID
 } from "@sugarmagic/plugins";
@@ -69,6 +72,23 @@ interface CreateProjectState {
   error: string | null;
 }
 
+// Story 45.5 — per-secret status pulled from /__sugardeploy/secret-status.
+// "loading" while the fetch is in flight; "ready" after the response arrives
+// (with isSet + version metadata); "error" when the probe itself fails. The
+// "missing" sub-state in ready handles the case where the Secret Manager
+// container itself doesn't exist yet (Setup Infra hasn't run).
+type SecretStatusState =
+  | { phase: "loading" }
+  | {
+      phase: "ready";
+      isSet: boolean;
+      latestVersion: string | null;
+      createdAt: string | null;
+      containerMissing: boolean;
+      message: string;
+    }
+  | { phase: "error"; message: string };
+
 function isDeploymentActionExecutionResult(
   value: unknown
 ): value is DeploymentActionExecutionResult {
@@ -80,6 +100,72 @@ function isDeploymentActionExecutionResult(
     "exitCode" in value &&
     "stdout" in value &&
     "stderr" in value
+  );
+}
+
+// Story 45.5 — Set Value modal body. Lives at module scope so it has its
+// own component lifecycle: when the modal closes, this unmounts, and the
+// typed `value` in its useState vanishes. The parent NEVER holds the
+// value — it lives only in this child's local state while the modal is
+// open, then it's gone. Submit hands the value to onSubmit (which calls
+// the network) and the variable goes out of scope as soon as the submit
+// settles. The PasswordInput's masked-by-default + reveal toggle is the
+// UX cue that this is a secret.
+interface SecretValueFormProps {
+  secretKey: string;
+  secretManagerName: string;
+  envVarName: string;
+  submitting: boolean;
+  error: string | null;
+  onSubmit(value: string): void;
+  onCancel(): void;
+}
+function SecretValueForm(props: SecretValueFormProps) {
+  const [value, setValue] = useState("");
+  const tooLong = value.length > 0 && new Blob([value]).size > 64 * 1024;
+  const canSubmit = !props.submitting && value.length > 0 && !tooLong;
+  return (
+    <Stack>
+      <Stack gap={2}>
+        <Text size="sm">
+          Writing a new version to <Code>{props.secretManagerName}</Code>.
+        </Text>
+        <Text size="xs" c="var(--sm-color-subtext)">
+          Bound to env var <Code>{props.envVarName}</Code> at request time. The
+          value is sent via stdin to <Code>gcloud secrets versions add</Code>;
+          it never appears in argv, shell history, or Studio logs.
+        </Text>
+      </Stack>
+      <PasswordInput
+        label="Value"
+        description={`Max 64 KiB. Pasting fine; the field is masked by default.`}
+        value={value}
+        onChange={(event) => setValue(event.currentTarget.value)}
+        error={
+          tooLong
+            ? "Value exceeds 64 KiB (Secret Manager's per-version limit)."
+            : null
+        }
+        autoFocus
+      />
+      {props.error ? (
+        <Text size="sm" c="red">
+          {props.error}
+        </Text>
+      ) : null}
+      <Group justify="flex-end">
+        <Button variant="light" onClick={props.onCancel} disabled={props.submitting}>
+          Cancel
+        </Button>
+        <Button
+          onClick={() => props.onSubmit(value)}
+          loading={props.submitting}
+          disabled={!canSubmit}
+        >
+          Set Value
+        </Button>
+      </Group>
+    </Stack>
   );
 }
 
@@ -109,6 +195,27 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     selectedBillingAccountId: null,
     result: null,
     error: null
+  });
+
+  // Story 45.5 — Secrets section state. Status is per-secret (keyed by
+  // secretKey). Set-Value modal holds the secretKey it's open for and a
+  // submitting flag; the typed VALUE lives only inside the SecretValueForm
+  // child (which unmounts on close), so the parent never holds plaintext.
+  const [secretStatusByKey, setSecretStatusByKey] = useState<
+    Record<string, SecretStatusState>
+  >({});
+  const [setValueModalState, setSetValueModalState] = useState<{
+    open: boolean;
+    secretKey: string | null;
+    submitting: boolean;
+    error: string | null;
+    lastResultMessage: string | null;
+  }>({
+    open: false,
+    secretKey: null,
+    submitting: false,
+    error: null,
+    lastResultMessage: null
   });
 
   const plan = gameProject ? planGameDeployment(gameProject) : null;
@@ -489,6 +596,168 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     }
   }
 
+  // Story 45.5 — Secrets section. Bindings come from the plan +
+  // serviceNamePrefix (single source of truth shared with terraform tfvars
+  // generator + deploy.sh generator + the host-side resolveSecretContext).
+  // Empty array when no enabled plugin declares secrets.
+  const secretBindings: SecretEnvBinding[] =
+    plan && selectedTargetId === "google-cloud-run" && cloudRunOverrides.serviceNamePrefix
+      ? collectSecretEnvBindings(plan, cloudRunOverrides.serviceNamePrefix)
+      : [];
+  const secretBindingsKey = secretBindings.map((b) => b.secretKey).join("|");
+
+  async function fetchSecretStatus(secretKey: string) {
+    if (!gameProject) return;
+    setSecretStatusByKey((prev) => ({
+      ...prev,
+      [secretKey]: { phase: "loading" }
+    }));
+    try {
+      const response = await fetch("/__sugardeploy/secret-status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ secretKey, gameProject })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        isSet?: boolean;
+        latestVersion?: string | null;
+        createdAt?: string | null;
+        message?: string;
+        stderr?: string;
+      } | null;
+      if (!response.ok && !payload?.ok) {
+        setSecretStatusByKey((prev) => ({
+          ...prev,
+          [secretKey]: {
+            phase: "error",
+            message: payload?.message ?? `HTTP ${response.status}`
+          }
+        }));
+        return;
+      }
+      // ok=true with isSet=false + a "container does not exist" message
+      // means terraform hasn't created the container yet; surface that as
+      // a distinct state so the UI can suggest Setup Infra.
+      const containerMissing = !payload?.isSet && /container .* does not exist/i.test(
+        payload?.message ?? ""
+      );
+      setSecretStatusByKey((prev) => ({
+        ...prev,
+        [secretKey]: {
+          phase: "ready",
+          isSet: payload?.isSet === true,
+          latestVersion: payload?.latestVersion ?? null,
+          createdAt: payload?.createdAt ?? null,
+          containerMissing,
+          message: payload?.message ?? ""
+        }
+      }));
+    } catch (error) {
+      setSecretStatusByKey((prev) => ({
+        ...prev,
+        [secretKey]: {
+          phase: "error",
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }));
+    }
+  }
+
+  useEffect(() => {
+    // Only probe statuses when the GCP project is owned AND we're on the
+    // Cloud Run target. Before Setup Infra, the Secret Manager containers
+    // don't exist; the per-secret probe would noise-up with "container
+    // missing" for every secret. Defer until ownership flips to owned.
+    if (
+      !hostActionsAvailable ||
+      selectedTargetId !== "google-cloud-run" ||
+      probeState.status !== "owned" ||
+      secretBindings.length === 0
+    ) {
+      return;
+    }
+    for (const binding of secretBindings) {
+      void fetchSecretStatus(binding.secretKey);
+    }
+    // secretBindingsKey collapses the binding array identity to a stable
+    // signature that only changes when the set of declared secrets changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedTargetId,
+    probeState.status,
+    secretBindingsKey,
+    hostActionsAvailable
+  ]);
+
+  function openSetValueModal(secretKey: string) {
+    setSetValueModalState({
+      open: true,
+      secretKey,
+      submitting: false,
+      error: null,
+      lastResultMessage: null
+    });
+  }
+
+  function closeSetValueModal() {
+    // Reset the entire modal state on close. This unmounts SecretValueForm,
+    // which is the component that holds the typed VALUE in its own state —
+    // unmounting clears that state, so the value never persists past the
+    // modal lifecycle. This is the architectural promise: parent state
+    // never touches the value, child state vanishes on close.
+    setSetValueModalState({
+      open: false,
+      secretKey: null,
+      submitting: false,
+      error: null,
+      lastResultMessage: null
+    });
+  }
+
+  async function submitSecretValue(secretKey: string, value: string) {
+    if (!gameProject) return;
+    setSetValueModalState((prev) => ({
+      ...prev,
+      submitting: true,
+      error: null,
+      lastResultMessage: null
+    }));
+    try {
+      const response = await fetch("/__sugardeploy/set-secret-value", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ secretKey, value, gameProject })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
+      const ok = response.ok && payload?.ok === true;
+      if (!ok) {
+        setSetValueModalState((prev) => ({
+          ...prev,
+          submitting: false,
+          error: payload?.message ?? `HTTP ${response.status}`,
+          lastResultMessage: null
+        }));
+        return;
+      }
+      // Success: close the modal (which unmounts the form holding the value
+      // in its local state) and re-fetch the secret's status so the UI
+      // updates to "Set ✓". The value variable goes out of scope here.
+      closeSetValueModal();
+      await fetchSecretStatus(secretKey);
+    } catch (error) {
+      setSetValueModalState((prev) => ({
+        ...prev,
+        submitting: false,
+        error: error instanceof Error ? error.message : String(error),
+        lastResultMessage: null
+      }));
+    }
+  }
+
   const actionBlockedReason = (() => {
     if (!hostActionsAvailable) {
       return "Host deployment actions are available in Studio dev mode only.";
@@ -771,6 +1040,92 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               })
             }
           />
+        </Stack>
+      ) : null}
+
+      {selectedTargetId === "google-cloud-run" ? (
+        <Stack gap="xs">
+          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+            Secrets
+          </Text>
+          {secretBindings.length === 0 ? (
+            <Text size="sm" c="var(--sm-color-overlay0)">
+              No enabled plugins declare secrets. Enable SugarAgent (or another
+              secret-declaring plugin) to populate this list.
+            </Text>
+          ) : probeState.status !== "owned" ? (
+            <Text size="sm" c="var(--sm-color-overlay0)">
+              Create the GCP Project and run Setup Infra first — Secret Manager
+              containers are created by terraform and can't be probed before
+              they exist.
+            </Text>
+          ) : (
+            secretBindings.map((binding) => {
+              const status = secretStatusByKey[binding.secretKey];
+              return (
+                <Group
+                  key={binding.secretKey}
+                  justify="space-between"
+                  wrap="nowrap"
+                  align="flex-start"
+                  p="sm"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 6
+                  }}
+                >
+                  <Stack gap={2} style={{ minWidth: 0 }}>
+                    <Group gap="xs" wrap="nowrap">
+                      <Code>{binding.secretKey}</Code>
+                      {status?.phase === "ready" && status.isSet ? (
+                        <Badge color="green" variant="light">
+                          Set ✓{" "}
+                          {status.latestVersion
+                            ? `(v${status.latestVersion})`
+                            : ""}
+                        </Badge>
+                      ) : status?.phase === "ready" && status.containerMissing ? (
+                        <Badge color="yellow" variant="light">
+                          Container missing
+                        </Badge>
+                      ) : status?.phase === "ready" ? (
+                        <Badge color="gray" variant="light">
+                          Not Set
+                        </Badge>
+                      ) : status?.phase === "loading" ? (
+                        <Badge color="gray" variant="light">
+                          Checking…
+                        </Badge>
+                      ) : status?.phase === "error" ? (
+                        <Badge color="red" variant="light">
+                          Probe error
+                        </Badge>
+                      ) : null}
+                    </Group>
+                    <Text size="xs" c="var(--sm-color-subtext)">
+                      <Code>{binding.secretManagerName}</Code> · binds to{" "}
+                      <Code>{binding.envVarName}</Code>
+                    </Text>
+                    {status?.phase === "error" ? (
+                      <Text size="xs" c="red">
+                        {status.message}
+                      </Text>
+                    ) : null}
+                  </Stack>
+                  <Button
+                    size="xs"
+                    onClick={() => openSetValueModal(binding.secretKey)}
+                    disabled={
+                      status?.phase === "ready" && status.containerMissing
+                    }
+                  >
+                    Set Value
+                  </Button>
+                </Group>
+              );
+            })
+          )}
         </Stack>
       ) : null}
 
@@ -1064,6 +1419,48 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             </Button>
           </Group>
         </Stack>
+      </Modal>
+
+      <Modal
+        opened={setValueModalState.open}
+        onClose={closeSetValueModal}
+        title={
+          setValueModalState.secretKey
+            ? `Set value for ${setValueModalState.secretKey}`
+            : "Set value"
+        }
+        centered
+        size="md"
+      >
+        {setValueModalState.open && setValueModalState.secretKey ? (
+          (() => {
+            const binding = secretBindings.find(
+              (b) => b.secretKey === setValueModalState.secretKey
+            );
+            if (!binding) {
+              return (
+                <Text size="sm" c="red">
+                  Couldn't find binding for{" "}
+                  <Code>{setValueModalState.secretKey}</Code> — the plan may
+                  have changed since the modal opened.
+                </Text>
+              );
+            }
+            return (
+              <SecretValueForm
+                secretKey={binding.secretKey}
+                secretManagerName={binding.secretManagerName}
+                envVarName={binding.envVarName}
+                submitting={setValueModalState.submitting}
+                error={setValueModalState.error}
+                onCancel={closeSetValueModal}
+                onSubmit={(value) =>
+                  void submitSecretValue(binding.secretKey, value)
+                }
+              />
+            );
+          })()
+        ) : null}
       </Modal>
 
       {plan?.warnings.length ? (

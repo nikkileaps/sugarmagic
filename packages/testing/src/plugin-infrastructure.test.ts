@@ -33,6 +33,7 @@ import {
   REQUIRED_GCP_APIS,
   buildGcpProjectName,
   classifyProjectListResult,
+  collectSecretEnvBindings,
   isValidGcpProjectId,
   isValidGcpServiceAccountId,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
@@ -275,14 +276,18 @@ describe("plugin infrastructure", () => {
       expect(typeof plugin.name).toBe("string");
       expect(typeof plugin.configureServer).toBe("function");
     }
-    // SugarDeploy specifically contributes three middleware plugins:
-    // the action dispatcher (/__sugardeploy/action), the billing list
-    // (/__sugardeploy/list-billing-accounts), and the GCP project
-    // lifecycle (/__sugardeploy/probe-gcp-project + /create-gcp-project).
+    // SugarDeploy contributes five middleware plugins:
+    // - action dispatcher (/__sugardeploy/action)
+    // - billing list (/__sugardeploy/list-billing-accounts)
+    // - GCP project lifecycle (/__sugardeploy/probe-gcp-project + /create-gcp-project)
+    // - set-secret-value (/__sugardeploy/set-secret-value, story 45.5)
+    // - secret-status (/__sugardeploy/secret-status, story 45.5)
     expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
       "sugardeploy-gcp-billing-list",
       "sugardeploy-gcp-project-lifecycle",
-      "sugardeploy-host-actions"
+      "sugardeploy-host-actions",
+      "sugardeploy-secret-status",
+      "sugardeploy-set-secret-value"
     ]);
   });
 
@@ -917,6 +922,287 @@ describe("plugin infrastructure", () => {
     expect(() => resolveSecretManagerName("a".repeat(60), "b".repeat(30))).toThrow(/exceeds 80 characters/);
   });
 
+  it("collectSecretEnvBindings dedupes by secretKey and derives env var names from mappingHint or secretKey", () => {
+    // 45.5 — the deploy-script generator + Set Value modal both consume
+    // this helper, so it's the single source of truth for the
+    // env-var-name ↔ secret-manager-name mapping.
+    const wordlark = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const bindings = collectSecretEnvBindings(wordlark, "wordlark-v1-k3m9p");
+    // SugarAgent declares anthropic-api-key with mappingHint
+    // SUGARMAGIC_ANTHROPIC_API_KEY and openai-api-key with mappingHint
+    // SUGARMAGIC_OPENAI_API_KEY. Sorted by secretKey.
+    expect(bindings).toEqual([
+      {
+        secretKey: "anthropic-api-key",
+        envVarName: "SUGARMAGIC_ANTHROPIC_API_KEY",
+        secretManagerName: "wordlark-v1-k3m9p-anthropic-api-key"
+      },
+      {
+        secretKey: "openai-api-key",
+        envVarName: "SUGARMAGIC_OPENAI_API_KEY",
+        secretManagerName: "wordlark-v1-k3m9p-openai-api-key"
+      }
+    ]);
+  });
+
+  it("formatCloudRunDeployScript emits 45.5-shape script with terraform-output reads + baked defaults + --set-secrets", () => {
+    // 45.5 exit-signal test. Asserts the SHAPE of the generated deploy.sh:
+    // terraform-output reads, --service-account flag, baked-in
+    // cpu/memory/cpu-throttling/min/max, and `--set-secrets=KEY=NAME:latest`
+    // for each declared secret. We assert presence of key fragments rather
+    // than line-for-line equality so harmless formatting tweaks don't
+    // break the test.
+    const wordlark = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const deployScript = wordlark.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript).toBeDefined();
+    const content = deployScript!.content;
+
+    // Terraform-output reads (single source of truth for resolved names).
+    expect(content).toContain(`terraform -chdir="${"${TERRAFORM_DIR}"}" output -json`);
+    expect(content).toContain("ARTIFACT_REGISTRY_URL=");
+    expect(content).toContain(".artifact_registry_url.value");
+    expect(content).toContain("RUNTIME_SA_EMAIL=");
+    expect(content).toContain(".runtime_sa_email.value");
+
+    // Right-sized Cloud Run defaults baked into gcloud run deploy.
+    expect(content).toContain("--cpu=1");
+    expect(content).toContain("--memory=512Mi");
+    expect(content).toContain("--cpu-throttling");
+    expect(content).toContain("--min-instances=1");
+    expect(content).toContain("--max-instances=4");
+    // The runtime SA flag wires the deployed service to the SA terraform
+    // creates (and that holds secretAccessor on every container).
+    expect(content).toContain("--service-account");
+
+    // --set-secrets bindings: one per declared SecretRequirement, in the
+    // KEY=NAME:latest shape gcloud expects. With SugarAgent enabled,
+    // anthropic-api-key + openai-api-key must both bind.
+    expect(content).toContain(
+      "--set-secrets=SUGARMAGIC_ANTHROPIC_API_KEY=wordlark-v1-k3m9p-anthropic-api-key:latest"
+    );
+    expect(content).toContain(
+      "--set-secrets=SUGARMAGIC_OPENAI_API_KEY=wordlark-v1-k3m9p-openai-api-key:latest"
+    );
+
+    // jq guard so the script fails fast if it's missing on the host
+    // (better UX than a confusing parsing error).
+    expect(content).toContain("command -v jq");
+
+    // GENERATED header so resaves don't leave stale hand-edits.
+    expect(content).toContain("GENERATED BY SUGARMAGIC");
+  });
+
+  it("formatCloudRunDeployScript omits --set-secrets when no plugin declares secrets", () => {
+    // 45.5: when no plugin declares secrets, SECRET_ARGS is empty and the
+    // gcloud run deploy invocation expands "${SECRET_ARGS[@]}" to nothing.
+    // 45.5.5: there's still one service to deploy (the baseline gateway).
+    const helloOnly = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(HELLO_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const deployScript = helloOnly.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript).toBeDefined();
+    const content = deployScript!.content;
+    expect(content).not.toContain("--set-secrets=");
+    expect(content).toContain('SECRET_ARGS=(\n\n)');
+  });
+
+  it("deploy.sh uses safe array iteration (no `set -u`) and keeps the empty-services guard for safety", () => {
+    // bash 3.2 (macOS default) crashes on empty-array expansion under
+    // `set -u`. The script intentionally uses `set -eo pipefail` (no -u)
+    // with explicit null checks on the values that matter. The
+    // empty-services guard stays in the script as defensive
+    // programming even though 45.5.5's baseline gateway makes the
+    // empty-services case unreachable for valid plans.
+    const helloOnly = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(HELLO_PLUGIN_ID, true)
+        ]
+      })
+    );
+    const deployScript = helloOnly.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript).toBeDefined();
+    const content = deployScript!.content;
+    expect(content).toContain("set -eo pipefail");
+    expect(content).not.toContain("set -euo pipefail");
+    expect(content).toContain("${#services[@]} -eq 0");
+    expect(content).toContain("No runtime service units declared");
+  });
+
+  it("planner injects a baseline sugarmagic-gateway when no plugin contributes a runtime-service", () => {
+    // 45.5.5: every Cloud Run deployment always has a service to deploy,
+    // even with zero plugins enabled. The baseline carries /healthz only
+    // (the existing server.mjs template already exposes that route);
+    // plugins like SugarAgent contribute proxy-routes that merge in via
+    // the bucket logic. The baseline is the empty case — no other plugin
+    // contributed a shared-allowed request-response runtime-service.
+    const baselineOnly = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        // Just Hello (a sample plugin with no runtime-service requirement)
+        // → no plugin-contributed gateway unit → baseline kicks in.
+        pluginConfigurations: [
+          createPluginConfigurationRecord(HELLO_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(baselineOnly.serviceUnits).toHaveLength(1);
+    expect(baselineOnly.serviceUnits[0]).toMatchObject({
+      serviceUnitId: "sugarmagic-gateway",
+      label: "Sugarmagic Gateway",
+      ownerIds: ["sugardeploy"],
+      proxyRoutes: [],
+      secrets: []
+    });
+
+    // The generated deploy.sh has the baseline service in its services
+    // array so Deploy can actually push something even with no plugin
+    // contributing routes.
+    const deployScript = baselineOnly.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript?.content).toContain(
+      '"wordlark-v1-k3m9p-sugarmagic-gateway|services/sugarmagic-gateway"'
+    );
+
+    // The server.mjs scaffold exists, and the existing template puts
+    // /healthz behind `path === "/" || path === "/healthz"` — so even
+    // with no proxy routes, the baseline gateway responds to /healthz.
+    const serverFile = baselineOnly.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/services/sugarmagic-gateway/server.mjs"
+    );
+    expect(serverFile).toBeDefined();
+    expect(serverFile?.content).toContain('path === "/healthz"');
+  });
+
+  it("planner does NOT inject the baseline when a plugin already contributes a gateway service", () => {
+    // 45.5.5 guard: the baseline is only the FALLBACK. When SugarAgent (or
+    // any other plugin) declares a shared-allowed request-response
+    // runtime-service requirement, the bucket logic creates the
+    // sugarmagic-gateway unit and the baseline injection is skipped, so
+    // we don't end up with two redundant service units.
+    const withSugarAgent = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {}
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+    expect(withSugarAgent.serviceUnits).toHaveLength(1);
+    expect(withSugarAgent.serviceUnits[0].serviceUnitId).toBe(
+      "sugarmagic-gateway"
+    );
+    // The unit is plugin-contributed (ownerIds includes the SugarAgent
+    // plugin id), not the baseline fallback (ownerIds: ["sugardeploy"]).
+    expect(withSugarAgent.serviceUnits[0].ownerIds).toContain(
+      SUGARAGENT_PLUGIN_ID
+    );
+  });
+
+  it("planner does NOT inject the baseline when no deployment target is selected", () => {
+    // 45.5.5 guard: baseline is per-deployment-target. Until the user
+    // picks a target, plan.serviceUnits stays empty (nothing to deploy
+    // anywhere yet).
+    const noTarget = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: null,
+          targetOverrides: {}
+        },
+        pluginConfigurations: []
+      })
+    );
+    expect(noTarget.serviceUnits).toEqual([]);
+  });
+
   it.skipIf(!hasTerraform)(
     "generated Cloud Run terraform passes `terraform init -backend=false` + `terraform validate`",
     () => {
@@ -1169,7 +1455,8 @@ describe("plugin infrastructure", () => {
       "secretmanager.googleapis.com",
       "sts.googleapis.com",
       "cloudresourcemanager.googleapis.com",
-      "serviceusage.googleapis.com"
+      "serviceusage.googleapis.com",
+      "cloudbuild.googleapis.com"
     ]);
   });
 

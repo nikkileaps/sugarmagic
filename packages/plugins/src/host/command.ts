@@ -10,6 +10,16 @@ export interface HostCommandInput {
   command: string;
   args: string[];
   cwd: string;
+  /**
+   * Optional bytes piped to the child's stdin. REQUIRED for commands that
+   * must not surface the input in argv — e.g., `gcloud secrets versions add
+   * --data-file=-` is the only way to write a secret value without it
+   * leaking into shell history, `ps` listings, and process audit logs.
+   * When provided, stdio[0] flips to "pipe" and the buffer is written + ended.
+   * Never logged by this helper (caller's responsibility to keep it off any
+   * console.log path it might have).
+   */
+  stdin?: string;
 }
 
 export interface HostCommandResult {
@@ -20,17 +30,26 @@ export interface HostCommandResult {
 
 export function runHostCommand(command: HostCommandInput): Promise<HostCommandResult> {
   return new Promise((resolveRun) => {
+    const hasStdin = command.stdin != null;
+    // Tuple-typed stdio so TS retains "pipe" → non-null stdout/stderr on the
+    // child. With a conditional element at index 0, TS widens to a union and
+    // loses the narrowing for stdout/stderr.
+    const stdio: ["ignore" | "pipe", "pipe", "pipe"] = [
+      hasStdin ? "pipe" : "ignore",
+      "pipe",
+      "pipe"
+    ];
     const child = spawn(command.command, command.args, {
       cwd: command.cwd,
       env: process.env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio
     });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => {
+    child.stdout?.on("data", (chunk) => {
       stdout += chunk.toString();
     });
-    child.stderr.on("data", (chunk) => {
+    child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
     child.on("error", (error) => {
@@ -40,6 +59,10 @@ export function runHostCommand(command: HostCommandInput): Promise<HostCommandRe
     child.on("close", (exitCode) => {
       resolveRun({ exitCode, stdout, stderr });
     });
+    if (hasStdin && child.stdin) {
+      child.stdin.write(command.stdin as string);
+      child.stdin.end();
+    }
   });
 }
 

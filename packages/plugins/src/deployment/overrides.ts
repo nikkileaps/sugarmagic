@@ -151,8 +151,13 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
       min: 1024,
       max: 65535
     }),
-    minInstances: clampInteger(input?.minInstances, 0, { min: 0, max: 100 }),
-    maxInstances: clampInteger(input?.maxInstances, 2, { min: 1, max: 100 }),
+    // Story 45.5 right-sized defaults: gateway is a thin HTTP proxy now that
+    // LLM + vector DB are external, so `min-instances=1` keeps in-game dialog
+    // snappy (no cold start) and `max-instances=4` matches the prior wordlark
+    // shape that ran fine under real load. CPU throttling collapses the idle
+    // bill; see deploy.sh for the cpu/memory/throttling bake-in.
+    minInstances: clampInteger(input?.minInstances, 1, { min: 0, max: 100 }),
+    maxInstances: clampInteger(input?.maxInstances, 4, { min: 1, max: 100 }),
     ingress,
     allowUnauthenticated: input?.allowUnauthenticated !== false,
     githubRepo: normalizeGithubRepoOverride(input?.githubRepo),

@@ -129,7 +129,12 @@ export const REQUIRED_GCP_APIS = [
   "secretmanager.googleapis.com",
   "sts.googleapis.com",
   "cloudresourcemanager.googleapis.com",
-  "serviceusage.googleapis.com"
+  "serviceusage.googleapis.com",
+  // cloudbuild is required by `gcloud builds submit` in deploy.sh (story
+  // 45.5). Without it, the first Deploy fails with a confusing
+  // "Cloud Build API has not been used" error from gcloud. Cloud Build
+  // auto-enables its own dependent APIs (storage, logging) on first use.
+  "cloudbuild.googleapis.com"
 ] as const;
 
 /**

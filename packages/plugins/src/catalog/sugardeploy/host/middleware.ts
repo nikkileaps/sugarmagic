@@ -29,7 +29,8 @@ import {
 } from "../../../deployment/actions";
 import {
   getCloudRunServiceNamesForPlan,
-  planGameDeployment
+  planGameDeployment,
+  resolveSecretManagerName
 } from "../../../deployment/index";
 import {
   REQUIRED_GCP_APIS,
@@ -677,10 +678,298 @@ function createGcpProjectLifecyclePlugin(): VitePlugin {
   };
 }
 
+interface SecretRequestBody {
+  gameProject: unknown;
+  secretKey: unknown;
+  value?: unknown;
+}
+
+// Story 45.5 — 64 KiB cap on individual secret values. Google's Secret
+// Manager itself caps at 65 536 bytes; we set the same ceiling here so the
+// error surfaces in our middleware (clean UX) instead of as a gcloud
+// failure. Realistic API key / OAuth token / TLS material is much smaller;
+// the cap exists to refuse pathological inputs (paste accidents, etc.).
+const SECRET_VALUE_MAX_BYTES = 64 * 1024;
+
+interface ResolvedSecretContext {
+  projectId: string;
+  secretManagerName: string;
+}
+
+function resolveSecretContext(
+  normalizedGameProject: GameProject,
+  secretKey: string
+): { ok: true; context: ResolvedSecretContext } | { ok: false; reason: string } {
+  const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+    normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+    normalizedGameProject
+  );
+  if (!cloudRunOverrides.projectId) {
+    return {
+      ok: false,
+      reason:
+        "GCP project id is not resolvable from the game project; configure the Cloud Run target before running secret actions."
+    };
+  }
+  if (!cloudRunOverrides.serviceNamePrefix) {
+    return {
+      ok: false,
+      reason:
+        "Service name prefix is not resolvable from the game project; cannot derive Secret Manager name."
+    };
+  }
+  try {
+    const secretManagerName = resolveSecretManagerName(
+      cloudRunOverrides.serviceNamePrefix,
+      secretKey
+    );
+    return {
+      ok: true,
+      context: { projectId: cloudRunOverrides.projectId, secretManagerName }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+// Story 45.5: write a new version to a Secret Manager secret container.
+// The value is piped via stdin so it never appears in argv (no shell
+// history, no `ps` listing, no process audit trail). The middleware
+// explicitly does NOT log the body or the value anywhere — request stdout
+// is gcloud's own (which prints the version id, not the value). Any future
+// edit to this handler that introduces console.log on the request body
+// or response payload is a security regression.
+function createSetSecretValuePlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-set-secret-value",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/set-secret-value",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<SecretRequestBody>;
+            const secretKey = body.secretKey;
+            const value = body.value;
+            if (typeof secretKey !== "string" || secretKey.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "secretKey is required."
+              });
+              return;
+            }
+            if (typeof value !== "string" || value.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "value is required and must be a non-empty string."
+              });
+              return;
+            }
+            const byteLength = Buffer.byteLength(value, "utf8");
+            if (byteLength > SECRET_VALUE_MAX_BYTES) {
+              sendJson(res, 400, {
+                ok: false,
+                message: `value exceeds ${SECRET_VALUE_MAX_BYTES.toLocaleString()} bytes (Secret Manager's per-version limit). Got ${byteLength.toLocaleString()} bytes.`
+              });
+              return;
+            }
+
+            const normalizedGameProject = tryNormalizeGameProject(body.gameProject);
+            if (!normalizedGameProject) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "Unrecognized gameProject payload."
+              });
+              return;
+            }
+            const resolved = resolveSecretContext(normalizedGameProject, secretKey);
+            if (!resolved.ok) {
+              sendJson(res, 400, { ok: false, message: resolved.reason });
+              return;
+            }
+
+            const gcloudError = await ensureGcloudOnPath();
+            if (gcloudError !== null) {
+              sendJson(res, 400, { ok: false, message: gcloudError });
+              return;
+            }
+
+            const result = await runHostCommand({
+              command: "gcloud",
+              args: [
+                "secrets",
+                "versions",
+                "add",
+                resolved.context.secretManagerName,
+                "--project",
+                resolved.context.projectId,
+                "--data-file=-"
+              ],
+              cwd: process.cwd(),
+              stdin: value
+            });
+            const ok = result.exitCode === 0;
+            sendJson(res, ok ? 200 : 500, {
+              ok,
+              exitCode: result.exitCode,
+              // stdout from `gcloud secrets versions add` prints the resource
+              // name of the new version — `projects/.../secrets/<name>/versions/<n>`.
+              // It does NOT echo the secret value. Safe to surface verbatim.
+              stdout: result.stdout,
+              stderr: result.stderr,
+              secretKey,
+              secretManagerName: resolved.context.secretManagerName,
+              message: ok
+                ? `Wrote new version for \`${resolved.context.secretManagerName}\`.`
+                : `gcloud secrets versions add failed with exit code ${result.exitCode ?? "unknown"}.`
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              message: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+// Story 45.5: probe whether a Secret Manager container has any ENABLED
+// version. Returns { isSet, latestVersion?, createdAt? } without ever
+// reading or returning the secret VALUE — the value is only readable by
+// the runtime SA at request time. This is purely a status indicator for
+// the Studio Secrets section ("Not Set" vs "Set ✓ (v3, 2026-06-18)").
+function createSecretStatusPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-secret-status",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/secret-status",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<SecretRequestBody>;
+            const secretKey = body.secretKey;
+            if (typeof secretKey !== "string" || secretKey.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "secretKey is required."
+              });
+              return;
+            }
+            const normalizedGameProject = tryNormalizeGameProject(body.gameProject);
+            if (!normalizedGameProject) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "Unrecognized gameProject payload."
+              });
+              return;
+            }
+            const resolved = resolveSecretContext(normalizedGameProject, secretKey);
+            if (!resolved.ok) {
+              sendJson(res, 400, { ok: false, message: resolved.reason });
+              return;
+            }
+
+            const gcloudError = await ensureGcloudOnPath();
+            if (gcloudError !== null) {
+              sendJson(res, 400, { ok: false, message: gcloudError });
+              return;
+            }
+
+            const result = await runHostCommand({
+              command: "gcloud",
+              args: [
+                "secrets",
+                "versions",
+                "list",
+                resolved.context.secretManagerName,
+                "--filter=state:ENABLED",
+                "--format=json",
+                "--project",
+                resolved.context.projectId
+              ],
+              cwd: process.cwd()
+            });
+
+            // NOT_FOUND when the secret container itself doesn't exist
+            // (Setup Infra hasn't run, or the secret name doesn't match what
+            // terraform created). Surface as `isSet: false` with a clear
+            // message so the user can act.
+            if (result.exitCode !== 0) {
+              const containerMissing = /(?:NOT_FOUND|could not be found|not found)/i.test(
+                result.stderr
+              );
+              sendJson(res, containerMissing ? 200 : 500, {
+                ok: containerMissing,
+                isSet: false,
+                secretKey,
+                secretManagerName: resolved.context.secretManagerName,
+                exitCode: result.exitCode,
+                stdout: result.stdout,
+                stderr: result.stderr,
+                message: containerMissing
+                  ? `Secret container \`${resolved.context.secretManagerName}\` does not exist in GCP. Did Setup Infra finish, and is this secret declared by an enabled plugin?`
+                  : `gcloud secrets versions list failed with exit code ${result.exitCode ?? "unknown"}.`
+              });
+              return;
+            }
+
+            let versions: Array<{ name?: string; createTime?: string }> = [];
+            try {
+              const parsed = JSON.parse(result.stdout) as unknown;
+              if (Array.isArray(parsed)) {
+                versions = parsed as Array<{ name?: string; createTime?: string }>;
+              }
+            } catch {
+              // fall through with empty versions
+            }
+            const latest = versions[0] ?? null;
+            const latestVersion =
+              latest?.name?.split("/").pop() ?? null;
+            sendJson(res, 200, {
+              ok: true,
+              isSet: versions.length > 0,
+              latestVersion,
+              createdAt: latest?.createTime ?? null,
+              secretKey,
+              secretManagerName: resolved.context.secretManagerName,
+              exitCode: 0,
+              stdout: result.stdout,
+              stderr: result.stderr,
+              message:
+                versions.length > 0
+                  ? `Secret \`${resolved.context.secretManagerName}\` is Set (version ${latestVersion ?? "?"}).`
+                  : `Secret \`${resolved.context.secretManagerName}\` is Not Set (container exists, no enabled versions).`
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              message: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
     createBillingListPlugin(),
-    createGcpProjectLifecyclePlugin()
+    createGcpProjectLifecyclePlugin(),
+    createSetSecretValuePlugin(),
+    createSecretStatusPlugin()
   ];
 }
