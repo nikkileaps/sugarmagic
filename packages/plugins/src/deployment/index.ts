@@ -106,7 +106,8 @@ export {
   GITHUB_REPO_REGEX,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
-  stripGithubRepoPrefixes
+  stripGithubRepoPrefixes,
+  type GatewayAuthMode
 } from "./overrides";
 
 /**
@@ -1322,7 +1323,11 @@ const server = createServer(async (req, res) => {
     method: req.method ?? "GET",
     path
   });
-  if (path === "/" || path === "/healthz") {
+  // /health (not /healthz): Cloud Run's frontend reserves /healthz
+  // specifically — it gets intercepted before reaching the container,
+  // returning Google's generic 404 page with no x-cloud-trace-context
+  // header. Discovered the hard way during 45.5.7 verification.
+  if (path === "/" || path === "/health") {
     sendJson(res, 200, {
       ok: true,
       target: ${JSON.stringify(targetId)},
@@ -1777,7 +1782,15 @@ function buildGoogleCloudRunManagedFiles(
         "- Lore wiki ingestion is gateway-owned, but GitHub-backed lore source resolution for Cloud Run is still planned rather than implemented in this first pass.",
         "- Set a Working Directory override in the SugarDeploy workspace so host-side deploy actions know which game root to operate on.",
         `- Region: ${overrides.region}`,
-        `- Service name prefix: ${overrides.serviceNamePrefix}`
+        `- Service name prefix: ${overrides.serviceNamePrefix}`,
+        "",
+        `- Gateway auth mode: ${overrides.gatewayAuthMode}`,
+        ...(overrides.gatewayAuthMode === "none"
+          ? [
+              "  The deployed gateway has NO app-layer auth check — any HTTP caller that finds the URL can hit any route. terraform creates the org-policy override + project IAM binding allowing `allUsers` to invoke the Cloud Run service. This is by design until Plan 046 ships the identity-provider plugin model (Supabase, Auth0, etc.). For pre-Plan-046 deploys, treat any plugin route that costs money (LLM proxy, etc.) as exposed and budget accordingly.",
+              "  When Plan 046 lands, this field expands to a selectable enum (\"supabase\" / \"auth0\" / etc.) and the gateway's server.mjs gains middleware that validates JWTs or cookies before any plugin route runs."
+            ]
+          : [])
       ])
     ),
     asTextFile(

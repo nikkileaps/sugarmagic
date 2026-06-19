@@ -394,25 +394,31 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           payload = null;
         }
       }
-      if (!response.ok || !isDeploymentActionExecutionResult(payload)) {
-        const message =
-          payload && "message" in payload && typeof payload.message === "string"
-            ? payload.message
-            : rawBody.trim().length > 0
-              ? rawBody
-              : `SugarDeploy ${actionKind} failed.`;
+      // When the payload has the full DeploymentActionExecutionResult shape
+      // (descriptor + exitCode + stdout + stderr + message), surface IT
+      // regardless of HTTP status. A 500 with a structured payload means the
+      // script ran and failed cleanly — the stdout/stderr are what the user
+      // actually needs to see, not "HTTP 500." Only the malformed-response
+      // path gets the error-string fallback.
+      if (isDeploymentActionExecutionResult(payload)) {
         setActionState({
           kind: actionKind,
-          result: null,
-          error: `HTTP ${response.status} ${response.statusText}\n${message}`,
+          result: payload,
+          error: null,
           running: false
         });
         return;
       }
+      const message =
+        payload && "message" in payload && typeof payload.message === "string"
+          ? payload.message
+          : rawBody.trim().length > 0
+            ? rawBody
+            : `SugarDeploy ${actionKind} failed.`;
       setActionState({
         kind: actionKind,
-        result: payload,
-        error: null,
+        result: null,
+        error: `HTTP ${response.status} ${response.statusText}\n${message}`,
         running: false
       });
     } catch (error) {
@@ -1039,6 +1045,12 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 allowUnauthenticated: event.currentTarget.checked
               })
             }
+          />
+          <TextInput
+            label="Gateway Auth Mode"
+            description='Story 45.5.7: currently "none" — the deployed gateway is publicly reachable with no app-layer auth check. terraform creates the org-policy override + project IAM binding so allUsers can invoke. Identity-provider plugins (Supabase, Auth0, etc.) ship in Plan 046 and will expand this enum.'
+            value={cloudRunOverrides.gatewayAuthMode}
+            readOnly
           />
         </Stack>
       ) : null}

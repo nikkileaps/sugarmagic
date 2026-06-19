@@ -11,6 +11,16 @@ export type GoogleCloudRunIngress =
   | "internal"
   | "internal-and-cloud-load-balancing";
 
+/**
+ * Auth mode the deployed gateway runs in. Currently the only valid value is
+ * `"none"` — the gateway is publicly reachable with no auth check, which is
+ * how 45.5.7 unblocks the deployment-verification path while we punt on the
+ * identity-provider design. When Plan 046 lands, the enum expands to include
+ * concrete identity-provider ids (`"supabase"`, `"auth0"`, etc.) and the
+ * gateway's middleware switches based on this value.
+ */
+export type GatewayAuthMode = "none";
+
 export interface GoogleCloudRunDeploymentTargetOverrides {
   workingDirectory: string;
   projectId: string;
@@ -28,6 +38,8 @@ export interface GoogleCloudRunDeploymentTargetOverrides {
   // Optional explicit name override for the runtime service account. When empty,
   // terraform derives `${serviceNamePrefix}-runtime`.
   runtimeServiceAccountName: string;
+  // Story 45.5.7 — see GatewayAuthMode docstring. Plan 046 expands this.
+  gatewayAuthMode: GatewayAuthMode;
 }
 
 function slugify(input: string): string {
@@ -164,7 +176,12 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
     runtimeServiceAccountName:
       typeof input?.runtimeServiceAccountName === "string"
         ? input.runtimeServiceAccountName.trim()
-        : ""
+        : "",
+    // Story 45.5.7 — only "none" is valid right now. Plan 046 expands the
+    // enum; until then any non-"none" persisted value gets normalized back
+    // to "none" so old project files load cleanly when the enum changes.
+    gatewayAuthMode:
+      input?.gatewayAuthMode === "none" ? "none" : "none"
   };
 }
 

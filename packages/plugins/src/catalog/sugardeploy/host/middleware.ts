@@ -637,6 +637,37 @@ function createGcpProjectLifecyclePlugin(): VitePlugin {
               cwd: process.cwd()
             });
 
+            // Story 45.5.7 — terraform's org-policy override resource
+            // (`google_org_policy_policy.allow_public_invokers`) requires
+            // `roles/orgpolicy.policyAdmin` at the ORG level on the
+            // deploying principal. Bake the grant into the Create GCP
+            // Project sequence so the user never has to run gcloud by hand
+            // (per the feedback memory). Resolves the org id from the
+            // project, gets the current user, and grants the role.
+            // Idempotent — gcloud add-iam-policy-binding succeeds even if
+            // the binding already exists. Fails with a clear error when
+            // the deploying user lacks `resourcemanager.organizationAdmin`
+            // at the org level (can't grant what you don't already have
+            // the right to grant).
+            steps.push({
+              label: `Resolve org id for ${projectId}`,
+              command: "bash",
+              args: [
+                "-c",
+                `gcloud projects describe ${projectId} --format='value(parent.id)' > /tmp/sugardeploy-org-id-${projectId}`
+              ],
+              cwd: process.cwd()
+            });
+            steps.push({
+              label: `Grant orgpolicy.policyAdmin to current user (for org policy override)`,
+              command: "bash",
+              args: [
+                "-c",
+                `org_id="$(cat /tmp/sugardeploy-org-id-${projectId})"; user="$(gcloud config get-value account)"; gcloud organizations add-iam-policy-binding "$org_id" --member="user:$user" --role="roles/orgpolicy.policyAdmin" --condition=None`
+              ],
+              cwd: process.cwd()
+            });
+
             const seqResult = await runHostCommandSequence(steps);
             const ok = seqResult.exitCode === 0;
             // The one fail case we want to surface with a specific UX

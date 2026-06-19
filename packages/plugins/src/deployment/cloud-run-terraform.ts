@@ -22,7 +22,7 @@ import type { GoogleCloudRunDeploymentTargetOverrides } from "./overrides";
  * `TERRAFORM_RENAME_LEDGER` so existing games get a non-destructive `moved {}`
  * chain on regeneration.
  */
-export const CLOUD_RUN_TEMPLATE_VERSION = 1;
+export const CLOUD_RUN_TEMPLATE_VERSION = 2;
 
 export interface TerraformResourceMove {
   from: string;
@@ -227,6 +227,17 @@ export function buildCloudRunTerraformMainFile(
     `provider "google" {`,
     `  project = var.gcp_project_id`,
     `  region  = var.region`,
+    ``,
+    `  # user_project_override + billing_project tell the provider to bill API`,
+    `  # quota against the project we're managing (not against ADC's separately-`,
+    `  # configured quota project). Without this, calls to APIs like orgpolicy`,
+    `  # fail with "API requires a quota project" because ADC defaults to whatever`,
+    `  # the user last set via \`gcloud auth application-default set-quota-project\``,
+    `  # — which a sugarmagic user should never have to think about. This makes`,
+    `  # the terraform plan self-contained: it picks its own billing project from`,
+    `  # the deployment variables, regardless of the user's local gcloud state.`,
+    `  user_project_override = true`,
+    `  billing_project       = var.gcp_project_id`,
     `}`,
     ``,
     `# Artifact Registry — Docker repo for Cloud Run gateway images.`,
@@ -313,6 +324,26 @@ export function buildCloudRunTerraformMainFile(
     ``,
     `  replication {`,
     `    auto {}`,
+    `  }`,
+    `}`,
+    ``,
+    `# Story 45.5.7 — project-level org-policy override allowing the`,
+    `# \`allUsers\` IAM member, so the Cloud Run gateway can be made`,
+    `# publicly reachable. Requires \`roles/orgpolicy.policyAdmin\` at the`,
+    `# org level for the deploying principal (granted by the`,
+    `# create-gcp-project host action). The actual SERVICE-level binding`,
+    `# (allUsers → roles/run.invoker on the deployed Cloud Run service)`,
+    `# happens via deploy.sh's \`gcloud run deploy --allow-unauthenticated\``,
+    `# flag — that's the only correct level for an allUsers binding`,
+    `# (project-level IAM rejects allUsers with PROJECT_SET_IAM_DISALLOWED_MEMBER_TYPE).`,
+    `# Without THIS org-policy override, that flag fails silently.`,
+    `resource "google_org_policy_policy" "allow_public_invokers" {`,
+    `  name   = "projects/\${var.gcp_project_id}/policies/iam.allowedPolicyMemberDomains"`,
+    `  parent = "projects/\${var.gcp_project_id}"`,
+    `  spec {`,
+    `    rules {`,
+    `      allow_all = "TRUE"`,
+    `    }`,
     `  }`,
     `}`,
     movedBlocks

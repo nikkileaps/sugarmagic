@@ -78,7 +78,7 @@ function resolveLocalAction(
           args: ["compose", "up", "--build", "-d"],
           cwd
         },
-        healthUrl: `http://localhost:${healthPort}/healthz`
+        healthUrl: `http://localhost:${healthPort}/health`
       };
     case "stop":
       return {
@@ -90,7 +90,7 @@ function resolveLocalAction(
           args: ["compose", "down"],
           cwd
         },
-        healthUrl: `http://localhost:${healthPort}/healthz`
+        healthUrl: `http://localhost:${healthPort}/health`
       };
     case "status":
       return {
@@ -102,14 +102,14 @@ function resolveLocalAction(
           args: ["compose", "ps"],
           cwd
         },
-        healthUrl: `http://localhost:${healthPort}/healthz`
+        healthUrl: `http://localhost:${healthPort}/health`
       };
     case "health":
       return {
         targetId: "local",
         actionKind,
         supported: true,
-        healthUrl: `http://localhost:${healthPort}/healthz`
+        healthUrl: `http://localhost:${healthPort}/health`
       };
     case "setup-infra":
     case "teardown-infra":

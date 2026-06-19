@@ -134,7 +134,13 @@ export const REQUIRED_GCP_APIS = [
   // 45.5). Without it, the first Deploy fails with a confusing
   // "Cloud Build API has not been used" error from gcloud. Cloud Build
   // auto-enables its own dependent APIs (storage, logging) on first use.
-  "cloudbuild.googleapis.com"
+  "cloudbuild.googleapis.com",
+  // orgpolicy is required by the project-level org-policy override
+  // terraform creates in 45.5.7 (allows `allUsers` to be granted
+  // `roles/run.invoker` so the gateway is publicly reachable). When the
+  // user lacks `roles/orgpolicy.policyAdmin` at the org level, terraform
+  // surfaces a clear error during Setup Infra; that's expected behavior.
+  "orgpolicy.googleapis.com"
 ] as const;
 
 /**
