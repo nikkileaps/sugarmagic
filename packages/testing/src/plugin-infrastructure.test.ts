@@ -276,18 +276,20 @@ describe("plugin infrastructure", () => {
       expect(typeof plugin.name).toBe("string");
       expect(typeof plugin.configureServer).toBe("function");
     }
-    // SugarDeploy contributes five middleware plugins:
+    // SugarDeploy contributes six middleware plugins:
     // - action dispatcher (/__sugardeploy/action)
     // - billing list (/__sugardeploy/list-billing-accounts)
     // - GCP project lifecycle (/__sugardeploy/probe-gcp-project + /create-gcp-project)
     // - set-secret-value (/__sugardeploy/set-secret-value, story 45.5)
     // - secret-status (/__sugardeploy/secret-status, story 45.5)
+    // - template-version (/__sugardeploy/template-version, story 45.7)
     expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
       "sugardeploy-gcp-billing-list",
       "sugardeploy-gcp-project-lifecycle",
       "sugardeploy-host-actions",
       "sugardeploy-secret-status",
-      "sugardeploy-set-secret-value"
+      "sugardeploy-set-secret-value",
+      "sugardeploy-template-version"
     ]);
   });
 
@@ -1419,6 +1421,43 @@ describe("plugin infrastructure", () => {
       githubRepo: "this is not a repo"
     });
     expect(fromGarbage.githubRepo).toBe("");
+  });
+
+  it("template-drift comparator detects strictly-older on-disk versions only", async () => {
+    // 45.7 — pin the comparison the Studio banner uses. The host endpoint
+    // returns onDiskVersion (parser output) + currentVersion
+    // (CLOUD_RUN_TEMPLATE_VERSION); the banner renders only when
+    // onDiskVersion < currentVersion AND the file exists. Equal, newer,
+    // null (no stamp), and missing-file all suppress the banner — false
+    // positives would train the user to ignore it.
+    const { CLOUD_RUN_TEMPLATE_VERSION } = await import("@sugarmagic/plugins");
+    const isDrifted = (
+      onDiskVersion: number | null,
+      currentVersion: number,
+      fileExists: boolean
+    ) =>
+      fileExists &&
+      onDiskVersion !== null &&
+      onDiskVersion < currentVersion;
+
+    // Older stamp on disk → drift.
+    expect(isDrifted(1, CLOUD_RUN_TEMPLATE_VERSION, true)).toBe(true);
+    // Equal → no drift.
+    expect(
+      isDrifted(CLOUD_RUN_TEMPLATE_VERSION, CLOUD_RUN_TEMPLATE_VERSION, true)
+    ).toBe(false);
+    // Newer on disk (downgrade scenario) → no drift; this isn't drift to
+    // warn about, the user is intentionally on an older plugin build.
+    expect(
+      isDrifted(CLOUD_RUN_TEMPLATE_VERSION + 1, CLOUD_RUN_TEMPLATE_VERSION, true)
+    ).toBe(false);
+    // Stamp absent / unparseable → null → suppress (avoid false positive
+    // when the file was hand-edited to remove the comment).
+    expect(isDrifted(null, CLOUD_RUN_TEMPLATE_VERSION, true)).toBe(false);
+    // File doesn't exist (fresh project, terraform never generated) →
+    // suppress; banner only nags about drift, not about "you should run
+    // Setup Infra," which other UI surfaces handle.
+    expect(isDrifted(1, CLOUD_RUN_TEMPLATE_VERSION, false)).toBe(false);
   });
 
   it("parseTemplateVersionStamp finds the SUGARMAGIC TEMPLATE VERSION line", () => {

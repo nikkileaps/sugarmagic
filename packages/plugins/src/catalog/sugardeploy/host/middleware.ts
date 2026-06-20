@@ -9,6 +9,7 @@
 // reduces Studio's vite.config.ts to one plugin-agnostic registry line.
 
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Plugin as VitePlugin } from "vite";
 import {
@@ -32,6 +33,10 @@ import {
   planGameDeployment,
   resolveSecretManagerName
 } from "../../../deployment/index";
+import {
+  CLOUD_RUN_TEMPLATE_VERSION,
+  parseTemplateVersionStamp
+} from "../../../deployment/cloud-run-terraform";
 import {
   REQUIRED_GCP_APIS,
   buildGcpProjectName,
@@ -1247,12 +1252,79 @@ function createSecretStatusPlugin(): VitePlugin {
   };
 }
 
+// Story 45.7 — template-drift probe. Reads the SUGARMAGIC TEMPLATE VERSION
+// stamp at the top of the on-disk generated `main.tf` and returns it
+// alongside the plugin's current CLOUD_RUN_TEMPLATE_VERSION so the Studio
+// can render a non-blocking drift banner. Strictly read-only: never writes,
+// never re-generates. The banner clears on the next save / Setup Infra run
+// because both regenerate the file from the current template and the
+// Studio re-probes after each. Pure parser lives in cloud-run-terraform.ts
+// (45.2 shipped it specifically for this story).
+interface TemplateVersionRequest {
+  workingDirectory: unknown;
+}
+
+function createTemplateVersionPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-template-version",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/template-version",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<TemplateVersionRequest>;
+            const workingDirectory =
+              typeof body.workingDirectory === "string"
+                ? body.workingDirectory.trim()
+                : "";
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                message: "workingDirectory is required."
+              });
+              return;
+            }
+            const mainTfPath = resolve(
+              workingDirectory,
+              "deployment/google-cloud-run/terraform/main.tf"
+            );
+            let onDiskVersion: number | null = null;
+            let fileExists = false;
+            if (existsSync(mainTfPath)) {
+              fileExists = true;
+              const content = await readFile(mainTfPath, "utf8");
+              onDiskVersion = parseTemplateVersionStamp(content);
+            }
+            sendJson(res, 200, {
+              ok: true,
+              fileExists,
+              onDiskVersion,
+              currentVersion: CLOUD_RUN_TEMPLATE_VERSION,
+              mainTfPath
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              message: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
     createBillingListPlugin(),
     createGcpProjectLifecyclePlugin(),
     createSetSecretValuePlugin(),
-    createSecretStatusPlugin()
+    createSecretStatusPlugin(),
+    createTemplateVersionPlugin()
   ];
 }

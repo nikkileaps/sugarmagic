@@ -197,6 +197,25 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     error: null
   });
 
+  // Story 45.7 — template-drift probe. Reads the on-disk
+  // `# SUGARMAGIC TEMPLATE VERSION:` stamp and compares against the
+  // plugin's current CLOUD_RUN_TEMPLATE_VERSION. When on-disk is older,
+  // the banner renders non-blockingly above the action buttons. State is
+  // tri-mode: `idle` before we know the result, `loaded` with the parsed
+  // numbers, `error` if the host route failed (banner hides — no false
+  // positives from a flaky probe).
+  const [templateDriftState, setTemplateDriftState] = useState<{
+    phase: "idle" | "loaded" | "error";
+    onDiskVersion: number | null;
+    currentVersion: number | null;
+    fileExists: boolean;
+  }>({
+    phase: "idle",
+    onDiskVersion: null,
+    currentVersion: null,
+    fileExists: false
+  });
+
   // Story 45.5 — Secrets section state. Status is per-secret (keyed by
   // secretKey). Set-Value modal holds the secretKey it's open for and a
   // submitting flag; the typed VALUE lives only inside the SecretValueForm
@@ -407,6 +426,13 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           error: null,
           running: false
         });
+        // Story 45.7 — Setup Infra (and any other action that touches the
+        // template-stamped file) regenerates main.tf, so re-probe the
+        // template version once the action settles. Cheap (one fs read)
+        // and the banner needs to clear without a manual refresh.
+        if (payload.ok) {
+          void probeTemplateVersion();
+        }
         return;
       }
       const message =
@@ -484,6 +510,78 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     // probeProject closes over the resolved id; re-run on id / target change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTargetId, resolvedGcpProjectId, hostActionsAvailable]);
+
+  // Story 45.7 — template-drift probe (POST /__sugardeploy/template-version
+  // → reads the on-disk stamp). Triggers: mount (when working dir + cloud
+  // run target resolve), workingDirectory change, and every successful
+  // action (because Setup Infra / Deploy can both leave behind a freshly
+  // regenerated `main.tf` from a current template). Save-triggered
+  // regeneration is picked up via the managedFiles ref change.
+  const cloudRunWorkingDirectory = cloudRunOverrides.workingDirectory;
+  async function probeTemplateVersion() {
+    if (!cloudRunWorkingDirectory) return;
+    try {
+      const response = await fetch("/__sugardeploy/template-version", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workingDirectory: cloudRunWorkingDirectory })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        fileExists?: boolean;
+        onDiskVersion?: number | null;
+        currentVersion?: number | null;
+      } | null;
+      if (!payload?.ok) {
+        setTemplateDriftState({
+          phase: "error",
+          onDiskVersion: null,
+          currentVersion: null,
+          fileExists: false
+        });
+        return;
+      }
+      setTemplateDriftState({
+        phase: "loaded",
+        onDiskVersion: payload.onDiskVersion ?? null,
+        currentVersion: payload.currentVersion ?? null,
+        fileExists: payload.fileExists ?? false
+      });
+    } catch {
+      setTemplateDriftState({
+        phase: "error",
+        onDiskVersion: null,
+        currentVersion: null,
+        fileExists: false
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (
+      selectedTargetId === "google-cloud-run" &&
+      cloudRunWorkingDirectory &&
+      hostActionsAvailable
+    ) {
+      void probeTemplateVersion();
+    } else {
+      setTemplateDriftState({
+        phase: "idle",
+        onDiskVersion: null,
+        currentVersion: null,
+        fileExists: false
+      });
+    }
+    // probeTemplateVersion closes over the working dir; re-run on
+    // workingDir / target change AND on managedFiles ref change so a
+    // save-triggered regeneration clears the banner without manual refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedTargetId,
+    cloudRunWorkingDirectory,
+    hostActionsAvailable,
+    plan?.managedFiles
+  ]);
 
   async function handleCreateGcpProjectClick() {
     if (!gameProject || !resolvedGcpProjectId) return;
@@ -1154,6 +1252,29 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Deployment Actions
         </Text>
+        {/* Story 45.7 — non-blocking template-drift banner. Only renders
+            when we have a confirmed older on-disk stamp; absent / parse-
+            failed / equal / newer → no banner (avoid false positives that
+            would train the user to ignore it). Save or Setup Infra
+            regenerates the file and the next probe clears this. */}
+        {selectedTargetId === "google-cloud-run" &&
+        templateDriftState.phase === "loaded" &&
+        templateDriftState.fileExists &&
+        templateDriftState.onDiskVersion !== null &&
+        templateDriftState.currentVersion !== null &&
+        templateDriftState.onDiskVersion < templateDriftState.currentVersion ? (
+          <Alert color="yellow" variant="light" title="Template drift">
+            <Text size="sm">
+              The on-disk terraform template stamp is{" "}
+              <Code>v{templateDriftState.onDiskVersion}</Code>; the current
+              SugarDeploy template is{" "}
+              <Code>v{templateDriftState.currentVersion}</Code>. Save the
+              project (or run Setup Infra) to regenerate{" "}
+              <Code>main.tf</Code> with the current template; the banner
+              will clear automatically.
+            </Text>
+          </Alert>
+        ) : null}
         {selectedTargetId === "google-cloud-run" ? (
           <Group>
             <Tooltip
