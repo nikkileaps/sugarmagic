@@ -56,7 +56,7 @@ interface CreateGcpProjectRequest {
 
 const SUGARDEPLOY_ACTION_KINDS: ReadonlySet<DeploymentActionKind> = new Set([
   "deploy",
-  "stop",
+  "destroy",
   "status",
   "health",
   "setup-infra",
@@ -116,6 +116,151 @@ async function ensureGcloudOnPath(): Promise<string | null> {
   return result.available ? null : result.reason;
 }
 
+// Story 45.6 — Cloud Run + local health probe. Single-shot fetch with a 5s
+// AbortSignal timeout; no retries, no redirect follow. The body is
+// truncated to 512 bytes so a chatty gateway doesn't choke the response.
+// For Cloud Run the deployed service URL isn't known until after deploy,
+// so this resolves it via `gcloud run services describe <service-name>
+// --format='value(status.url)' --project --region` first.
+interface HealthProbeResult {
+  ok: boolean;
+  statusCode: number | null;
+  durationMs: number;
+  bodyPreview: string;
+  resolvedUrl: string | null;
+  error?: string;
+}
+
+async function probeServiceHealth(
+  descriptor: import("../../../deployment/actions").DeploymentActionDescriptor,
+  normalizedGameProject: GameProject | null
+): Promise<HealthProbeResult> {
+  let healthUrl: string | null = null;
+
+  if (descriptor.targetId === "google-cloud-run") {
+    if (!normalizedGameProject) {
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: "Game project payload required to resolve Cloud Run service URL."
+      };
+    }
+    const plan = planGameDeployment(normalizedGameProject);
+    const serviceNames = getCloudRunServiceNamesForPlan(plan);
+    if (serviceNames.length === 0) {
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: "No service units declared by enabled plugins; nothing to probe."
+      };
+    }
+    const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+      normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+      normalizedGameProject
+    );
+    const gcloudError = await ensureGcloudOnPath();
+    if (gcloudError !== null) {
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: gcloudError
+      };
+    }
+    // Probe the FIRST service unit. Multi-service plans get treated as
+    // single-gateway for now; per-unit probe expansion is a follow-up.
+    const describeResult = await runHostCommand({
+      command: "gcloud",
+      args: [
+        "run",
+        "services",
+        "describe",
+        serviceNames[0],
+        "--format=value(status.url)",
+        "--project",
+        cloudRunOverrides.projectId,
+        "--region",
+        cloudRunOverrides.region
+      ],
+      cwd: process.cwd()
+    });
+    if (describeResult.exitCode !== 0) {
+      const notFound = /(?:NOT_FOUND|not found|could not be found)/i.test(
+        describeResult.stderr
+      );
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: notFound
+          ? `Cloud Run service \`${serviceNames[0]}\` is not deployed.`
+          : `gcloud describe failed with exit code ${describeResult.exitCode}: ${describeResult.stderr.trim()}`
+      };
+    }
+    const baseUrl = describeResult.stdout.trim();
+    if (!baseUrl) {
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: `gcloud described the service but returned an empty URL — is \`${serviceNames[0]}\` actually deployed?`
+      };
+    }
+    healthUrl = `${baseUrl}/health`;
+  } else if (descriptor.healthUrl) {
+    healthUrl = descriptor.healthUrl;
+  }
+
+  if (!healthUrl) {
+    return {
+      ok: false,
+      statusCode: null,
+      durationMs: 0,
+      bodyPreview: "",
+      resolvedUrl: null,
+      error: `Health probe needs a target URL; descriptor for ${descriptor.targetId} did not provide one.`
+    };
+  }
+
+  const start = performance.now();
+  try {
+    const response = await fetch(healthUrl, {
+      signal: AbortSignal.timeout(5000),
+      redirect: "manual"
+    });
+    const bodyText = await response.text().catch(() => "");
+    const bodyPreview = bodyText.slice(0, 512);
+    return {
+      ok: response.ok,
+      statusCode: response.status,
+      durationMs: performance.now() - start,
+      bodyPreview,
+      resolvedUrl: healthUrl
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      durationMs: performance.now() - start,
+      bodyPreview: "",
+      resolvedUrl: healthUrl,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 async function probeGcpProjectOwnership(projectId: string): Promise<{
   status: GcpProjectProbeStatus;
   exitCode: number | null;
@@ -173,7 +318,8 @@ function createActionDispatcherPlugin(): VitePlugin {
             );
             const descriptor = resolveDeploymentActionFromSettings(
               deploymentSettings,
-              actionKind as DeploymentActionKind
+              actionKind as DeploymentActionKind,
+              normalizedGameProject
             );
 
             if (!descriptor.supported) {
@@ -185,6 +331,33 @@ function createActionDispatcherPlugin(): VitePlugin {
                 stderr: "",
                 message:
                   descriptor.reason ?? "SugarDeploy action is not supported."
+              } satisfies DeploymentActionExecutionResult);
+              return;
+            }
+
+            // Story 45.6 — health probe. No shell command runs; instead the
+            // middleware resolves the service URL (gcloud describe for Cloud
+            // Run, descriptor.healthUrl for local) and performs an HTTP
+            // probe with a 5s AbortSignal timeout. Returns the structured
+            // result via stdout so the existing result-box rendering picks
+            // it up.
+            if (actionKind === "health") {
+              const probeResult = await probeServiceHealth(
+                descriptor,
+                normalizedGameProject
+              );
+              const summary = probeResult.ok
+                ? `Health probe ${probeResult.resolvedUrl ?? ""}: ${probeResult.statusCode} OK in ${Math.round(probeResult.durationMs)}ms`
+                : probeResult.error
+                ? `Health probe ${probeResult.resolvedUrl ?? "<no url>"}: ${probeResult.error}`
+                : `Health probe ${probeResult.resolvedUrl ?? "<no url>"}: HTTP ${probeResult.statusCode ?? "?"}`;
+              sendJson(res, probeResult.ok ? 200 : 500, {
+                ok: probeResult.ok,
+                descriptor,
+                exitCode: probeResult.ok ? 0 : 1,
+                stdout: `${summary}\n${probeResult.bodyPreview}`,
+                stderr: probeResult.error ?? "",
+                message: summary
               } satisfies DeploymentActionExecutionResult);
               return;
             }
@@ -225,6 +398,85 @@ function createActionDispatcherPlugin(): VitePlugin {
             // plan's declared Cloud Run service names server-side via
             // planGameDeployment + getCloudRunServiceNamesForPlan — server
             // owns the contract end-to-end.
+            // Story 45.6 — Cloud Run Destroy: gcloud delete loop over the
+            // plan's declared service names, each with not-found tolerance
+            // so re-Destroy on an already-deleted service is a clean
+            // no-op. Doesn't touch Artifact Registry, IAM, WIF, or Secret
+            // Manager — a subsequent Deploy brings the service back
+            // without Setup Infra needing to re-run.
+            if (
+              actionKind === "destroy" &&
+              descriptor.targetId === "google-cloud-run"
+            ) {
+              if (!normalizedGameProject) {
+                sendJson(res, 400, {
+                  ok: false,
+                  descriptor,
+                  exitCode: null,
+                  stdout: "",
+                  stderr: "",
+                  message:
+                    "Destroy requires the game project payload to compute Cloud Run service names; SugarDeploy received an unrecognized gameProject."
+                } satisfies DeploymentActionExecutionResult);
+                return;
+              }
+              const plan = planGameDeployment(normalizedGameProject);
+              const serviceNames = getCloudRunServiceNamesForPlan(plan);
+              const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+                normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+                normalizedGameProject
+              );
+              const projectId = cloudRunOverrides.projectId;
+              const region = cloudRunOverrides.region;
+              if (!projectId || !region) {
+                sendJson(res, 400, {
+                  ok: false,
+                  descriptor,
+                  exitCode: null,
+                  stdout: "",
+                  stderr: "",
+                  message:
+                    "Destroy requires both `gcp_project_id` and `region` to be resolved; one or both are missing."
+                } satisfies DeploymentActionExecutionResult);
+                return;
+              }
+              const steps: HostCommandStep[] = serviceNames.map((name) => ({
+                label: `gcloud run services delete ${name}`,
+                command: "gcloud",
+                args: [
+                  "run",
+                  "services",
+                  "delete",
+                  name,
+                  "--quiet",
+                  "--project",
+                  projectId,
+                  "--region",
+                  region
+                ],
+                cwd: resolvedCwd,
+                tolerateNotFound: true
+              }));
+              const seqResult = await runHostCommandSequence(steps);
+              sendJson(res, seqResult.exitCode === 0 ? 200 : 500, {
+                ok: seqResult.exitCode === 0,
+                descriptor: {
+                  ...descriptor,
+                  command: { ...descriptor.command, cwd: resolvedCwd }
+                },
+                exitCode: seqResult.exitCode,
+                stdout: seqResult.stdout,
+                stderr: seqResult.stderr,
+                message:
+                  seqResult.exitCode === 0
+                    ? serviceNames.length === 0
+                      ? "No service units declared by enabled plugins; nothing to destroy."
+                      : `Destroy completed for ${serviceNames.length} service${serviceNames.length === 1 ? "" : "s"}.`
+                    : `Destroy failed with exit code ${seqResult.exitCode ?? "unknown"}.`
+              } satisfies DeploymentActionExecutionResult);
+              return;
+            }
+
             if (actionKind === "setup-infra" || actionKind === "teardown-infra") {
               const terraformError = await ensureTerraformOnPath();
               if (terraformError !== null) {

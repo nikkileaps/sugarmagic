@@ -1777,6 +1777,182 @@ describe("plugin infrastructure", () => {
     expect(names).toContain("wordlark-v1-sugarmagic-gateway");
   });
 
+  it("resolves Cloud Run health as supported with no command — middleware probes the deployed URL", () => {
+    // 45.6: health on Cloud Run is a middleware-orchestrated HTTP probe
+    // (gcloud run services describe → fetch <url>/health). The resolver
+    // signals supported:true with NO command; the middleware fully owns
+    // the probe so the UI keeps a single uniform action shape.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": {
+              workingDirectory: "/tmp/wordlark",
+              projectId: "wordlark-v1-abcdef"
+            }
+          }
+        }
+      })
+    );
+    const health = resolveDeploymentAction(plan, "health");
+    expect(health).toEqual({
+      targetId: "google-cloud-run",
+      actionKind: "health",
+      supported: true
+    });
+  });
+
+  it("resolves Cloud Run destroy with gcloud run services delete (project + region scoped)", () => {
+    // 45.6: destroy deletes the Cloud Run service(s) the plan declared
+    // and preserves Artifact Registry, IAM, WIF, Secret Manager state so
+    // a subsequent Deploy can bring the service back without Setup Infra.
+    // The descriptor surfaces the command shape; the middleware iterates
+    // the plan's service names and applies tolerateNotFound:true per call.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": {
+              workingDirectory: "/tmp/wordlark",
+              projectId: "wordlark-v1-abcdef",
+              region: "us-central1"
+            }
+          }
+        }
+      })
+    );
+    const destroy = resolveDeploymentAction(plan, "destroy");
+    expect(destroy).toMatchObject({
+      targetId: "google-cloud-run",
+      actionKind: "destroy",
+      supported: true,
+      command: {
+        command: "gcloud",
+        args: [
+          "run",
+          "services",
+          "delete",
+          "--quiet",
+          "--project",
+          "wordlark-v1-abcdef",
+          "--region",
+          "us-central1"
+        ]
+      }
+    });
+  });
+
+  it("threads gameProject through resolveDeploymentAction so Status/Destroy commands target the versioned slug + suffix", () => {
+    // 45.6 regression: before this fix, resolveDeploymentAction dropped
+    // the gameProject before re-normalizing overrides, so the projectId
+    // fell back to bare `sugarmagic-v1` and gcloud Status fired against
+    // a project nikki doesn't own. Pin the contract — when the project
+    // has a versionedProjectIdentifiers entry, the resolved command's
+    // `--project` arg matches the versioned slug + suffix.
+    const project = normalizeGameProject({
+      ...makeProject(),
+      identity: { id: "wordlark", schema: "GameProject", version: 1 },
+      displayName: "Wordlark",
+      majorVersion: 1,
+      versionedProjectIdentifiers: { v1: "1dqlc" },
+      deployment: {
+        publishTargetId: "web",
+        deploymentTargetId: "google-cloud-run",
+        targetOverrides: {
+          "google-cloud-run": {
+            workingDirectory: "/tmp/wordlark",
+            region: "us-central1"
+          }
+        }
+      }
+    });
+    const plan = planGameDeployment(project);
+    const status = resolveDeploymentAction(plan, "status", project);
+    expect(status.command?.args).toContain("wordlark-v1-1dqlc");
+    expect(status.command?.args).not.toContain("sugarmagic-v1");
+    const destroy = resolveDeploymentAction(plan, "destroy", project);
+    expect(destroy.command?.args).toContain("wordlark-v1-1dqlc");
+  });
+
+  it("rejects Cloud Run health + destroy with a clear reason when working directory is missing", () => {
+    // 45.6: both actions short-circuit at the Working Directory check —
+    // gcloud commands need the deployment cwd resolved before they can
+    // emit a descriptor. projectId always derives from the versioned
+    // slug (45.4.7), so the real unblock is the Working Directory
+    // override, surfaced with a concrete reason for the UI.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "google-cloud-run"
+        }
+      })
+    );
+    expect(resolveDeploymentAction(plan, "health")).toMatchObject({
+      supported: false,
+      reason: expect.stringMatching(/Working Directory/i)
+    });
+    expect(resolveDeploymentAction(plan, "destroy")).toMatchObject({
+      supported: false,
+      reason: expect.stringMatching(/Working Directory/i)
+    });
+  });
+
+  it("resolves Local health + destroy symmetrically with the deploy port", () => {
+    // 45.6 symmetry: the Local target keeps its docker-compose-shaped
+    // commands while health resolves to a healthUrl probe — same shape
+    // the middleware now uses for both Local and Cloud Run. Local
+    // destroy uses `docker compose down` to tear containers down;
+    // images stay cached, so a subsequent Deploy rebuilds quickly.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: {
+          publishTargetId: "web",
+          deploymentTargetId: "local",
+          targetOverrides: {
+            local: {
+              workingDirectory: "/tmp/wordlark",
+              gatewayHostPortBase: 9100
+            }
+          }
+        }
+      })
+    );
+    const health = resolveDeploymentAction(plan, "health");
+    expect(health).toEqual({
+      targetId: "local",
+      actionKind: "health",
+      supported: true,
+      healthUrl: "http://localhost:9100/health"
+    });
+    const destroy = resolveDeploymentAction(plan, "destroy");
+    expect(destroy).toMatchObject({
+      targetId: "local",
+      actionKind: "destroy",
+      supported: true,
+      command: {
+        command: "docker",
+        args: ["compose", "down"],
+        cwd: "/tmp/wordlark/deployment/local"
+      },
+      healthUrl: "http://localhost:9100/health"
+    });
+  });
+
   it("resolves local deployment actions from target overrides", () => {
     const plan = planGameDeployment(
       normalizeGameProject({

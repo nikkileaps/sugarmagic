@@ -1244,24 +1244,23 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           </Button>
           <Button
             size="xs"
-            variant="light"
-            color="red"
-            onClick={() => runAction("stop")}
-            loading={actionState.running && actionState.kind === "stop"}
+            variant="subtle"
+            onClick={() => runAction("health")}
+            loading={actionState.running && actionState.kind === "health"}
             disabled={actionsDisabled}
           >
-            Stop
+            Health
           </Button>
-          {plan?.deploymentTargetId === "local" ? (
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={() => runAction("health")}
-              disabled={actionsDisabled}
-            >
-              Health
-            </Button>
-          ) : null}
+          <Button
+            size="xs"
+            variant="filled"
+            color="red"
+            onClick={() => runAction("destroy")}
+            loading={actionState.running && actionState.kind === "destroy"}
+            disabled={actionsDisabled}
+          >
+            Destroy
+          </Button>
         </Group>
         <Text size="sm" c="var(--sm-color-overlay0)">
           {actionBlockedReason ??

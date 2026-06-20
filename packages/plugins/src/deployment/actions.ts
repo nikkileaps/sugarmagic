@@ -1,4 +1,8 @@
-import type { DeploymentTargetId, DeploymentSettings } from "@sugarmagic/domain";
+import type {
+  DeploymentTargetId,
+  DeploymentSettings,
+  GameProject
+} from "@sugarmagic/domain";
 import type {
   DeploymentPlan,
 } from "./index";
@@ -9,7 +13,7 @@ import {
 
 export type DeploymentActionKind =
   | "deploy"
-  | "stop"
+  | "destroy"
   | "status"
   | "health"
   | "setup-infra"
@@ -42,6 +46,13 @@ export interface DeploymentActionExecutionResult {
 interface DeploymentExecutionContext {
   deploymentTargetId: DeploymentTargetId | null;
   targetOverrides: Record<string, Record<string, unknown>>;
+  // 45.6 — the normalizer derives projectId / composeProjectName from the
+  // game project's identity + majorVersion + versionedProjectIdentifiers
+  // (45.4.7). Without it, gcloud-shaped descriptors (status, destroy)
+  // fall back to the bare `sugarmagic-vN` slug and target the wrong GCP
+  // project. Optional so callers without a project (CLI-style settings
+  // resolution) still type-check; production callers must pass it.
+  gameProject?: GameProject | null;
 }
 
 function joinPath(base: string, relative: string): string {
@@ -53,7 +64,8 @@ function resolveLocalAction(
   actionKind: DeploymentActionKind
 ): DeploymentActionDescriptor {
   const overrides = normalizeLocalDeploymentTargetOverrides(
-    context.targetOverrides.local
+    context.targetOverrides.local,
+    context.gameProject ?? undefined
   );
   if (!overrides.workingDirectory) {
     return {
@@ -80,7 +92,11 @@ function resolveLocalAction(
         },
         healthUrl: `http://localhost:${healthPort}/health`
       };
-    case "stop":
+    case "destroy":
+      // Local "destroy" parallels Cloud Run "destroy": tear the running
+      // deployment down completely. `docker compose down` removes the
+      // containers (and the default network); a subsequent Deploy
+      // rebuilds and recreates them. Images stay cached.
       return {
         targetId: "local",
         actionKind,
@@ -128,7 +144,8 @@ function resolveGoogleCloudRunAction(
   actionKind: DeploymentActionKind
 ): DeploymentActionDescriptor {
   const overrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-    context.targetOverrides["google-cloud-run"]
+    context.targetOverrides["google-cloud-run"],
+    context.gameProject ?? undefined
   );
   if (!overrides.workingDirectory) {
     return {
@@ -183,21 +200,62 @@ function resolveGoogleCloudRunAction(
           cwd
         }
       };
-    case "stop":
+    case "destroy":
+      // Story 45.6: deletes the Cloud Run service(s) for this game's plan
+      // (the middleware iterates the plan-derived service names, each
+      // with not-found tolerance so re-Destroy is a clean no-op).
+      // Artifact Registry, IAM, WIF, and Secret Manager state stay
+      // intact; a subsequent Deploy brings the service back without
+      // re-running Setup Infra. Destroy is the destructive counterpart
+      // to Deploy at the service-definition level; full teardown
+      // (terraform destroy) is a separate Teardown Infra action.
+      if (!overrides.projectId) {
+        return {
+          targetId: "google-cloud-run",
+          actionKind,
+          supported: false,
+          reason:
+            "Google Cloud Run destroy requires a GCP project id override before SugarDeploy can run gcloud commands."
+        };
+      }
       return {
         targetId: "google-cloud-run",
         actionKind,
-        supported: false,
-        reason:
-          "Google Cloud Run stop is not modeled yet; use gcloud or extend SugarDeploy with a destroy/scale action."
+        supported: true,
+        command: {
+          command: "gcloud",
+          args: [
+            "run",
+            "services",
+            "delete",
+            "--quiet",
+            "--project",
+            overrides.projectId,
+            "--region",
+            overrides.region
+          ],
+          cwd
+        }
       };
     case "health":
+      // Story 45.6: the middleware resolves the deployed service URL via
+      // `gcloud run services describe ... --format='value(status.url)'`
+      // and probes <url>/health with a 5s AbortSignal timeout. If describe
+      // returns no URL (service not deployed), middleware reports
+      // supported: false with reason "Service is not deployed".
+      if (!overrides.projectId) {
+        return {
+          targetId: "google-cloud-run",
+          actionKind,
+          supported: false,
+          reason:
+            "Google Cloud Run health requires a GCP project id override before SugarDeploy can run gcloud commands."
+        };
+      }
       return {
         targetId: "google-cloud-run",
         actionKind,
-        supported: false,
-        reason:
-          "Google Cloud Run health requires a deployed service URL; SugarDeploy does not resolve that automatically yet."
+        supported: true
       };
     case "setup-infra":
       // Multi-step on the host side (terraform init + terraform apply). The
@@ -235,7 +293,8 @@ function resolveGoogleCloudRunAction(
 
 export function resolveDeploymentAction(
   plan: DeploymentPlan,
-  actionKind: DeploymentActionKind
+  actionKind: DeploymentActionKind,
+  gameProject?: GameProject | null
 ): DeploymentActionDescriptor {
   return resolveDeploymentActionFromSettings(
     {
@@ -244,13 +303,15 @@ export function resolveDeploymentAction(
         [plan.deploymentTargetId ?? ""]: plan.targetOverrides
       }
     },
-    actionKind
+    actionKind,
+    gameProject
   );
 }
 
 export function resolveDeploymentActionFromSettings(
   settings: Pick<DeploymentSettings, "deploymentTargetId" | "targetOverrides">,
-  actionKind: DeploymentActionKind
+  actionKind: DeploymentActionKind,
+  gameProject?: GameProject | null
 ): DeploymentActionDescriptor {
   const targetId = settings.deploymentTargetId;
   if (!targetId) {
@@ -262,11 +323,20 @@ export function resolveDeploymentActionFromSettings(
     };
   }
 
+  const context: DeploymentExecutionContext = {
+    deploymentTargetId: settings.deploymentTargetId,
+    targetOverrides: settings.targetOverrides as Record<
+      string,
+      Record<string, unknown>
+    >,
+    gameProject
+  };
+
   switch (targetId) {
     case "local":
-      return resolveLocalAction(settings, actionKind);
+      return resolveLocalAction(context, actionKind);
     case "google-cloud-run":
-      return resolveGoogleCloudRunAction(settings, actionKind);
+      return resolveGoogleCloudRunAction(context, actionKind);
     case "aws-fargate":
       return {
         targetId,
