@@ -307,12 +307,6 @@ describe("plugin infrastructure", () => {
   it("lists SugarDeploy deployment targets with local as the implemented baseline", () => {
     expect(listDeploymentTargets()).toEqual([
       {
-        targetId: "aws-fargate",
-        displayName: "AWS Fargate",
-        summary: "Hosted deployment target for ECS/Fargate style service topology.",
-        implemented: false
-      },
-      {
         targetId: "google-cloud-run",
         displayName: "Google Cloud Run",
         summary: "Hosted deployment target for Cloud Run services and managed proxy topology.",
@@ -580,8 +574,7 @@ describe("plugin infrastructure", () => {
               serviceNamePrefix: "wordlark-api",
               minInstances: 1,
               maxInstances: 3,
-              ingress: "internal",
-              allowUnauthenticated: false
+              ingress: "internal"
             }
           }
         },
@@ -598,8 +591,7 @@ describe("plugin infrastructure", () => {
       serviceNamePrefix: "wordlark-api",
       minInstances: 1,
       maxInstances: 3,
-      ingress: "internal",
-      allowUnauthenticated: false
+      ingress: "internal"
     });
     expect(withTarget.managedFiles.map((file) => file.relativePath)).toEqual(
       expect.arrayContaining([

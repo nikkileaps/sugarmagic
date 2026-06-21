@@ -5,12 +5,15 @@ import {
   Button,
   Code,
   Group,
+  Loader,
+  Menu,
   Modal,
   NumberInput,
   PasswordInput,
   Select,
+  SimpleGrid,
   Stack,
-  Switch,
+  Tabs,
   Text,
   TextInput,
   Tooltip
@@ -216,6 +219,55 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     fileExists: false
   });
 
+  // Story 45.8.5 — Current Version panel chip state. Health auto-probes
+  // silently on mount so the chip carries a meaningful colour the moment
+  // the workspace opens; Status is on-click only since `gcloud run
+  // services list` is multi-second and we don't want every mount to fan
+  // out to GCP. Both update when the corresponding action runs through
+  // the result-box flow (so clicking the chip surfaces the full stdout
+  // in the existing result box AND refreshes the chip). `ok === null`
+  // renders as grey "Unknown"; true → green; false → red.
+  type ChipProbeState = {
+    phase: "idle" | "probing" | "loaded";
+    ok: boolean | null;
+    message: string;
+  };
+  const [healthChip, setHealthChip] = useState<ChipProbeState>({
+    phase: "idle",
+    ok: null,
+    message: "Not probed yet."
+  });
+  const [statusChip, setStatusChip] = useState<ChipProbeState>({
+    phase: "idle",
+    ok: null,
+    message: "Click to query gcloud."
+  });
+
+  // Story 45.8.5 — chip-result modal. Clicking the Health or Status
+  // chip in the Action Bar runs the matching action AND opens this
+  // modal; the modal shows the result/error/stdout/stderr instead of
+  // injecting a result box inline below the workspace (the chip is a
+  // small affordance, not a fan-out trigger to a multi-second-output
+  // section that's now stranded mid-workspace). Set to non-null to
+  // open; null = closed.
+  const [chipModalKind, setChipModalKind] = useState<
+    "health" | "status" | null
+  >(null);
+
+  // Story 45.8.5 — Release New Version stub. The button at the top of
+  // the lifecycle section opens this modal as a placeholder until 45.8
+  // wires the actual Cut New Major Version flow (git tag + bump + commit
+  // + new GCP project orchestration). Modal exists so the affordance is
+  // discoverable; clicking through it is a no-op explicitly labelled
+  // "not wired yet" so users don't think a step silently succeeded.
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+
+  // Story 45.8.5 — placeholder for the "+ add publish target" tab
+  // that lands in plan 047. Today's data model carries a singular
+  // publishTargetId; this modal makes the affordance discoverable
+  // without lying about wired behaviour.
+  const [addTargetModalOpen, setAddTargetModalOpen] = useState(false);
+
   // Story 45.5 — Secrets section state. Status is per-secret (keyed by
   // secretKey). Set-Value modal holds the secretKey it's open for and a
   // submitting flag; the typed VALUE lives only inside the SecretValueForm
@@ -258,7 +310,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     const value = rawCloudRunOverrides[key];
     return typeof value === "string" ? value : "";
   }
-  const rawGithubRepo = rawCloudRunString("githubRepo");
+  // Story 45.8.5 — githubRepo lives on DeploymentSettings (project-level)
+  // now, not in per-target overrides. Field reads from there directly.
+  const rawGithubRepo = gameProject?.deployment.githubRepo ?? "";
   const githubRepoError =
     rawGithubRepo.length > 0 && !GITHUB_REPO_REGEX.test(rawGithubRepo)
       ? "Expected owner/repo (e.g. nikki/wordlark)"
@@ -355,16 +409,12 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     updateSettings({
       ...gameProject.deployment,
       deploymentTargetId:
-        value === "local" ||
-        value === "google-cloud-run" ||
-        value === "aws-fargate"
-          ? value
-          : null
+        value === "local" || value === "google-cloud-run" ? value : null
     });
   }
 
   function updateTargetOverrides(
-    targetId: "local" | "google-cloud-run" | "aws-fargate",
+    targetId: "local" | "google-cloud-run",
     patch: Record<string, unknown>
   ) {
     if (!gameProject) return;
@@ -380,6 +430,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     });
   }
 
+  // Story 45.8.5 — "+" Targets-tab flow. Adds a target to the project
+  // (so it persists as a tab even after switching away) AND makes it
+  // the active target in one updateSettings call to avoid losing the
+  // overrides write to React's batched state. The empty-record entry
+  // is what keeps the target in `configured` after a tab switch.
+  function addTarget(targetId: "local" | "google-cloud-run") {
+    if (!gameProject) return;
+    updateSettings({
+      ...gameProject.deployment,
+      deploymentTargetId: targetId,
+      targetOverrides: {
+        ...gameProject.deployment.targetOverrides,
+        [targetId]:
+          gameProject.deployment.targetOverrides[targetId] ?? {}
+      }
+    });
+  }
+
   async function runAction(actionKind: DeploymentActionKind) {
     if (!gameProject) return;
     setActionState({
@@ -388,6 +456,14 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       error: null,
       running: true
     });
+    // Story 45.8.5 — flip the chip to "probing" so the spinner shows
+    // immediately. Result settles via the existing isDeploymentAction
+    // ExecutionResult branch below.
+    if (actionKind === "health") {
+      setHealthChip((prev) => ({ ...prev, phase: "probing" }));
+    } else if (actionKind === "status") {
+      setStatusChip((prev) => ({ ...prev, phase: "probing" }));
+    }
     try {
       const response = await fetch("/__sugardeploy/action", {
         method: "POST",
@@ -426,6 +502,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           error: null,
           running: false
         });
+        // Story 45.8.5 — keep the Current Version panel chips in sync
+        // with the latest action outcome. Click the Health chip → it
+        // runs the health action → result lands in the result box AND
+        // the chip flips green/red. Same for Status. Other actions
+        // (deploy, destroy, setup-infra) don't drive these chips.
+        if (actionKind === "health") {
+          setHealthChip({
+            phase: "loaded",
+            ok: payload.ok,
+            message: payload.message
+          });
+        } else if (actionKind === "status") {
+          setStatusChip({
+            phase: "loaded",
+            ok: payload.ok,
+            message: payload.message
+          });
+        }
         // Story 45.7 — Setup Infra (and any other action that touches the
         // template-stamped file) regenerates main.tf, so re-probe the
         // template version once the action settles. Cheap (one fs read)
@@ -581,6 +675,86 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     cloudRunWorkingDirectory,
     hostActionsAvailable,
     plan?.managedFiles
+  ]);
+
+  // Story 45.8.5 — silent health probe at mount-time so the Current
+  // Version panel's Health chip carries a real colour as soon as the
+  // workspace opens. Reuses the existing /action endpoint with
+  // actionKind:"health" but writes ONLY to healthChip — never to
+  // actionState — so the user doesn't see a result box pop in
+  // unbidden. Status is on-click only (multi-second gcloud call).
+  async function probeHealthSilent() {
+    if (!gameProject) return;
+    setHealthChip((prev) => ({ ...prev, phase: "probing" }));
+    try {
+      const response = await fetch("/__sugardeploy/action", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ actionKind: "health", gameProject })
+      });
+      const rawBody = await response.text();
+      let payload: DeploymentActionExecutionResult | null = null;
+      if (rawBody.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          if (isDeploymentActionExecutionResult(parsed)) {
+            payload = parsed;
+          }
+        } catch {
+          payload = null;
+        }
+      }
+      if (payload) {
+        setHealthChip({
+          phase: "loaded",
+          ok: payload.ok,
+          message: payload.message
+        });
+      } else {
+        setHealthChip({
+          phase: "loaded",
+          ok: false,
+          message: `HTTP ${response.status} ${response.statusText}`
+        });
+      }
+    } catch (error) {
+      setHealthChip({
+        phase: "loaded",
+        ok: false,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (
+      selectedTargetId === "google-cloud-run" &&
+      cloudRunWorkingDirectory &&
+      hostActionsAvailable &&
+      gameProject
+    ) {
+      void probeHealthSilent();
+    } else {
+      setHealthChip({
+        phase: "idle",
+        ok: null,
+        message: "Not probed yet."
+      });
+      setStatusChip({
+        phase: "idle",
+        ok: null,
+        message: "Click to query gcloud."
+      });
+    }
+    // probeHealthSilent closes over gameProject; re-probe on workingDir /
+    // target / gameProject change. Project re-save flips this too, which
+    // is right — a save can change the deployed shape.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedTargetId,
+    cloudRunWorkingDirectory,
+    hostActionsAvailable,
+    gameProject
   ]);
 
   async function handleCreateGcpProjectClick() {
@@ -955,212 +1129,683 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Text>
       </Stack>
 
-      <Select
-        label="Publish Target"
-        data={[{ value: "web", label: "Web" }]}
-        value={gameProject?.deployment.publishTargetId ?? "web"}
-        disabled
-      />
+      {/* Story 45.8.5 — Action Bar. The top-of-workspace toolbar that
+          operates on the (version × publish target × deployment target)
+          combination. Shows the combo context, Health + Status chips
+          (Health auto-probes silently on mount for Cloud Run; click to
+          re-probe), and every action button that acts on this combo.
+          The Version panel below carries version metadata + history;
+          the Targets section below it carries the per-combo settings.
+          Action bar gets the heavy visual treatment because this is
+          where users live day-to-day. */}
+      {selectedTargetId && gameProject ? (
+        <Box
+          p="md"
+          style={{
+            border: "1px solid var(--sm-color-surface3)",
+            borderRadius: 8,
+            background: "var(--sm-color-surface1)"
+          }}
+        >
+          <Stack gap="sm">
+            <Group justify="space-between" wrap="nowrap" align="center">
+              <Group gap="xs" align="center" wrap="nowrap">
+                <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                  Deploy
+                </Text>
+                <Badge size="lg" variant="filled" color="blue">
+                  v{gameProject.majorVersion}
+                </Badge>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  &gt;
+                </Text>
+                <Badge size="lg" variant="light" color="gray">
+                  {gameProject.deployment.publishTargetId === "web"
+                    ? "Web"
+                    : gameProject.deployment.publishTargetId}
+                </Badge>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  /
+                </Text>
+                <Badge size="lg" variant="light" color="gray">
+                  {selectedTargetId === "google-cloud-run"
+                    ? "Google Cloud Run"
+                    : selectedTargetId === "local"
+                      ? "Local"
+                      : selectedTargetId}
+                </Badge>
+              </Group>
+              <Group gap="xs">
+                <Tooltip
+                  label={healthChip.message || "Click to re-probe."}
+                  withinPortal
+                  multiline
+                  w={320}
+                >
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color={
+                      healthChip.phase === "probing"
+                        ? "gray"
+                        : healthChip.ok === null
+                          ? "gray"
+                          : healthChip.ok
+                            ? "green"
+                            : "red"
+                    }
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      setChipModalKind("health");
+                      void runAction("health");
+                    }}
+                  >
+                    {healthChip.phase === "probing"
+                      ? "Health: probing…"
+                      : healthChip.ok === null
+                        ? "Health: unknown"
+                        : healthChip.ok
+                          ? "Health: OK"
+                          : "Health: down"}
+                  </Badge>
+                </Tooltip>
+                <Tooltip
+                  label={statusChip.message || "Click to query gcloud."}
+                  withinPortal
+                  multiline
+                  w={320}
+                >
+                  <Badge
+                    size="lg"
+                    variant="light"
+                    color={
+                      statusChip.phase === "probing"
+                        ? "gray"
+                        : statusChip.ok === null
+                          ? "gray"
+                          : statusChip.ok
+                            ? "green"
+                            : "red"
+                    }
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      setChipModalKind("status");
+                      void runAction("status");
+                    }}
+                  >
+                    {statusChip.phase === "probing"
+                      ? "Status: querying…"
+                      : statusChip.ok === null
+                        ? "Status: unknown"
+                        : statusChip.ok
+                          ? "Status: OK"
+                          : "Status: error"}
+                  </Badge>
+                </Tooltip>
+              </Group>
+            </Group>
 
-      <Select
-        label="Deployment Target"
-        placeholder="Select a deployment target"
-        data={listDeploymentTargets().map((target) => ({
-          value: target.targetId,
-          label: `${target.displayName}${target.implemented ? "" : " (Planned)"}`
-        }))}
-        value={gameProject?.deployment.deploymentTargetId}
-        onChange={updateTarget}
-      />
+            {/* Story 45.7 — template-drift banner. Lives inside the
+                Action Bar because it's a workspace-level alert about
+                this combo's on-disk template stamp. Save / Setup Infra
+                regenerate and the next probe clears it automatically. */}
+            {selectedTargetId === "google-cloud-run" &&
+            templateDriftState.phase === "loaded" &&
+            templateDriftState.fileExists &&
+            templateDriftState.onDiskVersion !== null &&
+            templateDriftState.currentVersion !== null &&
+            templateDriftState.onDiskVersion < templateDriftState.currentVersion ? (
+              <Alert color="yellow" variant="light" title="Template drift">
+                <Text size="sm">
+                  The on-disk terraform template stamp is{" "}
+                  <Code>v{templateDriftState.onDiskVersion}</Code>; the
+                  current SugarDeploy template is{" "}
+                  <Code>v{templateDriftState.currentVersion}</Code>. Save
+                  the project (or run Setup Infra) to regenerate{" "}
+                  <Code>main.tf</Code>; the banner will clear
+                  automatically.
+                </Text>
+              </Alert>
+            ) : null}
 
-      {selectedTargetId === "local" ? (
-        <Stack gap="sm">
-          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-            Local Overrides
-          </Text>
-          <TextInput
-            label="Working Directory"
-            description="Absolute path to the game root on disk. Required for deploy actions because the browser host cannot infer the selected folder path."
-            value={localOverrides.workingDirectory}
-            onChange={(event) =>
-              updateTargetOverrides("local", {
-                workingDirectory: event.currentTarget.value
-              })
-            }
-          />
-          <TextInput
-            label="Compose Project Name"
-            value={localOverrides.composeProjectName}
-            onChange={(event) =>
-              updateTargetOverrides("local", {
-                composeProjectName: event.currentTarget.value
-              })
-            }
-          />
-          <NumberInput
-            label="Gateway Host Port Base"
-            value={localOverrides.gatewayHostPortBase}
-            min={1024}
-            max={65535}
-            onChange={(value) =>
-              updateTargetOverrides("local", {
-                gatewayHostPortBase: value
-              })
-            }
-          />
-        </Stack>
+            <Group>
+              {selectedTargetId === "google-cloud-run" ? (
+                <>
+                  <Tooltip
+                    label={
+                      probeState.status === "owned"
+                        ? `\`${resolvedGcpProjectId}\` is provisioned and ready.`
+                        : probeState.status === "unknown"
+                          ? probeState.message ?? "Could not determine project ownership."
+                          : "Run gcloud projects create + billing link + services enable. Idempotent — safe to re-run."
+                    }
+                    withinPortal
+                    multiline
+                    w={320}
+                  >
+                    <Button
+                      size="xs"
+                      variant={createButtonInfo.variant}
+                      color={createButtonInfo.color}
+                      onClick={handleCreateGcpProjectClick}
+                      loading={createButtonInfo.loading}
+                      disabled={createButtonInfo.disabled}
+                    >
+                      {createButtonInfo.label}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip
+                    label={
+                      actionBlockedReason ??
+                      "Create the GCP Project first — Setup Infra runs terraform against it."
+                    }
+                    disabled={!setupInfraBlockedByProbe && !actionsDisabled}
+                    withinPortal
+                    multiline
+                    w={320}
+                  >
+                    <Button
+                      size="xs"
+                      variant="filled"
+                      onClick={() => runAction("setup-infra")}
+                      loading={
+                        actionState.running && actionState.kind === "setup-infra"
+                      }
+                      disabled={actionsDisabled || setupInfraBlockedByProbe}
+                      title="Run terraform init + apply against the GCP project to stand up Artifact Registry, runtime SA, IAM, WIF, and empty Secret Manager containers. Idempotent — safe to re-run."
+                    >
+                      Setup Infra
+                    </Button>
+                  </Tooltip>
+                </>
+              ) : null}
+              <Button
+                size="xs"
+                onClick={() => runAction("deploy")}
+                loading={actionState.running && actionState.kind === "deploy"}
+                disabled={actionsDisabled}
+              >
+                Deploy
+              </Button>
+              <Button
+                size="xs"
+                variant="filled"
+                color="red"
+                onClick={() => runAction("destroy")}
+                loading={actionState.running && actionState.kind === "destroy"}
+                disabled={actionsDisabled}
+              >
+                Destroy
+              </Button>
+              {selectedTargetId === "google-cloud-run" ? (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  color="red"
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      "Teardown Infra will delete every declared Cloud Run service in this project AND run `terraform destroy` against all SugarDeploy-managed infrastructure (Artifact Registry, runtime SA, IAM bindings, WIF, Secret Manager containers).\n\n" +
+                        "Secret VALUES are destroyed with the containers. The GCP project itself stays.\n\n" +
+                        "This is destructive. Proceed?"
+                    );
+                    if (confirmed) runAction("teardown-infra");
+                  }}
+                  loading={
+                    actionState.running && actionState.kind === "teardown-infra"
+                  }
+                  disabled={actionsDisabled}
+                  title="Delete Cloud Run services first, then `terraform destroy`. The GCP project itself is not deleted (use `gcloud projects delete` for that)."
+                >
+                  Teardown Infra
+                </Button>
+              ) : null}
+            </Group>
+
+            <Text size="sm" c="var(--sm-color-overlay0)">
+              {actionBlockedReason ??
+                "Click a chip to probe. Save first, then use the action buttons. Working Directory must point at the game root on disk."}
+            </Text>
+          </Stack>
+        </Box>
       ) : null}
 
-      {selectedTargetId === "google-cloud-run" ? (
+      {/* Story 45.8.5 — Version panel. Sits below the Action Bar because
+          the Action Bar is the daily-driver surface; the Version panel
+          is the longer-horizon "which release am I operating on" context.
+          Independent of publish/deployment target (a v4 release can ship
+          to Web/GCP, Web/AWS, mobile/Apple, mobile/Android, etc.).
+          Strictly version metadata + history + the Release-New-Version
+          affordance — no operational buttons live here. History rows
+          render newest-first; the current major flags "(active)". */}
+      {gameProject ? (
         <Stack gap="sm">
-          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-            Google Cloud Run Overrides
-          </Text>
-          <TextInput
-            label="Working Directory"
-            description="Absolute path to the game root on disk. Required for host-side deploy/status actions."
-            value={cloudRunOverrides.workingDirectory}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                workingDirectory: event.currentTarget.value
-              })
-            }
-          />
-          <TextInput
-            label="GCP Project Id"
-            description="Leave blank to auto-derive from project identity and major version."
-            placeholder={cloudRunOverrides.projectId}
-            value={rawCloudRunString("projectId")}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                projectId: event.currentTarget.value
-              })
-            }
-          />
-          <TextInput
-            label="Region"
-            description="GCP region for Cloud Run and Artifact Registry."
-            placeholder={cloudRunOverrides.region}
-            value={rawCloudRunString("region")}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                region: event.currentTarget.value
-              })
-            }
-          />
-          <TextInput
-            label="Service Name Prefix"
-            description="Leave blank to auto-derive from project identity and major version. Used for Artifact Registry repo, Secret Manager containers, and the WIF pool name."
-            placeholder={cloudRunOverrides.serviceNamePrefix}
-            value={rawCloudRunString("serviceNamePrefix")}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                serviceNamePrefix: event.currentTarget.value
-              })
-            }
-          />
-          <TextInput
-            label="GitHub Repository"
-            description="owner/repo form. Drives the Workload Identity Federation binding so GitHub Actions in this repo can deploy. Pasting a full GitHub URL or git@ clone URL is fine — the prefix and trailing .git get stripped automatically."
-            placeholder="nikki/wordlark"
-            value={rawGithubRepo}
-            error={githubRepoError}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                githubRepo: stripGithubRepoPrefixes(event.currentTarget.value)
-              })
-            }
-          />
-          <TextInput
-            label="Runtime Service Account Name"
-            description="Optional. The account_id (left of @) for the Cloud Run runtime service account. Leave blank to auto-derive as ${serviceNamePrefix}-runtime."
-            placeholder={autoDerivedRuntimeServiceAccount}
-            value={rawRuntimeServiceAccount}
-            error={runtimeServiceAccountError}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                runtimeServiceAccountName: event.currentTarget.value
-              })
-            }
-          />
-          <NumberInput
-            label="Container Port"
-            value={cloudRunOverrides.containerPort}
-            min={1024}
-            max={65535}
-            onChange={(value) =>
-              updateTargetOverrides("google-cloud-run", {
-                containerPort: value
-              })
-            }
-          />
-          <Group grow>
-            <NumberInput
-              label="Min Instances"
-              value={cloudRunOverrides.minInstances}
-              min={0}
-              max={100}
-              onChange={(value) =>
-                updateTargetOverrides("google-cloud-run", {
-                  minInstances: value
-                })
-              }
-            />
-            <NumberInput
-              label="Max Instances"
-              value={cloudRunOverrides.maxInstances}
-              min={1}
-              max={100}
-              onChange={(value) =>
-                updateTargetOverrides("google-cloud-run", {
-                  maxInstances: value
-                })
-              }
-            />
+          <Group justify="space-between" align="center">
+            <Group gap="xs" align="baseline">
+              <Text fw={700} size="md">
+                Version
+              </Text>
+              <Text size="xs" c="var(--sm-color-subtext)">
+                — release metadata, independent of publish + deployment targets
+              </Text>
+            </Group>
+            <Button
+              size="xs"
+              variant="filled"
+              onClick={() => setReleaseModalOpen(true)}
+            >
+              Release New Version
+            </Button>
           </Group>
-          <Select
-            label="Ingress"
-            data={[
-              { value: "all", label: "All" },
-              { value: "internal", label: "Internal" },
-              {
-                value: "internal-and-cloud-load-balancing",
-                label: "Internal + Load Balancing"
-              }
-            ]}
-            value={cloudRunOverrides.ingress}
-            onChange={(value) =>
-              updateTargetOverrides("google-cloud-run", {
-                ingress: value ?? "all"
-              })
-            }
-          />
-          <Switch
-            label="Allow unauthenticated"
-            checked={cloudRunOverrides.allowUnauthenticated}
-            onChange={(event) =>
-              updateTargetOverrides("google-cloud-run", {
-                allowUnauthenticated: event.currentTarget.checked
-              })
-            }
-          />
-          <Select
-            label="Gateway Auth Mode"
-            description='"none" leaves the deployed gateway publicly reachable — fine for verification, dangerous for plugin routes that cost money. "bearer" gates every route except /health behind a shared deployment secret (gateway-shared-token); set the value via the Secrets section. Plan 046 expands this enum with real per-user identity providers (Supabase, Auth0, etc.).'
-            data={[
-              { value: "none", label: "None (public, no auth check)" },
-              { value: "bearer", label: "Bearer (shared deployment token)" }
-            ]}
-            value={cloudRunOverrides.gatewayAuthMode}
-            onChange={(value) =>
-              updateTargetOverrides("google-cloud-run", {
-                gatewayAuthMode:
-                  value === "bearer" ? "bearer" : "none"
-              })
-            }
-          />
+          <Box
+            p="sm"
+            style={{
+              border: "1px solid var(--sm-color-surface3)",
+              borderRadius: 8,
+              background: "var(--sm-color-surface1)"
+            }}
+          >
+            <Stack gap="xs">
+              {(() => {
+                const slug = gameProject.identity.id || "sugarmagic-game";
+                const entries = Object.entries(
+                  gameProject.versionedProjectIdentifiers ?? {}
+                )
+                  .map(([key, suffix]) => {
+                    const match = /^v(\d+)$/.exec(key);
+                    return match
+                      ? {
+                          version: Number(match[1]),
+                          key,
+                          suffix,
+                          gcpProjectId: `${slug}-${key}-${suffix}`
+                        }
+                      : null;
+                  })
+                  .filter(
+                    (entry): entry is {
+                      version: number;
+                      key: string;
+                      suffix: string;
+                      gcpProjectId: string;
+                    } => entry !== null
+                  )
+                  .sort((a, b) => b.version - a.version);
+                if (entries.length === 0) {
+                  return (
+                    <Text size="sm" c="var(--sm-color-subtext)">
+                      No version suffixes recorded yet. The current major
+                      (<Code>v{gameProject.majorVersion}</Code>) will register
+                      on the next SugarDeploy save.
+                    </Text>
+                  );
+                }
+                return entries.map((entry) => {
+                  const isActive = entry.version === gameProject.majorVersion;
+                  return (
+                    <Group
+                      key={entry.key}
+                      justify="space-between"
+                      wrap="nowrap"
+                      align="center"
+                    >
+                      <Group gap="xs" align="center" wrap="nowrap">
+                        <Badge
+                          size="md"
+                          variant={isActive ? "filled" : "light"}
+                          color={isActive ? "blue" : "gray"}
+                        >
+                          v{entry.version}
+                        </Badge>
+                        {isActive ? (
+                          <Text size="xs" c="var(--sm-color-subtext)">
+                            (active)
+                          </Text>
+                        ) : null}
+                      </Group>
+                      <Code>{entry.gcpProjectId}</Code>
+                    </Group>
+                  );
+                });
+              })()}
+            </Stack>
+          </Box>
         </Stack>
       ) : null}
+
+      {/* Story 45.8.5 — Sources panel. Sits between Version and Targets
+          because Working Directory + GitHub Repository describe the
+          *source* the deployment runs against; they're the same value
+          regardless of which target ships them. Storage hoisted to
+          DeploymentSettings (not per-target) — single source of truth
+          across all targets. */}
+      {gameProject ? (
+        <Stack gap="sm">
+          <Group gap="xs" align="baseline">
+            <Text fw={700} size="md">
+              Sources
+            </Text>
+            <Text size="xs" c="var(--sm-color-subtext)">
+              — shared across all targets
+            </Text>
+          </Group>
+          <Box
+            p="sm"
+            style={{
+              border: "1px solid var(--sm-color-surface3)",
+              borderRadius: 8,
+              background: "var(--sm-color-surface1)"
+            }}
+          >
+            <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
+              <TextInput
+                label="Working Directory"
+                description="Absolute path to the game root on disk. Required for any host-side deploy/status action."
+                value={gameProject.deployment.workingDirectory}
+                onChange={(event) =>
+                  updateSettings({
+                    ...gameProject.deployment,
+                    workingDirectory: event.currentTarget.value
+                  })
+                }
+              />
+              <TextInput
+                label="GitHub Repository"
+                description="Drives the GCR target's Workload Identity Federation binding so GitHub Actions in this repo can deploy. Pasting a full GitHub URL or git@ clone URL is fine — the prefix and trailing .git get stripped automatically."
+                placeholder="nikki/wordlark"
+                value={rawGithubRepo}
+                error={githubRepoError}
+                onChange={(event) =>
+                  updateSettings({
+                    ...gameProject.deployment,
+                    githubRepo: stripGithubRepoPrefixes(event.currentTarget.value)
+                  })
+                }
+              />
+            </SimpleGrid>
+          </Box>
+        </Stack>
+      ) : null}
+
+      {/* Story 45.8.5 — Targets panel. Mirrors the Version panel's
+          visual structure (title row + bordered card with surface1
+          background) for visual consistency. Configured targets render
+          as tabs; Local is always first; a "+" tab on the far right
+          opens a menu of unselected deployment targets (Mantine Menu
+          wraps a dummy Tabs.Tab so the affordance reads as a tab).
+          Switching tabs flips deploymentTargetId; the "+" picker calls
+          addTarget which both selects AND seeds an empty overrides
+          entry so the tab persists after the user switches away. GCP
+          Project Id is intentionally not exposed — it auto-derives
+          from versioned slug + suffix per 45.4.7 and is shown in the
+          Version panel above. */}
+      {gameProject ? (() => {
+        const allTargets = listDeploymentTargets();
+        const configured = new Set<string>();
+        configured.add("local");
+        if (selectedTargetId && selectedTargetId !== "local") {
+          configured.add(selectedTargetId);
+        }
+        for (const key of Object.keys(
+          gameProject.deployment.targetOverrides ?? {}
+        )) {
+          configured.add(key);
+        }
+        const configuredList = allTargets
+          .filter((t) => configured.has(t.targetId))
+          .sort((a, b) => {
+            if (a.targetId === "local") return -1;
+            if (b.targetId === "local") return 1;
+            return a.displayName.localeCompare(b.displayName);
+          });
+        const availableToAdd = allTargets.filter(
+          (t) => !configured.has(t.targetId)
+        );
+        const tabValue = selectedTargetId ?? "local";
+        return (
+          <Stack gap="sm">
+            <Group gap="xs" align="baseline">
+              <Text fw={700} size="md">
+                Targets
+              </Text>
+            </Group>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Tabs
+                value={tabValue}
+                onChange={(value) => {
+                  if (!value || value === "__add__") return;
+                  if (value === "local" || value === "google-cloud-run") {
+                    updateTarget(value);
+                  }
+                }}
+              >
+                <Tabs.List>
+                  {configuredList.map((t) => (
+                    <Tabs.Tab key={t.targetId} value={t.targetId}>
+                      {t.displayName}
+                    </Tabs.Tab>
+                  ))}
+                  {/* Story 45.8.5 — the "+" affordance sits in Tabs.List
+                      but is NOT a Tabs.Tab. Wrapping Tabs.Tab in Menu.Target
+                      crashes Mantine: Menu.Target clones the child and
+                      injects onClick/ref, which collides with Tabs.Tab's
+                      parent-context wiring. Render a plain Button instead,
+                      styled compact so it reads as a tab affordance. */}
+                  <Menu
+                    shadow="md"
+                    position="bottom-start"
+                    disabled={availableToAdd.length === 0}
+                  >
+                    <Menu.Target>
+                      <Button
+                        size="compact-sm"
+                        variant="subtle"
+                        color="gray"
+                        disabled={availableToAdd.length === 0}
+                        title={
+                          availableToAdd.length === 0
+                            ? "All available deployment targets already configured."
+                            : "Add a deployment target."
+                        }
+                        style={{ alignSelf: "center", marginLeft: 4 }}
+                      >
+                        +
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Label>Add a deployment target</Menu.Label>
+                      {availableToAdd.map((t) => (
+                        <Menu.Item
+                          key={t.targetId}
+                          onClick={() => {
+                            if (
+                              t.targetId === "local" ||
+                              t.targetId === "google-cloud-run"
+                            ) {
+                              addTarget(t.targetId);
+                            }
+                          }}
+                        >
+                          {t.displayName}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Tabs.List>
+
+                <Tabs.Panel value="local" pt="sm">
+                  <Stack gap="sm">
+                    <TextInput
+                      label="Compose Project Name"
+                      value={localOverrides.composeProjectName}
+                      onChange={(event) =>
+                        updateTargetOverrides("local", {
+                          composeProjectName: event.currentTarget.value
+                        })
+                      }
+                    />
+                    <NumberInput
+                      label="Gateway Host Port Base"
+                      value={localOverrides.gatewayHostPortBase}
+                      min={1024}
+                      max={65535}
+                      onChange={(value) =>
+                        updateTargetOverrides("local", {
+                          gatewayHostPortBase: value
+                        })
+                      }
+                    />
+                  </Stack>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="google-cloud-run" pt="sm">
+                  {/* Story 45.8.5 — subsections inside the GCR tab.
+                      Three logical groupings:
+                      - Service: identity + location (workspace path,
+                        repo, region, naming, runtime SA).
+                      - Gateway: how the deployed gateway listens and
+                        who's allowed through (port, ingress, auth).
+                      - Scale: horizontal-scale knobs (min/max instances).
+                      Each subsection has an uppercase subheader and a
+                      two-column SimpleGrid for its fields. */}
+                  <Stack gap="lg">
+                    <Stack gap="sm">
+                      <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                        Service
+                      </Text>
+                      <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
+                        <TextInput
+                          label="Region"
+                          description="GCP region for Cloud Run and Artifact Registry."
+                          placeholder={cloudRunOverrides.region}
+                          value={rawCloudRunString("region")}
+                          onChange={(event) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              region: event.currentTarget.value
+                            })
+                          }
+                        />
+                        <TextInput
+                          label="Service Name Prefix"
+                          description="Leave blank to auto-derive from project identity and major version. Used for Artifact Registry repo, Secret Manager containers, and the WIF pool name."
+                          placeholder={cloudRunOverrides.serviceNamePrefix}
+                          value={rawCloudRunString("serviceNamePrefix")}
+                          onChange={(event) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              serviceNamePrefix: event.currentTarget.value
+                            })
+                          }
+                        />
+                        <TextInput
+                          label="Runtime Service Account Name"
+                          description="Optional. The account_id (left of @) for the Cloud Run runtime service account. Leave blank to auto-derive as ${serviceNamePrefix}-runtime."
+                          placeholder={autoDerivedRuntimeServiceAccount}
+                          value={rawRuntimeServiceAccount}
+                          error={runtimeServiceAccountError}
+                          onChange={(event) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              runtimeServiceAccountName: event.currentTarget.value
+                            })
+                          }
+                        />
+                      </SimpleGrid>
+                    </Stack>
+
+                    <Stack gap="sm">
+                      <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                        Gateway
+                      </Text>
+                      <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
+                        <NumberInput
+                          label="Container Port"
+                          value={cloudRunOverrides.containerPort}
+                          min={1024}
+                          max={65535}
+                          onChange={(value) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              containerPort: value
+                            })
+                          }
+                        />
+                        <Select
+                          label="Ingress"
+                          data={[
+                            { value: "all", label: "All" },
+                            { value: "internal", label: "Internal" },
+                            {
+                              value: "internal-and-cloud-load-balancing",
+                              label: "Internal + Load Balancing"
+                            }
+                          ]}
+                          value={cloudRunOverrides.ingress}
+                          onChange={(value) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              ingress: value ?? "all"
+                            })
+                          }
+                        />
+                        <Select
+                          label="Gateway Auth Mode"
+                          data={[
+                            { value: "none", label: "None (public, no auth check)" },
+                            { value: "bearer", label: "Bearer (shared deployment token)" }
+                          ]}
+                          value={cloudRunOverrides.gatewayAuthMode}
+                          onChange={(value) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              gatewayAuthMode:
+                                value === "bearer" ? "bearer" : "none"
+                            })
+                          }
+                          style={{ gridColumn: "1 / -1" }}
+                        />
+                      </SimpleGrid>
+                    </Stack>
+
+                    <Stack gap="sm">
+                      <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                        Scale
+                      </Text>
+                      <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
+                        <NumberInput
+                          label="Min Instances"
+                          description="Cloud Run keeps at least this many warm. 0 = scale-to-zero (cold starts); 1 = keep one warm for snappy in-game dialog."
+                          value={cloudRunOverrides.minInstances}
+                          min={0}
+                          max={100}
+                          onChange={(value) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              minInstances: value
+                            })
+                          }
+                        />
+                        <NumberInput
+                          label="Max Instances"
+                          description="Hard ceiling on horizontal scale-out. Caps runaway cost from a bug or burst."
+                          value={cloudRunOverrides.maxInstances}
+                          min={1}
+                          max={100}
+                          onChange={(value) =>
+                            updateTargetOverrides("google-cloud-run", {
+                              maxInstances: value
+                            })
+                          }
+                        />
+                      </SimpleGrid>
+                    </Stack>
+                  </Stack>
+                </Tabs.Panel>
+              </Tabs>
+            </Box>
+          </Stack>
+        );
+      })() : null}
 
       {selectedTargetId === "google-cloud-run" ? (
         <Stack gap="xs">
@@ -1248,148 +1893,16 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Stack>
       ) : null}
 
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Deployment Actions
-        </Text>
-        {/* Story 45.7 — non-blocking template-drift banner. Only renders
-            when we have a confirmed older on-disk stamp; absent / parse-
-            failed / equal / newer → no banner (avoid false positives that
-            would train the user to ignore it). Save or Setup Infra
-            regenerates the file and the next probe clears this. */}
-        {selectedTargetId === "google-cloud-run" &&
-        templateDriftState.phase === "loaded" &&
-        templateDriftState.fileExists &&
-        templateDriftState.onDiskVersion !== null &&
-        templateDriftState.currentVersion !== null &&
-        templateDriftState.onDiskVersion < templateDriftState.currentVersion ? (
-          <Alert color="yellow" variant="light" title="Template drift">
-            <Text size="sm">
-              The on-disk terraform template stamp is{" "}
-              <Code>v{templateDriftState.onDiskVersion}</Code>; the current
-              SugarDeploy template is{" "}
-              <Code>v{templateDriftState.currentVersion}</Code>. Save the
-              project (or run Setup Infra) to regenerate{" "}
-              <Code>main.tf</Code> with the current template; the banner
-              will clear automatically.
-            </Text>
-          </Alert>
-        ) : null}
-        {selectedTargetId === "google-cloud-run" ? (
-          <Group>
-            <Tooltip
-              label={
-                probeState.status === "owned"
-                  ? `\`${resolvedGcpProjectId}\` is provisioned and ready.`
-                  : probeState.status === "unknown"
-                    ? probeState.message ?? "Could not determine project ownership."
-                    : "Run gcloud projects create + billing link + services enable. Idempotent — safe to re-run."
-              }
-              withinPortal
-              multiline
-              w={320}
-            >
-              <Button
-                size="xs"
-                variant={createButtonInfo.variant}
-                color={createButtonInfo.color}
-                onClick={handleCreateGcpProjectClick}
-                loading={createButtonInfo.loading}
-                disabled={createButtonInfo.disabled}
-              >
-                {createButtonInfo.label}
-              </Button>
-            </Tooltip>
-            <Tooltip
-              label={
-                actionBlockedReason ??
-                "Create the GCP Project first — Setup Infra runs terraform against it."
-              }
-              disabled={!setupInfraBlockedByProbe && !actionsDisabled}
-              withinPortal
-              multiline
-              w={320}
-            >
-              <Button
-                size="xs"
-                variant="filled"
-                onClick={() => runAction("setup-infra")}
-                loading={
-                  actionState.running && actionState.kind === "setup-infra"
-                }
-                disabled={actionsDisabled || setupInfraBlockedByProbe}
-                title="Run terraform init + apply against the GCP project to stand up Artifact Registry, runtime SA, IAM, WIF, and empty Secret Manager containers. Idempotent — safe to re-run."
-              >
-                Setup Infra
-              </Button>
-            </Tooltip>
-            <Button
-              size="xs"
-              variant="outline"
-              color="red"
-              onClick={() => {
-                const confirmed = window.confirm(
-                  "Teardown Infra will delete every declared Cloud Run service in this project AND run `terraform destroy` against all SugarDeploy-managed infrastructure (Artifact Registry, runtime SA, IAM bindings, WIF, Secret Manager containers).\n\n" +
-                    "Secret VALUES are destroyed with the containers. The GCP project itself stays.\n\n" +
-                    "This is destructive. Proceed?"
-                );
-                if (confirmed) runAction("teardown-infra");
-              }}
-              loading={
-                actionState.running && actionState.kind === "teardown-infra"
-              }
-              disabled={actionsDisabled}
-              title="Delete Cloud Run services first, then `terraform destroy`. The GCP project itself is not deleted (use `gcloud projects delete` for that)."
-            >
-              Teardown Infra
-            </Button>
-          </Group>
-        ) : null}
-        <Group>
-          <Button
-            size="xs"
-            onClick={() => runAction("deploy")}
-            loading={actionState.running && actionState.kind === "deploy"}
-            disabled={actionsDisabled}
-          >
-            Deploy
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            onClick={() => runAction("status")}
-            loading={actionState.running && actionState.kind === "status"}
-            disabled={actionsDisabled}
-          >
-            Status
-          </Button>
-          <Button
-            size="xs"
-            variant="subtle"
-            onClick={() => runAction("health")}
-            loading={actionState.running && actionState.kind === "health"}
-            disabled={actionsDisabled}
-          >
-            Health
-          </Button>
-          <Button
-            size="xs"
-            variant="filled"
-            color="red"
-            onClick={() => runAction("destroy")}
-            loading={actionState.running && actionState.kind === "destroy"}
-            disabled={actionsDisabled}
-          >
-            Destroy
-          </Button>
-        </Group>
-        <Text size="sm" c="var(--sm-color-overlay0)">
-          {actionBlockedReason ??
-            "Save first, then use SugarDeploy actions. Working Directory must point at the game root on disk."}
-        </Text>
-      </Stack>
 
-      {actionState.error ? (
+      {/* Story 45.8.5 — inline result/error boxes are suppressed for
+          Health + Status because their results live in the chip-result
+          modal (opens on chip click). Other actions (deploy, destroy,
+          setup-infra, teardown-infra, create-gcp-project) keep the
+          inline boxes because their multi-second stdout/stderr is
+          genuinely worth a dedicated workspace surface. */}
+      {actionState.error &&
+      actionState.kind !== "health" &&
+      actionState.kind !== "status" ? (
         <Box
           p="md"
           style={{
@@ -1407,7 +1920,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Box>
       ) : null}
 
-      {actionState.result ? (
+      {actionState.result &&
+      actionState.result.descriptor.actionKind !== "health" &&
+      actionState.result.descriptor.actionKind !== "status" ? (
         <Box
           p="md"
           style={{
@@ -1509,6 +2024,132 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           </Stack>
         </Box>
       ) : null}
+
+      {/* Story 45.8.5 — chip-result modal. Opens when the user clicks
+          the Health or Status chip; shows running / ok / error / stdout
+          / stderr for that probe in-place instead of injecting a result
+          box mid-workspace. Reads from actionState but guards on
+          chipModalKind matching the action that's in flight or last
+          settled, so a stale result from a different action doesn't
+          leak in. */}
+      <Modal
+        opened={chipModalKind !== null}
+        onClose={() => setChipModalKind(null)}
+        title={
+          chipModalKind === "health"
+            ? "Health probe"
+            : chipModalKind === "status"
+              ? "Status probe"
+              : ""
+        }
+        centered
+        size="lg"
+      >
+        {actionState.running && actionState.kind === chipModalKind ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">
+              {chipModalKind === "status"
+                ? "Querying gcloud..."
+                : "Probing..."}
+            </Text>
+          </Group>
+        ) : actionState.error && actionState.kind === chipModalKind ? (
+          <Stack gap="xs">
+            <Text fw={700} size="sm" c="red">
+              Action failed
+            </Text>
+            <Code block>{actionState.error}</Code>
+          </Stack>
+        ) : actionState.result &&
+          actionState.result.descriptor.actionKind === chipModalKind ? (
+          <Stack gap="xs">
+            <Text fw={700} size="sm" c={actionState.result.ok ? "green" : "red"}>
+              {actionState.result.ok ? "OK" : "Failed"}
+            </Text>
+            <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+              {actionState.result.message}
+            </Text>
+            {actionState.result.descriptor.command ? (
+              <Code block>{`${actionState.result.descriptor.command.command} ${actionState.result.descriptor.command.args.join(" ")}\n${actionState.result.descriptor.command.cwd}`}</Code>
+            ) : null}
+            {actionState.result.descriptor.healthUrl ? (
+              <Group gap="xs">
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  Health:
+                </Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  onClick={() => {
+                    if (actionState.result?.descriptor.healthUrl) {
+                      window.open(
+                        actionState.result.descriptor.healthUrl,
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }
+                  }}
+                >
+                  {actionState.result.descriptor.healthUrl}
+                </Button>
+              </Group>
+            ) : null}
+            {actionState.result.stdout.trim() ? (
+              <Code block>{actionState.result.stdout}</Code>
+            ) : null}
+            {actionState.result.stderr.trim() ? (
+              <Code block>{actionState.result.stderr}</Code>
+            ) : null}
+          </Stack>
+        ) : (
+          <Text size="sm" c="var(--sm-color-subtext)">
+            Waiting for probe to start...
+          </Text>
+        )}
+      </Modal>
+
+      {/* Story 45.8.5 — Release New Version stub. 45.8 will replace
+          this body with the real Cut New Major Version flow: pre-flight
+          checks (clean working tree, git on PATH, tag doesn't exist),
+          confirmation showing the new tag name and the next GCP project
+          id, then the sequenced operation. For now the modal exists so
+          the affordance is discoverable and explicit about not being
+          wired. */}
+      <Modal
+        opened={releaseModalOpen}
+        onClose={() => setReleaseModalOpen(false)}
+        title="Release New Version"
+        centered
+        size="md"
+      >
+        <Stack>
+          <Text size="sm">
+            Cutting a new major version produces a new git tag (e.g.{" "}
+            <Code>v{(gameProject?.majorVersion ?? 1) + 1}.0.0</Code>), bumps
+            the project's <Code>majorVersion</Code> to{" "}
+            <Code>v{(gameProject?.majorVersion ?? 1) + 1}</Code>, commits
+            the bump, and shifts SugarDeploy to a fresh GCP project so the
+            previous version keeps running side-by-side.
+          </Text>
+          <Alert color="yellow" variant="light" title="Not wired yet">
+            <Text size="sm">
+              The flow lands in Story 45.8 (Cut New Major Version).
+              Clicking <em>Cut Version</em> below is a no-op for now —
+              nothing in git, nothing in GCP changes. Close this modal
+              and come back once 45.8 ships.
+            </Text>
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setReleaseModalOpen(false)}>
+              Close
+            </Button>
+            <Button disabled title="Wired in Story 45.8.">
+              Cut Version
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={createState.phase === "picking-billing"}
@@ -1650,28 +2291,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         )}
       </Stack>
 
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Managed Files
-        </Text>
-        {plan?.managedFiles.length ? (
-          plan.managedFiles.map((file) => (
-            <Code key={file.relativePath} block>
-              {file.relativePath}
-            </Code>
-          ))
-        ) : (
-          <Text size="sm" c="var(--sm-color-overlay0)">
-            Select a deployment target to see generated deployment outputs.
-          </Text>
-        )}
-      </Stack>
-
-      <Alert color="blue" variant="light" title="Managed Files">
-        <Text size="sm">
-          SugarDeploy-generated files are managed surfaces. If you need customization, use deployment settings and extension points instead of editing generated files directly.
-        </Text>
-      </Alert>
     </Stack>
   );
 }

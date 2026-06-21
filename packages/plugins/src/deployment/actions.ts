@@ -337,13 +337,6 @@ export function resolveDeploymentActionFromSettings(
       return resolveLocalAction(context, actionKind);
     case "google-cloud-run":
       return resolveGoogleCloudRunAction(context, actionKind);
-    case "aws-fargate":
-      return {
-        targetId,
-        actionKind,
-        supported: false,
-        reason: "AWS Fargate execution actions are not implemented yet."
-      };
   }
 }
 
@@ -356,7 +349,5 @@ export function describeTargetOverrides(
       return { ...normalizeLocalDeploymentTargetOverrides(overrides) };
     case "google-cloud-run":
       return { ...normalizeGoogleCloudRunDeploymentTargetOverrides(overrides) };
-    case "aws-fargate":
-      return overrides;
   }
 }

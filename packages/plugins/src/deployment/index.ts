@@ -1710,9 +1710,13 @@ function formatCloudRunDeployScript(
     )
     .join("\n");
   const ingressArg = `--ingress=${overrides.ingress}`;
-  const allowUnauthArg = overrides.allowUnauthenticated
-    ? "--allow-unauthenticated"
-    : "--no-allow-unauthenticated";
+  // Story 45.8.5 — Cloud Run platform-level IAM is hardcoded open. End
+  // users (browser/mobile/native) authenticate via the gateway's app
+  // layer (gatewayAuthMode + Plan 046's per-user IDP plugins), never
+  // via Google ID tokens. Flipping this to `--no-allow-unauthenticated`
+  // would brick the service for any non-GCP-principal caller, which is
+  // every consumer-facing client we ship to.
+  const allowUnauthArg = "--allow-unauthenticated";
   // Story 45.5 baked-in defaults. cpu, memory, cpu-throttling are not yet
   // exposed as form fields (deferred to the 45.8.5 lifecycle UX overhaul);
   // these values are the right-sized shape for a thin HTTP proxy gateway.
@@ -1844,7 +1848,6 @@ function buildGoogleCloudRunManagedFiles(
         `SUGARDEPLOY_WORKING_DIRECTORY=${overrides.workingDirectory}`,
         `SUGARMAGIC_GCP_PROJECT_ID=${overrides.projectId}`,
         `SUGARMAGIC_GCP_REGION=${overrides.region}`,
-        `SUGARMAGIC_GCP_ALLOW_UNAUTHENTICATED=${overrides.allowUnauthenticated ? "true" : "false"}`,
         `SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5`,
         `SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
         `SUGARMAGIC_OPENAI_VECTOR_STORE_ID=`
@@ -1941,44 +1944,6 @@ const targetHandlers: Record<DeploymentTargetId, DeploymentTargetHandler> = {
     },
     buildManagedFiles: buildGoogleCloudRunManagedFiles
   },
-  "aws-fargate": {
-    definition: {
-      targetId: "aws-fargate",
-      displayName: "AWS Fargate",
-      summary: "Hosted deployment target for ECS/Fargate style service topology.",
-      implemented: false
-    },
-    normalizeOverrides: () => ({}),
-    buildManagedFiles: (plan) => {
-      const dir = "deployment/aws-fargate";
-      return [
-        asTextFile(
-          `${dir}/README.md`,
-          withHeader(
-            "#",
-            [
-              "# AWS Fargate",
-              "",
-              "This target is planned by SugarDeploy, but the AWS-specific handler is not implemented yet.",
-              "",
-              "Requirement summary:",
-              `- ${plan.requirements.length} requirements`,
-              `- ${plan.serviceUnits.length} service units`
-            ].join("\n")
-          )
-        ),
-        asJsonFile(`${dir}/deployment-plan.json`, {
-          publishTargetId: plan.publishTargetId,
-          deploymentTargetId: plan.deploymentTargetId,
-          status: plan.status,
-          requirements: plan.requirements,
-          serviceUnits: plan.serviceUnits,
-          conflicts: plan.conflicts,
-          warnings: plan.warnings
-        })
-      ];
-    }
-  }
 };
 
 export function listDeploymentTargets(): DeploymentTargetDefinition[] {
