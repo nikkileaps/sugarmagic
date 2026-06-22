@@ -62,6 +62,7 @@ import type {
   RemovePostProcessShaderCommand,
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
+  BumpMajorVersionCommand,
   CreateMenuDefinitionCommand,
   UpdateMenuDefinitionCommand,
   DeleteMenuDefinitionCommand,
@@ -1249,6 +1250,40 @@ function applyDeletePluginConfigurationCommand(
 // `pluginConfigurations[].config` slot. The deploy plugin contributes
 // typed builders that produce the right payload shape.
 
+// Story 45.8 — bump `majorVersion`. Idempotent / no-op when the
+// requested value already matches. Rejects non-integer / non-positive
+// inputs by leaving the session unchanged (the cut saga rolls back
+// rather than dispatching invalid bumps; this is the belt-and-suspenders).
+function applyBumpMajorVersionCommand(
+  session: AuthoringSession,
+  command: BumpMajorVersionCommand
+): AuthoringSession {
+  const target = command.payload.newMajorVersion;
+  if (
+    typeof target !== "number" ||
+    !Number.isFinite(target) ||
+    target < 1 ||
+    Math.floor(target) !== target
+  ) {
+    return session;
+  }
+  if (session.gameProject.majorVersion === target) return session;
+  const transaction = createTransactionForCommand(command, [
+    session.gameProject.identity.id
+  ]);
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      majorVersion: target
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyPlayerDefinitionCommand(
   session: AuthoringSession,
   command: UpdatePlayerDefinitionCommand
@@ -2131,6 +2166,10 @@ export function applyCommand(
 
   if (command.kind === "DeletePluginConfiguration") {
     return applyDeletePluginConfigurationCommand(session, command);
+  }
+
+  if (command.kind === "BumpMajorVersion") {
+    return applyBumpMajorVersionCommand(session, command);
   }
 
   if (command.kind === "CreateMenuDefinition") {

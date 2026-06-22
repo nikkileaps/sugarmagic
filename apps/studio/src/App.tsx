@@ -304,9 +304,26 @@ function dispatchCommand(command: SemanticCommand) {
   projectStore.getState().updateSession(applyCommand(session, command));
 }
 
-async function handleSave() {
+interface PerformSaveOptions {
+  // Story 45.8 — `true` skips the managed-files overwrite confirm
+  // dialog. Used by plugin-driven sagas (cut-major-version) that have
+  // already confirmed the operation up-front through their own modal
+  // and just need to flush the bumped state to disk silently.
+  silentOverwriteManagedFiles: boolean;
+}
+
+interface PerformSaveResult {
+  ok: boolean;
+  reason?: string;
+}
+
+async function performSave(
+  options: PerformSaveOptions
+): Promise<PerformSaveResult> {
   const { handle, descriptor, session } = projectStore.getState();
-  if (!handle || !descriptor || !session) return;
+  if (!handle || !descriptor || !session) {
+    return { ok: false, reason: "No project is loaded." };
+  }
   const mechanicsValidation = validateMechanicsDefinition(
     session.gameProject.mechanics,
     {
@@ -317,12 +334,13 @@ async function handleSave() {
     }
   );
   if (!mechanicsValidation.valid) {
-    window.alert(
-      `Project mechanics are invalid and the project was not saved:\n\n${mechanicsValidation.issues
-        .map((issue) => `- ${issue.path}: ${issue.message}`)
-        .join("\n")}`
-    );
-    return;
+    const reason = `Project mechanics are invalid:\n${mechanicsValidation.issues
+      .map((issue) => `- ${issue.path}: ${issue.message}`)
+      .join("\n")}`;
+    if (!options.silentOverwriteManagedFiles) {
+      window.alert(`${reason}\n\nProject was not saved.`);
+    }
+    return { ok: false, reason };
   }
   const baseSaveInput = {
     handle,
@@ -342,53 +360,16 @@ async function handleSave() {
       ? planGameDeployment(session.gameProject)
       : null;
 
-  if (deploymentPlan?.status === "invalid") {
-    window.alert(
-      `Deployment plan is invalid and managed deployment files were not generated:\n\n${deploymentPlan.conflicts
+  try {
+    if (deploymentPlan?.status === "invalid") {
+      const reason = `Deployment plan is invalid:\n${deploymentPlan.conflicts
         .map((conflict) => `- ${conflict.message}`)
-        .join("\n")}`
-    );
-    const result = await saveProjectWithManagedFiles(baseSaveInput);
-    projectStore.getState().updateSession(
-      markSessionClean({
-        ...session,
-        contentLibrary: result.reconciledContentLibrary
-      })
-    );
-    return;
-  }
-
-  const managedFiles = deploymentPlan?.managedFiles ?? [];
-  const inspection = await inspectManagedProjectFiles({
-    handle,
-    managedFiles
-  });
-
-  if (inspection.changedManagedFiles.length > 0) {
-    const changedOnly = inspection.changedManagedFiles.filter(
-      (path) => !inspection.driftedManagedFiles.includes(path)
-    );
-    const messageParts = [
-      "SugarDeploy detected existing managed deployment files that will be regenerated on save."
-    ];
-    if (changedOnly.length > 0) {
-      messageParts.push(
-        "",
-        "Generated files to overwrite:",
-        ...changedOnly.map((path) => `- ${path}`)
-      );
-    }
-    if (inspection.driftedManagedFiles.length > 0) {
-      messageParts.push(
-        "",
-        "Files with manual edits that will be overwritten:",
-        ...inspection.driftedManagedFiles.map((path) => `- ${path}`)
-      );
-    }
-    messageParts.push("", "Overwrite these managed deployment files?");
-
-    const confirmed = window.confirm(messageParts.join("\n"));
-    if (!confirmed) {
+        .join("\n")}`;
+      if (!options.silentOverwriteManagedFiles) {
+        window.alert(
+          `${reason}\n\nManaged deployment files were not generated; project.sgrmagic was still saved.`
+        );
+      }
       const result = await saveProjectWithManagedFiles(baseSaveInput);
       projectStore.getState().updateSession(
         markSessionClean({
@@ -396,22 +377,82 @@ async function handleSave() {
           contentLibrary: result.reconciledContentLibrary
         })
       );
-      return;
+      return { ok: false, reason };
     }
+
+    const managedFiles = deploymentPlan?.managedFiles ?? [];
+    const inspection = await inspectManagedProjectFiles({
+      handle,
+      managedFiles
+    });
+
+    if (
+      inspection.changedManagedFiles.length > 0 &&
+      !options.silentOverwriteManagedFiles
+    ) {
+      const changedOnly = inspection.changedManagedFiles.filter(
+        (path) => !inspection.driftedManagedFiles.includes(path)
+      );
+      const messageParts = [
+        "SugarDeploy detected existing managed deployment files that will be regenerated on save."
+      ];
+      if (changedOnly.length > 0) {
+        messageParts.push(
+          "",
+          "Generated files to overwrite:",
+          ...changedOnly.map((path) => `- ${path}`)
+        );
+      }
+      if (inspection.driftedManagedFiles.length > 0) {
+        messageParts.push(
+          "",
+          "Files with manual edits that will be overwritten:",
+          ...inspection.driftedManagedFiles.map((path) => `- ${path}`)
+        );
+      }
+      messageParts.push("", "Overwrite these managed deployment files?");
+
+      const confirmed = window.confirm(messageParts.join("\n"));
+      if (!confirmed) {
+        const result = await saveProjectWithManagedFiles(baseSaveInput);
+        projectStore.getState().updateSession(
+          markSessionClean({
+            ...session,
+            contentLibrary: result.reconciledContentLibrary
+          })
+        );
+        return { ok: true };
+      }
+    }
+
+    const result = await saveProjectWithManagedFiles({
+      ...baseSaveInput,
+      managedFiles,
+      overwriteManagedFiles: inspection.changedManagedFiles.length > 0
+    });
+
+    projectStore.getState().updateSession(
+      markSessionClean({
+        ...session,
+        contentLibrary: result.reconciledContentLibrary
+      })
+    );
+    return { ok: true };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason };
   }
+}
 
-  const result = await saveProjectWithManagedFiles({
-    ...baseSaveInput,
-    managedFiles,
-    overwriteManagedFiles: inspection.changedManagedFiles.length > 0
-  });
+async function handleSave() {
+  await performSave({ silentOverwriteManagedFiles: false });
+}
 
-  projectStore.getState().updateSession(
-    markSessionClean({
-      ...session,
-      contentLibrary: result.reconciledContentLibrary
-    })
-  );
+// Story 45.8 — exposed to the plugin workspace via PluginWorkspaceViewProps.
+// Lets sagas (cut-major-version is the first) flush in-memory dispatches
+// to disk mid-flow with no UI prompts.
+async function requestSaveFromPlugin(): Promise<PerformSaveResult> {
+  return performSave({ silentOverwriteManagedFiles: true });
 }
 
 async function handleReload() {
@@ -2080,7 +2121,8 @@ export function App() {
       gameProjectId: session?.gameProject.identity.id ?? null,
       gameProject: session?.gameProject ?? null,
       pluginConfigurations,
-      onCommand: dispatchCommand
+      onCommand: dispatchCommand,
+      requestSave: requestSaveFromPlugin
     });
   }, [
     activePluginWorkspaceDefinition,

@@ -122,6 +122,385 @@ async function ensureGcloudOnPath(): Promise<string | null> {
   return result.available ? null : result.reason;
 }
 
+async function ensureGitOnPath(): Promise<string | null> {
+  const result = await ensureBinaryOnPath("git", {
+    installHint:
+      "Install git (https://git-scm.com/downloads) and ensure it is on your PATH before running Cut New Major Version."
+  });
+  return result.available ? null : result.reason;
+}
+
+// Story 45.8 — shared pre-flight for the cut-major-version saga. Verifies
+// that the host can safely tag the prior major and commit the bump:
+// git on PATH, working directory is inside a git work tree, working tree
+// is clean (no uncommitted modifications + no untracked files that would
+// be swept into a `git add -u`), and the tag we're about to create
+// doesn't already exist. Returns null on pass, a user-readable reason
+// string on fail. Re-run by every cut endpoint so the server enforces
+// — the Studio UI's disable state is advisory, not authoritative.
+async function preflightCutMajorVersion(
+  workingDirectory: string,
+  priorMajor: number
+): Promise<string | null> {
+  if (!workingDirectory || workingDirectory.length === 0) {
+    return "workingDirectory is required.";
+  }
+  if (!existsSync(workingDirectory)) {
+    return `workingDirectory does not exist on disk: ${workingDirectory}`;
+  }
+  const gitErr = await ensureGitOnPath();
+  if (gitErr) return gitErr;
+  const inside = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "--is-inside-work-tree"],
+    cwd: workingDirectory
+  });
+  if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+    return `${workingDirectory} is not inside a git working tree.`;
+  }
+  const status = await runHostCommand({
+    command: "git",
+    args: ["status", "--porcelain"],
+    cwd: workingDirectory
+  });
+  if (status.exitCode !== 0) {
+    return `git status failed: ${status.stderr.trim() || `exit code ${status.exitCode}`}`;
+  }
+  if (status.stdout.trim().length > 0) {
+    return "Working tree is not clean. Commit or stash uncommitted changes before cutting a new major version.";
+  }
+  if (
+    typeof priorMajor !== "number" ||
+    !Number.isFinite(priorMajor) ||
+    priorMajor < 1 ||
+    Math.floor(priorMajor) !== priorMajor
+  ) {
+    return `priorMajor must be a positive integer; got ${String(priorMajor)}.`;
+  }
+  const tagName = `v${priorMajor}.0.0`;
+  const tagCheck = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "--verify", "--quiet", `refs/tags/${tagName}`],
+    cwd: workingDirectory
+  });
+  if (tagCheck.exitCode === 0) {
+    return `Tag ${tagName} already exists. Cut from a clean tag history (or delete the existing tag manually if it was created in error).`;
+  }
+  return null;
+}
+
+interface CutMajorVersionPrepareRequest {
+  workingDirectory: unknown;
+  priorMajor: unknown;
+}
+
+interface CutMajorVersionTagRequest {
+  workingDirectory: unknown;
+  priorMajor: unknown;
+}
+
+interface CutMajorVersionCommitRequest {
+  workingDirectory: unknown;
+  newMajor: unknown;
+}
+
+function readWorkingDirectory(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readPositiveInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (value < 1) return null;
+  if (Math.floor(value) !== value) return null;
+  return value;
+}
+
+function createCutMajorVersionPreparePlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-cut-major-version-prepare",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/prepare-cut-major-version",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<CutMajorVersionPrepareRequest>;
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const priorMajor = readPositiveInteger(body.priorMajor);
+            if (priorMajor === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "priorMajor must be a positive integer."
+              });
+              return;
+            }
+            const reason = await preflightCutMajorVersion(
+              workingDirectory,
+              priorMajor
+            );
+            if (reason) {
+              sendJson(res, 200, { ok: false, reason });
+              return;
+            }
+            sendJson(res, 200, { ok: true });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+function createCutMajorVersionTagPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-cut-major-version-tag",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/tag-prior-major",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<CutMajorVersionTagRequest>;
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const priorMajor = readPositiveInteger(body.priorMajor);
+            if (priorMajor === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "priorMajor must be a positive integer."
+              });
+              return;
+            }
+            // Server-enforced re-check: the saga's earlier prepare-call
+            // could have raced an external git operation that polluted
+            // the tree or claimed the tag. Re-validate before any side
+            // effect.
+            const reason = await preflightCutMajorVersion(
+              workingDirectory,
+              priorMajor
+            );
+            if (reason) {
+              sendJson(res, 200, { ok: false, reason });
+              return;
+            }
+            const tagName = `v${priorMajor}.0.0`;
+            const tagResult = await runHostCommand({
+              command: "git",
+              args: ["tag", tagName, "HEAD"],
+              cwd: workingDirectory
+            });
+            if (tagResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag ${tagName} failed: ${tagResult.stderr.trim() || `exit code ${tagResult.exitCode}`}`,
+                stdout: tagResult.stdout,
+                stderr: tagResult.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              tagName,
+              stdout: tagResult.stdout,
+              stderr: tagResult.stderr
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+// Story 45.8 — saga rollback helper. The orchestrator calls this when
+// the bump/persist/commit step fails after `git tag` already succeeded:
+// `git tag -d v{prior}.0.0` removes the orphaned tag so the next attempt
+// finds a clean tag history. Pre-flight is intentionally light (just
+// git-on-PATH + work-tree check) because this runs as a recovery
+// operation; the request that needed the strict pre-flight already ran.
+function createCutMajorVersionUntagPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-cut-major-version-untag",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/untag-prior-major",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<CutMajorVersionTagRequest>;
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const priorMajor = readPositiveInteger(body.priorMajor);
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (priorMajor === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "priorMajor must be a positive integer."
+              });
+              return;
+            }
+            const gitErr = await ensureGitOnPath();
+            if (gitErr) {
+              sendJson(res, 200, { ok: false, reason: gitErr });
+              return;
+            }
+            const tagName = `v${priorMajor}.0.0`;
+            const result = await runHostCommand({
+              command: "git",
+              args: ["tag", "-d", tagName],
+              cwd: workingDirectory
+            });
+            if (result.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag -d ${tagName} failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`,
+                stdout: result.stdout,
+                stderr: result.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              tagName,
+              stdout: result.stdout,
+              stderr: result.stderr
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+function createCutMajorVersionCommitPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-cut-major-version-commit",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/commit-major-version-bump",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<CutMajorVersionCommitRequest>;
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const newMajor = readPositiveInteger(body.newMajor);
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (newMajor === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "newMajor must be a positive integer."
+              });
+              return;
+            }
+            // Lighter pre-flight than the prepare/tag steps: by the time
+            // we reach commit, the working tree IS expected to be dirty
+            // (Studio persisted the bumped project.sgrmagic + regenerated
+            // managed files). We only re-verify git is on PATH + this is
+            // a work tree.
+            const gitErr = await ensureGitOnPath();
+            if (gitErr) {
+              sendJson(res, 200, { ok: false, reason: gitErr });
+              return;
+            }
+            const inside = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--is-inside-work-tree"],
+              cwd: workingDirectory
+            });
+            if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `${workingDirectory} is not inside a git working tree.`
+              });
+              return;
+            }
+            // Stage every tracked-file modification. The pre-flight at
+            // prepare-time required a clean tree, so the only changes
+            // present are the ones Studio just produced (project.sgrmagic
+            // bump + regenerated managed files). `-u` skips untracked
+            // files for safety.
+            const addResult = await runHostCommand({
+              command: "git",
+              args: ["add", "-u"],
+              cwd: workingDirectory
+            });
+            if (addResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git add -u failed: ${addResult.stderr.trim() || `exit code ${addResult.exitCode}`}`,
+                stdout: addResult.stdout,
+                stderr: addResult.stderr
+              });
+              return;
+            }
+            const commitMessage = `chore: bump major version to ${newMajor}`;
+            const commitResult = await runHostCommand({
+              command: "git",
+              args: ["commit", "-m", commitMessage],
+              cwd: workingDirectory
+            });
+            if (commitResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git commit failed: ${commitResult.stderr.trim() || `exit code ${commitResult.exitCode}`}`,
+                stdout: commitResult.stdout,
+                stderr: commitResult.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              commitMessage,
+              stdout: commitResult.stdout,
+              stderr: commitResult.stderr
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 // Story 45.6 — Cloud Run + local health probe. Single-shot fetch with a 5s
 // AbortSignal timeout; no retries, no redirect follow. The body is
 // truncated to 512 bytes so a chatty gateway doesn't choke the response.
@@ -1326,6 +1705,10 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createGcpProjectLifecyclePlugin(),
     createSetSecretValuePlugin(),
     createSecretStatusPlugin(),
-    createTemplateVersionPlugin()
+    createTemplateVersionPlugin(),
+    createCutMajorVersionPreparePlugin(),
+    createCutMajorVersionTagPlugin(),
+    createCutMajorVersionUntagPlugin(),
+    createCutMajorVersionCommitPlugin()
   ];
 }

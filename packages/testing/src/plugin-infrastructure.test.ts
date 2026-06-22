@@ -13,6 +13,8 @@ const hasTerraform = (() => {
   }
 })();
 import {
+  applyCommand,
+  createAuthoringSession,
   createDefaultDeploymentSettings,
   createDeploymentRequirementId,
   createPluginConfigurationRecord,
@@ -33,6 +35,7 @@ import {
   REQUIRED_GCP_APIS,
   buildGcpProjectName,
   classifyProjectListResult,
+  buildSetVersionedProjectIdentifierCommand,
   collectSecretEnvBindings,
   getVersionedProjectIdentifiers,
   isValidGcpProjectId,
@@ -277,14 +280,19 @@ describe("plugin infrastructure", () => {
       expect(typeof plugin.name).toBe("string");
       expect(typeof plugin.configureServer).toBe("function");
     }
-    // SugarDeploy contributes six middleware plugins:
+    // SugarDeploy contributes the following middleware plugins:
     // - action dispatcher (/__sugardeploy/action)
     // - billing list (/__sugardeploy/list-billing-accounts)
     // - GCP project lifecycle (/__sugardeploy/probe-gcp-project + /create-gcp-project)
     // - set-secret-value (/__sugardeploy/set-secret-value, story 45.5)
     // - secret-status (/__sugardeploy/secret-status, story 45.5)
     // - template-version (/__sugardeploy/template-version, story 45.7)
+    // - cut-major-version prepare/tag/untag/commit (/__sugardeploy/{prepare,tag,untag}-..., story 45.8)
     expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
+      "sugardeploy-cut-major-version-commit",
+      "sugardeploy-cut-major-version-prepare",
+      "sugardeploy-cut-major-version-tag",
+      "sugardeploy-cut-major-version-untag",
       "sugardeploy-gcp-billing-list",
       "sugardeploy-gcp-project-lifecycle",
       "sugardeploy-host-actions",
@@ -835,6 +843,166 @@ describe("plugin infrastructure", () => {
     expect(getVersionedProjectIdentifiers(projectWithJunk)).toEqual({
       v1: "k3m9p",
       v5: "12345"
+    });
+  });
+
+  it("BumpMajorVersion command bumps majorVersion and is idempotent on no-change / invalid input", () => {
+    // Story 45.8 — the cut saga dispatches BumpMajorVersion as the
+    // in-memory bump step. Pure game-authoring concern: just sets
+    // gameProject.majorVersion. Validation is belt-and-suspenders;
+    // invalid values silently no-op rather than corrupting state.
+    const session = createAuthoringSession(
+      normalizeGameProject({
+        ...makeProject(),
+        majorVersion: 1
+      }),
+      []
+    );
+    const bumped = applyCommand(session, {
+      kind: "BumpMajorVersion",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: session.gameProject.identity.id
+      },
+      subject: {
+        subjectKind: "game-project",
+        subjectId: session.gameProject.identity.id
+      },
+      payload: { newMajorVersion: 2 }
+    });
+    expect(bumped.gameProject.majorVersion).toBe(2);
+    expect(bumped.isDirty).toBe(true);
+    // Idempotent: a second bump to the same value returns the session
+    // unchanged (same reference would be a nicer guarantee but the
+    // applier returns a fresh-ish object; the value is what matters).
+    const noOpBump = applyCommand(bumped, {
+      kind: "BumpMajorVersion",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: session.gameProject.identity.id
+      },
+      subject: {
+        subjectKind: "game-project",
+        subjectId: session.gameProject.identity.id
+      },
+      payload: { newMajorVersion: 2 }
+    });
+    expect(noOpBump).toBe(bumped);
+    // Invalid inputs leave the session unchanged.
+    for (const invalid of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const result = applyCommand(bumped, {
+        kind: "BumpMajorVersion",
+        target: {
+          aggregateKind: "game-project",
+          aggregateId: session.gameProject.identity.id
+        },
+        subject: {
+          subjectKind: "game-project",
+          subjectId: session.gameProject.identity.id
+        },
+        payload: { newMajorVersion: invalid }
+      });
+      expect(result.gameProject.majorVersion).toBe(2);
+    }
+  });
+
+  it("buildSetVersionedProjectIdentifierCommand registers a fresh suffix and is a no-op when the entry exists", () => {
+    // Story 45.8 — historical-suffix immutability rule (carried forward
+    // from 45.4.7): once a major has a recorded suffix, the builder
+    // returns null so the cut saga can skip the dispatch. This is what
+    // makes worktrees / `git checkout v1.0.0` resolve back to the
+    // original v1 GCP project rather than getting a freshly-rolled
+    // suffix on every reopen.
+    const project = normalizeGameProject({
+      ...makeProject(),
+      majorVersion: 1
+    });
+    const registerV2 = buildSetVersionedProjectIdentifierCommand(
+      project,
+      2,
+      "k3m9p"
+    );
+    expect(registerV2).not.toBeNull();
+    expect(registerV2?.kind).toBe("UpdatePluginConfiguration");
+    // Apply the dispatch so the slot now carries v2 = "k3m9p".
+    const session = createAuthoringSession(project, []);
+    const sessionAfter = applyCommand(session, registerV2!);
+    expect(getVersionedProjectIdentifiers(sessionAfter.gameProject)).toEqual({
+      v2: "k3m9p"
+    });
+    // Second register for the SAME major is a no-op (returns null) —
+    // the historical suffix is immutable.
+    const registerAgain = buildSetVersionedProjectIdentifierCommand(
+      sessionAfter.gameProject,
+      2,
+      "xxxxx"
+    );
+    expect(registerAgain).toBeNull();
+    // Registering a DIFFERENT major still works.
+    const registerV3 = buildSetVersionedProjectIdentifierCommand(
+      sessionAfter.gameProject,
+      3,
+      "abcde"
+    );
+    expect(registerV3).not.toBeNull();
+    const sessionWithV3 = applyCommand(sessionAfter, registerV3!);
+    expect(getVersionedProjectIdentifiers(sessionWithV3.gameProject)).toEqual({
+      v2: "k3m9p",
+      v3: "abcde"
+    });
+  });
+
+  it("Cut New Major Version (in-memory): bumped session resolves new versionedSlug and preserves prior suffix", () => {
+    // Story 45.8 — end-to-end in-memory: starting from wordlark at v1,
+    // applying BumpMajorVersion + buildSetVersionedProjectIdentifierCommand
+    // produces a session whose planGameDeployment resolves to the v2
+    // project id while the v1 suffix is preserved (so a future worktree
+    // at v1.0.0 still resolves back to wordlark-v1-${origSuffix}).
+    const project = normalizeGameProject({
+      ...makeProject(),
+      identity: { id: "wordlark", schema: "GameProject", version: 1 },
+      displayName: "Wordlark",
+      majorVersion: 1,
+      versionedProjectIdentifiers: { v1: "k3m9p" },
+      deployment: {
+        publishTargetId: "web",
+        deploymentTargetId: "google-cloud-run",
+        targetOverrides: {}
+      },
+      pluginConfigurations: [
+        createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+      ]
+    });
+    let session = createAuthoringSession(project, []);
+    session = applyCommand(session, {
+      kind: "BumpMajorVersion",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: session.gameProject.identity.id
+      },
+      subject: {
+        subjectKind: "game-project",
+        subjectId: session.gameProject.identity.id
+      },
+      payload: { newMajorVersion: 2 }
+    });
+    const registerV2 = buildSetVersionedProjectIdentifierCommand(
+      session.gameProject,
+      2,
+      "abcde"
+    );
+    expect(registerV2).not.toBeNull();
+    session = applyCommand(session, registerV2!);
+
+    expect(session.gameProject.majorVersion).toBe(2);
+    expect(getVersionedProjectIdentifiers(session.gameProject)).toEqual({
+      v1: "k3m9p",
+      v2: "abcde"
+    });
+    const planV2 = planGameDeployment(session.gameProject);
+    expect(planV2.targetOverrides).toMatchObject({
+      projectId: "wordlark-v2-abcde",
+      serviceNamePrefix: "wordlark-v2-abcde"
     });
   });
 

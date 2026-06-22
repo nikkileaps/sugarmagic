@@ -177,7 +177,7 @@ function SecretValueForm(props: SecretValueFormProps) {
 }
 
 function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
-  const { gameProjectId, gameProject, onCommand } = props;
+  const { gameProjectId, gameProject, onCommand, requestSave } = props;
   const [actionState, setActionState] = useState<{
     kind: DeploymentActionKind | null;
     result: DeploymentActionExecutionResult | null;
@@ -258,13 +258,51 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     "health" | "status" | null
   >(null);
 
-  // Story 45.8.5 — Release New Version stub. The button at the top of
-  // the lifecycle section opens this modal as a placeholder until 45.8
-  // wires the actual Cut New Major Version flow (git tag + bump + commit
-  // + new GCP project orchestration). Modal exists so the affordance is
-  // discoverable; clicking through it is a no-op explicitly labelled
-  // "not wired yet" so users don't think a step silently succeeded.
-  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
+  // Story 45.8 — Release New Version (Cut New Major Version) modal.
+  // Phase machine drives the modal body: from `checking` (prepare host
+  // action in flight) -> `ready` (preview the planned cut) -> `cutting`
+  // (each step of the saga as it runs) -> `success` or `failed`. `null`
+  // is "modal closed."
+  type ReleaseModalState =
+    | null
+    | { phase: "checking" }
+    | { phase: "preflight-failed"; reason: string }
+    | {
+        phase: "ready";
+        priorMajor: number;
+        newMajorVersion: number;
+        newSuffix: string;
+        newProjectId: string;
+        newTagName: string;
+        commitMessage: string;
+        workingDirectory: string;
+      }
+    | {
+        phase: "cutting";
+        step: "tagging" | "bumping" | "persisting" | "committing";
+        priorMajor: number;
+        newMajorVersion: number;
+        newTagName: string;
+        commitMessage: string;
+        workingDirectory: string;
+        newSuffix: string;
+      }
+    | {
+        phase: "success";
+        newMajorVersion: number;
+        newTagName: string;
+        commitMessage: string;
+      }
+    | {
+        phase: "failed";
+        reason: string;
+        recoveryNotes: string[];
+      };
+  const [releaseModalState, setReleaseModalState] = useState<ReleaseModalState>(null);
+  const releaseModalOpen = releaseModalState !== null;
+  const releaseModalBusy =
+    releaseModalState?.phase === "checking" ||
+    releaseModalState?.phase === "cutting";
 
   // Story 45.8.5 — placeholder for the "+ add publish target" tab
   // that lands in plan 047. Today's data model carries a singular
@@ -756,6 +794,246 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     hostActionsAvailable,
     gameProject
   ]);
+
+  // Story 45.8 — Cut New Major Version saga.
+  //
+  // Phase 1: prepare. Open the modal in "checking" state and fire the
+  // prepare-cut-major-version host action. The host runs all pre-flight
+  // checks server-side (git on PATH, clean tree, tag doesn't exist).
+  // If pre-flight passes, generate the new suffix client-side and
+  // transition to "ready" with the proposed plan; otherwise "preflight-
+  // failed" with the reason. No side effects in this phase.
+  async function openReleaseModalAndPrepare() {
+    if (!gameProject) return;
+    const priorMajor = gameProject.majorVersion;
+    const workingDirectory =
+      getDeploymentSettings(gameProject).workingDirectory ?? "";
+    setReleaseModalState({ phase: "checking" });
+    try {
+      const response = await fetch(
+        "/__sugardeploy/prepare-cut-major-version",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ workingDirectory, priorMajor })
+        }
+      );
+      const payload = (await response.json()) as {
+        ok: boolean;
+        reason?: string;
+      };
+      if (!payload.ok) {
+        setReleaseModalState({
+          phase: "preflight-failed",
+          reason: payload.reason ?? "Pre-flight check failed."
+        });
+        return;
+      }
+      const newMajorVersion = priorMajor + 1;
+      const newSuffix = generateProjectIdSuffix();
+      const slug = gameProject.identity.id || "sugarmagic-game";
+      const newProjectId = `${slug}-v${newMajorVersion}-${newSuffix}`;
+      const newTagName = `v${priorMajor}.0.0`;
+      const commitMessage = `chore: bump major version to ${newMajorVersion}`;
+      setReleaseModalState({
+        phase: "ready",
+        priorMajor,
+        newMajorVersion,
+        newSuffix,
+        newProjectId,
+        newTagName,
+        commitMessage,
+        workingDirectory
+      });
+    } catch (error) {
+      setReleaseModalState({
+        phase: "preflight-failed",
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  // Phase 2: cut. User confirmed; walk the saga steps and update modal
+  // state as each one runs / settles. Best-effort rollback when a side-
+  // effect step fails; manual escape-hatch instructions when rollback
+  // itself can't complete.
+  async function runCutSaga(plan: {
+    priorMajor: number;
+    newMajorVersion: number;
+    newSuffix: string;
+    newTagName: string;
+    commitMessage: string;
+    workingDirectory: string;
+  }): Promise<void> {
+    if (!gameProject) return;
+    const { priorMajor, newMajorVersion, newSuffix, newTagName, commitMessage, workingDirectory } = plan;
+
+    // Step 1: tag the prior major at current HEAD. First side effect.
+    setReleaseModalState({
+      phase: "cutting",
+      step: "tagging",
+      priorMajor,
+      newMajorVersion,
+      newTagName,
+      commitMessage,
+      workingDirectory,
+      newSuffix
+    });
+    const tagResp = await fetch("/__sugardeploy/tag-prior-major", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workingDirectory, priorMajor })
+    });
+    const tagPayload = (await tagResp.json()) as {
+      ok: boolean;
+      reason?: string;
+    };
+    if (!tagPayload.ok) {
+      setReleaseModalState({
+        phase: "failed",
+        reason: `Tagging the prior major failed: ${tagPayload.reason ?? "unknown"}`,
+        recoveryNotes: []
+      });
+      return;
+    }
+
+    // Step 2: dispatch the in-memory bumps. Two dispatches: BumpMajorVersion
+    // sets gameProject.majorVersion; the suffix-register writes the
+    // SugarDeploy plugin slot via UpdatePluginConfiguration.
+    setReleaseModalState({
+      phase: "cutting",
+      step: "bumping",
+      priorMajor,
+      newMajorVersion,
+      newTagName,
+      commitMessage,
+      workingDirectory,
+      newSuffix
+    });
+    if (!gameProjectId) {
+      // Can't address the aggregate without an id — bail and roll back.
+      await bestEffortUntag(workingDirectory, priorMajor);
+      setReleaseModalState({
+        phase: "failed",
+        reason: "No project id available to dispatch BumpMajorVersion.",
+        recoveryNotes: []
+      });
+      return;
+    }
+    onCommand({
+      kind: "BumpMajorVersion",
+      target: { aggregateKind: "game-project", aggregateId: gameProjectId },
+      subject: { subjectKind: "game-project", subjectId: gameProjectId },
+      payload: { newMajorVersion }
+    });
+    const suffixCommand = buildSetVersionedProjectIdentifierCommand(
+      gameProject,
+      newMajorVersion,
+      newSuffix
+    );
+    if (suffixCommand) onCommand(suffixCommand);
+
+    // Step 3: persist the in-memory state. saveProjectWithManagedFiles
+    // also regenerates the deploy.sh + terraform files for the new
+    // major version, so the commit step picks them up. The session-
+    // store reads of gameProject for this save happen synchronously
+    // INSIDE requestSave — the dispatches above are reflected because
+    // the store updates after the synchronous onCommand calls return.
+    setReleaseModalState({
+      phase: "cutting",
+      step: "persisting",
+      priorMajor,
+      newMajorVersion,
+      newTagName,
+      commitMessage,
+      workingDirectory,
+      newSuffix
+    });
+    const saveResult = await requestSave();
+    if (!saveResult.ok) {
+      const untagOk = await bestEffortUntag(workingDirectory, priorMajor);
+      const recoveryNotes: string[] = [];
+      if (!untagOk) {
+        recoveryNotes.push(
+          `Untag failed — run \`git -C ${workingDirectory} tag -d ${newTagName}\` manually to clean up.`
+        );
+      }
+      recoveryNotes.push(
+        "The in-memory session was bumped but the project.sgrmagic save failed. Use the Studio's Reload button to discard the in-memory bump, or fix the save error and try again."
+      );
+      setReleaseModalState({
+        phase: "failed",
+        reason: `Persist failed: ${saveResult.reason ?? "unknown"}`,
+        recoveryNotes
+      });
+      return;
+    }
+
+    // Step 4: commit the bumped project.sgrmagic + regenerated managed
+    // files. After this succeeds, the cut is fully realized: tag exists,
+    // disk reflects the new major, commit captures the bump.
+    setReleaseModalState({
+      phase: "cutting",
+      step: "committing",
+      priorMajor,
+      newMajorVersion,
+      newTagName,
+      commitMessage,
+      workingDirectory,
+      newSuffix
+    });
+    const commitResp = await fetch("/__sugardeploy/commit-major-version-bump", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workingDirectory, newMajor: newMajorVersion })
+    });
+    const commitPayload = (await commitResp.json()) as {
+      ok: boolean;
+      reason?: string;
+    };
+    if (!commitPayload.ok) {
+      // Persist already wrote to disk, so rolling back fully would
+      // require restoring prior project.sgrmagic + managed files via
+      // a second save. That's out of scope for v1; surface the state
+      // clearly and tell the user what's left to do by hand.
+      setReleaseModalState({
+        phase: "failed",
+        reason: `Commit failed: ${commitPayload.reason ?? "unknown"}`,
+        recoveryNotes: [
+          `The tag ${newTagName} was created, and the bumped project.sgrmagic + managed files are saved to disk, but \`git commit\` failed.`,
+          `Fix the underlying issue, then run from ${workingDirectory}:`,
+          `  git add -u`,
+          `  git commit -m "${commitMessage}"`,
+          "(If you'd rather start over: `git tag -d ${newTagName}` to drop the tag, then Reload the project in Studio to discard the in-memory bump, and use git checkout to revert the modified files.)"
+        ]
+      });
+      return;
+    }
+
+    setReleaseModalState({
+      phase: "success",
+      newMajorVersion,
+      newTagName,
+      commitMessage
+    });
+  }
+
+  async function bestEffortUntag(
+    workingDirectory: string,
+    priorMajor: number
+  ): Promise<boolean> {
+    try {
+      const resp = await fetch("/__sugardeploy/untag-prior-major", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workingDirectory, priorMajor })
+      });
+      const payload = (await resp.json()) as { ok: boolean };
+      return payload.ok === true;
+    } catch {
+      return false;
+    }
+  }
 
   async function handleCreateGcpProjectClick() {
     if (!gameProject || !resolvedGcpProjectId) return;
@@ -1391,7 +1669,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             <Button
               size="xs"
               variant="filled"
-              onClick={() => setReleaseModalOpen(true)}
+              onClick={() => void openReleaseModalAndPrepare()}
             >
               Release New Version
             </Button>
@@ -2108,46 +2386,208 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         )}
       </Modal>
 
-      {/* Story 45.8.5 — Release New Version stub. 45.8 will replace
-          this body with the real Cut New Major Version flow: pre-flight
-          checks (clean working tree, git on PATH, tag doesn't exist),
-          confirmation showing the new tag name and the next GCP project
-          id, then the sequenced operation. For now the modal exists so
-          the affordance is discoverable and explicit about not being
-          wired. */}
+      {/* Story 45.8 — Cut New Major Version modal. Phase machine in the
+          parent component (releaseModalState) drives what we render here.
+          Closed by setting state to null; user can dismiss only when the
+          saga is idle (not in checking/cutting). */}
       <Modal
         opened={releaseModalOpen}
-        onClose={() => setReleaseModalOpen(false)}
+        onClose={() => {
+          if (releaseModalBusy) return;
+          setReleaseModalState(null);
+        }}
         title="Release New Version"
         centered
-        size="md"
+        size="lg"
+        closeOnClickOutside={!releaseModalBusy}
+        closeOnEscape={!releaseModalBusy}
+        withCloseButton={!releaseModalBusy}
       >
-        <Stack>
-          <Text size="sm">
-            Cutting a new major version produces a new git tag (e.g.{" "}
-            <Code>v{(gameProject?.majorVersion ?? 1) + 1}.0.0</Code>), bumps
-            the project's <Code>majorVersion</Code> to{" "}
-            <Code>v{(gameProject?.majorVersion ?? 1) + 1}</Code>, commits
-            the bump, and shifts SugarDeploy to a fresh GCP project so the
-            previous version keeps running side-by-side.
-          </Text>
-          <Alert color="yellow" variant="light" title="Not wired yet">
-            <Text size="sm">
-              The flow lands in Story 45.8 (Cut New Major Version).
-              Clicking <em>Cut Version</em> below is a no-op for now —
-              nothing in git, nothing in GCP changes. Close this modal
-              and come back once 45.8 ships.
-            </Text>
-          </Alert>
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setReleaseModalOpen(false)}>
-              Close
-            </Button>
-            <Button disabled title="Wired in Story 45.8.">
-              Cut Version
-            </Button>
+        {releaseModalState?.phase === "checking" ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">Running pre-flight checks...</Text>
           </Group>
-        </Stack>
+        ) : null}
+
+        {releaseModalState?.phase === "preflight-failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Pre-flight failed">
+              <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                {releaseModalState.reason}
+              </Text>
+            </Alert>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setReleaseModalState(null)}
+              >
+                Close
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {releaseModalState?.phase === "ready" ? (
+          <Stack>
+            <Text size="sm">
+              Cutting a new major version produces a git tag at the
+              current commit, bumps the project's{" "}
+              <Code>majorVersion</Code>, registers a fresh GCP project
+              suffix for the new major, and creates a commit capturing
+              the bump. The previous major's GCP project keeps running
+              untouched; future deploys target the new major.
+            </Text>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    Tag to create:
+                  </Text>
+                  <Code>{releaseModalState.newTagName}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    New major version:
+                  </Text>
+                  <Code>v{releaseModalState.newMajorVersion}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    New GCP project id:
+                  </Text>
+                  <Code>{releaseModalState.newProjectId}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    Commit message:
+                  </Text>
+                  <Code>{releaseModalState.commitMessage}</Code>
+                </Group>
+              </Stack>
+            </Box>
+            <Alert color="blue" variant="light" title="Commits locally">
+              <Text size="sm">
+                This commits to your local git repository. Push to the
+                remote yourself when you're ready (`git push && git push
+                --tags`).
+              </Text>
+            </Alert>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setReleaseModalState(null)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  if (releaseModalState.phase !== "ready") return;
+                  const {
+                    priorMajor,
+                    newMajorVersion,
+                    newSuffix,
+                    newTagName,
+                    commitMessage,
+                    workingDirectory
+                  } = releaseModalState;
+                  void runCutSaga({
+                    priorMajor,
+                    newMajorVersion,
+                    newSuffix,
+                    newTagName,
+                    commitMessage,
+                    workingDirectory
+                  });
+                }}
+              >
+                Cut Version
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {releaseModalState?.phase === "cutting" ? (
+          <Stack>
+            <Group gap="xs">
+              <Loader size="sm" />
+              <Text size="sm">
+                {releaseModalState.step === "tagging"
+                  ? `Creating git tag ${releaseModalState.newTagName}...`
+                  : releaseModalState.step === "bumping"
+                    ? `Bumping majorVersion to v${releaseModalState.newMajorVersion}...`
+                    : releaseModalState.step === "persisting"
+                      ? "Persisting project.sgrmagic and regenerating deploy files..."
+                      : "Committing the bump..."}
+              </Text>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {releaseModalState?.phase === "success" ? (
+          <Stack>
+            <Alert color="green" variant="light" title="Done">
+              <Stack gap="xs">
+                <Text size="sm">
+                  Tag <Code>{releaseModalState.newTagName}</Code> created,
+                  major version bumped to{" "}
+                  <Code>v{releaseModalState.newMajorVersion}</Code>, and
+                  the bump committed locally.
+                </Text>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  Commit message: <Code>{releaseModalState.commitMessage}</Code>
+                </Text>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  Next: the SugarDeploy section now resolves the default
+                  project id to v{releaseModalState.newMajorVersion}.
+                  Click Create GCP Project + Setup Infra + Deploy to
+                  stand up the new major.
+                </Text>
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setReleaseModalState(null)}>Close</Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {releaseModalState?.phase === "failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Cut failed">
+              <Stack gap="xs">
+                <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                  {releaseModalState.reason}
+                </Text>
+                {releaseModalState.recoveryNotes.length > 0 ? (
+                  <Stack gap={4}>
+                    <Text size="sm" fw={600}>
+                      What to do next:
+                    </Text>
+                    {releaseModalState.recoveryNotes.map((note, index) => (
+                      <Text
+                        key={index}
+                        size="sm"
+                        style={{ whiteSpace: "pre-wrap" }}
+                      >
+                        {note}
+                      </Text>
+                    ))}
+                  </Stack>
+                ) : null}
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setReleaseModalState(null)}>Close</Button>
+            </Group>
+          </Stack>
+        ) : null}
       </Modal>
 
       <Modal
