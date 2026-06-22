@@ -251,6 +251,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core

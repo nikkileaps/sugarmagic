@@ -1,4 +1,4 @@
-# Plan 046 — Identity Provider Plugin Model
+# Plan 047 — Identity Provider Plugin Model
 
 **Status:** Proposed (not yet Accepted)
 

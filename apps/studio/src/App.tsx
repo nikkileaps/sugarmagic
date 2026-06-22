@@ -148,6 +148,7 @@ import {
 import {
   useBuildProductModeView,
   useDesignProductModeView,
+  usePublishProductModeView,
   useRenderProductModeView,
   type WorkspaceNavigationTarget
 } from "@sugarmagic/workspaces";
@@ -503,6 +504,7 @@ function handleStartPreview(
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
     activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
+    activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
     activeRegionId: shell.activeRegionId,
     activeEnvironmentId: shell.activeEnvironmentId,
     activeWorkspaceId: shell.activeWorkspaceId,
@@ -567,6 +569,9 @@ function handleStopPreview() {
   if (snapshot.activeProductMode === "render") {
     shell.setActiveRenderWorkspaceKind(snapshot.activeRenderWorkspaceKind);
   }
+  if (snapshot.activeProductMode === "publish") {
+    shell.setActivePublishWorkspaceKind(snapshot.activePublishWorkspaceKind);
+  }
   if (snapshot.activeRegionId) {
     shell.setActiveRegionId(snapshot.activeRegionId);
   }
@@ -629,6 +634,10 @@ async function postPreviewBootMessage(
 export function App() {
   const activeProductMode = useStore(shellStore, (s) => s.activeProductMode);
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
+  const activePublishKind = useStore(
+    shellStore,
+    (s) => s.activePublishWorkspaceKind
+  );
   const activeBuildKind = useStore(
     shellStore,
     (s) => s.activeBuildWorkspaceKind
@@ -658,6 +667,7 @@ export function App() {
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
   const isRender = activeProductMode === "render";
+  const isPublish = activeProductMode === "publish";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
 
   const regions = useMemo(() => {
@@ -873,6 +883,7 @@ export function App() {
       activeBuildWorkspaceKind: activeBuildKind,
       activeDesignWorkspaceKind: activeDesignKind,
       activeRenderWorkspaceKind: activeRenderKind,
+      activePublishWorkspaceKind: activePublishKind,
       activeRegionId,
       activeEnvironmentId,
       activeWorkspaceId,
@@ -2113,6 +2124,13 @@ export function App() {
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
+  const publishView = usePublishProductModeView({
+    activePublishKind,
+    gameProject: session?.gameProject ?? null,
+    pluginConfigurations,
+    onSelectKind: (kind) =>
+      shellStore.getState().setActivePublishWorkspaceKind(kind)
+  });
   const activePluginWorkspaceDefinition =
     getStudioPluginWorkspaceDefinition(activeDesignKind);
   const activePluginView = useMemo(() => {
@@ -2757,7 +2775,9 @@ export function App() {
                 ? designView.subHeaderPanel
                 : isRender
                   ? renderView.subHeaderPanel
-                  : undefined
+                  : isPublish
+                    ? publishView.subHeaderPanel
+                    : undefined
             : undefined
         }
         leftPanel={
@@ -2767,7 +2787,9 @@ export function App() {
               ? activeDesignPanels.leftPanel
               : isRender
                 ? renderView.leftPanel
-                : null
+                : isPublish
+                  ? publishView.leftPanel
+                  : null
         }
         rightPanel={
           isBuild
@@ -2776,7 +2798,9 @@ export function App() {
               ? activeDesignPanels.rightPanel
               : isRender
                 ? renderView.rightPanel
-                : undefined
+                : isPublish
+                  ? publishView.rightPanel
+                  : undefined
         }
         bottomPanel={
           <StatusBar
@@ -2794,6 +2818,8 @@ export function App() {
             activeDesignPanels.centerPanel
           ) : phase === "active" && isRender && renderView.centerPanel ? (
             renderView.centerPanel
+          ) : phase === "active" && isPublish && publishView.centerPanel ? (
+            publishView.centerPanel
           ) : (
             <ViewportFrame>
               {shouldRenderSharedViewport ? (
@@ -2805,6 +2831,7 @@ export function App() {
                   {isBuild && buildView.viewportOverlay}
                   {isDesign && activeDesignPanels.viewportOverlay}
                   {isRender && renderView.viewportOverlay}
+                  {isPublish && publishView.viewportOverlay}
                 </>
               ) : (
                 <Text size="sm" c="var(--sm-color-overlay0)">

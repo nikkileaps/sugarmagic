@@ -1721,7 +1721,7 @@ function formatCloudRunDeployScript(
   const ingressArg = `--ingress=${overrides.ingress}`;
   // Story 45.8.5 — Cloud Run platform-level IAM is hardcoded open. End
   // users (browser/mobile/native) authenticate via the gateway's app
-  // layer (gatewayAuthMode + Plan 046's per-user IDP plugins), never
+  // layer (gatewayAuthMode + Plan 047's per-user IDP plugins), never
   // via Google ID tokens. Flipping this to `--no-allow-unauthenticated`
   // would brick the service for any non-GCP-principal caller, which is
   // every consumer-facing client we ship to.
@@ -1895,7 +1895,7 @@ function buildGoogleCloudRunManagedFiles(
           : [
               "Every request EXCEPT `/health` requires `Authorization: Bearer <token>`. The expected token is the `gateway-shared-token` deployment secret, exposed in the container as `SUGARMAGIC_GATEWAY_SHARED_TOKEN`. Set it via the SugarDeploy Secrets section's Set Value modal; rotate by setting a new value (the previous version is retained in Secret Manager but only `:latest` is bound at deploy time). Game / CI / devtools clients must send the token on every request.",
               "",
-              "Single shared token across all callers. Appropriate for solo-dev alpha; not real per-player identity. Per-user identity providers (Supabase / Auth0 / etc.) land in Plan 046."
+              "Single shared token across all callers. Appropriate for solo-dev alpha; not real per-player identity. Per-user identity providers (Supabase / Auth0 / etc.) land in Plan 047."
             ]),
         "",
         "## Cloud Run platform-level auth",
@@ -2210,7 +2210,7 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   // SecretRequirement into the gateway service unit's secrets list so it
   // flows through the existing terraform tfvars + deploy.sh --set-secrets +
   // Studio Set Value paths. Single shared token across all callers; not
-  // per-user identity (that's Plan 046's job).
+  // per-user identity (that's Plan 047's job).
   if (targetId === "google-cloud-run") {
     const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
       deploymentSettings.targetOverrides["google-cloud-run"],

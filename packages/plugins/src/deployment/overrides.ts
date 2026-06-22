@@ -31,7 +31,7 @@ export type GoogleCloudRunIngress =
  *   all callers — appropriate for solo-dev alpha where the threat model is
  *   drive-by abuse, not malicious authenticated users.
  *
- * When [Plan 046](046-identity-provider-plugin-model-epic.md) lands the
+ * When [Plan 047](047-identity-provider-plugin-model-epic.md) lands the
  * proper identity-provider plugin model, this enum expands to include real
  * provider ids (`"supabase"`, `"auth0"`, etc.) and the gateway middleware
  * switches based on the value. `"bearer"` retroactively becomes the first
@@ -55,7 +55,7 @@ export interface GoogleCloudRunDeploymentTargetOverrides {
   // Optional explicit name override for the runtime service account. When empty,
   // terraform derives `${serviceNamePrefix}-runtime`.
   runtimeServiceAccountName: string;
-  // Story 45.5.7 — see GatewayAuthMode docstring. Plan 046 expands this.
+  // Story 45.5.7 — see GatewayAuthMode docstring. Plan 047 expands this.
   gatewayAuthMode: GatewayAuthMode;
 }
 
@@ -226,7 +226,7 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
         ? input.runtimeServiceAccountName.trim()
         : "",
     // Story 45.5.8 — "none" | "bearer". Anything else normalizes to "none"
-    // so old project files load cleanly when the enum expands in Plan 046.
+    // so old project files load cleanly when the enum expands in Plan 047.
     gatewayAuthMode:
       input?.gatewayAuthMode === "bearer" ? "bearer" : "none"
   };

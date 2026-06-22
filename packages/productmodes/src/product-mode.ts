@@ -1,4 +1,4 @@
-export type ProductModeId = "design" | "build" | "render";
+export type ProductModeId = "design" | "build" | "render" | "publish";
 
 export interface ProductModeDescriptor {
   id: ProductModeId;

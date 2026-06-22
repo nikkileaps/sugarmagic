@@ -50,6 +50,13 @@ export type CoreDesignWorkspaceKind =
 
 export type DesignWorkspaceKind = CoreDesignWorkspaceKind | (string & {});
 export type RenderWorkspaceKind = "shaders" | (string & {});
+// Story 46.1 — Publish productmode workspaces. Studio core contributes
+// `package` (the baseline pure-client publish path). SugarDeploy and
+// future publish plugins extend the union with their own workspace
+// kinds (`provision`, `release`, `deploy`, etc.) via the
+// `(string & {})` opaque widening pattern used by other modes.
+export type CorePublishWorkspaceKind = "package";
+export type PublishWorkspaceKind = CorePublishWorkspaceKind | (string & {});
 
 export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "player",
@@ -61,6 +68,10 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "quests",
   "mechanics",
   "game-ui"
+];
+
+export const CORE_PUBLISH_WORKSPACE_KINDS: CorePublishWorkspaceKind[] = [
+  "package"
 ];
 
 export const VIEWPORT_BACKED_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] =
@@ -106,6 +117,7 @@ export interface ShellState {
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeDesignWorkspaceKind: DesignWorkspaceKind;
   activeRenderWorkspaceKind: RenderWorkspaceKind;
+  activePublishWorkspaceKind: PublishWorkspaceKind;
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;
@@ -128,6 +140,7 @@ export interface ShellActions {
   setActiveBuildWorkspaceKind: (kind: BuildWorkspaceKind) => void;
   setActiveDesignWorkspaceKind: (kind: DesignWorkspaceKind) => void;
   setActiveRenderWorkspaceKind: (kind: RenderWorkspaceKind) => void;
+  setActivePublishWorkspaceKind: (kind: PublishWorkspaceKind) => void;
   setActiveRegionId: (regionId: string | null) => void;
   setActiveEnvironmentId: (environmentId: string | null) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
@@ -158,6 +171,10 @@ export function deriveRenderWorkspaceId(kind: RenderWorkspaceKind): string {
   return `render:${kind}`;
 }
 
+export function derivePublishWorkspaceId(kind: PublishWorkspaceKind): string {
+  return `publish:${kind}`;
+}
+
 function getBuildContextId(
   state: Pick<
     ShellState,
@@ -178,6 +195,7 @@ function deriveWorkspaceIdForMode(
     | "activeBuildWorkspaceKind"
     | "activeDesignWorkspaceKind"
     | "activeRenderWorkspaceKind"
+    | "activePublishWorkspaceKind"
     | "activeRegionId"
     | "activeEnvironmentId"
   >,
@@ -196,6 +214,10 @@ function deriveWorkspaceIdForMode(
 
   if (productModeId === "render") {
     return deriveRenderWorkspaceId(state.activeRenderWorkspaceKind);
+  }
+
+  if (productModeId === "publish") {
+    return derivePublishWorkspaceId(state.activePublishWorkspaceKind);
   }
 
   return null;
@@ -217,13 +239,16 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
       ? deriveDesignWorkspaceId("player")
       : initialProductMode === "render"
         ? deriveRenderWorkspaceId("shaders")
-        : null;
+        : initialProductMode === "publish"
+          ? derivePublishWorkspaceId("package")
+          : null;
 
   return createStore<ShellState & ShellActions>()((set, get) => ({
     activeProductMode: initialProductMode,
     activeBuildWorkspaceKind: "layout" as BuildWorkspaceKind,
     activeDesignWorkspaceKind: "player" as DesignWorkspaceKind,
     activeRenderWorkspaceKind: "shaders" as RenderWorkspaceKind,
+    activePublishWorkspaceKind: "package" as PublishWorkspaceKind,
     activeRegionId: null,
     activeEnvironmentId: null,
     activeWorkspaceId: initialWorkspaceId,
@@ -335,6 +360,31 @@ export function createShellStore(initialProductMode: ProductModeId = "build") {
             : state.selection,
         toolSession:
           state.activeProductMode === "render"
+            ? { workspaceId, toolId: null, isActive: false }
+            : state.toolSession
+      }));
+    },
+    setActivePublishWorkspaceKind: (kind) => {
+      const workspaceId = derivePublishWorkspaceId(kind);
+      set((state) => ({
+        activePublishWorkspaceKind: kind,
+        activeWorkspaceId:
+          state.activeProductMode === "publish"
+            ? workspaceId
+            : state.activeWorkspaceId,
+        navigation: {
+          ...state.navigation,
+          activeWorkspaceId:
+            state.activeProductMode === "publish"
+              ? workspaceId
+              : state.navigation.activeWorkspaceId
+        },
+        selection:
+          state.activeProductMode === "publish"
+            ? { workspaceId, entityIds: [] }
+            : state.selection,
+        toolSession:
+          state.activeProductMode === "publish"
             ? { workspaceId, toolId: null, isActive: false }
             : state.toolSession
       }));

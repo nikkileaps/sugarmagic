@@ -160,7 +160,7 @@ service is gcloud-owned and terraform doesn't know about it) and THEN
 - The bearer-token gateway auth (`gatewayAuthMode: "bearer"`) is honor-
   system. The token is shared across all callers and lives in the game
   binary the user receives. It stops drive-by scrapers; it does not stop
-  determined per-user abuse. Real per-user identity is [Plan 046](/docs/plans/046-identity-provider-plugin-model-epic.md).
+  determined per-user abuse. Real per-user identity is [Plan 047](/docs/plans/047-identity-provider-plugin-model-epic.md).
 - Frontend / static-asset hosting is explicitly out of scope. This epic
   ships the gateway backend only. Making a deployed game playable in a
   browser requires a separate plan (player bundle + static hosting +
@@ -193,5 +193,5 @@ service is gcloud-owned and terraform doesn't know about it) and THEN
 
 - [Plan 021: Deployment Plugin and Publish/Deploy Target Architecture Epic](/docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md)
 - [Plan 045: SugarDeploy Cloud Run Plugin-Owned Infrastructure Epic](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md)
-- [Plan 046: Identity Provider Plugin Model](/docs/plans/046-identity-provider-plugin-model-epic.md) (the path beyond bearer-shared-token)
+- [Plan 047: Identity Provider Plugin Model](/docs/plans/047-identity-provider-plugin-model-epic.md) (the path beyond bearer-shared-token)
 - [ADR 009: Game Root Contract](/docs/adr/009-game-root-contract.md)

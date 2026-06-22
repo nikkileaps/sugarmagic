@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@sugarmagic/domain": "workspace:*",
+    "@sugarmagic/plugins": "workspace:*",
     "@sugarmagic/runtime-core": "workspace:*",
     "@sugarmagic/shell": "workspace:*",
     "@sugarmagic/ui": "workspace:*",
