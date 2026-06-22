@@ -1,7 +1,15 @@
 # Plan 021: Deployment Plugin and Publish Deploy Target Architecture Epic
 
-**Status:** Proposed  
+**Status:** Proposed
 **Date:** 2026-04-04
+
+> **Cloud Run implementation:** the Cloud Run deployment target this plan
+> envisioned is fully implemented in
+> [Plan 045](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md);
+> the architectural rules it settled are recorded in
+> [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md). Read those
+> two before changing anything in `packages/plugins/src/catalog/sugardeploy/`
+> or `packages/plugins/src/deployment/`.
 
 ## Epic
 

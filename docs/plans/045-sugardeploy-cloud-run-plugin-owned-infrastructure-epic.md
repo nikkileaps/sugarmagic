@@ -1,7 +1,14 @@
 # Plan 045: SugarDeploy Cloud Run Plugin-Owned Infrastructure Epic
 
-**Status:** Accepted
-**Date:** 2026-05-18 (proposed) / 2026-06-15 (accepted)
+**Status:** Complete
+**Date:** 2026-05-18 (proposed) / 2026-06-15 (accepted) / 2026-06-22 (complete)
+
+> Architectural rules from this epic are captured in
+> [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md).
+> Operating reference for the deploy plugin: [packages/plugins/src/deployment/README.md](/packages/plugins/src/deployment/README.md).
+> Frontend / static-asset hosting for the playable game client is
+> explicitly out of this epic's scope (see "What is NOT in scope" below)
+> and will land in a follow-up plan.
 
 ## Epic
 
