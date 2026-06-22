@@ -28,6 +28,7 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides
 } from "./overrides";
+import { getDeploymentSettings } from "./plugin-state";
 import {
   buildCloudRunTerraformGitignore,
   buildCloudRunTerraformMainFile,
@@ -111,6 +112,14 @@ export {
   stripGithubRepoPrefixes,
   type GatewayAuthMode
 } from "./overrides";
+
+export {
+  buildSetVersionedProjectIdentifierCommand,
+  buildUpdateDeploymentSettingsCommand,
+  getDeploymentSettings,
+  getVersionedProjectIdentifiers,
+  type DeployStateInput
+} from "./plugin-state";
 
 /**
  * Resolve the full set of Cloud Run service names a plan declares, using the
@@ -1914,7 +1923,7 @@ const targetHandlers: Record<DeploymentTargetId, DeploymentTargetHandler> = {
     normalizeOverrides: (gameProject) =>
       ({
         ...normalizeLocalDeploymentTargetOverrides(
-          getDeploymentTargetOverrides(gameProject.deployment, "local"),
+          getDeploymentTargetOverrides(getDeploymentSettings(gameProject), "local"),
           gameProject
         )
       }),
@@ -1930,7 +1939,10 @@ const targetHandlers: Record<DeploymentTargetId, DeploymentTargetHandler> = {
     normalizeOverrides: (gameProject) =>
       ({
         ...normalizeGoogleCloudRunDeploymentTargetOverrides(
-          getDeploymentTargetOverrides(gameProject.deployment, "google-cloud-run"),
+          getDeploymentTargetOverrides(
+            getDeploymentSettings(gameProject),
+            "google-cloud-run"
+          ),
           gameProject
         )
       }),
@@ -2126,7 +2138,8 @@ function buildServiceUnits(
 
 export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   const { sources, conflicts: sourceConflicts } = collectRequirementSources(gameProject);
-  const targetId = gameProject.deployment.deploymentTargetId;
+  const deploymentSettings = getDeploymentSettings(gameProject);
+  const targetId = deploymentSettings.deploymentTargetId;
   const requirements = sources.flatMap((source) => source.requirements);
   const { serviceUnits, conflicts: serviceConflicts } = buildServiceUnits(
     requirements,
@@ -2141,7 +2154,7 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   // per-user identity (that's Plan 046's job).
   if (targetId === "google-cloud-run") {
     const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-      gameProject.deployment.targetOverrides["google-cloud-run"],
+      deploymentSettings.targetOverrides["google-cloud-run"],
       gameProject
     );
     if (cloudRunOverrides.gatewayAuthMode === "bearer") {
@@ -2209,7 +2222,7 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   }
 
   const provisionalPlan: DeploymentPlan = {
-    publishTargetId: gameProject.deployment.publishTargetId,
+    publishTargetId: deploymentSettings.publishTargetId,
     deploymentTargetId: targetId,
     targetLabel: handler?.definition.displayName ?? null,
     targetOverrides,

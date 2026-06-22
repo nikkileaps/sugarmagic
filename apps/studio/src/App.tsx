@@ -102,6 +102,7 @@ import {
   buildSugarlangPreviewBootPayloadForSession,
   collectPluginShellContributions,
   ensureDiscoveredPluginConfiguration,
+  getDeploymentSettings,
   listDiscoveredPluginDefinitions,
   planGameDeployment,
   resolveSugarLangTargetLanguage,
@@ -336,7 +337,8 @@ async function handleSave() {
   );
   const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
   const deploymentPlan =
-    canRunSugarDeploy && session.gameProject.deployment.deploymentTargetId
+    canRunSugarDeploy &&
+    getDeploymentSettings(session.gameProject).deploymentTargetId
       ? planGameDeployment(session.gameProject)
       : null;
 

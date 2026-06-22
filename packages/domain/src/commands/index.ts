@@ -792,28 +792,14 @@ export type DeletePluginConfigurationCommand = SemanticCommandBase<
   }
 >;
 
-export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
-  "UpdateDeploymentSettings",
-  {
-    settings: DeploymentSettings;
-  }
->;
-
-/**
- * Idempotently set the random suffix for a major version's GCP project id.
- * Story 45.4.7. The apply function is a no-op when the entry already exists —
- * historical suffixes are preserved forever so git worktrees and `git checkout
- * v1.0.0` resolve back to the original v1 GCP project. Generation lives in the
- * Studio (via `crypto.getRandomValues`); the domain just persists what it
- * receives after shape-validating it.
- */
-export type EnsureVersionedProjectIdentifierCommand = SemanticCommandBase<
-  "EnsureVersionedProjectIdentifier",
-  {
-    majorVersion: number;
-    suffix: string;
-  }
->;
+// Story 45.7.5 — `UpdateDeploymentSettingsCommand` and
+// `EnsureVersionedProjectIdentifierCommand` removed. Deploy settings and
+// versioned project identifiers live in the SugarDeploy plugin's
+// `pluginConfigurations[].config` slot now and mutate via the generic
+// `UpdatePluginConfigurationCommand` above. The deploy plugin contributes
+// typed builder helpers (`buildUpdateDeploymentSettingsCommand`,
+// `buildSetVersionedProjectIdentifierCommand`) so callers never hand-roll
+// the plugin-config patch shape.
 
 export type CreateMenuDefinitionCommand = SemanticCommandBase<
   "CreateMenuDefinition",
@@ -994,8 +980,6 @@ export type SemanticCommand =
   | RemovePlacedAssetInspectableCommand
   | UpdatePluginConfigurationCommand
   | DeletePluginConfigurationCommand
-  | UpdateDeploymentSettingsCommand
-  | EnsureVersionedProjectIdentifierCommand
   | CreateMenuDefinitionCommand
   | UpdateMenuDefinitionCommand
   | DeleteMenuDefinitionCommand

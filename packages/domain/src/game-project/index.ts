@@ -129,19 +129,14 @@ export interface GameProject {
   identity: DocumentIdentity;
   displayName: string;
   majorVersion: number;
-  /**
-   * Per-major-version random suffixes that collision-resist the auto-derived
-   * GCP project id. Keys are `v${majorVersion}` strings (e.g., `"v1"`, `"v2"`);
-   * values are 5-character lowercase alphanumeric (base36) suffixes generated
-   * client-side via `crypto.getRandomValues`. Generated lazily on first
-   * SugarDeploy form mount per version and via the Cut New Major Version flow.
-   * Historical entries are preserved forever so worktrees / `git checkout
-   * v1.0.0` resolve back to the original v1 GCP project. Empty `{}` default
-   * preserves back-compat for older project files. Story 45.4.7.
-   */
-  versionedProjectIdentifiers: Record<string, string>;
+  // Story 45.7.5 — `deployment` and `versionedProjectIdentifiers` moved
+  // off this type and into the SugarDeploy plugin's
+  // `pluginConfigurations[id="sugardeploy"].config` slot. The domain type
+  // carries only game-authoring concerns now; deploy-shaped concerns live
+  // in the plugin's namespaced state. `majorVersion` stays here because
+  // it's a game-authoring concept (save-game compat, changelog, UI
+  // display) independent of deployment.
   gameRootPath: string;
-  deployment: DeploymentSettings;
   regionRegistry: RegionReference[];
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibraryId: string | null;
@@ -180,14 +175,81 @@ export function normalizeVersionedProjectIdentifiers(
   return out;
 }
 
+// Story 45.7.5 — plugin id literal that matches `SUGARDEPLOY_PLUGIN_ID`
+// in the SugarDeploy plugin source. Inlined here (rather than imported)
+// because `packages/domain` cannot depend on `packages/plugins` without
+// introducing a cycle. The migration below is the ONLY domain code
+// that should reference this string; touch this constant if and only if
+// the plugin id ever changes in the plugins package.
+const SUGARDEPLOY_PLUGIN_ID_LITERAL = "sugardeploy";
+
+/**
+ * Migrate legacy top-level `deployment` + `versionedProjectIdentifiers`
+ * fields (pre-45.7.5) into the SugarDeploy plugin's
+ * pluginConfigurations[].config slot. Returns the updated
+ * pluginConfigurations array. Idempotent: when no legacy fields are
+ * present, returns the input unchanged. When the legacy field is set
+ * AND the slot is also set (e.g., callers spreading an already-migrated
+ * project and overriding `deployment: {...}`), the explicit legacy
+ * field wins — that's the only way it could have been set by a caller
+ * after normalize stripped it from disk, so it represents intent. Real
+ * round-tripped files only ever have one shape or the other.
+ */
+function migrateLegacyDeployFields(
+  pluginConfigurations: PluginConfigurationRecord[],
+  legacyDeployment: unknown,
+  legacyVersionedProjectIdentifiers: unknown
+): PluginConfigurationRecord[] {
+  const hasLegacyDeployment =
+    legacyDeployment !== undefined && legacyDeployment !== null;
+  const hasLegacyVPI =
+    legacyVersionedProjectIdentifiers !== undefined &&
+    legacyVersionedProjectIdentifiers !== null;
+  if (!hasLegacyDeployment && !hasLegacyVPI) return pluginConfigurations;
+
+  const existingRecord = pluginConfigurations.find(
+    (record) => record.pluginId === SUGARDEPLOY_PLUGIN_ID_LITERAL
+  );
+  const existingConfig: Record<string, unknown> =
+    (existingRecord?.config as Record<string, unknown> | undefined) ?? {};
+
+  const nextConfig: Record<string, unknown> = { ...existingConfig };
+  if (hasLegacyDeployment) {
+    nextConfig.settings = normalizeDeploymentSettings(
+      legacyDeployment as Partial<DeploymentSettings>
+    );
+  }
+  if (hasLegacyVPI) {
+    nextConfig.versionedProjectIdentifiers = normalizeVersionedProjectIdentifiers(
+      legacyVersionedProjectIdentifiers
+    );
+  }
+
+  const nextRecord: PluginConfigurationRecord = existingRecord
+    ? { ...existingRecord, config: nextConfig }
+    : {
+        identity: {
+          id: `${SUGARDEPLOY_PLUGIN_ID_LITERAL}-config`,
+          schema: "PluginConfiguration",
+          version: 1
+        },
+        pluginId: SUGARDEPLOY_PLUGIN_ID_LITERAL,
+        enabled: false,
+        config: nextConfig
+      };
+
+  const remaining = pluginConfigurations.filter(
+    (record) => record.pluginId !== SUGARDEPLOY_PLUGIN_ID_LITERAL
+  );
+  return [...remaining, nextRecord];
+}
+
 export function normalizeGameProject(
   gameProject:
     | GameProject
     | (Omit<
         GameProject,
         | "majorVersion"
-        | "versionedProjectIdentifiers"
-        | "deployment"
         | "pluginConfigurations"
         | "playerDefinition"
         | "spellDefinitions"
@@ -204,6 +266,10 @@ export function normalizeGameProject(
         | "mechanics"
       > & {
         majorVersion?: number | null;
+        // Legacy fields accepted on input for back-compat with pre-45.7.5
+        // project.sgrmagic files. The migration below lifts them into
+        // pluginConfigurations[id="sugardeploy"].config and DROPS them
+        // from the output shape.
         versionedProjectIdentifiers?: unknown;
         deployment?: Partial<DeploymentSettings> | null;
         pluginConfigurations?: Array<
@@ -235,16 +301,34 @@ export function normalizeGameProject(
     typeof rawMajor === "number" && Number.isFinite(rawMajor) && rawMajor >= 1
       ? Math.floor(rawMajor)
       : 1;
+
+  // Story 45.7.5 — destructure the legacy fields off the spread so they
+  // don't leak into the GameProject output. The migration below lifts
+  // them into the SugarDeploy plugin-config slot before normalizing the
+  // plugin configurations array.
+  const {
+    deployment: legacyDeployment,
+    versionedProjectIdentifiers: legacyVersionedProjectIdentifiers,
+    ...gameProjectRest
+  } = gameProject as {
+    deployment?: unknown;
+    versionedProjectIdentifiers?: unknown;
+  } & Record<string, unknown>;
+  const migratedPluginConfigurations = migrateLegacyDeployFields(
+    normalizePluginConfigurationRecords(
+      gameProjectRest.pluginConfigurations as
+        | Array<PluginConfigurationRecord | PartialPluginConfigurationRecord>
+        | null
+        | undefined
+    ),
+    legacyDeployment,
+    legacyVersionedProjectIdentifiers
+  );
+
   return {
-    ...gameProject,
+    ...(gameProjectRest as unknown as GameProject),
     majorVersion,
-    versionedProjectIdentifiers: normalizeVersionedProjectIdentifiers(
-      gameProject.versionedProjectIdentifiers
-    ),
-    deployment: normalizeDeploymentSettings(gameProject.deployment),
-    pluginConfigurations: normalizePluginConfigurationRecords(
-      gameProject.pluginConfigurations
-    ),
+    pluginConfigurations: migratedPluginConfigurations,
     playerDefinition: normalizePlayerDefinition(
       gameProject.playerDefinition,
       gameProject.identity.id
@@ -291,9 +375,7 @@ export function createDefaultGameProject(
     identity: { id: slug, schema: "GameProject", version: 1 },
     displayName: gameName,
     majorVersion: 1,
-    versionedProjectIdentifiers: {},
     gameRootPath: ".",
-    deployment: createDefaultDeploymentSettings(),
     regionRegistry: [],
     pluginConfigurations: [],
     contentLibraryId: `${slug}:content-library`,

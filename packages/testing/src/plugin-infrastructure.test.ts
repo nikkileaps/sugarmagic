@@ -34,6 +34,7 @@ import {
   buildGcpProjectName,
   classifyProjectListResult,
   collectSecretEnvBindings,
+  getVersionedProjectIdentifiers,
   isValidGcpProjectId,
   isValidGcpServiceAccountId,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
@@ -804,17 +805,22 @@ describe("plugin infrastructure", () => {
     });
   });
 
-  it("normalizeGameProject defaults missing versionedProjectIdentifiers to {} and filters corrupt entries", () => {
-    // 45.4.7 — older project files load with the field missing (back-compat).
+  it("normalizeGameProject migrates legacy top-level versionedProjectIdentifiers into the SugarDeploy plugin-config slot, filtering corrupt entries", () => {
+    // 45.4.7 + 45.7.5 — older project files persisted the field at the
+    // top level. The 45.7.5 migration lifts that legacy data into the
+    // SugarDeploy plugin's pluginConfigurations[].config slot and drops
+    // the top-level field entirely. Older files with no entries at all
+    // still load cleanly — getVersionedProjectIdentifiers() returns {}.
     const projectMissingField = normalizeGameProject({
       ...makeProject(),
       versionedProjectIdentifiers: undefined
     } as unknown as Parameters<typeof normalizeGameProject>[0]);
-    expect(projectMissingField.versionedProjectIdentifiers).toEqual({});
+    expect(getVersionedProjectIdentifiers(projectMissingField)).toEqual({});
 
     // Corrupt entries (bad keys, non-string values, wrong-length suffixes)
-    // get filtered out silently — load shouldn't fail on bad persisted data,
-    // but the bad entries don't make it into the canonical model either.
+    // get filtered out silently during migration — load shouldn't fail on
+    // bad persisted data, but the bad entries don't make it into the
+    // canonical model either.
     const projectWithJunk = normalizeGameProject({
       ...makeProject(),
       versionedProjectIdentifiers: {
@@ -826,7 +832,7 @@ describe("plugin infrastructure", () => {
         v5: "12345" // valid (digits only)
       }
     } as unknown as Parameters<typeof normalizeGameProject>[0]);
-    expect(projectWithJunk.versionedProjectIdentifiers).toEqual({
+    expect(getVersionedProjectIdentifiers(projectWithJunk)).toEqual({
       v1: "k3m9p",
       v5: "12345"
     });

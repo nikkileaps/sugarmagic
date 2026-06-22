@@ -1,5 +1,11 @@
 import type { GameProject } from "@sugarmagic/domain";
 
+import {
+  getDeploymentSettings,
+  getVersionedProjectIdentifiers,
+  type DeployStateInput
+} from "./plugin-state";
+
 export interface LocalDeploymentTargetOverrides {
   workingDirectory: string;
   composeProjectName: string;
@@ -106,11 +112,20 @@ function resolveMajorVersion(
     : 1;
 }
 
+// Story 45.7.5 — gameProjects passed to the normalizers carry the
+// SugarDeploy plugin state in their pluginConfigurations slot (new
+// shape) and/or in legacy top-level fields (mid-migration projects).
+// The plugin-state helpers handle both transparently. The Pick<>
+// signatures below widen to `pluginConfigurations` so the helpers can
+// inspect the slot, with the legacy fields still listed during the
+// migration window so old fixtures continue to compile.
+type GameProjectForVersionedSlug = Pick<
+  GameProject,
+  "identity" | "majorVersion" | "pluginConfigurations"
+>;
+
 function defaultVersionedDeploymentSlug(
-  gameProject: Pick<
-    GameProject,
-    "identity" | "majorVersion" | "versionedProjectIdentifiers"
-  >
+  gameProject: GameProjectForVersionedSlug
 ): string {
   const slug = defaultDeploymentSlug(gameProject);
   const major = resolveMajorVersion(gameProject);
@@ -122,24 +137,28 @@ function defaultVersionedDeploymentSlug(
   // targets — fall back to the pre-45.4.7 `${slug}-v${major}` form so
   // existing GCP projects remain reachable until the form mounts and
   // generates a suffix.
-  const suffix = gameProject.versionedProjectIdentifiers?.[`v${major}`];
+  const identifiers = getVersionedProjectIdentifiers(gameProject);
+  const suffix = identifiers[`v${major}`];
   return suffix ? `${slug}-v${major}-${suffix}` : `${slug}-v${major}`;
 }
 
 export function normalizeLocalDeploymentTargetOverrides(
   input: Record<string, unknown> | null | undefined,
-  gameProject?: Pick<GameProject, "identity" | "deployment">
+  gameProject?: Pick<GameProject, "identity" | "pluginConfigurations">
 ): LocalDeploymentTargetOverrides {
   const fallbackSlug = gameProject
     ? defaultDeploymentSlug(gameProject)
     : "sugarmagic-local";
+  const deploymentSettings = gameProject
+    ? getDeploymentSettings(gameProject as DeployStateInput)
+    : null;
   return {
     // Story 45.8.5 — workingDirectory lives on DeploymentSettings, not in
     // per-target overrides. Old project files persisted it here too; read
     // the project-level value first, fall back to the per-target value so
     // those still load cleanly.
     workingDirectory:
-      gameProject?.deployment.workingDirectory?.trim() ||
+      deploymentSettings?.workingDirectory.trim() ||
       (typeof input?.workingDirectory === "string"
         ? input.workingDirectory.trim()
         : ""),
@@ -157,12 +176,15 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   input: Record<string, unknown> | null | undefined,
   gameProject?: Pick<
     GameProject,
-    "identity" | "majorVersion" | "versionedProjectIdentifiers" | "deployment"
+    "identity" | "majorVersion" | "pluginConfigurations"
   >
 ): GoogleCloudRunDeploymentTargetOverrides {
   const versionedSlug = gameProject
     ? defaultVersionedDeploymentSlug(gameProject)
     : `sugarmagic-v${resolveMajorVersion(gameProject)}`;
+  const deploymentSettings = gameProject
+    ? getDeploymentSettings(gameProject as DeployStateInput)
+    : null;
   const ingress =
     input?.ingress === "internal" ||
     input?.ingress === "internal-and-cloud-load-balancing" ||
@@ -172,7 +194,7 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
   return {
     // Story 45.8.5 — see Local normalizer above. Project-level value first.
     workingDirectory:
-      gameProject?.deployment.workingDirectory?.trim() ||
+      deploymentSettings?.workingDirectory.trim() ||
       (typeof input?.workingDirectory === "string"
         ? input.workingDirectory.trim()
         : ""),
@@ -197,7 +219,7 @@ export function normalizeGoogleCloudRunDeploymentTargetOverrides(
     // per-target overrides. Old project files persisted it here; read
     // the project-level value first, fall back to the per-target value.
     githubRepo:
-      normalizeGithubRepoOverride(gameProject?.deployment.githubRepo) ||
+      normalizeGithubRepoOverride(deploymentSettings?.githubRepo) ||
       normalizeGithubRepoOverride(input?.githubRepo),
     runtimeServiceAccountName:
       typeof input?.runtimeServiceAccountName === "string"

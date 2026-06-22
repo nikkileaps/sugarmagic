@@ -21,12 +21,16 @@ import {
 import { useEffect, useState } from "react";
 import type { DeploymentSettings } from "@sugarmagic/domain";
 import {
+  buildSetVersionedProjectIdentifierCommand,
+  buildUpdateDeploymentSettingsCommand,
   type DeploymentActionExecutionResult,
   type DeploymentActionKind,
   GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH,
   GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
   collectSecretEnvBindings,
+  getDeploymentSettings,
+  getVersionedProjectIdentifiers,
   listDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
@@ -290,20 +294,31 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   });
 
   const plan = gameProject ? planGameDeployment(gameProject) : null;
-  const selectedTargetId = gameProject?.deployment.deploymentTargetId ?? null;
+  // Story 45.7.5 — SugarDeploy state reads route through the plugin-state
+  // helpers, NOT through `gameProject.deployment` / `gameProject.versionedProjectIdentifiers`.
+  // The two top-level fields are being removed from GameProject; the
+  // helpers handle the new-shape (pluginConfigurations slot) and
+  // legacy-shape reads transparently.
+  const deploymentSettings = gameProject
+    ? getDeploymentSettings(gameProject)
+    : null;
+  const versionedProjectIdentifiers = gameProject
+    ? getVersionedProjectIdentifiers(gameProject)
+    : {};
+  const selectedTargetId = deploymentSettings?.deploymentTargetId ?? null;
   const localOverrides = normalizeLocalDeploymentTargetOverrides(
-    gameProject?.deployment.targetOverrides.local,
+    deploymentSettings?.targetOverrides.local,
     gameProject ?? undefined
   );
   const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-    gameProject?.deployment.targetOverrides["google-cloud-run"],
+    deploymentSettings?.targetOverrides["google-cloud-run"],
     gameProject ?? undefined
   );
   // Raw persisted overrides (pre-normalize). Form fields bind their `value`
   // here so blank stays blank visually; the normalized value above shows up
   // as the placeholder so users can see what the auto-derived default would
   // be without it pretending to be their input.
-  const rawCloudRunOverrides = (gameProject?.deployment.targetOverrides[
+  const rawCloudRunOverrides = (deploymentSettings?.targetOverrides[
     "google-cloud-run"
   ] ?? {}) as Record<string, unknown>;
   function rawCloudRunString(key: string): string {
@@ -312,7 +327,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   }
   // Story 45.8.5 — githubRepo lives on DeploymentSettings (project-level)
   // now, not in per-target overrides. Field reads from there directly.
-  const rawGithubRepo = gameProject?.deployment.githubRepo ?? "";
+  const rawGithubRepo = deploymentSettings?.githubRepo ?? "";
   const githubRepoError =
     rawGithubRepo.length > 0 && !GITHUB_REPO_REGEX.test(rawGithubRepo)
       ? "Expected owner/repo (e.g. nikki/wordlark)"
@@ -360,54 +375,38 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     ) {
       return;
     }
-    const key = `v${gameProject.majorVersion}`;
-    if (gameProject.versionedProjectIdentifiers[key]) return;
-    onCommand({
-      kind: "EnsureVersionedProjectIdentifier",
-      target: {
-        aggregateKind: "game-project",
-        aggregateId: gameProjectId
-      },
-      subject: {
-        subjectKind: "game-project",
-        subjectId: gameProjectId
-      },
-      payload: {
-        majorVersion: gameProject.majorVersion,
-        suffix: generateProjectIdSuffix()
-      }
-    });
+    // Story 45.7.5 — suffix register routes through the SugarDeploy
+    // plugin-state slot via the typed builder. The builder is idempotent:
+    // returns null when the entry for this major already exists (preserves
+    // the historical-suffix-is-immutable rule from Story 45.4.7).
+    const command = buildSetVersionedProjectIdentifierCommand(
+      gameProject,
+      gameProject.majorVersion,
+      generateProjectIdSuffix()
+    );
+    if (command) onCommand(command);
     // onCommand is stable from props; gameProject changes drive re-eval.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     gameProjectId,
     selectedTargetId,
     gameProject?.majorVersion,
-    gameProject?.versionedProjectIdentifiers
+    gameProject?.pluginConfigurations
   ]);
 
   function updateSettings(nextSettings: DeploymentSettings) {
     if (!gameProjectId || !gameProject) return;
-    onCommand({
-      kind: "UpdateDeploymentSettings",
-      target: {
-        aggregateKind: "game-project",
-        aggregateId: gameProjectId
-      },
-      subject: {
-        subjectKind: "game-project",
-        subjectId: gameProjectId
-      },
-      payload: {
-        settings: nextSettings
-      }
-    });
+    // Story 45.7.5 — settings writes route through the plugin-state
+    // builder, NOT the deprecated UpdateDeploymentSettings command. The
+    // builder lands the settings in pluginConfigurations[id="sugardeploy"].config.
+    onCommand(buildUpdateDeploymentSettingsCommand(gameProject, nextSettings));
   }
 
   function updateTarget(value: string | null) {
     if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
     updateSettings({
-      ...gameProject.deployment,
+      ...current,
       deploymentTargetId:
         value === "local" || value === "google-cloud-run" ? value : null
     });
@@ -418,12 +417,13 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     patch: Record<string, unknown>
   ) {
     if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
     updateSettings({
-      ...gameProject.deployment,
+      ...current,
       targetOverrides: {
-        ...gameProject.deployment.targetOverrides,
+        ...current.targetOverrides,
         [targetId]: {
-          ...(gameProject.deployment.targetOverrides[targetId] ?? {}),
+          ...(current.targetOverrides[targetId] ?? {}),
           ...patch
         }
       }
@@ -437,13 +437,13 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   // is what keeps the target in `configured` after a tab switch.
   function addTarget(targetId: "local" | "google-cloud-run") {
     if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
     updateSettings({
-      ...gameProject.deployment,
+      ...current,
       deploymentTargetId: targetId,
       targetOverrides: {
-        ...gameProject.deployment.targetOverrides,
-        [targetId]:
-          gameProject.deployment.targetOverrides[targetId] ?? {}
+        ...current.targetOverrides,
+        [targetId]: current.targetOverrides[targetId] ?? {}
       }
     });
   }
@@ -1160,9 +1160,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   &gt;
                 </Text>
                 <Badge size="lg" variant="light" color="gray">
-                  {gameProject.deployment.publishTargetId === "web"
+                  {deploymentSettings?.publishTargetId === "web"
                     ? "Web"
-                    : gameProject.deployment.publishTargetId}
+                    : deploymentSettings?.publishTargetId}
                 </Badge>
                 <Text size="sm" c="var(--sm-color-subtext)">
                   /
@@ -1407,9 +1407,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             <Stack gap="xs">
               {(() => {
                 const slug = gameProject.identity.id || "sugarmagic-game";
-                const entries = Object.entries(
-                  gameProject.versionedProjectIdentifiers ?? {}
-                )
+                const entries = Object.entries(versionedProjectIdentifiers)
                   .map(([key, suffix]) => {
                     const match = /^v(\d+)$/.exec(key);
                     return match
@@ -1500,13 +1498,14 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               <TextInput
                 label="Working Directory"
                 description="Absolute path to the game root on disk. Required for any host-side deploy/status action."
-                value={gameProject.deployment.workingDirectory}
-                onChange={(event) =>
+                value={deploymentSettings?.workingDirectory ?? ""}
+                onChange={(event) => {
+                  if (!gameProject) return;
                   updateSettings({
-                    ...gameProject.deployment,
+                    ...getDeploymentSettings(gameProject),
                     workingDirectory: event.currentTarget.value
-                  })
-                }
+                  });
+                }}
               />
               <TextInput
                 label="GitHub Repository"
@@ -1514,12 +1513,13 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 placeholder="nikki/wordlark"
                 value={rawGithubRepo}
                 error={githubRepoError}
-                onChange={(event) =>
+                onChange={(event) => {
+                  if (!gameProject) return;
                   updateSettings({
-                    ...gameProject.deployment,
+                    ...getDeploymentSettings(gameProject),
                     githubRepo: stripGithubRepoPrefixes(event.currentTarget.value)
-                  })
-                }
+                  });
+                }}
               />
             </SimpleGrid>
           </Box>
@@ -1545,9 +1545,8 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         if (selectedTargetId && selectedTargetId !== "local") {
           configured.add(selectedTargetId);
         }
-        for (const key of Object.keys(
-          gameProject.deployment.targetOverrides ?? {}
-        )) {
+        const currentSettings = getDeploymentSettings(gameProject);
+        for (const key of Object.keys(currentSettings.targetOverrides ?? {})) {
           configured.add(key);
         }
         const configuredList = allTargets

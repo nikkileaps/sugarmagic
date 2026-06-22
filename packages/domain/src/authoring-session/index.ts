@@ -62,8 +62,6 @@ import type {
   RemovePostProcessShaderCommand,
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
-  UpdateDeploymentSettingsCommand,
-  EnsureVersionedProjectIdentifierCommand,
   CreateMenuDefinitionCommand,
   UpdateMenuDefinitionCommand,
   DeleteMenuDefinitionCommand,
@@ -1244,60 +1242,12 @@ function applyDeletePluginConfigurationCommand(
   };
 }
 
-function applyUpdateDeploymentSettingsCommand(
-  session: AuthoringSession,
-  command: UpdateDeploymentSettingsCommand
-): AuthoringSession {
-  const transaction = createTransactionForCommand(command, [
-    session.gameProject.identity.id
-  ]);
-
-  return {
-    ...session,
-    gameProject: {
-      ...session.gameProject,
-      deployment: command.payload.settings
-    },
-    undoStack: [...session.undoStack, checkpointSession(session)],
-    redoStack: [],
-    history: pushTransaction(session.history, transaction),
-    isDirty: true
-  };
-}
-
-function applyEnsureVersionedProjectIdentifierCommand(
-  session: AuthoringSession,
-  command: EnsureVersionedProjectIdentifierCommand
-): AuthoringSession {
-  // Story 45.4.7 — idempotent: never overwrite an existing entry. Historical
-  // suffixes are part of the persistent record so worktrees / `git checkout
-  // v1.0.0` resolve back to the correct historical GCP project. The
-  // shape-validation (key `v\d+`, value 5-char alphanumeric) lives in
-  // normalizeVersionedProjectIdentifiers, which is what produces the map we
-  // mutate here. A no-change call returns the session unchanged so we don't
-  // pollute the undo stack with no-ops.
-  const key = `v${command.payload.majorVersion}`;
-  if (session.gameProject.versionedProjectIdentifiers[key] != null) {
-    return session;
-  }
-  const transaction = createTransactionForCommand(command, [
-    session.gameProject.identity.id
-  ]);
-  return {
-    ...session,
-    gameProject: {
-      ...session.gameProject,
-      versionedProjectIdentifiers: {
-        ...session.gameProject.versionedProjectIdentifiers,
-        [key]: command.payload.suffix
-      }
-    },
-    undoStack: [...session.undoStack, checkpointSession(session)],
-    redoStack: [],
-    history: pushTransaction(session.history, transaction),
-    isDirty: true
-  };
-}
+// Story 45.7.5 — `applyUpdateDeploymentSettingsCommand` and
+// `applyEnsureVersionedProjectIdentifierCommand` removed. Deploy state
+// mutations now flow through the generic `UpdatePluginConfiguration`
+// command applier, which writes the SugarDeploy plugin's
+// `pluginConfigurations[].config` slot. The deploy plugin contributes
+// typed builders that produce the right payload shape.
 
 function applyPlayerDefinitionCommand(
   session: AuthoringSession,
@@ -2181,13 +2131,6 @@ export function applyCommand(
 
   if (command.kind === "DeletePluginConfiguration") {
     return applyDeletePluginConfigurationCommand(session, command);
-  }
-
-  if (command.kind === "UpdateDeploymentSettings") {
-    return applyUpdateDeploymentSettingsCommand(session, command);
-  }
-  if (command.kind === "EnsureVersionedProjectIdentifier") {
-    return applyEnsureVersionedProjectIdentifierCommand(session, command);
   }
 
   if (command.kind === "CreateMenuDefinition") {

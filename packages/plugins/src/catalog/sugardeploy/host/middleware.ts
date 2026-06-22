@@ -46,6 +46,7 @@ import {
   type GcpProjectProbeStatus
 } from "../../../deployment/gcp-bootstrap";
 import { normalizeGoogleCloudRunDeploymentTargetOverrides } from "../../../deployment/overrides";
+import { getDeploymentSettings } from "../../../deployment/plugin-state";
 
 interface SugarDeployActionRequest {
   actionKind: DeploymentActionKind;
@@ -166,7 +167,7 @@ async function probeServiceHealth(
       };
     }
     const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-      normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+      getDeploymentSettings(normalizedGameProject).targetOverrides["google-cloud-run"],
       normalizedGameProject
     );
     const gcloudError = await ensureGcloudOnPath();
@@ -318,9 +319,9 @@ function createActionDispatcherPlugin(): VitePlugin {
             }
 
             const normalizedGameProject = tryNormalizeGameProject(body.gameProject);
-            const deploymentSettings = normalizeDeploymentSettings(
-              (normalizedGameProject?.deployment ?? null) as never
-            );
+            const deploymentSettings = normalizedGameProject
+              ? getDeploymentSettings(normalizedGameProject)
+              : normalizeDeploymentSettings(null);
             const descriptor = resolveDeploymentActionFromSettings(
               deploymentSettings,
               actionKind as DeploymentActionKind,
@@ -428,7 +429,7 @@ function createActionDispatcherPlugin(): VitePlugin {
               const plan = planGameDeployment(normalizedGameProject);
               const serviceNames = getCloudRunServiceNamesForPlan(plan);
               const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-                normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+                getDeploymentSettings(normalizedGameProject).targetOverrides["google-cloud-run"],
                 normalizedGameProject
               );
               const projectId = cloudRunOverrides.projectId;
@@ -526,7 +527,7 @@ function createActionDispatcherPlugin(): VitePlugin {
                 const plan = planGameDeployment(normalizedGameProject);
                 const serviceNames = getCloudRunServiceNamesForPlan(plan);
                 const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-                  normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+                  getDeploymentSettings(normalizedGameProject).targetOverrides["google-cloud-run"],
                   normalizedGameProject
                 );
                 const projectId = cloudRunOverrides.projectId;
@@ -989,7 +990,7 @@ function resolveSecretContext(
   secretKey: string
 ): { ok: true; context: ResolvedSecretContext } | { ok: false; reason: string } {
   const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
-    normalizedGameProject.deployment.targetOverrides["google-cloud-run"],
+    getDeploymentSettings(normalizedGameProject).targetOverrides["google-cloud-run"],
     normalizedGameProject
   );
   if (!cloudRunOverrides.projectId) {
