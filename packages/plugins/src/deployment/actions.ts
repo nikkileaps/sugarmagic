@@ -1,5 +1,5 @@
 import type {
-  DeploymentTargetId,
+  BackendDeploymentTargetId,
   DeploymentSettings,
   GameProject
 } from "@sugarmagic/domain";
@@ -26,7 +26,7 @@ export interface DeploymentHostCommand {
 }
 
 export interface DeploymentActionDescriptor {
-  targetId: DeploymentTargetId;
+  targetId: BackendDeploymentTargetId;
   actionKind: DeploymentActionKind;
   supported: boolean;
   reason?: string;
@@ -44,7 +44,11 @@ export interface DeploymentActionExecutionResult {
 }
 
 interface DeploymentExecutionContext {
-  deploymentTargetId: DeploymentTargetId | null;
+  // Story 46.6 — renamed from `deploymentTargetId` for symmetry with
+  // the new frontend axis. Backend-only because the action descriptors
+  // built here (deploy/destroy/health/status/setup-infra/teardown-infra)
+  // operate on services + secrets + IAM, all backend-side concerns.
+  backendDeploymentTargetId: BackendDeploymentTargetId | null;
   targetOverrides: Record<string, Record<string, unknown>>;
   // 45.6 — the normalizer derives projectId / composeProjectName from the
   // game project's identity + majorVersion + versionedProjectIdentifiers
@@ -298,9 +302,9 @@ export function resolveDeploymentAction(
 ): DeploymentActionDescriptor {
   return resolveDeploymentActionFromSettings(
     {
-      deploymentTargetId: plan.deploymentTargetId,
+      backendDeploymentTargetId: plan.backendDeploymentTargetId,
       targetOverrides: {
-        [plan.deploymentTargetId ?? ""]: plan.targetOverrides
+        [plan.backendDeploymentTargetId ?? ""]: plan.targetOverrides
       }
     },
     actionKind,
@@ -309,11 +313,11 @@ export function resolveDeploymentAction(
 }
 
 export function resolveDeploymentActionFromSettings(
-  settings: Pick<DeploymentSettings, "deploymentTargetId" | "targetOverrides">,
+  settings: Pick<DeploymentSettings, "backendDeploymentTargetId" | "targetOverrides">,
   actionKind: DeploymentActionKind,
   gameProject?: GameProject | null
 ): DeploymentActionDescriptor {
-  const targetId = settings.deploymentTargetId;
+  const targetId = settings.backendDeploymentTargetId;
   if (!targetId) {
     return {
       targetId: "local",
@@ -324,7 +328,7 @@ export function resolveDeploymentActionFromSettings(
   }
 
   const context: DeploymentExecutionContext = {
-    deploymentTargetId: settings.deploymentTargetId,
+    backendDeploymentTargetId: settings.backendDeploymentTargetId,
     targetOverrides: settings.targetOverrides as Record<
       string,
       Record<string, unknown>
@@ -341,7 +345,7 @@ export function resolveDeploymentActionFromSettings(
 }
 
 export function describeTargetOverrides(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   overrides: Record<string, unknown>
 ): Record<string, unknown> {
   switch (targetId) {

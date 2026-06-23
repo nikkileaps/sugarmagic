@@ -7,7 +7,12 @@ import type {
   TopologyRequirement
 } from "@sugarmagic/domain";
 import { createDeploymentRequirementId } from "../../../domain/src/index";
-import type { DeploymentSettings, DeploymentTargetId, GameProject } from "@sugarmagic/domain";
+import type {
+  BackendDeploymentTargetId,
+  DeploymentSettings,
+  FrontendDeploymentTargetId,
+  GameProject
+} from "@sugarmagic/domain";
 // IMPORTANT — these VALUE imports use the relative path on purpose. The
 // SugarDeploy host middleware (catalog/sugardeploy/host/) is reachable
 // from Studio's vite.config.ts at Vite's config-load phase, which bundles
@@ -38,6 +43,13 @@ import {
   buildCloudRunTerraformVariablesFile,
   collectSecretEnvBindings
 } from "./cloud-run-terraform";
+import {
+  buildNetlifyManagedFiles,
+  collectNetlifyWarnings,
+  FRONTEND_RENAME_LEDGER,
+  NETLIFY_TEMPLATE_VERSION,
+  normalizeNetlifyDeploymentTargetOverrides
+} from "./netlify";
 
 export interface ManagedProjectFile {
   relativePath: string;
@@ -80,9 +92,20 @@ export interface DeploymentServiceUnit {
 
 export interface DeploymentPlan {
   publishTargetId: PublishTargetId;
-  deploymentTargetId: DeploymentTargetId | null;
+  // Story 46.6 — backend axis (where game services run). Renamed from
+  // `deploymentTargetId` to disambiguate from the frontend axis added
+  // alongside it. Generated sidecar JSON files (`deployment-plan.json`)
+  // emit the renamed field too.
+  backendDeploymentTargetId: BackendDeploymentTargetId | null;
   targetLabel: string | null;
   targetOverrides: Record<string, unknown>;
+  // Story 46.6 — frontend axis (where the static client artifact runs).
+  // Chosen independently of the backend; null when no frontend target
+  // is configured. The matching handler's `buildManagedFiles` runs
+  // alongside the backend handler's and appends to plan.managedFiles.
+  frontendDeploymentTargetId: FrontendDeploymentTargetId | null;
+  frontendTargetLabel: string | null;
+  frontendTargetOverrides: Record<string, unknown>;
   status: "ready" | "warning" | "invalid";
   requirementSources: DeploymentRequirementSource[];
   requirements: DeploymentRequirement[];
@@ -93,14 +116,43 @@ export interface DeploymentPlan {
 }
 
 export interface DeploymentTargetDefinition {
-  targetId: DeploymentTargetId;
+  targetId: BackendDeploymentTargetId;
   displayName: string;
   summary: string;
   implemented: boolean;
+  /**
+   * Story 46.6 — Discriminates backend vs frontend handlers. Every
+   * existing `DeploymentTargetDefinition` is a backend target (services
+   * + secrets + IAM); the parallel `FrontendDeploymentTargetDefinition`
+   * for static-hosting targets carries `role: "frontend"`. Today the UI
+   * uses this to render two separate Targets tab strips in the Provision
+   * workspace.
+   */
+  role: "backend";
 }
 
 interface DeploymentTargetHandler {
   definition: DeploymentTargetDefinition;
+  normalizeOverrides: (gameProject: GameProject) => Record<string, unknown>;
+  collectWarnings?: (plan: DeploymentPlan) => string[];
+  buildManagedFiles: (plan: DeploymentPlan, gameProject: GameProject) => ManagedProjectFile[];
+}
+
+// Story 46.6 — frontend-target counterpart of DeploymentTargetDefinition.
+// Lives on a separate enum + registry so neither side has to know about
+// the other's id space (Netlify isn't a backend target choice;
+// google-cloud-run isn't a frontend target choice). The Provision UI
+// renders two parallel tab strips driven by their respective lists.
+export interface FrontendDeploymentTargetDefinition {
+  targetId: FrontendDeploymentTargetId;
+  displayName: string;
+  summary: string;
+  implemented: boolean;
+  role: "frontend";
+}
+
+interface FrontendDeploymentTargetHandler {
+  definition: FrontendDeploymentTargetDefinition;
   normalizeOverrides: (gameProject: GameProject) => Record<string, unknown>;
   collectWarnings?: (plan: DeploymentPlan) => string[];
   buildManagedFiles: (plan: DeploymentPlan, gameProject: GameProject) => ManagedProjectFile[];
@@ -315,14 +367,14 @@ function toComposeServiceName(input: string): string {
 }
 
 function getServiceDirectory(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit
 ): string {
   return `deployment/${targetId}/services/${toComposeServiceName(unit.serviceUnitId)}`;
 }
 
 function buildGatewayPackageFile(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit
 ): ManagedProjectFile {
   return asJsonFile(`${getServiceDirectory(targetId, unit)}/package.json`, {
@@ -333,7 +385,7 @@ function buildGatewayPackageFile(
 }
 
 function buildGatewayDockerFile(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
   containerPort: number
 ): ManagedProjectFile {
@@ -355,7 +407,7 @@ function buildGatewayDockerFile(
 }
 
 function buildGatewayServerFile(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
   containerPort: number,
   gatewayAuthMode: "none" | "bearer" = "none"
@@ -1523,7 +1575,7 @@ server.listen(port, () => {
 }
 
 function buildGatewayRoutesFile(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit
 ): ManagedProjectFile {
   return asJsonFile(`${getServiceDirectory(targetId, unit)}/routes.json`, {
@@ -1540,7 +1592,7 @@ function buildGatewayRoutesFile(
 }
 
 function buildGatewayScaffoldFiles(
-  targetId: DeploymentTargetId,
+  targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
   containerPort: number,
   gatewayAuthMode: "none" | "bearer" = "none"
@@ -1644,7 +1696,7 @@ function buildLocalManagedFiles(
     ),
     asJsonFile("deployment/local/deployment-plan.json", {
       publishTargetId: plan.publishTargetId,
-      deploymentTargetId: plan.deploymentTargetId,
+      backendDeploymentTargetId: plan.backendDeploymentTargetId,
       status: plan.status,
       targetOverrides: overrides,
       loreSource,
@@ -1938,7 +1990,7 @@ function buildGoogleCloudRunManagedFiles(
     ),
     asJsonFile("deployment/google-cloud-run/deployment-plan.json", {
       publishTargetId: plan.publishTargetId,
-      deploymentTargetId: plan.deploymentTargetId,
+      backendDeploymentTargetId: plan.backendDeploymentTargetId,
       status: plan.status,
       targetOverrides: overrides,
       serviceUnits: plan.serviceUnits.map((unit) => ({
@@ -1982,13 +2034,14 @@ function buildGoogleCloudRunManagedFiles(
   return files;
 }
 
-const targetHandlers: Record<DeploymentTargetId, DeploymentTargetHandler> = {
+const targetHandlers: Record<BackendDeploymentTargetId, DeploymentTargetHandler> = {
   local: {
     definition: {
       targetId: "local",
       displayName: "Local",
       summary: "Local same-origin deployment target with generated proxy and service scaffolding.",
-      implemented: true
+      implemented: true,
+      role: "backend"
     },
     normalizeOverrides: (gameProject) =>
       ({
@@ -2004,7 +2057,8 @@ const targetHandlers: Record<DeploymentTargetId, DeploymentTargetHandler> = {
       targetId: "google-cloud-run",
       displayName: "Google Cloud Run",
       summary: "Hosted deployment target for Cloud Run services and managed proxy topology.",
-      implemented: true
+      implemented: true,
+      role: "backend"
     },
     normalizeOverrides: (gameProject) =>
       ({
@@ -2033,6 +2087,56 @@ export function listDeploymentTargets(): DeploymentTargetDefinition[] {
     .map((handler) => handler.definition)
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
+
+// Story 46.6 — frontend deployment target registry, parallel to the
+// backend `targetHandlers` above. Single concrete entry (Netlify) for
+// now; the structure is the same so adding "cloudflare-pages", "s3",
+// etc. is a one-line entry plus a generator module.
+const frontendDeploymentTargetHandlers: Record<
+  FrontendDeploymentTargetId,
+  FrontendDeploymentTargetHandler
+> = {
+  netlify: {
+    definition: {
+      targetId: "netlify",
+      displayName: "Netlify",
+      summary:
+        "Static-host the targets/web build on Netlify. CI deploys via the generated GHA workflow (story 46.7+).",
+      implemented: true,
+      role: "frontend"
+    },
+    normalizeOverrides: (gameProject) =>
+      ({
+        ...normalizeNetlifyDeploymentTargetOverrides(
+          getDeploymentTargetOverrides(
+            getDeploymentSettings(gameProject),
+            "netlify"
+          )
+        )
+      }),
+    collectWarnings: (plan) => collectNetlifyWarnings(plan),
+    buildManagedFiles: (plan, gameProject) =>
+      buildNetlifyManagedFiles(plan, gameProject)
+  }
+};
+
+export function listFrontendDeploymentTargets(): FrontendDeploymentTargetDefinition[] {
+  return Object.values(frontendDeploymentTargetHandlers)
+    .map((handler) => handler.definition)
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+export {
+  buildNetlifyManagedFiles,
+  FRONTEND_RENAME_LEDGER,
+  NETLIFY_TEMPLATE_VERSION,
+  normalizeNetlifyDeploymentTargetOverrides
+};
+export {
+  isValidNetlifySiteId,
+  type NetlifyDeploymentTargetOverrides,
+  type NetlifyProductionContext
+} from "./netlify";
 
 function collectRequirementSources(
   gameProject: GameProject
@@ -2073,7 +2177,7 @@ function collectRequirementSources(
 
 function buildServiceUnits(
   requirements: DeploymentRequirement[],
-  deploymentTargetId: DeploymentTargetId | null
+  backendDeploymentTargetId: BackendDeploymentTargetId | null
 ): {
   serviceUnits: DeploymentServiceUnit[];
   conflicts: DeploymentConflict[];
@@ -2184,7 +2288,7 @@ function buildServiceUnits(
   // contributions still merge in normally when other plugins are enabled
   // (those go through the bucket logic above and produce their own unit,
   // so this branch is skipped).
-  if (serviceUnits.length === 0 && deploymentTargetId !== null) {
+  if (serviceUnits.length === 0 && backendDeploymentTargetId !== null) {
     serviceUnits.push({
       serviceUnitId: "sugarmagic-gateway",
       label: "Sugarmagic Gateway",
@@ -2209,7 +2313,8 @@ function buildServiceUnits(
 export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   const { sources, conflicts: sourceConflicts } = collectRequirementSources(gameProject);
   const deploymentSettings = getDeploymentSettings(gameProject);
-  const targetId = deploymentSettings.deploymentTargetId;
+  const targetId = deploymentSettings.backendDeploymentTargetId;
+  const frontendTargetId = deploymentSettings.frontendDeploymentTargetId;
   const requirements = sources.flatMap((source) => source.requirements);
   const { serviceUnits, conflicts: serviceConflicts } = buildServiceUnits(
     requirements,
@@ -2291,11 +2396,41 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
     );
   }
 
+  // Story 46.6 — resolve the frontend handler in parallel with the
+  // backend one. Frontend target is OPTIONAL; missing it doesn't add a
+  // conflict (lots of projects deploy only to a backend during
+  // standup). When set, its buildManagedFiles runs alongside the
+  // backend's and appends to managedFiles.
+  const frontendHandler = frontendTargetId
+    ? frontendDeploymentTargetHandlers[frontendTargetId]
+    : null;
+  if (frontendTargetId && !frontendHandler) {
+    conflicts.push({
+      conflictId: `unsupported-frontend-target:${frontendTargetId}`,
+      severity: "error",
+      kind: "unsupported-target",
+      message: `Frontend deployment target ${frontendTargetId} is not supported by SugarDeploy.`,
+      ownerIds: [],
+      requirementIds: []
+    });
+  }
+  const frontendTargetOverrides = frontendHandler
+    ? frontendHandler.normalizeOverrides(gameProject)
+    : {};
+  if (frontendHandler && !frontendHandler.definition.implemented) {
+    warnings.push(
+      `${frontendHandler.definition.displayName} is planned but not fully implemented yet; SugarDeploy will generate stub deployment artifacts for review.`
+    );
+  }
+
   const provisionalPlan: DeploymentPlan = {
     publishTargetId: getPublishSettings(gameProject).publishTargetId,
-    deploymentTargetId: targetId,
+    backendDeploymentTargetId: targetId,
     targetLabel: handler?.definition.displayName ?? null,
     targetOverrides,
+    frontendDeploymentTargetId: frontendTargetId,
+    frontendTargetLabel: frontendHandler?.definition.displayName ?? null,
+    frontendTargetOverrides,
     status:
       conflicts.some((conflict) => conflict.severity === "error")
         ? "invalid"
@@ -2312,16 +2447,28 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
 
   if (handler?.collectWarnings) {
     provisionalPlan.warnings.push(...handler.collectWarnings(provisionalPlan));
-    provisionalPlan.status =
-      provisionalPlan.conflicts.some((conflict) => conflict.severity === "error")
-        ? "invalid"
-        : provisionalPlan.conflicts.length > 0 || provisionalPlan.warnings.length > 0
-          ? "warning"
-          : "ready";
   }
+  if (frontendHandler?.collectWarnings) {
+    provisionalPlan.warnings.push(
+      ...frontendHandler.collectWarnings(provisionalPlan)
+    );
+  }
+  provisionalPlan.status =
+    provisionalPlan.conflicts.some((conflict) => conflict.severity === "error")
+      ? "invalid"
+      : provisionalPlan.conflicts.length > 0 || provisionalPlan.warnings.length > 0
+        ? "warning"
+        : "ready";
+
+  const backendManagedFiles = handler
+    ? handler.buildManagedFiles(provisionalPlan, gameProject)
+    : [];
+  const frontendManagedFiles = frontendHandler
+    ? frontendHandler.buildManagedFiles(provisionalPlan, gameProject)
+    : [];
 
   return {
     ...provisionalPlan,
-    managedFiles: handler ? handler.buildManagedFiles(provisionalPlan, gameProject) : []
+    managedFiles: [...backendManagedFiles, ...frontendManagedFiles]
   };
 }

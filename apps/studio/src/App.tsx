@@ -357,7 +357,7 @@ async function performSave(
   const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
   const deploymentPlan =
     canRunSugarDeploy &&
-    getDeploymentSettings(session.gameProject).deploymentTargetId
+    getDeploymentSettings(session.gameProject).backendDeploymentTargetId
       ? planGameDeployment(session.gameProject)
       : null;
 

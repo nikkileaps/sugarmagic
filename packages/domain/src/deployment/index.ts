@@ -1,12 +1,34 @@
-export type DeploymentTargetId = "local" | "google-cloud-run";
+// Story 45 — backend deployment targets (where the GAME SERVICES run).
+// Pre-46.6 this enum was named `DeploymentTargetId` flat; renamed for
+// symmetry once 46.6 introduced the parallel frontend axis.
+export type BackendDeploymentTargetId = "local" | "google-cloud-run";
+
+/**
+ * @deprecated Use `BackendDeploymentTargetId`. Kept as an alias only to
+ * tide the legacy `DeploymentTargetId` imports through the 46.6 rename
+ * sweep; remove once the codebase fully adopts the role-specific names.
+ */
+export type DeploymentTargetId = BackendDeploymentTargetId;
+
+// Story 46.6 — frontend deployment targets (where the GAME CLIENT static
+// artifact runs). Lives on a separate axis from the backend so the user
+// can pick "Cloud Run + Netlify" or future "Cloud Run + Cloudflare Pages"
+// independently. Initial entry: Netlify.
+export type FrontendDeploymentTargetId = "netlify";
 
 export interface DeploymentSettings {
   // Story 46.2 — `publishTargetId` moved off `DeploymentSettings` and
   // into the SugarDeploy plugin's `config.publishSettings` slot. Reads
   // go through `getPublishSettings(gameProject)` from
-  // `@sugarmagic/plugins`; the legacy `publishTargetId: "web"` from
-  // pre-046 project files is migrated to `"web-netlify"` at read time.
-  deploymentTargetId: DeploymentTargetId | null;
+  // `@sugarmagic/plugins`.
+  //
+  // Story 46.6 — `deploymentTargetId` renamed to
+  // `backendDeploymentTargetId` and `frontendDeploymentTargetId` added
+  // so the two axes can be chosen independently. Pre-46.6 project files
+  // are migrated at read time in `normalizeDeploymentSettings` (legacy
+  // `deploymentTargetId` is read into `backendDeploymentTargetId`).
+  backendDeploymentTargetId: BackendDeploymentTargetId | null;
+  frontendDeploymentTargetId: FrontendDeploymentTargetId | null;
   // Project-level source paths. These live on DeploymentSettings (not in
   // targetOverrides) because they describe the *source* the deployment
   // runs against, which is the same regardless of which target you ship
@@ -18,7 +40,8 @@ export interface DeploymentSettings {
 
 export function createDefaultDeploymentSettings(): DeploymentSettings {
   return {
-    deploymentTargetId: null,
+    backendDeploymentTargetId: null,
+    frontendDeploymentTargetId: null,
     workingDirectory: "",
     githubRepo: "",
     targetOverrides: {}
@@ -26,12 +49,21 @@ export function createDefaultDeploymentSettings(): DeploymentSettings {
 }
 
 export function normalizeDeploymentSettings(
-  input: Partial<DeploymentSettings> | null | undefined
+  input: Partial<DeploymentSettings> & {
+    // Story 46.6 — pre-rename projects persisted `deploymentTargetId`
+    // at this slot; accept it on input for back-compat then forget it.
+    deploymentTargetId?: BackendDeploymentTargetId | null;
+  } | null | undefined
 ): DeploymentSettings {
-  const deploymentTargetId =
-    input?.deploymentTargetId === "local" ||
-    input?.deploymentTargetId === "google-cloud-run"
-      ? input.deploymentTargetId
+  const rawBackend =
+    input?.backendDeploymentTargetId ?? input?.deploymentTargetId ?? null;
+  const backendDeploymentTargetId =
+    rawBackend === "local" || rawBackend === "google-cloud-run"
+      ? rawBackend
+      : null;
+  const frontendDeploymentTargetId =
+    input?.frontendDeploymentTargetId === "netlify"
+      ? input.frontendDeploymentTargetId
       : null;
 
   const targetOverrides: Record<string, Record<string, unknown>> = {};
@@ -60,7 +92,8 @@ export function normalizeDeploymentSettings(
     "";
 
   return {
-    deploymentTargetId,
+    backendDeploymentTargetId,
+    frontendDeploymentTargetId,
     workingDirectory,
     githubRepo,
     targetOverrides

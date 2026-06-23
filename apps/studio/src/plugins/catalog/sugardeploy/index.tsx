@@ -32,9 +32,12 @@ import {
   getDeploymentSettings,
   getPublishSettings,
   getVersionedProjectIdentifiers,
+  isValidNetlifySiteId,
   listDeploymentTargets,
+  listFrontendDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
+  normalizeNetlifyDeploymentTargetOverrides,
   planGameDeployment,
   type SecretEnvBinding,
   stripGithubRepoPrefixes,
@@ -379,7 +382,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const versionedProjectIdentifiers = gameProject
     ? getVersionedProjectIdentifiers(gameProject)
     : {};
-  const selectedTargetId = deploymentSettings?.deploymentTargetId ?? null;
+  const selectedTargetId =
+    deploymentSettings?.backendDeploymentTargetId ?? null;
+  // Story 46.6 — parallel frontend-target state. Frontend has no "local"
+  // fallback (no equivalent of a docker-compose static host yet), so the
+  // strip can legitimately be empty until the user adds Netlify via "+".
+  const selectedFrontendTargetId =
+    deploymentSettings?.frontendDeploymentTargetId ?? null;
+  const netlifyOverrides = normalizeNetlifyDeploymentTargetOverrides(
+    deploymentSettings?.targetOverrides.netlify
+  );
+  const netlifySiteIdInput =
+    typeof deploymentSettings?.targetOverrides.netlify?.siteId === "string"
+      ? (deploymentSettings.targetOverrides.netlify.siteId as string)
+      : "";
+  const netlifySiteIdError =
+    netlifySiteIdInput.length > 0 && !isValidNetlifySiteId(netlifySiteIdInput)
+      ? "Netlify site ids are lowercase hex + dashes, usually a UUID."
+      : null;
   const localOverrides = normalizeLocalDeploymentTargetOverrides(
     deploymentSettings?.targetOverrides.local,
     gameProject ?? undefined
@@ -481,7 +501,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     const current = getDeploymentSettings(gameProject);
     updateSettings({
       ...current,
-      deploymentTargetId:
+      backendDeploymentTargetId:
         value === "local" || value === "google-cloud-run" ? value : null
     });
   }
@@ -514,10 +534,53 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     const current = getDeploymentSettings(gameProject);
     updateSettings({
       ...current,
-      deploymentTargetId: targetId,
+      backendDeploymentTargetId: targetId,
       targetOverrides: {
         ...current.targetOverrides,
         [targetId]: current.targetOverrides[targetId] ?? {}
+      }
+    });
+  }
+
+  // Story 46.6 — frontend-axis equivalents of the backend updaters above.
+  // Same shape (write to targetOverrides + the matching id slot) so the
+  // serialized DeploymentSettings remains symmetric across roles.
+  function updateFrontendTarget(value: string | null) {
+    if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
+    updateSettings({
+      ...current,
+      frontendDeploymentTargetId: value === "netlify" ? "netlify" : null
+    });
+  }
+
+  function addFrontendTarget(targetId: "netlify") {
+    if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
+    updateSettings({
+      ...current,
+      frontendDeploymentTargetId: targetId,
+      targetOverrides: {
+        ...current.targetOverrides,
+        [targetId]: current.targetOverrides[targetId] ?? {}
+      }
+    });
+  }
+
+  function updateFrontendTargetOverrides(
+    targetId: "netlify",
+    patch: Record<string, unknown>
+  ) {
+    if (!gameProject) return;
+    const current = getDeploymentSettings(gameProject);
+    updateSettings({
+      ...current,
+      targetOverrides: {
+        ...current.targetOverrides,
+        [targetId]: {
+          ...(current.targetOverrides[targetId] ?? {}),
+          ...patch
+        }
       }
     });
   }
@@ -1884,7 +1947,10 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           <Stack gap="sm">
             <Group gap="xs" align="baseline">
               <Text fw={700} size="md">
-                Targets
+                Backend Targets
+              </Text>
+              <Text size="xs" c="var(--sm-color-subtext)">
+                — services + secrets (where the game backend runs)
               </Text>
             </Group>
             <Box
@@ -2121,6 +2187,195 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   </Stack>
                 </Tabs.Panel>
               </Tabs>
+            </Box>
+          </Stack>
+        );
+      })() : null}
+
+      {/* Story 46.6 — Frontend Targets panel. Parallel to Backend
+          Targets above; lists static-hosting destinations (Netlify
+          today). Empty strip is legal — frontend deployment is
+          opt-in. The "+" picker adds Netlify; selecting it flips
+          frontendDeploymentTargetId and seeds an overrides slot so
+          the next save regenerates deployment/netlify/. */}
+      {isProvision && gameProject ? (() => {
+        const allFrontendTargets = listFrontendDeploymentTargets();
+        const currentSettings = getDeploymentSettings(gameProject);
+        const configured = new Set<string>();
+        if (selectedFrontendTargetId) {
+          configured.add(selectedFrontendTargetId);
+        }
+        for (const key of Object.keys(currentSettings.targetOverrides ?? {})) {
+          if (allFrontendTargets.some((t) => t.targetId === key)) {
+            configured.add(key);
+          }
+        }
+        const configuredList = allFrontendTargets.filter((t) =>
+          configured.has(t.targetId)
+        );
+        const availableToAdd = allFrontendTargets.filter(
+          (t) => !configured.has(t.targetId)
+        );
+        const tabValue = selectedFrontendTargetId ?? "__none__";
+        return (
+          <Stack gap="sm">
+            <Group gap="xs" align="baseline">
+              <Text fw={700} size="md">
+                Frontend Targets
+              </Text>
+            </Group>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              {configuredList.length === 0 ? (
+                <Group justify="space-between" align="center">
+                  <Text size="sm" c="var(--sm-color-overlay0)">
+                    No frontend target configured. Add Netlify to
+                    generate the static-host build config.
+                  </Text>
+                  <Menu
+                    shadow="md"
+                    position="bottom-end"
+                    disabled={availableToAdd.length === 0}
+                  >
+                    <Menu.Target>
+                      <Button
+                        size="compact-sm"
+                        variant="subtle"
+                        color="gray"
+                        disabled={availableToAdd.length === 0}
+                      >
+                        + Add Frontend Target
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Label>Add a frontend target</Menu.Label>
+                      {availableToAdd.map((t) => (
+                        <Menu.Item
+                          key={t.targetId}
+                          onClick={() => {
+                            if (t.targetId === "netlify") {
+                              addFrontendTarget("netlify");
+                            }
+                          }}
+                        >
+                          {t.displayName}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
+              ) : (
+                <Tabs
+                  value={tabValue}
+                  onChange={(value) => {
+                    if (!value || value === "__add__") return;
+                    if (value === "netlify") {
+                      updateFrontendTarget("netlify");
+                    }
+                  }}
+                >
+                  <Tabs.List>
+                    {configuredList.map((t) => (
+                      <Tabs.Tab key={t.targetId} value={t.targetId}>
+                        {t.displayName}
+                      </Tabs.Tab>
+                    ))}
+                    <Menu
+                      shadow="md"
+                      position="bottom-start"
+                      disabled={availableToAdd.length === 0}
+                    >
+                      <Menu.Target>
+                        <Button
+                          size="compact-sm"
+                          variant="subtle"
+                          color="gray"
+                          disabled={availableToAdd.length === 0}
+                          title={
+                            availableToAdd.length === 0
+                              ? "All available frontend targets are configured."
+                              : "Add a frontend deployment target."
+                          }
+                          style={{ alignSelf: "center", marginLeft: 4 }}
+                        >
+                          +
+                        </Button>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Label>Add a frontend target</Menu.Label>
+                        {availableToAdd.map((t) => (
+                          <Menu.Item
+                            key={t.targetId}
+                            onClick={() => {
+                              if (t.targetId === "netlify") {
+                                addFrontendTarget("netlify");
+                              }
+                            }}
+                          >
+                            {t.displayName}
+                          </Menu.Item>
+                        ))}
+                      </Menu.Dropdown>
+                    </Menu>
+                  </Tabs.List>
+
+                  <Tabs.Panel value="netlify" pt="sm">
+                    <Stack gap="sm">
+                      <SimpleGrid cols={2} spacing="sm" verticalSpacing="sm">
+                        <TextInput
+                          label="Site ID"
+                          description="Netlify site UUID. Available from `netlify sites:list` or the site settings page."
+                          placeholder="12345678-90ab-cdef-1234-567890abcdef"
+                          value={netlifySiteIdInput}
+                          error={netlifySiteIdError}
+                          onChange={(event) =>
+                            updateFrontendTargetOverrides("netlify", {
+                              siteId: event.currentTarget.value
+                            })
+                          }
+                        />
+                        <TextInput
+                          label="Site Name"
+                          description="Human-readable site name (for the generated README)."
+                          placeholder="wordlark-v1"
+                          value={netlifyOverrides.siteName}
+                          onChange={(event) =>
+                            updateFrontendTargetOverrides("netlify", {
+                              siteName: event.currentTarget.value
+                            })
+                          }
+                        />
+                        <Select
+                          label="Production Context"
+                          description="Which Netlify deploy context the GHA workflow targets."
+                          data={[
+                            { value: "production", label: "Production" },
+                            { value: "deploy-preview", label: "Deploy Preview" },
+                            { value: "branch-deploy", label: "Branch Deploy" }
+                          ]}
+                          value={netlifyOverrides.productionContext}
+                          onChange={(value) =>
+                            updateFrontendTargetOverrides("netlify", {
+                              productionContext:
+                                value === "deploy-preview" ||
+                                value === "branch-deploy"
+                                  ? value
+                                  : "production"
+                            })
+                          }
+                          style={{ gridColumn: "1 / -1" }}
+                        />
+                      </SimpleGrid>
+                    </Stack>
+                  </Tabs.Panel>
+                </Tabs>
+              )}
             </Box>
           </Stack>
         );
