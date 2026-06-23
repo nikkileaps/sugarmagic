@@ -28,7 +28,8 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides
 } from "./overrides";
-import { getDeploymentSettings } from "./plugin-state";
+import { getDeploymentSettings, getPublishSettings } from "./plugin-state";
+import type { PublishTargetId } from "./publish-targets";
 import {
   buildCloudRunTerraformGitignore,
   buildCloudRunTerraformMainFile,
@@ -78,7 +79,7 @@ export interface DeploymentServiceUnit {
 }
 
 export interface DeploymentPlan {
-  publishTargetId: DeploymentSettings["publishTargetId"];
+  publishTargetId: PublishTargetId;
   deploymentTargetId: DeploymentTargetId | null;
   targetLabel: string | null;
   targetOverrides: Record<string, unknown>;
@@ -116,10 +117,20 @@ export {
 export {
   buildSetVersionedProjectIdentifierCommand,
   buildUpdateDeploymentSettingsCommand,
+  buildUpdatePublishSettingsCommand,
   getDeploymentSettings,
+  getPublishSettings,
   getVersionedProjectIdentifiers,
   type DeployStateInput
 } from "./plugin-state";
+
+export {
+  createDefaultPublishTargetSettings,
+  migrateLegacyPublishTargetId,
+  normalizePublishTargetSettings,
+  type PublishTargetId,
+  type PublishTargetSettings
+} from "./publish-targets";
 
 /**
  * Resolve the full set of Cloud Run service names a plan declares, using the
@@ -2281,7 +2292,7 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   }
 
   const provisionalPlan: DeploymentPlan = {
-    publishTargetId: deploymentSettings.publishTargetId,
+    publishTargetId: getPublishSettings(gameProject).publishTargetId,
     deploymentTargetId: targetId,
     targetLabel: handler?.definition.displayName ?? null,
     targetOverrides,

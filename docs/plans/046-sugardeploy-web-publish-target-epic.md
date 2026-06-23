@@ -123,15 +123,22 @@ surface.
   CLI) on PATH and logged in via `gh auth login`, same way they
   already need `gcloud` and `terraform`.
 
-- **Publish-target plugin selection mirrors deployment-target plugin
-  selection.** `publishTargetId` becomes a typed enum like
-  `deploymentTargetId`. For v1: `web-netlify` is the single concrete
-  value (the legacy `"web"` value migrates to `"web-netlify"` on
-  read). The same per-target handler-registry shape Plan 045
-  established for deployment targets applies to publish targets —
-  per-target normalizer, per-target managed-files, per-target host
-  actions. Adding a new frontend host (Vercel, Cloud Storage + Cloud
-  CDN, etc.) is registering a new handler, not rewriting the plugin.
+- **Publish target stays publication-medium-shaped; frontend hosts
+  are deployment targets with `role: "frontend"`.** `publishTargetId`
+  stays `"web"` (the medium — what the user plays on). Future
+  publish targets are `"mobile"`, `"steam"`, etc., NOT subdivided by
+  hosting provider. Where artifacts physically run is the orthogonal
+  deployment-target axis. Plan 045's `DeploymentTargetId` enum
+  (currently `"local" | "google-cloud-run"`, both `role: "backend"`)
+  gets a parallel `FrontendDeploymentTargetId` enum (initially
+  `"netlify"`, future Vercel / GCP static / etc.). The two enums are
+  kept separate at the type level — `backendDeploymentTargetId:
+  BackendDeploymentTargetId | null` and `frontendDeploymentTargetId:
+  FrontendDeploymentTargetId | null` on `DeploymentSettings` — so
+  the type system enforces "a frontend slot only accepts frontend-
+  role targets." Adding a new frontend host is registering a new
+  entry in the frontend registry; same plugin-handler shape Plan
+  045 established for backend targets.
 
 - **`targets/web/` finished into a real playable artifact.** The
   published-web shell at `targets/web/` (workspace name
@@ -322,14 +329,18 @@ the actual promote / drain controls land in a follow-up.
   per-target settings flow into Provision because they're set-once
   config; Version lives in Release; the live-alias indicator and
   per-deploy history live in Deploy).
-- A `publishTargetHandlers` registry in
-  `packages/plugins/src/deployment/` parallel to `targetHandlers`.
-  Each handler exposes `definition`, `normalizeOverrides`, optional
+- A `frontendDeploymentTargetHandlers` registry in
+  `packages/plugins/src/deployment/` parallel to the existing
+  `targetHandlers` (which now becomes
+  `backendDeploymentTargetHandlers` or stays named while it grows a
+  sibling, scoping detail). Each handler exposes `definition` (with
+  `role: "frontend"`), `normalizeOverrides`, optional
   `collectWarnings`, `buildManagedFiles`. The Netlify handler emits
   per-game `netlify.toml`, a build-config manifest, and a README
-  into `<game-root>/publish/web-netlify/` (mirroring the Cloud Run
-  managed-files layout). Same drift-discipline as the Cloud Run
-  terraform.
+  into `<game-root>/deployment/netlify/` (mirroring the existing
+  `deployment/google-cloud-run/` layout — all deployment-target
+  outputs live under `deployment/` keyed by target id). Same drift-
+  discipline as the Cloud Run terraform.
 
 ### Plugin-managed files (new)
 
@@ -341,9 +352,9 @@ the actual promote / drain controls land in a follow-up.
   (workflows don't have a `moved {}` concept; drift handling here
   is "overwrite on save with a banner if hand-edits are present" —
   shape decided during scoping).
-- `<game-root>/publish/web-netlify/netlify.toml` and supporting
+- `<game-root>/deployment/netlify/netlify.toml` and supporting
   files — Netlify build config, frozen at the major's identity.
-- `<game-root>/publish/web-netlify/README.md` — generated, covers
+- `<game-root>/deployment/netlify/README.md` — generated, covers
   what's in the bundle, what env vars are baked in, manual fix-up
   commands.
 
@@ -396,7 +407,7 @@ from Plan 045. New endpoints:
   target plugin contract; per-version frontend deploys preserved
   forever; URL shape supports promote / drain; GHA secret bootstrap
   pattern.
-- The plugin-generated `publish/web-netlify/README.md` documents
+- The plugin-generated `deployment/netlify/README.md` documents
   the bundle.
 - The plugin-generated `.github/workflows/sugardeploy-deploy.yml`
   carries inline comments explaining each job.
@@ -406,12 +417,15 @@ from Plan 045. New endpoints:
 
 ### Tests
 
-- `publishTargetHandlers` registry + normalizer round-trips.
+- `frontendDeploymentTargetHandlers` registry + normalizer
+  round-trips.
 - Plugin-generated `netlify.toml` + workflow YAML shape assertions.
 - Build-config manifest baked into the player bundle has the
   expected gateway URL + version identity.
-- `normalizeGameProject` migrates legacy `publishTargetId: "web"`
-  to `"web-netlify"`.
+- `normalizeGameProject` lifts legacy `publishTargetId: "web"` from
+  the deployment-settings slot into the new `publishSettings`
+  slot — value stays `"web"` (publication medium), the Netlify
+  half lives on the new frontend-deployment-target axis.
 - Studio's mode-registry test asserts the Publish mode appears in
   the canonical order with at least the Studio-core Package
   workspace contributed.
@@ -512,11 +526,28 @@ tabs are absent because nothing is contributing them.
   the live alias subdomain CNAMEs to whichever per-version deploy
   is currently promoted.
 
-- **First-party frontend host is Netlify, named `web-netlify` in
-  the publish-target enum.** Per-deploy preserved-forever URL
-  semantics match the version model exactly; production-promote API
-  is one call; cert + CDN are automatic. Other hosts can be added
-  via the same handler-contract pattern.
+- **First-party frontend deployment target is Netlify, named
+  `"netlify"` in the `FrontendDeploymentTargetId` enum.** Per-deploy
+  preserved-forever URL semantics match the version model exactly;
+  production-promote API is one call; cert + CDN are automatic.
+  Other hosts (Vercel, GCP Cloud Storage + Cloud CDN, etc.) are
+  added via the same handler-contract pattern Plan 045 established
+  for backend targets.
+
+- **`PublishTargetId` and `DeploymentTargetId` are separate axes
+  with separate enums.** Publish target is the publication medium
+  (what the user plays on — `"web"` for v1, future `"mobile"` /
+  `"steam"`). Deployment targets are where artifacts physically run
+  (backend on Cloud Run / Local; frontend on Netlify / etc.). Each
+  deployment-target handler declares `role: "backend" | "frontend"`
+  in its definition, and the enums stay separated at the type level
+  (`BackendDeploymentTargetId` vs `FrontendDeploymentTargetId`) so
+  the type system enforces "a frontend slot can only accept a
+  frontend-role target." This rejects an earlier proposal of
+  collapsing publish + frontend host into a `"web-netlify"`
+  composite value, which conflated two orthogonal axes and would
+  have made cross-host publish target identity (e.g., a future
+  game published to "web" AND "steam") incoherent.
 
 - **Per-version frontend deploys are immutable; promote is
   separate from Deploy.** Every Deploy produces a new per-version
@@ -666,28 +697,37 @@ the canonical order of productmodes.
 ### 46.2 — Plugin-state migration for publish settings
 
 Extends the SugarDeploy plugin state slot (the
-`pluginConfigurations[].config` shape established in 45.7.5) with
-a `publishSettings` field carrying publish-target overrides
-parallel to `settings.targetOverrides` on the deployment-target
-side. Defines the `publishTargetId` typed enum (initially
-`"web-netlify"`), the `PublishTargetSettings` type, and the
-`liveDomain` project-level field. Adds `getPublishSettings(gameProject)`
-and `buildUpdatePublishSettingsCommand(gameProject, settings)`
-helpers exported from `packages/plugins/src/deployment/plugin-state.ts`.
+`pluginConfigurations[].config` shape established in 45.7.5) with a
+new `publishSettings` field carrying publish-medium-level concerns
+parallel to `config.settings` on the deployment-target side. Defines
+the `PublishTargetId` typed enum (initially `"web"` — the publication
+medium), the `PublishTargetSettings` type carrying `publishTargetId`
++ `liveDomain`, and the helpers `getPublishSettings(gameProject)` /
+`buildUpdatePublishSettingsCommand(gameProject, settings)` exported
+from `packages/plugins/src/deployment/plugin-state.ts`. Drops
+`publishTargetId` from the `DeploymentSettings` interface in domain
+(it never belonged on the deployment-target side).
 
-Legacy migration: pre-046 projects whose `DeploymentSettings`
-carries `publishTargetId: "web"` get the value migrated to
-`"web-netlify"` on read. Same forward-only pattern 45.7.5
-established. Tests cover both the new-shape round-trip and the
-legacy migration.
+Legacy migration: pre-046 projects carry `publishTargetId: "web"` on
+the deployment-settings slot (via 45.7.5's lift of the original
+`gameProject.deployment` shape). `getPublishSettings` reads from
+the new `config.publishSettings` slot, falls back to lifting the
+legacy field value from `config.settings.publishTargetId`. The value
+itself stays `"web"` — publishTargetId is the publication medium,
+not the host (the orthogonal frontend-deployment-target axis with
+Netlify / Vercel / etc. lands in later 046 stories). Same forward-
+only pattern 45.7.5 established.
 
-**Exit:** opening a project file with `publishTargetId: "web"`
-normalizes to `"web-netlify"`; saving rewrites the file with the
-new value; `getPublishSettings(gameProject)` returns a populated
-`PublishTargetSettings` with default fields filled. The deployment
-package's typecheck is clean. New tests in
-`packages/testing/src/plugin-infrastructure.test.ts` cover the
-shape + migration.
+**Exit:** opening a pre-046 project file (with `publishTargetId:
+"web"` on the legacy `config.settings` slot) loads cleanly;
+`getPublishSettings(gameProject)` returns `{ publishTargetId: "web",
+liveDomain: "" }`; saving rewrites `project.sgrmagic` with the new
+`config.publishSettings` slot AND the legacy field removed from
+`config.settings`. `DeploymentSettings` in domain no longer declares
+`publishTargetId`. The deployment package's typecheck is clean. New
+test in `packages/testing/src/plugin-infrastructure.test.ts` covers
+the legacy lift, the new-shape round-trip, the default shape, and
+the `buildUpdatePublishSettingsCommand` payload shape.
 
 ### 46.3 — `targets/web/` finishing: real game render path
 
@@ -785,43 +825,51 @@ workspace reshuffle in place. The `productmode` registration
 test asserts SugarDeploy's three workspaces appear in the right
 order.
 
-### 46.6 — `publishTargetHandlers` registry + `web-netlify` handler
+### 46.6 — `FrontendDeploymentTargetId` enum + `netlify` handler
 
-Adds the `publishTargetHandlers` registry in
-`packages/plugins/src/deployment/` parallel to `targetHandlers`.
-Each entry exposes `definition` (id + displayName + summary +
-implemented), `normalizeOverrides`, optional `collectWarnings`,
-and `buildManagedFiles`. The single concrete handler is
-`web-netlify`:
+Introduces the frontend-deployment-target axis. Adds
+`FrontendDeploymentTargetId` enum (initially `"netlify"`),
+`frontendDeploymentTargetId: FrontendDeploymentTargetId | null` on
+`DeploymentSettings` parallel to the existing
+`backendDeploymentTargetId` (which is the existing
+`deploymentTargetId` renamed for symmetry — single migration on
+DeploymentSettings to do both renames at once).
+
+Adds a `frontendDeploymentTargetHandlers` registry in
+`packages/plugins/src/deployment/` parallel to the existing
+backend `targetHandlers`. Each entry exposes `definition` (id +
+displayName + summary + `role: "frontend"` + implemented),
+`normalizeOverrides`, optional `collectWarnings`, and
+`buildManagedFiles`. The single concrete handler is `"netlify"`:
 
 - `normalizeOverrides`: validates `siteId` (UUID-ish), `siteName`
   (optional), `productionContext` enum.
-- `buildManagedFiles`: emits `publish/web-netlify/netlify.toml`
+- `buildManagedFiles`: emits `deployment/netlify/netlify.toml`
   (with the right `[build]`, `publish`, and `[[redirects]]`
-  blocks for a SPA), `publish/web-netlify/build-config.json`
+  blocks for a SPA), `deployment/netlify/build-config.json`
   (consumed by the GHA workflow at build time — captures gateway
-  URL, version identity, etc.), and
-  `publish/web-netlify/README.md` (explains what's generated,
-  what env vars are baked in, manual fix-up commands). All
-  carry the `# GENERATED BY SUGARMAGIC` header and the
-  `# SUGARMAGIC PUBLISH TEMPLATE VERSION: NN` stamp. New
-  `PUBLISH_TARGET_RENAME_LEDGER` parallel to
+  URL, version identity, etc.), and `deployment/netlify/README.md`
+  (explains what's generated, what env vars are baked in, manual
+  fix-up commands). All carry the `# GENERATED BY SUGARMAGIC`
+  header and the `# SUGARMAGIC FRONTEND TEMPLATE VERSION: NN`
+  stamp. New `FRONTEND_RENAME_LEDGER` parallel to
   `TERRAFORM_RENAME_LEDGER` (currently empty — no renames yet).
 
-The Provision workspace's existing Targets tabs gain a parallel
-Publish Targets tab list with `web-netlify` as the single
-configured target. Selecting it surfaces its settings fields
-(siteId, siteName, productionContext).
+The Provision workspace's Targets section grows TWO tab strips
+(landing in this story): one for backend targets (Local + Cloud
+Run from Plan 045) and one for frontend targets (Netlify). Each
+gets a `+` for adding new entries to its respective axis.
 
-**Exit:** with `publishTargetId: "web-netlify"` set on a project,
-saving regenerates `publish/web-netlify/netlify.toml` and
+**Exit:** with `frontendDeploymentTargetId: "netlify"` set on a
+project, saving regenerates `deployment/netlify/netlify.toml` and
 `build-config.json` with the right shape (snapshot test in
 `packages/testing/src/plugin-infrastructure.test.ts`). The
-Provision workspace's Publish Targets section lets the user fill
-in Netlify site id; values persist via
-`buildUpdatePublishSettingsCommand`. Uninstalling SugarDeploy
-removes the regenerated files on next clean-build (they don't
-re-appear).
+Provision workspace's Targets section renders the two parallel
+tab strips. Values persist via the same
+`buildUpdateDeploymentSettingsCommand` flow (the new field lives
+on `DeploymentSettings`, same write path as everything else there).
+Uninstalling SugarDeploy removes the regenerated files on next
+clean-build (they don't re-appear).
 
 ### 46.7 — `.github/workflows/sugardeploy-deploy.yml` generation
 
@@ -834,7 +882,7 @@ output. The workflow has two jobs:
   here, not duplicated).
 - `deploy-frontend`: checkout, set up Node, `pnpm install`, build
   `@sugarmagic/target-web` with all the env vars from
-  `publish/web-netlify/build-config.json`, copy game-root content
+  `deployment/netlify/build-config.json`, copy game-root content
   into the build inputs (project.sgrmagic, content library,
   regions, assets), `npx netlify deploy --site=<id> --dir=...
   --prod-if-unlocked` (auth via `NETLIFY_AUTH_TOKEN` repo secret).
@@ -976,8 +1024,8 @@ synchronous path is removed (it's now in GHA).
 The Plan 045 story 45.8 Cut saga's `saveProjectWithManagedFiles`
 step regenerates terraform + the backend's deploy.sh + secrets
 README. This story extends that regeneration to ALSO produce the
-new major's `publish/web-netlify/netlify.toml` +
-`build-config.json` + `publish/web-netlify/README.md` AND the new
+new major's `deployment/netlify/netlify.toml` +
+`build-config.json` + `deployment/netlify/README.md` AND the new
 `.github/workflows/sugardeploy-deploy.yml`. Same managed-files
 discipline; no new commit-side logic.
 
@@ -985,7 +1033,7 @@ discipline; no new commit-side logic.
 a single commit `chore: bump major version to 2` that contains:
 the bumped `project.sgrmagic` (with the new `versionedProjectIdentifiers[v2]`
 suffix in the plugin slot), the regenerated terraform + deploy.sh
-(per Plan 045), the regenerated `publish/web-netlify/*` files
+(per Plan 045), the regenerated `deployment/netlify/*` files
 (now pointing at the v2 Netlify site config), and the regenerated
 `.github/workflows/sugardeploy-deploy.yml` (template-version
 stamp updated, references the new major's resource names). The
@@ -1037,11 +1085,11 @@ publish + workflow template-version + rename-ledger discipline.
 
 Updates `packages/plugins/src/deployment/README.md` to document
 the publish-target half (file layout for the new managed-files
-directories, the `publishTargetHandlers` registry, the
+directories, the `frontendDeploymentTargetHandlers` registry, the
 `PUBLISH_TARGET_RENAME_LEDGER` + `WORKFLOW_RENAME_LEDGER`
 conventions, the host endpoints for publish-side actions).
 
-The plugin-generated `publish/web-netlify/README.md` carries
+The plugin-generated `deployment/netlify/README.md` carries
 its own operational guide.
 
 Updates Plan 021 with a "Web publish target implementation: see
@@ -1055,7 +1103,7 @@ schema.
 internally consistent with Plan 046. `packages/plugins/src/deployment/README.md`
 reflects current behavior including the new ledgers + the
 publish-target handler API. The plugin-generated
-`publish/web-netlify/README.md` in a fresh wordlark save
+`deployment/netlify/README.md` in a fresh wordlark save
 reflects the per-major Netlify site identity + the build-time
 env var list. Plan 021 carries the cross-reference at the top.
 

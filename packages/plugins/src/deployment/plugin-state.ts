@@ -27,6 +27,11 @@ import {
 } from "@sugarmagic/domain";
 
 import { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
+import {
+  createDefaultPublishTargetSettings,
+  normalizePublishTargetSettings,
+  type PublishTargetSettings
+} from "./publish-targets";
 
 // Structural type that captures the slice of a game project these
 // helpers actually inspect: the plugin-config slot (always) plus the
@@ -47,6 +52,7 @@ export type DeployStateInput = {
 interface DeployPluginConfig {
   settings: DeploymentSettings;
   versionedProjectIdentifiers: Record<string, string>;
+  publishSettings: PublishTargetSettings;
 }
 
 function findSugarDeployConfigRecord(
@@ -75,7 +81,13 @@ function readDeployPluginConfig(
     raw.versionedProjectIdentifiers !== null
       ? (raw.versionedProjectIdentifiers as Record<string, string>)
       : undefined;
-  return { settings, versionedProjectIdentifiers };
+  const publishSettings =
+    raw &&
+    typeof raw.publishSettings === "object" &&
+    raw.publishSettings !== null
+      ? (raw.publishSettings as PublishTargetSettings)
+      : undefined;
+  return { settings, versionedProjectIdentifiers, publishSettings };
 }
 
 /**
@@ -176,6 +188,61 @@ export function buildUpdateDeploymentSettingsCommand(
     config: {
       ...currentConfig,
       settings
+    }
+  });
+}
+
+/**
+ * Story 46.2 — single read API for publish-target settings on a game
+ * project. Returns the plugin-config-slot value if present; falls
+ * back to migrating a legacy `publishTargetId` recorded on the
+ * deployment-settings slot (carried over from pre-046 project files
+ * via 45.7.5's lift) by mapping the umbrella value `"web"` to the
+ * concrete `"web-netlify"`. When neither is present, returns the
+ * default `PublishTargetSettings` shape so callers can rely on
+ * non-null fields.
+ */
+export function getPublishSettings(
+  gameProject: DeployStateInput
+): PublishTargetSettings {
+  const fromPluginSlot = readDeployPluginConfig(gameProject).publishSettings;
+  if (fromPluginSlot) {
+    return normalizePublishTargetSettings(fromPluginSlot);
+  }
+  // Legacy fallback — pre-046 projects have publishTargetId living on
+  // the deployment-settings slot (`config.settings.publishTargetId`)
+  // because 45.7.5 lifted the entire pre-45.7.5 `gameProject.deployment`
+  // shape there. Lift it again now, mapping the umbrella value to the
+  // concrete v1 target.
+  const legacyDeploy = readDeployPluginConfig(gameProject).settings as
+    | (DeploymentSettings & { publishTargetId?: unknown })
+    | undefined;
+  if (legacyDeploy && legacyDeploy.publishTargetId !== undefined) {
+    return normalizePublishTargetSettings({
+      publishTargetId: legacyDeploy.publishTargetId as
+        | PublishTargetSettings["publishTargetId"]
+        | undefined
+    });
+  }
+  return createDefaultPublishTargetSettings();
+}
+
+/**
+ * Build the command that persists a publish-target-settings change.
+ * Mirrors `buildUpdateDeploymentSettingsCommand` for the publish
+ * side of the publish/deploy axis.
+ */
+export function buildUpdatePublishSettingsCommand(
+  gameProject: DeployStateInput,
+  settings: PublishTargetSettings
+): UpdatePluginConfigurationCommand {
+  const current = ensureSugarDeployConfigRecord(gameProject);
+  const currentConfig = (current.config as Record<string, unknown>) ?? {};
+  return buildUpdateCommand({
+    ...current,
+    config: {
+      ...currentConfig,
+      publishSettings: settings
     }
   });
 }

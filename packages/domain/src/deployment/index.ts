@@ -1,9 +1,11 @@
-export type PublishTargetId = "web";
-
 export type DeploymentTargetId = "local" | "google-cloud-run";
 
 export interface DeploymentSettings {
-  publishTargetId: PublishTargetId;
+  // Story 46.2 — `publishTargetId` moved off `DeploymentSettings` and
+  // into the SugarDeploy plugin's `config.publishSettings` slot. Reads
+  // go through `getPublishSettings(gameProject)` from
+  // `@sugarmagic/plugins`; the legacy `publishTargetId: "web"` from
+  // pre-046 project files is migrated to `"web-netlify"` at read time.
   deploymentTargetId: DeploymentTargetId | null;
   // Project-level source paths. These live on DeploymentSettings (not in
   // targetOverrides) because they describe the *source* the deployment
@@ -16,7 +18,6 @@ export interface DeploymentSettings {
 
 export function createDefaultDeploymentSettings(): DeploymentSettings {
   return {
-    publishTargetId: "web",
     deploymentTargetId: null,
     workingDirectory: "",
     githubRepo: "",
@@ -27,7 +28,6 @@ export function createDefaultDeploymentSettings(): DeploymentSettings {
 export function normalizeDeploymentSettings(
   input: Partial<DeploymentSettings> | null | undefined
 ): DeploymentSettings {
-  const publishTargetId = input?.publishTargetId === "web" ? "web" : "web";
   const deploymentTargetId =
     input?.deploymentTargetId === "local" ||
     input?.deploymentTargetId === "google-cloud-run"
@@ -60,7 +60,6 @@ export function normalizeDeploymentSettings(
     "";
 
   return {
-    publishTargetId,
     deploymentTargetId,
     workingDirectory,
     githubRepo,

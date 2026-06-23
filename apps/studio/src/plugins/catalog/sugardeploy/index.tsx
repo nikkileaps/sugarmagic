@@ -30,6 +30,7 @@ import {
   GITHUB_REPO_REGEX,
   collectSecretEnvBindings,
   getDeploymentSettings,
+  getPublishSettings,
   getVersionedProjectIdentifiers,
   listDeploymentTargets,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
@@ -340,6 +341,11 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const deploymentSettings = gameProject
     ? getDeploymentSettings(gameProject)
     : null;
+  // Story 46.2 — publish settings live in the SugarDeploy plugin slot
+  // alongside deployment settings. Reads route through the typed
+  // helper, NOT through `gameProject.deployment.publishTargetId`
+  // (which no longer exists on the type).
+  const publishSettings = gameProject ? getPublishSettings(gameProject) : null;
   const versionedProjectIdentifiers = gameProject
     ? getVersionedProjectIdentifiers(gameProject)
     : {};
@@ -1438,9 +1444,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   &gt;
                 </Text>
                 <Badge size="lg" variant="light" color="gray">
-                  {deploymentSettings?.publishTargetId === "web"
+                  {publishSettings?.publishTargetId === "web"
                     ? "Web"
-                    : deploymentSettings?.publishTargetId}
+                    : publishSettings?.publishTargetId}
                 </Badge>
                 <Text size="sm" c="var(--sm-color-subtext)">
                   /

@@ -36,7 +36,10 @@ import {
   buildGcpProjectName,
   classifyProjectListResult,
   buildSetVersionedProjectIdentifierCommand,
+  buildUpdatePublishSettingsCommand,
   collectSecretEnvBindings,
+  createDefaultPublishTargetSettings,
+  getPublishSettings,
   getVersionedProjectIdentifiers,
   isValidGcpProjectId,
   isValidGcpServiceAccountId,
@@ -519,7 +522,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "local"
         },
         pluginConfigurations: [
@@ -574,7 +576,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": {
@@ -629,7 +630,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -664,7 +664,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 2,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -686,7 +685,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": { projectId: "wordlark" }
@@ -715,7 +713,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -748,7 +745,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 2,
         versionedProjectIdentifiers: { v1: "k3m9p", v2: "wt7qz" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -774,7 +770,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: {},
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -797,7 +792,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": { projectId: "wordlark-manual" }
@@ -844,6 +838,68 @@ describe("plugin infrastructure", () => {
       v1: "k3m9p",
       v5: "12345"
     });
+  });
+
+  it("Story 46.2 — getPublishSettings lifts legacy publishTargetId from settings into publishSettings slot and round-trips the new shape", () => {
+    // Legacy: pre-046 projects had `publishTargetId: "web"` living
+    // on `DeploymentSettings`. 45.7.5 lifted that whole settings
+    // shape into `pluginConfigurations[sugardeploy].config.settings`.
+    // 46.2 splits `publishTargetId` out into the new
+    // `config.publishSettings` slot at read time. The VALUE stays
+    // "web" (publication medium); future stories add the orthogonal
+    // frontend-deployment-target axis (Netlify, Vercel, etc.) on
+    // DeploymentSettings, NOT here.
+    const legacyProject = normalizeGameProject({
+      ...makeProject(),
+      // Cast through the legacy shape — `publishTargetId` is no longer
+      // declared on `DeploymentSettings`, but old project files carry
+      // it in this exact place.
+      deployment: {
+        publishTargetId: "web",
+        deploymentTargetId: "local"
+      }
+    } as unknown as Parameters<typeof normalizeGameProject>[0]);
+    expect(getPublishSettings(legacyProject)).toEqual({
+      publishTargetId: "web",
+      liveDomain: ""
+    });
+
+    // Round-trip the new shape: a project with publishSettings already
+    // in the plugin slot reads back identically.
+    const freshSettings = createDefaultPublishTargetSettings();
+    const newShapeProject = normalizeGameProject({
+      ...makeProject(),
+      pluginConfigurations: [
+        createPluginConfigurationRecord(SUGARDEPLOY_PLUGIN_ID, true, {
+          publishSettings: { ...freshSettings, liveDomain: "play.example.com" }
+        })
+      ]
+    });
+    expect(getPublishSettings(newShapeProject)).toEqual({
+      publishTargetId: "web",
+      liveDomain: "play.example.com"
+    });
+
+    // Empty plugin slot returns the default shape (used by every fresh
+    // project that hasn't opened SugarDeploy yet).
+    const blankProject = normalizeGameProject(makeProject());
+    expect(getPublishSettings(blankProject)).toEqual({
+      publishTargetId: "web",
+      liveDomain: ""
+    });
+
+    // buildUpdatePublishSettingsCommand emits the right kind / target /
+    // payload shape for the command bus.
+    const command = buildUpdatePublishSettingsCommand(blankProject, {
+      ...freshSettings,
+      liveDomain: "play.wordlarkhollow.com"
+    });
+    expect(command.kind).toBe("UpdatePluginConfiguration");
+    expect(command.payload.configuration.pluginId).toBe(SUGARDEPLOY_PLUGIN_ID);
+    expect(
+      (command.payload.configuration.config as Record<string, unknown>)
+        .publishSettings
+    ).toMatchObject({ liveDomain: "play.wordlarkhollow.com" });
   });
 
   it("BumpMajorVersion command bumps majorVersion and is idempotent on no-change / invalid input", () => {
@@ -965,7 +1021,6 @@ describe("plugin infrastructure", () => {
       majorVersion: 1,
       versionedProjectIdentifiers: { v1: "k3m9p" },
       deployment: {
-        publishTargetId: "web",
         deploymentTargetId: "google-cloud-run",
         targetOverrides: {}
       },
@@ -1016,7 +1071,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": { githubRepo: "nikki/wordlark" }
@@ -1114,7 +1168,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1156,7 +1209,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1218,7 +1270,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1251,7 +1302,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1286,7 +1336,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1345,7 +1394,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1379,7 +1427,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": { gatewayAuthMode: "bearer" }
@@ -1448,7 +1495,6 @@ describe("plugin infrastructure", () => {
         majorVersion: 1,
         versionedProjectIdentifiers: { v1: "k3m9p" },
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           // gatewayAuthMode not set → defaults to "none"
           targetOverrides: {}
@@ -1486,7 +1532,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: null,
           targetOverrides: {}
         },
@@ -1509,7 +1554,6 @@ describe("plugin infrastructure", () => {
           displayName: "Wordlark",
           majorVersion: 1,
           deployment: {
-            publishTargetId: "web",
             deploymentTargetId: "google-cloud-run",
             targetOverrides: {
               "google-cloud-run": { githubRepo: "nikki/wordlark" }
@@ -1895,7 +1939,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": {
@@ -1940,7 +1983,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "local",
           targetOverrides: {
             local: { workingDirectory: "/tmp/wordlark" }
@@ -1967,7 +2009,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {}
         },
@@ -1994,7 +2035,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": {
@@ -2026,7 +2066,6 @@ describe("plugin infrastructure", () => {
         displayName: "Wordlark",
         majorVersion: 1,
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run",
           targetOverrides: {
             "google-cloud-run": {
@@ -2073,7 +2112,6 @@ describe("plugin infrastructure", () => {
       majorVersion: 1,
       versionedProjectIdentifiers: { v1: "1dqlc" },
       deployment: {
-        publishTargetId: "web",
         deploymentTargetId: "google-cloud-run",
         targetOverrides: {
           "google-cloud-run": {
@@ -2101,7 +2139,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run"
         }
       })
@@ -2126,7 +2163,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "local",
           targetOverrides: {
             local: {
@@ -2163,7 +2199,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "local",
           targetOverrides: {
             local: {
@@ -2196,7 +2231,6 @@ describe("plugin infrastructure", () => {
       normalizeGameProject({
         ...makeProject(),
         deployment: {
-          publishTargetId: "web",
           deploymentTargetId: "google-cloud-run"
         },
         pluginConfigurations: [
