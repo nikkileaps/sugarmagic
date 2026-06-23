@@ -22,7 +22,10 @@ import type { GoogleCloudRunDeploymentTargetOverrides } from "./overrides";
  * `TERRAFORM_RENAME_LEDGER` so existing games get a non-destructive `moved {}`
  * chain on regeneration.
  */
-export const CLOUD_RUN_TEMPLATE_VERSION = 2;
+// Story 46.9 — bumped 2 → 3 for the new `allowed_origins` variable +
+// output (CORS plumbing). No `moved {}` blocks needed; the change is
+// additive (new variable + new output, no resource renames).
+export const CLOUD_RUN_TEMPLATE_VERSION = 3;
 
 export interface TerraformResourceMove {
   from: string;
@@ -383,6 +386,15 @@ export function buildCloudRunTerraformVariablesFile(): string {
     `  type        = list(string)`,
     `  default     = []`,
     `}`,
+    ``,
+    // Story 46.9 — gateway CORS-allowed origins (Netlify per-deploy
+    // wildcard + alias + custom domain). Comma-joined and threaded to
+    // the gateway via deploy.sh as SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS.
+    `variable "allowed_origins" {`,
+    `  description = "Origins the gateway echoes in Access-Control-Allow-Origin. Patterns may contain a single '*' for the Netlify per-deploy subdomain wildcard."`,
+    `  type        = list(string)`,
+    `  default     = []`,
+    `}`,
     ``
   ].join("\n");
 }
@@ -409,6 +421,14 @@ export function buildCloudRunTerraformOutputsFile(): string {
     `  description = "Secret Manager secret IDs created by terraform (empty containers; values written via gcloud)"`,
     `  value       = [for s in google_secret_manager_secret.containers : s.secret_id]`,
     `}`,
+    ``,
+    // Story 46.9 — echo `var.allowed_origins` as an output so
+    // deploy.sh can read it via `terraform output -json` and forward
+    // to the gateway as SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS.
+    `output "allowed_origins" {`,
+    `  description = "Comma-joined list of origins the gateway should accept for CORS. Set on Cloud Run via deploy.sh --set-env-vars."`,
+    `  value       = var.allowed_origins`,
+    `}`,
     ``
   ].join("\n");
 }
@@ -424,7 +444,11 @@ function tfStringList(values: string[]): string {
 
 export function buildCloudRunTerraformTfvarsFile(
   plan: DeploymentPlan,
-  overrides: GoogleCloudRunDeploymentTargetOverrides
+  overrides: GoogleCloudRunDeploymentTargetOverrides,
+  // Story 46.9 — derived by `deriveGatewayAllowedOrigins(plan, gameProject)`
+  // in the plan-build path; passed in so this generator stays pure
+  // (no GameProject reach).
+  allowedOrigins: string[] = []
 ): string {
   const secretKeys = collectUniqueSecretKeys(plan);
   const secretNames = secretKeys.map((key) =>
@@ -439,6 +463,7 @@ export function buildCloudRunTerraformTfvarsFile(
     `runtime_sa_account_id = ${tfStringLiteral(runtimeSaAccountId)}`,
     `github_repo           = ${tfStringLiteral(overrides.githubRepo)}`,
     `secret_names          = ${tfStringList(secretNames)}`,
+    `allowed_origins       = ${tfStringList(allowedOrigins)}`,
     ``
   ].join("\n");
 }

@@ -200,6 +200,60 @@ export {
  * consumed by the teardown-infra host action (gcloud delete loop) and any
  * future stop / health / status surfaces that need per-unit names.
  */
+/**
+ * Story 46.9 — derive the gateway's CORS-allowed origins from the
+ * project's frontend configuration. The list flows through:
+ *
+ *   terraform var `allowed_origins`
+ *     -> terraform output `allowed_origins`
+ *     -> deploy.sh reads it
+ *     -> `gcloud run deploy --set-env-vars=SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=...`
+ *     -> gateway server.mjs per-request Origin matching
+ *
+ * Built from (in order):
+ *   1. Netlify per-deploy wildcard origin `https://*--{siteName}.netlify.app`
+ *      (each deploy gets a unique <deploy-id>--<site> subdomain; the
+ *      gateway pattern-matches at request time).
+ *   2. Netlify alias / production URL `https://{siteName}.netlify.app`.
+ *   3. PublishTargetSettings.liveDomain when set (custom domain).
+ *
+ * Empty array when no frontend target is configured — the gateway
+ * then emits no ACAO header at all, blocking browsers from
+ * cross-origin reads. That's the safe default.
+ */
+export function deriveGatewayAllowedOrigins(
+  plan: DeploymentPlan,
+  gameProject: GameProject
+): string[] {
+  const origins: string[] = [];
+  if (plan.frontendDeploymentTargetId === "netlify") {
+    const overrides = normalizeNetlifyDeploymentTargetOverrides(
+      plan.frontendTargetOverrides
+    );
+    const siteName = overrides.siteName.trim();
+    if (siteName.length > 0) {
+      origins.push(`https://*--${siteName}.netlify.app`);
+      origins.push(`https://${siteName}.netlify.app`);
+    }
+  }
+  const publishSettings = getPublishSettings(gameProject);
+  const liveDomain = publishSettings.liveDomain.trim();
+  if (liveDomain.length > 0) {
+    origins.push(
+      liveDomain.startsWith("http://") || liveDomain.startsWith("https://")
+        ? liveDomain
+        : `https://${liveDomain}`
+    );
+  }
+  // De-dupe; preserve insertion order.
+  const seen = new Set<string>();
+  return origins.filter((origin) => {
+    if (seen.has(origin)) return false;
+    seen.add(origin);
+    return true;
+  });
+}
+
 export function getCloudRunServiceNamesForPlan(plan: DeploymentPlan): string[] {
   const overrides = normalizeGoogleCloudRunDeploymentTargetOverrides(plan.targetOverrides);
   return plan.serviceUnits.map(
@@ -447,15 +501,63 @@ const loreIngestState = {
   startedAt: null,
   completedAt: null
 };
+// Story 46.9 — CORS allowed-origin patterns come from terraform via
+// SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS (comma-joined). Each entry is
+// either an exact origin ("https://foo.com") or a single-'*'
+// wildcard pattern ("https://*--site.netlify.app"). The gateway
+// pattern-matches each request's Origin header at request time and
+// only emits Access-Control-Allow-Origin when there's a hit. Empty
+// list = no ACAO header emitted, blocking browsers.
+const allowedOriginPatterns = (
+  process.env.SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS ?? ""
+)
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter((entry) => entry.length > 0);
+
+function resolveAllowedOrigin(origin) {
+  if (!origin) return null;
+  for (const pattern of allowedOriginPatterns) {
+    if (pattern === origin) return origin;
+    const wildcardIndex = pattern.indexOf("*");
+    if (wildcardIndex >= 0) {
+      const prefix = pattern.slice(0, wildcardIndex);
+      const suffix = pattern.slice(wildcardIndex + 1);
+      if (
+        origin.length >= prefix.length + suffix.length &&
+        origin.startsWith(prefix) &&
+        origin.endsWith(suffix)
+      ) {
+        return origin;
+      }
+    }
+  }
+  return null;
+}
+
 const baseHeaders = {
-  "content-type": "application/json; charset=utf-8",
-  "access-control-allow-origin": process.env.ALLOW_ORIGIN ?? "*",
-  "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-  "access-control-allow-headers": "content-type, authorization"
+  "content-type": "application/json; charset=utf-8"
 };
 
+function resolveCorsHeaders(req) {
+  const headers = { vary: "origin" };
+  const origin = req?.headers?.origin;
+  const echoOrigin = resolveAllowedOrigin(origin);
+  if (echoOrigin) {
+    headers["access-control-allow-origin"] = echoOrigin;
+    headers["access-control-allow-credentials"] = "true";
+  }
+  return headers;
+}
+
+// Stash the per-request resolved CORS headers on the response so the
+// many sendJson call sites stay one-arg and don't have to thread req
+// through every helper. The top of createServer sets it once per req.
 function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, baseHeaders);
+  res.writeHead(statusCode, {
+    ...baseHeaders,
+    ...(res.__sugarmagicCors ?? {})
+  });
   res.end(JSON.stringify(payload, null, 2));
 }
 
@@ -484,6 +586,7 @@ function updateLoreIngestState(patch) {
 function sendMethodNotAllowed(res, allowed) {
   res.writeHead(405, {
     ...baseHeaders,
+    ...(res.__sugarmagicCors ?? {}),
     allow: allowed.join(", ")
   });
   res.end(
@@ -1420,8 +1523,26 @@ async function handleSugarAgentLoreIngest(req, res) {
 }
 
 const server = createServer(async (req, res) => {
+  // Story 46.9 — resolve CORS headers once per request, stash on the
+  // response, then sendJson / sendMethodNotAllowed read them off the
+  // response so call sites don't have to thread req.
+  res.__sugarmagicCors = resolveCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
-    res.writeHead(204, baseHeaders);
+    // CORS preflight. Echo the request's
+    // access-control-request-headers verbatim when present so we don't
+    // have to enumerate them; fall back to a safe default.
+    const requestedHeaders = req.headers["access-control-request-headers"];
+    res.writeHead(204, {
+      ...baseHeaders,
+      ...res.__sugarmagicCors,
+      "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      "access-control-allow-headers":
+        typeof requestedHeaders === "string" && requestedHeaders.length > 0
+          ? requestedHeaders
+          : "content-type, authorization",
+      "access-control-max-age": "86400"
+    });
     res.end();
     return;
   }
@@ -1832,6 +1953,10 @@ fi
 TF_OUTPUTS="$(terraform -chdir="\${TERRAFORM_DIR}" output -json)"
 ARTIFACT_REGISTRY_URL="$(echo "\${TF_OUTPUTS}" | jq -r '.artifact_registry_url.value')"
 RUNTIME_SA_EMAIL="$(echo "\${TF_OUTPUTS}" | jq -r '.runtime_sa_email.value')"
+# Story 46.9 — comma-join terraform's allowed_origins list (a JSON
+# array) for the gateway env var. Empty list -> empty string, which
+# the gateway treats as "no allowed origins" (browsers blocked).
+ALLOWED_ORIGINS="$(echo "\${TF_OUTPUTS}" | jq -r '.allowed_origins.value | join(",")')"
 
 if [ -z "\${ARTIFACT_REGISTRY_URL}" ] || [ "\${ARTIFACT_REGISTRY_URL}" = "null" ]; then
   echo "[sugardeploy] terraform output 'artifact_registry_url' is empty; did Setup Infra finish?" >&2
@@ -1887,6 +2012,7 @@ for entry in "\${services[@]}"; do
     --max-instances=${overrides.maxInstances} \\
     ${ingressArg} \\
     ${allowUnauthArg} \\
+    --set-env-vars="^@^SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=\${ALLOWED_ORIGINS}" \\
     "\${SECRET_ARGS[@]}"
 done
 `;
@@ -2034,7 +2160,13 @@ function buildGoogleCloudRunManagedFiles(
     asTextFile(`${terraformDir}/outputs.tf`, buildCloudRunTerraformOutputsFile()),
     asTextFile(
       `${terraformDir}/terraform.tfvars`,
-      buildCloudRunTerraformTfvarsFile(plan, overrides)
+      buildCloudRunTerraformTfvarsFile(
+        plan,
+        overrides,
+        // Story 46.9 — derived origins flow tfvars → terraform output →
+        // deploy.sh → Cloud Run env var → gateway server.mjs.
+        deriveGatewayAllowedOrigins(plan, gameProject)
+      )
     ),
     asTextFile(`${terraformDir}/.gitignore`, buildCloudRunTerraformGitignore())
   );

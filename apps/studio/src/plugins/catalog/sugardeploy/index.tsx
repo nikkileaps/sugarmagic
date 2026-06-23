@@ -1659,6 +1659,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                       ? "Local"
                       : selectedTargetId}
                 </Badge>
+                {/* Story 46.6 — frontend axis badge, only shown when
+                    a frontend target is configured. Same divider +
+                    badge shape as the backend slot so the combo
+                    context reads "version > publish / backend / frontend". */}
+                {selectedFrontendTargetId ? (
+                  <>
+                    <Text size="sm" c="var(--sm-color-subtext)">
+                      /
+                    </Text>
+                    <Badge size="lg" variant="light" color="gray">
+                      {selectedFrontendTargetId === "netlify"
+                        ? "Netlify"
+                        : selectedFrontendTargetId}
+                    </Badge>
+                  </>
+                ) : null}
               </Group>
               {isDeploy ? (
                 <Group gap="xs">
