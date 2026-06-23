@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { readBuildConfigFromViteEnv } from "./buildConfig";
 import {
   createWebRuntimeHost,
   type WebRuntimeHost,
@@ -60,7 +61,21 @@ export function App() {
         }
         const payload = (await response.json()) as WebRuntimeStartState;
         if (cancelled) return;
-        host.start(payload);
+        // Story 46.4 — pluginRuntimeEnvironment lives in the build-time
+        // config (env vars baked by the GHA workflow per Story 46.7),
+        // NOT in boot.json (which is the game's authored data). Merge
+        // here so gateway-needing plugins see their URLs / tokens. Any
+        // env value in boot.json would be a misconfig — log + ignore.
+        const buildConfig = readBuildConfigFromViteEnv();
+        if (payload.pluginRuntimeEnvironment) {
+          console.warn(
+            "[target-web] boot.json carried pluginRuntimeEnvironment; ignoring (this lives in the build-time config, not the baked artifact)."
+          );
+        }
+        host.start({
+          ...payload,
+          pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment
+        });
         setPhase({ kind: "running" });
       } catch (error) {
         if (cancelled) return;

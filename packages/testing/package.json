@@ -12,6 +12,7 @@
     "@sugarmagic/runtime-core": "workspace:*",
     "@sugarmagic/shell": "workspace:*",
     "@sugarmagic/studio": "workspace:*",
+    "@sugarmagic/target-web": "workspace:*",
     "@sugarmagic/workspaces": "workspace:*",
     "three": "^0.183.2"
   },

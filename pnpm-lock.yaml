@@ -221,6 +221,9 @@ importers:
       '@sugarmagic/studio':
         specifier: workspace:*
         version: link:../../apps/studio
+      '@sugarmagic/target-web':
+        specifier: workspace:*
+        version: link:../../targets/web
       '@sugarmagic/workspaces':
         specifier: workspace:*
         version: link:../workspaces
