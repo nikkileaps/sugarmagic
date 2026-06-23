@@ -750,15 +750,19 @@ it stays on the `hostKind === "studio"` branch. The published-web
 branch is new but composes the same `runtime-core` + `render-web`
 + enabled plugins, so behavioral parity is structural.
 
-**Exit:** running `pnpm --filter @sugarmagic/target-web dev` and
-visiting `/?hostKind=published-web` with a synthetic
-`boot.json` fixture renders the game (player, region, NPCs,
-dialogue, etc.) instead of the placeholder card; Studio's preview
-window still renders the same game when opened from Studio (the
-`hostKind === "studio"` path is untouched). The
-`apps/studio/src/preview/UIPreviewSession.tsx` tests continue to
-pass. A new integration test boots the published-web path against
-a synthetic boot fixture and asserts the runtime mounts.
+**Exit:** `targets/web/src/App.tsx` no longer renders the
+placeholder card. Instead it mounts a runtime root, instantiates
+`createWebRuntimeHost` with `hostKind: "published-web"`, fetches
+`/boot.json`, and calls `host.start(parsedState)`; renders loading
++ error overlays for the in-flight + failed paths. Workspace
+typecheck stays clean. The on-disk verification step (running the
+Vite dev server against a real `boot.json`) lands as part of 46.4
+— there's no synthetic-fixture scaffolding in 46.3 because the
+intended way to preview a published build is the Package button
+(46.1) or the GHA-driven Deploy (46.10), not the raw Vite dev
+server. Studio's preview window keeps using
+`apps/studio/src/preview.ts` (`hostKind: "studio"` + postMessage),
+unchanged.
 
 ### 46.4 — Build-time config wiring for `targets/web/`
 

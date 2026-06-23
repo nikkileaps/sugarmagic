@@ -18,10 +18,40 @@ body {
 }
 
 .target-shell {
+  position: relative;
   min-height: 100vh;
+  width: 100vw;
+  background: #1e1e2e;
+}
+
+.target-runtime-root {
+  position: absolute;
+  inset: 0;
+}
+
+.target-overlay {
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.target-overlay-card {
+  pointer-events: auto;
+  width: min(420px, 100%);
   padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(30, 30, 46, 0.92);
+  color: #cdd6f4;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.target-overlay-card-error {
+  border-color: rgba(243, 139, 168, 0.4);
 }
 
 .card {
