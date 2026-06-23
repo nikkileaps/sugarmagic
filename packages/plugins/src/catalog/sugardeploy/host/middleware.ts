@@ -1726,6 +1726,295 @@ function createTemplateVersionPlugin(): VitePlugin {
   };
 }
 
+// Story 46.8 — Setup GitHub Workflow host action. Synchronises the
+// GitHub repo's vars/secrets so the workflow generated in 46.7 has
+// what it needs at runtime. Idempotent: safe to re-run; each `gh
+// variable set` / `gh secret set` overwrites the prior value.
+//
+// Body shape:
+//   {
+//     workingDirectory: string,       // absolute game-root path
+//     githubRepo: string,             // "owner/repo"
+//     netlifyAuthToken: string        // never persisted in Studio state
+//   }
+//
+// Response shape:
+//   { ok: true, message, stdout, stderr }
+//   { ok: false, message, reason }
+//
+// The netlify token is piped to `gh secret set` via stdin so it never
+// appears in argv (which surfaces in ps/audit logs). When Cloud Run
+// is provisioned (terraform/ exists), the WIF provider + runtime SA
+// email get set as repo VARS — they're identifiers, not secrets, so
+// they're fine to live as vars where they're inspectable from the
+// GitHub UI. NETLIFY_AUTH_TOKEN is always set as a SECRET.
+interface SetupGithubWorkflowRequest {
+  workingDirectory: unknown;
+  githubRepo: unknown;
+  netlifyAuthToken: unknown;
+}
+
+async function ensureGhCliOnPath(): Promise<string | null> {
+  const result = await ensureBinaryOnPath("gh", {
+    installHint:
+      "Install the GitHub CLI (https://cli.github.com) and run `gh auth login` before clicking Setup GitHub Workflow."
+  });
+  return result.available ? null : result.reason;
+}
+
+function parseTerraformOutputs(
+  json: string
+): { runtimeSaEmail: string | null; githubWifProviderName: string | null } {
+  try {
+    const parsed = JSON.parse(json) as Record<
+      string,
+      { value?: unknown } | undefined
+    >;
+    const runtimeSaEmail =
+      typeof parsed.runtime_sa_email?.value === "string"
+        ? parsed.runtime_sa_email.value.trim()
+        : null;
+    const githubWifProviderName =
+      typeof parsed.github_wif_provider_name?.value === "string"
+        ? parsed.github_wif_provider_name.value.trim()
+        : null;
+    return {
+      runtimeSaEmail: runtimeSaEmail || null,
+      githubWifProviderName: githubWifProviderName || null
+    };
+  } catch {
+    return { runtimeSaEmail: null, githubWifProviderName: null };
+  }
+}
+
+function createSetupGithubWorkflowPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-setup-github-workflow",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/setup-github-workflow",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<SetupGithubWorkflowRequest>;
+            const workingDirectory =
+              typeof body.workingDirectory === "string"
+                ? body.workingDirectory.trim()
+                : "";
+            const githubRepo =
+              typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+            const netlifyAuthToken =
+              typeof body.netlifyAuthToken === "string"
+                ? body.netlifyAuthToken
+                : "";
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (githubRepo.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason:
+                  "GitHub Repository is not set on this project. Fill it in under Sources before running Setup GitHub Workflow."
+              });
+              return;
+            }
+            if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(githubRepo)) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: `GitHub Repository "${githubRepo}" is not in owner/repo form.`
+              });
+              return;
+            }
+            if (netlifyAuthToken.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason:
+                  "NETLIFY_AUTH_TOKEN value is required so the workflow can deploy to Netlify."
+              });
+              return;
+            }
+
+            const ghMissing = await ensureGhCliOnPath();
+            if (ghMissing) {
+              sendJson(res, 412, { ok: false, reason: ghMissing });
+              return;
+            }
+            const authStatus = await runHostCommand({
+              command: "gh",
+              args: ["auth", "status"],
+              cwd: workingDirectory
+            });
+            if (authStatus.exitCode !== 0) {
+              sendJson(res, 412, {
+                ok: false,
+                reason:
+                  "`gh auth status` failed. Run `gh auth login` and try again.",
+                stdout: authStatus.stdout,
+                stderr: authStatus.stderr
+              });
+              return;
+            }
+
+            const steps: HostCommandStep[] = [];
+            let aggregatedStdout = "";
+            let aggregatedStderr = "";
+
+            // Read terraform outputs ONLY when terraform has been
+            // applied. Frontend-only projects skip this block entirely
+            // and end up just syncing the netlify secret.
+            const terraformDir = resolve(
+              workingDirectory,
+              "deployment/google-cloud-run/terraform"
+            );
+            const terraformStateExists = existsSync(
+              resolve(terraformDir, "terraform.tfstate")
+            );
+
+            let runtimeSaEmail: string | null = null;
+            let githubWifProviderName: string | null = null;
+
+            if (terraformStateExists) {
+              const tfOutput = await runHostCommand({
+                command: "terraform",
+                args: ["output", "-json"],
+                cwd: terraformDir
+              });
+              aggregatedStdout += `\n# terraform output -json\n${tfOutput.stdout}`;
+              aggregatedStderr += tfOutput.stderr;
+              if (tfOutput.exitCode !== 0) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    "`terraform output -json` failed. Run Setup Infra first to apply terraform, then re-try Setup GitHub Workflow.",
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              ({ runtimeSaEmail, githubWifProviderName } =
+                parseTerraformOutputs(tfOutput.stdout));
+              if (!runtimeSaEmail || !githubWifProviderName) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    "terraform outputs missing runtime_sa_email or github_wif_provider_name. Re-run Setup Infra and try again.",
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              steps.push(
+                {
+                  label: "Set SUGARMAGIC_WIF_PROVIDER repo variable",
+                  command: "gh",
+                  args: [
+                    "variable",
+                    "set",
+                    "SUGARMAGIC_WIF_PROVIDER",
+                    "--repo",
+                    githubRepo,
+                    "--body",
+                    githubWifProviderName
+                  ],
+                  cwd: workingDirectory
+                },
+                {
+                  label: "Set SUGARMAGIC_RUNTIME_SA_EMAIL repo variable",
+                  command: "gh",
+                  args: [
+                    "variable",
+                    "set",
+                    "SUGARMAGIC_RUNTIME_SA_EMAIL",
+                    "--repo",
+                    githubRepo,
+                    "--body",
+                    runtimeSaEmail
+                  ],
+                  cwd: workingDirectory
+                }
+              );
+            }
+
+            for (const step of steps) {
+              aggregatedStdout += `\n# ${step.label}\n# $ ${step.command} ${step.args.join(" ")}\n`;
+              const result = await runHostCommand({
+                command: step.command,
+                args: step.args,
+                cwd: step.cwd
+              });
+              aggregatedStdout += result.stdout;
+              aggregatedStderr += result.stderr;
+              if (result.exitCode !== 0) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason: `${step.label} failed (exit ${result.exitCode}).`,
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+            }
+
+            // Pipe NETLIFY_AUTH_TOKEN to gh via stdin so the value
+            // never appears in argv.
+            aggregatedStdout += `\n# Set NETLIFY_AUTH_TOKEN repo secret\n# $ gh secret set NETLIFY_AUTH_TOKEN --repo ${githubRepo}\n`;
+            const setSecret = await runHostCommand({
+              command: "gh",
+              args: ["secret", "set", "NETLIFY_AUTH_TOKEN", "--repo", githubRepo],
+              cwd: workingDirectory,
+              stdin: netlifyAuthToken
+            });
+            aggregatedStdout += setSecret.stdout;
+            aggregatedStderr += setSecret.stderr;
+            if (setSecret.exitCode !== 0) {
+              sendJson(res, 500, {
+                ok: false,
+                reason: `gh secret set NETLIFY_AUTH_TOKEN failed (exit ${setSecret.exitCode}).`,
+                stdout: aggregatedStdout,
+                stderr: aggregatedStderr
+              });
+              return;
+            }
+
+            const summaryParts: string[] = [];
+            if (terraformStateExists) {
+              summaryParts.push(
+                `Set repo VARS: SUGARMAGIC_WIF_PROVIDER, SUGARMAGIC_RUNTIME_SA_EMAIL.`
+              );
+            } else {
+              summaryParts.push(
+                `Skipped GCP vars (no terraform state under deployment/google-cloud-run/terraform).`
+              );
+            }
+            summaryParts.push(`Set repo SECRET: NETLIFY_AUTH_TOKEN.`);
+
+            sendJson(res, 200, {
+              ok: true,
+              message: summaryParts.join(" "),
+              stdout: aggregatedStdout,
+              stderr: aggregatedStderr,
+              wifProviderName: githubWifProviderName,
+              runtimeSaEmail
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
@@ -1733,6 +2022,7 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createGcpProjectLifecyclePlugin(),
     createSetSecretValuePlugin(),
     createSecretStatusPlugin(),
+    createSetupGithubWorkflowPlugin(),
     createTemplateVersionPlugin(),
     createCutMajorVersionPreparePlugin(),
     createCutMajorVersionTagPlugin(),

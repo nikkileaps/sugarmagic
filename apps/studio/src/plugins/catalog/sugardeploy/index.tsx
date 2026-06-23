@@ -342,6 +342,35 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         recoveryNotes: string[];
       };
   const [releaseModalState, setReleaseModalState] = useState<ReleaseModalState>(null);
+
+  // Story 46.8 — Setup GitHub Workflow modal state machine.
+  // - prompting: user enters NETLIFY_AUTH_TOKEN
+  // - running: POST is in flight
+  // - success: green panel with stdout
+  // - failed: red panel with reason + stdout/stderr
+  // The token value is held in modal-local state only; it's piped
+  // straight to the host endpoint and never written into the project.
+  type SetupGithubWorkflowModalState =
+    | null
+    | { phase: "prompting"; netlifyAuthToken: string }
+    | { phase: "running" }
+    | {
+        phase: "success";
+        message: string;
+        stdout: string;
+        stderr: string;
+      }
+    | {
+        phase: "failed";
+        reason: string;
+        stdout: string;
+        stderr: string;
+      };
+  const [setupGithubWorkflowState, setSetupGithubWorkflowState] =
+    useState<SetupGithubWorkflowModalState>(null);
+  const setupGithubWorkflowOpen = setupGithubWorkflowState !== null;
+  const setupGithubWorkflowBusy =
+    setupGithubWorkflowState?.phase === "running";
   const releaseModalOpen = releaseModalState !== null;
   const releaseModalBusy =
     releaseModalState?.phase === "checking" ||
@@ -549,6 +578,54 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         [targetId]: current.targetOverrides[targetId] ?? {}
       }
     });
+  }
+
+  // Story 46.8 — submit handler for Setup GitHub Workflow. Pipes the
+  // NETLIFY_AUTH_TOKEN to the host endpoint; the value is forgotten
+  // after the fetch returns so it never enters persisted state.
+  async function runSetupGithubWorkflow(netlifyAuthToken: string) {
+    if (!gameProject) return;
+    setSetupGithubWorkflowState({ phase: "running" });
+    try {
+      const response = await fetch("/__sugardeploy/setup-github-workflow", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingDirectory: deploymentSettings?.workingDirectory ?? "",
+          githubRepo: deploymentSettings?.githubRepo ?? "",
+          netlifyAuthToken
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        reason?: string;
+        stdout?: string;
+        stderr?: string;
+      } | null;
+      if (!payload?.ok) {
+        setSetupGithubWorkflowState({
+          phase: "failed",
+          reason: payload?.reason ?? `HTTP ${response.status}`,
+          stdout: payload?.stdout ?? "",
+          stderr: payload?.stderr ?? ""
+        });
+        return;
+      }
+      setSetupGithubWorkflowState({
+        phase: "success",
+        message: payload.message ?? "Done.",
+        stdout: payload.stdout ?? "",
+        stderr: payload.stderr ?? ""
+      });
+    } catch (error) {
+      setSetupGithubWorkflowState({
+        phase: "failed",
+        reason: error instanceof Error ? error.message : String(error),
+        stdout: "",
+        stderr: ""
+      });
+    }
   }
 
   // Story 46.6 — frontend-axis equivalents of the backend updaters above.
@@ -1769,6 +1846,41 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 >
                   Teardown Infra
                 </Button>
+              </Group>
+            ) : null}
+
+            {/* Story 46.8 — Setup GitHub Workflow. Available in
+                Provision regardless of backend target (frontend-only
+                projects still need NETLIFY_AUTH_TOKEN synced into the
+                repo). Disabled until GitHub Repository is set on
+                Sources because we can't address a repo without it. */}
+            {isProvision ? (
+              <Group>
+                <Tooltip
+                  label={
+                    !deploymentSettings?.githubRepo
+                      ? "Fill in GitHub Repository under Sources first — Setup GitHub Workflow uses it to address the right repo."
+                      : "Sync repo VARS (WIF provider + runtime SA email from terraform outputs) and the NETLIFY_AUTH_TOKEN secret via the gh CLI. Idempotent — re-running re-syncs."
+                  }
+                  withinPortal
+                  multiline
+                  w={320}
+                >
+                  <Button
+                    size="xs"
+                    variant="filled"
+                    color="grape"
+                    disabled={!deploymentSettings?.githubRepo}
+                    onClick={() =>
+                      setSetupGithubWorkflowState({
+                        phase: "prompting",
+                        netlifyAuthToken: ""
+                      })
+                    }
+                  >
+                    Setup GitHub Workflow
+                  </Button>
+                </Tooltip>
               </Group>
             ) : null}
 
@@ -3033,6 +3145,133 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               />
             );
           })()
+        ) : null}
+      </Modal>
+
+      {/* Story 46.8 — Setup GitHub Workflow modal. State machine in
+          the parent (setupGithubWorkflowState). The NETLIFY_AUTH_TOKEN
+          input is local-only — never written to project state. Submit
+          pipes it to /__sugardeploy/setup-github-workflow which forwards
+          to `gh secret set` via stdin so the value never appears in
+          argv. Idempotent — re-clicking re-syncs. */}
+      <Modal
+        opened={setupGithubWorkflowOpen}
+        onClose={() => {
+          if (setupGithubWorkflowBusy) return;
+          setSetupGithubWorkflowState(null);
+        }}
+        title="Setup GitHub Workflow"
+        centered
+        size="lg"
+        closeOnClickOutside={!setupGithubWorkflowBusy}
+        closeOnEscape={!setupGithubWorkflowBusy}
+        withCloseButton={!setupGithubWorkflowBusy}
+      >
+        {setupGithubWorkflowState?.phase === "prompting" ? (
+          <Stack>
+            <Text size="sm">
+              Syncs the GitHub repo's vars + secrets so the workflow
+              generated at{" "}
+              <Code>.github/workflows/sugardeploy-deploy.yml</Code> has
+              what it needs to deploy. The token is piped to{" "}
+              <Code>gh secret set</Code> via stdin and never persisted
+              by Studio.
+            </Text>
+            <PasswordInput
+              label="NETLIFY_AUTH_TOKEN"
+              description="Netlify personal access token with permission to deploy to your site. In Netlify: click your name/avatar at the BOTTOM-LEFT of the sidebar → User settings → Applications → OAuth → New access token."
+              value={setupGithubWorkflowState.netlifyAuthToken}
+              onChange={(event) =>
+                setSetupGithubWorkflowState({
+                  phase: "prompting",
+                  netlifyAuthToken: event.currentTarget.value
+                })
+              }
+            />
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setSetupGithubWorkflowState(null)}
+              >
+                Close
+              </Button>
+              <Button
+                disabled={
+                  setupGithubWorkflowState.netlifyAuthToken.trim().length === 0
+                }
+                onClick={() =>
+                  void runSetupGithubWorkflow(
+                    setupGithubWorkflowState.netlifyAuthToken
+                  )
+                }
+              >
+                Sync to GitHub
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {setupGithubWorkflowState?.phase === "running" ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">
+              Running gh + terraform output... this can take a few seconds.
+            </Text>
+          </Group>
+        ) : null}
+
+        {setupGithubWorkflowState?.phase === "success" ? (
+          <Stack>
+            <Alert color="green" variant="light" title="Synced">
+              <Stack gap="xs">
+                <Text size="sm">{setupGithubWorkflowState.message}</Text>
+                {setupGithubWorkflowState.stdout.trim() ? (
+                  <Code block>{setupGithubWorkflowState.stdout}</Code>
+                ) : null}
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setSetupGithubWorkflowState(null)}>
+                Close
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {setupGithubWorkflowState?.phase === "failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Setup failed">
+              <Stack gap="xs">
+                <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                  {setupGithubWorkflowState.reason}
+                </Text>
+                {setupGithubWorkflowState.stdout.trim() ? (
+                  <Code block>{setupGithubWorkflowState.stdout}</Code>
+                ) : null}
+                {setupGithubWorkflowState.stderr.trim() ? (
+                  <Code block>{setupGithubWorkflowState.stderr}</Code>
+                ) : null}
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setSetupGithubWorkflowState(null)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() =>
+                  setSetupGithubWorkflowState({
+                    phase: "prompting",
+                    netlifyAuthToken: ""
+                  })
+                }
+              >
+                Try Again
+              </Button>
+            </Group>
+          </Stack>
         ) : null}
       </Modal>
 

@@ -329,6 +329,7 @@ describe("plugin infrastructure", () => {
     // - set-secret-value (/__sugardeploy/set-secret-value, story 45.5)
     // - secret-status (/__sugardeploy/secret-status, story 45.5)
     // - template-version (/__sugardeploy/template-version, story 45.7)
+    // - setup-github-workflow (/__sugardeploy/setup-github-workflow, story 46.8)
     // - cut-major-version prepare/tag/untag/commit (/__sugardeploy/{prepare,tag,untag}-..., story 45.8)
     expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
       "sugardeploy-cut-major-version-commit",
@@ -340,6 +341,7 @@ describe("plugin infrastructure", () => {
       "sugardeploy-host-actions",
       "sugardeploy-secret-status",
       "sugardeploy-set-secret-value",
+      "sugardeploy-setup-github-workflow",
       "sugardeploy-template-version"
     ]);
   });
