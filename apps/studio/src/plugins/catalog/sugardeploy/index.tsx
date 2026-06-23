@@ -245,16 +245,25 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   // tri-mode: `idle` before we know the result, `loaded` with the parsed
   // numbers, `error` if the host route failed (banner hides — no false
   // positives from a flaky probe).
+  // Story 46.7 — extended to also carry the GHA workflow drift signal
+  // (workflowOnDiskVersion < workflowCurrentVersion). Both signals come
+  // from the same probe endpoint, so they live on the same state slot.
   const [templateDriftState, setTemplateDriftState] = useState<{
     phase: "idle" | "loaded" | "error";
     onDiskVersion: number | null;
     currentVersion: number | null;
     fileExists: boolean;
+    workflowOnDiskVersion: number | null;
+    workflowCurrentVersion: number | null;
+    workflowFileExists: boolean;
   }>({
     phase: "idle",
     onDiskVersion: null,
     currentVersion: null,
-    fileExists: false
+    fileExists: false,
+    workflowOnDiskVersion: null,
+    workflowCurrentVersion: null,
+    workflowFileExists: false
   });
 
   // Story 45.8.5 — Current Version panel chip state. Health auto-probes
@@ -762,13 +771,19 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         fileExists?: boolean;
         onDiskVersion?: number | null;
         currentVersion?: number | null;
+        workflowFileExists?: boolean;
+        workflowOnDiskVersion?: number | null;
+        workflowCurrentVersion?: number | null;
       } | null;
       if (!payload?.ok) {
         setTemplateDriftState({
           phase: "error",
           onDiskVersion: null,
           currentVersion: null,
-          fileExists: false
+          fileExists: false,
+          workflowOnDiskVersion: null,
+          workflowCurrentVersion: null,
+          workflowFileExists: false
         });
         return;
       }
@@ -776,14 +791,20 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         phase: "loaded",
         onDiskVersion: payload.onDiskVersion ?? null,
         currentVersion: payload.currentVersion ?? null,
-        fileExists: payload.fileExists ?? false
+        fileExists: payload.fileExists ?? false,
+        workflowOnDiskVersion: payload.workflowOnDiskVersion ?? null,
+        workflowCurrentVersion: payload.workflowCurrentVersion ?? null,
+        workflowFileExists: payload.workflowFileExists ?? false
       });
     } catch {
       setTemplateDriftState({
         phase: "error",
         onDiskVersion: null,
         currentVersion: null,
-        fileExists: false
+        fileExists: false,
+        workflowOnDiskVersion: null,
+        workflowCurrentVersion: null,
+        workflowFileExists: false
       });
     }
   }
@@ -800,7 +821,10 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         phase: "idle",
         onDiskVersion: null,
         currentVersion: null,
-        fileExists: false
+        fileExists: false,
+        workflowOnDiskVersion: null,
+        workflowCurrentVersion: null,
+        workflowFileExists: false
       });
     }
     // probeTemplateVersion closes over the working dir; re-run on
@@ -1649,6 +1673,30 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   the project (or run Setup Infra) to regenerate{" "}
                   <Code>main.tf</Code>; the banner will clear
                   automatically.
+                </Text>
+              </Alert>
+            ) : null}
+
+            {/* Story 46.7 — GHA workflow-drift banner. Same shape as
+                terraform drift; reads the workflow stamp from the same
+                probe. Save (or future Setup GitHub Workflow button)
+                regenerates and clears. */}
+            {isProvision &&
+            templateDriftState.phase === "loaded" &&
+            templateDriftState.workflowFileExists &&
+            templateDriftState.workflowOnDiskVersion !== null &&
+            templateDriftState.workflowCurrentVersion !== null &&
+            templateDriftState.workflowOnDiskVersion <
+              templateDriftState.workflowCurrentVersion ? (
+              <Alert color="yellow" variant="light" title="Workflow drift">
+                <Text size="sm">
+                  The on-disk GitHub Actions workflow stamp is{" "}
+                  <Code>v{templateDriftState.workflowOnDiskVersion}</Code>;
+                  the current SugarDeploy workflow template is{" "}
+                  <Code>v{templateDriftState.workflowCurrentVersion}</Code>.
+                  Save the project to regenerate{" "}
+                  <Code>.github/workflows/sugardeploy-deploy.yml</Code>;
+                  the banner will clear automatically.
                 </Text>
               </Alert>
             ) : null}

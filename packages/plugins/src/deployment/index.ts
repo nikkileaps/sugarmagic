@@ -50,6 +50,14 @@ import {
   NETLIFY_TEMPLATE_VERSION,
   normalizeNetlifyDeploymentTargetOverrides
 } from "./netlify";
+import {
+  buildSugarDeployGithubWorkflowFile,
+  getSugarDeployGithubWorkflowPath,
+  parseWorkflowTemplateVersionStamp,
+  planNeedsGithubWorkflow,
+  SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION,
+  WORKFLOW_RENAME_LEDGER
+} from "./github-workflow";
 
 export interface ManagedProjectFile {
   relativePath: string;
@@ -2138,6 +2146,16 @@ export {
   type NetlifyProductionContext
 } from "./netlify";
 
+// Story 46.7 — GitHub Actions workflow generator surface.
+export {
+  buildSugarDeployGithubWorkflowFile,
+  getSugarDeployGithubWorkflowPath,
+  parseWorkflowTemplateVersionStamp,
+  planNeedsGithubWorkflow,
+  SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION,
+  WORKFLOW_RENAME_LEDGER
+};
+
 function collectRequirementSources(
   gameProject: GameProject
 ): {
@@ -2466,9 +2484,21 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   const frontendManagedFiles = frontendHandler
     ? frontendHandler.buildManagedFiles(provisionalPlan, gameProject)
     : [];
+  // Story 46.7 — when at least one hosted target is set (Cloud Run on
+  // the backend or Netlify on the frontend), append the
+  // `.github/workflows/sugardeploy-deploy.yml`. Local-only backends
+  // don't need a workflow (docker-compose handles its own lifecycle).
+  const workflowFile = buildSugarDeployGithubWorkflowFile(
+    provisionalPlan,
+    gameProject
+  );
 
   return {
     ...provisionalPlan,
-    managedFiles: [...backendManagedFiles, ...frontendManagedFiles]
+    managedFiles: [
+      ...backendManagedFiles,
+      ...frontendManagedFiles,
+      ...(workflowFile ? [workflowFile] : [])
+    ]
   };
 }

@@ -38,6 +38,11 @@ import {
   parseTemplateVersionStamp
 } from "../../../deployment/cloud-run-terraform";
 import {
+  getSugarDeployGithubWorkflowPath,
+  parseWorkflowTemplateVersionStamp,
+  SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION
+} from "../../../deployment/github-workflow";
+import {
   REQUIRED_GCP_APIS,
   buildGcpProjectName,
   classifyProjectListResult,
@@ -1679,12 +1684,35 @@ function createTemplateVersionPlugin(): VitePlugin {
               const content = await readFile(mainTfPath, "utf8");
               onDiskVersion = parseTemplateVersionStamp(content);
             }
+
+            // Story 46.7 — same endpoint also probes the GHA workflow
+            // file's stamp so the Studio gets both drift signals in one
+            // round-trip. Existing fields preserved; new fields are
+            // prefixed `workflow*`.
+            const workflowPath = resolve(
+              workingDirectory,
+              getSugarDeployGithubWorkflowPath()
+            );
+            let workflowOnDiskVersion: number | null = null;
+            let workflowFileExists = false;
+            if (existsSync(workflowPath)) {
+              workflowFileExists = true;
+              const workflowContent = await readFile(workflowPath, "utf8");
+              workflowOnDiskVersion = parseWorkflowTemplateVersionStamp(
+                workflowContent
+              );
+            }
+
             sendJson(res, 200, {
               ok: true,
               fileExists,
               onDiskVersion,
               currentVersion: CLOUD_RUN_TEMPLATE_VERSION,
-              mainTfPath
+              mainTfPath,
+              workflowFileExists,
+              workflowOnDiskVersion,
+              workflowCurrentVersion: SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION,
+              workflowPath
             });
           } catch (error) {
             sendJson(res, 500, {
