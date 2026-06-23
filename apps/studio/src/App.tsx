@@ -2124,12 +2124,62 @@ export function App() {
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
+  // Story 46.5 — gather plugin-contributed Publish workspaces (e.g.
+  // SugarDeploy's Provision / Release / Deploy). Two halves: shell
+  // contributions provide labels + icons + sort order; plugin
+  // workspace definitions provide createWorkspaceView. We zip them
+  // by workspaceKind, render each contribution's view, and pass the
+  // sorted result into the Publish productmode hook.
+  const pluginPublishWorkspaceItems = useMemo(() => {
+    const publishWorkspaceDefinitions =
+      studioPluginWorkspaceDefinitions.filter(
+        (definition) => definition.productMode === "publish"
+      );
+    return pluginShellContributions.publishWorkspaces
+      .map((contribution) => {
+        const definition = publishWorkspaceDefinitions.find(
+          (entry) => entry.workspaceKind === contribution.workspaceKind
+        );
+        if (!definition) return null;
+        const view = definition.createWorkspaceView({
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          onCommand: dispatchCommand,
+          requestSave: requestSaveFromPlugin
+        });
+        return {
+          workspaceKind: contribution.workspaceKind,
+          label: contribution.label,
+          icon: contribution.icon,
+          view
+        };
+      })
+      .filter(
+        (
+          entry
+        ): entry is {
+          workspaceKind: string;
+          label: string;
+          icon: string;
+          view: ReturnType<
+            (typeof studioPluginWorkspaceDefinitions)[number]["createWorkspaceView"]
+          >;
+        } => entry !== null
+      );
+  }, [
+    pluginShellContributions.publishWorkspaces,
+    studioPluginWorkspaceDefinitions,
+    pluginConfigurations,
+    session?.gameProject
+  ]);
   const publishView = usePublishProductModeView({
     activePublishKind,
     gameProject: session?.gameProject ?? null,
     pluginConfigurations,
     onSelectKind: (kind) =>
-      shellStore.getState().setActivePublishWorkspaceKind(kind)
+      shellStore.getState().setActivePublishWorkspaceKind(kind),
+    pluginPublishWorkspaces: pluginPublishWorkspaceItems
   });
   const activePluginWorkspaceDefinition =
     getStudioPluginWorkspaceDefinition(activeDesignKind);

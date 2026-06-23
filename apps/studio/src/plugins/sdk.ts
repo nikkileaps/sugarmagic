@@ -4,6 +4,7 @@ import type {
   PluginConfigurationRecord,
   SemanticCommand
 } from "@sugarmagic/domain";
+import type { ProductModeId } from "@sugarmagic/productmodes";
 
 export interface PluginWorkspaceViewContribution {
   leftPanel: ReactNode;
@@ -38,6 +39,12 @@ export interface PluginWorkspaceViewProps {
 export interface StudioPluginWorkspaceDefinition {
   pluginId: string;
   workspaceKind: string;
+  /**
+   * Story 46.5 — which productmode this workspace lives in. When
+   * omitted, defaults to `"design"` for back-compat with pre-046
+   * plugins whose contributions all landed in Design productmode.
+   */
+  productMode?: ProductModeId;
   createWorkspaceView: (
     props: PluginWorkspaceViewProps
   ) => PluginWorkspaceViewContribution;

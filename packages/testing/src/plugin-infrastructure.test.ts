@@ -254,6 +254,43 @@ describe("plugin infrastructure", () => {
     expect(contributions.designSections).toEqual([]);
   });
 
+  it("registers SugarDeploy's three publish workspaces in cadence order", () => {
+    // Story 46.5 — SugarDeploy contributes Provision / Release /
+    // Deploy in the Publish productmode (no Design workspace
+    // anymore). The shell aggregator sorts publishWorkspaces by
+    // `order` so the sub-nav always shows them in this cadence
+    // order regardless of plugin-discovery order.
+    const contributions = collectPluginShellContributions(
+      [createPluginConfigurationRecord(SUGARDEPLOY_PLUGIN_ID, true)],
+      (pluginId) => getDiscoveredPluginDefinition(pluginId)?.shell ?? null
+    );
+
+    expect(contributions.designWorkspaces).toEqual([]);
+    expect(
+      contributions.publishWorkspaces.map((entry) => ({
+        workspaceKind: entry.workspaceKind,
+        label: entry.label,
+        order: entry.order
+      }))
+    ).toEqual([
+      {
+        workspaceKind: "sugardeploy-provision",
+        label: "Provision",
+        order: 100
+      },
+      {
+        workspaceKind: "sugardeploy-release",
+        label: "Release",
+        order: 110
+      },
+      {
+        workspaceKind: "sugardeploy-deploy",
+        label: "Deploy",
+        order: 120
+      }
+    ]);
+  });
+
   it("lists only actually installed plugins in the app registry", () => {
     expect(listDiscoveredPluginDefinitions().map((plugin) => plugin.manifest.pluginId)).toEqual([
       FIREFLIES_PLUGIN_ID,

@@ -45,7 +45,34 @@ import type {
   StudioPluginWorkspaceDefinition
 } from "../../sdk";
 
-type SugarDeployCenterPanelProps = PluginWorkspaceViewProps;
+/**
+ * Story 46.5 — SugarDeploy's Provision / Release / Deploy publish
+ * workspaces are all rendered by SugarDeployCenterPanel; the `view`
+ * prop tells it which slice to show.
+ *
+ *   - "provision": stand-up surface. Sources (working dir + GitHub
+ *     repo), Targets (Local / Cloud Run with all per-target settings),
+ *     Secrets, Create-GCP-Project + Setup-Infra + Teardown-Infra
+ *     buttons, the template-drift banner, plan warnings + conflicts +
+ *     requirement sources. The "what's wired up" side of the plugin.
+ *
+ *   - "release": cut-new-major-version surface. Version metadata +
+ *     history with the Release-New-Version trigger; the cut saga
+ *     modal renders on top.
+ *
+ *   - "deploy": daily-driver surface. Health + Status chips and
+ *     Deploy + Destroy buttons; inline result/error boxes for those
+ *     actions plus the chip-result modal.
+ *
+ * The combo-context badge row (version > publish target / deployment
+ * target) renders in all three views as a slim header so the user
+ * always sees what they're operating on.
+ */
+type SugarDeployView = "provision" | "release" | "deploy";
+
+type SugarDeployCenterPanelProps = PluginWorkspaceViewProps & {
+  view: SugarDeployView;
+};
 
 // Story 45.4.5 — state shapes for the Create GCP Project button.
 // Status semantics changed in 45.4.7 fix: GCP intentionally can't
@@ -178,7 +205,10 @@ function SecretValueForm(props: SecretValueFormProps) {
 }
 
 function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
-  const { gameProjectId, gameProject, onCommand, requestSave } = props;
+  const { gameProjectId, gameProject, onCommand, requestSave, view } = props;
+  const isProvision = view === "provision";
+  const isRelease = view === "release";
+  const isDeploy = view === "deploy";
   const [actionState, setActionState] = useState<{
     kind: DeploymentActionKind | null;
     result: DeploymentActionExecutionResult | null;
@@ -1404,24 +1434,31 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         overflowX: "hidden"
       }}
     >
+      {/* Story 46.5 — per-view title row. Provision is "what's wired
+          up"; Release is "cut new major version"; Deploy is "daily
+          driver — ship + observe". */}
       <Stack gap={4}>
         <Text fw={700} size="lg">
-          SugarDeploy Plugin
+          {isProvision
+            ? "Provision"
+            : isRelease
+              ? "Release"
+              : "Deploy"}
         </Text>
         <Text size="sm" c="var(--sm-color-subtext)">
-          Choose a deployment target, inspect plugin requirements, and review the generated deployment surfaces that will be managed in the game root on save.
+          {isProvision
+            ? "Configure sources, deployment targets, and secrets. Stand up infrastructure with Setup Infra."
+            : isRelease
+              ? "Cut a new major version: tag the current commit, bump majorVersion, register a fresh GCP project suffix."
+              : "Ship the current version to the selected publish + deployment target. Health + Status chips probe the live service."}
         </Text>
       </Stack>
 
-      {/* Story 45.8.5 — Action Bar. The top-of-workspace toolbar that
-          operates on the (version × publish target × deployment target)
-          combination. Shows the combo context, Health + Status chips
-          (Health auto-probes silently on mount for Cloud Run; click to
-          re-probe), and every action button that acts on this combo.
-          The Version panel below carries version metadata + history;
-          the Targets section below it carries the per-combo settings.
-          Action bar gets the heavy visual treatment because this is
-          where users live day-to-day. */}
+      {/* Story 46.5 — Action Bar. Now rendered in every Publish-side
+          workspace (Provision / Release / Deploy) with view-specific
+          inner content. The combo-context badge row stays constant so
+          the user always sees what they're operating on; chips and
+          actions are sliced per view. */}
       {selectedTargetId && gameProject ? (
         <Box
           p="md"
@@ -1435,7 +1472,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             <Group justify="space-between" wrap="nowrap" align="center">
               <Group gap="xs" align="center" wrap="nowrap">
                 <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                  Deploy
+                  {isProvision ? "Provision" : isRelease ? "Release" : "Deploy"}
                 </Text>
                 <Badge size="lg" variant="filled" color="blue">
                   v{gameProject.majorVersion}
@@ -1459,81 +1496,82 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                       : selectedTargetId}
                 </Badge>
               </Group>
-              <Group gap="xs">
-                <Tooltip
-                  label={healthChip.message || "Click to re-probe."}
-                  withinPortal
-                  multiline
-                  w={320}
-                >
-                  <Badge
-                    size="lg"
-                    variant="light"
-                    color={
-                      healthChip.phase === "probing"
-                        ? "gray"
+              {isDeploy ? (
+                <Group gap="xs">
+                  <Tooltip
+                    label={healthChip.message || "Click to re-probe."}
+                    withinPortal
+                    multiline
+                    w={320}
+                  >
+                    <Badge
+                      size="lg"
+                      variant="light"
+                      color={
+                        healthChip.phase === "probing"
+                          ? "gray"
+                          : healthChip.ok === null
+                            ? "gray"
+                            : healthChip.ok
+                              ? "green"
+                              : "red"
+                      }
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setChipModalKind("health");
+                        void runAction("health");
+                      }}
+                    >
+                      {healthChip.phase === "probing"
+                        ? "Health: probing…"
                         : healthChip.ok === null
-                          ? "gray"
+                          ? "Health: unknown"
                           : healthChip.ok
-                            ? "green"
-                            : "red"
-                    }
-                    style={{ cursor: "pointer" }}
-                    onClick={() => {
-                      setChipModalKind("health");
-                      void runAction("health");
-                    }}
+                            ? "Health: OK"
+                            : "Health: down"}
+                    </Badge>
+                  </Tooltip>
+                  <Tooltip
+                    label={statusChip.message || "Click to query gcloud."}
+                    withinPortal
+                    multiline
+                    w={320}
                   >
-                    {healthChip.phase === "probing"
-                      ? "Health: probing…"
-                      : healthChip.ok === null
-                        ? "Health: unknown"
-                        : healthChip.ok
-                          ? "Health: OK"
-                          : "Health: down"}
-                  </Badge>
-                </Tooltip>
-                <Tooltip
-                  label={statusChip.message || "Click to query gcloud."}
-                  withinPortal
-                  multiline
-                  w={320}
-                >
-                  <Badge
-                    size="lg"
-                    variant="light"
-                    color={
-                      statusChip.phase === "probing"
-                        ? "gray"
-                        : statusChip.ok === null
+                    <Badge
+                      size="lg"
+                      variant="light"
+                      color={
+                        statusChip.phase === "probing"
                           ? "gray"
+                          : statusChip.ok === null
+                            ? "gray"
+                            : statusChip.ok
+                              ? "green"
+                              : "red"
+                      }
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setChipModalKind("status");
+                        void runAction("status");
+                      }}
+                    >
+                      {statusChip.phase === "probing"
+                        ? "Status: querying…"
+                        : statusChip.ok === null
+                          ? "Status: unknown"
                           : statusChip.ok
-                            ? "green"
-                            : "red"
-                    }
-                    style={{ cursor: "pointer" }}
-                    onClick={() => {
-                      setChipModalKind("status");
-                      void runAction("status");
-                    }}
-                  >
-                    {statusChip.phase === "probing"
-                      ? "Status: querying…"
-                      : statusChip.ok === null
-                        ? "Status: unknown"
-                        : statusChip.ok
-                          ? "Status: OK"
-                          : "Status: error"}
-                  </Badge>
-                </Tooltip>
-              </Group>
+                            ? "Status: OK"
+                            : "Status: error"}
+                    </Badge>
+                  </Tooltip>
+                </Group>
+              ) : null}
             </Group>
 
-            {/* Story 45.7 — template-drift banner. Lives inside the
-                Action Bar because it's a workspace-level alert about
-                this combo's on-disk template stamp. Save / Setup Infra
-                regenerate and the next probe clears it automatically. */}
-            {selectedTargetId === "google-cloud-run" &&
+            {/* Story 45.7 — template-drift banner. Provision view
+                only — it's a Setup-Infra-fixes-it kind of alert. */}
+            {isProvision &&
+            selectedTargetId === "google-cloud-run" &&
             templateDriftState.phase === "loaded" &&
             templateDriftState.fileExists &&
             templateDriftState.onDiskVersion !== null &&
@@ -1552,76 +1590,54 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               </Alert>
             ) : null}
 
-            <Group>
-              {selectedTargetId === "google-cloud-run" ? (
-                <>
-                  <Tooltip
-                    label={
-                      probeState.status === "owned"
-                        ? `\`${resolvedGcpProjectId}\` is provisioned and ready.`
-                        : probeState.status === "unknown"
-                          ? probeState.message ?? "Could not determine project ownership."
-                          : "Run gcloud projects create + billing link + services enable. Idempotent — safe to re-run."
-                    }
-                    withinPortal
-                    multiline
-                    w={320}
+            {isProvision && selectedTargetId === "google-cloud-run" ? (
+              <Group>
+                <Tooltip
+                  label={
+                    probeState.status === "owned"
+                      ? `\`${resolvedGcpProjectId}\` is provisioned and ready.`
+                      : probeState.status === "unknown"
+                        ? probeState.message ?? "Could not determine project ownership."
+                        : "Run gcloud projects create + billing link + services enable. Idempotent — safe to re-run."
+                  }
+                  withinPortal
+                  multiline
+                  w={320}
+                >
+                  <Button
+                    size="xs"
+                    variant={createButtonInfo.variant}
+                    color={createButtonInfo.color}
+                    onClick={handleCreateGcpProjectClick}
+                    loading={createButtonInfo.loading}
+                    disabled={createButtonInfo.disabled}
                   >
-                    <Button
-                      size="xs"
-                      variant={createButtonInfo.variant}
-                      color={createButtonInfo.color}
-                      onClick={handleCreateGcpProjectClick}
-                      loading={createButtonInfo.loading}
-                      disabled={createButtonInfo.disabled}
-                    >
-                      {createButtonInfo.label}
-                    </Button>
-                  </Tooltip>
-                  <Tooltip
-                    label={
-                      actionBlockedReason ??
-                      "Create the GCP Project first — Setup Infra runs terraform against it."
+                    {createButtonInfo.label}
+                  </Button>
+                </Tooltip>
+                <Tooltip
+                  label={
+                    actionBlockedReason ??
+                    "Create the GCP Project first — Setup Infra runs terraform against it."
+                  }
+                  disabled={!setupInfraBlockedByProbe && !actionsDisabled}
+                  withinPortal
+                  multiline
+                  w={320}
+                >
+                  <Button
+                    size="xs"
+                    variant="filled"
+                    onClick={() => runAction("setup-infra")}
+                    loading={
+                      actionState.running && actionState.kind === "setup-infra"
                     }
-                    disabled={!setupInfraBlockedByProbe && !actionsDisabled}
-                    withinPortal
-                    multiline
-                    w={320}
+                    disabled={actionsDisabled || setupInfraBlockedByProbe}
+                    title="Run terraform init + apply against the GCP project to stand up Artifact Registry, runtime SA, IAM, WIF, and empty Secret Manager containers. Idempotent — safe to re-run."
                   >
-                    <Button
-                      size="xs"
-                      variant="filled"
-                      onClick={() => runAction("setup-infra")}
-                      loading={
-                        actionState.running && actionState.kind === "setup-infra"
-                      }
-                      disabled={actionsDisabled || setupInfraBlockedByProbe}
-                      title="Run terraform init + apply against the GCP project to stand up Artifact Registry, runtime SA, IAM, WIF, and empty Secret Manager containers. Idempotent — safe to re-run."
-                    >
-                      Setup Infra
-                    </Button>
-                  </Tooltip>
-                </>
-              ) : null}
-              <Button
-                size="xs"
-                onClick={() => runAction("deploy")}
-                loading={actionState.running && actionState.kind === "deploy"}
-                disabled={actionsDisabled}
-              >
-                Deploy
-              </Button>
-              <Button
-                size="xs"
-                variant="filled"
-                color="red"
-                onClick={() => runAction("destroy")}
-                loading={actionState.running && actionState.kind === "destroy"}
-                disabled={actionsDisabled}
-              >
-                Destroy
-              </Button>
-              {selectedTargetId === "google-cloud-run" ? (
+                    Setup Infra
+                  </Button>
+                </Tooltip>
                 <Button
                   size="xs"
                   variant="outline"
@@ -1642,26 +1658,49 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 >
                   Teardown Infra
                 </Button>
-              ) : null}
-            </Group>
+              </Group>
+            ) : null}
 
-            <Text size="sm" c="var(--sm-color-overlay0)">
-              {actionBlockedReason ??
-                "Click a chip to probe. Save first, then use the action buttons. Working Directory must point at the game root on disk."}
-            </Text>
+            {isDeploy ? (
+              <Group>
+                <Button
+                  size="xs"
+                  onClick={() => runAction("deploy")}
+                  loading={actionState.running && actionState.kind === "deploy"}
+                  disabled={actionsDisabled}
+                >
+                  Deploy
+                </Button>
+                <Button
+                  size="xs"
+                  variant="filled"
+                  color="red"
+                  onClick={() => runAction("destroy")}
+                  loading={actionState.running && actionState.kind === "destroy"}
+                  disabled={actionsDisabled}
+                >
+                  Destroy
+                </Button>
+              </Group>
+            ) : null}
+
+            {!isRelease ? (
+              <Text size="sm" c="var(--sm-color-overlay0)">
+                {actionBlockedReason ??
+                  (isDeploy
+                    ? "Click a chip to probe. Save first, then use Deploy/Destroy. Working Directory must point at the game root on disk."
+                    : "Save first, then use the buttons. Working Directory must point at the game root on disk.")}
+              </Text>
+            ) : null}
           </Stack>
         </Box>
       ) : null}
 
-      {/* Story 45.8.5 — Version panel. Sits below the Action Bar because
-          the Action Bar is the daily-driver surface; the Version panel
-          is the longer-horizon "which release am I operating on" context.
-          Independent of publish/deployment target (a v4 release can ship
-          to Web/GCP, Web/AWS, mobile/Apple, mobile/Android, etc.).
-          Strictly version metadata + history + the Release-New-Version
-          affordance — no operational buttons live here. History rows
-          render newest-first; the current major flags "(active)". */}
-      {gameProject ? (
+      {/* Story 45.8.5 / 46.5 — Version panel. Release view only —
+          version metadata + history + the Release-New-Version trigger
+          live here. History rows render newest-first; the current
+          major flags "(active)". */}
+      {isRelease && gameProject ? (
         <Stack gap="sm">
           <Group justify="space-between" align="center">
             <Group gap="xs" align="baseline">
@@ -1754,13 +1793,10 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Stack>
       ) : null}
 
-      {/* Story 45.8.5 — Sources panel. Sits between Version and Targets
-          because Working Directory + GitHub Repository describe the
-          *source* the deployment runs against; they're the same value
-          regardless of which target ships them. Storage hoisted to
-          DeploymentSettings (not per-target) — single source of truth
-          across all targets. */}
-      {gameProject ? (
+      {/* Story 45.8.5 / 46.5 — Sources panel. Provision view only —
+          Working Directory + GitHub Repository describe the *source*
+          the deployment runs against; configured once during stand-up. */}
+      {isProvision && gameProject ? (
         <Stack gap="sm">
           <Group gap="xs" align="baseline">
             <Text fw={700} size="md">
@@ -1822,7 +1858,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           Project Id is intentionally not exposed — it auto-derives
           from versioned slug + suffix per 45.4.7 and is shown in the
           Version panel above. */}
-      {gameProject ? (() => {
+      {isProvision && gameProject ? (() => {
         const allTargets = listDeploymentTargets();
         const configured = new Set<string>();
         configured.add("local");
@@ -2090,7 +2126,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         );
       })() : null}
 
-      {selectedTargetId === "google-cloud-run" ? (
+      {isProvision && selectedTargetId === "google-cloud-run" ? (
         <Stack gap="xs">
           <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
             Secrets
@@ -2177,15 +2213,18 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       ) : null}
 
 
-      {/* Story 45.8.5 — inline result/error boxes are suppressed for
-          Health + Status because their results live in the chip-result
-          modal (opens on chip click). Other actions (deploy, destroy,
-          setup-infra, teardown-infra, create-gcp-project) keep the
-          inline boxes because their multi-second stdout/stderr is
-          genuinely worth a dedicated workspace surface. */}
+      {/* Story 45.8.5 / 46.5 — inline result/error boxes are
+          suppressed for Health + Status (they surface in the chip
+          modal). For the other actions, results render in the view
+          that owns them: Deploy view shows deploy/destroy results,
+          Provision view shows setup-infra/teardown-infra/create-gcp-
+          project results. */}
       {actionState.error &&
-      actionState.kind !== "health" &&
-      actionState.kind !== "status" ? (
+      ((isDeploy &&
+        (actionState.kind === "deploy" || actionState.kind === "destroy")) ||
+        (isProvision &&
+          (actionState.kind === "setup-infra" ||
+            actionState.kind === "teardown-infra"))) ? (
         <Box
           p="md"
           style={{
@@ -2204,8 +2243,12 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       ) : null}
 
       {actionState.result &&
-      actionState.result.descriptor.actionKind !== "health" &&
-      actionState.result.descriptor.actionKind !== "status" ? (
+      ((isDeploy &&
+        (actionState.result.descriptor.actionKind === "deploy" ||
+          actionState.result.descriptor.actionKind === "destroy")) ||
+        (isProvision &&
+          (actionState.result.descriptor.actionKind === "setup-infra" ||
+            actionState.result.descriptor.actionKind === "teardown-infra"))) ? (
         <Box
           p="md"
           style={{
@@ -2256,7 +2299,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Box>
       ) : null}
 
-      {createState.error ? (
+      {isProvision && createState.error ? (
         <Box
           p="md"
           style={{
@@ -2276,7 +2319,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Box>
       ) : null}
 
-      {createState.result ? (
+      {isProvision && createState.result ? (
         <Box
           p="md"
           style={{
@@ -2690,7 +2733,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         ) : null}
       </Modal>
 
-      {plan?.warnings.length ? (
+      {isProvision && plan?.warnings.length ? (
         <Alert color="yellow" variant="light" title="Plan Warnings">
           <Stack gap={4}>
             {plan.warnings.map((warning) => (
@@ -2702,7 +2745,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Alert>
       ) : null}
 
-      {plan?.conflicts.length ? (
+      {isProvision && plan?.conflicts.length ? (
         <Alert color={plan.conflicts.some((conflict) => conflict.severity === "error") ? "red" : "yellow"} variant="light" title="Conflicts">
           <Stack gap={4}>
             {plan.conflicts.map((conflict) => (
@@ -2714,41 +2757,80 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         </Alert>
       ) : null}
 
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Requirement Sources
-        </Text>
-        {plan?.requirementSources.length ? (
-          plan.requirementSources.map((source) => (
-            <Group key={source.ownerId} gap="xs">
-              <Badge variant="light" color="blue">
-                {source.displayName}
-              </Badge>
-              <Text size="sm" c="var(--sm-color-subtext)">
-                {source.requirements.length} requirements
-              </Text>
-            </Group>
-          ))
-        ) : (
-          <Text size="sm" c="var(--sm-color-overlay0)">
-            No enabled plugins are currently declaring deployment requirements.
+      {isProvision ? (
+        <Stack gap="xs">
+          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+            Requirement Sources
           </Text>
-        )}
-      </Stack>
+          {plan?.requirementSources.length ? (
+            plan.requirementSources.map((source) => (
+              <Group key={source.ownerId} gap="xs">
+                <Badge variant="light" color="blue">
+                  {source.displayName}
+                </Badge>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  {source.requirements.length} requirements
+                </Text>
+              </Group>
+            ))
+          ) : (
+            <Text size="sm" c="var(--sm-color-overlay0)">
+              No enabled plugins are currently declaring deployment requirements.
+            </Text>
+          )}
+        </Stack>
+      ) : null}
 
     </Stack>
   );
 }
 
-export const pluginWorkspaceDefinition: StudioPluginWorkspaceDefinition = {
-  pluginId: SUGARDEPLOY_PLUGIN_ID,
-  workspaceKind: SUGARDEPLOY_PLUGIN_ID,
-  createWorkspaceView(props) {
-    return {
-      leftPanel: null,
-      rightPanel: null,
-      centerPanel: <SugarDeployCenterPanel {...props} />,
-      viewportOverlay: null
-    };
+// Story 46.5 — SugarDeploy now contributes three Publish-productmode
+// workspaces (Provision / Release / Deploy). Each shares the same
+// SugarDeployCenterPanel underlying renderer but passes a different
+// `view` prop so the panel knows which slice of UI to show. The
+// PluginShellContributionDefinition above (catalog/sugardeploy/index.ts)
+// declares the matching PluginPublishWorkspaceContribution metadata
+// (label + icon + order); the App.tsx wiring zips that metadata with
+// the createWorkspaceView output from these definitions.
+export const pluginWorkspaceDefinitions: StudioPluginWorkspaceDefinition[] = [
+  {
+    pluginId: SUGARDEPLOY_PLUGIN_ID,
+    workspaceKind: "sugardeploy-provision",
+    productMode: "publish",
+    createWorkspaceView(props) {
+      return {
+        leftPanel: null,
+        rightPanel: null,
+        centerPanel: <SugarDeployCenterPanel {...props} view="provision" />,
+        viewportOverlay: null
+      };
+    }
+  },
+  {
+    pluginId: SUGARDEPLOY_PLUGIN_ID,
+    workspaceKind: "sugardeploy-release",
+    productMode: "publish",
+    createWorkspaceView(props) {
+      return {
+        leftPanel: null,
+        rightPanel: null,
+        centerPanel: <SugarDeployCenterPanel {...props} view="release" />,
+        viewportOverlay: null
+      };
+    }
+  },
+  {
+    pluginId: SUGARDEPLOY_PLUGIN_ID,
+    workspaceKind: "sugardeploy-deploy",
+    productMode: "publish",
+    createWorkspaceView(props) {
+      return {
+        leftPanel: null,
+        rightPanel: null,
+        centerPanel: <SugarDeployCenterPanel {...props} view="deploy" />,
+        viewportOverlay: null
+      };
+    }
   }
-};
+];

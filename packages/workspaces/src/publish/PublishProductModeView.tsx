@@ -32,11 +32,37 @@ const corePublishWorkspaceTabs: PublishWorkspaceTab[] = [
   { id: "package", label: "Package", icon: "📦" }
 ];
 
+/**
+ * Story 46.5 — plugin-contributed Publish workspace tab. App.tsx
+ * assembles these from PluginPublishWorkspaceContribution metadata +
+ * the matching StudioPluginWorkspaceDefinition.createWorkspaceView()
+ * output. The hook renders the active tab's view in the relevant
+ * panel slots; non-active tabs aren't rendered (no offscreen mount).
+ */
+export interface PluginPublishWorkspaceTab {
+  workspaceKind: string;
+  label: string;
+  icon: string;
+  view: {
+    leftPanel: React.ReactNode;
+    rightPanel: React.ReactNode;
+    centerPanel?: React.ReactNode;
+    viewportOverlay: React.ReactNode;
+  };
+}
+
 export interface PublishProductModeViewProps {
   activePublishKind: PublishWorkspaceKind;
   gameProject: GameProject | null;
   pluginConfigurations: PluginConfigurationRecord[];
   onSelectKind: (kind: PublishWorkspaceKind) => void;
+  /**
+   * Story 46.5 — plugin-contributed Publish workspace tabs, ordered
+   * by their PluginPublishWorkspaceContribution.order. Empty when no
+   * publish-side plugin is installed (the productmode shows just the
+   * Package tab).
+   */
+  pluginPublishWorkspaces?: PluginPublishWorkspaceTab[];
 }
 
 export interface PublishProductModeViewResult {
@@ -275,27 +301,32 @@ function PackageWorkspace(props: {
 export function usePublishProductModeView(
   props: PublishProductModeViewProps
 ): PublishProductModeViewResult {
-  const { activePublishKind, gameProject, pluginConfigurations, onSelectKind } =
-    props;
+  const {
+    activePublishKind,
+    gameProject,
+    pluginConfigurations,
+    onSelectKind,
+    pluginPublishWorkspaces = []
+  } = props;
 
-  // For Story 46.1 only the core Package tab is contributed. Later
-  // stories will combine these with plugin-contributed tabs (Provision
-  // / Release / Deploy from SugarDeploy).
-  const workspaceTabs = corePublishWorkspaceTabs;
+  // Story 46.5 — Package (Studio core) is always first; plugin
+  // contributions follow in PluginPublishWorkspaceContribution.order
+  // (App.tsx pre-sorts the list it passes in).
+  const workspaceTabs: PublishWorkspaceTab[] = [
+    ...corePublishWorkspaceTabs,
+    ...pluginPublishWorkspaces.map((entry) => ({
+      id: entry.workspaceKind,
+      label: entry.label,
+      icon: entry.icon
+    }))
+  ];
 
-  const centerPanel =
-    activePublishKind === "package" ? (
-      <PackageWorkspace
-        gameProject={gameProject}
-        pluginConfigurations={pluginConfigurations}
-      />
-    ) : (
-      <Stack gap="sm" p="xl">
-        <Text size="sm" c="var(--sm-color-overlay0)">
-          Unknown publish workspace: <Code>{activePublishKind}</Code>
-        </Text>
-      </Stack>
-    );
+  const activePluginWorkspace = pluginPublishWorkspaces.find(
+    (entry) => entry.workspaceKind === activePublishKind
+  );
+
+  const isPackage = activePublishKind === "package";
+  const isPlugin = activePluginWorkspace !== undefined;
 
   return {
     subHeaderPanel: (
@@ -305,7 +336,9 @@ export function usePublishProductModeView(
         onSelectKind={(id) => onSelectKind(id as PublishWorkspaceKind)}
       />
     ),
-    leftPanel: (
+    leftPanel: isPlugin ? (
+      activePluginWorkspace.view.leftPanel
+    ) : (
       <PanelSection title="Publish" icon="🚀">
         <Stack gap="xs" p="sm">
           <Text size="xs" c="var(--sm-color-subtext)">
@@ -314,12 +347,23 @@ export function usePublishProductModeView(
         </Stack>
       </PanelSection>
     ),
-    // Story 46.1 — Package workspace doesn't need an inspector. The
-    // operation is one button with inline result/error; no
-    // per-selection context to inspect. Future SugarDeploy-contributed
-    // workspaces in this productmode can return their own rightPanel.
-    rightPanel: null,
-    centerPanel,
-    viewportOverlay: null
+    rightPanel: isPlugin ? activePluginWorkspace.view.rightPanel : null,
+    centerPanel: isPackage ? (
+      <PackageWorkspace
+        gameProject={gameProject}
+        pluginConfigurations={pluginConfigurations}
+      />
+    ) : isPlugin ? (
+      activePluginWorkspace.view.centerPanel
+    ) : (
+      <Stack gap="sm" p="xl">
+        <Text size="sm" c="var(--sm-color-overlay0)">
+          Unknown publish workspace: <Code>{activePublishKind}</Code>
+        </Text>
+      </Stack>
+    ),
+    viewportOverlay: isPlugin
+      ? activePluginWorkspace.view.viewportOverlay
+      : null
   };
 }
