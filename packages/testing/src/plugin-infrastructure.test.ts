@@ -1648,6 +1648,139 @@ describe("plugin infrastructure", () => {
     });
   });
 
+  it("Cut New Major Version bump regenerates publish-side managed files with the new major's identity (story 46.11)", () => {
+    // The Cut saga's `saveProjectWithManagedFiles` step calls
+    // planGameDeployment on the bumped session and writes every
+    // managed file in the result. 46.6 / 46.7 / 46.10.5 made the
+    // publish-side artifacts (deployment/netlify/*, the GHA workflow
+    // YAML, .sugarmagic/published-web/boot.json) regular managed
+    // files. This story is the test coverage: the bumped plan's
+    // managedFiles list must include those, with the v2 identity
+    // baked into the new copies.
+    const project = normalizeGameProject({
+      ...makeProject(),
+      identity: { id: "wordlark", schema: "GameProject", version: 1 },
+      displayName: "Wordlark",
+      majorVersion: 1,
+      versionedProjectIdentifiers: { v1: "k3m9p" },
+      deployment: {
+        backendDeploymentTargetId: "google-cloud-run",
+        frontendDeploymentTargetId: "netlify",
+        githubRepo: "nikki/wordlark",
+        targetOverrides: {
+          netlify: {
+            siteId: "abc12345-6789-4def-9012-3456789abcde",
+            siteName: "wordlark-prod"
+          }
+        }
+      },
+      pluginConfigurations: [
+        createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+      ]
+    });
+    let session = createAuthoringSession(project, []);
+    session = applyCommand(session, {
+      kind: "BumpMajorVersion",
+      target: {
+        aggregateKind: "game-project",
+        aggregateId: session.gameProject.identity.id
+      },
+      subject: {
+        subjectKind: "game-project",
+        subjectId: session.gameProject.identity.id
+      },
+      payload: { newMajorVersion: 2 }
+    });
+    const registerV2 = buildSetVersionedProjectIdentifierCommand(
+      session.gameProject,
+      2,
+      "abcde"
+    );
+    expect(registerV2).not.toBeNull();
+    session = applyCommand(session, registerV2!);
+
+    const bumpedPlan = planGameDeployment(session.gameProject);
+    const paths = bumpedPlan.managedFiles.map((file) => file.relativePath);
+
+    // Terraform / Cloud Run files (Plan 045 / 046.6+ + 46.9 land).
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "deployment/google-cloud-run/terraform/main.tf",
+        "deployment/google-cloud-run/terraform/variables.tf",
+        "deployment/google-cloud-run/terraform/outputs.tf",
+        "deployment/google-cloud-run/terraform/terraform.tfvars",
+        "deployment/google-cloud-run/deploy.sh"
+      ])
+    );
+
+    // Netlify managed files (46.6) — frontend target side.
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "deployment/netlify/netlify.toml",
+        "deployment/netlify/build-config.json",
+        "deployment/netlify/README.md"
+      ])
+    );
+
+    // GHA workflow YAML (46.7).
+    expect(paths).toContain(".github/workflows/sugardeploy-deploy.yml");
+
+    // Published-web boot.json + README (46.10.5 follow-up).
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        ".sugarmagic/published-web/boot.json",
+        ".sugarmagic/published-web/README.md"
+      ])
+    );
+
+    // V2 identity must thread through the regenerated files.
+    const tfvars = bumpedPlan.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/terraform/terraform.tfvars"
+    );
+    expect(tfvars?.content).toContain('gcp_project_id        = "wordlark-v2-abcde"');
+    expect(tfvars?.content).toContain('service_name_prefix   = "wordlark-v2-abcde"');
+
+    const buildConfig = bumpedPlan.managedFiles.find(
+      (file) =>
+        file.relativePath === "deployment/netlify/build-config.json"
+    );
+    const parsedBuildConfig = JSON.parse(buildConfig?.content ?? "{}");
+    expect(parsedBuildConfig).toMatchObject({
+      majorVersion: 2,
+      backendDeploymentTargetId: "google-cloud-run",
+      frontendDeploymentTargetId: "netlify"
+    });
+
+    const workflow = bumpedPlan.managedFiles.find(
+      (file) =>
+        file.relativePath === ".github/workflows/sugardeploy-deploy.yml"
+    );
+    expect(workflow?.content).toContain("name: SugarDeploy — wordlark v2");
+    expect(workflow?.content).toContain(
+      "SUGARMAGIC_GCP_PROJECT_ID: wordlark-v2-abcde"
+    );
+    expect(workflow?.content).toContain(
+      "SUGARMAGIC_SERVICE_NAME_PREFIX: wordlark-v2-abcde"
+    );
+    // After 46.10.5 the frontend job is a thin checkout-and-
+    // netlify-deploy off the pre-baked dist — no inline gateway URL
+    // resolution in the workflow YAML — so the gateway service name
+    // shows up only via the service-name-prefix env above.
+
+    const bootJson = bumpedPlan.managedFiles.find(
+      (file) =>
+        file.relativePath === ".sugarmagic/published-web/boot.json"
+    );
+    const parsedBoot = JSON.parse(bootJson?.content ?? "{}");
+    expect(parsedBoot).toMatchObject({
+      schemaVersion: 1,
+      gameProjectMajorVersion: 2,
+      gameProjectIdentity: { id: "wordlark" }
+    });
+  });
+
   it("Cut New Major Version (in-memory): bumped session resolves new versionedSlug and preserves prior suffix", () => {
     // Story 45.8 — end-to-end in-memory: starting from wordlark at v1,
     // applying BumpMajorVersion + buildSetVersionedProjectIdentifierCommand
