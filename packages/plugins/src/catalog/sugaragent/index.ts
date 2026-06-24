@@ -135,6 +135,14 @@ export function normalizeSugarAgentPluginConfig(
     proxyBaseUrl:
       readEnvValue(environment, "SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL") ||
       (typeof config?.proxyBaseUrl === "string" ? config.proxyBaseUrl.trim() : ""),
+    // Story 46.14 — bearer token plumbed through to the gateway
+    // clients so they can attach `Authorization: Bearer <token>` on
+    // every request when the gateway runs in `bearer` auth mode.
+    // The env carries an empty string when the gateway is `none`.
+    gatewayBearerToken: readEnvValue(
+      environment,
+      "SUGARMAGIC_GATEWAY_BEARER_TOKEN"
+    ),
     loreSourceKind:
       config?.loreSourceKind === "github"
         ? "github"

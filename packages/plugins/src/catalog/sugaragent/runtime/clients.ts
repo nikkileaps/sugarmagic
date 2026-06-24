@@ -140,8 +140,26 @@ async function parseJsonResponse<T>(response: Response, label: string): Promise<
   return (await response.json()) as T;
 }
 
+/**
+ * Story 46.14 — when the gateway runs in `bearer` auth mode it
+ * requires `Authorization: Bearer <token>` on every non-`/health`
+ * request. The token is the `gateway-shared-token` Secret Manager
+ * value (45.5.8); Studio reads it from `SUGARMAGIC_GATEWAY_BEARER_TOKEN`
+ * (forwarded from the build-time `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN`)
+ * and passes it into these clients. Empty bearer = `none` auth mode;
+ * the helper omits the header in that case so the request still
+ * works against a public gateway.
+ */
+function authHeaders(bearerToken: string): Record<string, string> {
+  const token = bearerToken.trim();
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
 export class SugarAgentGatewayLLMClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly bearerToken: string = ""
+  ) {}
 
   async generate(request: GatewayGenerateRequest): Promise<GatewayGenerateResult> {
     const response = await fetch(
@@ -149,7 +167,8 @@ export class SugarAgentGatewayLLMClient {
       {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
+          ...authHeaders(this.bearerToken)
         },
         body: JSON.stringify(request)
       }
@@ -163,7 +182,10 @@ export class SugarAgentGatewayLLMClient {
 }
 
 export class SugarAgentGatewayEmbeddingsClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly bearerToken: string = ""
+  ) {}
 
   async createEmbedding(
     request: GatewayEmbeddingRequest
@@ -173,7 +195,8 @@ export class SugarAgentGatewayEmbeddingsClient {
       {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
+          ...authHeaders(this.bearerToken)
         },
         body: JSON.stringify(request)
       }
@@ -187,7 +210,10 @@ export class SugarAgentGatewayEmbeddingsClient {
 }
 
 export class SugarAgentGatewayVectorStoreClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly bearerToken: string = ""
+  ) {}
 
   async search(
     request: GatewayVectorSearchRequest
@@ -197,7 +223,8 @@ export class SugarAgentGatewayVectorStoreClient {
       {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
+          ...authHeaders(this.bearerToken)
         },
         body: JSON.stringify(request)
       }

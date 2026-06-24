@@ -50,6 +50,17 @@ export interface SugarAgentPluginConfig {
    * `.env` (Studio) or Secret Manager (Cloud Run).
    */
   proxyBaseUrl: string;
+  /**
+   * Story 46.14 — when the gateway runs in `bearer` auth mode (the
+   * 45.5.8 default), every non-`/health` request must carry
+   * `Authorization: Bearer <token>`. Empty string = the gateway is
+   * in `none` auth mode (public) and no header is sent. Sourced
+   * from `SUGARMAGIC_GATEWAY_BEARER_TOKEN` at build time (which
+   * Studio reads from `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN` and
+   * SugarDeploy's Build Frontend host action resolves via `gcloud
+   * secrets versions access`).
+   */
+  gatewayBearerToken: string;
   loreSourceKind: "local" | "github";
   loreLocalPath: string;
   loreRepositoryUrl: string;

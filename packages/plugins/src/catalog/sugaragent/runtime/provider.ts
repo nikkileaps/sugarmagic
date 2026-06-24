@@ -204,15 +204,16 @@ function resolveProviders(
   vectorStoreProvider: VectorStoreProvider | null;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
+  const bearerToken = config.gatewayBearerToken;
   return {
     llmProvider: new SugarAgentGatewayLLMProvider(
-      new SugarAgentGatewayLLMClient(baseUrl)
+      new SugarAgentGatewayLLMClient(baseUrl, bearerToken)
     ),
     embeddingsProvider: new SugarAgentGatewayEmbeddingsProvider(
-      new SugarAgentGatewayEmbeddingsClient(baseUrl)
+      new SugarAgentGatewayEmbeddingsClient(baseUrl, bearerToken)
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
-      new SugarAgentGatewayVectorStoreClient(baseUrl)
+      new SugarAgentGatewayVectorStoreClient(baseUrl, bearerToken)
     )
   };
 }

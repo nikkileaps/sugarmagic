@@ -126,6 +126,7 @@ function createStageContext() {
       // generation path is reached, then the test's mocked
       // llmProvider returns the deterministic response.
       proxyBaseUrl: "https://test-proxy.local",
+      gatewayBearerToken: "",
       loreSourceKind: "local" as const,
       loreLocalPath: "",
       loreRepositoryUrl: "",

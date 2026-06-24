@@ -3081,6 +3081,7 @@ describe("plugin infrastructure", () => {
       })
     ).toEqual({
       proxyBaseUrl: "",
+      gatewayBearerToken: "",
       loreSourceKind: "local",
       loreLocalPath: "",
       loreRepositoryUrl: "",
@@ -3101,6 +3102,7 @@ describe("plugin infrastructure", () => {
       )
     ).toEqual({
       proxyBaseUrl: "http://localhost:8787",
+      gatewayBearerToken: "",
       loreSourceKind: "local",
       loreLocalPath: "",
       loreRepositoryUrl: "",
