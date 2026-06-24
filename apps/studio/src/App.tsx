@@ -355,21 +355,27 @@ async function performSave(
     SUGARDEPLOY_PLUGIN_ID
   );
   const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
+  const publishedWebSnapshot = {
+    // Story 46.10 follow-up — feed the in-memory runtime snapshot
+    // through so boot.json bakes the real game content (regions +
+    // content library + asset sources) rather than empty
+    // placeholders.
+    regions: getAllRegions(session),
+    contentLibrary: session.contentLibrary,
+    assetSources: {} as Record<string, string>,
+    activeRegionId: session.activeRegionId,
+    activeEnvironmentId: null as string | null
+  };
+
+  // Story 46.15 reshape — non-secret runtime config env now flows
+  // from per-game plugin config (which is already in memory on the
+  // session) rather than from sugarmagic-root .env. No async fetch,
+  // no two-pass plan: planGameDeployment computes the env map
+  // internally from enabled plugins' gatewayRuntimeConfigKeys.
   const deploymentPlan =
     canRunSugarDeploy &&
     getDeploymentSettings(session.gameProject).backendDeploymentTargetId
-      ? planGameDeployment(session.gameProject, {
-          // Story 46.10 follow-up — feed the in-memory runtime
-          // snapshot through so boot.json bakes the real game
-          // content (regions + content library + asset sources)
-          // rather than the empty placeholders the deployment-only
-          // call site would produce.
-          regions: getAllRegions(session),
-          contentLibrary: session.contentLibrary,
-          assetSources: {},
-          activeRegionId: session.activeRegionId,
-          activeEnvironmentId: null
-        })
+      ? planGameDeployment(session.gameProject, publishedWebSnapshot)
       : null;
 
   try {

@@ -65,6 +65,16 @@ export interface SugarAgentPluginConfig {
   loreLocalPath: string;
   loreRepositoryUrl: string;
   loreRepositoryRef: string;
+  /**
+   * Story 46.15 — per-game gateway runtime config. Empty string
+   * means "let the gateway's own default take over." Surfaces in
+   * SugarAgent's Studio settings panel; propagates to Cloud Run
+   * at deploy time via the `gatewayRuntimeConfigKeys` plugin
+   * declaration -> deploy.sh `--set-env-vars` chain.
+   */
+  openAiVectorStoreId: string;
+  anthropicModel: string;
+  openAiEmbeddingModel: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */

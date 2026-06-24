@@ -1390,6 +1390,201 @@ Source, has no Anthropic / OpenAI API keys in it. A test fixture
 that boots SugarAgent in published-web mode without a proxy URL
 configured fails cleanly with the documented error message.
 
+### 46.15 — Per-game plugin config as source of truth for gateway runtime
+
+(Reshape — originally drafted as "Non-secret runtime env plumbing
+for the gateway" with `.env` as the source of truth. Stepping
+back: env vars were a stopgap when Studio had no plugin config
+surface and no deploy infrastructure. Now that we have both, the
+right home for per-game plugin settings is the per-game project
+state — `pluginConfigurations[<plugin>].config` — surfaced in
+Studio's plugin settings panel, committed with the game,
+propagated to Cloud Run via the existing deploy pipeline. Env
+vars become a propagation mechanism, not a source of truth.)
+
+**The problem this solves:**
+
+The gateway's server-side handlers need non-secret config values
+(vector store id, model identifiers, target language). Story
+46.14 removed the browser-side path that fed these — they now
+live ONLY on the gateway. But the gateway has no automatic way to
+get them; `deploy.sh`'s `--set-env-vars` only carried
+`SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS`. Result: gateway returns 400
+on every request that needs e.g. a vector store id, and the
+SugarAgent pipeline cascades to its canned-fallback reply.
+
+**The design — taxonomy first:**
+
+- **Per-game plugin settings.** Vector store id (each game has its
+  own lore corpus -> its own OpenAI vector store), target
+  language, optional model overrides. Live in
+  `pluginConfigurations[<plugin>].config`. Surfaced in Studio's
+  plugin settings panel. Committed with the game's project file.
+- **Plugin-coded defaults.** Anthropic model
+  (`claude-sonnet-4-5`), embedding model
+  (`text-embedding-3-small`). Hardcoded in the plugin's
+  `defaultConfig`; per-game overrides allowed via the settings
+  panel.
+- **Secrets.** API keys. Stay in Secret Manager via the existing
+  `SecretRequirement` contract — never in plugin config, never
+  in `.env`, never in git.
+- **Sugarmagic-shared runtime config.** `SUGARMAGIC_GATEWAY_URL`,
+  `_BEARER_TOKEN`, `_ALLOWED_ORIGINS`. Not plugin-owned; stays
+  the way it is (derived at deploy time from terraform / Cloud
+  Run state).
+
+**The contract:**
+
+- New optional field on `DiscoveredPluginDefinition`:
+  `gatewayRuntimeConfigKeys: GatewayRuntimeConfigKey[]`. Each
+  entry declares one per-game config key the plugin wants
+  propagated to the gateway env at deploy time.
+  ```ts
+  interface GatewayRuntimeConfigKey {
+    /** Property name on the plugin's config object. */
+    configKey: string;
+    /** Env var name the gateway server-side reads. Must follow
+     *  the convention SUGARMAGIC_<PLUGIN>_<KEY>; the validator
+     *  enforces this. */
+    envVarName: string;
+    /** What it carries; surfaced as the field's help text in
+     *  the auto-rendered settings panel. */
+    description: string;
+    /** Plugin author's explicit attestation that this value is
+     *  non-secret. Same backstop as the original 46.15 draft. */
+    nonSecretAttestation: "safe-to-expose-publicly";
+  }
+  ```
+- The `runtime-config` `DeploymentRequirement` kind introduced
+  in the original 46.15 draft is REMOVED — the new field
+  supersedes it. Requirements were the wrong shape because they
+  didn't carry the link to the actual per-game value; the new
+  field carries both the schema declaration AND the
+  config-key-to-env-name mapping.
+- Plugins declare their settings UI shape via their existing
+  Studio-side plugin contribution (e.g., SugarAgent already
+  renders its own settings panel at
+  `apps/studio/src/plugins/catalog/sugaragent/index.tsx` — it
+  just gains new fields wired to the new config keys).
+
+**SugarAgent's declarations:**
+
+- `gatewayRuntimeConfigKeys`:
+  - `{ configKey: "openAiVectorStoreId", envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID", ... }`
+  - `{ configKey: "anthropicModel", envVarName: "SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", ... }`
+  - `{ configKey: "openAiEmbeddingModel", envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL", ... }`
+- New fields on `SugarAgentPluginConfig`:
+  - `openAiVectorStoreId: string`
+  - `anthropicModel: string` (default `"claude-sonnet-4-5"`)
+  - `openAiEmbeddingModel: string` (default `"text-embedding-3-small"`)
+- SugarAgent's existing settings panel gains text inputs for
+  these. Default values appear as placeholders; user overrides
+  persist to plugin config.
+
+**Sugarlang's declarations:**
+
+- `gatewayRuntimeConfigKeys`:
+  - `{ configKey: "targetLanguage", envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE", ... }`
+- New field on `SugarlangPluginConfig`:
+  - `targetLanguage: string` (default `""` — empty disables
+    Sugarlang's middleware effects).
+- Sugarlang gains a settings panel field for this (or extends
+  its existing config UI if there is one).
+
+**SugarDeploy's plumbing:**
+
+- At save time, SugarDeploy iterates enabled plugins, reads
+  their `gatewayRuntimeConfigKeys` declarations, looks up the
+  matching values in each plugin's `pluginConfigurations[].config`
+  slot, builds a `{ envVarName: value }` map of all non-empty
+  values.
+- `planGameDeployment` accepts this map (replacing the
+  `runtimeConfigEnv` arg from the original 46.15 draft) and
+  threads it through:
+  - `deploy.sh` generator inlines them via `--set-env-vars`
+    (same caret-delimited shape, just sourced from plugin
+    config instead of `.env`).
+  - GHA workflow YAML's `deploy-backend` env block carries
+    them so re-deploys from CI pick up the latest committed
+    values.
+- The `/__sugardeploy/resolve-runtime-config-env` host endpoint
+  from the original 46.15 draft is REMOVED — Studio reads
+  plugin config directly from in-memory session state; no
+  filesystem `.env` parsing happens server-side.
+- The `SUSPECTED_SECRET_ENV_NAME_REGEX` backstop stays — moved
+  from the requirement validator to the new
+  `gatewayRuntimeConfigKeys` validator. Same name patterns, same
+  hard-refusal behaviour.
+
+**The `.env` story going forward:**
+
+- Studio dev gateway middleware still reads API keys from `.env`
+  (or wherever Studio's dev gateway sources them today —
+  unchanged). Per-developer secrets, dev-only convenience.
+- The bare `SUGARMAGIC_*` runtime-config keys that the original
+  46.15 draft put in `.env` (vector store id, model
+  identifiers) go away. Their values live in plugin config now.
+- The `VITE_*` keys that ARE actually meant for the browser
+  bundle (proxy base URL, build-time stamps) stay where they
+  are — they're not plugin settings, they're build-time wiring.
+
+**Tests:**
+
+- A plugin declaring a `gatewayRuntimeConfigKey` whose
+  `envVarName` doesn't follow `SUGARMAGIC_<PLUGIN_ID>_<KEY>`
+  fails the validator with a clear message.
+- A plugin declaring an `envVarName` ending in `_API_KEY` etc.
+  fails the validator (backstop preserved).
+- `planGameDeployment` reads enabled plugins' settings,
+  propagates non-empty values; deploy.sh + workflow YAML
+  carry them.
+- Tests against the existing SugarAgent settings panel: setting
+  `openAiVectorStoreId` in the settings UI -> plugin config
+  updates -> next save's `deploy.sh` carries
+  `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=...`.
+
+**Exit:**
+
+- In wordlark with SugarAgent enabled, opening Studio's
+  SugarAgent settings panel shows a "OpenAI vector store id"
+  text input. Entering `vs_abc123`, saving, committing, pushing,
+  and redeploying lands the value on the Cloud Run service env.
+  `gcloud run services describe <gateway> --format='value(spec.template.spec.containers[0].env)'`
+  shows `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=vs_abc123`.
+- Vector search calls to the deployed gateway succeed (no more
+  400 / "vectorStoreId is required").
+- SugarAgent pipeline produces evidence; the canned-fallback
+  response goes away.
+- `.env` no longer carries any plugin settings — only the few
+  things that legitimately belong to the dev environment.
+
+### 46.16 — Auto-rendered plugin settings panels from declared schema
+
+Generalization of 46.15's "SugarAgent and Sugarlang each have a
+settings panel" — formalize the contract so future plugins don't
+have to hand-write their settings panels.
+
+- Plugins declare a `pluginSettingsSchema` on their discovered
+  definition. The schema lists fields with `{ key, label,
+  type: "text" | "select" | "number" | "boolean", description,
+  default, options?: string[] }`.
+- Studio renders the panel automatically from the schema.
+  Existing hand-written panels (SugarAgent's
+  `apps/studio/src/plugins/catalog/sugaragent/index.tsx`)
+  migrate to the schema; plugins that want custom UI can still
+  contribute their own panel component, the schema-rendered
+  panel is the default.
+- `gatewayRuntimeConfigKeys` and `pluginSettingsSchema` cross-
+  reference: a `configKey` named in the runtime-config list
+  must have a matching schema field. The validator enforces
+  this so plugin authors can't accidentally declare a runtime-
+  config key that has no UI surface.
+
+**Exit:** SugarAgent's settings panel renders entirely from the
+schema (no hand-written JSX for individual fields). A new
+plugin that declares a schema gets a working settings panel
+with zero Studio-side code.
+
 ## Builds On
 
 - [Plan 021: Deployment Plugin and Publish/Deploy Target Architecture Epic](/docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md)

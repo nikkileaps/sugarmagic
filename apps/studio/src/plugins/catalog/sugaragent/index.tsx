@@ -361,6 +361,45 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
 
       <Stack gap="xs">
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+          Gateway Runtime Config
+        </Text>
+        <Text size="xs" c="var(--sm-color-subtext)">
+          Non-secret values the deployed Cloud Run gateway reads at
+          request time. SugarDeploy plumbs them into the Cloud Run
+          service env on save -&gt; deploy. Leave empty to use the
+          gateway's bundled defaults.
+        </Text>
+        <TextInput
+          label="OpenAI Vector Store ID"
+          description="Which OpenAI vector store the gateway queries for evidence retrieval. Pure identifier; not a credential."
+          placeholder="vs_abcd1234..."
+          value={sugarAgent.openAiVectorStoreId ?? ""}
+          onChange={(event) =>
+            updateConfig({ openAiVectorStoreId: event.currentTarget.value })
+          }
+        />
+        <TextInput
+          label="Anthropic Model"
+          description="Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5)."
+          placeholder="claude-sonnet-4-5"
+          value={sugarAgent.anthropicModel ?? ""}
+          onChange={(event) =>
+            updateConfig({ anthropicModel: event.currentTarget.value })
+          }
+        />
+        <TextInput
+          label="OpenAI Embedding Model"
+          description="Override the embedding model the gateway's retrieve route uses. Empty = gateway default (text-embedding-3-small). Must match the model used to ingest the vector store above."
+          placeholder="text-embedding-3-small"
+          value={sugarAgent.openAiEmbeddingModel ?? ""}
+          onChange={(event) =>
+            updateConfig({ openAiEmbeddingModel: event.currentTarget.value })
+          }
+        />
+      </Stack>
+
+      <Stack gap="xs">
+        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Runtime Behavior
         </Text>
         <NumberInput

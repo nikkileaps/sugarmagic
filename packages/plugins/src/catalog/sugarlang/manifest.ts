@@ -167,6 +167,20 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       "Adaptive language-learning middleware pipeline for Sugarmagic conversations.",
     capabilityIds: ["conversation.middleware", "dialogue.entryDecorator", "design.workspace"]
   },
+  // Story 46.15 — Sugarlang's targetLanguage is a non-secret
+  // per-game config value the gateway reads at request time
+  // (e.g., to bias generation toward the player's target
+  // language). Plumbed through deploy.sh + GHA workflow's
+  // deploy-backend env block via SugarDeploy's collection step.
+  gatewayRuntimeConfigKeys: [
+    {
+      configKey: "targetLanguage",
+      envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
+      description:
+        "Target language code (e.g. `es`, `fr`) the Sugarlang gateway uses to bias generation + verification. Pure config, never a credential.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    }
+  ],
   runtime: {
     createRuntimePlugin: createSugarlangPlugin
   },

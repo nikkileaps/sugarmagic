@@ -157,6 +157,21 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.loreRepositoryRef === "string" && config.loreRepositoryRef.trim()
         ? config.loreRepositoryRef.trim()
         : "main",
+    // Story 46.15 — non-secret per-game gateway runtime config.
+    // Empty string is OK; the gateway falls back to its own
+    // defaults (or the bundled plugin defaults).
+    openAiVectorStoreId:
+      typeof config?.openAiVectorStoreId === "string"
+        ? config.openAiVectorStoreId.trim()
+        : "",
+    anthropicModel:
+      typeof config?.anthropicModel === "string"
+        ? config.anthropicModel.trim()
+        : "",
+    openAiEmbeddingModel:
+      typeof config?.openAiEmbeddingModel === "string"
+        ? config.openAiEmbeddingModel.trim()
+        : "",
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -175,11 +190,42 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     capabilityIds: ["conversation.provider", "design.workspace"]
   },
   deploymentRequirements,
+  // Story 46.15 — per-game non-secret gateway runtime env vars.
+  // Values come from the matching keys in the plugin's per-game
+  // config slot (`pluginConfigurations[sugaragent].config.*`);
+  // SugarDeploy plumbs them through deploy.sh + the GHA workflow
+  // to Cloud Run at deploy time.
+  gatewayRuntimeConfigKeys: [
+    {
+      configKey: "openAiVectorStoreId",
+      envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID",
+      description:
+        "OpenAI vector store id the SugarAgent gateway queries when the browser doesn't send one explicitly.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "anthropicModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL",
+      description:
+        "Default Anthropic model id the gateway uses when generating turns (e.g., `claude-sonnet-4-5`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "openAiEmbeddingModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL",
+      description:
+        "Default OpenAI embedding model the gateway's retrieve route uses (e.g., `text-embedding-3-small`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    }
+  ],
   defaultConfig: {
     loreSourceKind: "local",
     loreLocalPath: "",
     loreRepositoryUrl: "",
     loreRepositoryRef: "main",
+    openAiVectorStoreId: "",
+    anthropicModel: "",
+    openAiEmbeddingModel: "",
     maxEvidenceResults: 4,
     debugLogging: false,
     tone: ""

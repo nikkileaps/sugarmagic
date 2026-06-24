@@ -26,6 +26,7 @@ import {
   normalizeDeploymentRequirements
 } from "../../../domain/src/index";
 import { getDiscoveredPluginDefinition } from "../builtin";
+import { validateGatewayRuntimeConfigKey } from "../sdk";
 import { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 import {
   type GoogleCloudRunDeploymentTargetOverrides,
@@ -127,6 +128,19 @@ export interface DeploymentPlan {
   conflicts: DeploymentConflict[];
   warnings: string[];
   managedFiles: ManagedProjectFile[];
+  /**
+   * Story 46.15 — non-secret per-game env vars enabled plugins
+   * declared via `gatewayRuntimeConfigKeys`, paired with the
+   * values read from each plugin's per-game config slot. Empty
+   * map when no plugin declares any. Threaded into deploy.sh's
+   * `--set-env-vars` + the GHA workflow's `deploy-backend` env
+   * block. Conflicts are NOT resolved here; if two plugins
+   * declare the same envVarName (which they shouldn't given the
+   * naming convention enforces a SUGARMAGIC_<PLUGIN>_<KEY>
+   * prefix), the later one wins (insertion order from
+   * `pluginConfigurations` iteration).
+   */
+  gatewayRuntimeConfigEnv: Record<string, string>;
 }
 
 export interface DeploymentTargetDefinition {
@@ -1136,7 +1150,7 @@ async function handleSugarAgentGenerate(req, res) {
   const model =
     typeof body.model === "string" && body.model.trim()
       ? body.model.trim()
-      : resolveEnv("SUGARMAGIC_ANTHROPIC_MODEL", "claude-sonnet-4-5");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-sonnet-4-5");
   const systemPrompt =
     typeof body.systemPrompt === "string" ? body.systemPrompt.trim() : "";
   const userPrompt =
@@ -1208,7 +1222,7 @@ async function handleSugarAgentEmbed(req, res) {
   const model =
     typeof body.model === "string" && body.model.trim()
       ? body.model.trim()
-      : resolveEnv("SUGARMAGIC_OPENAI_EMBEDDING_MODEL", "text-embedding-3-small");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL", "text-embedding-3-small");
 
   if (!input) {
     sendJson(res, 400, {
@@ -1259,7 +1273,7 @@ async function handleSugarAgentSearch(req, res) {
   const vectorStoreId =
     typeof body.vectorStoreId === "string" && body.vectorStoreId.trim()
       ? body.vectorStoreId.trim()
-      : resolveEnv("SUGARMAGIC_OPENAI_VECTOR_STORE_ID");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID");
   const maxResults =
     typeof body.maxResults === "number" && Number.isFinite(body.maxResults)
       ? Math.max(1, Math.min(8, Math.floor(body.maxResults)))
@@ -1327,7 +1341,7 @@ async function handleSugarAgentLoreStatus(req, res) {
   }
 
   const lore = readLorePages();
-  const vectorStoreId = resolveEnv("SUGARMAGIC_OPENAI_VECTOR_STORE_ID") || null;
+  const vectorStoreId = resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID") || null;
   sendJson(res, 200, {
     ok: true,
     sourceKind: lore.source.sourceKind,
@@ -1426,7 +1440,7 @@ async function handleSugarAgentLoreIngest(req, res) {
   const vectorStoreId =
     typeof body.vectorStoreId === "string" && body.vectorStoreId.trim()
       ? body.vectorStoreId.trim()
-      : resolveEnv("SUGARMAGIC_OPENAI_VECTOR_STORE_ID");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID");
 
   if (!vectorStoreId) {
     sendJson(res, 400, {
@@ -1819,9 +1833,9 @@ function buildLocalManagedFiles(
         `SUGARMAGIC_LORE_SOURCE_LOCAL_PATH=${loreSource.localPath}`,
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL=${loreSource.repositoryUrl}`,
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_REF=${loreSource.repositoryRef}`,
-        `SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5`,
-        `SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
-        `SUGARMAGIC_OPENAI_VECTOR_STORE_ID=`,
+        `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
+        `SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
+        `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`,
         `ALLOW_ORIGIN=*`
       ])
     ),
@@ -1901,6 +1915,23 @@ function formatCloudRunServiceYaml(
   );
 }
 
+/**
+ * Story 46.15 — collects the union of `runtime-config` requirements
+ * from every plugin enabled on this plan. Used by
+ * `formatCloudRunDeployScript` to emit per-key `--set-env-vars`
+ * stanzas alongside `SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS`. Caller
+ * supplies the resolved values (from sugarmagic-root `.env` via the
+ * host endpoint); the generator just lays out the variable plumbing
+ * + the gcloud invocation shape.
+ */
+function collectRuntimeConfigEnvKeys(plan: DeploymentPlan): string[] {
+  // Story 46.15 reshape — keys come from the plan's pre-computed
+  // gatewayRuntimeConfigEnv (populated by planGameDeployment from
+  // enabled plugins' `gatewayRuntimeConfigKeys` + their per-game
+  // config slot values).
+  return Object.keys(plan.gatewayRuntimeConfigEnv).sort();
+}
+
 function formatCloudRunDeployScript(
   plan: DeploymentPlan,
   overrides: GoogleCloudRunDeploymentTargetOverrides
@@ -1910,6 +1941,18 @@ function formatCloudRunDeployScript(
     const serviceDir = `services/${toComposeServiceName(unit.serviceUnitId)}`;
     return { serviceName, serviceDir };
   });
+  // Story 46.15 — non-secret runtime env keys the gateway needs.
+  // Values are read from deploy.sh's own process env at runtime; the
+  // CI workflow (or local studio's host action) sets them before
+  // shelling deploy.sh, so the values reach Cloud Run via
+  // --set-env-vars without the script having to read .env directly.
+  const runtimeConfigKeys = collectRuntimeConfigEnvKeys(plan);
+  const runtimeConfigEnvLines = runtimeConfigKeys
+    .map(
+      (key) =>
+        `RUNTIME_CONFIG_PAIRS+=("${key}=\${${key}:-}")`
+    )
+    .join("\n");
   const serviceLines = services
     .map((service) => `  "${service.serviceName}|${service.serviceDir}"`)
     .join("\n");
@@ -2005,6 +2048,32 @@ SECRET_ARGS=(
 ${secretArgLines}
 )
 
+# Story 46.15 — non-secret runtime config env vars the gateway needs.
+# Each entry reads its value from deploy.sh's own process env at run
+# time (set by the GHA workflow or by the Studio host action that
+# spawned this script). Keys whose env value is empty are SKIPPED to
+# avoid setting EMPTY env on Cloud Run (which would shadow a future
+# default the gateway might bake in).
+RUNTIME_CONFIG_PAIRS=()
+${runtimeConfigEnvLines}
+RUNTIME_CONFIG_VARS=""
+for pair in "\${RUNTIME_CONFIG_PAIRS[@]}"; do
+  key="\${pair%%=*}"
+  value="\${pair#*=}"
+  if [ -n "\${value}" ]; then
+    # gcloud --set-env-vars="^@^k1=v1@k2=v2" uses @ as the kvpair
+    # delimiter (the ^@^ prefix sets it). Join entries with @ here
+    # so the parser sees distinct env vars; joining with , would
+    # collapse them into a single value (allowed-origins absorbs
+    # everything that follows the first comma).
+    if [ -z "\${RUNTIME_CONFIG_VARS}" ]; then
+      RUNTIME_CONFIG_VARS="\${pair}"
+    else
+      RUNTIME_CONFIG_VARS="\${RUNTIME_CONFIG_VARS}@\${pair}"
+    fi
+  fi
+done
+
 services=(
 ${serviceLines}
 )
@@ -2051,7 +2120,7 @@ for entry in "\${services[@]}"; do
     --max-instances=${overrides.maxInstances} \\
     ${ingressArg} \\
     ${allowUnauthArg} \\
-    --set-env-vars="^@^SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=\${ALLOWED_ORIGINS}" \\
+    --set-env-vars="^@^SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=\${ALLOWED_ORIGINS}\${RUNTIME_CONFIG_VARS:+@\${RUNTIME_CONFIG_VARS}}" \\
     "\${SECRET_ARGS[@]}"
 done
 `;
@@ -2152,9 +2221,9 @@ function buildGoogleCloudRunManagedFiles(
         `SUGARDEPLOY_WORKING_DIRECTORY=${overrides.workingDirectory}`,
         `SUGARMAGIC_GCP_PROJECT_ID=${overrides.projectId}`,
         `SUGARMAGIC_GCP_REGION=${overrides.region}`,
-        `SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5`,
-        `SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
-        `SUGARMAGIC_OPENAI_VECTOR_STORE_ID=`
+        `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
+        `SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
+        `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`
       ])
     ),
     asTextFile(
@@ -2628,6 +2697,42 @@ export function planGameDeployment(
     );
   }
 
+  // Story 46.15 reshape — walk enabled plugins, validate each
+  // gatewayRuntimeConfigKey, read the matching value from the
+  // plugin's per-game config slot. Empty / missing values are
+  // skipped so deploy.sh + workflow YAML carry only meaningful
+  // entries.
+  const gatewayRuntimeConfigEnv: Record<string, string> = {};
+  for (const configuration of gameProject.pluginConfigurations) {
+    if (!configuration.enabled) continue;
+    const definition = getDiscoveredPluginDefinition(configuration.pluginId);
+    const keys = definition?.gatewayRuntimeConfigKeys;
+    if (!keys || keys.length === 0) continue;
+    const config = (configuration.config ?? {}) as Record<string, unknown>;
+    for (const key of keys) {
+      const validation = validateGatewayRuntimeConfigKey(
+        configuration.pluginId,
+        key
+      );
+      if (!validation.ok) {
+        conflicts.push({
+          conflictId: `gateway-runtime-config:${configuration.pluginId}:${key.envVarName}`,
+          severity: "error",
+          kind: "unsupported-target",
+          message: validation.reason ?? "Invalid gatewayRuntimeConfigKey.",
+          ownerIds: [configuration.pluginId],
+          requirementIds: []
+        });
+        continue;
+      }
+      const rawValue = config[key.configKey];
+      if (typeof rawValue !== "string") continue;
+      const trimmed = rawValue.trim();
+      if (trimmed.length === 0) continue;
+      gatewayRuntimeConfigEnv[key.envVarName] = trimmed;
+    }
+  }
+
   const provisionalPlan: DeploymentPlan = {
     publishTargetId: getPublishSettings(gameProject).publishTargetId,
     backendDeploymentTargetId: targetId,
@@ -2647,7 +2752,8 @@ export function planGameDeployment(
     serviceUnits,
     conflicts,
     warnings,
-    managedFiles: []
+    managedFiles: [],
+    gatewayRuntimeConfigEnv
   };
 
   if (handler?.collectWarnings) {
@@ -2681,7 +2787,11 @@ export function planGameDeployment(
     // Story 46.10 — same derived list the tfvars + terraform output
     // emit; the workflow injects it directly so deploy.sh can skip
     // terraform entirely on the GHA runner.
-    deriveGatewayAllowedOrigins(provisionalPlan, gameProject)
+    deriveGatewayAllowedOrigins(provisionalPlan, gameProject),
+    // Story 46.15 reshape — runtime config env was computed
+    // earlier into the plan itself from enabled plugins'
+    // gatewayRuntimeConfigKeys + their per-game config slots.
+    provisionalPlan.gatewayRuntimeConfigEnv
   );
   // Story 46.10 follow-up — when Netlify (or any future frontend
   // target) is configured, regenerate the boot.json + published-web
