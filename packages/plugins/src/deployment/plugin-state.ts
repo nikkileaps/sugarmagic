@@ -49,10 +49,36 @@ export type DeployStateInput = {
   versionedProjectIdentifiers?: unknown;
 };
 
+// Story 46.10 — per-deploy history entry. One row per dispatched GHA
+// workflow run, appended on dispatch and updated as the run progresses
+// (status / conclusion / surfaced URLs). Keeps the daily-driver Deploy
+// workspace's history list off transient state — survives Studio
+// restarts, syncs through normal save/load flow.
+export interface DeployHistoryEntry {
+  /** GHA run database id (numeric). */
+  runId: number;
+  /** Direct link to the GHA run on github.com. */
+  runUrl: string;
+  /** Branch / tag / sha that was dispatched. */
+  ref: string;
+  /** HEAD sha at dispatch time (resolved on the dispatcher's machine). */
+  headSha: string;
+  /** ISO-8601 dispatch timestamp. */
+  dispatchedAt: string;
+  /** Latest known GHA status (queued | in_progress | completed). */
+  status: string;
+  /** GHA conclusion (success | failure | cancelled | null when in flight). */
+  conclusion: string | null;
+  /** Surfaced post-deploy URLs (populated after success when discoverable). */
+  netlifyDeployUrl?: string;
+  cloudRunRevisionUrl?: string;
+}
+
 interface DeployPluginConfig {
   settings: DeploymentSettings;
   versionedProjectIdentifiers: Record<string, string>;
   publishSettings: PublishTargetSettings;
+  deployHistory: DeployHistoryEntry[];
 }
 
 function findSugarDeployConfigRecord(
@@ -87,7 +113,15 @@ function readDeployPluginConfig(
     raw.publishSettings !== null
       ? (raw.publishSettings as PublishTargetSettings)
       : undefined;
-  return { settings, versionedProjectIdentifiers, publishSettings };
+  const deployHistory = Array.isArray(raw?.deployHistory)
+    ? (raw.deployHistory as DeployHistoryEntry[])
+    : undefined;
+  return {
+    settings,
+    versionedProjectIdentifiers,
+    publishSettings,
+    deployHistory
+  };
 }
 
 /**
@@ -255,6 +289,79 @@ export function buildUpdatePublishSettingsCommand(
  * project id, so we never overwrite a recorded suffix). Callers can
  * `if (cmd)` and skip dispatch when null.
  */
+/**
+ * Story 46.10 — read the per-project deploy history list. Newest-first
+ * ordering by insertion; the caller doesn't have to sort. Empty array
+ * when nothing has been dispatched yet.
+ */
+export function getDeployHistory(
+  gameProject: DeployStateInput
+): DeployHistoryEntry[] {
+  const fromSlot = readDeployPluginConfig(gameProject).deployHistory;
+  if (!fromSlot) return [];
+  // Defensive copy + drop entries with no runId (corrupt state guard).
+  return fromSlot.filter(
+    (entry): entry is DeployHistoryEntry =>
+      entry &&
+      typeof entry === "object" &&
+      typeof entry.runId === "number"
+  );
+}
+
+const MAX_DEPLOY_HISTORY_ENTRIES = 50;
+
+/**
+ * Story 46.10 — append a freshly dispatched run to history. Caps at
+ * MAX_DEPLOY_HISTORY_ENTRIES to keep the persisted slot bounded;
+ * older entries fall off the tail. Newest-first ordering.
+ */
+export function buildAppendDeployHistoryCommand(
+  gameProject: DeployStateInput,
+  entry: DeployHistoryEntry
+): UpdatePluginConfigurationCommand {
+  const current = ensureSugarDeployConfigRecord(gameProject);
+  const currentConfig = (current.config as Record<string, unknown>) ?? {};
+  const existing = getDeployHistory(gameProject);
+  // Idempotent on runId — if an entry for this run already exists,
+  // replace it instead of duplicating. Lets dispatch be retryable
+  // (e.g., the status-poll loop calling the same builder on resume).
+  const filtered = existing.filter((row) => row.runId !== entry.runId);
+  const next = [entry, ...filtered].slice(0, MAX_DEPLOY_HISTORY_ENTRIES);
+  return buildUpdateCommand({
+    ...current,
+    config: {
+      ...currentConfig,
+      deployHistory: next
+    }
+  });
+}
+
+/**
+ * Story 46.10 — patch a specific run's history entry with the latest
+ * status / conclusion / surfaced URLs. Returns null when no entry with
+ * the given runId exists (caller should `if (cmd)` and skip dispatch).
+ */
+export function buildUpdateDeployHistoryEntryCommand(
+  gameProject: DeployStateInput,
+  runId: number,
+  patch: Partial<Omit<DeployHistoryEntry, "runId">>
+): UpdatePluginConfigurationCommand | null {
+  const current = ensureSugarDeployConfigRecord(gameProject);
+  const currentConfig = (current.config as Record<string, unknown>) ?? {};
+  const existing = getDeployHistory(gameProject);
+  const index = existing.findIndex((row) => row.runId === runId);
+  if (index < 0) return null;
+  const next = existing.slice();
+  next[index] = { ...next[index], ...patch };
+  return buildUpdateCommand({
+    ...current,
+    config: {
+      ...currentConfig,
+      deployHistory: next
+    }
+  });
+}
+
 export function buildSetVersionedProjectIdentifierCommand(
   gameProject: DeployStateInput,
   majorVersion: number,

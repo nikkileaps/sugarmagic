@@ -22,10 +22,14 @@ import type { GoogleCloudRunDeploymentTargetOverrides } from "./overrides";
  * `TERRAFORM_RENAME_LEDGER` so existing games get a non-destructive `moved {}`
  * chain on regeneration.
  */
-// Story 46.9 — bumped 2 → 3 for the new `allowed_origins` variable +
+// Story 46.10 — bumped 3 → 4 for the new
+// `github_impersonates_runtime_token_creator` IAM binding (lets the
+// WIF principal call iam.serviceAccounts.getAccessToken on the
+// runtime SA so google-github-actions/auth@v2 can impersonate it).
+// Story 46.9 bumped 2 → 3 for the new `allowed_origins` variable +
 // output (CORS plumbing). No `moved {}` blocks needed; the change is
 // additive (new variable + new output, no resource renames).
-export const CLOUD_RUN_TEMPLATE_VERSION = 3;
+export const CLOUD_RUN_TEMPLATE_VERSION = 4;
 
 export interface TerraformResourceMove {
   from: string;
@@ -309,6 +313,18 @@ export function buildCloudRunTerraformMainFile(
     `resource "google_service_account_iam_member" "github_impersonates_runtime" {`,
     `  service_account_id = google_service_account.runtime.name`,
     `  role               = "roles/iam.serviceAccountUser"`,
+    `  member             = local.github_principal`,
+    `}`,
+    ``,
+    `# Story 46.10 — google-github-actions/auth@v2 with`,
+    `# \`service_account: <runtime SA>\` impersonates that SA by calling`,
+    `# iam.serviceAccounts.getAccessToken, which requires`,
+    `# roles/iam.serviceAccountTokenCreator (NOT just serviceAccountUser).`,
+    `# Without this binding the GHA job fails with`,
+    `# "Permission 'iam.serviceAccounts.getAccessToken' denied".`,
+    `resource "google_service_account_iam_member" "github_impersonates_runtime_token_creator" {`,
+    `  service_account_id = google_service_account.runtime.name`,
+    `  role               = "roles/iam.serviceAccountTokenCreator"`,
     `  member             = local.github_principal`,
     `}`,
     ``,

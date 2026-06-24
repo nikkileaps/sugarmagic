@@ -8,9 +8,9 @@
 // server-side contract (planGameDeployment is a sibling import now), and
 // reduces Studio's vite.config.ts to one plugin-agnostic registry line.
 
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { readFile, cp, mkdir, rm } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import type { Plugin as VitePlugin } from "vite";
 import {
   ensureBinaryOnPath,
@@ -2015,6 +2015,668 @@ function createSetupGithubWorkflowPlugin(): VitePlugin {
   };
 }
 
+// Story 46.10 — dispatch + status endpoints that hand the Deploy
+// workspace off to the generated GHA workflow instead of running
+// `gcloud run deploy` inline. Pre-flight refuses on dirty tree or
+// when HEAD isn't pushed — nikki's preference: deploys must come
+// from a pushed git ref, no auto-snapshot branches behind the back.
+
+interface DispatchDeployWorkflowRequest {
+  workingDirectory: unknown;
+  githubRepo: unknown;
+  ref: unknown;
+}
+
+interface GetDeployWorkflowStatusRequest {
+  githubRepo: unknown;
+  runId: unknown;
+}
+
+interface RerunFailedJobsRequest {
+  githubRepo: unknown;
+  runId: unknown;
+}
+
+async function readGitWorkflowDispatchPreflight(
+  workingDirectory: string,
+  githubRepo: string
+): Promise<{ ok: false; reason: string } | {
+  ok: true;
+  ref: string;
+  headSha: string;
+}> {
+  if (workingDirectory.length === 0) {
+    return { ok: false, reason: "workingDirectory is required." };
+  }
+  if (!existsSync(workingDirectory)) {
+    return {
+      ok: false,
+      reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+    };
+  }
+  if (githubRepo.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "GitHub Repository is not set on this project. Fill it in under Sources before deploying."
+    };
+  }
+  const gitMissing = await ensureGitOnPath();
+  if (gitMissing) return { ok: false, reason: gitMissing };
+  const ghMissing = await ensureGhCliOnPath();
+  if (ghMissing) return { ok: false, reason: ghMissing };
+
+  const insideWorkTree = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "--is-inside-work-tree"],
+    cwd: workingDirectory
+  });
+  if (
+    insideWorkTree.exitCode !== 0 ||
+    insideWorkTree.stdout.trim() !== "true"
+  ) {
+    return {
+      ok: false,
+      reason: `${workingDirectory} is not inside a git working tree.`
+    };
+  }
+
+  const porcelain = await runHostCommand({
+    command: "git",
+    args: ["status", "--porcelain"],
+    cwd: workingDirectory
+  });
+  if (porcelain.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `git status failed: ${porcelain.stderr.trim() || `exit code ${porcelain.exitCode}`}`
+    };
+  }
+  if (porcelain.stdout.trim().length > 0) {
+    return {
+      ok: false,
+      reason:
+        "Working tree is not clean. Commit (or stash) and push your changes before deploying — the GHA workflow only sees what's on the remote."
+    };
+  }
+
+  const headSha = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "HEAD"],
+    cwd: workingDirectory
+  });
+  if (headSha.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `git rev-parse HEAD failed: ${headSha.stderr.trim() || `exit code ${headSha.exitCode}`}`
+    };
+  }
+
+  const branchName = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "--abbrev-ref", "HEAD"],
+    cwd: workingDirectory
+  });
+  if (branchName.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `git rev-parse --abbrev-ref HEAD failed: ${branchName.stderr.trim() || `exit code ${branchName.exitCode}`}`
+    };
+  }
+
+  // Verify HEAD is pushed: ahead-count vs upstream must be zero. If
+  // there's no upstream configured, that's also a refuse — the
+  // workflow can't dispatch against an untracked branch.
+  const aheadCount = await runHostCommand({
+    command: "git",
+    args: ["rev-list", "--count", "@{u}..HEAD"],
+    cwd: workingDirectory
+  });
+  if (aheadCount.exitCode !== 0) {
+    return {
+      ok: false,
+      reason:
+        "Current branch has no upstream / can't compare with remote. Run `git push -u origin <branch>` and try again."
+    };
+  }
+  const ahead = Number.parseInt(aheadCount.stdout.trim(), 10);
+  if (!Number.isFinite(ahead) || ahead > 0) {
+    return {
+      ok: false,
+      reason: `Local branch is ${ahead || "?"} commit(s) ahead of remote. Push your changes (\`git push\`) before deploying — the GHA workflow only sees what's on the remote.`
+    };
+  }
+
+  return {
+    ok: true,
+    ref: branchName.stdout.trim(),
+    headSha: headSha.stdout.trim()
+  };
+}
+
+function createPreflightDeployWorkflowPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-preflight-deploy-workflow",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/preflight-deploy-workflow",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<DispatchDeployWorkflowRequest>;
+            const workingDirectory =
+              typeof body.workingDirectory === "string"
+                ? body.workingDirectory.trim()
+                : "";
+            const githubRepo =
+              typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+            const preflight = await readGitWorkflowDispatchPreflight(
+              workingDirectory,
+              githubRepo
+            );
+            if (!preflight.ok) {
+              sendJson(res, 200, { ok: false, reason: preflight.reason });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              ref: preflight.ref,
+              headSha: preflight.headSha
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+function createDispatchDeployWorkflowPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-dispatch-deploy-workflow",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/dispatch-deploy-workflow",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<DispatchDeployWorkflowRequest>;
+            const workingDirectory =
+              typeof body.workingDirectory === "string"
+                ? body.workingDirectory.trim()
+                : "";
+            const githubRepo =
+              typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+            const requestedRef =
+              typeof body.ref === "string" ? body.ref.trim() : "";
+
+            const preflight = await readGitWorkflowDispatchPreflight(
+              workingDirectory,
+              githubRepo
+            );
+            if (!preflight.ok) {
+              sendJson(res, 200, { ok: false, reason: preflight.reason });
+              return;
+            }
+            const ref = requestedRef || preflight.ref;
+            const headSha = preflight.headSha;
+
+            const dispatch = await runHostCommand({
+              command: "gh",
+              args: [
+                "workflow",
+                "run",
+                "sugardeploy-deploy.yml",
+                "--repo",
+                githubRepo,
+                "--ref",
+                ref
+              ],
+              cwd: workingDirectory
+            });
+            if (dispatch.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `gh workflow run failed (exit ${dispatch.exitCode}).`,
+                stdout: dispatch.stdout,
+                stderr: dispatch.stderr
+              });
+              return;
+            }
+
+            // gh's `workflow run` returns nothing useful about the run
+            // id — it just dispatches. Sleep briefly so GitHub
+            // registers the queued run, then list the most recent run
+            // of this workflow that matches our headSha.
+            await new Promise((resolveSleep) => setTimeout(resolveSleep, 2500));
+
+            const list = await runHostCommand({
+              command: "gh",
+              args: [
+                "run",
+                "list",
+                "--repo",
+                githubRepo,
+                "--workflow",
+                "sugardeploy-deploy.yml",
+                "--limit",
+                "5",
+                "--json",
+                "databaseId,url,headSha,headBranch,createdAt,status,conclusion,event"
+              ],
+              cwd: workingDirectory
+            });
+            if (list.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `gh run list failed (exit ${list.exitCode}). Dispatched, but couldn't resolve runId.`,
+                stdout: list.stdout,
+                stderr: list.stderr
+              });
+              return;
+            }
+            const runs = (() => {
+              try {
+                return JSON.parse(list.stdout) as Array<{
+                  databaseId: number;
+                  url: string;
+                  headSha: string;
+                  headBranch: string;
+                  createdAt: string;
+                  status: string;
+                  conclusion: string;
+                  event: string;
+                }>;
+              } catch {
+                return [];
+              }
+            })();
+            // Prefer the most recent run on our headSha; fall back to the
+            // newest workflow_dispatch run, then to the newest run.
+            const matchByShaAndDispatch = runs.find(
+              (entry) =>
+                entry.headSha === headSha && entry.event === "workflow_dispatch"
+            );
+            const matchByDispatch = runs.find(
+              (entry) => entry.event === "workflow_dispatch"
+            );
+            const fallback = runs[0];
+            const resolved =
+              matchByShaAndDispatch ?? matchByDispatch ?? fallback;
+            if (!resolved) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  "Dispatched, but no recent runs of sugardeploy-deploy.yml were found. Check the GitHub Actions tab.",
+                stdout: list.stdout
+              });
+              return;
+            }
+
+            sendJson(res, 200, {
+              ok: true,
+              runId: resolved.databaseId,
+              runUrl: resolved.url,
+              ref,
+              headSha
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+function createGetDeployWorkflowStatusPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-get-deploy-workflow-status",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/get-deploy-workflow-status",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<GetDeployWorkflowStatusRequest>;
+            const githubRepo =
+              typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+            const runId =
+              typeof body.runId === "number" || typeof body.runId === "string"
+                ? String(body.runId)
+                : "";
+            if (githubRepo.length === 0 || runId.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "githubRepo and runId are required."
+              });
+              return;
+            }
+            const ghMissing = await ensureGhCliOnPath();
+            if (ghMissing) {
+              sendJson(res, 412, { ok: false, reason: ghMissing });
+              return;
+            }
+            const view = await runHostCommand({
+              command: "gh",
+              args: [
+                "run",
+                "view",
+                runId,
+                "--repo",
+                githubRepo,
+                "--json",
+                "status,conclusion,url,jobs,headSha,headBranch,createdAt,updatedAt"
+              ],
+              cwd: process.cwd()
+            });
+            if (view.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `gh run view failed (exit ${view.exitCode}).`,
+                stdout: view.stdout,
+                stderr: view.stderr
+              });
+              return;
+            }
+            const parsed = (() => {
+              try {
+                return JSON.parse(view.stdout) as {
+                  status: string;
+                  conclusion: string | null;
+                  url: string;
+                  headSha: string;
+                  headBranch: string;
+                  createdAt: string;
+                  updatedAt: string;
+                  jobs: Array<{
+                    name: string;
+                    status: string;
+                    conclusion: string | null;
+                    url: string;
+                    startedAt: string | null;
+                    completedAt: string | null;
+                  }>;
+                };
+              } catch {
+                return null;
+              }
+            })();
+            if (!parsed) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: "Could not parse gh run view output.",
+                stdout: view.stdout
+              });
+              return;
+            }
+            // Story 46.10 — `gh run view --json conclusion` returns an
+            // empty string while a run is queued / in_progress and
+            // only fills in success / failure / cancelled at terminal.
+            // Normalise empty -> null so downstream UI can rely on
+            // `=== null` meaning "in flight" instead of having to
+            // remember the gh quirk.
+            const normalizeConclusion = (value: string | null) =>
+              typeof value === "string" && value.length > 0 ? value : null;
+            sendJson(res, 200, {
+              ok: true,
+              status: parsed.status,
+              conclusion: normalizeConclusion(parsed.conclusion),
+              url: parsed.url,
+              headSha: parsed.headSha,
+              headBranch: parsed.headBranch,
+              createdAt: parsed.createdAt,
+              updatedAt: parsed.updatedAt,
+              jobs: parsed.jobs.map((job) => ({
+                name: job.name,
+                status: job.status,
+                conclusion: normalizeConclusion(job.conclusion),
+                url: job.url,
+                startedAt: job.startedAt,
+                completedAt: job.completedAt
+              }))
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+// Story 46.10 follow-up — Build Frontend host action. Runs
+// `pnpm --filter @sugarmagic/target-web build` in the sugarmagic
+// monorepo root (the vite dev server's cwd) and copies the resulting
+// `targets/web/dist/` into the wordlark project at
+// `.sugarmagic/published-web/dist/`. Idempotent — replaces any
+// existing dist before copying.
+//
+// Body shape:
+//   { workingDirectory: string }   // wordlark root
+//
+// The sugarmagic root is whatever the vite dev server was launched
+// from (process.cwd()). That's a hard requirement: this endpoint
+// expects to be running INSIDE a sugarmagic monorepo checkout.
+interface BuildPublishedWebRequest {
+  workingDirectory: unknown;
+}
+
+function createBuildPublishedWebPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-build-published-web",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/build-published-web",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<BuildPublishedWebRequest>;
+            const workingDirectory =
+              typeof body.workingDirectory === "string"
+                ? body.workingDirectory.trim()
+                : "";
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (!existsSync(workingDirectory)) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+              });
+              return;
+            }
+
+            const sugarmagicRoot = process.cwd();
+            if (!existsSync(resolve(sugarmagicRoot, "pnpm-workspace.yaml"))) {
+              sendJson(res, 412, {
+                ok: false,
+                reason: `Studio dev server cwd (${sugarmagicRoot}) is not a sugarmagic monorepo root (no pnpm-workspace.yaml found). The Build Frontend action expects to run from inside a sugarmagic checkout.`
+              });
+              return;
+            }
+
+            const pnpmMissing = await ensureBinaryOnPath("pnpm", {
+              installHint:
+                "Install pnpm (https://pnpm.io/installation) and ensure it is on your PATH before running Build Frontend."
+            });
+            if (!pnpmMissing.available) {
+              sendJson(res, 412, {
+                ok: false,
+                reason: pnpmMissing.reason
+              });
+              return;
+            }
+
+            let aggregatedStdout = "";
+            let aggregatedStderr = "";
+
+            // 1. pnpm --filter @sugarmagic/target-web build
+            aggregatedStdout += `# pnpm --filter @sugarmagic/target-web build\n`;
+            const build = await runHostCommand({
+              command: "pnpm",
+              args: ["--filter", "@sugarmagic/target-web", "build"],
+              cwd: sugarmagicRoot
+            });
+            aggregatedStdout += build.stdout;
+            aggregatedStderr += build.stderr;
+            if (build.exitCode !== 0) {
+              sendJson(res, 500, {
+                ok: false,
+                reason: `pnpm build failed (exit ${build.exitCode}).`,
+                stdout: aggregatedStdout,
+                stderr: aggregatedStderr
+              });
+              return;
+            }
+
+            const distSource = resolve(sugarmagicRoot, "targets/web/dist");
+            if (!existsSync(distSource)) {
+              sendJson(res, 500, {
+                ok: false,
+                reason: `targets/web/dist was not produced at ${distSource}. The pnpm build reported success but the dist directory is missing.`,
+                stdout: aggregatedStdout,
+                stderr: aggregatedStderr
+              });
+              return;
+            }
+
+            // 2. Wipe + recreate the destination so removed bundles
+            // don't linger.
+            const destDir = resolve(
+              workingDirectory,
+              ".sugarmagic/published-web/dist"
+            );
+            aggregatedStdout += `\n# clean ${destDir}\n`;
+            try {
+              await rm(destDir, { recursive: true, force: true });
+            } catch (error) {
+              aggregatedStderr += `\nrm failed: ${error instanceof Error ? error.message : String(error)}\n`;
+            }
+            await mkdir(dirname(destDir), { recursive: true });
+
+            // 3. Recursive copy. node:fs/promises cp handles dirs +
+            // files end-to-end on Node 18+; preserves nothing fancy
+            // we need.
+            aggregatedStdout += `# cp -r ${distSource} ${destDir}\n`;
+            await cp(distSource, destDir, { recursive: true });
+
+            const stat = statSync(destDir);
+            sendJson(res, 200, {
+              ok: true,
+              message: `Built and copied target-web dist to ${destDir}.`,
+              stdout: aggregatedStdout,
+              stderr: aggregatedStderr,
+              destDir,
+              copiedAt: stat.mtime.toISOString()
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+function createRerunFailedJobsPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-rerun-failed-jobs",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/rerun-failed-jobs",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<RerunFailedJobsRequest>;
+            const githubRepo =
+              typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+            const runId =
+              typeof body.runId === "number" || typeof body.runId === "string"
+                ? String(body.runId)
+                : "";
+            if (githubRepo.length === 0 || runId.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "githubRepo and runId are required."
+              });
+              return;
+            }
+            const ghMissing = await ensureGhCliOnPath();
+            if (ghMissing) {
+              sendJson(res, 412, { ok: false, reason: ghMissing });
+              return;
+            }
+            const rerun = await runHostCommand({
+              command: "gh",
+              args: [
+                "run",
+                "rerun",
+                runId,
+                "--repo",
+                githubRepo,
+                "--failed"
+              ],
+              cwd: process.cwd()
+            });
+            if (rerun.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `gh run rerun --failed failed (exit ${rerun.exitCode}).`,
+                stdout: rerun.stdout,
+                stderr: rerun.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              message: "Re-running failed jobs.",
+              stdout: rerun.stdout
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
@@ -2023,6 +2685,11 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createSetSecretValuePlugin(),
     createSecretStatusPlugin(),
     createSetupGithubWorkflowPlugin(),
+    createBuildPublishedWebPlugin(),
+    createPreflightDeployWorkflowPlugin(),
+    createDispatchDeployWorkflowPlugin(),
+    createGetDeployWorkflowStatusPlugin(),
+    createRerunFailedJobsPlugin(),
     createTemplateVersionPlugin(),
     createCutMajorVersionPreparePlugin(),
     createCutMajorVersionTagPlugin(),

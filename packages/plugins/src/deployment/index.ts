@@ -58,6 +58,11 @@ import {
   SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION,
   WORKFLOW_RENAME_LEDGER
 } from "./github-workflow";
+import {
+  BOOT_JSON_SCHEMA_VERSION,
+  buildPublishedWebManagedFiles,
+  getPublishedWebDirectory
+} from "./published-web";
 
 export interface ManagedProjectFile {
   relativePath: string;
@@ -175,12 +180,16 @@ export {
 } from "./overrides";
 
 export {
+  buildAppendDeployHistoryCommand,
   buildSetVersionedProjectIdentifierCommand,
+  buildUpdateDeployHistoryEntryCommand,
   buildUpdateDeploymentSettingsCommand,
   buildUpdatePublishSettingsCommand,
+  getDeployHistory,
   getDeploymentSettings,
   getPublishSettings,
   getVersionedProjectIdentifiers,
+  type DeployHistoryEntry,
   type DeployStateInput
 } from "./plugin-state";
 
@@ -1950,13 +1959,29 @@ fi
 # Read authoritative deploy-time values from terraform outputs. Terraform
 # is the single source of truth for resolved resource names; we don't
 # duplicate them here.
-TF_OUTPUTS="$(terraform -chdir="\${TERRAFORM_DIR}" output -json)"
-ARTIFACT_REGISTRY_URL="$(echo "\${TF_OUTPUTS}" | jq -r '.artifact_registry_url.value')"
-RUNTIME_SA_EMAIL="$(echo "\${TF_OUTPUTS}" | jq -r '.runtime_sa_email.value')"
-# Story 46.9 — comma-join terraform's allowed_origins list (a JSON
-# array) for the gateway env var. Empty list -> empty string, which
-# the gateway treats as "no allowed origins" (browsers blocked).
-ALLOWED_ORIGINS="$(echo "\${TF_OUTPUTS}" | jq -r '.allowed_origins.value | join(",")')"
+# Story 46.10 — env-vars-or-terraform resolution. GHA can't run
+# terraform (no state in the runner; no terraform binary by default),
+# so the workflow injects the three values it knows directly:
+#   - SUGARMAGIC_RUNTIME_SA_EMAIL (already a repo VAR from 46.8)
+#   - SUGARMAGIC_ARTIFACT_REGISTRY_URL (derived at workflow-gen time)
+#   - SUGARMAGIC_ALLOWED_ORIGINS (derived at workflow-gen time)
+# When ANY are missing (local dev runs deploy.sh by hand), we fall
+# back to terraform output -json for the missing pieces.
+NEED_TF=0
+[ -z "\${SUGARMAGIC_RUNTIME_SA_EMAIL:-}" ] && NEED_TF=1
+[ -z "\${SUGARMAGIC_ARTIFACT_REGISTRY_URL:-}" ] && NEED_TF=1
+[ -z "\${SUGARMAGIC_ALLOWED_ORIGINS:-}" ] && NEED_TF=1
+TF_OUTPUTS=""
+if [ "\${NEED_TF}" = "1" ]; then
+  if ! command -v terraform >/dev/null 2>&1; then
+    echo "[sugardeploy] terraform is required to resolve deploy-time values when SUGARMAGIC_RUNTIME_SA_EMAIL / SUGARMAGIC_ARTIFACT_REGISTRY_URL / SUGARMAGIC_ALLOWED_ORIGINS are not all preset; install terraform or pre-set those env vars." >&2
+    exit 1
+  fi
+  TF_OUTPUTS="$(terraform -chdir="\${TERRAFORM_DIR}" output -json)"
+fi
+RUNTIME_SA_EMAIL="\${SUGARMAGIC_RUNTIME_SA_EMAIL:-$(echo "\${TF_OUTPUTS}" | jq -r '.runtime_sa_email.value')}"
+ARTIFACT_REGISTRY_URL="\${SUGARMAGIC_ARTIFACT_REGISTRY_URL:-$(echo "\${TF_OUTPUTS}" | jq -r '.artifact_registry_url.value')}"
+ALLOWED_ORIGINS="\${SUGARMAGIC_ALLOWED_ORIGINS:-$(echo "\${TF_OUTPUTS}" | jq -r '.allowed_origins.value | join(",")')}"
 
 if [ -z "\${ARTIFACT_REGISTRY_URL}" ] || [ "\${ARTIFACT_REGISTRY_URL}" = "null" ]; then
   echo "[sugardeploy] terraform output 'artifact_registry_url' is empty; did Setup Infra finish?" >&2
@@ -1993,10 +2018,23 @@ for entry in "\${services[@]}"; do
   IFS='|' read -r service_name service_dir <<<"\$entry"
   image="\${ARTIFACT_REGISTRY_URL}/\${service_name}:latest"
 
+  # Story 46.10 — local docker build + push instead of \`gcloud builds
+  # submit\`. The submit path uploads source to Cloud Build's implicit
+  # source bucket, which requires the caller (WIF principal on GHA) to
+  # hold \`serviceusage.services.use\` on the project. Building locally
+  # sidesteps the whole Cloud Build IAM surface: \`gcloud auth
+  # configure-docker\` already wired docker's credential helper to the
+  # active gcloud credentials, so \`docker push\` just works against
+  # Artifact Registry. Faster too (no upload step).
   echo "[sugardeploy] building \${service_name} from \${service_dir}"
-  gcloud builds submit "\${service_dir}" \\
-    --tag "\${image}" \\
-    --project "\${PROJECT_ID}"
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[sugardeploy] docker is required to build the gateway image; install Docker (https://docs.docker.com/get-docker/) and retry." >&2
+    exit 1
+  fi
+  docker build -t "\${image}" "\${service_dir}"
+
+  echo "[sugardeploy] pushing \${service_name} to \${ARTIFACT_REGISTRY_URL}"
+  docker push "\${image}"
 
   echo "[sugardeploy] deploying \${service_name}"
   gcloud run deploy "\${service_name}" \\
@@ -2286,6 +2324,13 @@ export {
   planNeedsGithubWorkflow,
   SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION,
   WORKFLOW_RENAME_LEDGER
+};
+
+// Story 46.10 follow-up — published-web boot.json generator surface.
+export {
+  BOOT_JSON_SCHEMA_VERSION,
+  buildPublishedWebManagedFiles,
+  getPublishedWebDirectory
 };
 
 function collectRequirementSources(
@@ -2622,14 +2667,27 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   // don't need a workflow (docker-compose handles its own lifecycle).
   const workflowFile = buildSugarDeployGithubWorkflowFile(
     provisionalPlan,
-    gameProject
+    gameProject,
+    // Story 46.10 — same derived list the tfvars + terraform output
+    // emit; the workflow injects it directly so deploy.sh can skip
+    // terraform entirely on the GHA runner.
+    deriveGatewayAllowedOrigins(provisionalPlan, gameProject)
   );
+  // Story 46.10 follow-up — when Netlify (or any future frontend
+  // target) is configured, regenerate the boot.json + published-web
+  // README into the per-game artifact root. The frontend bundle
+  // (target-web dist) lands in the same directory via a separate
+  // host action (`/__sugardeploy/build-published-web`), not on save.
+  const publishedWebFiles = frontendTargetId
+    ? buildPublishedWebManagedFiles(gameProject)
+    : [];
 
   return {
     ...provisionalPlan,
     managedFiles: [
       ...backendManagedFiles,
       ...frontendManagedFiles,
+      ...publishedWebFiles,
       ...(workflowFile ? [workflowFile] : [])
     ]
   };

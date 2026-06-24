@@ -18,10 +18,12 @@ import {
   TextInput,
   Tooltip
 } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DeploymentSettings } from "@sugarmagic/domain";
 import {
   buildSetVersionedProjectIdentifierCommand,
+  buildAppendDeployHistoryCommand,
+  buildUpdateDeployHistoryEntryCommand,
   buildUpdateDeploymentSettingsCommand,
   type DeploymentActionExecutionResult,
   type DeploymentActionKind,
@@ -29,6 +31,7 @@ import {
   GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
   collectSecretEnvBindings,
+  getDeployHistory,
   getDeploymentSettings,
   getPublishSettings,
   getVersionedProjectIdentifiers,
@@ -371,6 +374,64 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const setupGithubWorkflowOpen = setupGithubWorkflowState !== null;
   const setupGithubWorkflowBusy =
     setupGithubWorkflowState?.phase === "running";
+
+  // Story 46.10 follow-up — Build Frontend state machine.
+  type BuildPublishedWebState =
+    | null
+    | { phase: "running" }
+    | { phase: "success"; copiedAt: string; stdout: string }
+    | {
+        phase: "failed";
+        reason: string;
+        stdout: string;
+        stderr: string;
+      };
+  const [buildPublishedWebState, setBuildPublishedWebState] =
+    useState<BuildPublishedWebState>(null);
+
+  // Story 46.10 — Deploy-workflow dispatch + poll state machine.
+  // - preview: preflight is in flight (or has just returned); UI shows
+  //   the ref/sha the user will dispatch, plus the dirty-tree refuse
+  //   message when applicable
+  // - preview-failed: preflight refused (dirty tree, unpushed, etc.)
+  // - dispatching: POST is in flight
+  // - dispatch-failed: POST returned ok=false
+  // - tracking: dispatched OK; polling status. `runId` keys the
+  //   history entry the poll loop keeps fresh
+  type DeployWorkflowState =
+    | null
+    | { phase: "preview"; loading: boolean; ref?: string; headSha?: string; reason?: string }
+    | { phase: "preview-failed"; reason: string }
+    | { phase: "dispatching" }
+    | { phase: "dispatch-failed"; reason: string; stdout: string; stderr: string }
+    | {
+        phase: "tracking";
+        runId: number;
+        runUrl: string;
+        ref: string;
+        headSha: string;
+        status: string;
+        conclusion: string | null;
+        jobs: Array<{
+          name: string;
+          status: string;
+          conclusion: string | null;
+          url: string;
+        }>;
+      };
+  const [deployWorkflowState, setDeployWorkflowState] =
+    useState<DeployWorkflowState>(null);
+  const deployWorkflowOpen = deployWorkflowState !== null;
+  // Refs/timers for the poll loop — kept off React state so the
+  // 4-second tick doesn't churn the whole component tree.
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRunIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      activeRunIdRef.current = null;
+    };
+  }, []);
   const releaseModalOpen = releaseModalState !== null;
   const releaseModalBusy =
     releaseModalState?.phase === "checking" ||
@@ -420,6 +481,10 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const versionedProjectIdentifiers = gameProject
     ? getVersionedProjectIdentifiers(gameProject)
     : {};
+  // Story 46.10 — deploy history (per-GHA-run rows). Persisted in the
+  // SugarDeploy plugin slot; the live status of the in-flight row is
+  // patched as the poll loop ticks.
+  const deployHistory = gameProject ? getDeployHistory(gameProject) : [];
   const selectedTargetId =
     deploymentSettings?.backendDeploymentTargetId ?? null;
   // Story 46.6 — parallel frontend-target state. Frontend has no "local"
@@ -578,6 +643,250 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         [targetId]: current.targetOverrides[targetId] ?? {}
       }
     });
+  }
+
+  // Story 46.10 follow-up — Build Frontend trigger. Calls the host
+  // endpoint which runs the vite build in sugarmagic root and copies
+  // the dist into the wordlark project. No-op if the project's
+  // working directory isn't configured.
+  async function runBuildPublishedWeb() {
+    if (!gameProject || !deploymentSettings?.workingDirectory) return;
+    setBuildPublishedWebState({ phase: "running" });
+    try {
+      const response = await fetch("/__sugardeploy/build-published-web", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingDirectory: deploymentSettings.workingDirectory
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        reason?: string;
+        stdout?: string;
+        stderr?: string;
+        copiedAt?: string;
+      } | null;
+      if (!payload?.ok) {
+        setBuildPublishedWebState({
+          phase: "failed",
+          reason: payload?.reason ?? `HTTP ${response.status}`,
+          stdout: payload?.stdout ?? "",
+          stderr: payload?.stderr ?? ""
+        });
+        return;
+      }
+      setBuildPublishedWebState({
+        phase: "success",
+        copiedAt: payload.copiedAt ?? new Date().toISOString(),
+        stdout: payload.stdout ?? ""
+      });
+    } catch (error) {
+      setBuildPublishedWebState({
+        phase: "failed",
+        reason: error instanceof Error ? error.message : String(error),
+        stdout: "",
+        stderr: ""
+      });
+    }
+  }
+
+  // Story 46.10 — deploy-workflow handlers. The modal hits these in
+  // sequence: openDeployWorkflowModal() runs preflight, then on
+  // confirm dispatchDeployWorkflow() POSTs the dispatch endpoint and
+  // kicks off the status poll loop.
+  async function openDeployWorkflowModal() {
+    if (!gameProject || !deploymentSettings) return;
+    setDeployWorkflowState({ phase: "preview", loading: true });
+    try {
+      const response = await fetch("/__sugardeploy/preflight-deploy-workflow", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingDirectory: deploymentSettings.workingDirectory ?? "",
+          githubRepo: deploymentSettings.githubRepo ?? ""
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        ref?: string;
+        headSha?: string;
+        reason?: string;
+      } | null;
+      if (!payload?.ok) {
+        setDeployWorkflowState({
+          phase: "preview-failed",
+          reason: payload?.reason ?? `HTTP ${response.status}`
+        });
+        return;
+      }
+      setDeployWorkflowState({
+        phase: "preview",
+        loading: false,
+        ref: payload.ref,
+        headSha: payload.headSha
+      });
+    } catch (error) {
+      setDeployWorkflowState({
+        phase: "preview-failed",
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  async function dispatchDeployWorkflow() {
+    if (!gameProject || !deploymentSettings) return;
+    setDeployWorkflowState({ phase: "dispatching" });
+    try {
+      const response = await fetch("/__sugardeploy/dispatch-deploy-workflow", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingDirectory: deploymentSettings.workingDirectory ?? "",
+          githubRepo: deploymentSettings.githubRepo ?? ""
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        runId?: number;
+        runUrl?: string;
+        ref?: string;
+        headSha?: string;
+        reason?: string;
+        stdout?: string;
+        stderr?: string;
+      } | null;
+      if (!payload?.ok || typeof payload.runId !== "number") {
+        setDeployWorkflowState({
+          phase: "dispatch-failed",
+          reason: payload?.reason ?? `HTTP ${response.status}`,
+          stdout: payload?.stdout ?? "",
+          stderr: payload?.stderr ?? ""
+        });
+        return;
+      }
+      const runId = payload.runId;
+      const runUrl = payload.runUrl ?? "";
+      const ref = payload.ref ?? "";
+      const headSha = payload.headSha ?? "";
+      // Persist the dispatched run as a history entry. Subsequent
+      // poll cycles update status/conclusion via
+      // buildUpdateDeployHistoryEntryCommand below.
+      onCommand(
+        buildAppendDeployHistoryCommand(gameProject, {
+          runId,
+          runUrl,
+          ref,
+          headSha,
+          dispatchedAt: new Date().toISOString(),
+          status: "queued",
+          conclusion: null
+        })
+      );
+      setDeployWorkflowState({
+        phase: "tracking",
+        runId,
+        runUrl,
+        ref,
+        headSha,
+        status: "queued",
+        conclusion: null,
+        jobs: []
+      });
+      activeRunIdRef.current = runId;
+      void pollDeployWorkflowStatus(runId);
+    } catch (error) {
+      setDeployWorkflowState({
+        phase: "dispatch-failed",
+        reason: error instanceof Error ? error.message : String(error),
+        stdout: "",
+        stderr: ""
+      });
+    }
+  }
+
+  async function pollDeployWorkflowStatus(runId: number) {
+    if (!gameProject || !deploymentSettings) return;
+    if (activeRunIdRef.current !== runId) return;
+    try {
+      const response = await fetch("/__sugardeploy/get-deploy-workflow-status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          githubRepo: deploymentSettings.githubRepo ?? "",
+          runId
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        status?: string;
+        conclusion?: string | null;
+        url?: string;
+        jobs?: Array<{
+          name: string;
+          status: string;
+          conclusion: string | null;
+          url: string;
+        }>;
+      } | null;
+      if (payload?.ok) {
+        setDeployWorkflowState((prev) =>
+          prev?.phase === "tracking" && prev.runId === runId
+            ? {
+                ...prev,
+                status: payload.status ?? prev.status,
+                conclusion: payload.conclusion ?? null,
+                jobs: payload.jobs ?? prev.jobs
+              }
+            : prev
+        );
+        // Patch the history entry too — only when something
+        // observable changed, to avoid command churn.
+        const patchCmd = buildUpdateDeployHistoryEntryCommand(
+          gameProject,
+          runId,
+          {
+            status: payload.status ?? "queued",
+            conclusion: payload.conclusion ?? null
+          }
+        );
+        if (patchCmd) onCommand(patchCmd);
+        const terminal =
+          payload.status === "completed" || payload.conclusion !== null;
+        if (terminal) {
+          activeRunIdRef.current = null;
+          return;
+        }
+      }
+    } catch {
+      // Swallow transient poll errors; the next tick will retry.
+    }
+    if (activeRunIdRef.current !== runId) return;
+    pollTimerRef.current = setTimeout(
+      () => void pollDeployWorkflowStatus(runId),
+      4000
+    );
+  }
+
+  async function rerunFailedJobs(runId: number) {
+    if (!deploymentSettings) return;
+    try {
+      await fetch("/__sugardeploy/rerun-failed-jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          githubRepo: deploymentSettings.githubRepo ?? "",
+          runId
+        })
+      });
+      // Resume polling — gh kicks off a fresh run for the failed jobs,
+      // tracked under the same runId.
+      activeRunIdRef.current = runId;
+      void pollDeployWorkflowStatus(runId);
+    } catch {
+      // Silent — the user can re-trigger from the GitHub UI if it
+      // didn't take.
+    }
   }
 
   // Story 46.8 — submit handler for Setup GitHub Workflow. Pipes the
@@ -1900,13 +2209,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               </Group>
             ) : null}
 
+            {/* Story 46.10 — Deploy fires the GHA workflow rather
+                than running gcloud-run-deploy inline. Destroy still
+                runs gcloud inline (it tears down the live Cloud Run
+                service, no need to round-trip through GHA). */}
             {isDeploy ? (
               <Group>
                 <Button
                   size="xs"
-                  onClick={() => runAction("deploy")}
-                  loading={actionState.running && actionState.kind === "deploy"}
-                  disabled={actionsDisabled}
+                  onClick={() => openDeployWorkflowModal()}
+                  disabled={
+                    actionsDisabled ||
+                    deployWorkflowState?.phase === "preview" ||
+                    deployWorkflowState?.phase === "dispatching"
+                  }
+                  loading={
+                    deployWorkflowState?.phase === "preview" ||
+                    deployWorkflowState?.phase === "dispatching"
+                  }
                 >
                   Deploy
                 </Button>
@@ -1933,6 +2253,124 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             ) : null}
           </Stack>
         </Box>
+      ) : null}
+
+      {/* Story 46.10 — per-deploy history list. Deploy view only.
+          Newest-first; the in-flight row's status updates live via
+          the 4s poll loop. Each row links to the GHA run. */}
+      {isDeploy && gameProject ? (
+        <Stack gap="sm">
+          <Group gap="xs" align="baseline">
+            <Text fw={700} size="md">
+              Deploys
+            </Text>
+            <Text size="xs" c="var(--sm-color-subtext)">
+              — per-GHA-run history
+            </Text>
+          </Group>
+          {deployHistory.length === 0 ? (
+            <Text size="sm" c="var(--sm-color-overlay0)">
+              No deploys yet. Click Deploy above to dispatch the first one.
+            </Text>
+          ) : (
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Stack gap="xs">
+                {deployHistory.map((entry) => {
+                  const isActive =
+                    deployWorkflowState?.phase === "tracking" &&
+                    deployWorkflowState.runId === entry.runId;
+                  const status = isActive
+                    ? deployWorkflowState.status
+                    : entry.status;
+                  const conclusion = isActive
+                    ? deployWorkflowState.conclusion
+                    : entry.conclusion;
+                  const badgeColor =
+                    conclusion === "success"
+                      ? "green"
+                      : conclusion === null
+                        ? "blue"
+                        : "red";
+                  return (
+                    <Group
+                      key={entry.runId}
+                      justify="space-between"
+                      wrap="nowrap"
+                      align="center"
+                    >
+                      <Group gap="xs" wrap="nowrap" align="center">
+                        <Badge
+                          size="md"
+                          variant="light"
+                          color={badgeColor}
+                        >
+                          {conclusion ?? status}
+                        </Badge>
+                        <Code>{entry.ref}</Code>
+                        <Text size="xs" c="var(--sm-color-subtext)">
+                          {entry.headSha.slice(0, 7)} ·{" "}
+                          {new Date(entry.dispatchedAt).toLocaleString()}
+                        </Text>
+                      </Group>
+                      <Group gap="xs">
+                        <Button
+                          size="compact-xs"
+                          variant="subtle"
+                          onClick={() =>
+                            window.open(
+                              entry.runUrl,
+                              "_blank",
+                              "noopener,noreferrer"
+                            )
+                          }
+                        >
+                          View run
+                        </Button>
+                        {entry.netlifyDeployUrl ? (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            onClick={() =>
+                              window.open(
+                                entry.netlifyDeployUrl ?? "",
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
+                          >
+                            Netlify
+                          </Button>
+                        ) : null}
+                        {entry.cloudRunRevisionUrl ? (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            onClick={() =>
+                              window.open(
+                                entry.cloudRunRevisionUrl ?? "",
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
+                          >
+                            Cloud Run
+                          </Button>
+                        ) : null}
+                      </Group>
+                    </Group>
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
+        </Stack>
       ) : null}
 
       {/* Story 45.8.5 / 46.5 — Version panel. Release view only —
@@ -2556,6 +2994,84 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           </Stack>
         );
       })() : null}
+
+      {/* Story 46.10 follow-up — Build Frontend. Runs the
+          @sugarmagic/target-web vite build in the sugarmagic
+          monorepo cwd (where Studio is hosted) and copies dist/
+          into the wordlark project's .sugarmagic/published-web/dist/
+          so the deploy-frontend GHA job has a ready-to-ship bundle
+          to drop into Netlify alongside boot.json (regenerated on
+          save). Build step is out-of-band of save (multi-second
+          vite build) — click when target-web itself changes. */}
+      {isProvision && selectedFrontendTargetId === "netlify" ? (
+        <Stack gap="sm">
+          <Group gap="xs" align="baseline">
+            <Text fw={700} size="md">
+              Frontend Build
+            </Text>
+            <Text size="xs" c="var(--sm-color-subtext)">
+              — refresh the @sugarmagic/target-web bundle
+            </Text>
+          </Group>
+          <Box
+            p="sm"
+            style={{
+              border: "1px solid var(--sm-color-surface3)",
+              borderRadius: 8,
+              background: "var(--sm-color-surface1)"
+            }}
+          >
+            <Stack gap="sm">
+              <Text size="sm" c="var(--sm-color-subtext)">
+                Runs <Code>pnpm --filter @sugarmagic/target-web build</Code> in
+                the Studio's sugarmagic root and copies <Code>targets/web/dist</Code>{" "}
+                into <Code>.sugarmagic/published-web/dist</Code>. Re-run only
+                when the engine itself changes; boot.json (per-game data)
+                regenerates automatically on save.
+              </Text>
+              <Group>
+                <Button
+                  size="xs"
+                  variant="filled"
+                  color="grape"
+                  onClick={() => void runBuildPublishedWeb()}
+                  loading={buildPublishedWebState?.phase === "running"}
+                  disabled={
+                    !deploymentSettings?.workingDirectory ||
+                    buildPublishedWebState?.phase === "running"
+                  }
+                >
+                  Build Frontend
+                </Button>
+                {buildPublishedWebState?.phase === "success" ? (
+                  <Text size="xs" c="green">
+                    OK — {new Date(buildPublishedWebState.copiedAt).toLocaleTimeString()}
+                  </Text>
+                ) : buildPublishedWebState?.phase === "failed" ? (
+                  <Text size="xs" c="red">
+                    Failed (see log below)
+                  </Text>
+                ) : null}
+              </Group>
+              {buildPublishedWebState?.phase === "failed" ? (
+                <Alert color="red" variant="light" title="Build failed">
+                  <Stack gap="xs">
+                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                      {buildPublishedWebState.reason}
+                    </Text>
+                    {buildPublishedWebState.stdout.trim() ? (
+                      <Code block>{buildPublishedWebState.stdout}</Code>
+                    ) : null}
+                    {buildPublishedWebState.stderr.trim() ? (
+                      <Code block>{buildPublishedWebState.stderr}</Code>
+                    ) : null}
+                  </Stack>
+                </Alert>
+              ) : null}
+            </Stack>
+          </Box>
+        </Stack>
+      ) : null}
 
       {isProvision && selectedTargetId === "google-cloud-run" ? (
         <Stack gap="xs">
@@ -3285,6 +3801,280 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 }
               >
                 Try Again
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
+
+      {/* Story 46.10 — Deploy workflow modal. Preview (preflight) →
+          dispatch confirmation → tracking. The tracking pane stays open
+          while the GHA run is in flight; the user can close it and
+          continue working — the history list below the action bar keeps
+          rendering live status via the same poll loop. */}
+      <Modal
+        opened={deployWorkflowOpen}
+        onClose={() => {
+          if (
+            deployWorkflowState?.phase === "preview" &&
+            deployWorkflowState.loading
+          )
+            return;
+          if (deployWorkflowState?.phase === "dispatching") return;
+          setDeployWorkflowState(null);
+        }}
+        title="Deploy via GitHub Actions"
+        centered
+        size="lg"
+        closeOnClickOutside={
+          deployWorkflowState?.phase !== "dispatching" &&
+          !(
+            deployWorkflowState?.phase === "preview" &&
+            deployWorkflowState.loading
+          )
+        }
+        closeOnEscape={
+          deployWorkflowState?.phase !== "dispatching" &&
+          !(
+            deployWorkflowState?.phase === "preview" &&
+            deployWorkflowState.loading
+          )
+        }
+        withCloseButton={
+          deployWorkflowState?.phase !== "dispatching" &&
+          !(
+            deployWorkflowState?.phase === "preview" &&
+            deployWorkflowState.loading
+          )
+        }
+      >
+        {deployWorkflowState?.phase === "preview" &&
+        deployWorkflowState.loading ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">Running pre-flight checks...</Text>
+          </Group>
+        ) : null}
+
+        {deployWorkflowState?.phase === "preview" &&
+        !deployWorkflowState.loading ? (
+          <Stack>
+            <Text size="sm">
+              Will dispatch{" "}
+              <Code>sugardeploy-deploy.yml</Code> against this ref. The
+              workflow runs on GitHub Actions; it only sees what's on the
+              remote, so make sure your local changes are pushed.
+            </Text>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
+                    Ref:
+                  </Text>
+                  <Code>{deployWorkflowState.ref ?? "(unknown)"}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
+                    HEAD sha:
+                  </Text>
+                  <Code>
+                    {deployWorkflowState.headSha
+                      ? deployWorkflowState.headSha.slice(0, 12)
+                      : "(unknown)"}
+                  </Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
+                    Repo:
+                  </Text>
+                  <Code>{deploymentSettings?.githubRepo ?? "(none)"}</Code>
+                </Group>
+              </Stack>
+            </Box>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setDeployWorkflowState(null)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={() => void dispatchDeployWorkflow()}>
+                Dispatch Deploy
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {deployWorkflowState?.phase === "preview-failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Pre-flight failed">
+              <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                {deployWorkflowState.reason}
+              </Text>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setDeployWorkflowState(null)}>Close</Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {deployWorkflowState?.phase === "dispatching" ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">Dispatching workflow...</Text>
+          </Group>
+        ) : null}
+
+        {deployWorkflowState?.phase === "dispatch-failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Dispatch failed">
+              <Stack gap="xs">
+                <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                  {deployWorkflowState.reason}
+                </Text>
+                {deployWorkflowState.stdout.trim() ? (
+                  <Code block>{deployWorkflowState.stdout}</Code>
+                ) : null}
+                {deployWorkflowState.stderr.trim() ? (
+                  <Code block>{deployWorkflowState.stderr}</Code>
+                ) : null}
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setDeployWorkflowState(null)}
+              >
+                Close
+              </Button>
+              <Button onClick={() => void openDeployWorkflowModal()}>
+                Try Again
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {deployWorkflowState?.phase === "tracking" ? (
+          <Stack>
+            <Alert
+              color={
+                deployWorkflowState.conclusion === "success"
+                  ? "green"
+                  : deployWorkflowState.conclusion === null
+                    ? "blue"
+                    : "red"
+              }
+              variant="light"
+              title={
+                deployWorkflowState.conclusion === "success"
+                  ? "Deploy succeeded"
+                  : deployWorkflowState.conclusion === null
+                    ? `In progress (${deployWorkflowState.status})`
+                    : `Deploy ${deployWorkflowState.conclusion}`
+              }
+            >
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={80}>
+                    Ref:
+                  </Text>
+                  <Code>{deployWorkflowState.ref}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={80}>
+                    Sha:
+                  </Text>
+                  <Code>{deployWorkflowState.headSha.slice(0, 12)}</Code>
+                </Group>
+                <Group gap="xs">
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    onClick={() =>
+                      window.open(
+                        deployWorkflowState.runUrl,
+                        "_blank",
+                        "noopener,noreferrer"
+                      )
+                    }
+                  >
+                    View on GitHub
+                  </Button>
+                </Group>
+              </Stack>
+            </Alert>
+            <Stack gap={4}>
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                Jobs
+              </Text>
+              {deployWorkflowState.jobs.length === 0 ? (
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  Waiting for GitHub Actions to schedule the jobs...
+                </Text>
+              ) : (
+                deployWorkflowState.jobs.map((job) => (
+                  <Group
+                    key={job.url}
+                    justify="space-between"
+                    wrap="nowrap"
+                    align="center"
+                  >
+                    <Group gap="xs" wrap="nowrap">
+                      <Badge
+                        size="sm"
+                        variant="light"
+                        color={
+                          job.conclusion === "success"
+                            ? "green"
+                            : job.conclusion === null
+                              ? "blue"
+                              : "red"
+                        }
+                      >
+                        {job.conclusion ?? job.status}
+                      </Badge>
+                      <Text size="sm">{job.name}</Text>
+                    </Group>
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      onClick={() =>
+                        window.open(job.url, "_blank", "noopener,noreferrer")
+                      }
+                    >
+                      Logs
+                    </Button>
+                  </Group>
+                ))
+              )}
+            </Stack>
+            {deployWorkflowState.conclusion &&
+            deployWorkflowState.conclusion !== "success" ? (
+              <Group justify="flex-end">
+                <Button
+                  variant="filled"
+                  color="grape"
+                  onClick={() =>
+                    void rerunFailedJobs(deployWorkflowState.runId)
+                  }
+                >
+                  Re-run failed jobs
+                </Button>
+              </Group>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setDeployWorkflowState(null)}
+              >
+                Close
               </Button>
             </Group>
           </Stack>
