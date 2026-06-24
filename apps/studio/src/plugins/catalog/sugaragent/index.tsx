@@ -299,18 +299,21 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         </Text>
       </Stack>
 
-      <Alert color="blue" variant="light" title="Local .env">
+      <Alert color="blue" variant="light" title="Where SugarAgent config lives">
         <Stack gap={4}>
           <Text size="sm">
-            Set these in the Sugarmagic repo-root <Code>.env</Code> file (Studio reads env from the monorepo root via Vite's <Code>envDir</Code>):
+            The browser only talks to the gateway. API keys (Anthropic, OpenAI) live server-side in Secret Manager; the browser never sees them. Non-secret runtime config (vector store id, model ids) lives in this panel's <b>Gateway Runtime Config</b> section below and is committed with the game, then plumbed to Cloud Run on deploy.
+          </Text>
+          <Text size="sm">
+            The repo-root <Code>.env</Code> only needs to point Studio at its local gateway:
           </Text>
           <Code block>
-            {`# Optional proxy mode through SugarDeploy\nVITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787\n\n# Direct browser-to-vendor mode (still supported)\nVITE_SUGARMAGIC_ANTHROPIC_API_KEY=...\nVITE_SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5\nVITE_SUGARMAGIC_OPENAI_API_KEY=...\nVITE_SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small\nVITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID=...`}
+            {`VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787`}
           </Code>
         </Stack>
       </Alert>
 
-      <Stack gap="xs">
+<Stack gap="xs">
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Lore Source
         </Text>
