@@ -127,6 +127,11 @@ export function normalizeSugarAgentPluginConfig(
   environment?: RuntimePluginEnvironment
 ): SugarAgentPluginConfig {
   return {
+    // Story 46.14 — only the proxy URL crosses the plugin/runtime
+    // boundary. Anthropic / OpenAI API keys + model identifiers +
+    // vector store ids all live server-side now (Studio's vite
+    // middleware in dev; the deployed Cloud Run gateway in
+    // published-web). They never enter SugarAgentPluginConfig.
     proxyBaseUrl:
       readEnvValue(environment, "SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL") ||
       (typeof config?.proxyBaseUrl === "string" ? config.proxyBaseUrl.trim() : ""),
@@ -144,28 +149,6 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.loreRepositoryRef === "string" && config.loreRepositoryRef.trim()
         ? config.loreRepositoryRef.trim()
         : "main",
-    anthropicApiKey:
-      readEnvValue(environment, "SUGARMAGIC_ANTHROPIC_API_KEY") ||
-      (typeof config?.anthropicApiKey === "string" ? config.anthropicApiKey : ""),
-    anthropicModel:
-      readEnvValue(environment, "SUGARMAGIC_ANTHROPIC_MODEL") ||
-      (typeof config?.anthropicModel === "string" && config.anthropicModel.trim()
-        ? config.anthropicModel
-        : "claude-sonnet-4-5"),
-    openAiApiKey:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_API_KEY") ||
-      (typeof config?.openAiApiKey === "string" ? config.openAiApiKey : ""),
-    openAiEmbeddingModel:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_EMBEDDING_MODEL") ||
-      (typeof config?.openAiEmbeddingModel === "string" &&
-      config.openAiEmbeddingModel.trim()
-        ? config.openAiEmbeddingModel
-        : "text-embedding-3-small"),
-    openAiVectorStoreId:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_VECTOR_STORE_ID") ||
-      (typeof config?.openAiVectorStoreId === "string"
-        ? config.openAiVectorStoreId
-        : ""),
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -200,21 +183,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         environment
       );
 
-      const missing: string[] = [];
-      const usingProxy = config.proxyBaseUrl.trim().length > 0;
-      if (!usingProxy && !config.anthropicApiKey.trim()) {
-        missing.push("VITE_SUGARMAGIC_ANTHROPIC_API_KEY");
-      }
-      if (!usingProxy && !config.openAiApiKey.trim()) {
-        missing.push("VITE_SUGARMAGIC_OPENAI_API_KEY");
-      }
-      if (!usingProxy && !config.openAiVectorStoreId.trim()) {
-        missing.push("VITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID");
-      }
-      if (missing.length > 0) {
+      // Story 46.14 — SugarAgent always routes through a proxy. In
+      // Studio dev the proxy is vite's middleware; in published-web
+      // it's the deployed Cloud Run gateway. The runtime environment
+      // is responsible for providing SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL
+      // (auto-defaults to SUGARMAGIC_GATEWAY_URL when not overridden).
+      if (!config.proxyBaseUrl.trim()) {
         throw new Error(
-          `[sugaragent] SugarAgent plugin is enabled but required environment variables are missing: ${missing.join(", ")}. ` +
-          `Add them to the repo-root .env file (Vite reads envDir "../.." from apps/studio) and restart the dev server.`
+          `[sugaragent] SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL is not set. ` +
+          `SugarAgent always routes through a proxy (Studio's vite ` +
+          `middleware in dev; the deployed Cloud Run gateway in published- ` +
+          `web). In Studio: confirm the repo-root .env carries ` +
+          `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL or ` +
+          `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the ` +
+          `Build Frontend host action injected the gateway URL at build ` +
+          `time. See the plugin SDK docs for the proxy-URL contract.`
         );
       }
 
@@ -224,25 +207,9 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         init() {
           console.debug("[sugaragent] plugin:init", {
             pluginId: configuration.pluginId,
-            transport: usingProxy ? "gateway" : "direct",
-            gatewayBaseUrl: usingProxy ? config.proxyBaseUrl : null,
-            stageLoggingEnabled:
-              config.debugLogging || config.proxyBaseUrl.trim().length > 0,
-            llmBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.anthropicApiKey.trim()
-                ? "anthropic"
-                : "deterministic",
-            embeddingsBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.openAiApiKey.trim()
-                ? "openai"
-                : "none",
-            vectorStoreBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.openAiVectorStoreId.trim()
-                ? "openai-hosted"
-                : "none"
+            transport: "proxy",
+            proxyBaseUrl: config.proxyBaseUrl,
+            stageLoggingEnabled: config.debugLogging
           });
         },
         contributions: [

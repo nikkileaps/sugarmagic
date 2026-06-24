@@ -7,12 +7,10 @@ import type {
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
 import {
-  AnthropicClient,
-  AnthropicLLMProvider,
-  OpenAIEmbeddingsClient,
-  OpenAIEmbeddingsProvider,
-  OpenAIVectorStoreClient,
-  OpenAIVectorStoreProvider,
+  // Story 46.14 — only the gateway-routed providers remain; direct-API
+  // client classes were deleted because the browser-side SugarAgent
+  // never reads raw Anthropic / OpenAI keys (they live server-side, in
+  // Studio's vite middleware or the deployed Cloud Run gateway).
   SugarAgentGatewayEmbeddingsClient,
   SugarAgentGatewayEmbeddingsProvider,
   SugarAgentGatewayLLMClient,
@@ -189,66 +187,33 @@ function createTurnContext(
   };
 }
 
+/**
+ * Story 46.14 — always returns the gateway-routed providers. The
+ * direct-API fork (Anthropic / OpenAI clients constructed from raw
+ * API keys) is gone — browser-side SugarAgent must always proxy
+ * through Studio's vite middleware (dev) or the deployed Cloud Run
+ * gateway (published-web). Missing proxy URL is caught earlier in
+ * `createRuntimePlugin`'s init guard.
+ */
 function resolveProviders(
   config: SugarAgentPluginConfig,
-  logger: SugarAgentLogger
+  _logger: SugarAgentLogger
 ): {
   llmProvider: LLMProvider | null;
   embeddingsProvider: EmbeddingsProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
 } {
-  if (config.proxyBaseUrl.trim()) {
-    return {
-      llmProvider: new SugarAgentGatewayLLMProvider(
-        new SugarAgentGatewayLLMClient(config.proxyBaseUrl.trim())
-      ),
-      embeddingsProvider: new SugarAgentGatewayEmbeddingsProvider(
-        new SugarAgentGatewayEmbeddingsClient(config.proxyBaseUrl.trim())
-      ),
-      vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
-        new SugarAgentGatewayVectorStoreClient(config.proxyBaseUrl.trim())
-      )
-    };
-  }
-
-  const llmProvider =
-    config.anthropicApiKey.trim() && config.anthropicModel.trim()
-      ? new AnthropicLLMProvider(new AnthropicClient(config.anthropicApiKey.trim()))
-      : null;
-  if (!llmProvider) {
-    logger.logFallback("generation-provider", {
-      reason: "anthropic-not-configured"
-    });
-  }
-
-  const embeddingsProvider =
-    config.openAiApiKey.trim() && config.openAiEmbeddingModel.trim()
-      ? new OpenAIEmbeddingsProvider(
-          new OpenAIEmbeddingsClient(config.openAiApiKey.trim())
-        )
-      : null;
-  if (!embeddingsProvider) {
-    logger.logFallback("embeddings-provider", {
-      reason: "openai-embeddings-not-configured"
-    });
-  }
-
-  const vectorStoreProvider =
-    config.openAiApiKey.trim() && config.openAiVectorStoreId.trim()
-      ? new OpenAIVectorStoreProvider(
-          new OpenAIVectorStoreClient(config.openAiApiKey.trim())
-        )
-      : null;
-  if (!vectorStoreProvider) {
-    logger.logFallback("vector-store-provider", {
-      reason: "vector-store-not-configured"
-    });
-  }
-
+  const baseUrl = config.proxyBaseUrl.trim();
   return {
-    llmProvider,
-    embeddingsProvider,
-    vectorStoreProvider
+    llmProvider: new SugarAgentGatewayLLMProvider(
+      new SugarAgentGatewayLLMClient(baseUrl)
+    ),
+    embeddingsProvider: new SugarAgentGatewayEmbeddingsProvider(
+      new SugarAgentGatewayEmbeddingsClient(baseUrl)
+    ),
+    vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
+      new SugarAgentGatewayVectorStoreClient(baseUrl)
+    )
   };
 }
 

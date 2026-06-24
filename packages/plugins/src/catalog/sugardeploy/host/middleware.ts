@@ -2479,6 +2479,15 @@ function createGetDeployWorkflowStatusPlugin(): VitePlugin {
 // expects to be running INSIDE a sugarmagic monorepo checkout.
 interface BuildPublishedWebRequest {
   workingDirectory: unknown;
+  // Story 46.14 — Studio passes these so the host endpoint can
+  // resolve VITE_SUGARMAGIC_* env vars to inject into the build.
+  gcpProjectId?: unknown;
+  gcpRegion?: unknown;
+  serviceNamePrefix?: unknown;
+  gatewayAuthMode?: unknown;
+  majorVersion?: unknown;
+  versionedSlug?: unknown;
+  gameProjectSlug?: unknown;
 }
 
 function createBuildPublishedWebPlugin(): VitePlugin {
@@ -2513,13 +2522,23 @@ function createBuildPublishedWebPlugin(): VitePlugin {
               return;
             }
 
-            const sugarmagicRoot = process.cwd();
-            if (!existsSync(resolve(sugarmagicRoot, "pnpm-workspace.yaml"))) {
-              sendJson(res, 412, {
-                ok: false,
-                reason: `Studio dev server cwd (${sugarmagicRoot}) is not a sugarmagic monorepo root (no pnpm-workspace.yaml found). The Build Frontend action expects to run from inside a sugarmagic checkout.`
-              });
-              return;
+            // Studio's vite dev server's cwd is `apps/studio/`, not
+            // the monorepo root. Walk up until we find
+            // pnpm-workspace.yaml (the canonical monorepo-root marker).
+            // Stop at the filesystem root.
+            let sugarmagicRoot = process.cwd();
+            while (
+              !existsSync(resolve(sugarmagicRoot, "pnpm-workspace.yaml"))
+            ) {
+              const parent = dirname(sugarmagicRoot);
+              if (parent === sugarmagicRoot) {
+                sendJson(res, 412, {
+                  ok: false,
+                  reason: `Could not find a sugarmagic monorepo root from Studio's cwd (${process.cwd()}); no ancestor directory contains pnpm-workspace.yaml. The Build Frontend action expects to run with Studio launched from inside a sugarmagic checkout.`
+                });
+                return;
+              }
+              sugarmagicRoot = parent;
             }
 
             const pnpmMissing = await ensureBinaryOnPath("pnpm", {
@@ -2537,12 +2556,145 @@ function createBuildPublishedWebPlugin(): VitePlugin {
             let aggregatedStdout = "";
             let aggregatedStderr = "";
 
+            // Story 46.14 — resolve published-web build-time env
+            // vars and pipe them to the vite build subprocess. The
+            // gateway URL comes from `gcloud run services describe`
+            // (no Studio-side state about the deployed URL); the
+            // bearer token (when gatewayAuthMode = "bearer") comes
+            // from `gcloud secrets versions access`.
+            const gcpProjectId =
+              typeof body.gcpProjectId === "string"
+                ? body.gcpProjectId.trim()
+                : "";
+            const gcpRegion =
+              typeof body.gcpRegion === "string" ? body.gcpRegion.trim() : "";
+            const serviceNamePrefix =
+              typeof body.serviceNamePrefix === "string"
+                ? body.serviceNamePrefix.trim()
+                : "";
+            const gatewayAuthMode =
+              body.gatewayAuthMode === "bearer" ? "bearer" : "none";
+            const majorVersion =
+              typeof body.majorVersion === "number"
+                ? body.majorVersion
+                : typeof body.majorVersion === "string"
+                  ? Number.parseInt(body.majorVersion, 10) || 1
+                  : 1;
+            const versionedSlug =
+              typeof body.versionedSlug === "string"
+                ? body.versionedSlug.trim()
+                : "";
+
+            const buildEnv: Record<string, string> = {
+              VITE_SUGARMAGIC_GAME_MAJOR_VERSION: String(majorVersion),
+              VITE_SUGARMAGIC_VERSIONED_SLUG: versionedSlug,
+              VITE_SUGARMAGIC_BUILD_TIMESTAMP: new Date().toISOString()
+            };
+
+            if (gcpProjectId && gcpRegion && serviceNamePrefix) {
+              const gatewayServiceName = `${serviceNamePrefix}-sugarmagic-gateway`;
+              aggregatedStdout += `# gcloud run services describe ${gatewayServiceName}\n`;
+              const describe = await runHostCommand({
+                command: "gcloud",
+                args: [
+                  "run",
+                  "services",
+                  "describe",
+                  gatewayServiceName,
+                  "--project",
+                  gcpProjectId,
+                  "--region",
+                  gcpRegion,
+                  "--format",
+                  "value(status.url)"
+                ],
+                cwd: workingDirectory
+              });
+              aggregatedStdout += describe.stdout;
+              aggregatedStderr += describe.stderr;
+              if (describe.exitCode !== 0) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    `gcloud run services describe ${gatewayServiceName} failed (exit ${describe.exitCode}). ` +
+                    `Most common cause: gcloud auth token expired — run \`gcloud auth login\` in a terminal and retry. ` +
+                    `Without the gateway URL, target-web cannot bake SUGARMAGIC_GATEWAY_URL into the bundle and the deployed page will fail at plugin init.`,
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              const gatewayUrl = describe.stdout.trim();
+              if (!gatewayUrl) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    `gcloud run services describe ${gatewayServiceName} returned an empty URL. ` +
+                    `Is the Cloud Run service actually deployed? Run Deploy first if you haven't yet.`,
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              buildEnv.VITE_SUGARMAGIC_GATEWAY_URL = gatewayUrl;
+              // Plugin proxy URLs default to the gateway URL unless
+              // overridden. SugarAgent + Sugarlang both read the
+              // SUGARMAGIC_<plugin>_PROXY_BASE_URL key family.
+              buildEnv.VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL = gatewayUrl;
+              buildEnv.VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL = gatewayUrl;
+            }
+
+            if (gatewayAuthMode === "bearer" && gcpProjectId && serviceNamePrefix) {
+              const secretName = `${serviceNamePrefix}-gateway-shared-token`;
+              aggregatedStdout += `\n# gcloud secrets versions access latest --secret=${secretName}\n`;
+              const accessSecret = await runHostCommand({
+                command: "gcloud",
+                args: [
+                  "secrets",
+                  "versions",
+                  "access",
+                  "latest",
+                  "--secret",
+                  secretName,
+                  "--project",
+                  gcpProjectId
+                ],
+                cwd: workingDirectory
+              });
+              aggregatedStdout += `(redacted ${accessSecret.stdout.length} bytes)\n`;
+              aggregatedStderr += accessSecret.stderr;
+              if (accessSecret.exitCode !== 0) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    `gcloud secrets versions access latest --secret=${secretName} failed (exit ${accessSecret.exitCode}). ` +
+                    `Bearer mode is enabled but the gateway-shared-token couldn't be fetched. Check that the secret exists (Setup Infra creates it) and you have access (gcloud auth login).`,
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              const bearer = accessSecret.stdout.trim();
+              if (!bearer) {
+                sendJson(res, 500, {
+                  ok: false,
+                  reason:
+                    `Gateway shared token secret ${secretName} is empty. Set its value via the Secrets section in Provision and retry.`,
+                  stdout: aggregatedStdout,
+                  stderr: aggregatedStderr
+                });
+                return;
+              }
+              buildEnv.VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN = bearer;
+            }
+
             // 1. pnpm --filter @sugarmagic/target-web build
-            aggregatedStdout += `# pnpm --filter @sugarmagic/target-web build\n`;
+            aggregatedStdout += `\n# pnpm --filter @sugarmagic/target-web build (with VITE_SUGARMAGIC_* env injected)\n`;
             const build = await runHostCommand({
               command: "pnpm",
               args: ["--filter", "@sugarmagic/target-web", "build"],
-              cwd: sugarmagicRoot
+              cwd: sugarmagicRoot,
+              env: buildEnv
             });
             aggregatedStdout += build.stdout;
             aggregatedStderr += build.stderr;

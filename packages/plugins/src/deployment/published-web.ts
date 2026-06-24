@@ -25,7 +25,11 @@
  * the local-build-+-commit shape.
  */
 
-import type { GameProject } from "@sugarmagic/domain";
+import type {
+  ContentLibrarySnapshot,
+  GameProject,
+  RegionDocument
+} from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
 
 /**
@@ -59,29 +63,61 @@ function asTextFile(
 }
 
 /**
- * Build the boot.json payload from a game project. For now this
- * mirrors the slice of `WebRuntimeStartState` that lives on
- * `GameProject` directly; full content (regions + content library
- * snapshot) lands in a follow-up that wires the on-disk files into
- * the build path.
+ * Story 46.10 follow-up — the full payload target-web's runtime
+ * loads at boot. Mirrors `WebRuntimeStartState` from
+ * `@sugarmagic/target-web`. Studio's save call passes the live
+ * in-memory data; non-Studio callers (e.g. test fixtures) get
+ * empty defaults so the runtime can still load to a "no content"
+ * state instead of throwing on missing fields.
  */
-function buildBootJsonPayload(gameProject: GameProject): Record<string, unknown> {
+export interface PublishedWebRuntimeSnapshot {
+  regions: RegionDocument[];
+  contentLibrary: ContentLibrarySnapshot;
+  /** Maps asset references (typically asset definition ids) to URLs the
+   * deployed page can fetch them from. Stays empty for now — asset
+   * hosting itself is a separate follow-up. */
+  assetSources: Record<string, string>;
+  activeRegionId?: string | null;
+  activeEnvironmentId?: string | null;
+}
+
+function emptySnapshot(): PublishedWebRuntimeSnapshot {
+  return {
+    regions: [],
+    contentLibrary: { items: [] } as unknown as ContentLibrarySnapshot,
+    assetSources: {},
+    activeRegionId: null,
+    activeEnvironmentId: null
+  };
+}
+
+/**
+ * Build the boot.json payload from a game project + the in-memory
+ * runtime snapshot Studio has loaded. The shape mirrors
+ * `WebRuntimeStartState`; mismatches between this shape and the
+ * runtime's expectation are guarded by `BOOT_JSON_SCHEMA_VERSION`.
+ */
+function buildBootJsonPayload(
+  gameProject: GameProject,
+  snapshot: PublishedWebRuntimeSnapshot
+): Record<string, unknown> {
+  const activeRegionId =
+    snapshot.activeRegionId !== undefined
+      ? snapshot.activeRegionId
+      : snapshot.regions[0]?.identity.id ?? null;
   return {
     note: PUBLISHED_WEB_HEADER,
     schemaVersion: BOOT_JSON_SCHEMA_VERSION,
     gameProjectIdentity: gameProject.identity,
     gameProjectMajorVersion: gameProject.majorVersion,
-    // Per-runtime fields. Slots not yet baked from the on-disk
-    // sources default to empty so the deployed page can still boot
-    // and surface a clear "no content" state instead of throwing.
     installedPluginIds: gameProject.pluginConfigurations
       .filter((entry) => entry.enabled)
       .map((entry) => entry.pluginId),
     pluginConfigurations: gameProject.pluginConfigurations,
-    regions: [],
-    activeRegionId: null,
-    activeEnvironmentId: null,
-    contentLibrary: { items: [] },
+    regions: snapshot.regions,
+    activeRegionId,
+    activeEnvironmentId: snapshot.activeEnvironmentId ?? null,
+    contentLibrary: snapshot.contentLibrary,
     mechanics: gameProject.mechanics,
     playerDefinition: gameProject.playerDefinition,
     spellDefinitions: gameProject.spellDefinitions,
@@ -95,18 +131,19 @@ function buildBootJsonPayload(gameProject: GameProject): Record<string, unknown>
     uiTheme: gameProject.uiTheme,
     soundEventBindings: gameProject.soundEventBindings,
     audioMixer: gameProject.audioMixer,
-    assetSources: {}
+    assetSources: snapshot.assetSources
   };
 }
 
 export function buildPublishedWebManagedFiles(
-  gameProject: GameProject
+  gameProject: GameProject,
+  snapshot: PublishedWebRuntimeSnapshot = emptySnapshot()
 ): ManagedProjectFile[] {
   const files: ManagedProjectFile[] = [];
   files.push(
     asJsonFile(
       `${PUBLISHED_WEB_DIRECTORY}/boot.json`,
-      buildBootJsonPayload(gameProject)
+      buildBootJsonPayload(gameProject, snapshot)
     )
   );
   files.push(

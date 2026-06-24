@@ -358,7 +358,18 @@ async function performSave(
   const deploymentPlan =
     canRunSugarDeploy &&
     getDeploymentSettings(session.gameProject).backendDeploymentTargetId
-      ? planGameDeployment(session.gameProject)
+      ? planGameDeployment(session.gameProject, {
+          // Story 46.10 follow-up — feed the in-memory runtime
+          // snapshot through so boot.json bakes the real game
+          // content (regions + content library + asset sources)
+          // rather than the empty placeholders the deployment-only
+          // call site would produce.
+          regions: getAllRegions(session),
+          contentLibrary: session.contentLibrary,
+          assetSources: {},
+          activeRegionId: session.activeRegionId,
+          activeEnvironmentId: null
+        })
       : null;
 
   try {

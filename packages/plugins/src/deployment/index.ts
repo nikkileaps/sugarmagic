@@ -61,7 +61,8 @@ import {
 import {
   BOOT_JSON_SCHEMA_VERSION,
   buildPublishedWebManagedFiles,
-  getPublishedWebDirectory
+  getPublishedWebDirectory,
+  type PublishedWebRuntimeSnapshot
 } from "./published-web";
 
 export interface ManagedProjectFile {
@@ -2330,7 +2331,8 @@ export {
 export {
   BOOT_JSON_SCHEMA_VERSION,
   buildPublishedWebManagedFiles,
-  getPublishedWebDirectory
+  getPublishedWebDirectory,
+  type PublishedWebRuntimeSnapshot
 };
 
 function collectRequirementSources(
@@ -2505,7 +2507,15 @@ function buildServiceUnits(
   };
 }
 
-export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
+export function planGameDeployment(
+  gameProject: GameProject,
+  // Story 46.10 follow-up — Studio passes the live in-memory
+  // runtime snapshot (regions, content library, asset sources) so
+  // boot.json bakes the real game data. Non-Studio callers (test
+  // fixtures, the plugin's own UI-display call) omit it; the
+  // published-web generator falls back to empty defaults.
+  publishedWebSnapshot?: PublishedWebRuntimeSnapshot
+): DeploymentPlan {
   const { sources, conflicts: sourceConflicts } = collectRequirementSources(gameProject);
   const deploymentSettings = getDeploymentSettings(gameProject);
   const targetId = deploymentSettings.backendDeploymentTargetId;
@@ -2679,7 +2689,7 @@ export function planGameDeployment(gameProject: GameProject): DeploymentPlan {
   // (target-web dist) lands in the same directory via a separate
   // host action (`/__sugardeploy/build-published-web`), not on save.
   const publishedWebFiles = frontendTargetId
-    ? buildPublishedWebManagedFiles(gameProject)
+    ? buildPublishedWebManagedFiles(gameProject, publishedWebSnapshot)
     : [];
 
   return {

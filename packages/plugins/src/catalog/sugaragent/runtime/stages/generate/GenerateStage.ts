@@ -337,10 +337,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       };
     }
 
-    if (
-      this.llmProvider &&
-      (context.config.anthropicModel.trim() || canUseProxyDefaults)
-    ) {
+    // Story 46.14 — model selection lives server-side now (Studio
+    // vite middleware in dev; Cloud Run gateway in published-web).
+    // Browser-side code passes an empty model string; the gateway
+    // defaults it from its own configuration.
+    if (this.llmProvider && canUseProxyDefaults) {
       const promptContext: GeneratePromptContext = {
         mode: "agent",
         npcDisplayName,
@@ -380,7 +381,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         for (let attempt = 0; attempt <= GENERATE_RETRY_BACKOFF_MS.length; attempt += 1) {
           try {
             generatedText = await this.llmProvider.generateStructuredTurn({
-              model: context.config.anthropicModel,
+              // Empty model → gateway defaults it server-side.
+              model: "",
               systemPrompt,
               userPrompt,
               maxTokens: 300

@@ -41,16 +41,19 @@ export interface TurnStageResult<TOutput> {
 }
 
 export interface SugarAgentPluginConfig {
+  /**
+   * Story 46.14 — REQUIRED. Browser-side SugarAgent always routes
+   * through a proxy (Studio's vite middleware in dev; the deployed
+   * Cloud Run gateway in published-web). Third-party API keys
+   * (Anthropic / OpenAI) NEVER live in browser code; the proxy
+   * terminates the LLM calls server-side using keys from the local
+   * `.env` (Studio) or Secret Manager (Cloud Run).
+   */
   proxyBaseUrl: string;
   loreSourceKind: "local" | "github";
   loreLocalPath: string;
   loreRepositoryUrl: string;
   loreRepositoryRef: string;
-  anthropicApiKey: string;
-  anthropicModel: string;
-  openAiApiKey: string;
-  openAiEmbeddingModel: string;
-  openAiVectorStoreId: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */

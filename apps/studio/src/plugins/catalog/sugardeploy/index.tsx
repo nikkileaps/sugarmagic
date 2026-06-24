@@ -653,11 +653,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     if (!gameProject || !deploymentSettings?.workingDirectory) return;
     setBuildPublishedWebState({ phase: "running" });
     try {
+      // Story 46.14 — pass deploy context so the host endpoint can
+      // resolve VITE_SUGARMAGIC_GATEWAY_URL via gcloud and
+      // VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN via Secret Manager
+      // before invoking the vite build.
       const response = await fetch("/__sugardeploy/build-published-web", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          workingDirectory: deploymentSettings.workingDirectory
+          workingDirectory: deploymentSettings.workingDirectory,
+          gcpProjectId: cloudRunOverrides.projectId,
+          gcpRegion: cloudRunOverrides.region,
+          serviceNamePrefix: cloudRunOverrides.serviceNamePrefix,
+          gatewayAuthMode: cloudRunOverrides.gatewayAuthMode,
+          majorVersion: gameProject.majorVersion,
+          versionedSlug: cloudRunOverrides.serviceNamePrefix,
+          gameProjectSlug: gameProject.identity.id
         })
       });
       const payload = (await response.json().catch(() => null)) as {

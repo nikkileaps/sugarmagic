@@ -2937,6 +2937,10 @@ describe("plugin infrastructure", () => {
   });
 
   it("normalizes sugaragent plugin config with hosted backend defaults", () => {
+    // Story 46.14 — SugarAgentPluginConfig dropped the
+    // anthropicApiKey / openAiApiKey / *Model / vectorStoreId fields;
+    // those live server-side now (Studio vite middleware in dev,
+    // Cloud Run gateway in published-web).
     expect(
       normalizeSugarAgentPluginConfig({
         debugLogging: true,
@@ -2948,18 +2952,13 @@ describe("plugin infrastructure", () => {
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      anthropicApiKey: "",
-      anthropicModel: "claude-sonnet-4-5",
-      openAiApiKey: "",
-      openAiEmbeddingModel: "text-embedding-3-small",
-      openAiVectorStoreId: "",
       maxEvidenceResults: 8,
       debugLogging: true,
       tone: ""
     });
   });
 
-  it("normalizes sugaragent proxy mode from environment and does not require direct vendor keys", () => {
+  it("normalizes sugaragent proxy mode from environment (story 46.14)", () => {
     expect(
       normalizeSugarAgentPluginConfig(
         {},
@@ -2973,11 +2972,6 @@ describe("plugin infrastructure", () => {
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      anthropicApiKey: "",
-      anthropicModel: "claude-sonnet-4-5",
-      openAiApiKey: "",
-      openAiEmbeddingModel: "text-embedding-3-small",
-      openAiVectorStoreId: "",
       maxEvidenceResults: 4,
       debugLogging: false,
       tone: ""

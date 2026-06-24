@@ -1297,6 +1297,99 @@ epic that builds on the URL + version shape this epic
 establishes. The engine-versioning production design is Plan
 048.
 
+### 46.14 — Plugin runtime context: browser-only-talks-to-proxy
+
+Removes a security-anti-pattern vestige from gateway-routed
+plugins (SugarAgent, Sugarlang) and codifies the canonical
+runtime-context shape so future plugins follow the same pattern.
+
+**The vestige:** SugarAgent's runtime currently has a fallback
+"direct API" code path that reads `anthropicApiKey` /
+`openAiApiKey` / `openAiVectorStoreId` straight from
+`pluginRuntimeEnvironment` (sourced from `VITE_SUGARMAGIC_*` build-
+time env vars) and calls Anthropic / OpenAI directly from the
+browser. That works in Studio dev (where the keys live in the
+repo-root `.env`) but is wrong by design — in any deployed bundle
+those keys are extractable from the JS source by anyone hitting
+"view source." The path predates the gateway and should never
+have survived into the production-deploy plan. Sugarlang has the
+same vestige.
+
+**The correct shape:**
+
+- Browser code (Studio's preview AND the deployed published-web
+  bundle) NEVER holds raw third-party API keys. Period.
+- Browser code only knows two things per gateway-routed plugin:
+  - a **proxy base URL** (`SUGARMAGIC_<PLUGIN>_PROXY_BASE_URL`),
+  - and (when the plugin's gateway routes use bearer auth) a
+    **shared bearer token** (`SUGARMAGIC_GATEWAY_BEARER_TOKEN`).
+- The proxy sits between browser and third-party APIs and is the
+  ONLY thing that reads the real API keys. In Studio dev mode the
+  proxy is Studio's vite-dev-server middleware (the keys live in
+  the repo-root `.env`); in published-web mode the proxy is the
+  deployed Cloud Run gateway (the keys live in Secret Manager).
+  Same plugin runtime code in both modes; only the proxy URL
+  changes.
+
+**Deliverables:**
+
+- Delete `anthropicApiKey`, `openAiApiKey`, `openAiVectorStoreId`
+  from `SugarAgentPluginConfig`'s runtime shape. Delete the
+  `usingProxy` fork in SugarAgent's `createRuntimePlugin` — there
+  is only proxy mode now. The plugin requires
+  `SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL` to be set at runtime; if
+  it's missing, the plugin throws with a clear "wire up the
+  proxy URL — see plugin SDK docs" message instead of falling
+  through to a direct-call path.
+- Same treatment for Sugarlang: delete its direct-API fallback;
+  require `SUGARMAGIC_SUGARLANG_PROXY_BASE_URL`.
+- Verify (or add) Studio's vite-dev-server middleware routes for
+  the per-plugin proxy: when SugarAgent points at
+  `/__plugin-proxy/sugaragent/...`, Studio's middleware reads
+  the local `.env` keys and proxies the request to Anthropic /
+  OpenAI. This is the dev-time equivalent of the deployed Cloud
+  Run gateway.
+- Set the Studio-dev default for `SUGARMAGIC_<PLUGIN>_PROXY_BASE_URL`
+  to the local middleware path so plugins boot correctly in Studio
+  without any extra config. The `.env`'s `VITE_SUGARMAGIC_<PLUGIN>_PROXY_BASE_URL`
+  override stays available for connecting Studio to a remote
+  gateway during testing.
+- SugarDeploy's Build Frontend host action (the 46.10.5 stopgap)
+  resolves the published-web env vars at build time:
+  - `VITE_SUGARMAGIC_GATEWAY_URL` — via
+    `gcloud run services describe <gateway-service>
+    --format='value(status.url)'`.
+  - `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN` — via
+    `gcloud secrets versions access latest
+    --secret=<gateway-shared-token>` when `gatewayAuthMode ===
+    "bearer"`.
+  - `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL` and
+    `VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL` default to the
+    gateway URL when not otherwise set.
+  - `VITE_SUGARMAGIC_GIT_SHA` / `VITE_SUGARMAGIC_BUILD_TIMESTAMP`
+    — easy locals.
+- All of the above pass to `pnpm --filter @sugarmagic/target-web
+  build` as process env so Vite inlines them. Plan 048's GHCR
+  publish workflow does the SAME resolution (engine bundle still
+  needs the same env vars baked in; the engine doesn't change
+  per-deploy but its config does).
+- Plugin-SDK docs section explaining the canonical contract:
+  "If your plugin needs to call a third-party API, declare a
+  `<plugin>_PROXY_BASE_URL` runtime env key, ALWAYS route through
+  it, and NEVER read raw API keys in browser code. Studio's vite
+  middleware + the deployed gateway both terminate the proxy and
+  hold the real keys. Future plugins follow this pattern without
+  re-asking how."
+
+**Exit:** SugarAgent + Sugarlang both run cleanly in Studio
+preview (proxying through vite middleware to the local `.env`-
+sourced keys) and on a deployed Netlify URL (proxying through
+the Cloud Run gateway to the Secret Manager-sourced keys) with
+the SAME plugin runtime code. The deployed JS bundle, viewed by
+Source, has no Anthropic / OpenAI API keys in it. A test fixture
+that boots SugarAgent in published-web mode without a proxy URL
+configured fails cleanly with the documented error message.
+
 ## Builds On
 
 - [Plan 021: Deployment Plugin and Publish/Deploy Target Architecture Epic](/docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md)

@@ -243,15 +243,15 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           }
         : undefined;
 
-    if (
-      !skipRetrieval &&
-      this.embeddingsProvider &&
-      (context.config.openAiEmbeddingModel.trim() || canUseProxyDefaults)
-    ) {
+    // Story 46.14 — embedding model + vector store id live
+    // server-side (Studio vite middleware in dev; Cloud Run gateway
+    // in published-web). Browser-side code passes empty strings;
+    // the gateway defaults them from its own configuration.
+    if (!skipRetrieval && this.embeddingsProvider && canUseProxyDefaults) {
       try {
         semanticQueryFingerprint = await this.embeddingsProvider.embedQuery(
           searchQuery,
-          context.config.openAiEmbeddingModel
+          ""
         );
         usedEmbeddings = true;
       } catch {
@@ -261,11 +261,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       }
     }
 
-    if (
-      !skipRetrieval &&
-      this.vectorStoreProvider &&
-      (context.config.openAiVectorStoreId.trim() || canUseProxyDefaults)
-    ) {
+    if (!skipRetrieval && this.vectorStoreProvider && canUseProxyDefaults) {
       try {
         const reservedNpcLoreResults = shouldPinNpcLore ? 1 : 0;
         const primaryMaxResults = Math.max(
@@ -275,7 +271,8 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
 
         const searchLore = (filters?: OpenAIVectorStoreFilter) =>
           this.vectorStoreProvider!.searchLore({
-            vectorStoreId: context.config.openAiVectorStoreId,
+            // Empty vectorStoreId → gateway defaults it server-side.
+            vectorStoreId: "",
             query: searchQuery,
             maxResults: filters ? primaryMaxResults : context.config.maxEvidenceResults,
             filters
@@ -289,7 +286,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
 
         if (shouldPinNpcLore && npcLorePageId) {
           const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
-            vectorStoreId: context.config.openAiVectorStoreId,
+            vectorStoreId: "",
             query: searchQuery,
             maxResults: 1,
             filters: {
