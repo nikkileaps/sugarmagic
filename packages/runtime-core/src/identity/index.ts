@@ -101,3 +101,8 @@ export interface UserIdentityProvider {
     input: SignInWithPasswordInput
   ): Promise<User>;
 }
+
+export {
+  createAnonymousLocalIdentityProvider,
+  type AnonymousLocalIdentityProviderOptions
+} from "./anonymous-local";

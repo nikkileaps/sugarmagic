@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createAnonymousLocalIdentityProvider,
   createRuntimeBootModel,
   createRuntimePluginManager,
   GAME_SAVE_SCHEMA_VERSION,
@@ -17,6 +18,29 @@ import {
   type UserIdentityChangeListener,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
+
+function createFakeStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear: () => data.clear(),
+    getItem: (key) => data.get(key) ?? null,
+    key: (index) => Array.from(data.keys())[index] ?? null,
+    removeItem: (key) => {
+      data.delete(key);
+    },
+    setItem: (key, value) => {
+      data.set(key, value);
+    }
+  };
+}
+
+function createSequentialUuids(prefix: string): () => string {
+  let counter = 0;
+  return () => `${prefix}${counter++}`;
+}
 
 function makeStubUser(overrides: Partial<User> = {}): User {
   return {
@@ -488,5 +512,159 @@ describe("identity.provider + save.store contribution kinds", () => {
     expect(identityContributions[0].payload.provider).toBe(identityProvider);
     expect(saveContributions).toHaveLength(1);
     expect(saveContributions[0].payload.store).toBe(store);
+  });
+});
+
+// Story 47.3 — default AnonymousLocalIdentityProvider. The "no
+// plugin installed" identity path: persists a UUIDv4 + createdAt in
+// localStorage so the same browser carries the same identity across
+// reloads. Credentialed operations throw NotSupportedError pointing
+// at SugarProfile.
+describe("AnonymousLocalIdentityProvider", () => {
+  it("generates + persists a UUID on first currentUser call", () => {
+    const storage = createFakeStorage();
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: createSequentialUuids("uuid-"),
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const user = provider.currentUser();
+    expect(user).not.toBeNull();
+    expect(user?.userId).toBe("uuid-0");
+    expect(user?.isAnonymous).toBe(true);
+    expect(user?.email).toBeNull();
+    expect(user?.displayName).toBeNull();
+    expect(user?.createdAt).toBe("2026-06-25T00:00:00.000Z");
+    // Persistence: storage now carries the record under the canonical key.
+    const raw = storage.getItem("sugarmagic.anonymous-user-id");
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw ?? "{}")).toEqual({
+      version: 1,
+      userId: "uuid-0",
+      createdAt: "2026-06-25T00:00:00.000Z"
+    });
+  });
+
+  it("returns the same userId on successive currentUser calls", () => {
+    const storage = createFakeStorage();
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: createSequentialUuids("uuid-"),
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const first = provider.currentUser();
+    const second = provider.currentUser();
+    const third = provider.currentUser();
+    expect(first?.userId).toBe("uuid-0");
+    expect(second?.userId).toBe("uuid-0");
+    expect(third?.userId).toBe("uuid-0");
+  });
+
+  it("regenerates the UUID after the persisted record is cleared", () => {
+    const storage = createFakeStorage();
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: createSequentialUuids("uuid-"),
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const first = provider.currentUser();
+    expect(first?.userId).toBe("uuid-0");
+    storage.removeItem("sugarmagic.anonymous-user-id");
+    const second = provider.currentUser();
+    expect(second?.userId).toBe("uuid-1");
+  });
+
+  it("rejects credentialed sign-in with NotSupportedError naming SugarProfile", async () => {
+    const provider = createAnonymousLocalIdentityProvider({
+      storage: createFakeStorage(),
+      randomUuid: () => "uuid-fixed",
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    await expect(
+      provider.signIn({ email: "nikki@example.com", password: "x" })
+    ).rejects.toThrow(NotSupportedError);
+    try {
+      await provider.signIn({ email: "nikki@example.com", password: "x" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(NotSupportedError);
+      expect((error as NotSupportedError).suggestedPluginId).toBe("sugarprofile");
+      expect((error as Error).message).toMatch(/SugarProfile/);
+    }
+  });
+
+  it("rejects sign-up + link operations with NotSupportedError", async () => {
+    const provider = createAnonymousLocalIdentityProvider({
+      storage: createFakeStorage(),
+      randomUuid: () => "uuid-fixed",
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    await expect(
+      provider.signUp({ email: "nikki@example.com", password: "x" })
+    ).rejects.toThrow(NotSupportedError);
+    await expect(
+      provider.linkAnonymousToCredentials({
+        email: "nikki@example.com",
+        password: "x"
+      })
+    ).rejects.toThrow(NotSupportedError);
+  });
+
+  it("signOut is a no-op that resolves cleanly", async () => {
+    const storage = createFakeStorage();
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: createSequentialUuids("uuid-"),
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const before = provider.currentUser();
+    await expect(provider.signOut()).resolves.toBeUndefined();
+    const after = provider.currentUser();
+    // Signing out of the anonymous user does NOT clear the local
+    // identity; it's a no-op so UIs can call signOut() uniformly.
+    expect(after?.userId).toBe(before?.userId);
+  });
+
+  it("onChange registers + unregisters listeners cleanly", () => {
+    const provider = createAnonymousLocalIdentityProvider({
+      storage: createFakeStorage(),
+      randomUuid: () => "uuid-fixed",
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const listener = vi.fn();
+    const unsubscribe = provider.onChange(listener);
+    expect(typeof unsubscribe).toBe("function");
+    // Anonymous-local never fires onChange during the page lifetime,
+    // so the listener should not have been called yet.
+    expect(listener).not.toHaveBeenCalled();
+    // Calling unsubscribe multiple times is safe.
+    unsubscribe();
+    unsubscribe();
+  });
+
+  it("recovers from a corrupt persisted record by regenerating", () => {
+    const storage = createFakeStorage();
+    storage.setItem("sugarmagic.anonymous-user-id", "{not-json");
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: () => "uuid-recovered",
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const user = provider.currentUser();
+    expect(user?.userId).toBe("uuid-recovered");
+  });
+
+  it("recovers from a wrong-version persisted record by regenerating", () => {
+    const storage = createFakeStorage();
+    storage.setItem(
+      "sugarmagic.anonymous-user-id",
+      JSON.stringify({ version: 99, userId: "stale", createdAt: "irrelevant" })
+    );
+    const provider = createAnonymousLocalIdentityProvider({
+      storage,
+      randomUuid: () => "uuid-fresh",
+      nowIso: () => "2026-06-25T00:00:00.000Z"
+    });
+    const user = provider.currentUser();
+    expect(user?.userId).toBe("uuid-fresh");
   });
 });
