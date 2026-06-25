@@ -10,6 +10,7 @@ import { pluginDefinition as helloPluginDefinition } from "../catalog/hello";
 import { pluginDefinition as sugaragentPluginDefinition } from "../catalog/sugaragent";
 import { pluginDefinition as sugardeployPluginDefinition } from "../catalog/sugardeploy";
 import { pluginDefinition as sugarlangPluginDefinition } from "../catalog/sugarlang";
+import { pluginDefinition as sugarprofilePluginDefinition } from "../catalog/sugarprofile";
 export {
   createFirefliesRuntimePlugin,
   FIREFLIES_PLUGIN_ID,
@@ -26,6 +27,11 @@ export {
   normalizeSugarLangPluginConfig,
   resolveSugarLangTargetLanguage
 } from "../catalog/sugarlang";
+export {
+  SUGARPROFILE_PLUGIN_ID,
+  normalizeSugarProfilePluginConfig,
+  type SugarProfilePluginConfig
+} from "../catalog/sugarprofile";
 
 // Plugin registry — single source of truth for every plugin Sugarmagic
 // ships. Previously used `import.meta.glob("../catalog/*/index.ts")` for
@@ -42,7 +48,8 @@ const discoveredPlugins: DiscoveredPluginDefinition[] = [
   helloPluginDefinition,
   sugaragentPluginDefinition,
   sugardeployPluginDefinition,
-  sugarlangPluginDefinition
+  sugarlangPluginDefinition,
+  sugarprofilePluginDefinition
 ].sort((left, right) =>
   left.manifest.displayName.localeCompare(right.manifest.displayName)
 );

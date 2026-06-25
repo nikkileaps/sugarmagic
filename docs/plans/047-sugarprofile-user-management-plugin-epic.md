@@ -350,8 +350,8 @@ existing Plan 045 Set Value modal.
 Story dependency shape: `47.1 -> {47.2, 47.3, 47.4}`;
 `{47.3, 47.4} -> 47.5 -> 47.5.5`; `47.1 -> 47.6`;
 `47.6 -> {47.7, 47.8}`; `{47.6, 47.8} -> 47.9`;
-`{47.5, 47.9} -> 47.10`; everything -> `47.11`. Stories with no
-shared inputs can land in parallel.
+`{47.5, 47.9} -> 47.10 -> 47.10.5`; everything -> `47.11`.
+Stories with no shared inputs can land in parallel.
 
 ### 47.1 — Core contracts in `runtime-core`
 
@@ -984,6 +984,111 @@ gateway).
 and their progress survives both sign-in and a page reload. With
 SugarProfile NOT installed, the same play loop persists locally
 through IndexedDB.
+
+### 47.10.5 — Save-aware menu + default starting state
+
+Closes the UX gap autosave exposes: once 47.10 writes per-tick,
+every boot finds a save and hydrates the player at their last
+position. The current `start-new-game` UI action just dismisses
+the menu — it does NOT clear the save. So clicking "New Game"
+after autosave is in continues from the save instead of starting
+fresh. This story makes the menu save-aware and introduces an
+explicit starting-state record on the project so "New Game" has
+something clean to reset to.
+
+Three coupled pieces:
+
+**1. Default starting state on the project.**
+Add `defaultGameSavePayload: GameSavePayload | null` to
+`GameProject` (or to the SugarProfile plugin's per-game config
+slot — see Open Questions). Carries the cross-plugin player
+record a brand-new player gets: `currentRegionId`,
+`currentQuestId`, `playerPosition`. Replaces today's implicit
+composition (`boot.json.activeRegionId` + per-region
+`playerPresence`) with a single editable record. Until a project
+authors a value, the runtime falls back to the existing
+implicit defaults — no breaking change to existing games.
+
+**2. Revised UI actions.**
+
+- `start-new-game` semantics change: clear the active save store
+  for the current user, hydrate the runtime from
+  `defaultGameSavePayload` (or fall back to the implicit
+  composition), then dismiss the menu + unpause. The save-clearing
+  step is conditional on a confirmation in the menu (cancellable
+  modal) so a misclick doesn't nuke a player's progress.
+- `continue-game` (new) — loads the existing save and dismisses
+  the menu. No-op when no save exists (button is hidden in that
+  case; see #3).
+
+**3. Menu auto-detection + designable Continue button.**
+
+- A new menu-system runtime hook `isSaveAvailableForCurrentUser()`
+  exposes "is there a save in the active store under the current
+  user?" The default start menu's `start-new-game` and
+  `continue-game` buttons read this hook to decide what to show:
+  - Save present: "Continue" (primary), "New Game" (secondary,
+    confirms-then-resets).
+  - No save: "New Game" only (no Continue button).
+- The Continue button is a first-class menu element: authors style
+  + place it in the **Game UI workspace** just like the existing
+  New Game button. The auto-detect lives in the menu's
+  visibility rule (a declarative `showWhen` expression bound to
+  the save-presence hook), so no per-game JavaScript needed.
+
+**Files (new):**
+
+- `packages/runtime-core/src/ui-actions/save-aware-actions.ts`
+  - `registerSaveAwareUIActions(registry, options)` adds
+    `continue-game` + replaces `start-new-game` with the
+    save-clearing variant. Options carry `saveStore` + `userId
+    Provider` + a clear-confirmation callback the menu layer
+    surfaces as a modal.
+- `packages/runtime-core/src/ui-context/save-presence.ts`
+  - `useSavePresence(saveStore, userId)` — exposes a reactive
+    boolean to the menu system. Updates when the save store
+    changes (post-write, post-clear).
+
+**Files (modify):**
+
+- `packages/domain/src/game-project/index.ts` — adds the
+  `defaultGameSavePayload: GameSavePayload | null` field with a
+  null default. Migration: existing projects deserialize cleanly
+  with `null`; the new field is purely additive.
+- `targets/web/src/runtimeHost.ts` — the existing save-fallback
+  chain becomes:
+  `savedGame.payload -> defaultGameSavePayload -> implicit (boot.json + playerPresence)`.
+- `apps/studio/src/workspaces/GameUIWorkspace.tsx` (or the actual
+  Game UI workspace file) — surfaces the Continue button as a
+  selectable element; authors can style + position it. The
+  visibility rule is wired to `isSaveAvailableForCurrentUser`
+  declaratively.
+
+**Tests:**
+
+- `pickGameSavePayload(authoredImplicit, defaultPayload, save)`
+  pure helper: save wins -> defaultPayload wins -> authored
+  implicit wins, in that order.
+- `start-new-game` clears the save then dispatches the menu
+  dismiss.
+- `continue-game` no-ops when no save exists.
+- `useSavePresence` reactivity: writes flip it true, clears flip
+  it false.
+- Game UI workspace: rendering the start menu with a save present
+  shows both buttons; without a save shows only New Game.
+
+**Dependencies:** 47.10 (autosave is what makes the menu save-
+aware actually meaningful).
+
+**Exit:** in wordlark, the start menu shows "Continue" + "New
+Game" when a save exists for the current user; clicking Continue
+resumes at the saved region/position; clicking New Game prompts
+for confirmation then clears the save + spawns the player at the
+project's `defaultGameSavePayload` values (or, if unset, at the
+implicit boot.json + playerPresence defaults). A brand-new
+player (no save yet) sees only "New Game". The Continue button
+is editable in the Game UI workspace like any authored menu
+element — visibility binding is declarative, not per-game code.
 
 ### 47.11 — Documentation pass
 

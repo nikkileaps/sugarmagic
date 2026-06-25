@@ -61,6 +61,7 @@ import {
   SUGARAGENT_PLUGIN_ID,
   SUGARDEPLOY_PLUGIN_ID,
   SUGARLANG_PLUGIN_ID,
+  SUGARPROFILE_PLUGIN_ID,
   getDiscoveredPluginDefinition,
   listDiscoveredPluginDefinitions,
   listDeploymentTargets,
@@ -309,7 +310,8 @@ describe("plugin infrastructure", () => {
       HELLO_PLUGIN_ID,
       SUGARAGENT_PLUGIN_ID,
       SUGARDEPLOY_PLUGIN_ID,
-      SUGARLANG_PLUGIN_ID
+      SUGARLANG_PLUGIN_ID,
+      SUGARPROFILE_PLUGIN_ID
     ]);
   });
 
@@ -3542,6 +3544,78 @@ describe("plugin infrastructure", () => {
       definition?.gatewayRuntimeConfigKeys
     );
     expect(result.ok).toBe(true);
+  });
+
+  // Story 47.6 — SugarProfile plugin scaffold. Manifest + settings
+  // schema + gateway runtime config + deployment requirements all
+  // land; the Studio-side hand-written workspace override is
+  // verified separately via the Studio catalog test below.
+  it("SugarProfile is registered with the correct capability list", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    expect(definition?.manifest.displayName).toBe("SugarProfile");
+    expect(definition?.manifest.capabilityIds).toEqual([
+      "identity.provider",
+      "save.store",
+      "design.workspace"
+    ]);
+  });
+
+  it("SugarProfile's bundled plugin definition passes the settings schema validator", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    const result = validatePluginSettingsSchema(
+      SUGARPROFILE_PLUGIN_ID,
+      definition?.pluginSettingsSchema,
+      definition?.gatewayRuntimeConfigKeys
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("SugarProfile's gatewayRuntimeConfigKeys each pass the env-name + attestation validator", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    const keys = definition?.gatewayRuntimeConfigKeys ?? [];
+    expect(keys).toHaveLength(2);
+    for (const key of keys) {
+      const result = validateGatewayRuntimeConfigKey(
+        SUGARPROFILE_PLUGIN_ID,
+        key
+      );
+      expect(result.ok).toBe(true);
+    }
+    const envVarNames = keys.map((key) => key.envVarName);
+    expect(envVarNames).toEqual([
+      "SUGARMAGIC_SUGARPROFILE_SUPABASE_URL",
+      "SUGARMAGIC_SUGARPROFILE_SUPABASE_ANON_KEY"
+    ]);
+  });
+
+  it("SugarProfile declares the service-role + JWT secret deployment requirements", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
+    const secrets = (definition?.deploymentRequirements ?? []).filter(
+      (requirement) => requirement.kind === "secret"
+    );
+    const secretKeys = secrets.map((s) => s.secretKey).sort();
+    expect(secretKeys).toEqual([
+      "supabase-jwt-secret",
+      "supabase-service-role-key"
+    ]);
+    for (const secret of secrets) {
+      // Plan 047 §47.6 — both secrets are server-only + private. The
+      // gateway is the only consumer; they never enter the browser
+      // bundle or any Studio React state.
+      expect(secret.consumption).toBe("server-only");
+      expect(secret.exposure).toBe("private");
+    }
+  });
+
+  it("SugarProfile contributes a designWorkspace under its plugin id", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
+    const workspaces = definition?.shell?.designWorkspaces ?? [];
+    expect(workspaces).toHaveLength(1);
+    expect(workspaces[0]?.workspaceKind).toBe(SUGARPROFILE_PLUGIN_ID);
+    expect(workspaces[0]?.label).toBe("SugarProfile");
   });
 
   it("groupVersionTags skips orphan patches missing a v{N}.0.0 base", () => {
