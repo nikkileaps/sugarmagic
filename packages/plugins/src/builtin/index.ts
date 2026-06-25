@@ -32,6 +32,10 @@ export {
   normalizeSugarProfilePluginConfig,
   type SugarProfilePluginConfig
 } from "../catalog/sugarprofile";
+export {
+  createSupabaseIdentityProvider,
+  type SupabaseIdentityProviderOptions
+} from "../catalog/sugarprofile/runtime/identity";
 
 // Plugin registry — single source of truth for every plugin Sugarmagic
 // ships. Previously used `import.meta.glob("../catalog/*/index.ts")` for

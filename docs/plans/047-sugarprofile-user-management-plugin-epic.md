@@ -349,8 +349,8 @@ existing Plan 045 Set Value modal.
 
 Story dependency shape: `47.1 -> {47.2, 47.3, 47.4}`;
 `{47.3, 47.4} -> 47.5 -> 47.5.5`; `47.1 -> 47.6`;
-`47.6 -> {47.7, 47.8}`; `{47.6, 47.8} -> 47.9`;
-`{47.5, 47.9} -> 47.10 -> 47.10.5`; everything -> `47.11`.
+`47.6 -> 47.7 -> 47.7.5 -> 47.8 -> 47.9`;
+`{47.7.5, 47.8, 47.9} -> 47.10 -> 47.10.5`; everything -> `47.11`.
 Stories with no shared inputs can land in parallel.
 
 ### 47.1 — Core contracts in `runtime-core`
@@ -800,10 +800,122 @@ boot via the resolver from 47.2.
 
 **Dependencies:** 47.1, 47.2, 47.6.
 
-**Exit:** mocked-client unit tests pass. Bundling SugarProfile into
-wordlark + running the published-web bundle locally produces a real
-Supabase anonymous user on first page load (verified manually
-against a test Supabase project).
+**Exit:** mocked-client unit tests pass. The SugarProfile runtime
+factory contributes the `identity.provider` when both URL + anon
+key are non-empty in the per-game config; the runtime plugin
+manager exposes the contribution via `getContributions(
+"identity.provider")`. No boot-path wiring yet — App.tsx still
+uses the anonymous-local default. The end-to-end "deployed bundle
+uses the Supabase user" flow lands in 47.7.5.
+
+### 47.7.5 — Login UI + boot wiring + Netlify deploy verification
+
+Closes the auth loop end-to-end so a deployed game has real
+sign-up / sign-in / sign-out flows before any save-store work
+starts. After this story lands you can deploy wordlark to
+Netlify, sign up a test user via the Login modal, sign in, see
+the game start screen, click New Game, and be in the world. The
+save store (47.8) and autosave (47.10) come after; this story is
+just "auth + identity work end-to-end."
+
+**Surface A: resolver-driven boot path.**
+`targets/web/src/App.tsx` and `apps/studio/src/preview.ts` stop
+hardcoding the anonymous-local provider. Instead:
+
+1. Construct the anonymous-local + IndexedDB defaults as the
+   *fallback*.
+2. Pass the fallbacks into the host.
+3. The host's `start` path resolves the active provider via
+   `resolveActiveIdentityProvider(manager, fallbackProvider)`
+   from 47.2 AFTER the plugin manager finishes init, and uses
+   whichever provider wins for downstream consumers (HUD card,
+   UserContext, save load).
+4. Initial render blocks on `provider.currentUser()` settling.
+   Supabase's async bootstrap (getSession + signInAnonymously)
+   takes a tick or two; App.tsx renders a "Signing in..." overlay
+   until `currentUser` returns non-null OR `onChange` fires.
+
+**Surface B: Login modal contributed by SugarProfile.**
+A SugarProfile-owned React component, imported by App.tsx via a
+lazy dynamic import (so non-SugarProfile bundles never pull it
+in). Rendered when:
+
+- SugarProfile is enabled AND
+- `allowAnonymous: false` AND no current user, OR
+- The user clicks an explicit "Sign In" affordance (corner button)
+  while signed in anonymously, to upgrade.
+
+Modal contents:
+- Tab: Sign In (email + password + Sign In button).
+- Tab: Sign Up (email + password + Confirm password + Sign Up
+  button; Supabase email confirmation flow per project settings).
+- Anonymous-to-credentialed link path: when the user is currently
+  anonymous and signs in via email/password, call
+  `linkAnonymousToCredentials` instead of `signIn` so the
+  underlying userId is preserved.
+- Errors surface inline (Supabase auth errors are user-actionable:
+  "Invalid login credentials", "User already registered", etc.).
+
+**Surface C: Sign-out affordance.**
+A small "Signed in as <email>" pill in the corner with a Sign Out
+button when the user is credentialed. Calls `provider.signOut()`,
+then either re-renders the Login modal (when allowAnonymous=false)
+or transitions back to a fresh anonymous user (when allowAnonymous
+is on).
+
+**Files (new):**
+
+- `packages/plugins/src/catalog/sugarprofile/ui/LoginModal.tsx`
+  - Mantine-styled email/password form with Sign In / Sign Up
+    tabs. Imports the runtime's resolved identity provider via a
+    prop; the modal itself is presentational.
+  - Exports `LoginModal({ provider, onClose, mode? })`.
+- `packages/plugins/src/catalog/sugarprofile/ui/SignedInBadge.tsx`
+  - "Signed in as <email> [Sign Out]" pill component.
+- `targets/web/src/identity/useResolvedIdentity.ts` (or wherever
+  fits) — React hook that:
+  - Returns `{ provider, user, isLoading, signedIn }`.
+  - Subscribes to `provider.onChange` so React re-renders on auth
+    state flips.
+- A Studio E2E recipe doc — quick walkthrough of "configure
+  SugarProfile, redeploy, sign up + sign in" so future-you (or me)
+  doesn't have to re-derive it.
+
+**Files (modify):**
+
+- `targets/web/src/App.tsx`
+  - Resolver-driven boot: construct fallback, pass into host,
+    pull active provider from host after start.
+  - "Signing in..." overlay during async bootstrap.
+  - Mount LoginModal when SugarProfile is enabled + sign-in is
+    required.
+  - Mount SignedInBadge corner pill when user is credentialed.
+- `apps/studio/src/preview.ts` — same resolver wiring.
+- `targets/web/src/runtimeHost.ts` — host's `start` accepts the
+  fallback providers, resolves active via 47.2's helpers AFTER
+  plugin init, uses the resolved provider for the Session HUD
+  card's `currentUser` + UserContext propagation.
+
+**Tests:**
+
+- Unit: `useResolvedIdentity` returns the fallback when no plugin
+  contributes; the contributing provider when one is present.
+- Unit: LoginModal's Sign In tab calls `provider.signIn` with the
+  form input; Sign Up tab calls `provider.signUp`; errors render.
+- Integration (mocked Supabase client): user enters credentials,
+  clicks Sign In, modal closes, currentUser flips to credentialed.
+
+**Dependencies:** 47.5 (boot path scaffold), 47.6 (SugarProfile
+scaffold), 47.7 (SupabaseIdentityProvider).
+
+**Exit:** deploy wordlark to Netlify with a real Supabase project
+configured in SugarProfile's settings. Open the deployed URL.
+With `allowAnonymous: false`, the LoginModal renders on first
+load. Sign up a test user (Supabase dashboard shows the new auth
+entry). Sign in. Game start menu renders, "Signed in as
+<email>" pill shows in the corner. Click New Game; you're in
+the world (the existing menu wiring still works because no save
+load is involved). Sign Out returns to the LoginModal.
 
 ### 47.8 — `SupabaseGameSaveStore` + Postgres migration
 
@@ -930,43 +1042,38 @@ SugarAgent's `/api/sugaragent/generate` rejects unauthenticated
 requests with 401 + accepts a request carrying a valid signed-in
 user's JWT.
 
-### 47.10 — Published-web login + autosave loop
+### 47.10 — Autosave loop + migrate-local-to-cloud on sign-in
 
-Wire SugarProfile's login UI into the published-web bundle + add
-the autosave loop. On sign-in, the anonymous IndexedDB save
-migrates up to Supabase.
+Adds the per-tick save-writing loop on top of the existing read
+path (47.5) so a player's progress persists between sessions.
+When a player signs in mid-game (the LoginModal lands in 47.7.5),
+their anonymous IndexedDB save migrates up to Supabase under the
+new credentialed userId so they don't lose progress.
 
 **Files (new):**
 
-- `packages/plugins/src/catalog/sugarprofile/ui/LoginModal.tsx`
-  - Mantine-styled email/password form. Stays a plugin-contributed
-    component (not Studio core) so the bundle pulls it only when
-    SugarProfile is enabled.
 - `targets/web/src/save/useAutosave.ts`
   - `useAutosave(payload: GameSavePayload, store: GameSaveStore,
     userId: string)` hook. Debounces writes 500ms. Bails on
-    re-renders where `payload` is reference-equal to the last write.
+    re-renders where `payload` is reference-equal to the last
+    write.
   - Tracks `lastWriteState` so it can skip no-op writes after a
     server-confirmed save round-trips back.
+- `targets/web/src/save/migrate-local-to-cloud.ts`
+  - `migrateLocalSaveToCloud(localStore, cloudStore, user)` —
+    reads the local IndexedDB save, writes it to the cloud store
+    under the new credentialed userId, clears the local copy on
+    successful write.
 
 **Files (modify):**
 
 - `targets/web/src/App.tsx`
-  - Mounts `<LoginModal>` from SugarProfile when (a) SugarProfile is
-    enabled AND (b) the current user is anonymous. Modal is corner-
-    button-triggered, not blocking.
   - Wires `useAutosave(currentGameSavePayload, activeSaveStore,
-    currentUser.userId)`.
-  - On sign-in: read the local IndexedDB save (if any), write it to
-    the Supabase store under the new credentialed userId via a
-    `migrateLocalSaveToCloud(localStore, cloudStore, user)` helper,
-    then clear the local copy.
-- `packages/plugins/src/catalog/sugarprofile/index.ts`
-  - Contributes the `LoginModal` component via a new UI
-    contribution kind OR (simpler) exposes it on the plugin's
-    runtime instance for the bundle to import lazily.
-  - Add a UI contribution kind if needed; mirror existing
-    contribution patterns.
+    currentUser.userId)` against the resolved save store.
+  - On sign-in (subscribe to `provider.onChange`, trigger when
+    isAnonymous flips false): run
+    `migrateLocalSaveToCloud(...)` once and reset the autosave
+    cursor so the cloud write loop takes over cleanly.
 
 **Tests:**
 
@@ -977,13 +1084,14 @@ migrates up to Supabase.
   manual): open game, move player, close tab, reopen, resume.
   Repeat signed-in to verify cloud round-trip.
 
-**Dependencies:** 47.5 (boot path), 47.9 (JWT middleware for the
-gateway).
+**Dependencies:** 47.7.5 (resolver + login UI), 47.8 (save store
+contribution), 47.9 (gateway JWT so SugarAgent calls can use the
+signed-in user's bearer if needed).
 
-**Exit:** a player can play wordlark anonymously, sign in mid-game,
-and their progress survives both sign-in and a page reload. With
-SugarProfile NOT installed, the same play loop persists locally
-through IndexedDB.
+**Exit:** a player can play wordlark anonymously, sign in mid-
+game, and their progress survives both sign-in and a page reload.
+With SugarProfile NOT installed, the same play loop persists
+locally through IndexedDB.
 
 ### 47.10.5 — Save-aware menu + default starting state
 

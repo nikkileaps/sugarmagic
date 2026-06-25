@@ -1270,3 +1270,400 @@ describe("truncateIdForChip", () => {
     expect(truncateIdForChip("verylongprefix-tail")).toBe("verylong...");
   });
 });
+
+// Story 47.7 — SupabaseIdentityProvider. Wraps supabase.auth and
+// satisfies the runtime-core UserIdentityProvider contract. Tested
+// via a hand-rolled mock client because the real supabase-js client
+// requires a live Supabase project and network. The mock surfaces
+// only the auth methods the provider touches; everything else is
+// intentionally undefined.
+describe("createSupabaseIdentityProvider", () => {
+  interface MockSession {
+    user: MockSupabaseUser;
+  }
+
+  interface MockSupabaseUser {
+    id: string;
+    email: string | null;
+    is_anonymous: boolean;
+    created_at: string;
+    user_metadata?: Record<string, unknown>;
+  }
+
+  type AuthChangeCallback = (event: string, session: MockSession | null) => void;
+
+  interface MockClient {
+    auth: {
+      getSession: () => Promise<{
+        data: { session: MockSession | null };
+        error: null;
+      }>;
+      signInAnonymously: () => Promise<{
+        data: { user: MockSupabaseUser | null; session: MockSession | null };
+        error: null;
+      }>;
+      signInWithPassword: (input: {
+        email: string;
+        password: string;
+      }) => Promise<{
+        data: { user: MockSupabaseUser | null; session: MockSession | null };
+        error: null;
+      }>;
+      signUp: (input: { email: string; password: string }) => Promise<{
+        data: { user: MockSupabaseUser | null; session: MockSession | null };
+        error: null;
+      }>;
+      signOut: () => Promise<{ error: null }>;
+      updateUser: (attrs: { email?: string; password?: string }) => Promise<{
+        data: { user: MockSupabaseUser | null };
+        error: null;
+      }>;
+      onAuthStateChange: (cb: AuthChangeCallback) => {
+        data: { subscription: { unsubscribe: () => void } };
+      };
+    };
+    emit: (event: string, session: MockSession | null) => void;
+    calls: {
+      signInAnonymously: number;
+      signInWithPassword: number;
+      signUp: number;
+      signOut: number;
+      updateUser: number;
+    };
+  }
+
+  function makeMockUser(overrides: Partial<MockSupabaseUser> = {}): MockSupabaseUser {
+    return {
+      id: "u_supabase_default",
+      email: null,
+      is_anonymous: false,
+      created_at: "2026-06-25T00:00:00.000Z",
+      ...overrides
+    };
+  }
+
+  function createMockSupabaseClient(initial?: {
+    session?: MockSession | null;
+  }): MockClient {
+    let currentSession: MockSession | null = initial?.session ?? null;
+    const subscribers = new Set<AuthChangeCallback>();
+    let counter = 0;
+    const calls = {
+      signInAnonymously: 0,
+      signInWithPassword: 0,
+      signUp: 0,
+      signOut: 0,
+      updateUser: 0
+    };
+    return {
+      auth: {
+        getSession: async () => ({
+          data: { session: currentSession },
+          error: null
+        }),
+        signInAnonymously: async () => {
+          calls.signInAnonymously++;
+          const user = makeMockUser({
+            id: `u_anon_${counter++}`,
+            is_anonymous: true,
+            email: null
+          });
+          currentSession = { user };
+          return {
+            data: { user, session: currentSession },
+            error: null
+          };
+        },
+        signInWithPassword: async (input) => {
+          calls.signInWithPassword++;
+          const user = makeMockUser({
+            id: `u_password_${counter++}`,
+            is_anonymous: false,
+            email: input.email
+          });
+          currentSession = { user };
+          return {
+            data: { user, session: currentSession },
+            error: null
+          };
+        },
+        signUp: async (input) => {
+          calls.signUp++;
+          const user = makeMockUser({
+            id: `u_signup_${counter++}`,
+            is_anonymous: false,
+            email: input.email
+          });
+          currentSession = { user };
+          return {
+            data: { user, session: currentSession },
+            error: null
+          };
+        },
+        signOut: async () => {
+          calls.signOut++;
+          currentSession = null;
+          return { error: null };
+        },
+        updateUser: async (attrs) => {
+          calls.updateUser++;
+          if (!currentSession) {
+            return { data: { user: null }, error: null };
+          }
+          const updated = {
+            ...currentSession.user,
+            email: attrs.email ?? currentSession.user.email,
+            is_anonymous: false
+          };
+          currentSession = { user: updated };
+          return { data: { user: updated }, error: null };
+        },
+        onAuthStateChange: (cb) => {
+          subscribers.add(cb);
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  subscribers.delete(cb);
+                }
+              }
+            }
+          };
+        }
+      },
+      emit: (event, session) => {
+        currentSession = session;
+        for (const cb of subscribers) cb(event, session);
+      },
+      calls
+    };
+  }
+
+  async function waitFor(
+    predicate: () => boolean,
+    options: { timeoutMs?: number; intervalMs?: number } = {}
+  ): Promise<void> {
+    const timeout = options.timeoutMs ?? 1000;
+    const interval = options.intervalMs ?? 5;
+    const start = performance.now();
+    while (!predicate()) {
+      if (performance.now() - start > timeout) {
+        throw new Error("[test] waitFor timed out");
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+  }
+
+  it("signs in anonymously on bootstrap when allowAnonymous + no session", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser() !== null);
+    const user = provider.currentUser();
+    expect(user?.isAnonymous).toBe(true);
+    expect(user?.userId.startsWith("u_anon_")).toBe(true);
+    expect(mock.calls.signInAnonymously).toBe(1);
+  });
+
+  it("does NOT sign in anonymously when allowAnonymous is false", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: false,
+      client: mock as never
+    });
+    // Give bootstrap a moment to run (getSession will resolve, find
+    // no session, and stop because allowAnonymous is off).
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(provider.currentUser()).toBeNull();
+    expect(mock.calls.signInAnonymously).toBe(0);
+  });
+
+  it("uses an existing session at bootstrap when one is already present", async () => {
+    const existing = makeMockUser({
+      id: "u_existing",
+      is_anonymous: false,
+      email: "n@example.com"
+    });
+    const mock = createMockSupabaseClient({ session: { user: existing } });
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser() !== null);
+    expect(provider.currentUser()?.userId).toBe("u_existing");
+    expect(provider.currentUser()?.isAnonymous).toBe(false);
+    expect(provider.currentUser()?.email).toBe("n@example.com");
+    expect(mock.calls.signInAnonymously).toBe(0);
+  });
+
+  it("signIn flips the cached user to credentialed", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser() !== null);
+    const signedIn = await provider.signIn({
+      email: "n@example.com",
+      password: "hunter2"
+    });
+    expect(signedIn.isAnonymous).toBe(false);
+    expect(signedIn.email).toBe("n@example.com");
+    expect(provider.currentUser()?.userId).toBe(signedIn.userId);
+    expect(mock.calls.signInWithPassword).toBe(1);
+  });
+
+  it("signUp returns the new user + caches it", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: false,
+      client: mock as never
+    });
+    const next = await provider.signUp({
+      email: "fresh@example.com",
+      password: "p"
+    });
+    expect(next.email).toBe("fresh@example.com");
+    expect(provider.currentUser()?.userId).toBe(next.userId);
+    expect(mock.calls.signUp).toBe(1);
+  });
+
+  it("linkAnonymousToCredentials preserves userId", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser()?.isAnonymous === true);
+    const anonId = provider.currentUser()!.userId;
+    const linked = await provider.linkAnonymousToCredentials({
+      email: "n@example.com",
+      password: "p"
+    });
+    expect(linked.userId).toBe(anonId);
+    expect(linked.isAnonymous).toBe(false);
+    expect(linked.email).toBe("n@example.com");
+    expect(mock.calls.updateUser).toBe(1);
+  });
+
+  it("linkAnonymousToCredentials throws when current user is already credentialed", async () => {
+    const existing = makeMockUser({
+      id: "u_existing",
+      is_anonymous: false,
+      email: "already@example.com"
+    });
+    const mock = createMockSupabaseClient({ session: { user: existing } });
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser() !== null);
+    await expect(
+      provider.linkAnonymousToCredentials({
+        email: "next@example.com",
+        password: "p"
+      })
+    ).rejects.toThrow(NotSupportedError);
+    expect(mock.calls.updateUser).toBe(0);
+  });
+
+  it("linkAnonymousToCredentials throws when there is no current user", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: false,
+      client: mock as never
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(
+      provider.linkAnonymousToCredentials({
+        email: "n@example.com",
+        password: "p"
+      })
+    ).rejects.toThrow(NotSupportedError);
+  });
+
+  it("signOut clears the cached user", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: true,
+      client: mock as never
+    });
+    await waitFor(() => provider.currentUser() !== null);
+    expect(provider.currentUser()).not.toBeNull();
+    await provider.signOut();
+    expect(provider.currentUser()).toBeNull();
+    expect(mock.calls.signOut).toBe(1);
+  });
+
+  it("onChange fires when the auth state changes externally", async () => {
+    const mock = createMockSupabaseClient();
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon-key",
+      allowAnonymous: false,
+      client: mock as never
+    });
+    const seen: Array<{ userId: string | null; isAnonymous: boolean }> = [];
+    provider.onChange((user) => {
+      seen.push({
+        userId: user?.userId ?? null,
+        isAnonymous: user?.isAnonymous ?? false
+      });
+    });
+    const newUser = makeMockUser({ id: "u_external", is_anonymous: false });
+    mock.emit("SIGNED_IN", { user: newUser });
+    await waitFor(() => seen.length > 0);
+    expect(seen[seen.length - 1].userId).toBe("u_external");
+    expect(provider.currentUser()?.userId).toBe("u_external");
+  });
+});

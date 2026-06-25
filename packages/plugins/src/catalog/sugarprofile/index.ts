@@ -25,6 +25,7 @@ import {
   type DeploymentRequirement
 } from "@sugarmagic/domain";
 import type { DiscoveredPluginDefinition } from "../../sdk";
+import { createSupabaseIdentityProvider } from "./runtime/identity";
 
 export const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
 
@@ -178,6 +179,61 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       nonSecretAttestation: "safe-to-expose-publicly"
     }
   ],
+  // Story 47.7 — runtime contribution. The SugarProfile plugin's
+  // runtime is what flips identity from anonymous-local (the
+  // runtime-core default) over to Supabase. The factory only
+  // contributes the identity.provider when the config carries a
+  // non-empty URL + anon key — empty config means "scaffold only,
+  // no Supabase wiring yet", and the runtime contribution resolver
+  // (`resolveActiveIdentityProvider` from 47.2) falls through to
+  // the anonymous-local default.
+  //
+  // 47.8 will add a `save.store` contribution here too, pointing at
+  // the Supabase Postgres-backed store. 47.9's gateway JWT
+  // middleware is gateway-side, not browser-side, so it doesn't
+  // surface here.
+  runtime: {
+    createRuntimePlugin: ({ configuration }) => {
+      const config = normalizeSugarProfilePluginConfig(configuration.config);
+      const hasSupabaseConfig =
+        config.supabaseUrl.length > 0 && config.supabaseAnonKey.length > 0;
+      if (!hasSupabaseConfig) {
+        console.debug(
+          "[sugarprofile] runtime: no Supabase URL/anon-key configured; skipping identity.provider contribution. Runtime falls through to anonymous-local default."
+        );
+        return {
+          pluginId: configuration.pluginId,
+          displayName: "SugarProfile",
+          contributions: []
+        };
+      }
+      const provider = createSupabaseIdentityProvider({
+        supabaseUrl: config.supabaseUrl,
+        supabaseAnonKey: config.supabaseAnonKey,
+        allowAnonymous: config.allowAnonymous
+      });
+      return {
+        pluginId: configuration.pluginId,
+        displayName: "SugarProfile",
+        contributions: [
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugarprofile.identity-provider",
+            kind: "identity.provider",
+            displayName: "Supabase Identity Provider",
+            priority: 100,
+            payload: {
+              providerId: "sugarprofile.supabase-identity",
+              summary:
+                "Supabase Auth backing. Anonymous sign-in on first boot when allowed; email/password upgrades the anonymous account in place via updateUser.",
+              status: "ready",
+              provider
+            }
+          }
+        ]
+      };
+    }
+  },
   shell: {
     designWorkspaces: [
       {
