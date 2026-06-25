@@ -53,6 +53,7 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   parseBillingAccountList,
   parseTemplateVersionStamp,
+  type PluginSettingsSchemaField,
   resolveDeploymentAction,
   resolveSecretManagerName,
   stripBillingAccountPrefix,
@@ -69,7 +70,8 @@ import {
   normalizeSugarAgentPluginConfig,
   listBundledRuntimePluginIds,
   planGameDeployment,
-  validateGatewayRuntimeConfigKey
+  validateGatewayRuntimeConfigKey,
+  validatePluginSettingsSchema
 } from "@sugarmagic/plugins";
 import {
   createRuntimeBootModel,
@@ -3379,6 +3381,167 @@ describe("plugin infrastructure", () => {
         ]
       }
     ]);
+  });
+
+  // Story 46.16 — schema-driven plugin settings panels.
+  // `pluginSettingsSchema` is the public contract a plugin uses to
+  // declare its per-game config UI. Studio auto-mounts a panel that
+  // renders one input per schema field; the validator below enforces
+  // cross-reference with `gatewayRuntimeConfigKeys` so a deploy-time
+  // env var can't exist without a UI surface.
+  it("passes a well-formed schema", () => {
+    const schema: PluginSettingsSchemaField[] = [
+      { configKey: "foo", label: "Foo", type: "text" },
+      {
+        configKey: "bar",
+        label: "Bar",
+        type: "select",
+        options: [{ value: "a", label: "A" }]
+      }
+    ];
+    expect(validatePluginSettingsSchema("test", schema, undefined)).toEqual({
+      ok: true
+    });
+  });
+
+  it("rejects duplicate schema keys", () => {
+    const result = validatePluginSettingsSchema(
+      "test",
+      [
+        { configKey: "foo", label: "Foo", type: "text" },
+        { configKey: "foo", label: "Foo Again", type: "text" }
+      ],
+      undefined
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/duplicate.*configKey "foo"/);
+  });
+
+  it("rejects a select field with no options", () => {
+    const result = validatePluginSettingsSchema(
+      "test",
+      [{ configKey: "foo", label: "Foo", type: "select" }],
+      undefined
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/no options/);
+  });
+
+  it("rejects showWhen targeting a nonexistent sibling field", () => {
+    const result = validatePluginSettingsSchema(
+      "test",
+      [
+        {
+          configKey: "foo",
+          label: "Foo",
+          type: "text",
+          showWhen: { configKey: "missing", equals: "x" }
+        }
+      ],
+      undefined
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/showWhen.*does not match/);
+  });
+
+  it("accepts showWhen targeting a sibling field that exists", () => {
+    const result = validatePluginSettingsSchema(
+      "test",
+      [
+        {
+          configKey: "kind",
+          label: "Kind",
+          type: "select",
+          options: [{ value: "a", label: "A" }]
+        },
+        {
+          configKey: "detail",
+          label: "Detail",
+          type: "text",
+          showWhen: { configKey: "kind", equals: "a" }
+        }
+      ],
+      undefined
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a gatewayRuntimeConfigKey with no matching schema field", () => {
+    const result = validatePluginSettingsSchema(
+      "sugaragent",
+      [{ configKey: "tone", label: "Tone", type: "text" }],
+      [
+        {
+          configKey: "openAiVectorStoreId",
+          envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID",
+          description: "...",
+          nonSecretAttestation: "safe-to-expose-publicly"
+        }
+      ]
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/openAiVectorStoreId.*no matching/);
+  });
+
+  it("rejects gatewayRuntimeConfigKeys when no schema is declared at all", () => {
+    const result = validatePluginSettingsSchema(
+      "test",
+      undefined,
+      [
+        {
+          configKey: "x",
+          envVarName: "SUGARMAGIC_TEST_X",
+          description: "...",
+          nonSecretAttestation: "safe-to-expose-publicly"
+        }
+      ]
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/no pluginSettingsSchema/);
+  });
+
+  it("accepts a matching schema + runtime-config pair", () => {
+    const result = validatePluginSettingsSchema(
+      "sugaragent",
+      [
+        {
+          configKey: "openAiVectorStoreId",
+          label: "OpenAI Vector Store ID",
+          type: "text"
+        }
+      ],
+      [
+        {
+          configKey: "openAiVectorStoreId",
+          envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID",
+          description: "...",
+          nonSecretAttestation: "safe-to-expose-publicly"
+        }
+      ]
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("SugarAgent's bundled plugin definition passes the validator", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARAGENT_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    const result = validatePluginSettingsSchema(
+      SUGARAGENT_PLUGIN_ID,
+      definition?.pluginSettingsSchema,
+      definition?.gatewayRuntimeConfigKeys
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("Sugarlang's bundled plugin definition passes the validator", () => {
+    const definition = getDiscoveredPluginDefinition(SUGARLANG_PLUGIN_ID);
+    expect(definition).not.toBeNull();
+    const result = validatePluginSettingsSchema(
+      SUGARLANG_PLUGIN_ID,
+      definition?.pluginSettingsSchema,
+      definition?.gatewayRuntimeConfigKeys
+    );
+    expect(result.ok).toBe(true);
   });
 
   it("groupVersionTags skips orphan patches missing a v{N}.0.0 base", () => {

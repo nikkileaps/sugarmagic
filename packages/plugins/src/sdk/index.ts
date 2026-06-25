@@ -59,6 +59,86 @@ export interface InstalledPluginDefinition {
    * deploy time. See `GatewayRuntimeConfigKey` for the contract.
    */
   gatewayRuntimeConfigKeys?: GatewayRuntimeConfigKey[];
+  /**
+   * Story 46.16 — declarative schema for the plugin's per-game
+   * settings panel. When a plugin contributes a `designWorkspace`
+   * with this schema set, Studio auto-renders the panel from the
+   * schema. Plugins needing custom UI (lore actions, embedded
+   * inspectors, etc.) override the auto-mount by shipping a
+   * hand-written `apps/studio/src/plugins/catalog/<id>/index.tsx`,
+   * which can still embed `<PluginSchemaSettingsPanel>` to keep
+   * field rendering schema-driven where appropriate.
+   *
+   * Cross-references `gatewayRuntimeConfigKeys`: every entry's
+   * `configKey` MUST appear as a schema field. The cross-reference
+   * check lives in `validatePluginSettingsSchema` so plugin
+   * authors can't declare a runtime-config value without a UI
+   * surface for it.
+   *
+   * See `PluginSettingsSchemaField` for field shape.
+   */
+  pluginSettingsSchema?: PluginSettingsSchemaField[];
+}
+
+/**
+ * Story 46.16 — one entry in a plugin's settings schema. Each
+ * entry declares a single per-game config field plus the metadata
+ * Studio's auto-renderer needs to render it. The schema is the
+ * public contract any plugin (bundled or future third-party) uses
+ * to surface its config in Studio without writing UI code.
+ *
+ * `type`:
+ *   - `"text"`   -> Mantine TextInput, value is `string`
+ *   - `"select"` -> Mantine Select, value is `string`; `options`
+ *                   carries `{ value, label }[]`
+ *   - `"number"` -> Mantine NumberInput, value is `number`;
+ *                   honors optional `min` / `max`
+ *   - `"boolean"`-> Mantine Switch, value is `boolean`
+ *
+ * `showWhen` makes a field conditional on another field's value
+ * (e.g. SugarAgent's `loreLocalPath` only renders when
+ * `loreSourceKind === "local"`). The validator checks that the
+ * `configKey` referenced by `showWhen` exists in the same schema.
+ *
+ * `default` is the value the per-game config falls back to when
+ * the schema field has never been touched. Plugins should also
+ * carry the default in their `defaultConfig` for parity at
+ * project-creation time; the schema default is what the renderer
+ * uses for fresh fields after a schema migration.
+ */
+export type PluginSettingsSchemaFieldType =
+  | "text"
+  | "select"
+  | "number"
+  | "boolean";
+
+export interface PluginSettingsSchemaSelectOption {
+  value: string;
+  label: string;
+}
+
+export interface PluginSettingsSchemaShowWhen {
+  configKey: string;
+  equals: string | number | boolean;
+}
+
+export interface PluginSettingsSchemaField {
+  configKey: string;
+  label: string;
+  type: PluginSettingsSchemaFieldType;
+  description?: string;
+  placeholder?: string;
+  default?: string | number | boolean;
+  options?: PluginSettingsSchemaSelectOption[];
+  min?: number;
+  max?: number;
+  showWhen?: PluginSettingsSchemaShowWhen;
+  /**
+   * Group label for visual section header in the auto-rendered
+   * panel. Adjacent fields with the same `group` render under one
+   * header; fields without a group render at the panel top level.
+   */
+  group?: string;
 }
 
 export interface GatewayRuntimeConfigKeyValidationResult {
@@ -111,6 +191,98 @@ export function validateGatewayRuntimeConfigKey(
       ok: false,
       reason: `Plugin "${pluginId}" declared gatewayRuntimeConfigKey envVarName "${key.envVarName}" without a configKey. configKey names the field on the plugin's per-game config object where the value lives.`
     };
+  }
+  return { ok: true };
+}
+
+export interface PluginSettingsSchemaValidationResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Story 46.16 — validates a plugin's `pluginSettingsSchema` plus
+ * its cross-reference with `gatewayRuntimeConfigKeys`. Returns
+ * `{ ok: true }` when the schema is well-formed and every runtime-
+ * config key has a matching schema field; returns the first
+ * problem encountered as a user-readable reason otherwise.
+ *
+ * Rules:
+ *   1. No duplicate `configKey` entries.
+ *   2. `type` is one of "text" / "select" / "number" / "boolean".
+ *   3. `type: "select"` requires non-empty `options`.
+ *   4. `showWhen.configKey` resolves to a sibling schema field.
+ *   5. Every `gatewayRuntimeConfigKeys[i].configKey` has a matching
+ *      schema field (so the value has a UI surface).
+ *
+ * Pure function; no I/O. Designed to be called eagerly at plugin
+ * discovery / startup so misconfiguration surfaces clearly rather
+ * than producing a silently broken settings panel.
+ */
+export function validatePluginSettingsSchema(
+  pluginId: string,
+  schema: PluginSettingsSchemaField[] | undefined,
+  gatewayRuntimeConfigKeys: GatewayRuntimeConfigKey[] | undefined
+): PluginSettingsSchemaValidationResult {
+  if (!schema || schema.length === 0) {
+    if (gatewayRuntimeConfigKeys && gatewayRuntimeConfigKeys.length > 0) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" declares gatewayRuntimeConfigKeys but no pluginSettingsSchema. Every runtime-config key must have a matching schema field so the value has a UI surface; declare the schema or remove the runtime-config entries.`
+      };
+    }
+    return { ok: true };
+  }
+  const seenKeys = new Set<string>();
+  for (const field of schema) {
+    if (typeof field.configKey !== "string" || field.configKey.trim().length === 0) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" has a pluginSettingsSchema entry with an empty configKey.`
+      };
+    }
+    if (seenKeys.has(field.configKey)) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" has duplicate pluginSettingsSchema configKey "${field.configKey}".`
+      };
+    }
+    seenKeys.add(field.configKey);
+    if (
+      field.type !== "text" &&
+      field.type !== "select" &&
+      field.type !== "number" &&
+      field.type !== "boolean"
+    ) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" schema field "${field.configKey}" has unsupported type "${String(field.type)}". Supported types: text / select / number / boolean.`
+      };
+    }
+    if (field.type === "select" && (!field.options || field.options.length === 0)) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" schema field "${field.configKey}" has type "select" but no options.`
+      };
+    }
+  }
+  for (const field of schema) {
+    if (field.showWhen && !seenKeys.has(field.showWhen.configKey)) {
+      return {
+        ok: false,
+        reason: `Plugin "${pluginId}" schema field "${field.configKey}" has showWhen.configKey "${field.showWhen.configKey}" that does not match any sibling schema field.`
+      };
+    }
+  }
+  if (gatewayRuntimeConfigKeys && gatewayRuntimeConfigKeys.length > 0) {
+    for (const runtimeKey of gatewayRuntimeConfigKeys) {
+      if (!seenKeys.has(runtimeKey.configKey)) {
+        return {
+          ok: false,
+          reason: `Plugin "${pluginId}" declares gatewayRuntimeConfigKey "${runtimeKey.configKey}" (envVar "${runtimeKey.envVarName}") with no matching pluginSettingsSchema field. The value needs a UI surface so users can set it.`
+        };
+      }
+    }
   }
   return { ok: true };
 }

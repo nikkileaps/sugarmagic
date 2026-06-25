@@ -6,12 +6,8 @@ import {
   Button,
   Code,
   Group,
-  NumberInput,
-  Select,
   Stack,
-  Switch,
-  Text,
-  TextInput
+  Text
 } from "@mantine/core";
 import { getPluginConfiguration } from "@sugarmagic/domain";
 import {
@@ -24,6 +20,7 @@ import type {
   PluginWorkspaceViewProps,
   StudioPluginWorkspaceDefinition
 } from "../../sdk";
+import { PluginSchemaSettingsPanel } from "../../PluginSchemaSettingsPanel";
 import { readStudioPluginRuntimeEnvironment } from "../../../runtimeEnv";
 
 interface SugarAgentLoreStatusResponse {
@@ -135,31 +132,6 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
     const response = await fetch(`${proxyBaseUrl}/api/sugaragent/lore/status`);
     const payload = (await response.json()) as unknown;
     return isLoreStatusResponse(payload) ? payload : null;
-  }
-
-  function updateConfig(patch: Record<string, unknown>) {
-    if (!gameProjectId) return;
-    onCommand({
-      kind: "UpdatePluginConfiguration",
-      target: {
-        aggregateKind: "plugin-config",
-        aggregateId: configuration.identity.id
-      },
-      subject: {
-        subjectKind: "plugin-configuration",
-        subjectId: configuration.identity.id
-      },
-      payload: {
-        configuration: {
-          ...configuration,
-          enabled: true,
-          config: {
-            ...configuration.config,
-            ...patch
-          }
-        }
-      }
-    });
   }
 
   async function runLoreAction(kind: SugarAgentLoreActionKind) {
@@ -290,15 +262,6 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
 
   return (
     <Stack gap="lg" p="xl" h="100%" style={{ minHeight: 0, overflowY: "auto" }}>
-      <Stack gap={4}>
-        <Text fw={700} size="lg">
-          SugarAgent Plugin
-        </Text>
-        <Text size="sm" c="var(--sm-color-subtext)">
-          SugarAgent conversation runtime is configured here, but authored world lore now comes from the lore wiki. NPCs bind to a canonical lore page id, and the gateway owns lore discovery and vector-store ingest.
-        </Text>
-      </Stack>
-
       <Alert color="blue" variant="light" title="Where SugarAgent config lives">
         <Stack gap={4}>
           <Text size="sm">
@@ -313,128 +276,15 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         </Stack>
       </Alert>
 
-<Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Lore Source
-        </Text>
-        <Select
-          label="Source Kind"
-          data={[
-            { value: "local", label: "Local Checked-Out Repo" },
-            { value: "github", label: "GitHub Repo (Planned)" }
-          ]}
-          value={sugarAgent.loreSourceKind}
-          onChange={(value) =>
-            updateConfig({
-              loreSourceKind: value === "github" ? "github" : "local"
-            })
-          }
-        />
-        {sugarAgent.loreSourceKind === "local" ? (
-          <TextInput
-            label="Local Lore Repo Path"
-            description="Absolute path to the checked-out lore wiki repo. Save, then redeploy SugarDeploy so the local gateway mounts this path."
-            placeholder="/Users/nikki/projects/world-lore"
-            value={sugarAgent.loreLocalPath}
-            onChange={(event) =>
-              updateConfig({ loreLocalPath: event.currentTarget.value })
-            }
-          />
-        ) : (
-          <>
-            <TextInput
-              label="Repository URL"
-              placeholder="https://github.com/org/world-lore"
-              value={sugarAgent.loreRepositoryUrl}
-              onChange={(event) =>
-                updateConfig({ loreRepositoryUrl: event.currentTarget.value })
-              }
-            />
-            <TextInput
-              label="Repository Ref"
-              placeholder="main"
-              value={sugarAgent.loreRepositoryRef}
-              onChange={(event) =>
-                updateConfig({ loreRepositoryRef: event.currentTarget.value })
-              }
-            />
-          </>
-        )}
-      </Stack>
-
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Gateway Runtime Config
-        </Text>
-        <Text size="xs" c="var(--sm-color-subtext)">
-          Non-secret values the deployed Cloud Run gateway reads at
-          request time. SugarDeploy plumbs them into the Cloud Run
-          service env on save -&gt; deploy. Leave empty to use the
-          gateway's bundled defaults.
-        </Text>
-        <TextInput
-          label="OpenAI Vector Store ID"
-          description="Which OpenAI vector store the gateway queries for evidence retrieval. Pure identifier; not a credential."
-          placeholder="vs_abcd1234..."
-          value={sugarAgent.openAiVectorStoreId ?? ""}
-          onChange={(event) =>
-            updateConfig({ openAiVectorStoreId: event.currentTarget.value })
-          }
-        />
-        <TextInput
-          label="Anthropic Model"
-          description="Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5)."
-          placeholder="claude-sonnet-4-5"
-          value={sugarAgent.anthropicModel ?? ""}
-          onChange={(event) =>
-            updateConfig({ anthropicModel: event.currentTarget.value })
-          }
-        />
-        <TextInput
-          label="OpenAI Embedding Model"
-          description="Override the embedding model the gateway's retrieve route uses. Empty = gateway default (text-embedding-3-small). Must match the model used to ingest the vector store above."
-          placeholder="text-embedding-3-small"
-          value={sugarAgent.openAiEmbeddingModel ?? ""}
-          onChange={(event) =>
-            updateConfig({ openAiEmbeddingModel: event.currentTarget.value })
-          }
-        />
-      </Stack>
-
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Runtime Behavior
-        </Text>
-        <NumberInput
-          label="Max Evidence Results"
-          min={1}
-          max={8}
-          value={sugarAgent.maxEvidenceResults}
-          onChange={(value) =>
-            updateConfig({
-              maxEvidenceResults:
-                typeof value === "number" && Number.isFinite(value)
-                  ? value
-                  : sugarAgent.maxEvidenceResults
-            })
-          }
-        />
-        <Switch
-          label="Structured Debug Logging"
-          checked={sugarAgent.debugLogging}
-          onChange={(event) =>
-            updateConfig({ debugLogging: event.currentTarget.checked })
-          }
-        />
-        <TextInput
-          label="Tone"
-          description="Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
-          value={sugarAgent.tone ?? ""}
-          onChange={(event) =>
-            updateConfig({ tone: event.currentTarget.value })
-          }
-        />
-      </Stack>
+      {/* Story 46.16 — fields below render from the SugarAgent
+          plugin's declared pluginSettingsSchema. Edits here flow to
+          the schema in packages/plugins/src/catalog/sugaragent/. */}
+      <PluginSchemaSettingsPanel
+        pluginId={SUGARAGENT_PLUGIN_ID}
+        gameProjectId={gameProjectId}
+        pluginConfigurations={pluginConfigurations}
+        onCommand={onCommand}
+      />
 
       <Stack gap="xs">
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">

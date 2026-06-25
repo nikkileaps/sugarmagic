@@ -190,6 +190,101 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     capabilityIds: ["conversation.provider", "design.workspace"]
   },
   deploymentRequirements,
+  // Story 46.16 — declarative schema Studio's auto-renderer turns
+  // into the SugarAgent settings panel. Cross-references
+  // gatewayRuntimeConfigKeys below; every runtime-config key has a
+  // matching field here. The validator enforces this so a future
+  // edit can't silently drop a UI surface for a gateway env var.
+  pluginSettingsSchema: [
+    {
+      configKey: "loreSourceKind",
+      label: "Source Kind",
+      type: "select",
+      group: "Lore Source",
+      options: [
+        { value: "local", label: "Local Checked-Out Repo" },
+        { value: "github", label: "GitHub Repo (Planned)" }
+      ],
+      default: "local"
+    },
+    {
+      configKey: "loreLocalPath",
+      label: "Local Lore Repo Path",
+      type: "text",
+      group: "Lore Source",
+      description:
+        "Absolute path to the checked-out lore wiki repo. Save, then redeploy SugarDeploy so the local gateway mounts this path.",
+      placeholder: "/Users/nikki/projects/world-lore",
+      showWhen: { configKey: "loreSourceKind", equals: "local" }
+    },
+    {
+      configKey: "loreRepositoryUrl",
+      label: "Repository URL",
+      type: "text",
+      group: "Lore Source",
+      placeholder: "https://github.com/you/world-lore",
+      showWhen: { configKey: "loreSourceKind", equals: "github" }
+    },
+    {
+      configKey: "loreRepositoryRef",
+      label: "Repository Ref",
+      type: "text",
+      group: "Lore Source",
+      placeholder: "main",
+      showWhen: { configKey: "loreSourceKind", equals: "github" }
+    },
+    {
+      configKey: "openAiVectorStoreId",
+      label: "OpenAI Vector Store ID",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Which OpenAI vector store the gateway queries for evidence retrieval. Pure identifier; not a credential.",
+      placeholder: "vs_abcd1234..."
+    },
+    {
+      configKey: "anthropicModel",
+      label: "Anthropic Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5).",
+      placeholder: "claude-sonnet-4-5"
+    },
+    {
+      configKey: "openAiEmbeddingModel",
+      label: "OpenAI Embedding Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Override the embedding model the gateway's retrieve route uses. Empty = gateway default (text-embedding-3-small). Must match the model used to ingest the vector store above.",
+      placeholder: "text-embedding-3-small"
+    },
+    {
+      configKey: "maxEvidenceResults",
+      label: "Max Evidence Results",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 4,
+      min: 1,
+      max: 8
+    },
+    {
+      configKey: "debugLogging",
+      label: "Structured Debug Logging",
+      type: "boolean",
+      group: "Runtime Behavior",
+      default: false
+    },
+    {
+      configKey: "tone",
+      label: "Tone",
+      type: "text",
+      group: "Runtime Behavior",
+      description:
+        "Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
+    }
+  ],
   // Story 46.15 — per-game non-secret gateway runtime env vars.
   // Values come from the matching keys in the plugin's per-game
   // config slot (`pluginConfigurations[sugaragent].config.*`);
