@@ -106,3 +106,9 @@ export {
   createAnonymousLocalIdentityProvider,
   type AnonymousLocalIdentityProviderOptions
 } from "./anonymous-local";
+
+export {
+  createSessionHudCard,
+  type CreateSessionHudCardArgs,
+  type SessionHudSavedGameSnapshot
+} from "./session-hud-card";

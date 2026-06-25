@@ -9,6 +9,7 @@ import {
   createIndexedDBGameSaveStore,
   createRuntimeBootModel,
   createRuntimePluginManager,
+  createSessionHudCard,
   GAME_SAVE_SCHEMA_VERSION,
   NotSupportedError,
   pickActiveRegionId,
@@ -955,5 +956,317 @@ describe("spawnRuntimePlayerEntity with positionOverride", () => {
       { positionOverride: null }
     );
     expect(spawn.position).toEqual([0, 0, 0]);
+  });
+});
+
+// Story 47.5.5 — Session debug HUD card. Studio Playtest only; the
+// `hostKinds: ["studio"]` filter keeps it out of published-web. The
+// factory closes over its DOM refs so updateCard refreshes the live
+// position without rebuilding the panel.
+describe("createSessionHudCard", () => {
+  // Minimal fake DOM. createSessionHudCard uses only createElement /
+  // appendChild / textContent / className / ownerDocument; rolling
+  // these by hand avoids pulling in jsdom for one story's worth of
+  // tests.
+  interface FakeElement {
+    nodeName: string;
+    className: string;
+    textContent: string;
+    title: string;
+    style: Record<string, string>;
+    children: FakeElement[];
+    ownerDocument: FakeDocument;
+    appendChild(child: FakeElement): FakeElement;
+    append(...nodes: FakeElement[]): void;
+  }
+
+  interface FakeDocument {
+    createElement(tag: string): FakeElement;
+  }
+
+  function createFakeElement(
+    tag: string,
+    ownerDocument: FakeDocument
+  ): FakeElement {
+    const element: FakeElement = {
+      nodeName: tag.toUpperCase(),
+      className: "",
+      textContent: "",
+      title: "",
+      style: {},
+      children: [],
+      ownerDocument,
+      appendChild(child) {
+        element.children.push(child);
+        return child;
+      },
+      append(...nodes) {
+        for (const node of nodes) element.children.push(node);
+      }
+    };
+    return element;
+  }
+
+  function createFakeDocument(): FakeDocument {
+    const document: FakeDocument = {
+      createElement: (tag: string) => createFakeElement(tag, document)
+    };
+    return document;
+  }
+
+  function findRowValue(
+    container: FakeElement,
+    label: string
+  ): string | undefined {
+    for (const card of container.children) {
+      for (const row of card.children) {
+        const [labelEl, valueEl] = row.children;
+        if (labelEl?.textContent === label) {
+          return valueEl?.textContent;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function findRowValueElement(
+    container: FakeElement,
+    label: string
+  ): FakeElement | undefined {
+    for (const card of container.children) {
+      for (const row of card.children) {
+        const [labelEl, valueEl] = row.children;
+        if (labelEl?.textContent === label) {
+          return valueEl;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function makeContext(
+    playerPosition: { x: number; y: number; z: number } | null
+  ) {
+    // The HUD card only reads gameplaySession.playerPosition.
+    // Casting through `unknown` lets us avoid building the full
+    // DebugHudCardContext fixture for a one-field consumer.
+    return {
+      gameplaySession: { playerPosition }
+    } as unknown as Parameters<
+      NonNullable<ReturnType<typeof createSessionHudCard>["payload"]["renderCard"]>
+    >[1];
+  }
+
+  function makeUser(overrides: Partial<{
+    userId: string;
+    displayName: string | null;
+    email: string | null;
+    isAnonymous: boolean;
+    createdAt: string;
+  }> = {}) {
+    return {
+      userId: "abcdef1234567890",
+      displayName: null,
+      email: null,
+      isAnonymous: true,
+      createdAt: "2026-06-25T00:00:00.000Z",
+      ...overrides
+    };
+  }
+
+  it("contributes the canonical static fields for the debug HUD registry", () => {
+    const card = createSessionHudCard({
+      user: makeUser(),
+      savedGameSnapshot: null
+    });
+    expect(card.kind).toBe("debug.hudCard");
+    expect(card.hostKinds).toEqual(["studio"]);
+    expect(card.pluginId).toBe("runtime-core.session");
+    expect(card.contributionId).toBe("runtime-core.session.hud");
+    expect(card.payload.cardId).toBe("session");
+    expect(card.displayName).toBe("Session");
+    expect(typeof card.payload.renderCard).toBe("function");
+    expect(typeof card.payload.updateCard).toBe("function");
+  });
+
+  it("renders the user + save + position rows with the expected static values", () => {
+    const card = createSessionHudCard({
+      user: makeUser({ userId: "ab12cd34ef56gh78" }),
+      savedGameSnapshot: {
+        lastPlayed: "2026-06-25T12:00:00.000Z",
+        currentRegionId: "hollow-station",
+        currentQuestId: "find-the-cat"
+      }
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext({ x: 12.5, y: 0, z: -8.25 })
+    );
+    expect(findRowValue(container, "User")).toBe("ab12cd34...");
+    expect(findRowValue(container, "Anon")).toBe("yes");
+    expect(findRowValue(container, "Save")).toBe("present");
+    expect(findRowValue(container, "Last Played")).toBe(
+      "2026-06-25T12:00:00.000Z"
+    );
+    expect(findRowValue(container, "Region")).toBe("hollow-station");
+    expect(findRowValue(container, "Quest")).toBe("find-the-cat");
+    expect(findRowValue(container, "Position")).toBe("12.50, 0.00, -8.25");
+  });
+
+  it("shows '(none)' for save when no save is loaded and dashes for nullable fields", () => {
+    const card = createSessionHudCard({
+      user: makeUser({ userId: "uuid-test-1234567890", isAnonymous: false }),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    expect(findRowValue(container, "Anon")).toBe("no");
+    expect(findRowValue(container, "Save")).toBe("(none)");
+    expect(findRowValue(container, "Last Played")).toBe("-");
+    expect(findRowValue(container, "Region")).toBe("-");
+    expect(findRowValue(container, "Quest")).toBe("-");
+    expect(findRowValue(container, "Position")).toBe("-");
+  });
+
+  it("shows dashes everywhere when user is null", () => {
+    const card = createSessionHudCard({ user: null, savedGameSnapshot: null });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    expect(findRowValue(container, "User")).toBe("-");
+    expect(findRowValue(container, "Anon")).toBe("-");
+  });
+
+  it("updateCard refreshes the position row from a fresh context tick", () => {
+    const card = createSessionHudCard({
+      user: makeUser(),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    expect(findRowValue(container, "Position")).toBe("-");
+    card.payload.updateCard!(makeContext({ x: 1.234, y: 5.678, z: -9.012 }));
+    expect(findRowValue(container, "Position")).toBe("1.23, 5.68, -9.01");
+  });
+
+  it("does not preserve a short userId past 12 chars (no truncation)", () => {
+    const card = createSessionHudCard({
+      user: makeUser({ userId: "abc123" }),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    expect(findRowValue(container, "User")).toBe("abc123");
+  });
+
+  it("truncates a real UUID to the first dash-separated segment", () => {
+    const card = createSessionHudCard({
+      user: makeUser({
+        userId: "9969d6fa-1234-5678-9abc-def012345678"
+      }),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    expect(findRowValue(container, "User")).toBe("9969d6fa");
+  });
+
+  it("sets the full userId as the title attribute for hover-to-reveal", () => {
+    const fullId = "9969d6fa-1234-5678-9abc-def012345678";
+    const card = createSessionHudCard({
+      user: makeUser({ userId: fullId }),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    const userValue = findRowValueElement(container, "User");
+    expect(userValue?.title).toBe(fullId);
+  });
+
+  it("applies chip-pill styling to the User row when a user is present", () => {
+    const card = createSessionHudCard({
+      user: makeUser({ userId: "9969d6fa-1234-5678-9abc-def012345678" }),
+      savedGameSnapshot: null
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    const userValue = findRowValueElement(container, "User");
+    expect(userValue?.style.borderRadius).toBe("999px");
+    expect(userValue?.style.display).toBe("inline-block");
+    // Sanity-check the cursor stays the default for non-clickable
+    // contexts (the chip click handler is in the React IdChip
+    // component; the HUD render is observation-only).
+    expect(userValue?.style.cursor).toBe("default");
+  });
+
+  it("does NOT apply chip styling or title when user is null", () => {
+    const card = createSessionHudCard({ user: null, savedGameSnapshot: null });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext(null)
+    );
+    const userValue = findRowValueElement(container, "User");
+    expect(userValue?.title).toBe("");
+    // Style map untouched.
+    expect(Object.keys(userValue?.style ?? {}).length).toBe(0);
+  });
+});
+
+// Story 47.5.5 follow-up — IdChip React component shares the same
+// truncation logic via the exported `truncateIdForChip` helper.
+// Testing the truncation helper directly avoids needing jsdom for
+// the React component (the rendered DOM is covered by Mantine's
+// own test suite + manual eyeball).
+describe("truncateIdForChip", () => {
+  it("returns the first dash-separated segment for UUIDs", async () => {
+    const { truncateIdForChip } = await import("@sugarmagic/ui");
+    expect(truncateIdForChip("9969d6fa-1234-5678-9abc-def012345678")).toBe(
+      "9969d6fa"
+    );
+  });
+
+  it("returns the first segment for game ids like 'wordlark-v1-...'", async () => {
+    const { truncateIdForChip } = await import("@sugarmagic/ui");
+    expect(truncateIdForChip("wordlark-v1-1dqlc-sugarmagic-gateway")).toBe(
+      "wordlark"
+    );
+  });
+
+  it("falls back to first-8-plus-ellipsis when there is no dash", async () => {
+    const { truncateIdForChip } = await import("@sugarmagic/ui");
+    expect(truncateIdForChip("abcdef1234567890")).toBe("abcdef12...");
+  });
+
+  it("returns short ids unchanged", async () => {
+    const { truncateIdForChip } = await import("@sugarmagic/ui");
+    expect(truncateIdForChip("abc")).toBe("abc");
+    expect(truncateIdForChip("abc-def")).toBe("abc");
+  });
+
+  it("falls back when the first dash is past the 12-char window", async () => {
+    const { truncateIdForChip } = await import("@sugarmagic/ui");
+    expect(truncateIdForChip("verylongprefix-tail")).toBe("verylong...");
   });
 });

@@ -586,19 +586,16 @@ to a new region; close + reopen the Playtest session; the player
 spawns in the saved region. Same behavior in the deployed
 published-web bundle without any plugins installed.
 
-### 47.5.5 — Session Inspector (HUD card + Studio dev panel)
+### 47.5.5 — Session HUD card during playtest
 
 QA / dev-tooling story landed alongside the boot-path wiring so the
 read path from 47.5 (and the write path from 47.10) is observable
-without devtools spelunking. Ships two surfaces; both are
-author-facing, neither ships to published-web.
-
-**Surface A: live "Session" HUD card during playtest.**
-A `debug.hudCard` contribution rendered into Studio Playtest only
-(filtered via `hostKinds: ["studio"]` — the existing mechanism
-keeps it out of the published-web bundle). Updates per tick from
-the live runtime so the author can watch `playerPosition` change
-as they walk around. Card body:
+without devtools spelunking. A `debug.hudCard` contribution
+rendered into Studio Playtest only (filtered via
+`hostKinds: ["studio"]` — the existing mechanism keeps it out of
+the published-web bundle). Updates per tick from the live runtime
+so the author can watch `playerPosition` change as they walk
+around. Card body:
 
 ```
 SESSION
@@ -608,74 +605,62 @@ position    12.50, 0.00, -8.25
 save        present (lastPlayed 12:04:31)
 ```
 
-**Surface B: Studio "Session" design workspace.**
-A new core-Studio workspace under Design productmode (alongside
-Layout / NPCs / Quests). Constructs the same default
-`AnonymousLocalIdentityProvider` + `IndexedDBGameSaveStore` the
-boot path uses, reads + writes the persisted record. Three
-sections:
-
-- **Current user** — userId, isAnonymous, displayName, email,
-  createdAt. "Refresh" button re-reads.
-- **Current save** — when a save exists: lastPlayed,
-  currentRegionId, currentQuestId, playerPosition. When null:
-  "No save yet for this user." "Refresh" button re-reads.
-- **Dev actions** — three buttons:
-  - **Seed Save** opens a modal: region picker (populated from
-    the project's `regions`), playerPosition x/y/z inputs,
-    optional currentQuestId. On submit, writes a `GameSave` to
-    IndexedDB for the current user. Useful for verifying the
-    47.5 read path before 47.10's autosave lands.
-  - **Clear Save** confirms + calls `saveStore.clear(userId)`.
-  - **Regenerate Anonymous User** confirms + deletes the
-    `localStorage` entry under `sugarmagic.anonymous-user-id`,
-    re-constructs the provider, refreshes the user view.
-    Useful for testing first-time-player paths.
-
-The design panel and HUD card both pull from the same defaults,
-so changes in the panel are visible immediately in the next
-playtest open.
+The complementary "Session" dev-actions panel (current user view,
+current save view, Seed Save / Clear Save / Regenerate Anonymous
+User buttons) lives inside SugarProfile's workspace and lands in
+47.6. SugarProfile is the natural home for user-management dev
+actions; gating those actions on a story that ships SugarProfile
+keeps the architectural boundary clean.
 
 **Files (new):**
 
 - `packages/runtime-core/src/identity/session-hud-card.ts`
-  - `createSessionHudCard(args: { user, saveStore, getActiveRegionId,
-    getPlayerPosition }): DebugHudCardContribution` factory.
-  - Card render function reads the live position component via
-    the supplied `getPlayerPosition` callback (closure over the
-    world + player entity from the host).
-- `targets/web/src/runtimeHost.ts` (modify) — wires the
-  session HUD card automatically when `hostKind === "studio"`.
-  The card needs `user`, `saveStore`, and accessors for the
-  current region id + player position; the host owns all of
-  these post-`start`.
-- `apps/studio/src/workspaces/SessionWorkspace.tsx` — the new
-  Studio design workspace component.
-- `apps/studio/src/App.tsx` — register the "session" workspaceKind
-  alongside the existing "layout" / "npcs" / "quests" branches.
+  - `createSessionHudCard(args: { user, savedGameSnapshot }):
+    DebugHudCardContribution` factory.
+  - `user` is the resolved `User` at boot (anonymous-local or
+    Supabase). `savedGameSnapshot` is null when no save was
+    loaded, or `{ lastPlayed, currentRegionId, currentQuestId }`.
+  - Card render builds the DOM; updateCard refreshes the live
+    `playerPosition` from `DebugHudCardContext.gameplaySession`
+    (which already exposes the player's position component every
+    tick).
+  - `hostKinds: ["studio"]` so the card never appears in
+    published-web.
+
+**Files (modify):**
+
+- `targets/web/src/runtimeHost.ts`
+  - Add `currentUser?: User | null` field to
+    `WebRuntimeStartState` (same shape as the `savedGame` field
+    from 47.5).
+  - When `hostKind === "studio"`, append a session card built via
+    `createSessionHudCard` to the pluginCards list passed into
+    `createRuntimeDebugHud`.
+- `targets/web/src/App.tsx` — pass `currentUser: identity.user`
+  in the host.start call (alongside the existing `savedGame`).
+- `apps/studio/src/preview.ts` — same: pass the resolved user
+  through the start state.
 
 **Tests:**
 
-- Pure: `createSessionHudCard` renders the right strings given
-  fixture inputs (truncated userId, formatted position, save
-  present/absent).
-- Pure: `SessionWorkspace` seed-save dialog form validation
-  (region id is required, x/y/z parse as numbers).
-- Integration: opening + writing a save via the dev panel +
-  closing + reopening Studio results in the new save being
-  loaded by the runtime host on next start (string-match on
-  IndexedDB read, mocked via `fake-indexeddb`).
+- `createSessionHudCard` factory builds a DOM container with the
+  expected user row (truncated userId, "anon" / "user" label).
+- Save-present + save-null branches render the right strings.
+- `updateCard` updates the position row when given a fresh
+  `DebugHudCardContext.gameplaySession.playerPosition`.
+- `hostKinds` is `["studio"]` so the card is filtered out in a
+  published-web bundle.
 
-**Dependencies:** 47.5 (the boot-path wiring + UserContext are the
-substrate this story makes inspectable).
+**Dependencies:** 47.5 (the boot-path wiring is the substrate this
+story makes inspectable).
 
-**Exit:** in Studio's Design productmode, the "Session" workspace
-shows the current anonymous user and any persisted save; clicking
-"Seed Save" with a real region id + position writes to IndexedDB;
-clicking Playtest opens the runtime with the seeded state +
-spawns the player in the seeded region/position. The live HUD
-card in Playtest shows the same userId + updating playerPosition
-as the player walks around.
+**Exit:** open wordlark in Studio's Playtest mode. Toggle the
+debug HUD (F3 / Backquote). A "Session" tab appears alongside
+Renderer / World. Selecting it shows the current userId
+(truncated), anonymous flag, region id, save presence + last-
+played, and a live-updating position row that changes as the
+player walks. Building wordlark for published-web and serving it
+locally shows NO Session tab (the card is studio-only).
 
 ### 47.6 — SugarProfile plugin scaffold
 
@@ -714,19 +699,56 @@ No identity/save behavior yet; story 47.7/47.8 fill those in.
   way `SUGARAGENT_PLUGIN_ID` is exported today.
 - `packages/plugins/package.json` adds `@supabase/supabase-js`
   + `jsonwebtoken` (server-only) as runtime deps.
+- `apps/studio/src/plugins/catalog/sugarprofile/index.tsx` —
+  hand-written Studio workspace that wraps the auto-mounted
+  schema panel (the Supabase config fields) PLUS the **Session
+  Inspector** dev-actions panel from 47.5.5 (Surface B):
+  - **Current user** — userId, isAnonymous, displayName, email,
+    createdAt. "Refresh" button re-reads via the resolved
+    identity provider.
+  - **Current save** — when a save exists: lastPlayed,
+    currentRegionId, currentQuestId, playerPosition. When null:
+    "No save yet for this user." "Refresh" button re-reads.
+  - **Dev actions** — three buttons:
+    - **Seed Save** opens a modal: region picker (populated from
+      the project's `regions`), playerPosition x/y/z inputs,
+      optional currentQuestId. On submit, writes a `GameSave` to
+      the active save store for the current user.
+    - **Clear Save** confirms + calls `saveStore.clear(userId)`.
+    - **Regenerate Anonymous User** confirms + deletes the
+      `localStorage` entry under `sugarmagic.anonymous-user-id`,
+      re-constructs the provider, refreshes the user view.
+      Anonymous-local only — disabled when a credentialed
+      provider is active (SugarProfile signed in).
+  - Reads the active identity provider + save store via the same
+    defaults the boot path uses (or whichever provider/store
+    SugarProfile contributes once 47.7/47.8 land).
+
+The hand-written Studio file is the Plan 046 override mechanism:
+its presence supersedes the auto-mounted schema panel, so the
+custom workspace controls all rendering for SugarProfile's tab.
 
 **Tests:** `packages/testing/src/plugin-infrastructure.test.ts`
 gains:
 - SugarProfile is in `listDiscoveredPluginDefinitions()`.
 - Schema + runtime-config keys pass `validatePluginSettingsSchema`.
-- Auto-mounted Studio workspace appears.
+- Studio's manual catalog entry for SugarProfile supersedes the
+  auto-mount (the schema-only mount is suppressed when the
+  override file exists).
+- Session Inspector dev actions trigger the right store calls
+  (mock the save store, assert `save` / `clear` are called with
+  the right args).
 
-**Dependencies:** none (just hooks into existing Plan 046
-mechanisms).
+**Dependencies:** 47.5.5 (the HUD card establishes the
+"session inspection" shape this dev panel mirrors statically).
 
-**Exit:** SugarProfile shows up as a Design workspace in Studio
-with a schema-rendered settings panel. Bundled plugin passes
-existing validators. No runtime behavior wired yet.
+**Exit:** SugarProfile shows up as a Design workspace in Studio.
+The workspace renders the schema-rendered Supabase config fields
+PLUS the Session Inspector dev panel. Clicking Seed Save with a
+real region id + position writes to IndexedDB; opening Playtest
+spawns the player in the seeded region/position. Bundled plugin
+passes existing validators. No Supabase runtime behavior wired
+yet (lands in 47.7+).
 
 ### 47.7 — `SupabaseIdentityProvider`
 

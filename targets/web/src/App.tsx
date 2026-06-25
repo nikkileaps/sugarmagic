@@ -127,7 +127,8 @@ export function App() {
         host.start({
           ...payload,
           pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment,
-          savedGame
+          savedGame,
+          currentUser: identity.user
         });
         setPhase({ kind: "running" });
       } catch (error) {

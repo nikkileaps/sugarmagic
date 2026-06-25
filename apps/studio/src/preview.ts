@@ -110,6 +110,7 @@ window.addEventListener("message", (event) => {
         activeRegionId: data.activeRegionId,
         activeEnvironmentId: data.activeEnvironmentId,
         savedGame,
+        currentUser: user,
         installedPluginIds: data.installedPluginIds,
         pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
         pluginConfigurations: data.pluginConfigurations,

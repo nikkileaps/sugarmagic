@@ -89,9 +89,11 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createPlayerVisualController,
+  createSessionHudCard,
   pickActiveRegionId,
   spawnRuntimePlayerEntity,
   type GameSave,
+  type User,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -146,6 +148,14 @@ export interface WebRuntimeStartState {
    * `null` is the explicit "first-time player, no save yet" signal.
    */
   savedGame?: GameSave | null;
+  /**
+   * Story 47.5.5 — resolved user at boot, used to populate the
+   * Session debug HUD card under Studio Playtest. Callers
+   * construct the active `UserIdentityProvider` and capture
+   * `currentUser()` before invoking `start`. Optional because the
+   * card is studio-only; published-web doesn't render the HUD.
+   */
+  currentUser?: User | null;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
@@ -1251,13 +1261,32 @@ export function createWebRuntimeHost(
     });
     if (adapter.boot.hostKind === "studio") {
       gameplaySession.initializeDebugBillboards();
+      // Story 47.5.5 — append the Session card so the author can
+      // watch user / save / region / position update during
+      // Playtest. The card is filtered to hostKinds: ["studio"]
+      // inside its factory; it would never appear in published-web
+      // anyway, but the explicit guard here makes the intent
+      // unambiguous at the call site.
+      const sessionHudCard = createSessionHudCard({
+        user: state.currentUser ?? null,
+        savedGameSnapshot: state.savedGame
+          ? {
+              lastPlayed: state.savedGame.lastPlayed,
+              currentRegionId: state.savedGame.payload.currentRegionId,
+              currentQuestId: state.savedGame.payload.currentQuestId
+            }
+          : null
+      });
       debugHud = createRuntimeDebugHud({
         parent: root,
         ownerWindow,
         boot: adapter.boot,
         world,
         blackboard: gameplaySession.blackboard,
-        pluginCards: gameplaySession.getDebugHudCardContributions(),
+        pluginCards: [
+          ...gameplaySession.getDebugHudCardContributions(),
+          sessionHudCard
+        ],
         getRendererStats: () => {
           const renderer = renderView?.renderer;
           if (!renderer) {

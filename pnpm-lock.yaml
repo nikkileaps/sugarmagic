@@ -224,6 +224,9 @@ importers:
       '@sugarmagic/target-web':
         specifier: workspace:*
         version: link:../../targets/web
+      '@sugarmagic/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@sugarmagic/workspaces':
         specifier: workspace:*
         version: link:../workspaces
