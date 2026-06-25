@@ -17,7 +17,13 @@ import type {
   RegionDocument
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
-import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
+import {
+  createAnonymousLocalIdentityProvider,
+  createIndexedDBGameSaveStore,
+  type GameSave,
+  type GameSaveStore,
+  type RuntimeBootModel
+} from "@sugarmagic/runtime-core";
 import { createWebRuntimeHost } from "@sugarmagic/target-web";
 
 interface PreviewBootMessage {
@@ -67,33 +73,64 @@ const host = createWebRuntimeHost({
   }
 });
 
+// Story 47.5 — Studio Playtest shares the same default identity +
+// save-store substrate as the published-web bundle so save behaviors
+// can be developed in-Studio without deploying. IndexedDB is same-
+// origin with the Studio dev server, so the iframe + the parent
+// Studio page see the same storage. SugarProfile would override via
+// the runtime contribution mechanism if it were enabled.
+const identityProvider = createAnonymousLocalIdentityProvider();
+const saveStore = createIndexedDBGameSaveStore();
+
+async function loadSaveSafely(
+  store: GameSaveStore,
+  userId: string
+): Promise<GameSave | null> {
+  try {
+    return await store.load(userId);
+  } catch (error) {
+    console.warn(
+      "[studio-preview] Failed to load saved game; continuing with a fresh world.",
+      error
+    );
+    return null;
+  }
+}
+
 window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
-    host.start({
-      regions: data.regions,
-      activeRegionId: data.activeRegionId,
-      activeEnvironmentId: data.activeEnvironmentId,
-      installedPluginIds: data.installedPluginIds,
-      pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
-      pluginConfigurations: data.pluginConfigurations,
-      contentLibrary: data.contentLibrary,
-      mechanics: data.mechanics,
-      playerDefinition: data.playerDefinition,
-      spellDefinitions: data.spellDefinitions,
-      itemDefinitions: data.itemDefinitions,
-      documentDefinitions: data.documentDefinitions,
-      npcDefinitions: data.npcDefinitions,
-      dialogueDefinitions: data.dialogueDefinitions,
-      questDefinitions: data.questDefinitions,
-      menuDefinitions: data.menuDefinitions,
-      hudDefinition: data.hudDefinition,
-      uiTheme: data.uiTheme,
-      soundEventBindings: data.soundEventBindings,
-      audioMixer: data.audioMixer,
-      assetSources: data.assetSources,
-      pluginBootPayloads: data.pluginBootPayloads
-    });
+    void (async () => {
+      const user = identityProvider.currentUser();
+      const savedGame = user
+        ? await loadSaveSafely(saveStore, user.userId)
+        : null;
+      host.start({
+        regions: data.regions,
+        activeRegionId: data.activeRegionId,
+        activeEnvironmentId: data.activeEnvironmentId,
+        savedGame,
+        installedPluginIds: data.installedPluginIds,
+        pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
+        pluginConfigurations: data.pluginConfigurations,
+        contentLibrary: data.contentLibrary,
+        mechanics: data.mechanics,
+        playerDefinition: data.playerDefinition,
+        spellDefinitions: data.spellDefinitions,
+        itemDefinitions: data.itemDefinitions,
+        documentDefinitions: data.documentDefinitions,
+        npcDefinitions: data.npcDefinitions,
+        dialogueDefinitions: data.dialogueDefinitions,
+        questDefinitions: data.questDefinitions,
+        menuDefinitions: data.menuDefinitions,
+        hudDefinition: data.hudDefinition,
+        uiTheme: data.uiTheme,
+        soundEventBindings: data.soundEventBindings,
+        audioMixer: data.audioMixer,
+        assetSources: data.assetSources,
+        pluginBootPayloads: data.pluginBootPayloads
+      });
+    })();
   }
 });
 

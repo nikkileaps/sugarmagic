@@ -89,7 +89,9 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createPlayerVisualController,
+  pickActiveRegionId,
   spawnRuntimePlayerEntity,
+  type GameSave,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -135,6 +137,15 @@ export interface WebRuntimeStartState {
   regions: RegionDocument[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  /**
+   * Story 47.5 — pre-loaded game save record for the current user.
+   * When non-null, the host hydrates from the save's payload
+   * (currentRegionId, playerPosition) instead of the authored
+   * defaults from boot.json. Callers (App.tsx, preview.ts) load
+   * this via `GameSaveStore.load(userId)` before invoking `start`;
+   * `null` is the explicit "first-time player, no save yet" signal.
+   */
+  savedGame?: GameSave | null;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
@@ -924,7 +935,15 @@ export function createWebRuntimeHost(
       }
     });
 
-    const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
+    // Story 47.5 — the saved game's currentRegionId wins over the
+    // authored default from boot.json so a returning player resumes
+    // where they left off. First-time players (no save) fall through
+    // to the authored region id.
+    const resolvedActiveRegionId = pickActiveRegionId(
+      state.activeRegionId,
+      state.savedGame ?? null
+    );
+    const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
     renderEngineProjector.push(state);
     renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
@@ -1146,11 +1165,18 @@ export function createWebRuntimeHost(
         .getContributions("conversation.provider")
         .map((contribution) => contribution.payload.providerId)
     });
+    // Story 47.5 — when the saved game carries a playerPosition,
+    // spawn there; otherwise fall through to the region's
+    // playerPresence default (which spawnRuntimePlayerEntity handles
+    // when positionOverride is undefined).
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,
       state.playerDefinition,
-      state.mechanics
+      state.mechanics,
+      {
+        positionOverride: state.savedGame?.payload.playerPosition ?? null
+      }
     );
     playerEyeHeight = playerSpawn.eyeHeight;
 

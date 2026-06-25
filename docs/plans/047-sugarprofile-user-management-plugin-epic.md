@@ -348,9 +348,10 @@ existing Plan 045 Set Value modal.
 ## Stories
 
 Story dependency shape: `47.1 -> {47.2, 47.3, 47.4}`;
-`{47.3, 47.4} -> 47.5`; `47.1 -> 47.6`; `47.6 -> {47.7, 47.8}`;
-`{47.6, 47.8} -> 47.9`; `{47.5, 47.9} -> 47.10`; everything ->
-`47.11`. Stories with no shared inputs can land in parallel.
+`{47.3, 47.4} -> 47.5 -> 47.5.5`; `47.1 -> 47.6`;
+`47.6 -> {47.7, 47.8}`; `{47.6, 47.8} -> 47.9`;
+`{47.5, 47.9} -> 47.10`; everything -> `47.11`. Stories with no
+shared inputs can land in parallel.
 
 ### 47.1 — Core contracts in `runtime-core`
 
@@ -584,6 +585,97 @@ session so a bare game without SugarProfile saves to IndexedDB.
 to a new region; close + reopen the Playtest session; the player
 spawns in the saved region. Same behavior in the deployed
 published-web bundle without any plugins installed.
+
+### 47.5.5 — Session Inspector (HUD card + Studio dev panel)
+
+QA / dev-tooling story landed alongside the boot-path wiring so the
+read path from 47.5 (and the write path from 47.10) is observable
+without devtools spelunking. Ships two surfaces; both are
+author-facing, neither ships to published-web.
+
+**Surface A: live "Session" HUD card during playtest.**
+A `debug.hudCard` contribution rendered into Studio Playtest only
+(filtered via `hostKinds: ["studio"]` — the existing mechanism
+keeps it out of the published-web bundle). Updates per tick from
+the live runtime so the author can watch `playerPosition` change
+as they walk around. Card body:
+
+```
+SESSION
+user        ab12cd34...  (anon)
+region      hollow-station
+position    12.50, 0.00, -8.25
+save        present (lastPlayed 12:04:31)
+```
+
+**Surface B: Studio "Session" design workspace.**
+A new core-Studio workspace under Design productmode (alongside
+Layout / NPCs / Quests). Constructs the same default
+`AnonymousLocalIdentityProvider` + `IndexedDBGameSaveStore` the
+boot path uses, reads + writes the persisted record. Three
+sections:
+
+- **Current user** — userId, isAnonymous, displayName, email,
+  createdAt. "Refresh" button re-reads.
+- **Current save** — when a save exists: lastPlayed,
+  currentRegionId, currentQuestId, playerPosition. When null:
+  "No save yet for this user." "Refresh" button re-reads.
+- **Dev actions** — three buttons:
+  - **Seed Save** opens a modal: region picker (populated from
+    the project's `regions`), playerPosition x/y/z inputs,
+    optional currentQuestId. On submit, writes a `GameSave` to
+    IndexedDB for the current user. Useful for verifying the
+    47.5 read path before 47.10's autosave lands.
+  - **Clear Save** confirms + calls `saveStore.clear(userId)`.
+  - **Regenerate Anonymous User** confirms + deletes the
+    `localStorage` entry under `sugarmagic.anonymous-user-id`,
+    re-constructs the provider, refreshes the user view.
+    Useful for testing first-time-player paths.
+
+The design panel and HUD card both pull from the same defaults,
+so changes in the panel are visible immediately in the next
+playtest open.
+
+**Files (new):**
+
+- `packages/runtime-core/src/identity/session-hud-card.ts`
+  - `createSessionHudCard(args: { user, saveStore, getActiveRegionId,
+    getPlayerPosition }): DebugHudCardContribution` factory.
+  - Card render function reads the live position component via
+    the supplied `getPlayerPosition` callback (closure over the
+    world + player entity from the host).
+- `targets/web/src/runtimeHost.ts` (modify) — wires the
+  session HUD card automatically when `hostKind === "studio"`.
+  The card needs `user`, `saveStore`, and accessors for the
+  current region id + player position; the host owns all of
+  these post-`start`.
+- `apps/studio/src/workspaces/SessionWorkspace.tsx` — the new
+  Studio design workspace component.
+- `apps/studio/src/App.tsx` — register the "session" workspaceKind
+  alongside the existing "layout" / "npcs" / "quests" branches.
+
+**Tests:**
+
+- Pure: `createSessionHudCard` renders the right strings given
+  fixture inputs (truncated userId, formatted position, save
+  present/absent).
+- Pure: `SessionWorkspace` seed-save dialog form validation
+  (region id is required, x/y/z parse as numbers).
+- Integration: opening + writing a save via the dev panel +
+  closing + reopening Studio results in the new save being
+  loaded by the runtime host on next start (string-match on
+  IndexedDB read, mocked via `fake-indexeddb`).
+
+**Dependencies:** 47.5 (the boot-path wiring + UserContext are the
+substrate this story makes inspectable).
+
+**Exit:** in Studio's Design productmode, the "Session" workspace
+shows the current anonymous user and any persisted save; clicking
+"Seed Save" with a real region id + position writes to IndexedDB;
+clicking Playtest opens the runtime with the seeded state +
+spawns the player in the seeded region/position. The live HUD
+card in Playtest shows the same userId + updating playerPosition
+as the player walks around.
 
 ### 47.6 — SugarProfile plugin scaffold
 

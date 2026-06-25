@@ -1,14 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import {
+  createDefaultMechanicsDefinition,
+  createDefaultPlayerDefinition
+} from "@sugarmagic/domain";
+import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
   createRuntimeBootModel,
   createRuntimePluginManager,
   GAME_SAVE_SCHEMA_VERSION,
   NotSupportedError,
+  pickActiveRegionId,
+  Position,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
+  spawnRuntimePlayerEntity,
+  World,
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
@@ -837,5 +845,115 @@ describe("IndexedDBGameSaveStore", () => {
     });
     const fromB = await storeB.load("u_alpha");
     expect(fromB?.payload.currentRegionId).toBe("shared");
+  });
+});
+
+// Story 47.5 — boot-path wiring. Pure helpers the runtime host uses
+// to decide between resuming-from-save and starting-from-authored-
+// defaults. The host integration itself is verified by manual
+// playtest (heavy three.js / WebGL deps make Node-level integration
+// testing impractical); these tests cover the swappable surface.
+describe("pickActiveRegionId", () => {
+  function makeSave(
+    overrides: Partial<{
+      currentRegionId: string | null;
+      currentQuestId: string | null;
+      playerPosition: { x: number; y: number; z: number } | null;
+    }> = {}
+  ) {
+    return {
+      userId: "u_alpha",
+      lastPlayed: "2026-06-25T12:00:00.000Z",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: {
+        currentRegionId: "saved-region",
+        currentQuestId: null,
+        playerPosition: null,
+        ...overrides
+      }
+    };
+  }
+
+  it("returns the save's currentRegionId when a save with a region is present", () => {
+    expect(
+      pickActiveRegionId("authored-region", makeSave({ currentRegionId: "saved" }))
+    ).toBe("saved");
+  });
+
+  it("falls back to the authored region id when no save is present", () => {
+    expect(pickActiveRegionId("authored-region", null)).toBe("authored-region");
+  });
+
+  it("falls back to the authored region id when the save carries a null currentRegionId", () => {
+    expect(
+      pickActiveRegionId("authored-region", makeSave({ currentRegionId: null }))
+    ).toBe("authored-region");
+  });
+
+  it("returns the authored value unchanged when both are undefined / null", () => {
+    expect(pickActiveRegionId(null, null)).toBeNull();
+    expect(pickActiveRegionId(undefined, null)).toBeUndefined();
+  });
+
+  it("the save still wins even when the authored value is null / undefined", () => {
+    expect(
+      pickActiveRegionId(null, makeSave({ currentRegionId: "saved-from-save" }))
+    ).toBe("saved-from-save");
+    expect(
+      pickActiveRegionId(
+        undefined,
+        makeSave({ currentRegionId: "saved-from-save" })
+      )
+    ).toBe("saved-from-save");
+  });
+});
+
+describe("spawnRuntimePlayerEntity with positionOverride", () => {
+  it("spawns at the override position when provided", () => {
+    const world = new World();
+    const player = createDefaultPlayerDefinition("project:test", {
+      definitionId: "project:test:player:default"
+    });
+    const spawn = spawnRuntimePlayerEntity(
+      world,
+      null,
+      player,
+      createDefaultMechanicsDefinition(),
+      { positionOverride: { x: 12.5, y: 3, z: -8.25 } }
+    );
+    expect(spawn.position).toEqual([12.5, 3, -8.25]);
+    const position = world.getComponent(spawn.entity, Position);
+    expect(position?.x).toBe(12.5);
+    expect(position?.y).toBe(3);
+    expect(position?.z).toBe(-8.25);
+  });
+
+  it("falls back to [0,0,0] when no override and no region is supplied", () => {
+    const world = new World();
+    const player = createDefaultPlayerDefinition("project:test", {
+      definitionId: "project:test:player:default"
+    });
+    const spawn = spawnRuntimePlayerEntity(
+      world,
+      null,
+      player,
+      createDefaultMechanicsDefinition()
+    );
+    expect(spawn.position).toEqual([0, 0, 0]);
+  });
+
+  it("explicit null positionOverride falls through to the region default", () => {
+    const world = new World();
+    const player = createDefaultPlayerDefinition("project:test", {
+      definitionId: "project:test:player:default"
+    });
+    const spawn = spawnRuntimePlayerEntity(
+      world,
+      null,
+      player,
+      createDefaultMechanicsDefinition(),
+      { positionOverride: null }
+    );
+    expect(spawn.position).toEqual([0, 0, 0]);
   });
 });
