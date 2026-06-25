@@ -7,8 +7,17 @@ exposes a Studio workspace; the substance — terraform generation, deploy scrip
 emission, action descriptors, secret naming, override normalization, plugin
 state — lives here.
 
-For the architectural rules, read [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md).
-For the epic that shipped this, read [Plan 045](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md).
+For the Cloud Run backend half, read
+[ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md)
+and [Plan 045](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md).
+For the web publish-target half (frontend deploy, GHA workflow,
+per-game gateway runtime config, Release workspace cadence), read
+[ADR 018](/docs/adr/018-sugardeploy-web-publish-target-architecture.md)
+and [Plan 046](/docs/plans/046-sugardeploy-web-publish-target-epic.md).
+For the engine vs. game lifecycle split that backs the published-web
+managed files, read
+[ADR 019](/docs/adr/019-engine-vs-game-lifecycle-split.md)
+and [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md).
 
 ## File layout
 
@@ -20,6 +29,11 @@ For the epic that shipped this, read [Plan 045](/docs/plans/045-sugardeploy-clou
 | `cloud-run-terraform.ts` | Cloud Run terraform emitters, the `CLOUD_RUN_TEMPLATE_VERSION` stamp, the `TERRAFORM_RENAME_LEDGER`, `resolveSecretManagerName`, `collectSecretEnvBindings` |
 | `gcp-bootstrap.ts`       | GCP-API helpers used by host middleware (`buildGcpProjectName`, `classifyProjectListResult`, `parseBillingAccountList`, `REQUIRED_GCP_APIS`, validators) |
 | `plugin-state.ts`        | Read/write API for SugarDeploy's `pluginConfigurations[].config` slot (`getDeploymentSettings`, `getVersionedProjectIdentifiers`, builders) |
+| `publish-targets.ts`     | `PublishTargetId` enum, `PublishTargetSettings`, defaulting + normalization for the publish-axis settings slot (Plan 046) |
+| `netlify.ts`             | Netlify frontend deployment target: `NETLIFY_TEMPLATE_VERSION`, `FRONTEND_RENAME_LEDGER`, `buildNetlifyManagedFiles`, `collectNetlifyWarnings`, `normalizeNetlifyDeploymentTargetOverrides`, `isValidNetlifySiteId` |
+| `published-web.ts`       | Per-game bundle root under `.sugarmagic/published-web/`: `BOOT_JSON_SCHEMA_VERSION`, `PublishedWebRuntimeSnapshot`, `buildPublishedWebManagedFiles`, `getPublishedWebDirectory` |
+| `github-workflow.ts`     | `sugardeploy-deploy.yml` generator: `SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION`, `WORKFLOW_RENAME_LEDGER`, `buildSugarDeployGithubWorkflowFile`, `getSugarDeployGithubWorkflowPath`, `planNeedsGithubWorkflow` |
+| `version-tags.ts`        | Pure `v{major}.0.{patch}` parsing + auto-increment + grouping helpers (`parseVersionTag`, `computeNextPatchTag`, `groupVersionTags`) for the Release workspace |
 
 ## SugarDeploy plugin state slot
 
@@ -89,6 +103,89 @@ Procedure:
 
 The ledger retains entries indefinitely; do not prune.
 
+## Frontend rename ledger + workflow rename ledger
+
+Two parallel ledgers cover the publish-side half on the same drift
+discipline as `TERRAFORM_RENAME_LEDGER`:
+
+- `FRONTEND_RENAME_LEDGER` in `netlify.ts` -- entries for files
+  under `deployment/<host>/` when the file shape or names change.
+  Drives the drift banner for `deployment/netlify/`. Owned per
+  frontend deployment target (Cloudflare Pages etc. would add
+  their own ledger alongside `netlify.ts`).
+- `WORKFLOW_RENAME_LEDGER` in `github-workflow.ts` -- entries for
+  files generated under `.github/workflows/` (today:
+  `sugardeploy-deploy.yml`). Drives the drift banner for the GHA
+  workflow stamp `SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION`.
+
+Both follow the same rename-safe pattern: bump the template version
+constant, add an entry to the ledger describing the rename, ship.
+Old games regenerate with the historical chain applied; drift
+banner clears on save.
+
+## boot.json + frontend deployment target handlers
+
+`buildPublishedWebManagedFiles(gameProject, snapshot)` emits the
+per-game artifact root at `.sugarmagic/published-web/`:
+
+- `boot.json` -- normalized game snapshot stamped with
+  `BOOT_JSON_SCHEMA_VERSION`. The published-web runtime
+  (`targets/web/src/App.tsx`) fetches this from the deployed
+  origin at boot and asserts compatibility on read. See
+  [ADR 019](/docs/adr/019-engine-vs-game-lifecycle-split.md)
+  for the engine vs. game compatibility contract.
+- `README.md` -- operational guide for what's generated vs.
+  what the Build Frontend button produces.
+
+`frontendDeploymentTargetHandlers` in `index.ts` is the per-host
+registry (mirror of the backend `targetHandlers`). Adding a second
+frontend host (Cloudflare Pages, S3, etc.) means:
+
+1. Add the `FrontendDeploymentTargetId` to
+   `packages/domain/src/deployment/index.ts`.
+2. Add the override normalizer + `<host>.ts` module with its own
+   `<HOST>_TEMPLATE_VERSION` + `FRONTEND_RENAME_LEDGER`.
+3. Add the entry to `frontendDeploymentTargetHandlers` with
+   `definition`, `normalizeOverrides`, optional `collectWarnings`,
+   and `buildManagedFiles`.
+4. Add a Studio tab in the SugarDeploy Provision workspace.
+5. Add tests.
+
+The shape is the same as adding a backend target -- one registry
+entry, one managed-files builder, no Studio-core changes.
+
+## Gateway runtime config (per-game plugin config)
+
+Non-secret runtime config that the gateway reads at request time
+(vector store ids, model identifiers, target language codes, etc.)
+lives in each plugin's per-game configuration slot under
+`pluginConfigurations[<pluginId>].config.*`, NOT in `.env` files
+or shell exports. Plugins declare which config keys flow to the
+gateway via `gatewayRuntimeConfigKeys`:
+
+```ts
+gatewayRuntimeConfigKeys: [
+  {
+    configKey: "openAiVectorStoreId",
+    envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID",
+    description: "OpenAI vector store id the gateway queries...",
+    nonSecretAttestation: "safe-to-expose-publicly"
+  }
+]
+```
+
+`planGameDeployment` walks every enabled plugin's declarations,
+validates each via `validateGatewayRuntimeConfigKey` (which
+enforces the `SUGARMAGIC_<PLUGIN_ID_UPPER>_<KEY>` env var name
+pattern and the secret-suffix backstop), and bakes the resulting
+`Record<string, string>` into `plan.gatewayRuntimeConfigEnv`.
+The deploy.sh `--set-env-vars=^@^...@...` block and the GHA
+workflow's `deploy-backend` `env:` block both read from that
+single map.
+
+See [ADR 018](/docs/adr/018-sugardeploy-web-publish-target-architecture.md)
+for the "non-secret attestation + name-pattern backstop" rationale.
+
 ## Secret naming
 
 `resolveSecretManagerName(plan, secretKey)` returns the canonical Secret
@@ -131,6 +228,14 @@ these endpoints:
 | `POST /__sugardeploy/tag-prior-major`             | `git tag v{prior}.0.0 HEAD`                            |
 | `POST /__sugardeploy/untag-prior-major`           | `git tag -d v{prior}.0.0` (saga rollback)              |
 | `POST /__sugardeploy/commit-major-version-bump`   | `git add -u` + `git commit` for the cut               |
+| `POST /__sugardeploy/list-version-tags`           | `git tag --list 'v*.0.*'` grouped by major (Release workspace version history) |
+| `POST /__sugardeploy/tag-patch-version`           | Auto-increment + `git tag v{N}.0.M+1 HEAD`; `dryRun: true` returns the plan without side effects |
+| `POST /__sugardeploy/setup-github-workflow`       | `gh variable set` + `gh secret set --body-file -` for the GHA deploy workflow's identifier + credential set |
+| `POST /__sugardeploy/build-published-web`         | Builds `@sugarmagic/target-web` and copies `dist/` into `.sugarmagic/published-web/dist/` (Plan 046 stopgap; Plan 048 reshapes this into a GHCR pull) |
+| `POST /__sugardeploy/preflight-deploy-workflow`   | `gh run` pre-flight + repo-clean check before dispatching the deploy workflow |
+| `POST /__sugardeploy/dispatch-deploy-workflow`    | `gh workflow run` for `sugardeploy-deploy.yml`        |
+| `POST /__sugardeploy/get-deploy-workflow-status`  | `gh run view --json` polled by the Deploy workspace tracker |
+| `POST /__sugardeploy/rerun-failed-jobs`           | `gh run rerun --failed` for a tracked run id          |
 
 Every endpoint accepts JSON, returns `{ ok: boolean, ... }`. Side-effect
 endpoints re-run the relevant pre-flight inside the handler — the Studio's

@@ -7,9 +7,26 @@
 > envisioned is fully implemented in
 > [Plan 045](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md);
 > the architectural rules it settled are recorded in
-> [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md). Read those
-> two before changing anything in `packages/plugins/src/catalog/sugardeploy/`
-> or `packages/plugins/src/deployment/`.
+> [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md).
+>
+> **Web publish target implementation:** the publish productmode, the
+> Provision / Release / Deploy workspace cadence, the GHA-driven deploy
+> pipeline, and the per-game gateway runtime config contract are
+> implemented in
+> [Plan 046](/docs/plans/046-sugardeploy-web-publish-target-epic.md); the
+> architectural rules are recorded in
+> [ADR 018](/docs/adr/018-sugardeploy-web-publish-target-architecture.md).
+>
+> **Engine-versioning model:** the engine vs. game lifecycle split that
+> the published-web managed files rely on is documented in
+> [ADR 019](/docs/adr/019-engine-vs-game-lifecycle-split.md); the
+> production substrate (GHCR-published engine image + per-game
+> `frontendBundleVersion` pin + Unity-style upgrade prompt) is designed
+> in [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md).
+>
+> Read the relevant ADR + plan pair before changing anything in
+> `packages/plugins/src/catalog/sugardeploy/` or
+> `packages/plugins/src/deployment/`.
 
 ## Epic
 

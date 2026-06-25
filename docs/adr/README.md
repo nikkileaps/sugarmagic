@@ -18,3 +18,8 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 012: Surface / Deform / Effect Traits](/Users/nikki/projects/sugarmagic/docs/adr/012-surface-deform-effect-traits.md)
 - [ADR 013: Surface as Layer Stack](/Users/nikki/projects/sugarmagic/docs/adr/013-surface-as-layer-stack.md)
 - [ADR 014: Render Engine and Render View](/Users/nikki/projects/sugarmagic/docs/adr/014-render-engine-and-render-view.md)
+- [ADR 015: Library-First Content Model](/Users/nikki/projects/sugarmagic/docs/adr/015-library-first-content-model.md)
+- [ADR 016: Sound System Architecture](/Users/nikki/projects/sugarmagic/docs/adr/016-sound-system-architecture.md)
+- [ADR 017: SugarDeploy Cloud Run Architecture](/Users/nikki/projects/sugarmagic/docs/adr/017-sugardeploy-cloud-run-architecture.md)
+- [ADR 018: SugarDeploy Web Publish Target Architecture](/Users/nikki/projects/sugarmagic/docs/adr/018-sugardeploy-web-publish-target-architecture.md)
+- [ADR 019: Engine vs. Game Lifecycle Split](/Users/nikki/projects/sugarmagic/docs/adr/019-engine-vs-game-lifecycle-split.md)
