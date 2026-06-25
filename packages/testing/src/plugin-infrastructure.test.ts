@@ -42,7 +42,10 @@ import {
   getDeployHistory,
   type DeployHistoryEntry,
   collectSecretEnvBindings,
+  computeNextPatchTag,
   createDefaultPublishTargetSettings,
+  groupVersionTags,
+  parseVersionTag,
   getPublishSettings,
   getVersionedProjectIdentifiers,
   isValidGcpProjectId,
@@ -351,11 +354,13 @@ describe("plugin infrastructure", () => {
       "sugardeploy-gcp-project-lifecycle",
       "sugardeploy-get-deploy-workflow-status",
       "sugardeploy-host-actions",
+      "sugardeploy-list-version-tags",
       "sugardeploy-preflight-deploy-workflow",
       "sugardeploy-rerun-failed-jobs",
       "sugardeploy-secret-status",
       "sugardeploy-set-secret-value",
       "sugardeploy-setup-github-workflow",
+      "sugardeploy-tag-patch-version",
       "sugardeploy-template-version"
     ]);
   });
@@ -3272,5 +3277,116 @@ describe("plugin infrastructure", () => {
         (contribution) => contribution.kind === "conversation.provider"
       )
     ).toBe(true);
+  });
+
+  // Story 46.12 — patch-tag auto-increment + version-history grouping.
+  // The `v{major}.0.{patch}` scheme is the source of truth for which
+  // commit deploys to which Cloud Run + Netlify slot. Patches always
+  // anchor to an existing major (you can't patch a major that hasn't
+  // been cut), and gaps in the patch sequence never get reused.
+  it("parses well-formed version tags and rejects malformed ones", () => {
+    expect(parseVersionTag("v1.0.0")).toEqual({ major: 1, patch: 0, tag: "v1.0.0" });
+    expect(parseVersionTag("v2.0.7")).toEqual({ major: 2, patch: 7, tag: "v2.0.7" });
+    expect(parseVersionTag("  v3.0.1  ")).toEqual({ major: 3, patch: 1, tag: "v3.0.1" });
+    // Wrong shape — semver minor (the middle component must be `0`).
+    expect(parseVersionTag("v1.2.3")).toBeNull();
+    // Missing leading `v`.
+    expect(parseVersionTag("1.0.0")).toBeNull();
+    // Pre-release suffix not supported.
+    expect(parseVersionTag("v1.0.0-rc1")).toBeNull();
+    // Zero / negative major rejected.
+    expect(parseVersionTag("v0.0.1")).toBeNull();
+  });
+
+  it("auto-increments to the next patch tag from the highest existing patch", () => {
+    expect(computeNextPatchTag(["v1.0.0"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.0.1",
+      highestExistingPatch: 0
+    });
+    expect(computeNextPatchTag(["v1.0.0", "v1.0.1"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.0.2",
+      highestExistingPatch: 1
+    });
+    expect(computeNextPatchTag(["v1.0.0", "v1.0.1", "v1.0.2"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.0.3",
+      highestExistingPatch: 2
+    });
+  });
+
+  it("is gap-tolerant: never reuses a freed patch number", () => {
+    // Patches v1.0.2 was deleted; next should still be v1.0.4, not v1.0.2.
+    // Reusing a freed number would point a tag at a different commit than
+    // anyone who saw it previously expects.
+    expect(computeNextPatchTag(["v1.0.0", "v1.0.1", "v1.0.3"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.0.4",
+      highestExistingPatch: 3
+    });
+  });
+
+  it("ignores patches of other majors when computing next patch", () => {
+    // v2's patches must not influence v1's next patch.
+    expect(computeNextPatchTag(["v1.0.0", "v2.0.0", "v2.0.5"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.0.1",
+      highestExistingPatch: 0
+    });
+    expect(computeNextPatchTag(["v1.0.0", "v2.0.0", "v2.0.5"], 2)).toEqual({
+      ok: true,
+      nextTag: "v2.0.6",
+      highestExistingPatch: 5
+    });
+  });
+
+  it("refuses to patch a major that hasn't been cut", () => {
+    const result = computeNextPatchTag(["v1.0.0"], 2);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/No v2\.0\.0 tag found/);
+  });
+
+  it("rejects non-positive-integer majors", () => {
+    expect(computeNextPatchTag(["v1.0.0"], 0).ok).toBe(false);
+    expect(computeNextPatchTag(["v1.0.0"], -1).ok).toBe(false);
+    expect(computeNextPatchTag(["v1.0.0"], 1.5).ok).toBe(false);
+  });
+
+  it("groups version tags into majors with patches sorted ascending", () => {
+    expect(
+      groupVersionTags([
+        "v1.0.0",
+        "v2.0.0",
+        "v1.0.2",
+        "v1.0.1",
+        "v2.0.1",
+        "not-a-version",
+        "v1.2.3"
+      ])
+    ).toEqual([
+      {
+        major: 2,
+        baseTag: "v2.0.0",
+        patches: [{ major: 2, patch: 1, tag: "v2.0.1" }]
+      },
+      {
+        major: 1,
+        baseTag: "v1.0.0",
+        patches: [
+          { major: 1, patch: 1, tag: "v1.0.1" },
+          { major: 1, patch: 2, tag: "v1.0.2" }
+        ]
+      }
+    ]);
+  });
+
+  it("groupVersionTags skips orphan patches missing a v{N}.0.0 base", () => {
+    // If someone hand-tagged v3.0.4 without ever creating v3.0.0,
+    // the UI shouldn't render v3 as a major. The cut-major flow is
+    // the only sanctioned way to create v3.0.0.
+    expect(groupVersionTags(["v1.0.0", "v3.0.4"])).toEqual([
+      { major: 1, baseTag: "v1.0.0", patches: [] }
+    ]);
   });
 });

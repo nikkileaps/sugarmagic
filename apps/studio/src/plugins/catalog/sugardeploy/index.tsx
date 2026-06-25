@@ -35,6 +35,7 @@ import {
   getDeploymentSettings,
   getPublishSettings,
   getVersionedProjectIdentifiers,
+  type GroupedVersionMajor,
   isValidNetlifySiteId,
   listDeploymentTargets,
   listFrontendDeploymentTargets,
@@ -346,6 +347,40 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       };
   const [releaseModalState, setReleaseModalState] = useState<ReleaseModalState>(null);
 
+  // Story 46.12 — Tag Patch Version modal. Mirrors the cut-major
+  // phase machine but stays git-only: no plugin-state changes, no
+  // GCP project, no commit. The host endpoint runs all pre-flight
+  // checks (clean tree, HEAD reachable from v{major}.0.0, base tag
+  // exists) plus computes the next patch number; `dryRun: true`
+  // returns the plan, `dryRun: false` actually creates the tag.
+  type TagPatchModalState =
+    | null
+    | { phase: "checking" }
+    | { phase: "preflight-failed"; reason: string }
+    | {
+        phase: "ready";
+        major: number;
+        nextTag: string;
+        baseTag: string;
+        workingDirectory: string;
+      }
+    | { phase: "tagging"; nextTag: string }
+    | { phase: "success"; tagName: string }
+    | { phase: "failed"; reason: string };
+  const [tagPatchModalState, setTagPatchModalState] =
+    useState<TagPatchModalState>(null);
+
+  // Story 46.12 — live git tag list driving the version history
+  // sub-rows. Plugin state tracks only major-version suffixes (a
+  // GCP-slot concern); patch tags exist in git alone, fetched on
+  // mount + after every Tag Patch action so the UI doesn't drift.
+  const [versionTagsByMajor, setVersionTagsByMajor] = useState<
+    GroupedVersionMajor[] | null
+  >(null);
+  const [versionTagsLoadError, setVersionTagsLoadError] = useState<string | null>(
+    null
+  );
+
   // Story 46.8 — Setup GitHub Workflow modal state machine.
   // - prompting: user enters NETLIFY_AUTH_TOKEN
   // - running: POST is in flight
@@ -436,6 +471,11 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const releaseModalBusy =
     releaseModalState?.phase === "checking" ||
     releaseModalState?.phase === "cutting";
+
+  const tagPatchModalOpen = tagPatchModalState !== null;
+  const tagPatchModalBusy =
+    tagPatchModalState?.phase === "checking" ||
+    tagPatchModalState?.phase === "tagging";
 
   // Story 45.8.5 — placeholder for the "+ add publish target" tab
   // that lands in plan 047. Today's data model carries a singular
@@ -1555,6 +1595,140 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     }
   }
 
+  // Story 46.12 — fetch the live tag list from git via the host
+  // middleware. Called on mount + after every Tag Patch action so
+  // the version history list always reflects on-disk reality.
+  async function refreshVersionTags() {
+    if (!gameProject) return;
+    const workingDirectory =
+      getDeploymentSettings(gameProject).workingDirectory ?? "";
+    if (workingDirectory.length === 0) {
+      setVersionTagsByMajor(null);
+      setVersionTagsLoadError(null);
+      return;
+    }
+    try {
+      const response = await fetch("/__sugardeploy/list-version-tags", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workingDirectory })
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        reason?: string;
+        majors?: GroupedVersionMajor[];
+      };
+      if (!payload.ok) {
+        setVersionTagsByMajor(null);
+        setVersionTagsLoadError(payload.reason ?? "Failed to list version tags.");
+        return;
+      }
+      setVersionTagsByMajor(payload.majors ?? []);
+      setVersionTagsLoadError(null);
+    } catch (error) {
+      setVersionTagsByMajor(null);
+      setVersionTagsLoadError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  // Fetch on mount and whenever workingDirectory changes. The Release
+  // workspace is the only consumer today; fetching unconditionally keeps
+  // the data fresh without coupling to view state (cheap: one read-only
+  // `git tag --list`).
+  const workingDirectoryForVersionTags =
+    gameProject
+      ? getDeploymentSettings(gameProject).workingDirectory ?? ""
+      : "";
+  useEffect(() => {
+    void refreshVersionTags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workingDirectoryForVersionTags]);
+
+  // Story 46.12 — Tag Patch Version saga.
+  //
+  // Phase 1: preview. Open the modal in "checking" state and call
+  // tag-patch-version with `dryRun: true`. The host runs every
+  // pre-flight check (git on PATH, clean tree, base tag reachable
+  // from HEAD) and returns the next patch tag without creating it.
+  // No side effects in this phase.
+  async function openTagPatchModalAndPrepare() {
+    if (!gameProject) return;
+    const major = gameProject.majorVersion;
+    const workingDirectory =
+      getDeploymentSettings(gameProject).workingDirectory ?? "";
+    setTagPatchModalState({ phase: "checking" });
+    try {
+      const response = await fetch("/__sugardeploy/tag-patch-version", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workingDirectory, major, dryRun: true })
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        reason?: string;
+        tagName?: string;
+        baseTag?: string;
+      };
+      if (!payload.ok || !payload.tagName || !payload.baseTag) {
+        setTagPatchModalState({
+          phase: "preflight-failed",
+          reason: payload.reason ?? "Pre-flight check failed."
+        });
+        return;
+      }
+      setTagPatchModalState({
+        phase: "ready",
+        major,
+        nextTag: payload.tagName,
+        baseTag: payload.baseTag,
+        workingDirectory
+      });
+    } catch (error) {
+      setTagPatchModalState({
+        phase: "preflight-failed",
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  // Phase 2: tag. User confirmed; call the same endpoint without
+  // dryRun. The host re-runs every pre-flight check before creating
+  // the tag — Studio's "ready" state is advisory, not authoritative,
+  // so an external git operation racing the modal still fails safely.
+  async function runTagPatchSaga(workingDirectory: string, major: number) {
+    setTagPatchModalState({ phase: "tagging", nextTag: "" });
+    try {
+      const response = await fetch("/__sugardeploy/tag-patch-version", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workingDirectory, major })
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        reason?: string;
+        tagName?: string;
+      };
+      if (!payload.ok || !payload.tagName) {
+        setTagPatchModalState({
+          phase: "failed",
+          reason: payload.reason ?? "git tag failed."
+        });
+        return;
+      }
+      setTagPatchModalState({ phase: "success", tagName: payload.tagName });
+      // Refresh the version history so the new tag renders as a
+      // sub-row under its major.
+      void refreshVersionTags();
+    } catch (error) {
+      setTagPatchModalState({
+        phase: "failed",
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   async function handleCreateGcpProjectClick() {
     if (!gameProject || !resolvedGcpProjectId) return;
     setCreateState((prev) => ({
@@ -2399,13 +2573,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 — release metadata, independent of publish + deployment targets
               </Text>
             </Group>
-            <Button
-              size="xs"
-              variant="filled"
-              onClick={() => void openReleaseModalAndPrepare()}
-            >
-              Release New Version
-            </Button>
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="default"
+                onClick={() => void openTagPatchModalAndPrepare()}
+              >
+                Tag Patch Version
+              </Button>
+              <Button
+                size="xs"
+                variant="filled"
+                onClick={() => void openReleaseModalAndPrepare()}
+              >
+                Release New Version
+              </Button>
+            </Group>
           </Group>
           <Box
             p="sm"
@@ -2450,32 +2633,60 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 }
                 return entries.map((entry) => {
                   const isActive = entry.version === gameProject.majorVersion;
+                  // Story 46.12 — patches for this major come from the
+                  // live git tag list (versionTagsByMajor). Plugin
+                  // state intentionally does NOT mirror patch tags;
+                  // git is the source of truth for `v{N}.0.M`.
+                  const patches =
+                    versionTagsByMajor?.find(
+                      (group) => group.major === entry.version
+                    )?.patches ?? [];
                   return (
-                    <Group
-                      key={entry.key}
-                      justify="space-between"
-                      wrap="nowrap"
-                      align="center"
-                    >
-                      <Group gap="xs" align="center" wrap="nowrap">
-                        <Badge
-                          size="md"
-                          variant={isActive ? "filled" : "light"}
-                          color={isActive ? "blue" : "gray"}
-                        >
-                          v{entry.version}
-                        </Badge>
-                        {isActive ? (
-                          <Text size="xs" c="var(--sm-color-subtext)">
-                            (active)
-                          </Text>
-                        ) : null}
+                    <Stack key={entry.key} gap={2}>
+                      <Group
+                        justify="space-between"
+                        wrap="nowrap"
+                        align="center"
+                      >
+                        <Group gap="xs" align="center" wrap="nowrap">
+                          <Badge
+                            size="md"
+                            variant={isActive ? "filled" : "light"}
+                            color={isActive ? "blue" : "gray"}
+                          >
+                            v{entry.version}
+                          </Badge>
+                          {isActive ? (
+                            <Text size="xs" c="var(--sm-color-subtext)">
+                              (active)
+                            </Text>
+                          ) : null}
+                        </Group>
+                        <Code>{entry.gcpProjectId}</Code>
                       </Group>
-                      <Code>{entry.gcpProjectId}</Code>
-                    </Group>
+                      {patches.map((patch) => (
+                        <Group
+                          key={patch.tag}
+                          gap="xs"
+                          wrap="nowrap"
+                          align="center"
+                          pl="lg"
+                        >
+                          <Text size="xs" c="var(--sm-color-subtext)">
+                            +
+                          </Text>
+                          <Code>{patch.tag}</Code>
+                        </Group>
+                      ))}
+                    </Stack>
                   );
                 });
               })()}
+              {versionTagsLoadError ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Couldn't read tags from git: {versionTagsLoadError}
+                </Text>
+              ) : null}
             </Stack>
           </Box>
         </Stack>
@@ -3592,6 +3803,145 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             </Alert>
             <Group justify="flex-end">
               <Button onClick={() => setReleaseModalState(null)}>Close</Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
+
+      {/* Story 46.12 — Tag Patch Version modal. Mirrors the cut-major
+          modal's phase machine but stays git-only: no plugin-state
+          mutations, no GCP project, no commit. */}
+      <Modal
+        opened={tagPatchModalOpen}
+        onClose={() => {
+          if (tagPatchModalBusy) return;
+          setTagPatchModalState(null);
+        }}
+        title="Tag Patch Version"
+        centered
+        size="lg"
+        closeOnClickOutside={!tagPatchModalBusy}
+        closeOnEscape={!tagPatchModalBusy}
+        withCloseButton={!tagPatchModalBusy}
+      >
+        {tagPatchModalState?.phase === "checking" ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">Running pre-flight checks...</Text>
+          </Group>
+        ) : null}
+
+        {tagPatchModalState?.phase === "preflight-failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Pre-flight failed">
+              <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                {tagPatchModalState.reason}
+              </Text>
+            </Alert>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setTagPatchModalState(null)}
+              >
+                Close
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {tagPatchModalState?.phase === "ready" ? (
+          <Stack>
+            <Text size="sm">
+              A patch tag anchors a new commit to an existing major
+              version's deployment slot. No <Code>majorVersion</Code>{" "}
+              bump, no GCP project change, no commit — just{" "}
+              <Code>git tag</Code> at HEAD.
+            </Text>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    Tag to create:
+                  </Text>
+                  <Code>{tagPatchModalState.nextTag}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={180}>
+                    Anchored to major:
+                  </Text>
+                  <Code>{tagPatchModalState.baseTag}</Code>
+                </Group>
+              </Stack>
+            </Box>
+            <Group justify="flex-end">
+              <Button
+                variant="subtle"
+                onClick={() => setTagPatchModalState(null)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  if (tagPatchModalState.phase !== "ready") return;
+                  const { workingDirectory, major } = tagPatchModalState;
+                  void runTagPatchSaga(workingDirectory, major);
+                }}
+              >
+                Tag Patch
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {tagPatchModalState?.phase === "tagging" ? (
+          <Group gap="xs">
+            <Loader size="sm" />
+            <Text size="sm">Creating git tag...</Text>
+          </Group>
+        ) : null}
+
+        {tagPatchModalState?.phase === "success" ? (
+          <Stack>
+            <Alert color="green" variant="light" title="Done">
+              <Stack gap="xs">
+                <Text size="sm">
+                  Tag <Code>{tagPatchModalState.tagName}</Code> created
+                  locally at HEAD.
+                </Text>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  Push to deploy:
+                </Text>
+                <Code block>{`git push --tags`}</Code>
+                <Text size="sm" c="var(--sm-color-subtext)">
+                  Pushing the tag fires the GHA workflow's tag trigger,
+                  which redeploys the v
+                  {tagPatchModalState.tagName.split(".")[0].slice(1)}{" "}
+                  slot.
+                </Text>
+              </Stack>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setTagPatchModalState(null)}>Close</Button>
+            </Group>
+          </Stack>
+        ) : null}
+
+        {tagPatchModalState?.phase === "failed" ? (
+          <Stack>
+            <Alert color="red" variant="light" title="Tag failed">
+              <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                {tagPatchModalState.reason}
+              </Text>
+            </Alert>
+            <Group justify="flex-end">
+              <Button onClick={() => setTagPatchModalState(null)}>Close</Button>
             </Group>
           </Stack>
         ) : null}

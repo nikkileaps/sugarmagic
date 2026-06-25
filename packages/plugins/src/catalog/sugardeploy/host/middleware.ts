@@ -31,7 +31,9 @@ import {
 import {
   getCloudRunServiceNamesForPlan,
   planGameDeployment,
-  resolveSecretManagerName
+  resolveSecretManagerName,
+  computeNextPatchTag,
+  groupVersionTags
 } from "../../../deployment/index";
 import {
   CLOUD_RUN_TEMPLATE_VERSION,
@@ -2829,6 +2831,267 @@ function createRerunFailedJobsPlugin(): VitePlugin {
   };
 }
 
+// Story 46.12 — list every `v{N}.0.{M}` tag in the working
+// directory, grouped by major with patches sorted ascending.
+// Source of truth for the Release workspace version history.
+// Read-only; safe to call on every workspace open.
+function createListVersionTagsPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-list-version-tags",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/list-version-tags",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as { workingDirectory?: unknown };
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (!existsSync(workingDirectory)) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+              });
+              return;
+            }
+            const gitErr = await ensureGitOnPath();
+            if (gitErr) {
+              sendJson(res, 200, { ok: false, reason: gitErr });
+              return;
+            }
+            const inside = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--is-inside-work-tree"],
+              cwd: workingDirectory
+            });
+            if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `${workingDirectory} is not inside a git working tree.`
+              });
+              return;
+            }
+            const listResult = await runHostCommand({
+              command: "git",
+              args: ["tag", "--list", "v*.0.*"],
+              cwd: workingDirectory
+            });
+            if (listResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag --list failed: ${listResult.stderr.trim() || `exit code ${listResult.exitCode}`}`
+              });
+              return;
+            }
+            const tags = listResult.stdout
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            sendJson(res, 200, { ok: true, majors: groupVersionTags(tags) });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
+// Story 46.12 — auto-increment to next patch tag and create it
+// at HEAD. Pre-flight requires git on PATH, a clean tree, and
+// HEAD reachable from `v{major}.0.0` so we don't accidentally
+// anchor a patch to an unrelated commit. The next patch number
+// comes from the pure helper (gap-tolerant; never reuses a freed
+// number).
+function createTagPatchVersionPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-tag-patch-version",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/tag-patch-version",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as {
+              workingDirectory?: unknown;
+              major?: unknown;
+              dryRun?: unknown;
+            };
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const major = readPositiveInteger(body.major);
+            const dryRun = body.dryRun === true;
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (major === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "major must be a positive integer."
+              });
+              return;
+            }
+            if (!existsSync(workingDirectory)) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+              });
+              return;
+            }
+            const gitErr = await ensureGitOnPath();
+            if (gitErr) {
+              sendJson(res, 200, { ok: false, reason: gitErr });
+              return;
+            }
+            const inside = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--is-inside-work-tree"],
+              cwd: workingDirectory
+            });
+            if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `${workingDirectory} is not inside a git working tree.`
+              });
+              return;
+            }
+            const status = await runHostCommand({
+              command: "git",
+              args: ["status", "--porcelain"],
+              cwd: workingDirectory
+            });
+            if (status.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git status failed: ${status.stderr.trim() || `exit code ${status.exitCode}`}`
+              });
+              return;
+            }
+            if (status.stdout.trim().length > 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  "Working tree is not clean. Commit or stash uncommitted changes before tagging a patch version."
+              });
+              return;
+            }
+            const baseTag = `v${major}.0.0`;
+            const baseExists = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--verify", "--quiet", `refs/tags/${baseTag}`],
+              cwd: workingDirectory
+            });
+            if (baseExists.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `${baseTag} does not exist. Cut major version ${major} first.`
+              });
+              return;
+            }
+            const ancestor = await runHostCommand({
+              command: "git",
+              args: ["merge-base", "--is-ancestor", baseTag, "HEAD"],
+              cwd: workingDirectory
+            });
+            if (ancestor.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  `${baseTag} is not reachable from HEAD. Check out a commit on the v${major} line before tagging a patch.`
+              });
+              return;
+            }
+            const listResult = await runHostCommand({
+              command: "git",
+              args: ["tag", "--list", "v*.0.*"],
+              cwd: workingDirectory
+            });
+            if (listResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag --list failed: ${listResult.stderr.trim() || `exit code ${listResult.exitCode}`}`
+              });
+              return;
+            }
+            const tags = listResult.stdout
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            const next = computeNextPatchTag(tags, major);
+            if (!next.ok || !next.nextTag) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: next.reason ?? "Could not compute next patch tag."
+              });
+              return;
+            }
+            // Story 46.12 — dryRun returns the computed plan after
+            // all pre-flight checks pass, without creating the tag.
+            // Studio uses this to populate the "ready" phase of the
+            // tag-patch modal so the user can confirm the exact tag
+            // name before any git side effect runs.
+            if (dryRun) {
+              sendJson(res, 200, {
+                ok: true,
+                dryRun: true,
+                tagName: next.nextTag,
+                baseTag,
+                major
+              });
+              return;
+            }
+            const tagResult = await runHostCommand({
+              command: "git",
+              args: ["tag", next.nextTag, "HEAD"],
+              cwd: workingDirectory
+            });
+            if (tagResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag ${next.nextTag} failed: ${tagResult.stderr.trim() || `exit code ${tagResult.exitCode}`}`,
+                stdout: tagResult.stdout,
+                stderr: tagResult.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              tagName: next.nextTag,
+              baseTag,
+              major,
+              stdout: tagResult.stdout,
+              stderr: tagResult.stderr
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
@@ -2846,6 +3109,8 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createCutMajorVersionPreparePlugin(),
     createCutMajorVersionTagPlugin(),
     createCutMajorVersionUntagPlugin(),
-    createCutMajorVersionCommitPlugin()
+    createCutMajorVersionCommitPlugin(),
+    createListVersionTagsPlugin(),
+    createTagPatchVersionPlugin()
   ];
 }

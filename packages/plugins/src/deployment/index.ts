@@ -285,6 +285,15 @@ export function getCloudRunServiceNamesForPlan(plan: DeploymentPlan): string[] {
   );
 }
 export {
+  computeNextPatchTag,
+  groupVersionTags,
+  parseVersionTag,
+  type ComputeNextPatchTagResult,
+  type GroupedVersionMajor,
+  type ParsedVersionTag
+} from "./version-tags";
+
+export {
   CLOUD_RUN_TEMPLATE_VERSION,
   TERRAFORM_RENAME_LEDGER,
   buildCloudRunTerraformGitignore,
