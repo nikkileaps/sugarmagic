@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
 import {
   createAnonymousLocalIdentityProvider,
+  createIndexedDBGameSaveStore,
   createRuntimeBootModel,
   createRuntimePluginManager,
   GAME_SAVE_SCHEMA_VERSION,
@@ -666,5 +668,174 @@ describe("AnonymousLocalIdentityProvider", () => {
     });
     const user = provider.currentUser();
     expect(user?.userId).toBe("uuid-fresh");
+  });
+});
+
+// Story 47.4 — default IndexedDBGameSaveStore. The "no plugin
+// installed" save path: one IndexedDB database, one object store
+// keyed by userId, load/save/clear with userId-assertion defense
+// in depth. Tests run against fake-indexeddb so each test gets a
+// fresh, isolated IDBFactory.
+describe("IndexedDBGameSaveStore", () => {
+  function makeStore(nowIso?: () => string) {
+    return createIndexedDBGameSaveStore({
+      indexedDB: new IDBFactory(),
+      nowIso: nowIso ?? (() => "2026-06-25T12:00:00.000Z")
+    });
+  }
+
+  function makePayload(overrides: Partial<{
+    currentRegionId: string | null;
+    currentQuestId: string | null;
+    playerPosition: { x: number; y: number; z: number } | null;
+  }> = {}) {
+    return {
+      currentRegionId: "hollow-station",
+      currentQuestId: "find-the-cat",
+      playerPosition: { x: 1, y: 2, z: 3 },
+      ...overrides
+    };
+  }
+
+  it("load of a user with no save returns null", async () => {
+    const store = makeStore();
+    const result = await store.load("u_never_played");
+    expect(result).toBeNull();
+  });
+
+  it("save then load round-trips the payload", async () => {
+    const store = makeStore(() => "2026-06-25T12:00:00.000Z");
+    const payload = makePayload();
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "stamped-at-write-time-anyway",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload
+    });
+    const reloaded = await store.load("u_alpha");
+    expect(reloaded).not.toBeNull();
+    expect(reloaded?.userId).toBe("u_alpha");
+    expect(reloaded?.payload).toEqual(payload);
+    // The store stamps lastPlayed + schemaVersion at write time
+    // regardless of what the caller passed.
+    expect(reloaded?.lastPlayed).toBe("2026-06-25T12:00:00.000Z");
+    expect(reloaded?.schemaVersion).toBe(GAME_SAVE_SCHEMA_VERSION);
+  });
+
+  it("save rewrites the existing record (no duplicate rows)", async () => {
+    let counter = 0;
+    const store = makeStore(() => `t${counter++}`);
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload({ currentRegionId: "first" })
+    });
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload({ currentRegionId: "second" })
+    });
+    const reloaded = await store.load("u_alpha");
+    expect(reloaded?.payload.currentRegionId).toBe("second");
+    expect(reloaded?.lastPlayed).toBe("t1");
+  });
+
+  it("clear removes the record; subsequent load returns null", async () => {
+    const store = makeStore();
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload()
+    });
+    expect(await store.load("u_alpha")).not.toBeNull();
+    await store.clear("u_alpha");
+    expect(await store.load("u_alpha")).toBeNull();
+  });
+
+  it("records for different userIds do not collide", async () => {
+    const store = makeStore();
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload({ currentRegionId: "alpha-region" })
+    });
+    await store.save("u_beta", {
+      userId: "u_beta",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload({ currentRegionId: "beta-region" })
+    });
+    const alpha = await store.load("u_alpha");
+    const beta = await store.load("u_beta");
+    expect(alpha?.payload.currentRegionId).toBe("alpha-region");
+    expect(beta?.payload.currentRegionId).toBe("beta-region");
+    await store.clear("u_alpha");
+    expect(await store.load("u_alpha")).toBeNull();
+    // Clearing alpha does NOT affect beta.
+    expect(await store.load("u_beta")).not.toBeNull();
+  });
+
+  it("save throws when the GameSave.userId disagrees with the key", async () => {
+    const store = makeStore();
+    await expect(
+      store.save("u_alpha", {
+        userId: "u_beta",
+        lastPlayed: "",
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        payload: makePayload()
+      })
+    ).rejects.toThrow(/Refusing to write cross-user state/);
+  });
+
+  it("load throws on an empty userId", async () => {
+    const store = makeStore();
+    await expect(store.load("")).rejects.toThrow(/non-empty userId/);
+  });
+
+  it("save throws on an empty userId", async () => {
+    const store = makeStore();
+    await expect(
+      store.save("", {
+        userId: "",
+        lastPlayed: "",
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        payload: makePayload()
+      })
+    ).rejects.toThrow(/non-empty userId/);
+  });
+
+  it("clear throws on an empty userId", async () => {
+    const store = makeStore();
+    await expect(store.clear("")).rejects.toThrow(/non-empty userId/);
+  });
+
+  it("two stores opened against the same factory share the underlying database", async () => {
+    // Real-world usage: a single createIndexedDBGameSaveStore() per
+    // page is the norm. But if two are constructed, both pointing at
+    // the same IDBFactory, they should see the same data (the
+    // database name + version are constants). This test asserts the
+    // contract is "the database is keyed by name+version, not by
+    // store-instance identity."
+    const factory = new IDBFactory();
+    const storeA = createIndexedDBGameSaveStore({
+      indexedDB: factory,
+      nowIso: () => "2026-06-25T12:00:00.000Z"
+    });
+    const storeB = createIndexedDBGameSaveStore({
+      indexedDB: factory,
+      nowIso: () => "2026-06-25T12:00:00.000Z"
+    });
+    await storeA.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: makePayload({ currentRegionId: "shared" })
+    });
+    const fromB = await storeB.load("u_alpha");
+    expect(fromB?.payload.currentRegionId).toBe("shared");
   });
 });

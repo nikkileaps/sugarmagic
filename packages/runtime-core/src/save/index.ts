@@ -105,3 +105,8 @@ export interface GameSaveStore {
   save(userId: string, save: GameSave): Promise<void>;
   clear(userId: string): Promise<void>;
 }
+
+export {
+  createIndexedDBGameSaveStore,
+  type IndexedDBGameSaveStoreOptions
+} from "./indexeddb-store";

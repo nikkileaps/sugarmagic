@@ -230,6 +230,10 @@ importers:
       three:
         specifier: ^0.183.2
         version: 0.183.2
+    devDependencies:
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
 
   packages/ui:
     dependencies:
