@@ -347,115 +347,563 @@ existing Plan 045 Set Value modal.
 
 ## Stories
 
-### 47.1 — Core contracts: `UserIdentityProvider` + `GameSaveStore`
+Story dependency shape: `47.1 -> {47.2, 47.3, 47.4}`;
+`{47.3, 47.4} -> 47.5`; `47.1 -> 47.6`; `47.6 -> {47.7, 47.8}`;
+`{47.6, 47.8} -> 47.9`; `{47.5, 47.9} -> 47.10`; everything ->
+`47.11`. Stories with no shared inputs can land in parallel.
 
-Define the two interfaces and the `User` / `GameSave` shapes in
-`packages/runtime-core/`. No implementations yet; just the types
-and JSDoc that documents the contract for plugin authors.
+### 47.1 — Core contracts in `runtime-core`
 
-**Exit:** the types exist, exported from `@sugarmagic/runtime-core`,
-and `packages/testing` imports them in a placeholder test that
-asserts the shapes typecheck.
+Land the two interfaces + their data shapes as the public contract.
+No implementations yet.
 
-### 47.2 — Default `AnonymousLocalIdentityProvider`
+**Files (new):**
 
-Implements `UserIdentityProvider` against `localStorage`. UUIDv4
-on first call; persists. `signIn` / `signOut` /
-`linkAnonymousToCredentials` throw `NotSupported`.
+- `packages/runtime-core/src/identity/index.ts`
+  ```ts
+  export interface User {
+    userId: string;             // stable across sign-ins for the same human
+    displayName: string | null;
+    email: string | null;
+    isAnonymous: boolean;
+    createdAt: string;          // ISO timestamp
+  }
+  export type UserIdentityChangeListener = (user: User | null) => void;
+  export interface SignInWithPasswordInput { email: string; password: string; }
+  export interface UserIdentityProvider {
+    currentUser(): User | null;
+    onChange(listener: UserIdentityChangeListener): () => void;
+    signIn(input: SignInWithPasswordInput): Promise<User>;
+    signUp(input: SignInWithPasswordInput): Promise<User>;
+    signOut(): Promise<void>;
+    /** Merge the anonymous current user into the given credentials.
+     *  Preserves userId; sets isAnonymous=false. Throws if currentUser
+     *  is null or already credentialed. */
+    linkAnonymousToCredentials(input: SignInWithPasswordInput): Promise<User>;
+  }
+  ```
+- `packages/runtime-core/src/save/index.ts`
+  ```ts
+  export const GAME_SAVE_SCHEMA_VERSION = 1;
+  export interface GameSavePayload {
+    // Cross-plugin player record. Owned by runtime-core/Studio core.
+    // Per-plugin per-user state lives in the plugin's own store,
+    // keyed on userId from UserIdentityProvider (see ADR 020).
+    currentRegionId: string | null;
+    currentQuestId: string | null;
+    playerPosition: { x: number; y: number; z: number } | null;
+  }
+  export interface GameSave {
+    userId: string;
+    lastPlayed: string;          // ISO timestamp
+    schemaVersion: number;       // pinned to GAME_SAVE_SCHEMA_VERSION on write
+    payload: GameSavePayload;
+  }
+  export interface GameSaveStore {
+    load(userId: string): Promise<GameSave | null>;
+    save(userId: string, save: GameSave): Promise<void>;
+    clear(userId: string): Promise<void>;
+  }
+  ```
+- Re-export both from `packages/runtime-core/src/index.ts`.
 
-**Exit:** unit test: first call creates a UUID, second call
-returns the same UUID, clearing storage produces a new UUID on
-next call. The published-web boot path uses this provider when no
-plugin overrides it.
+**Tests:** add `packages/testing/src/user-management.test.ts` with
+typecheck-only assertions that the shapes import cleanly + a few
+runtime sanity checks on `GAME_SAVE_SCHEMA_VERSION` being a positive
+integer.
 
-### 47.3 — Default `IndexedDBGameSaveStore`
+**Dependencies:** none.
 
-Implements `GameSaveStore` against IndexedDB via `idb` (a thin
-typed wrapper over the native API). One database, one object
-store, keyed by `userId`.
+**Exit:** types compile, `pnpm vitest run --root packages/testing
+src/user-management.test.ts` passes, `import { UserIdentityProvider,
+GameSaveStore } from "@sugarmagic/runtime-core"` resolves.
 
-**Exit:** unit test via `fake-indexeddb` covers load-of-empty,
-save-then-load, clear-then-load.
+### 47.2 — Runtime contribution kinds + boot-time resolver
 
-### 47.4 — SugarProfile plugin scaffold + manifest
+Add `identity.provider` + `save.store` contribution kinds to
+`RuntimePluginContributionKind`. Plugins contribute via the existing
+`RuntimePluginInstance.contributions` slot — same mechanism as
+`conversation.provider`. The boot path picks the highest-priority
+contribution; falls through to defaults when none are contributed.
 
-New plugin directory `packages/plugins/src/catalog/sugarprofile/`.
-Manifest, defaultConfig, `pluginSettingsSchema` (Supabase URL +
-anon key + JWT secret + allow-anonymous toggle),
-`gatewayRuntimeConfigKeys` (Supabase URL + anon key as env),
-`deploymentRequirements` (service-role key as secret). No runtime
-behavior yet — just the plugin shows up in the registry, validates
-clean, renders a settings panel via the Plan 046 auto-mount.
+**Files (modify):**
 
-**Exit:** SugarProfile appears in Studio's design workspaces,
-auto-mounted; bundled plugin definition passes
-`validatePluginSettingsSchema`.
+- `packages/runtime-core/src/plugins/index.ts`
+  - Add `"identity.provider"` and `"save.store"` to
+    `RuntimePluginContributionKind`.
+  - Add `IdentityProviderContribution` + `GameSaveStoreContribution`
+    types (mirror `ConversationProviderContribution`'s shape;
+    payload carries `{ provider }` / `{ store }`).
+  - Add to the `RuntimePluginContribution` union.
+- `packages/runtime-core/src/plugins/index.ts` (new exports):
+  ```ts
+  export function resolveActiveIdentityProvider(
+    manager: RuntimePluginManager,
+    fallback: UserIdentityProvider
+  ): UserIdentityProvider {
+    const contribs = manager.getContributions("identity.provider");
+    if (contribs.length === 0) return fallback;
+    return contribs
+      .slice()
+      .sort((a, b) => b.priority - a.priority)[0].payload.provider;
+  }
+  // Same shape for resolveActiveGameSaveStore.
+  ```
+  Log a warn (not throw) when multiple plugins contribute; the
+  highest-priority one wins to keep boot non-fatal.
 
-### 47.5 — `SupabaseIdentityProvider` browser client
+**Tests:** `packages/testing/src/user-management.test.ts` gains
+- Default fallback when no contribution.
+- Single contribution wins.
+- Highest-priority wins when two contribute.
+
+**Dependencies:** 47.1.
+
+**Exit:** new contribution kinds compile + are reachable from
+`manager.getContributions("identity.provider")`. Resolver returns
+fallback when no contributing plugin is present.
+
+### 47.3 — Default `AnonymousLocalIdentityProvider` in `runtime-core`
+
+The "no plugin installed" identity path. Pure browser-side: reads
++ writes `localStorage`, generates UUIDv4 on first call.
+
+**Files (new):**
+
+- `packages/runtime-core/src/identity/anonymous-local.ts`
+  ```ts
+  const STORAGE_KEY = "sugarmagic.anonymous-user-id";
+  export interface AnonymousLocalIdentityProviderOptions {
+    storage?: Storage;    // injectable for tests
+    nowIso?: () => string;
+    randomUuid?: () => string;
+  }
+  export function createAnonymousLocalIdentityProvider(
+    options?: AnonymousLocalIdentityProviderOptions
+  ): UserIdentityProvider { ... }
+  ```
+- `signIn` / `signUp` / `linkAnonymousToCredentials` throw a
+  `NotSupportedError` with message naming SugarProfile as the path
+  to credentialed auth.
+- `signOut` is a no-op (resolves immediately) since there's no
+  session to clear.
+- `onChange` returns an unsubscribe stub (the anonymous user never
+  changes during the page life).
+- Re-export from `packages/runtime-core/src/index.ts`.
+
+**Tests:** unit tests use a fake `Storage` adapter.
+- First `currentUser()` generates + persists a uuid; second returns
+  the same uuid.
+- Clearing storage between calls produces a new uuid.
+- `signIn` throws `NotSupportedError` with helpful message.
+- `signOut` is a no-op.
+
+**Dependencies:** 47.1.
+
+**Exit:** unit tests pass; importable from
+`@sugarmagic/runtime-core`.
+
+### 47.4 — Default `IndexedDBGameSaveStore` in `runtime-core`
+
+The "no plugin installed" save path. One IndexedDB database,
+one object store, keyed by `userId`. Uses the `idb` package (add to
+`packages/runtime-core/package.json`).
+
+**Files (new):**
+
+- `packages/runtime-core/src/save/indexeddb-store.ts`
+  ```ts
+  const DB_NAME = "sugarmagic-saves";
+  const STORE_NAME = "saves";
+  const DB_VERSION = 1;
+  export interface IndexedDBGameSaveStoreOptions {
+    indexedDB?: IDBFactory;   // injectable for tests
+  }
+  export function createIndexedDBGameSaveStore(
+    options?: IndexedDBGameSaveStoreOptions
+  ): GameSaveStore { ... }
+  ```
+- `load(userId)` opens the DB lazily on first call and caches the
+  promise. Returns `null` when the record doesn't exist.
+- `save(userId, save)` writes `GameSave`, stamps `lastPlayed` at
+  write time, asserts `save.userId === userId`.
+- `clear(userId)` deletes the record.
+- Re-export from `packages/runtime-core/src/index.ts`.
+
+**Tests:** `fake-indexeddb` (add to testing devDeps).
+- `load` of missing user returns `null`.
+- `save` then `load` round-trips.
+- `save` rewrites the existing record (no duplicate rows).
+- `clear` removes the record; subsequent `load` returns `null`.
+- Records for different `userId`s don't collide.
+
+**Dependencies:** 47.1.
+
+**Exit:** unit tests pass; importable from
+`@sugarmagic/runtime-core`.
+
+### 47.5 — Boot-path wiring in `targets/web` + Studio preview
+
+Wire the defaults into the published-web bundle + Studio preview
+session so a bare game without SugarProfile saves to IndexedDB.
+
+**Files (modify):**
+
+- `targets/web/src/App.tsx`
+  - Construct the default identity + save store at boot.
+  - Resolve the active provider/store via the resolver from 47.2.
+  - Add a `UserContext` React context exposing `{ user, provider,
+    saveStore }` to the runtime tree.
+  - Block initial render on `provider.currentUser()` settling + an
+    initial `saveStore.load(user.userId)` so the runtime sees the
+    persisted state.
+- `targets/web/src/runtimeHost.ts`
+  - Accept `{ identityProvider, saveStore }` in the boot args.
+  - On boot, if `saveStore.load()` returns a `GameSave`, hydrate
+    the runtime world from `payload.currentRegionId / playerPosition /
+    currentQuestId`. Otherwise hydrate from `boot.json`'s authored
+    defaults.
+- `apps/studio/src/...` Studio preview session
+  - Inject the same defaults so a Playtest session uses
+    IndexedDB-backed saves (lets the developer test save behaviors
+    in Studio without deploying).
+
+**Files (new):**
+
+- `targets/web/src/identity/useUserContext.ts` — the React hook.
+
+**Tests:**
+
+- `packages/testing/src/target-web-build-config.test.ts` extended
+  to assert the App.tsx boot path imports + uses the runtime-core
+  defaults (string-match on the bundled output).
+
+**Dependencies:** 47.3, 47.4 (the defaults must exist).
+
+**Exit:** open wordlark in Studio's Playtest mode; move the player
+to a new region; close + reopen the Playtest session; the player
+spawns in the saved region. Same behavior in the deployed
+published-web bundle without any plugins installed.
+
+### 47.6 — SugarProfile plugin scaffold
+
+New plugin in `packages/plugins/src/catalog/sugarprofile/`.
+Manifest + defaultConfig + schemas + deployment requirements.
+No identity/save behavior yet; story 47.7/47.8 fill those in.
+
+**Files (new):**
+
+- `packages/plugins/src/catalog/sugarprofile/index.ts`
+  - `SUGARPROFILE_PLUGIN_ID = "sugarprofile"`.
+  - `pluginDefinition: DiscoveredPluginDefinition` with:
+    - `manifest: { pluginId: "sugarprofile", displayName: "SugarProfile",
+      summary: "User identity + game saves via Supabase",
+      capabilityIds: ["identity.provider", "save.store"] }`.
+    - `defaultConfig: { supabaseUrl: "", supabaseAnonKey: "",
+      allowAnonymous: true }`.
+    - `pluginSettingsSchema`: four fields (supabaseUrl + supabaseAnonKey
+      as text, allowAnonymous as boolean, group "Supabase Project").
+    - `gatewayRuntimeConfigKeys`:
+      - `{ configKey: "supabaseUrl", envVarName:
+        "SUGARMAGIC_SUGARPROFILE_SUPABASE_URL",
+        nonSecretAttestation: "safe-to-expose-publicly" }`.
+      - `{ configKey: "supabaseAnonKey", envVarName:
+        "SUGARMAGIC_SUGARPROFILE_SUPABASE_ANON_KEY",
+        nonSecretAttestation: "safe-to-expose-publicly" }`.
+    - `deploymentRequirements`:
+      - `{ kind: "secret", secretKey: "supabase-service-role-key",
+        mappingHint: "SUGARMAGIC_SUPABASE_SERVICE_ROLE_KEY",
+        consumption: "server-only", exposure: "private" }`.
+      - `{ kind: "secret", secretKey: "supabase-jwt-secret",
+        mappingHint: "SUGARMAGIC_SUPABASE_JWT_SECRET",
+        consumption: "server-only", exposure: "private" }`.
+- `packages/plugins/src/index.ts` exports the new plugin id +
+  re-exports the definition through the discovery system the same
+  way `SUGARAGENT_PLUGIN_ID` is exported today.
+- `packages/plugins/package.json` adds `@supabase/supabase-js`
+  + `jsonwebtoken` (server-only) as runtime deps.
+
+**Tests:** `packages/testing/src/plugin-infrastructure.test.ts`
+gains:
+- SugarProfile is in `listDiscoveredPluginDefinitions()`.
+- Schema + runtime-config keys pass `validatePluginSettingsSchema`.
+- Auto-mounted Studio workspace appears.
+
+**Dependencies:** none (just hooks into existing Plan 046
+mechanisms).
+
+**Exit:** SugarProfile shows up as a Design workspace in Studio
+with a schema-rendered settings panel. Bundled plugin passes
+existing validators. No runtime behavior wired yet.
+
+### 47.7 — `SupabaseIdentityProvider`
 
 Implements `UserIdentityProvider` against `@supabase/supabase-js`.
-Anonymous sign-in on first boot; email/password sign-up + sign-in;
-`linkAnonymousToCredentials` for the upgrade path; sign-out clears.
+Contributed via the plugin's runtime instance as an
+`identity.provider` contribution. Resolves the active provider at
+boot via the resolver from 47.2.
 
-**Exit:** integration test via mocked Supabase client: anonymous
-sign-in returns a user; sign-in with credentials succeeds;
-linking the anonymous account preserves the user id; sign-out
-returns to anonymous on next boot.
+**Files (new):**
 
-### 47.6 — `SupabaseGameSaveStore` + Postgres migration
+- `packages/plugins/src/catalog/sugarprofile/runtime/identity.ts`
+  ```ts
+  export interface SupabaseIdentityProviderOptions {
+    supabaseUrl: string;
+    supabaseAnonKey: string;
+    allowAnonymous: boolean;
+    client?: SupabaseClient;     // injectable for tests
+  }
+  export function createSupabaseIdentityProvider(
+    options: SupabaseIdentityProviderOptions
+  ): UserIdentityProvider { ... }
+  ```
+- On first call to `currentUser()`, if no session and
+  `allowAnonymous`, call `supabase.auth.signInAnonymously()`
+  and cache the user.
+- `signIn` -> `supabase.auth.signInWithPassword`.
+- `signUp` -> `supabase.auth.signUp`.
+- `signOut` -> `supabase.auth.signOut`.
+- `linkAnonymousToCredentials` -> `supabase.auth.updateUser({ email,
+  password })` followed by `supabase.auth.refreshSession()`. Preserves
+  userId, flips isAnonymous to false.
+- `onChange` -> subscribes to `supabase.auth.onAuthStateChange`,
+  normalizes the Supabase user into the local `User` shape.
 
-Implements `GameSaveStore` via Supabase Postgres. Plugin emits
-the migration SQL above into
-`deployment/supabase/migrations/0001_game_save.sql`. Studio's
-Provision workspace gains an "Apply SugarProfile Migration"
-button that runs `supabase db push` via a new host endpoint
-`/__sugarprofile/run-migration`.
+**Files (modify):**
 
-**Exit:** the migration applies successfully against a test
-Supabase project; round-trip save-then-load works for an
-authenticated user; a different user's JWT cannot read the first
-user's save (RLS enforced).
+- `packages/plugins/src/catalog/sugarprofile/index.ts`
+  - Add a `runtime: { createRuntimePlugin }` factory that constructs
+    the provider from the per-game config + contributes it as an
+    `identity.provider` contribution with `priority: 100`.
 
-### 47.7 — Gateway-side JWT validation middleware
+**Tests:**
 
-`SupabaseProfileJwtMiddleware` validates the
-`Authorization: Bearer <jwt>` header against the Supabase JWT
-secret (HS256, audience, exp). Replaces the shared-token middleware
-when SugarProfile is enabled. The gateway scaffold composes this
-in via the existing middleware contribution mechanism.
+- Mocked Supabase client passes through `signInAnonymously` ->
+  returns a user with `isAnonymous: true`.
+- `signIn` with credentials returns a user with `isAnonymous: false`.
+- `linkAnonymousToCredentials` preserves `userId`.
+- `onChange` fires when the mock emits an `AUTH_STATE_CHANGE`.
 
-**Exit:** unit tests: valid JWT passes; expired JWT rejects 401;
-signature-mismatch JWT rejects 401; missing header rejects 401.
-Live wordlark gateway authenticates a real Supabase-signed JWT
-end-to-end.
+**Dependencies:** 47.1, 47.2, 47.6.
 
-### 47.8 — Published-web: login affordance + autosave loop
+**Exit:** mocked-client unit tests pass. Bundling SugarProfile into
+wordlark + running the published-web bundle locally produces a real
+Supabase anonymous user on first page load (verified manually
+against a test Supabase project).
 
-`targets/web/src/App.tsx` mounts SugarProfile's login modal
-component when SugarProfile is enabled and the current user is
-anonymous. `useAutosave(gameState, store, userId)` debounces
-writes (500ms) and pushes through the active store. On sign-in,
-the anonymous IndexedDB save migrates up to Supabase.
+### 47.8 — `SupabaseGameSaveStore` + Postgres migration
 
-**Exit:** a player can open wordlark, play through a quest beat,
-close the tab, reopen, and resume where they left off — both
-anonymous-local and signed-in-cloud modes work, and signing in
-mid-session preserves progress.
+Implements `GameSaveStore` against Supabase Postgres. Plugin emits
+the migration SQL into a managed file; Studio's Provision
+workspace gets an "Apply SugarProfile Migration" button.
 
-### 47.9 — Documentation pass
+**Files (new):**
 
-ADR 020: SugarProfile user-management architecture (the
-contracts, the Supabase-only-for-v1 decision, the RLS contract).
-Updates `packages/plugins/src/deployment/README.md` with the
-SugarProfile host endpoints and the Supabase migration pattern.
-Updates `targets/web/README.md` with the identity + save hooks
-the App.tsx boot path consumes. Plan 021 cross-reference banner
-extended.
+- `packages/plugins/src/catalog/sugarprofile/runtime/save-store.ts`
+  ```ts
+  export interface SupabaseGameSaveStoreOptions {
+    client: SupabaseClient;   // authenticated client (user JWT)
+  }
+  export function createSupabaseGameSaveStore(
+    options: SupabaseGameSaveStoreOptions
+  ): GameSaveStore { ... }
+  ```
+  - `load(userId)` -> `client.from("game_save").select("*").eq("user_id",
+    userId).maybeSingle()`. Asserts the returned `user_id` matches
+    (RLS should make this a no-op but cheap).
+  - `save(userId, save)` -> `client.from("game_save").upsert({ user_id:
+    userId, last_played: now, schema_version: GAME_SAVE_SCHEMA_VERSION,
+    payload: save.payload })`.
+  - `clear(userId)` -> `client.from("game_save").delete().eq("user_id",
+    userId)`.
+- `packages/plugins/src/catalog/sugarprofile/migrations/0001_game_save.sql`
+  - Carries the SQL from the "Supabase schema (generated migration)"
+    deliverables section.
+  - File is plugin-emitted into the game project as
+    `deployment/supabase/migrations/0001_game_save.sql` via the
+    managed-files mechanism (mirror Plan 046's `buildNetlifyManagedFiles`
+    pattern in a new `buildSupabaseManagedFiles`).
+- `packages/plugins/src/catalog/sugarprofile/host/middleware.ts`
+  - `POST /__sugarprofile/run-migration` host endpoint. Reads
+    `workingDirectory`, shells out `supabase db push --workdir
+    deployment/supabase`. Service-role key supplied via the existing
+    Plan 045 Set Value modal -> env -> child-process env.
+  - `POST /__sugarprofile/probe-supabase` host endpoint. Validates
+    the configured URL + anon key reach a real Supabase project
+    (a `select 1` round-trip).
 
-**Exit:** ADR 020 exists and is consistent with Plan 047; the
-existing READMEs reflect the new contracts; a future plugin
-author can read ADR 020 + the SDK docs and write a competing
-identity provider plugin without reading source.
+**Files (modify):**
+
+- `packages/plugins/src/catalog/sugarprofile/index.ts`
+  - Adds the runtime contribution: `save.store` carrying the store.
+  - Adds the host-middleware contribution.
+- `apps/studio/src/plugins/catalog/sugarprofile/index.tsx` (new file
+  if any custom UI is needed for the "Apply Migration" button beyond
+  the schema-rendered panel)
+  - Adds a Provision-side button "Apply SugarProfile Migration"
+    that POSTs to `/__sugarprofile/run-migration`.
+
+**Tests:**
+
+- Mocked Supabase client unit tests for the store.
+- A registration test asserts the host middleware is contributed.
+
+**Dependencies:** 47.1, 47.7 (need an authenticated client to
+construct the store from).
+
+**Exit:** the migration SQL is emitted into wordlark on save; the
+"Apply SugarProfile Migration" button runs `supabase db push`
+successfully; round-trip save+load works with an authenticated
+JWT against a test Supabase project; an attempt to read another
+user's row returns empty (RLS-enforced).
+
+### 47.9 — Gateway-side JWT validation middleware
+
+Validates `Authorization: Bearer <jwt>` against the Supabase JWT
+secret. Contributed by SugarProfile via the gateway scaffold's
+existing middleware contribution slot. Supersedes the shared-token
+path when SugarProfile is enabled.
+
+**Files (new):**
+
+- `packages/plugins/src/catalog/sugarprofile/runtime/gateway-jwt-middleware.ts`
+  ```ts
+  import { createHmac, timingSafeEqual } from "node:crypto";
+  export function createSupabaseJwtVerifyMiddleware(
+    options: { jwtSecret: string }
+  ): GatewayMiddleware { ... }
+  ```
+  - Parses `Authorization` header, splits + verifies HS256 signature
+    (compute HMAC-SHA256 of `header.payload`, constant-time compare
+    against the supplied signature).
+  - Decodes payload + asserts `aud === "authenticated"`, `exp > now`.
+  - Attaches `req.user = { userId: payload.sub, email: payload.email }`
+    on the request when valid.
+  - Returns 401 with `{ ok: false, reason }` on any failure (missing
+    header, bad shape, expired, signature mismatch).
+- `packages/plugins/src/catalog/sugarprofile/runtime/index.ts`
+  - Exports a `createSugarProfileGatewayContribution()` that returns
+    the gateway middleware factory hook.
+
+**Files (modify):**
+
+- Plan 045's gateway scaffold composes plugin-contributed middlewares
+  AFTER `/health` and BEFORE route dispatch. When SugarProfile is
+  enabled, the JWT middleware replaces the existing
+  `authorizeBearer` middleware. If SugarProfile is enabled AND
+  `gatewayAuthMode === "bearer"`, the JWT middleware wins and the
+  shared-token path is dropped — settled to "remove the shared
+  token when SugarProfile is enabled" per the open question.
+
+**Tests:**
+
+- Unit: valid HS256-signed payload with audience + exp -> 200, user
+  attached.
+- Expired payload -> 401.
+- Bad signature -> 401.
+- Missing Authorization header -> 401.
+- Wrong audience -> 401.
+- Header shape `Bearer ` with empty token -> 401.
+
+**Dependencies:** 47.6 (plugin scaffold). 47.7 isn't strictly
+required (the middleware is pure server-side) but story exit
+benefits from an end-to-end JWT to verify against, so land 47.7
+first.
+
+**Exit:** unit tests pass. The deployed wordlark gateway
+authenticates a real Supabase-signed JWT end-to-end:
+SugarAgent's `/api/sugaragent/generate` rejects unauthenticated
+requests with 401 + accepts a request carrying a valid signed-in
+user's JWT.
+
+### 47.10 — Published-web login + autosave loop
+
+Wire SugarProfile's login UI into the published-web bundle + add
+the autosave loop. On sign-in, the anonymous IndexedDB save
+migrates up to Supabase.
+
+**Files (new):**
+
+- `packages/plugins/src/catalog/sugarprofile/ui/LoginModal.tsx`
+  - Mantine-styled email/password form. Stays a plugin-contributed
+    component (not Studio core) so the bundle pulls it only when
+    SugarProfile is enabled.
+- `targets/web/src/save/useAutosave.ts`
+  - `useAutosave(payload: GameSavePayload, store: GameSaveStore,
+    userId: string)` hook. Debounces writes 500ms. Bails on
+    re-renders where `payload` is reference-equal to the last write.
+  - Tracks `lastWriteState` so it can skip no-op writes after a
+    server-confirmed save round-trips back.
+
+**Files (modify):**
+
+- `targets/web/src/App.tsx`
+  - Mounts `<LoginModal>` from SugarProfile when (a) SugarProfile is
+    enabled AND (b) the current user is anonymous. Modal is corner-
+    button-triggered, not blocking.
+  - Wires `useAutosave(currentGameSavePayload, activeSaveStore,
+    currentUser.userId)`.
+  - On sign-in: read the local IndexedDB save (if any), write it to
+    the Supabase store under the new credentialed userId via a
+    `migrateLocalSaveToCloud(localStore, cloudStore, user)` helper,
+    then clear the local copy.
+- `packages/plugins/src/catalog/sugarprofile/index.ts`
+  - Contributes the `LoginModal` component via a new UI
+    contribution kind OR (simpler) exposes it on the plugin's
+    runtime instance for the bundle to import lazily.
+  - Add a UI contribution kind if needed; mirror existing
+    contribution patterns.
+
+**Tests:**
+
+- Unit: autosave hook debounces, doesn't re-write reference-equal
+  state.
+- Unit: `migrateLocalSaveToCloud` copies + clears.
+- Browser integration test (Playwright if practical, otherwise
+  manual): open game, move player, close tab, reopen, resume.
+  Repeat signed-in to verify cloud round-trip.
+
+**Dependencies:** 47.5 (boot path), 47.9 (JWT middleware for the
+gateway).
+
+**Exit:** a player can play wordlark anonymously, sign in mid-game,
+and their progress survives both sign-in and a page reload. With
+SugarProfile NOT installed, the same play loop persists locally
+through IndexedDB.
+
+### 47.11 — Documentation pass
+
+ADR 020 captures the architecture. READMEs reflect the new
+contracts. Plan 021 cross-reference banner extended.
+
+**Files (new):**
+
+- `docs/adr/020-sugarprofile-user-management-architecture.md`
+  - Decisions: two core contracts; defaults in runtime-core; one
+    plugin = identity + save store; user-related data lives in
+    SugarProfile, plugin-domain per-user data stays with the
+    plugin keyed on userId; Supabase + RLS as the v1 backend.
+
+**Files (modify):**
+
+- `packages/plugins/src/deployment/README.md` — adds
+  `/__sugarprofile/run-migration` + `/__sugarprofile/probe-supabase`
+  to the host-endpoint table; adds SugarProfile to the catalog of
+  plugins.
+- `targets/web/README.md` — adds the identity + save hooks the
+  App.tsx boot path consumes, plus the autosave hook.
+- `docs/plans/021-deployment-plugin-and-publish-deploy-target-architecture-epic.md`
+  — adds Plan 047 / ADR 020 to the top cross-reference banner.
+- `docs/adr/README.md` — add ADR 020 to the index.
+
+**Tests:** none (docs).
+
+**Dependencies:** 47.10 (everything implemented + verified).
+
+**Exit:** ADR 020 exists and reads consistently with the
+shipped behavior. A future plugin author can read ADR 020 +
+`packages/plugins/src/deployment/README.md` + Plan 047 and write a
+competing identity provider plugin without reading source.
 
 ## Builds On
 
