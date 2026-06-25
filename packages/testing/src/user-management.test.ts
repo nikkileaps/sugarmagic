@@ -1,15 +1,126 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createRuntimeBootModel,
+  createRuntimePluginManager,
   GAME_SAVE_SCHEMA_VERSION,
   NotSupportedError,
+  resolveActiveGameSaveStore,
+  resolveActiveIdentityProvider,
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type GameSaveStoreContribution,
+  type IdentityProviderContribution,
+  type RuntimePluginInstance,
   type SignInWithPasswordInput,
   type User,
   type UserIdentityChangeListener,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
+
+function makeStubUser(overrides: Partial<User> = {}): User {
+  return {
+    userId: "u_stub",
+    displayName: null,
+    email: null,
+    isAnonymous: true,
+    createdAt: new Date(0).toISOString(),
+    ...overrides
+  };
+}
+
+function makeStubIdentityProvider(label: string): UserIdentityProvider {
+  const user = makeStubUser({ userId: `u_${label}` });
+  return {
+    currentUser: () => user,
+    onChange: () => () => undefined,
+    signIn: async () => {
+      throw new NotSupportedError(`stub:${label}`);
+    },
+    signUp: async () => {
+      throw new NotSupportedError(`stub:${label}`);
+    },
+    signOut: async () => undefined,
+    linkAnonymousToCredentials: async () => {
+      throw new NotSupportedError(`stub:${label}`);
+    }
+  };
+}
+
+function makeStubGameSaveStore(label: string): GameSaveStore {
+  const records = new Map<string, GameSave>();
+  return {
+    load: async (userId) => {
+      const record = records.get(userId);
+      return record ? { ...record, payload: { ...record.payload } } : null;
+    },
+    save: async (userId, save) => {
+      records.set(userId, {
+        ...save,
+        userId,
+        lastPlayed: `${label}:${save.lastPlayed}`
+      });
+    },
+    clear: async (userId) => {
+      records.delete(userId);
+    }
+  };
+}
+
+function makeIdentityProviderContribution(args: {
+  pluginId: string;
+  contributionId: string;
+  priority: number;
+  provider: UserIdentityProvider;
+  status?: "placeholder" | "ready";
+}): IdentityProviderContribution {
+  return {
+    pluginId: args.pluginId,
+    contributionId: args.contributionId,
+    kind: "identity.provider",
+    displayName: `${args.pluginId} identity`,
+    priority: args.priority,
+    payload: {
+      providerId: `${args.pluginId}.identity`,
+      summary: `${args.pluginId} identity provider`,
+      status: args.status ?? "ready",
+      provider: args.provider
+    }
+  };
+}
+
+function makeGameSaveStoreContribution(args: {
+  pluginId: string;
+  contributionId: string;
+  priority: number;
+  store: GameSaveStore;
+  status?: "placeholder" | "ready";
+}): GameSaveStoreContribution {
+  return {
+    pluginId: args.pluginId,
+    contributionId: args.contributionId,
+    kind: "save.store",
+    displayName: `${args.pluginId} save store`,
+    priority: args.priority,
+    payload: {
+      storeId: `${args.pluginId}.save`,
+      summary: `${args.pluginId} save store`,
+      status: args.status ?? "ready",
+      store: args.store
+    }
+  };
+}
+
+function buildManager(plugins: RuntimePluginInstance[]) {
+  return createRuntimePluginManager({
+    boot: createRuntimeBootModel({
+      hostKind: "studio",
+      compileProfile: "authoring-preview",
+      contentSource: "authored-game-root"
+    }),
+    plugins
+  });
+}
 
 // Story 47.1 — contract-shape assertions. No implementations yet;
 // these tests are deliberately typecheck-heavy. Stories 47.3+ add
@@ -180,5 +291,202 @@ describe("GameSaveStore contract", () => {
     expect(typeof store.load).toBe("function");
     expect(typeof store.save).toBe("function");
     expect(typeof store.clear).toBe("function");
+  });
+});
+
+// Story 47.2 — contribution kinds + boot-time resolvers. The two
+// kinds (identity.provider, save.store) flow through the existing
+// RuntimePluginContribution union; the resolvers pick the active
+// implementation at boot, falling through to a supplied fallback
+// when no plugin contributes.
+describe("identity.provider + save.store contribution kinds", () => {
+  it("resolveActiveIdentityProvider returns the fallback when no plugin contributes", () => {
+    const fallback = makeStubIdentityProvider("fallback");
+    const manager = buildManager([]);
+    const resolved = resolveActiveIdentityProvider(manager, fallback);
+    expect(resolved).toBe(fallback);
+    expect(resolved.currentUser()?.userId).toBe("u_fallback");
+  });
+
+  it("resolveActiveIdentityProvider returns the single contributing provider", () => {
+    const fallback = makeStubIdentityProvider("fallback");
+    const supabase = makeStubIdentityProvider("supabase");
+    const contribution = makeIdentityProviderContribution({
+      pluginId: "sugarprofile",
+      contributionId: "sugarprofile.identity",
+      priority: 100,
+      provider: supabase
+    });
+    const manager = buildManager([
+      {
+        pluginId: "sugarprofile",
+        displayName: "SugarProfile",
+        contributions: [contribution]
+      }
+    ]);
+    const resolved = resolveActiveIdentityProvider(manager, fallback);
+    expect(resolved).toBe(supabase);
+    expect(resolved.currentUser()?.userId).toBe("u_supabase");
+  });
+
+  it("resolveActiveIdentityProvider returns the highest-priority contribution when two plugins contribute", () => {
+    const fallback = makeStubIdentityProvider("fallback");
+    const low = makeStubIdentityProvider("low");
+    const high = makeStubIdentityProvider("high");
+    const manager = buildManager([
+      {
+        pluginId: "low-plugin",
+        displayName: "Low",
+        contributions: [
+          makeIdentityProviderContribution({
+            pluginId: "low-plugin",
+            contributionId: "low.identity",
+            priority: 10,
+            provider: low
+          })
+        ]
+      },
+      {
+        pluginId: "high-plugin",
+        displayName: "High",
+        contributions: [
+          makeIdentityProviderContribution({
+            pluginId: "high-plugin",
+            contributionId: "high.identity",
+            priority: 200,
+            provider: high
+          })
+        ]
+      }
+    ]);
+    const warn = vi.fn();
+    const resolved = resolveActiveIdentityProvider(manager, fallback, {
+      warn
+    });
+    expect(resolved).toBe(high);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [message, payload] = warn.mock.calls[0];
+    expect(message).toContain("identity.provider");
+    expect((payload as { contributingPluginIds: string[] }).contributingPluginIds)
+      .toEqual(["low-plugin", "high-plugin"]);
+  });
+
+  it("resolveActiveIdentityProvider does NOT warn for a single contributor", () => {
+    const fallback = makeStubIdentityProvider("fallback");
+    const supabase = makeStubIdentityProvider("supabase");
+    const manager = buildManager([
+      {
+        pluginId: "sugarprofile",
+        displayName: "SugarProfile",
+        contributions: [
+          makeIdentityProviderContribution({
+            pluginId: "sugarprofile",
+            contributionId: "sugarprofile.identity",
+            priority: 100,
+            provider: supabase
+          })
+        ]
+      }
+    ]);
+    const warn = vi.fn();
+    resolveActiveIdentityProvider(manager, fallback, { warn });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("resolveActiveGameSaveStore returns the fallback when no plugin contributes", () => {
+    const fallback = makeStubGameSaveStore("fallback");
+    const manager = buildManager([]);
+    const resolved = resolveActiveGameSaveStore(manager, fallback);
+    expect(resolved).toBe(fallback);
+  });
+
+  it("resolveActiveGameSaveStore returns the single contributing store", () => {
+    const fallback = makeStubGameSaveStore("fallback");
+    const cloud = makeStubGameSaveStore("cloud");
+    const manager = buildManager([
+      {
+        pluginId: "sugarprofile",
+        displayName: "SugarProfile",
+        contributions: [
+          makeGameSaveStoreContribution({
+            pluginId: "sugarprofile",
+            contributionId: "sugarprofile.save",
+            priority: 100,
+            store: cloud
+          })
+        ]
+      }
+    ]);
+    const resolved = resolveActiveGameSaveStore(manager, fallback);
+    expect(resolved).toBe(cloud);
+  });
+
+  it("resolveActiveGameSaveStore returns the highest-priority contribution when two plugins contribute", () => {
+    const fallback = makeStubGameSaveStore("fallback");
+    const low = makeStubGameSaveStore("low");
+    const high = makeStubGameSaveStore("high");
+    const manager = buildManager([
+      {
+        pluginId: "low-plugin",
+        displayName: "Low",
+        contributions: [
+          makeGameSaveStoreContribution({
+            pluginId: "low-plugin",
+            contributionId: "low.save",
+            priority: 10,
+            store: low
+          })
+        ]
+      },
+      {
+        pluginId: "high-plugin",
+        displayName: "High",
+        contributions: [
+          makeGameSaveStoreContribution({
+            pluginId: "high-plugin",
+            contributionId: "high.save",
+            priority: 200,
+            store: high
+          })
+        ]
+      }
+    ]);
+    const warn = vi.fn();
+    const resolved = resolveActiveGameSaveStore(manager, fallback, { warn });
+    expect(resolved).toBe(high);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [message] = warn.mock.calls[0];
+    expect(message).toContain("save.store");
+  });
+
+  it("manager.getContributions exposes identity.provider + save.store under their kind keys", () => {
+    const identityProvider = makeStubIdentityProvider("registry");
+    const store = makeStubGameSaveStore("registry");
+    const manager = buildManager([
+      {
+        pluginId: "sugarprofile",
+        displayName: "SugarProfile",
+        contributions: [
+          makeIdentityProviderContribution({
+            pluginId: "sugarprofile",
+            contributionId: "sugarprofile.identity",
+            priority: 100,
+            provider: identityProvider
+          }),
+          makeGameSaveStoreContribution({
+            pluginId: "sugarprofile",
+            contributionId: "sugarprofile.save",
+            priority: 100,
+            store
+          })
+        ]
+      }
+    ]);
+    const identityContributions = manager.getContributions("identity.provider");
+    const saveContributions = manager.getContributions("save.store");
+    expect(identityContributions).toHaveLength(1);
+    expect(identityContributions[0].payload.provider).toBe(identityProvider);
+    expect(saveContributions).toHaveLength(1);
+    expect(saveContributions[0].payload.store).toBe(store);
   });
 });

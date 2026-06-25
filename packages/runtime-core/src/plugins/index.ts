@@ -22,6 +22,8 @@ import type {
   ConversationProvider,
   ConversationTurnEnvelope
 } from "../conversation";
+import type { UserIdentityProvider } from "../identity";
+import type { GameSaveStore } from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
 import type {
   DocumentDefinition,
@@ -47,7 +49,9 @@ export type RuntimePluginContributionKind =
   | "design.workspace"
   | "design.section"
   | "project.settings"
-  | "mechanics.emitHandler";
+  | "mechanics.emitHandler"
+  | "identity.provider"
+  | "save.store";
 
 interface RuntimePluginContributionBase<TKind extends RuntimePluginContributionKind, TPayload> {
   pluginId: string;
@@ -216,6 +220,37 @@ export type DebugEntityBillboardContribution = RuntimePluginContributionBase<
   }
 >;
 
+// Story 47.2 — plugins that own user-account behaviour contribute a
+// UserIdentityProvider here. At most one provider is consumed per
+// boot (resolveActiveIdentityProvider picks the highest priority
+// when multiple plugins contribute, logging a warn). When no plugin
+// contributes, the boot path falls through to the runtime-core
+// AnonymousLocalIdentityProvider default.
+export type IdentityProviderContribution = RuntimePluginContributionBase<
+  "identity.provider",
+  {
+    providerId: string;
+    summary: string;
+    status: "placeholder" | "ready";
+    provider: UserIdentityProvider;
+  }
+>;
+
+// Story 47.2 — plugins that own cross-plugin player state persistence
+// contribute a GameSaveStore here. Same single-active-implementation
+// model as identity.provider; resolveActiveGameSaveStore picks the
+// highest-priority contribution and falls through to the runtime-core
+// IndexedDBGameSaveStore default when no plugin contributes.
+export type GameSaveStoreContribution = RuntimePluginContributionBase<
+  "save.store",
+  {
+    storeId: string;
+    summary: string;
+    status: "placeholder" | "ready";
+    store: GameSaveStore;
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
@@ -226,7 +261,9 @@ export type RuntimePluginContribution =
   | DesignWorkspaceContribution
   | DesignSectionContribution
   | ProjectSettingsContribution
-  | MechanicsEmitHandlerContribution;
+  | MechanicsEmitHandlerContribution
+  | IdentityProviderContribution
+  | GameSaveStoreContribution;
 
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
@@ -359,4 +396,74 @@ export class RuntimePluginSystem extends System {
   update(_world: World, delta: number): void {
     this.manager.update(delta);
   }
+}
+
+interface ResolverLogger {
+  warn(message: string, payload?: Record<string, unknown>): void;
+}
+
+const defaultResolverLogger: ResolverLogger = {
+  warn(message, payload) {
+    console.warn(message, payload ?? {});
+  }
+};
+
+// Story 47.2 — pick the active UserIdentityProvider at boot. Walks
+// every `identity.provider` contribution; picks the highest-priority
+// one. Falls through to the supplied fallback (typically the
+// runtime-core anonymous-local default) when no plugin contributes.
+// Logs a warn (not throw) on conflicts so a misconfigured stack
+// doesn't fail-fast — the boot path uses whichever provider it
+// resolves and surfaces the conflict for the developer to clean up.
+export function resolveActiveIdentityProvider(
+  manager: RuntimePluginManager,
+  fallback: UserIdentityProvider,
+  logger: ResolverLogger = defaultResolverLogger
+): UserIdentityProvider {
+  const contributions = manager.getContributions("identity.provider");
+  if (contributions.length === 0) return fallback;
+  if (contributions.length > 1) {
+    logger.warn(
+      `[runtime-core] Multiple plugins contribute identity.provider; picking highest priority.`,
+      {
+        contributingPluginIds: contributions.map((c) => c.pluginId),
+        priorities: contributions.map((c) => ({
+          pluginId: c.pluginId,
+          priority: c.priority
+        }))
+      }
+    );
+  }
+  const winner = contributions
+    .slice()
+    .sort((a, b) => b.priority - a.priority)[0];
+  return winner.payload.provider;
+}
+
+// Story 47.2 — pick the active GameSaveStore at boot. Same shape as
+// resolveActiveIdentityProvider; the two run side-by-side at boot and
+// are typically resolved together.
+export function resolveActiveGameSaveStore(
+  manager: RuntimePluginManager,
+  fallback: GameSaveStore,
+  logger: ResolverLogger = defaultResolverLogger
+): GameSaveStore {
+  const contributions = manager.getContributions("save.store");
+  if (contributions.length === 0) return fallback;
+  if (contributions.length > 1) {
+    logger.warn(
+      `[runtime-core] Multiple plugins contribute save.store; picking highest priority.`,
+      {
+        contributingPluginIds: contributions.map((c) => c.pluginId),
+        priorities: contributions.map((c) => ({
+          pluginId: c.pluginId,
+          priority: c.priority
+        }))
+      }
+    );
+  }
+  const winner = contributions
+    .slice()
+    .sort((a, b) => b.priority - a.priority)[0];
+  return winner.payload.store;
 }
