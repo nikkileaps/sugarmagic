@@ -31,7 +31,7 @@ export type GoogleCloudRunIngress =
  *   all callers — appropriate for solo-dev alpha where the threat model is
  *   drive-by abuse, not malicious authenticated users.
  *
- * When [Plan 047](047-identity-provider-plugin-model-epic.md) lands the
+ * When [Plan 047](047-sugarprofile-user-management-plugin-epic.md) lands the
  * proper identity-provider plugin model, this enum expands to include real
  * provider ids (`"supabase"`, `"auth0"`, etc.) and the gateway middleware
  * switches based on the value. `"bearer"` retroactively becomes the first

@@ -6,7 +6,7 @@
 > Builds on [Plan 045](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md)
 > (the backend / Cloud Run half) and [ADR 017](/docs/adr/017-sugardeploy-cloud-run-architecture.md).
 > The identity-provider plugin work that used to be Plan 046 is now
-> [Plan 047](/docs/plans/047-identity-provider-plugin-model-epic.md).
+> [Plan 047](/docs/plans/047-sugarprofile-user-management-plugin-epic.md).
 > Engine versioning for `@sugarmagic/target-web` is out of scope here
 > and lives in [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md);
 > this epic ships a "local-build-and-commit `dist/`" stopgap that
@@ -289,7 +289,7 @@ the actual promote / drain controls land in a follow-up.
 - **Per-user identity.** The bearer-shared-token model from Plan 045
   carries forward. The token is baked into the frontend bundle at
   build time (honor-system, as already established). Real per-user
-  identity is [Plan 047](/docs/plans/047-identity-provider-plugin-model-epic.md).
+  identity is [Plan 047](/docs/plans/047-sugarprofile-user-management-plugin-epic.md).
 - **Asset CDN optimization.** Frontends served from Netlify get
   Netlify's CDN. Moving assets to a separate object store + edge
   cache is a future optimization.
