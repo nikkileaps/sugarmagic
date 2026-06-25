@@ -102,6 +102,7 @@ import {
   buildSugarlangPreviewBootPayloadForSession,
   collectPluginShellContributions,
   ensureDiscoveredPluginConfiguration,
+  getDeploymentSettings,
   listDiscoveredPluginDefinitions,
   planGameDeployment,
   resolveSugarLangTargetLanguage,
@@ -147,6 +148,7 @@ import {
 import {
   useBuildProductModeView,
   useDesignProductModeView,
+  usePublishProductModeView,
   useRenderProductModeView,
   type WorkspaceNavigationTarget
 } from "@sugarmagic/workspaces";
@@ -303,9 +305,26 @@ function dispatchCommand(command: SemanticCommand) {
   projectStore.getState().updateSession(applyCommand(session, command));
 }
 
-async function handleSave() {
+interface PerformSaveOptions {
+  // Story 45.8 — `true` skips the managed-files overwrite confirm
+  // dialog. Used by plugin-driven sagas (cut-major-version) that have
+  // already confirmed the operation up-front through their own modal
+  // and just need to flush the bumped state to disk silently.
+  silentOverwriteManagedFiles: boolean;
+}
+
+interface PerformSaveResult {
+  ok: boolean;
+  reason?: string;
+}
+
+async function performSave(
+  options: PerformSaveOptions
+): Promise<PerformSaveResult> {
   const { handle, descriptor, session } = projectStore.getState();
-  if (!handle || !descriptor || !session) return;
+  if (!handle || !descriptor || !session) {
+    return { ok: false, reason: "No project is loaded." };
+  }
   const mechanicsValidation = validateMechanicsDefinition(
     session.gameProject.mechanics,
     {
@@ -316,12 +335,13 @@ async function handleSave() {
     }
   );
   if (!mechanicsValidation.valid) {
-    window.alert(
-      `Project mechanics are invalid and the project was not saved:\n\n${mechanicsValidation.issues
-        .map((issue) => `- ${issue.path}: ${issue.message}`)
-        .join("\n")}`
-    );
-    return;
+    const reason = `Project mechanics are invalid:\n${mechanicsValidation.issues
+      .map((issue) => `- ${issue.path}: ${issue.message}`)
+      .join("\n")}`;
+    if (!options.silentOverwriteManagedFiles) {
+      window.alert(`${reason}\n\nProject was not saved.`);
+    }
+    return { ok: false, reason };
   }
   const baseSaveInput = {
     handle,
@@ -335,58 +355,39 @@ async function handleSave() {
     SUGARDEPLOY_PLUGIN_ID
   );
   const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
+  const publishedWebSnapshot = {
+    // Story 46.10 follow-up — feed the in-memory runtime snapshot
+    // through so boot.json bakes the real game content (regions +
+    // content library + asset sources) rather than empty
+    // placeholders.
+    regions: getAllRegions(session),
+    contentLibrary: session.contentLibrary,
+    assetSources: {} as Record<string, string>,
+    activeRegionId: session.activeRegionId,
+    activeEnvironmentId: null as string | null
+  };
+
+  // Story 46.15 reshape — non-secret runtime config env now flows
+  // from per-game plugin config (which is already in memory on the
+  // session) rather than from sugarmagic-root .env. No async fetch,
+  // no two-pass plan: planGameDeployment computes the env map
+  // internally from enabled plugins' gatewayRuntimeConfigKeys.
   const deploymentPlan =
-    canRunSugarDeploy && session.gameProject.deployment.deploymentTargetId
-      ? planGameDeployment(session.gameProject)
+    canRunSugarDeploy &&
+    getDeploymentSettings(session.gameProject).backendDeploymentTargetId
+      ? planGameDeployment(session.gameProject, publishedWebSnapshot)
       : null;
 
-  if (deploymentPlan?.status === "invalid") {
-    window.alert(
-      `Deployment plan is invalid and managed deployment files were not generated:\n\n${deploymentPlan.conflicts
+  try {
+    if (deploymentPlan?.status === "invalid") {
+      const reason = `Deployment plan is invalid:\n${deploymentPlan.conflicts
         .map((conflict) => `- ${conflict.message}`)
-        .join("\n")}`
-    );
-    const result = await saveProjectWithManagedFiles(baseSaveInput);
-    projectStore.getState().updateSession(
-      markSessionClean({
-        ...session,
-        contentLibrary: result.reconciledContentLibrary
-      })
-    );
-    return;
-  }
-
-  const managedFiles = deploymentPlan?.managedFiles ?? [];
-  const inspection = await inspectManagedProjectFiles({
-    handle,
-    managedFiles
-  });
-
-  if (inspection.changedManagedFiles.length > 0) {
-    const changedOnly = inspection.changedManagedFiles.filter(
-      (path) => !inspection.driftedManagedFiles.includes(path)
-    );
-    const messageParts = [
-      "SugarDeploy detected existing managed deployment files that will be regenerated on save."
-    ];
-    if (changedOnly.length > 0) {
-      messageParts.push(
-        "",
-        "Generated files to overwrite:",
-        ...changedOnly.map((path) => `- ${path}`)
-      );
-    }
-    if (inspection.driftedManagedFiles.length > 0) {
-      messageParts.push(
-        "",
-        "Files with manual edits that will be overwritten:",
-        ...inspection.driftedManagedFiles.map((path) => `- ${path}`)
-      );
-    }
-    messageParts.push("", "Overwrite these managed deployment files?");
-
-    const confirmed = window.confirm(messageParts.join("\n"));
-    if (!confirmed) {
+        .join("\n")}`;
+      if (!options.silentOverwriteManagedFiles) {
+        window.alert(
+          `${reason}\n\nManaged deployment files were not generated; project.sgrmagic was still saved.`
+        );
+      }
       const result = await saveProjectWithManagedFiles(baseSaveInput);
       projectStore.getState().updateSession(
         markSessionClean({
@@ -394,22 +395,82 @@ async function handleSave() {
           contentLibrary: result.reconciledContentLibrary
         })
       );
-      return;
+      return { ok: false, reason };
     }
+
+    const managedFiles = deploymentPlan?.managedFiles ?? [];
+    const inspection = await inspectManagedProjectFiles({
+      handle,
+      managedFiles
+    });
+
+    if (
+      inspection.changedManagedFiles.length > 0 &&
+      !options.silentOverwriteManagedFiles
+    ) {
+      const changedOnly = inspection.changedManagedFiles.filter(
+        (path) => !inspection.driftedManagedFiles.includes(path)
+      );
+      const messageParts = [
+        "SugarDeploy detected existing managed deployment files that will be regenerated on save."
+      ];
+      if (changedOnly.length > 0) {
+        messageParts.push(
+          "",
+          "Generated files to overwrite:",
+          ...changedOnly.map((path) => `- ${path}`)
+        );
+      }
+      if (inspection.driftedManagedFiles.length > 0) {
+        messageParts.push(
+          "",
+          "Files with manual edits that will be overwritten:",
+          ...inspection.driftedManagedFiles.map((path) => `- ${path}`)
+        );
+      }
+      messageParts.push("", "Overwrite these managed deployment files?");
+
+      const confirmed = window.confirm(messageParts.join("\n"));
+      if (!confirmed) {
+        const result = await saveProjectWithManagedFiles(baseSaveInput);
+        projectStore.getState().updateSession(
+          markSessionClean({
+            ...session,
+            contentLibrary: result.reconciledContentLibrary
+          })
+        );
+        return { ok: true };
+      }
+    }
+
+    const result = await saveProjectWithManagedFiles({
+      ...baseSaveInput,
+      managedFiles,
+      overwriteManagedFiles: inspection.changedManagedFiles.length > 0
+    });
+
+    projectStore.getState().updateSession(
+      markSessionClean({
+        ...session,
+        contentLibrary: result.reconciledContentLibrary
+      })
+    );
+    return { ok: true };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason };
   }
+}
 
-  const result = await saveProjectWithManagedFiles({
-    ...baseSaveInput,
-    managedFiles,
-    overwriteManagedFiles: inspection.changedManagedFiles.length > 0
-  });
+async function handleSave() {
+  await performSave({ silentOverwriteManagedFiles: false });
+}
 
-  projectStore.getState().updateSession(
-    markSessionClean({
-      ...session,
-      contentLibrary: result.reconciledContentLibrary
-    })
-  );
+// Story 45.8 — exposed to the plugin workspace via PluginWorkspaceViewProps.
+// Lets sagas (cut-major-version is the first) flush in-memory dispatches
+// to disk mid-flow with no UI prompts.
+async function requestSaveFromPlugin(): Promise<PerformSaveResult> {
+  return performSave({ silentOverwriteManagedFiles: true });
 }
 
 async function handleReload() {
@@ -460,6 +521,7 @@ function handleStartPreview(
     activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
     activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
     activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
+    activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
     activeRegionId: shell.activeRegionId,
     activeEnvironmentId: shell.activeEnvironmentId,
     activeWorkspaceId: shell.activeWorkspaceId,
@@ -524,6 +586,9 @@ function handleStopPreview() {
   if (snapshot.activeProductMode === "render") {
     shell.setActiveRenderWorkspaceKind(snapshot.activeRenderWorkspaceKind);
   }
+  if (snapshot.activeProductMode === "publish") {
+    shell.setActivePublishWorkspaceKind(snapshot.activePublishWorkspaceKind);
+  }
   if (snapshot.activeRegionId) {
     shell.setActiveRegionId(snapshot.activeRegionId);
   }
@@ -586,6 +651,10 @@ async function postPreviewBootMessage(
 export function App() {
   const activeProductMode = useStore(shellStore, (s) => s.activeProductMode);
   const activeWorkspaceId = useStore(shellStore, (s) => s.activeWorkspaceId);
+  const activePublishKind = useStore(
+    shellStore,
+    (s) => s.activePublishWorkspaceKind
+  );
   const activeBuildKind = useStore(
     shellStore,
     (s) => s.activeBuildWorkspaceKind
@@ -615,6 +684,7 @@ export function App() {
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
   const isRender = activeProductMode === "render";
+  const isPublish = activeProductMode === "publish";
   const isPreviewRunning = useStore(previewStore, (s) => s.isPreviewRunning);
 
   const regions = useMemo(() => {
@@ -830,6 +900,7 @@ export function App() {
       activeBuildWorkspaceKind: activeBuildKind,
       activeDesignWorkspaceKind: activeDesignKind,
       activeRenderWorkspaceKind: activeRenderKind,
+      activePublishWorkspaceKind: activePublishKind,
       activeRegionId,
       activeEnvironmentId,
       activeWorkspaceId,
@@ -2070,6 +2141,63 @@ export function App() {
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
+  // Story 46.5 — gather plugin-contributed Publish workspaces (e.g.
+  // SugarDeploy's Provision / Release / Deploy). Two halves: shell
+  // contributions provide labels + icons + sort order; plugin
+  // workspace definitions provide createWorkspaceView. We zip them
+  // by workspaceKind, render each contribution's view, and pass the
+  // sorted result into the Publish productmode hook.
+  const pluginPublishWorkspaceItems = useMemo(() => {
+    const publishWorkspaceDefinitions =
+      studioPluginWorkspaceDefinitions.filter(
+        (definition) => definition.productMode === "publish"
+      );
+    return pluginShellContributions.publishWorkspaces
+      .map((contribution) => {
+        const definition = publishWorkspaceDefinitions.find(
+          (entry) => entry.workspaceKind === contribution.workspaceKind
+        );
+        if (!definition) return null;
+        const view = definition.createWorkspaceView({
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          onCommand: dispatchCommand,
+          requestSave: requestSaveFromPlugin
+        });
+        return {
+          workspaceKind: contribution.workspaceKind,
+          label: contribution.label,
+          icon: contribution.icon,
+          view
+        };
+      })
+      .filter(
+        (
+          entry
+        ): entry is {
+          workspaceKind: string;
+          label: string;
+          icon: string;
+          view: ReturnType<
+            (typeof studioPluginWorkspaceDefinitions)[number]["createWorkspaceView"]
+          >;
+        } => entry !== null
+      );
+  }, [
+    pluginShellContributions.publishWorkspaces,
+    studioPluginWorkspaceDefinitions,
+    pluginConfigurations,
+    session?.gameProject
+  ]);
+  const publishView = usePublishProductModeView({
+    activePublishKind,
+    gameProject: session?.gameProject ?? null,
+    pluginConfigurations,
+    onSelectKind: (kind) =>
+      shellStore.getState().setActivePublishWorkspaceKind(kind),
+    pluginPublishWorkspaces: pluginPublishWorkspaceItems
+  });
   const activePluginWorkspaceDefinition =
     getStudioPluginWorkspaceDefinition(activeDesignKind);
   const activePluginView = useMemo(() => {
@@ -2078,7 +2206,8 @@ export function App() {
       gameProjectId: session?.gameProject.identity.id ?? null,
       gameProject: session?.gameProject ?? null,
       pluginConfigurations,
-      onCommand: dispatchCommand
+      onCommand: dispatchCommand,
+      requestSave: requestSaveFromPlugin
     });
   }, [
     activePluginWorkspaceDefinition,
@@ -2463,205 +2592,226 @@ export function App() {
             <Text fw={700} size="sm" c="var(--sm-color-text)" mr="md">
               Sugarmagic
             </Text>
-            {phase === "active" && (
-              <Menu position="bottom-start" offset={4}>
-                <Menu.Target>
-                  <UnstyledButton
-                    px="md"
-                    py={6}
-                    styles={{
-                      root: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-accent-blue)",
-                        background: "var(--sm-active-bg)",
-                        borderRadius: "var(--sm-radius-sm)",
-                        marginRight: "var(--sm-space-lg)",
-                        "&:hover": { background: "var(--sm-active-bg-hover)" }
-                      }
-                    }}
-                  >
-                    📁 Game
-                  </UnstyledButton>
-                </Menu.Target>
-                <Menu.Dropdown
-                  styles={{
-                    dropdown: {
-                      background: "var(--sm-color-surface1)",
-                      border: "1px solid var(--sm-panel-border)",
-                      minWidth: 200,
-                      padding: "var(--sm-space-xs) 0"
-                    }
-                  }}
-                >
-                  <Menu.Item
-                    onClick={handleSave}
-                    disabled={!isDirty}
-                    rightSection={
-                      <Text size="xs" c="var(--sm-color-overlay0)">
-                        ⌘S
-                      </Text>
-                    }
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" },
-                        "&[data-disabled]": {
-                          color: "var(--sm-color-overlay0)"
-                        }
-                      }
-                    }}
-                  >
-                    💾 Save Game
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleUndo}
-                    disabled={undoCount === 0}
-                    rightSection={
-                      <Text size="xs" c="var(--sm-color-overlay0)">
-                        ⌘Z
-                      </Text>
-                    }
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" },
-                        "&[data-disabled]": {
-                          color: "var(--sm-color-overlay0)"
-                        }
-                      }
-                    }}
-                  >
-                    ↩ Undo
-                  </Menu.Item>
-                  <Menu.Divider
-                    styles={{
-                      divider: { borderColor: "var(--sm-panel-border)" }
-                    }}
-                  />
-                  <Menu.Sub position="right-start" offset={4}>
-                    <Menu.Sub.Target>
-                      <Menu.Sub.Item
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        📚 Libraries
-                      </Menu.Sub.Item>
-                    </Menu.Sub.Target>
-                    <Menu.Sub.Dropdown
+            {phase === "active" && session && (
+              <Group
+                gap={6}
+                align="center"
+                mr="var(--sm-space-lg)"
+                wrap="nowrap"
+              >
+                <Menu position="bottom-start" offset={4}>
+                  <Menu.Target>
+                    <UnstyledButton
+                      px="md"
+                      py={6}
                       styles={{
-                        dropdown: {
-                          background: "var(--sm-color-surface1)",
-                          border: "1px solid var(--sm-panel-border)",
-                          minWidth: 200,
-                          padding: "var(--sm-space-xs) 0"
+                        root: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-accent-blue)",
+                          background: "var(--sm-active-bg)",
+                          borderRadius: "var(--sm-radius-sm)",
+                          "&:hover": { background: "var(--sm-active-bg-hover)" }
                         }
                       }}
                     >
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("materials")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        🎨 Materials
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("textures")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        🖼 Textures
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("shaders")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        ⚙ Shaders
-                      </Menu.Item>
-                      <Menu.Item
-                        onClick={() =>
-                          shellStore.getState().setActiveLibrary("audio")
-                        }
-                        styles={{
-                          item: {
-                            fontSize: "var(--sm-font-size-lg)",
-                            color: "var(--sm-color-text)",
-                            padding: "10px 16px",
-                            "&:hover": { background: "var(--sm-active-bg)" }
-                          }
-                        }}
-                      >
-                        Audio
-                      </Menu.Item>
-                    </Menu.Sub.Dropdown>
-                  </Menu.Sub>
-                  <Menu.Divider
+                      📁 {session.gameProject.displayName}
+                    </UnstyledButton>
+                  </Menu.Target>
+                  <Menu.Dropdown
                     styles={{
-                      divider: { borderColor: "var(--sm-panel-border)" }
-                    }}
-                  />
-                  <Menu.Item
-                    onClick={() => setPluginsOpen(true)}
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" }
+                      dropdown: {
+                        background: "var(--sm-color-surface1)",
+                        border: "1px solid var(--sm-panel-border)",
+                        minWidth: 200,
+                        padding: "var(--sm-space-xs) 0"
                       }
                     }}
                   >
-                    🧩 Plugins
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleReload}
-                    styles={{
-                      item: {
-                        fontSize: "var(--sm-font-size-lg)",
-                        color: "var(--sm-color-text)",
-                        padding: "10px 16px",
-                        "&:hover": { background: "var(--sm-active-bg)" }
+                    <Menu.Item
+                      onClick={handleSave}
+                      disabled={!isDirty}
+                      rightSection={
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          ⌘S
+                        </Text>
                       }
-                    }}
-                  >
-                    🔄 Reload Project
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" },
+                          "&[data-disabled]": {
+                            color: "var(--sm-color-overlay0)"
+                          }
+                        }
+                      }}
+                    >
+                      💾 Save Game
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={handleUndo}
+                      disabled={undoCount === 0}
+                      rightSection={
+                        <Text size="xs" c="var(--sm-color-overlay0)">
+                          ⌘Z
+                        </Text>
+                      }
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" },
+                          "&[data-disabled]": {
+                            color: "var(--sm-color-overlay0)"
+                          }
+                        }
+                      }}
+                    >
+                      ↩ Undo
+                    </Menu.Item>
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Sub position="right-start" offset={4}>
+                      <Menu.Sub.Target>
+                        <Menu.Sub.Item
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          📚 Libraries
+                        </Menu.Sub.Item>
+                      </Menu.Sub.Target>
+                      <Menu.Sub.Dropdown
+                        styles={{
+                          dropdown: {
+                            background: "var(--sm-color-surface1)",
+                            border: "1px solid var(--sm-panel-border)",
+                            minWidth: 200,
+                            padding: "var(--sm-space-xs) 0"
+                          }
+                        }}
+                      >
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("materials")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          🎨 Materials
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("textures")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          🖼 Textures
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("shaders")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          ⚙ Shaders
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("audio")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          Audio
+                        </Menu.Item>
+                      </Menu.Sub.Dropdown>
+                    </Menu.Sub>
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Item
+                      onClick={() => setPluginsOpen(true)}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      🧩 Plugins
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={handleReload}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      🔄 Reload Project
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+                <Badge
+                  variant="light"
+                  color="blue"
+                  size="sm"
+                  styles={{
+                    root: {
+                      background: "var(--sm-active-bg)",
+                      color: "var(--sm-accent-blue)",
+                      fontWeight: 600,
+                      textTransform: "none"
+                    }
+                  }}
+                >
+                  v{session.gameProject.majorVersion}
+                </Badge>
+              </Group>
             )}
             <ModeBar
               items={modeBarItems}
@@ -2692,7 +2842,9 @@ export function App() {
                 ? designView.subHeaderPanel
                 : isRender
                   ? renderView.subHeaderPanel
-                  : undefined
+                  : isPublish
+                    ? publishView.subHeaderPanel
+                    : undefined
             : undefined
         }
         leftPanel={
@@ -2702,7 +2854,9 @@ export function App() {
               ? activeDesignPanels.leftPanel
               : isRender
                 ? renderView.leftPanel
-                : null
+                : isPublish
+                  ? publishView.leftPanel
+                  : null
         }
         rightPanel={
           isBuild
@@ -2711,7 +2865,9 @@ export function App() {
               ? activeDesignPanels.rightPanel
               : isRender
                 ? renderView.rightPanel
-                : undefined
+                : isPublish
+                  ? publishView.rightPanel
+                  : undefined
         }
         bottomPanel={
           <StatusBar
@@ -2729,6 +2885,8 @@ export function App() {
             activeDesignPanels.centerPanel
           ) : phase === "active" && isRender && renderView.centerPanel ? (
             renderView.centerPanel
+          ) : phase === "active" && isPublish && publishView.centerPanel ? (
+            publishView.centerPanel
           ) : (
             <ViewportFrame>
               {shouldRenderSharedViewport ? (
@@ -2740,6 +2898,7 @@ export function App() {
                   {isBuild && buildView.viewportOverlay}
                   {isDesign && activeDesignPanels.viewportOverlay}
                   {isRender && renderView.viewportOverlay}
+                  {isPublish && publishView.viewportOverlay}
                 </>
               ) : (
                 <Text size="sm" c="var(--sm-color-overlay0)">

@@ -62,7 +62,7 @@ import type {
   RemovePostProcessShaderCommand,
   UpdatePluginConfigurationCommand,
   DeletePluginConfigurationCommand,
-  UpdateDeploymentSettingsCommand,
+  BumpMajorVersionCommand,
   CreateMenuDefinitionCommand,
   UpdateMenuDefinitionCommand,
   DeleteMenuDefinitionCommand,
@@ -1243,19 +1243,39 @@ function applyDeletePluginConfigurationCommand(
   };
 }
 
-function applyUpdateDeploymentSettingsCommand(
+// Story 45.7.5 — `applyUpdateDeploymentSettingsCommand` and
+// `applyEnsureVersionedProjectIdentifierCommand` removed. Deploy state
+// mutations now flow through the generic `UpdatePluginConfiguration`
+// command applier, which writes the SugarDeploy plugin's
+// `pluginConfigurations[].config` slot. The deploy plugin contributes
+// typed builders that produce the right payload shape.
+
+// Story 45.8 — bump `majorVersion`. Idempotent / no-op when the
+// requested value already matches. Rejects non-integer / non-positive
+// inputs by leaving the session unchanged (the cut saga rolls back
+// rather than dispatching invalid bumps; this is the belt-and-suspenders).
+function applyBumpMajorVersionCommand(
   session: AuthoringSession,
-  command: UpdateDeploymentSettingsCommand
+  command: BumpMajorVersionCommand
 ): AuthoringSession {
+  const target = command.payload.newMajorVersion;
+  if (
+    typeof target !== "number" ||
+    !Number.isFinite(target) ||
+    target < 1 ||
+    Math.floor(target) !== target
+  ) {
+    return session;
+  }
+  if (session.gameProject.majorVersion === target) return session;
   const transaction = createTransactionForCommand(command, [
     session.gameProject.identity.id
   ]);
-
   return {
     ...session,
     gameProject: {
       ...session.gameProject,
-      deployment: command.payload.settings
+      majorVersion: target
     },
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2148,8 +2168,8 @@ export function applyCommand(
     return applyDeletePluginConfigurationCommand(session, command);
   }
 
-  if (command.kind === "UpdateDeploymentSettings") {
-    return applyUpdateDeploymentSettingsCommand(session, command);
+  if (command.kind === "BumpMajorVersion") {
+    return applyBumpMajorVersionCommand(session, command);
   }
 
   if (command.kind === "CreateMenuDefinition") {

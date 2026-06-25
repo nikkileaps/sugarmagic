@@ -43,6 +43,26 @@ export interface PluginDesignWorkspaceContribution {
   summary: string;
 }
 
+// Story 46.5 — plugins contribute Publish-productmode workspaces
+// here, parallel to the Design contributions above. Studio core
+// renders one baseline `package` workspace (Story 46.1); these
+// contributions stack additional tabs alongside it. SugarDeploy
+// contributes three (Provision / Release / Deploy).
+export interface PluginPublishWorkspaceContribution {
+  pluginId: string;
+  workspaceKind: string;
+  label: string;
+  icon: string;
+  summary: string;
+  /**
+   * Sort order within the Publish productmode sub-nav. The Package
+   * tab Studio core ships is rendered first; plugin contributions
+   * follow in ascending `order`. Stable-sorted, so equal values
+   * fall back to insertion order across plugins.
+   */
+  order: number;
+}
+
 export interface PluginDesignSectionContribution {
   pluginId: string;
   workspaceKind: string;
@@ -79,6 +99,7 @@ export interface PluginShellContributionSet {
   projectSettings: PluginProjectSettingsContribution[];
   designWorkspaces: PluginDesignWorkspaceContribution[];
   designSections: PluginDesignSectionContribution[];
+  publishWorkspaces: PluginPublishWorkspaceContribution[];
   npcInteractionOptions: PluginNPCInteractionOptionContribution[];
 }
 
@@ -86,6 +107,7 @@ export interface PluginShellContributionDefinition {
   projectSettings?: PluginProjectSettingsContribution[];
   designWorkspaces?: PluginDesignWorkspaceContribution[];
   designSections?: PluginDesignSectionContribution[];
+  publishWorkspaces?: PluginPublishWorkspaceContribution[];
   npcInteractionOptions?: PluginNPCInteractionOptionContribution[];
 }
 
@@ -94,6 +116,7 @@ export function createEmptyPluginShellContributionSet(): PluginShellContribution
     projectSettings: [],
     designWorkspaces: [],
     designSections: [],
+    publishWorkspaces: [],
     npcInteractionOptions: []
   };
 }
@@ -111,6 +134,7 @@ export function collectPluginShellContributions(
     result.projectSettings.push(...(definition.projectSettings ?? []));
     result.designWorkspaces.push(...(definition.designWorkspaces ?? []));
     result.designSections.push(...(definition.designSections ?? []));
+    result.publishWorkspaces.push(...(definition.publishWorkspaces ?? []));
     result.npcInteractionOptions.push(...(definition.npcInteractionOptions ?? []));
   }
 
@@ -121,6 +145,14 @@ export function collectPluginShellContributions(
       ? left.label.localeCompare(right.label)
       : left.workspaceKind.localeCompare(right.workspaceKind)
   );
+  // Story 46.5 — publish workspaces sort by explicit `order` so
+  // SugarDeploy's Provision / Release / Deploy stay in cadence order
+  // regardless of plugin discovery order. Ties break by label for
+  // determinism.
+  result.publishWorkspaces.sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order;
+    return left.label.localeCompare(right.label);
+  });
   result.npcInteractionOptions.sort((left, right) =>
     left.label.localeCompare(right.label)
   );

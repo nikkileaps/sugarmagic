@@ -6,12 +6,8 @@ import {
   Button,
   Code,
   Group,
-  NumberInput,
-  Select,
   Stack,
-  Switch,
-  Text,
-  TextInput
+  Text
 } from "@mantine/core";
 import { getPluginConfiguration } from "@sugarmagic/domain";
 import {
@@ -24,6 +20,7 @@ import type {
   PluginWorkspaceViewProps,
   StudioPluginWorkspaceDefinition
 } from "../../sdk";
+import { PluginSchemaSettingsPanel } from "../../PluginSchemaSettingsPanel";
 import { readStudioPluginRuntimeEnvironment } from "../../../runtimeEnv";
 
 interface SugarAgentLoreStatusResponse {
@@ -135,31 +132,6 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
     const response = await fetch(`${proxyBaseUrl}/api/sugaragent/lore/status`);
     const payload = (await response.json()) as unknown;
     return isLoreStatusResponse(payload) ? payload : null;
-  }
-
-  function updateConfig(patch: Record<string, unknown>) {
-    if (!gameProjectId) return;
-    onCommand({
-      kind: "UpdatePluginConfiguration",
-      target: {
-        aggregateKind: "plugin-config",
-        aggregateId: configuration.identity.id
-      },
-      subject: {
-        subjectKind: "plugin-configuration",
-        subjectId: configuration.identity.id
-      },
-      payload: {
-        configuration: {
-          ...configuration,
-          enabled: true,
-          config: {
-            ...configuration.config,
-            ...patch
-          }
-        }
-      }
-    });
   }
 
   async function runLoreAction(kind: SugarAgentLoreActionKind) {
@@ -290,109 +262,29 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
 
   return (
     <Stack gap="lg" p="xl" h="100%" style={{ minHeight: 0, overflowY: "auto" }}>
-      <Stack gap={4}>
-        <Text fw={700} size="lg">
-          SugarAgent Plugin
-        </Text>
-        <Text size="sm" c="var(--sm-color-subtext)">
-          SugarAgent conversation runtime is configured here, but authored world lore now comes from the lore wiki. NPCs bind to a canonical lore page id, and the gateway owns lore discovery and vector-store ingest.
-        </Text>
-      </Stack>
-
-      <Alert color="blue" variant="light" title="Local .env">
+      <Alert color="blue" variant="light" title="Where SugarAgent config lives">
         <Stack gap={4}>
           <Text size="sm">
-            Set these in the Sugarmagic repo-root <Code>.env</Code> file (Studio reads env from the monorepo root via Vite's <Code>envDir</Code>):
+            The browser only talks to the gateway. API keys (Anthropic, OpenAI) live server-side in Secret Manager; the browser never sees them. Non-secret runtime config (vector store id, model ids) lives in this panel's <b>Gateway Runtime Config</b> section below and is committed with the game, then plumbed to Cloud Run on deploy.
+          </Text>
+          <Text size="sm">
+            The repo-root <Code>.env</Code> only needs to point Studio at its local gateway:
           </Text>
           <Code block>
-            {`# Optional proxy mode through SugarDeploy\nVITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787\n\n# Direct browser-to-vendor mode (still supported)\nVITE_SUGARMAGIC_ANTHROPIC_API_KEY=...\nVITE_SUGARMAGIC_ANTHROPIC_MODEL=claude-sonnet-4-5\nVITE_SUGARMAGIC_OPENAI_API_KEY=...\nVITE_SUGARMAGIC_OPENAI_EMBEDDING_MODEL=text-embedding-3-small\nVITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID=...`}
+            {`VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL=http://localhost:8787`}
           </Code>
         </Stack>
       </Alert>
 
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Lore Source
-        </Text>
-        <Select
-          label="Source Kind"
-          data={[
-            { value: "local", label: "Local Checked-Out Repo" },
-            { value: "github", label: "GitHub Repo (Planned)" }
-          ]}
-          value={sugarAgent.loreSourceKind}
-          onChange={(value) =>
-            updateConfig({
-              loreSourceKind: value === "github" ? "github" : "local"
-            })
-          }
-        />
-        {sugarAgent.loreSourceKind === "local" ? (
-          <TextInput
-            label="Local Lore Repo Path"
-            description="Absolute path to the checked-out lore wiki repo. Save, then redeploy SugarDeploy so the local gateway mounts this path."
-            placeholder="/Users/nikki/projects/world-lore"
-            value={sugarAgent.loreLocalPath}
-            onChange={(event) =>
-              updateConfig({ loreLocalPath: event.currentTarget.value })
-            }
-          />
-        ) : (
-          <>
-            <TextInput
-              label="Repository URL"
-              placeholder="https://github.com/org/world-lore"
-              value={sugarAgent.loreRepositoryUrl}
-              onChange={(event) =>
-                updateConfig({ loreRepositoryUrl: event.currentTarget.value })
-              }
-            />
-            <TextInput
-              label="Repository Ref"
-              placeholder="main"
-              value={sugarAgent.loreRepositoryRef}
-              onChange={(event) =>
-                updateConfig({ loreRepositoryRef: event.currentTarget.value })
-              }
-            />
-          </>
-        )}
-      </Stack>
-
-      <Stack gap="xs">
-        <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-          Runtime Behavior
-        </Text>
-        <NumberInput
-          label="Max Evidence Results"
-          min={1}
-          max={8}
-          value={sugarAgent.maxEvidenceResults}
-          onChange={(value) =>
-            updateConfig({
-              maxEvidenceResults:
-                typeof value === "number" && Number.isFinite(value)
-                  ? value
-                  : sugarAgent.maxEvidenceResults
-            })
-          }
-        />
-        <Switch
-          label="Structured Debug Logging"
-          checked={sugarAgent.debugLogging}
-          onChange={(event) =>
-            updateConfig({ debugLogging: event.currentTarget.checked })
-          }
-        />
-        <TextInput
-          label="Tone"
-          description="Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
-          value={sugarAgent.tone ?? ""}
-          onChange={(event) =>
-            updateConfig({ tone: event.currentTarget.value })
-          }
-        />
-      </Stack>
+      {/* Story 46.16 — fields below render from the SugarAgent
+          plugin's declared pluginSettingsSchema. Edits here flow to
+          the schema in packages/plugins/src/catalog/sugaragent/. */}
+      <PluginSchemaSettingsPanel
+        pluginId={SUGARAGENT_PLUGIN_ID}
+        gameProjectId={gameProjectId}
+        pluginConfigurations={pluginConfigurations}
+        onCommand={onCommand}
+      />
 
       <Stack gap="xs">
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">

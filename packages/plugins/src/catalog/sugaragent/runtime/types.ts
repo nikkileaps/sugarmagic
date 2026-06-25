@@ -41,16 +41,40 @@ export interface TurnStageResult<TOutput> {
 }
 
 export interface SugarAgentPluginConfig {
+  /**
+   * Story 46.14 — REQUIRED. Browser-side SugarAgent always routes
+   * through a proxy (Studio's vite middleware in dev; the deployed
+   * Cloud Run gateway in published-web). Third-party API keys
+   * (Anthropic / OpenAI) NEVER live in browser code; the proxy
+   * terminates the LLM calls server-side using keys from the local
+   * `.env` (Studio) or Secret Manager (Cloud Run).
+   */
   proxyBaseUrl: string;
+  /**
+   * Story 46.14 — when the gateway runs in `bearer` auth mode (the
+   * 45.5.8 default), every non-`/health` request must carry
+   * `Authorization: Bearer <token>`. Empty string = the gateway is
+   * in `none` auth mode (public) and no header is sent. Sourced
+   * from `SUGARMAGIC_GATEWAY_BEARER_TOKEN` at build time (which
+   * Studio reads from `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN` and
+   * SugarDeploy's Build Frontend host action resolves via `gcloud
+   * secrets versions access`).
+   */
+  gatewayBearerToken: string;
   loreSourceKind: "local" | "github";
   loreLocalPath: string;
   loreRepositoryUrl: string;
   loreRepositoryRef: string;
-  anthropicApiKey: string;
-  anthropicModel: string;
-  openAiApiKey: string;
-  openAiEmbeddingModel: string;
+  /**
+   * Story 46.15 — per-game gateway runtime config. Empty string
+   * means "let the gateway's own default take over." Surfaces in
+   * SugarAgent's Studio settings panel; propagates to Cloud Run
+   * at deploy time via the `gatewayRuntimeConfigKeys` plugin
+   * declaration -> deploy.sh `--set-env-vars` chain.
+   */
   openAiVectorStoreId: string;
+  anthropicModel: string;
+  openAiEmbeddingModel: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */

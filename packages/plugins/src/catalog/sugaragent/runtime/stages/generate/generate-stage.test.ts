@@ -120,16 +120,17 @@ function createStageContext() {
       npcDefinitionId: "npc-1"
     },
     config: {
-      proxyBaseUrl: "",
+      // Story 46.14 — SugarAgent always routes through a proxy now.
+      // The test exercises GenerateStage in isolation; a non-empty
+      // proxy base URL keeps `canUseProxyDefaults` true so the LLM
+      // generation path is reached, then the test's mocked
+      // llmProvider returns the deterministic response.
+      proxyBaseUrl: "https://test-proxy.local",
+      gatewayBearerToken: "",
       loreSourceKind: "local" as const,
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      anthropicApiKey: "",
-      anthropicModel: "claude-sonnet-4-6",
-      openAiApiKey: "",
-      openAiEmbeddingModel: "",
-      openAiVectorStoreId: "",
       maxEvidenceResults: 4,
       debugLogging: false,
       tone: ""

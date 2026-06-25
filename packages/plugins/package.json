@@ -9,6 +9,9 @@
     "@sugarmagic/ui": "workspace:*",
     "ajv": "^8.18.0"
   },
+  "devDependencies": {
+    "vite": "^8.0.3"
+  },
   "exports": {
     ".": "./src/index.ts"
   }

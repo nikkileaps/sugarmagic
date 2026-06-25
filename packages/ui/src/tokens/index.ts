@@ -54,7 +54,8 @@ export const shellIcons = {
   trigger: "⚡",
   design: "✨",
   build: "🗺️",
-  render: "🔥"
+  render: "🔥",
+  publish: "🚀"
 } as const;
 
 export const shellTypography = {

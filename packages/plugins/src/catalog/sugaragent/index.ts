@@ -127,9 +127,22 @@ export function normalizeSugarAgentPluginConfig(
   environment?: RuntimePluginEnvironment
 ): SugarAgentPluginConfig {
   return {
+    // Story 46.14 — only the proxy URL crosses the plugin/runtime
+    // boundary. Anthropic / OpenAI API keys + model identifiers +
+    // vector store ids all live server-side now (Studio's vite
+    // middleware in dev; the deployed Cloud Run gateway in
+    // published-web). They never enter SugarAgentPluginConfig.
     proxyBaseUrl:
       readEnvValue(environment, "SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL") ||
       (typeof config?.proxyBaseUrl === "string" ? config.proxyBaseUrl.trim() : ""),
+    // Story 46.14 — bearer token plumbed through to the gateway
+    // clients so they can attach `Authorization: Bearer <token>` on
+    // every request when the gateway runs in `bearer` auth mode.
+    // The env carries an empty string when the gateway is `none`.
+    gatewayBearerToken: readEnvValue(
+      environment,
+      "SUGARMAGIC_GATEWAY_BEARER_TOKEN"
+    ),
     loreSourceKind:
       config?.loreSourceKind === "github"
         ? "github"
@@ -144,28 +157,21 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.loreRepositoryRef === "string" && config.loreRepositoryRef.trim()
         ? config.loreRepositoryRef.trim()
         : "main",
-    anthropicApiKey:
-      readEnvValue(environment, "SUGARMAGIC_ANTHROPIC_API_KEY") ||
-      (typeof config?.anthropicApiKey === "string" ? config.anthropicApiKey : ""),
-    anthropicModel:
-      readEnvValue(environment, "SUGARMAGIC_ANTHROPIC_MODEL") ||
-      (typeof config?.anthropicModel === "string" && config.anthropicModel.trim()
-        ? config.anthropicModel
-        : "claude-sonnet-4-5"),
-    openAiApiKey:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_API_KEY") ||
-      (typeof config?.openAiApiKey === "string" ? config.openAiApiKey : ""),
-    openAiEmbeddingModel:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_EMBEDDING_MODEL") ||
-      (typeof config?.openAiEmbeddingModel === "string" &&
-      config.openAiEmbeddingModel.trim()
-        ? config.openAiEmbeddingModel
-        : "text-embedding-3-small"),
+    // Story 46.15 — non-secret per-game gateway runtime config.
+    // Empty string is OK; the gateway falls back to its own
+    // defaults (or the bundled plugin defaults).
     openAiVectorStoreId:
-      readEnvValue(environment, "SUGARMAGIC_OPENAI_VECTOR_STORE_ID") ||
-      (typeof config?.openAiVectorStoreId === "string"
-        ? config.openAiVectorStoreId
-        : ""),
+      typeof config?.openAiVectorStoreId === "string"
+        ? config.openAiVectorStoreId.trim()
+        : "",
+    anthropicModel:
+      typeof config?.anthropicModel === "string"
+        ? config.anthropicModel.trim()
+        : "",
+    openAiEmbeddingModel:
+      typeof config?.openAiEmbeddingModel === "string"
+        ? config.openAiEmbeddingModel.trim()
+        : "",
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -184,11 +190,137 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     capabilityIds: ["conversation.provider", "design.workspace"]
   },
   deploymentRequirements,
+  // Story 46.16 — declarative schema Studio's auto-renderer turns
+  // into the SugarAgent settings panel. Cross-references
+  // gatewayRuntimeConfigKeys below; every runtime-config key has a
+  // matching field here. The validator enforces this so a future
+  // edit can't silently drop a UI surface for a gateway env var.
+  pluginSettingsSchema: [
+    {
+      configKey: "loreSourceKind",
+      label: "Source Kind",
+      type: "select",
+      group: "Lore Source",
+      options: [
+        { value: "local", label: "Local Checked-Out Repo" },
+        { value: "github", label: "GitHub Repo (Planned)" }
+      ],
+      default: "local"
+    },
+    {
+      configKey: "loreLocalPath",
+      label: "Local Lore Repo Path",
+      type: "text",
+      group: "Lore Source",
+      description:
+        "Absolute path to the checked-out lore wiki repo. Save, then redeploy SugarDeploy so the local gateway mounts this path.",
+      placeholder: "/Users/nikki/projects/world-lore",
+      showWhen: { configKey: "loreSourceKind", equals: "local" }
+    },
+    {
+      configKey: "loreRepositoryUrl",
+      label: "Repository URL",
+      type: "text",
+      group: "Lore Source",
+      placeholder: "https://github.com/you/world-lore",
+      showWhen: { configKey: "loreSourceKind", equals: "github" }
+    },
+    {
+      configKey: "loreRepositoryRef",
+      label: "Repository Ref",
+      type: "text",
+      group: "Lore Source",
+      placeholder: "main",
+      showWhen: { configKey: "loreSourceKind", equals: "github" }
+    },
+    {
+      configKey: "openAiVectorStoreId",
+      label: "OpenAI Vector Store ID",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Which OpenAI vector store the gateway queries for evidence retrieval. Pure identifier; not a credential.",
+      placeholder: "vs_abcd1234..."
+    },
+    {
+      configKey: "anthropicModel",
+      label: "Anthropic Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5).",
+      placeholder: "claude-sonnet-4-5"
+    },
+    {
+      configKey: "openAiEmbeddingModel",
+      label: "OpenAI Embedding Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Override the embedding model the gateway's retrieve route uses. Empty = gateway default (text-embedding-3-small). Must match the model used to ingest the vector store above.",
+      placeholder: "text-embedding-3-small"
+    },
+    {
+      configKey: "maxEvidenceResults",
+      label: "Max Evidence Results",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 4,
+      min: 1,
+      max: 8
+    },
+    {
+      configKey: "debugLogging",
+      label: "Structured Debug Logging",
+      type: "boolean",
+      group: "Runtime Behavior",
+      default: false
+    },
+    {
+      configKey: "tone",
+      label: "Tone",
+      type: "text",
+      group: "Runtime Behavior",
+      description:
+        "Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
+    }
+  ],
+  // Story 46.15 — per-game non-secret gateway runtime env vars.
+  // Values come from the matching keys in the plugin's per-game
+  // config slot (`pluginConfigurations[sugaragent].config.*`);
+  // SugarDeploy plumbs them through deploy.sh + the GHA workflow
+  // to Cloud Run at deploy time.
+  gatewayRuntimeConfigKeys: [
+    {
+      configKey: "openAiVectorStoreId",
+      envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID",
+      description:
+        "OpenAI vector store id the SugarAgent gateway queries when the browser doesn't send one explicitly.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "anthropicModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL",
+      description:
+        "Default Anthropic model id the gateway uses when generating turns (e.g., `claude-sonnet-4-5`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "openAiEmbeddingModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL",
+      description:
+        "Default OpenAI embedding model the gateway's retrieve route uses (e.g., `text-embedding-3-small`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    }
+  ],
   defaultConfig: {
     loreSourceKind: "local",
     loreLocalPath: "",
     loreRepositoryUrl: "",
     loreRepositoryRef: "main",
+    openAiVectorStoreId: "",
+    anthropicModel: "",
+    openAiEmbeddingModel: "",
     maxEvidenceResults: 4,
     debugLogging: false,
     tone: ""
@@ -200,21 +332,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         environment
       );
 
-      const missing: string[] = [];
-      const usingProxy = config.proxyBaseUrl.trim().length > 0;
-      if (!usingProxy && !config.anthropicApiKey.trim()) {
-        missing.push("VITE_SUGARMAGIC_ANTHROPIC_API_KEY");
-      }
-      if (!usingProxy && !config.openAiApiKey.trim()) {
-        missing.push("VITE_SUGARMAGIC_OPENAI_API_KEY");
-      }
-      if (!usingProxy && !config.openAiVectorStoreId.trim()) {
-        missing.push("VITE_SUGARMAGIC_OPENAI_VECTOR_STORE_ID");
-      }
-      if (missing.length > 0) {
+      // Story 46.14 — SugarAgent always routes through a proxy. In
+      // Studio dev the proxy is vite's middleware; in published-web
+      // it's the deployed Cloud Run gateway. The runtime environment
+      // is responsible for providing SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL
+      // (auto-defaults to SUGARMAGIC_GATEWAY_URL when not overridden).
+      if (!config.proxyBaseUrl.trim()) {
         throw new Error(
-          `[sugaragent] SugarAgent plugin is enabled but required environment variables are missing: ${missing.join(", ")}. ` +
-          `Add them to the repo-root .env file (Vite reads envDir "../.." from apps/studio) and restart the dev server.`
+          `[sugaragent] SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL is not set. ` +
+          `SugarAgent always routes through a proxy (Studio's vite ` +
+          `middleware in dev; the deployed Cloud Run gateway in published- ` +
+          `web). In Studio: confirm the repo-root .env carries ` +
+          `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL or ` +
+          `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the ` +
+          `Build Frontend host action injected the gateway URL at build ` +
+          `time. See the plugin SDK docs for the proxy-URL contract.`
         );
       }
 
@@ -224,25 +356,9 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         init() {
           console.debug("[sugaragent] plugin:init", {
             pluginId: configuration.pluginId,
-            transport: usingProxy ? "gateway" : "direct",
-            gatewayBaseUrl: usingProxy ? config.proxyBaseUrl : null,
-            stageLoggingEnabled:
-              config.debugLogging || config.proxyBaseUrl.trim().length > 0,
-            llmBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.anthropicApiKey.trim()
-                ? "anthropic"
-                : "deterministic",
-            embeddingsBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.openAiApiKey.trim()
-                ? "openai"
-                : "none",
-            vectorStoreBackend: usingProxy
-              ? "sugardeploy-gateway"
-              : config.openAiVectorStoreId.trim()
-                ? "openai-hosted"
-                : "none"
+            transport: "proxy",
+            proxyBaseUrl: config.proxyBaseUrl,
+            stageLoggingEnabled: config.debugLogging
           });
         },
         contributions: [

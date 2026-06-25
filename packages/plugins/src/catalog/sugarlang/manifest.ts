@@ -167,6 +167,40 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       "Adaptive language-learning middleware pipeline for Sugarmagic conversations.",
     capabilityIds: ["conversation.middleware", "dialogue.entryDecorator", "design.workspace"]
   },
+  // Story 46.16 — schema-driven settings panel. Sugarlang ships
+  // no apps/studio catalog entry today; with this schema declared,
+  // Studio auto-mounts a workspace and renders the panel from the
+  // schema. Demonstrates the "third-party plugin gets a working
+  // settings panel with zero Studio-side code" exit signal.
+  pluginSettingsSchema: [
+    {
+      configKey: "targetLanguage",
+      label: "Target Language",
+      type: "select",
+      description:
+        "Language the player is learning. Sugarlang biases generation + verification toward this language at gateway request time.",
+      options: [
+        { value: "", label: "(unset)" },
+        { value: "es", label: "Spanish (es)" },
+        { value: "it", label: "Italian (it)" }
+      ],
+      default: ""
+    }
+  ],
+  // Story 46.15 — Sugarlang's targetLanguage is a non-secret
+  // per-game config value the gateway reads at request time
+  // (e.g., to bias generation toward the player's target
+  // language). Plumbed through deploy.sh + GHA workflow's
+  // deploy-backend env block via SugarDeploy's collection step.
+  gatewayRuntimeConfigKeys: [
+    {
+      configKey: "targetLanguage",
+      envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
+      description:
+        "Target language code (e.g. `es`, `fr`) the Sugarlang gateway uses to bias generation + verification. Pure config, never a credential.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    }
+  ],
   runtime: {
     createRuntimePlugin: createSugarlangPlugin
   },

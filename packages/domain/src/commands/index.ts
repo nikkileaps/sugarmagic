@@ -792,10 +792,28 @@ export type DeletePluginConfigurationCommand = SemanticCommandBase<
   }
 >;
 
-export type UpdateDeploymentSettingsCommand = SemanticCommandBase<
-  "UpdateDeploymentSettings",
+// Story 45.7.5 — `UpdateDeploymentSettingsCommand` and
+// `EnsureVersionedProjectIdentifierCommand` removed. Deploy settings and
+// versioned project identifiers live in the SugarDeploy plugin's
+// `pluginConfigurations[].config` slot now and mutate via the generic
+// `UpdatePluginConfigurationCommand` above. The deploy plugin contributes
+// typed builder helpers (`buildUpdateDeploymentSettingsCommand`,
+// `buildSetVersionedProjectIdentifierCommand`) so callers never hand-roll
+// the plugin-config patch shape.
+
+/**
+ * Set the game project's `majorVersion`. Plumbed for Story 45.8's Cut
+ * New Major Version flow but kept deliberately narrow: bump-major is a
+ * pure game-authoring concept (save-game compatibility, changelog, UI
+ * display) independent of any plugin. The matching suffix-register for
+ * the SugarDeploy plugin slot is a separate dispatch via
+ * `UpdatePluginConfigurationCommand` (the deploy plugin's
+ * `buildSetVersionedProjectIdentifierCommand` builder produces it).
+ */
+export type BumpMajorVersionCommand = SemanticCommandBase<
+  "BumpMajorVersion",
   {
-    settings: DeploymentSettings;
+    newMajorVersion: number;
   }
 >;
 
@@ -978,7 +996,7 @@ export type SemanticCommand =
   | RemovePlacedAssetInspectableCommand
   | UpdatePluginConfigurationCommand
   | DeletePluginConfigurationCommand
-  | UpdateDeploymentSettingsCommand
+  | BumpMajorVersionCommand
   | CreateMenuDefinitionCommand
   | UpdateMenuDefinitionCommand
   | DeleteMenuDefinitionCommand

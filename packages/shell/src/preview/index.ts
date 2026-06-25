@@ -13,6 +13,7 @@ import type { ProductModeId } from "@sugarmagic/productmodes";
 import type {
   BuildWorkspaceKind,
   DesignWorkspaceKind,
+  PublishWorkspaceKind,
   RenderWorkspaceKind
 } from "../index";
 
@@ -21,6 +22,7 @@ export interface AuthoringContextSnapshot {
   activeBuildWorkspaceKind: BuildWorkspaceKind;
   activeDesignWorkspaceKind: DesignWorkspaceKind;
   activeRenderWorkspaceKind: RenderWorkspaceKind;
+  activePublishWorkspaceKind: PublishWorkspaceKind;
   activeRegionId: string | null;
   activeEnvironmentId: string | null;
   activeWorkspaceId: string | null;

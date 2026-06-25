@@ -1,202 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  type DeploymentActionExecutionResult,
-  type DeploymentActionKind,
-  resolveDeploymentActionFromSettings
-} from "../../packages/plugins/src/deployment/actions";
-import { normalizeDeploymentSettings } from "../../packages/domain/src/deployment/index";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-
-interface SugarDeployActionRequest {
-  actionKind: DeploymentActionKind;
-  gameProject?: {
-    deployment?: unknown;
-  };
-}
-
-function readJsonBody(
-  req: import("node:http").IncomingMessage
-): Promise<unknown> {
-  return new Promise((resolveBody, rejectBody) => {
-    let buffer = "";
-    req.on("data", (chunk) => {
-      buffer += chunk.toString();
-    });
-    req.on("end", () => {
-      try {
-        resolveBody(buffer.trim().length > 0 ? JSON.parse(buffer) : {});
-      } catch (error) {
-        rejectBody(error);
-      }
-    });
-    req.on("error", rejectBody);
-  });
-}
-
-function sendJson(
-  res: import("node:http").ServerResponse,
-  statusCode: number,
-  payload: unknown
-) {
-  res.statusCode = statusCode;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(payload, null, 2));
-}
-
-function runHostCommand(command: {
-  command: string;
-  args: string[];
-  cwd: string;
-}): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolveRun) => {
-    const child = spawn(command.command, command.args, {
-      cwd: command.cwd,
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => {
-      stderr += `${error instanceof Error ? error.message : String(error)}\n`;
-      resolveRun({
-        exitCode: 1,
-        stdout,
-        stderr
-      });
-    });
-    child.on("close", (exitCode) => {
-      resolveRun({
-        exitCode,
-        stdout,
-        stderr
-      });
-    });
-  });
-}
-
-function createSugarDeployHostPlugin(): Plugin {
-  return {
-    name: "sugardeploy-host-actions",
-    configureServer(server) {
-      server.middlewares.use(
-        "/__sugardeploy/action",
-        async (req, res, next) => {
-          if (req.method !== "POST") {
-            next();
-            return;
-          }
-
-          try {
-            const body = (await readJsonBody(
-              req
-            )) as Partial<SugarDeployActionRequest>;
-            const actionKind = body.actionKind;
-            if (
-              actionKind !== "deploy" &&
-              actionKind !== "stop" &&
-              actionKind !== "status" &&
-              actionKind !== "health"
-            ) {
-              sendJson(res, 400, {
-                ok: false,
-                message: "Invalid SugarDeploy action."
-              });
-              return;
-            }
-
-            const deploymentSettings = normalizeDeploymentSettings(
-              body.gameProject?.deployment as never
-            );
-            const descriptor = resolveDeploymentActionFromSettings(
-              deploymentSettings,
-              actionKind
-            );
-
-            if (!descriptor.supported) {
-              sendJson(res, 400, {
-                ok: false,
-                descriptor,
-                exitCode: null,
-                stdout: "",
-                stderr: "",
-                message:
-                  descriptor.reason ?? "SugarDeploy action is not supported."
-              } satisfies DeploymentActionExecutionResult);
-              return;
-            }
-
-            if (!descriptor.command) {
-              sendJson(res, 200, {
-                ok: true,
-                descriptor,
-                exitCode: 0,
-                stdout: "",
-                stderr: "",
-                message:
-                  descriptor.healthUrl != null
-                    ? `SugarDeploy resolved ${actionKind} without a shell command.`
-                    : "SugarDeploy action completed."
-              } satisfies DeploymentActionExecutionResult);
-              return;
-            }
-
-            const resolvedCwd = resolve(descriptor.command.cwd);
-            if (!existsSync(resolvedCwd)) {
-              sendJson(res, 400, {
-                ok: false,
-                descriptor,
-                exitCode: null,
-                stdout: "",
-                stderr: "",
-                message:
-                  `Working directory does not exist: ${resolvedCwd}. ` +
-                  "Save the project first and make sure the Working Directory override points at the game root on disk."
-              } satisfies DeploymentActionExecutionResult);
-              return;
-            }
-
-            const runResult = await runHostCommand({
-              ...descriptor.command,
-              cwd: resolvedCwd
-            });
-            sendJson(res, runResult.exitCode === 0 ? 200 : 500, {
-              ok: runResult.exitCode === 0,
-              descriptor: {
-                ...descriptor,
-                command: {
-                  ...descriptor.command,
-                  cwd: resolvedCwd
-                }
-              },
-              exitCode: runResult.exitCode,
-              stdout: runResult.stdout,
-              stderr: runResult.stderr,
-              message:
-                runResult.exitCode === 0
-                  ? `SugarDeploy ${actionKind} completed successfully.`
-                  : `SugarDeploy ${actionKind} failed with exit code ${runResult.exitCode ?? "unknown"}.`
-            } satisfies DeploymentActionExecutionResult);
-          } catch (error) {
-            sendJson(res, 500, {
-              ok: false,
-              message: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      );
-    }
-  };
-}
+import { gatherDiscoveredHostMiddleware } from "../../packages/plugins/src/host";
 
 function createMechanicsSchemaPlugin(): Plugin {
   const schemaPath = new URL(
@@ -221,12 +28,134 @@ function createMechanicsSchemaPlugin(): Plugin {
   };
 }
 
+// Story 46.1 — Package host endpoint. The Publish productmode's
+// baseline Package workspace POSTs here to shell
+// `pnpm --filter @sugarmagic/target-web build`, then surfaces the
+// resulting `targets/web/dist/` path + total size in the UI. Studio-
+// core middleware (not a plugin contribution) because the Package
+// workspace is owned by Studio core and ships regardless of which
+// plugins are installed.
+function createPackagePureClientPlugin(): Plugin {
+  const monorepoRoot = new URL("../..", import.meta.url).pathname;
+  const distDir = resolve(monorepoRoot, "targets/web/dist");
+  return {
+    name: "sugarmagic-package-pure-client",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__studio/package-pure-client",
+        async (req, res) => {
+          if (req.method !== "POST") {
+            res.statusCode = 405;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ ok: false, reason: "POST required." }));
+            return;
+          }
+          try {
+            const result = await runBuild(monorepoRoot);
+            if (result.exitCode !== 0) {
+              res.statusCode = 200;
+              res.setHeader("content-type", "application/json; charset=utf-8");
+              res.end(
+                JSON.stringify({
+                  ok: false,
+                  reason: `pnpm build exited with code ${result.exitCode}.`,
+                  buildLog:
+                    `${result.stdout}\n${result.stderr}`.trim()
+                })
+              );
+              return;
+            }
+            const sizeBytes = await directorySize(distDir).catch(() => 0);
+            res.statusCode = 200;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.end(
+              JSON.stringify({
+                ok: true,
+                distPath: distDir,
+                sizeBytes,
+                buildLog: `${result.stdout}\n${result.stderr}`.trim()
+              })
+            );
+          } catch (error) {
+            res.statusCode = 500;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.end(
+              JSON.stringify({
+                ok: false,
+                reason: error instanceof Error ? error.message : String(error)
+              })
+            );
+          }
+        }
+      );
+    }
+  };
+}
+
+interface BuildResult {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+function runBuild(cwd: string): Promise<BuildResult> {
+  return new Promise((resolveBuild) => {
+    const child = spawn(
+      "pnpm",
+      ["--filter", "@sugarmagic/target-web", "build"],
+      {
+        cwd,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      stderr += `${error instanceof Error ? error.message : String(error)}\n`;
+      resolveBuild({ exitCode: 1, stdout, stderr });
+    });
+    child.on("close", (exitCode) => {
+      resolveBuild({ exitCode, stdout, stderr });
+    });
+  });
+}
+
+async function directorySize(dir: string): Promise<number> {
+  let total = 0;
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = resolve(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += await directorySize(entryPath);
+    } else if (entry.isFile()) {
+      const info = await stat(entryPath);
+      total += info.size;
+    }
+  }
+  return total;
+}
+
 export default defineConfig({
   envDir: "../..",
   plugins: [
     react(),
-    createSugarDeployHostPlugin(),
-    createMechanicsSchemaPlugin()
+    // Plugin host-middleware registry. Every plugin that contributes
+    // server-side middleware gets mounted here automatically via its
+    // `hostMiddleware` SDK contribution. Studio has zero direct knowledge
+    // of any specific plugin — a plugin opts in by adding
+    // `hostMiddleware: ...` to its `pluginDefinition`. See
+    // packages/plugins/src/host/ for the registry and
+    // packages/plugins/src/sdk/ for the contribution type.
+    ...gatherDiscoveredHostMiddleware(),
+    createMechanicsSchemaPlugin(),
+    createPackagePureClientPlugin()
   ],
   resolve: {
     alias: {

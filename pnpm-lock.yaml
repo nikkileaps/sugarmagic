@@ -149,6 +149,10 @@ importers:
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
+    devDependencies:
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(tsx@4.21.0)
 
   packages/productmodes: {}
 
@@ -217,6 +221,9 @@ importers:
       '@sugarmagic/studio':
         specifier: workspace:*
         version: link:../../apps/studio
+      '@sugarmagic/target-web':
+        specifier: workspace:*
+        version: link:../../targets/web
       '@sugarmagic/workspaces':
         specifier: workspace:*
         version: link:../workspaces
@@ -247,6 +254,9 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+      '@sugarmagic/plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core

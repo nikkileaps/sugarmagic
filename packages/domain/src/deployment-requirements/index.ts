@@ -78,6 +78,16 @@ export type DeploymentRequirement =
   | RuntimeServiceRequirement
   | TopologyRequirement;
 
+/**
+ * Story 46.15 — plugin authors declaring an env var meant to be
+ * surfaced to the gateway must use this attestation. The 46.15
+ * reshape moved the env-var contract off DeploymentRequirement
+ * and onto `gatewayRuntimeConfigKeys` (a separate field on the
+ * plugin definition); this type stays exported so the new
+ * contract can reference it.
+ */
+export type NonSecretAttestation = "safe-to-expose-publicly";
+
 export type DeploymentRequirementInput = Partial<DeploymentRequirement> & {
   kind?: DeploymentRequirementKind;
 };
@@ -248,6 +258,24 @@ function normalizeDeploymentRequirementUnchecked(
         placement: requirement.placement
       };
   }
+}
+
+/**
+ * Story 46.15 — name-pattern backstop reused by the
+ * `gatewayRuntimeConfigKeys` validator on plugin definitions. A
+ * plugin author who attests `"safe-to-expose-publicly"` on an env
+ * var whose name pattern-matches something secret-shaped gets a
+ * hard refusal — the value never reaches Cloud Run env. The
+ * pattern catches the most common conventions; it doesn't try to
+ * be exhaustive. Plugin authors should route real secrets through
+ * `SecretRequirement` which fans out via Secret Manager +
+ * `--set-secrets`.
+ */
+export const SUSPECTED_SECRET_ENV_NAME_REGEX =
+  /(_API_KEY|_TOKEN|_SECRET|_PASSWORD|_PRIVATE_KEY)$/i;
+
+export function envVarNameLooksLikeSecret(envVarName: string): boolean {
+  return SUSPECTED_SECRET_ENV_NAME_REGEX.test(envVarName.trim());
 }
 
 export function validateDeploymentRequirements(
