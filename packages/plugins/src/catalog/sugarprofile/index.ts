@@ -105,24 +105,6 @@ const deploymentRequirements: DeploymentRequirement[] = [
       "Supabase service-role key — RLS-bypass admin credential used by the migration runner and the gateway for trusted server-side reads. Never bundled to the browser.",
     tags: ["supabase", "auth", "server"]
   },
-  {
-    requirementId: createDeploymentRequirementId({
-      ownerId: SUGARPROFILE_PLUGIN_ID,
-      kind: "secret",
-      key: "supabase-jwt-secret"
-    }),
-    ownerId: SUGARPROFILE_PLUGIN_ID,
-    ownerKind: "plugin",
-    kind: "secret",
-    required: true,
-    secretKey: "supabase-jwt-secret",
-    consumption: "server-only",
-    exposure: "private",
-    mappingHint: "SUGARMAGIC_SUPABASE_JWT_SECRET",
-    description:
-      "Supabase JWT secret — used by the gateway-side JWT verification middleware (Plan 047 §47.9) to validate Bearer tokens against the project's signing key.",
-    tags: ["supabase", "auth", "server", "jwt"]
-  }
 ];
 
 export const pluginDefinition: DiscoveredPluginDefinition = {

@@ -53,6 +53,9 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   parseBillingAccountList,
   parseTemplateVersionStamp,
+  buildSupabaseJwtVerifierSource,
+  SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
+  SUPABASE_URL_ENV_VAR,
   type PluginSettingsSchemaField,
   resolveDeploymentAction,
   resolveSecretManagerName,
@@ -2381,7 +2384,9 @@ describe("plugin infrastructure", () => {
     );
     expect(serverFile).toBeDefined();
     const content = serverFile!.content;
-    expect(content).toContain('import { timingSafeEqual } from "node:crypto"');
+    expect(content).toContain(
+      'import {\n  createHmac,\n  createPublicKey,\n  timingSafeEqual,\n  verify as cryptoVerify\n} from "node:crypto"'
+    );
     expect(content).toContain("function authorizeBearer(req)");
     expect(content).toContain("SUGARMAGIC_GATEWAY_SHARED_TOKEN");
     expect(content).toContain("timingSafeEqual(expectedBuf, presentedBuf)");
@@ -2395,6 +2400,379 @@ describe("plugin infrastructure", () => {
     expect(deployScript?.content).toContain(
       "--set-secrets=SUGARMAGIC_GATEWAY_SHARED_TOKEN=wordlark-v1-k3m9p-gateway-shared-token:latest"
     );
+  });
+
+  it("47.9 — SugarProfile enabled + gatewayAuthMode=bearer upgrades the gate to Supabase JWT (JWKS) verification", () => {
+    // 47.9: with SugarProfile's login enabled, the persisted "bearer"
+    // toggle is promoted to the effective mode "supabase-jwt". The
+    // gateway emits an async verifySupabaseJwt() function that fetches
+    // the project's JWKS (asymmetric ES256 default; HS256 fallback for
+    // unmigrated projects) and attaches req.user on success. NO shared
+    // secret is injected — the verifier reads the Supabase URL from
+    // SugarProfile's existing runtime config env var, then hits the
+    // public JWKS endpoint.
+    const wordlarkJwt = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        identity: { id: "wordlark", schema: "GameProject", version: 1 },
+        displayName: "Wordlark",
+        majorVersion: 1,
+        versionedProjectIdentifiers: { v1: "k3m9p" },
+        deployment: {
+          backendDeploymentTargetId: "google-cloud-run",
+          targetOverrides: {
+            "google-cloud-run": { gatewayAuthMode: "bearer" }
+          }
+        },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true),
+          createPluginConfigurationRecord(SUGARPROFILE_PLUGIN_ID, true, {
+            enableLogin: true,
+            supabaseUrl: "https://abcde.supabase.co",
+            supabaseAnonKey: "anon-key",
+            allowAnonymous: true
+          })
+        ]
+      })
+    );
+
+    // No shared bearer token, no shared HS256 JWT secret on the gateway
+    // unit. JWKS verification only needs the public Supabase URL,
+    // already in the container via SugarProfile's runtime config.
+    const gatewayUnit = wordlarkJwt.serviceUnits.find(
+      (unit) => unit.serviceUnitId === "sugarmagic-gateway"
+    );
+    expect(gatewayUnit).toBeDefined();
+    const secretKeys = gatewayUnit!.secrets.map((s) => s.secretKey).sort();
+    expect(secretKeys).not.toContain("gateway-shared-token");
+    expect(secretKeys).not.toContain("supabase-jwt-secret");
+
+    // Generated server.mjs has the async JWT verifier + the JWT-mode
+    // gate. authorizeBearer is still defined (mode-agnostic), but the
+    // bearer-mode gate is NOT emitted.
+    const serverFile = wordlarkJwt.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/services/sugarmagic-gateway/server.mjs"
+    );
+    expect(serverFile).toBeDefined();
+    const content = serverFile!.content;
+    expect(content).toContain(
+      'import {\n  createHmac,\n  createPublicKey,\n  timingSafeEqual,\n  verify as cryptoVerify\n} from "node:crypto"'
+    );
+    expect(content).toContain(
+      `async function ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req)`
+    );
+    expect(content).toContain(SUPABASE_URL_ENV_VAR);
+    expect(content).toContain("/auth/v1/.well-known/jwks.json");
+    expect(content).toContain(
+      `const verifiedUser = await ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req);`
+    );
+    expect(content).toContain("req.user = verifiedUser;");
+    expect(content).toContain('aud !== "authenticated"');
+    expect(content).not.toContain("if (!authorizeBearer(req))");
+
+    // No --set-secrets binding for either auth path.
+    const deployScript = wordlarkJwt.managedFiles.find(
+      (file) => file.relativePath === "deployment/google-cloud-run/deploy.sh"
+    );
+    expect(deployScript?.content).not.toContain(
+      "--set-secrets=SUGARMAGIC_GATEWAY_SHARED_TOKEN="
+    );
+    expect(deployScript?.content).not.toContain(
+      "--set-secrets=SUGARMAGIC_SUPABASE_JWT_SECRET="
+    );
+
+    // Terraform tfvars omit both the shared-token and JWT-secret
+    // container names. (SugarAgent's own secrets — Anthropic /
+    // OpenAI keys — are still listed; the assertion is the absence
+    // of the auth-gate secrets specifically.)
+    const tfvars = wordlarkJwt.managedFiles.find(
+      (file) =>
+        file.relativePath ===
+        "deployment/google-cloud-run/terraform/terraform.tfvars"
+    );
+    expect(tfvars).toBeDefined();
+    expect(tfvars!.content).not.toContain(
+      `"wordlark-v1-k3m9p-gateway-shared-token"`
+    );
+    expect(tfvars!.content).not.toContain(
+      `"wordlark-v1-k3m9p-supabase-jwt-secret"`
+    );
+  });
+
+  it("47.9 — emitted JWT verifier source verifies ES256 (JWKS) + HS256 (oct JWK) and rejects invalid / expired / wrong-aud / missing-header / kid-mismatch cases", async () => {
+    // Behavior test: stand up a localhost HTTP server that serves a
+    // fake JWKS containing one ES256 (P-256) public key + one HS256
+    // (oct) key. Write the emitted verifier source to a temp .mjs
+    // file, dynamic-import it, point it at the fake JWKS via the env
+    // var, and exercise against hand-crafted JWTs. The gateway runs
+    // this exact source inside Cloud Run; making sure the function
+    // under test matches the emitted source (rather than a parallel
+    // TS impl) means there's no drift between test + production.
+    const {
+      generateKeyPairSync,
+      createPrivateKey,
+      createHmac,
+      sign: cryptoSignAsync,
+      randomBytes
+    } = await import("node:crypto");
+    const { createServer } = await import("node:http");
+
+    function base64url(input: Buffer | string): string {
+      const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input;
+      return buf
+        .toString("base64")
+        .replace(/=+$/g, "")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_");
+    }
+
+    // ES256 keypair for the "current" Supabase signing key.
+    const ecKeyPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const ecJwk = ecKeyPair.publicKey.export({ format: "jwk" }) as {
+      kty: string;
+      crv: string;
+      x: string;
+      y: string;
+    };
+    const ecKid = "ec-test-kid-current";
+    const ecPrivateJwk = ecKeyPair.privateKey.export({ format: "jwk" });
+
+    // HS256 oct JWK for the "previous" legacy key on the same project.
+    const hsSecretBytes = randomBytes(32);
+    const hsJwk = {
+      kty: "oct" as const,
+      k: base64url(hsSecretBytes),
+      alg: "HS256" as const,
+      kid: "hs-test-kid-legacy"
+    };
+
+    const jwks = {
+      keys: [
+        { ...ecJwk, alg: "ES256" as const, kid: ecKid, use: "sig" },
+        hsJwk
+      ]
+    };
+
+    // Local JWKS server.
+    let jwksRequestCount = 0;
+    const server = createServer((req, res) => {
+      if (req.url === "/auth/v1/.well-known/jwks.json") {
+        jwksRequestCount += 1;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(jwks));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolveListen) =>
+      server.listen(0, "127.0.0.1", () => resolveListen())
+    );
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("test JWKS server failed to bind");
+    }
+    const supabaseUrl = `http://127.0.0.1:${address.port}`;
+
+    // Convert a DER-encoded ECDSA signature to JWS concat r||s (64
+    // bytes for P-256).
+    function derToJwsConcat(der: Buffer): Buffer {
+      // DER: 0x30 len 0x02 rLen r 0x02 sLen s
+      if (der[0] !== 0x30) throw new Error("bad DER header");
+      let offset = 2;
+      if (der[1] === 0x81) offset = 3; // long form length
+      if (der[offset] !== 0x02) throw new Error("expected r INTEGER");
+      const rLen = der[offset + 1];
+      let r = der.slice(offset + 2, offset + 2 + rLen);
+      offset = offset + 2 + rLen;
+      if (der[offset] !== 0x02) throw new Error("expected s INTEGER");
+      const sLen = der[offset + 1];
+      let s = der.slice(offset + 2, offset + 2 + sLen);
+      // Strip leading 0x00 padding then left-pad to 32 bytes.
+      if (r.length > 32 && r[0] === 0x00) r = r.slice(1);
+      if (s.length > 32 && s[0] === 0x00) s = s.slice(1);
+      const rPadded = Buffer.concat([Buffer.alloc(32 - r.length), r]);
+      const sPadded = Buffer.concat([Buffer.alloc(32 - s.length), s]);
+      return Buffer.concat([rPadded, sPadded]);
+    }
+
+    function signEs256Jwt(
+      payload: Record<string, unknown>,
+      kid: string,
+      options?: { tamperSignature?: boolean }
+    ): string {
+      const header = base64url(
+        JSON.stringify({ alg: "ES256", typ: "JWT", kid })
+      );
+      const body = base64url(JSON.stringify(payload));
+      const signingInput = Buffer.from(header + "." + body, "utf8");
+      const der = cryptoSignAsync(
+        "SHA256",
+        signingInput,
+        createPrivateKey({ key: ecPrivateJwk, format: "jwk" })
+      );
+      const concat = derToJwsConcat(der);
+      const finalSig = options?.tamperSignature
+        ? base64url(Buffer.alloc(64, 0xff))
+        : base64url(concat);
+      return header + "." + body + "." + finalSig;
+    }
+
+    function signHs256Jwt(
+      payload: Record<string, unknown>,
+      kid: string
+    ): string {
+      const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT", kid }));
+      const body = base64url(JSON.stringify(payload));
+      const sig = createHmac("sha256", hsSecretBytes)
+        .update(header + "." + body)
+        .digest();
+      return header + "." + body + "." + base64url(sig);
+    }
+
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "sugarmagic-jwt-verifier-")
+    );
+    const verifierPath = path.join(tmpDir, "verifier.mjs");
+    const moduleSource = [
+      "import {",
+      "  createHmac,",
+      "  createPublicKey,",
+      "  timingSafeEqual,",
+      "  verify as cryptoVerify",
+      '} from "node:crypto";',
+      "// Test stubs for the logError/logInfo functions the gateway",
+      "// server.mjs defines at module scope. The verifier source",
+      "// references logError on JWKS fetch failure paths.",
+      "function logError() {}",
+      "function logInfo() {}",
+      "",
+      buildSupabaseJwtVerifierSource(),
+      "",
+      `export { ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME} };`,
+      ""
+    ].join("\n");
+    fs.writeFileSync(verifierPath, moduleSource, "utf8");
+
+    process.env[SUPABASE_URL_ENV_VAR] = supabaseUrl;
+    try {
+      const mod = (await import(verifierPath)) as {
+        verifySupabaseJwt: (req: {
+          headers: Record<string, string | undefined>;
+        }) => Promise<{ userId: string; email: string | null } | null>;
+      };
+      const verify = mod.verifySupabaseJwt;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const validPayload = {
+        sub: "user-uuid-1234",
+        email: "player@example.com",
+        aud: "authenticated",
+        exp: nowSeconds + 60 * 60
+      };
+
+      // ES256 happy path.
+      const ecToken = signEs256Jwt(validPayload, ecKid);
+      expect(
+        await verify({ headers: { authorization: "Bearer " + ecToken } })
+      ).toEqual({
+        userId: "user-uuid-1234",
+        email: "player@example.com"
+      });
+
+      // HS256 happy path (legacy / unmigrated projects).
+      const hsToken = signHs256Jwt(validPayload, hsJwk.kid);
+      expect(
+        await verify({ headers: { authorization: "Bearer " + hsToken } })
+      ).toEqual({
+        userId: "user-uuid-1234",
+        email: "player@example.com"
+      });
+
+      // JWKS is cached — multiple verifications should not re-hit the
+      // upstream.
+      const jwksCallsBefore = jwksRequestCount;
+      await verify({ headers: { authorization: "Bearer " + ecToken } });
+      await verify({ headers: { authorization: "Bearer " + ecToken } });
+      expect(jwksRequestCount).toBe(jwksCallsBefore);
+
+      // Expired ES256.
+      const expiredToken = signEs256Jwt(
+        { ...validPayload, exp: nowSeconds - 60 },
+        ecKid
+      );
+      expect(
+        await verify({ headers: { authorization: "Bearer " + expiredToken } })
+      ).toBeNull();
+
+      // Tampered ES256 signature.
+      const tamperedToken = signEs256Jwt(validPayload, ecKid, {
+        tamperSignature: true
+      });
+      expect(
+        await verify({ headers: { authorization: "Bearer " + tamperedToken } })
+      ).toBeNull();
+
+      // kid not present in JWKS.
+      const unknownKidToken = signEs256Jwt(validPayload, "totally-unknown-kid");
+      expect(
+        await verify({
+          headers: { authorization: "Bearer " + unknownKidToken }
+        })
+      ).toBeNull();
+
+      // Wrong audience (Supabase emits "authenticated" for signed-in
+      // users; "anon" tokens should not satisfy the gateway gate).
+      const anonToken = signEs256Jwt(
+        { ...validPayload, aud: "anon" },
+        ecKid
+      );
+      expect(
+        await verify({ headers: { authorization: "Bearer " + anonToken } })
+      ).toBeNull();
+
+      // Missing Authorization header entirely.
+      expect(await verify({ headers: {} })).toBeNull();
+
+      // Bearer with empty token.
+      expect(
+        await verify({ headers: { authorization: "Bearer " } })
+      ).toBeNull();
+
+      // Garbage non-JWT string.
+      expect(
+        await verify({ headers: { authorization: "Bearer not-a-jwt" } })
+      ).toBeNull();
+
+      // Missing sub claim.
+      const noSubToken = signEs256Jwt(
+        { ...validPayload, sub: undefined },
+        ecKid
+      );
+      expect(
+        await verify({ headers: { authorization: "Bearer " + noSubToken } })
+      ).toBeNull();
+
+      // Email missing → still valid (Supabase oauth users may not
+      // expose an email); userId returned, email becomes null.
+      const noEmailToken = signEs256Jwt(
+        { ...validPayload, email: undefined },
+        ecKid
+      );
+      expect(
+        await verify({ headers: { authorization: "Bearer " + noEmailToken } })
+      ).toEqual({
+        userId: "user-uuid-1234",
+        email: null
+      });
+    } finally {
+      delete process.env[SUPABASE_URL_ENV_VAR];
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      await new Promise<void>((resolveClose) =>
+        server.close(() => resolveClose())
+      );
+    }
   });
 
   it("planner does NOT inject the bearer secret when gatewayAuthMode=none (the default)", () => {
@@ -3596,20 +3974,23 @@ describe("plugin infrastructure", () => {
     ]);
   });
 
-  it("SugarProfile declares the service-role + JWT secret deployment requirements", () => {
+  it("SugarProfile declares the service-role secret as a deployment requirement", () => {
+    // Plan 047 §47.6 originally declared TWO secrets: service-role + a
+    // shared HS256 JWT secret. §47.9 rewrote the gateway verifier to
+    // use JWKS over the public `/auth/v1/.well-known/jwks.json`
+    // endpoint instead — no shared secret needed — so the JWT secret
+    // requirement was dropped. Service-role remains: the migration
+    // runner uses it to bypass RLS during `supabase db push`.
     const definition = getDiscoveredPluginDefinition(SUGARPROFILE_PLUGIN_ID);
     const secrets = (definition?.deploymentRequirements ?? []).filter(
       (requirement) => requirement.kind === "secret"
     );
     const secretKeys = secrets.map((s) => s.secretKey).sort();
-    expect(secretKeys).toEqual([
-      "supabase-jwt-secret",
-      "supabase-service-role-key"
-    ]);
+    expect(secretKeys).toEqual(["supabase-service-role-key"]);
     for (const secret of secrets) {
-      // Plan 047 §47.6 — both secrets are server-only + private. The
-      // gateway is the only consumer; they never enter the browser
-      // bundle or any Studio React state.
+      // Server-only + private. The gateway / migration runner are the
+      // only consumers; they never enter the browser bundle or any
+      // Studio React state.
       expect(secret.consumption).toBe("server-only");
       expect(secret.exposure).toBe("private");
     }

@@ -31,6 +31,7 @@ import {
   GCP_SERVICE_ACCOUNT_ID_REGEX,
   GITHUB_REPO_REGEX,
   collectSecretEnvBindings,
+  deriveEffectiveGatewayAuthMode,
   getDeployHistory,
   getDeploymentSettings,
   getPublishSettings,
@@ -705,7 +706,15 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           gcpProjectId: cloudRunOverrides.projectId,
           gcpRegion: cloudRunOverrides.region,
           serviceNamePrefix: cloudRunOverrides.serviceNamePrefix,
-          gatewayAuthMode: cloudRunOverrides.gatewayAuthMode,
+          // Story 47.9 — POST the EFFECTIVE mode (which can be
+          // "supabase-jwt" when SugarProfile is enabled alongside
+          // bearer), not the raw persisted toggle. The host endpoint
+          // switches on this string to decide whether to bake the
+          // shared bearer into the bundle or skip it.
+          gatewayAuthMode: deriveEffectiveGatewayAuthMode(
+            cloudRunOverrides.gatewayAuthMode,
+            gameProject
+          ),
           majorVersion: gameProject.majorVersion,
           versionedSlug: cloudRunOverrides.serviceNamePrefix,
           gameProjectSlug: gameProject.identity.id

@@ -2574,8 +2574,18 @@ function createBuildPublishedWebPlugin(): VitePlugin {
               typeof body.serviceNamePrefix === "string"
                 ? body.serviceNamePrefix.trim()
                 : "";
+            // Story 47.9 — "supabase-jwt" is the effective mode Studio
+            // computes when SugarProfile is enabled alongside a "bearer"
+            // user toggle. The Build Frontend bake-time bearer fetch only
+            // applies to literal "bearer"; "supabase-jwt" skips the bake
+            // because the deployed gateway expects a Supabase session
+            // JWT per request, not a build-baked shared token.
             const gatewayAuthMode =
-              body.gatewayAuthMode === "bearer" ? "bearer" : "none";
+              body.gatewayAuthMode === "bearer"
+                ? "bearer"
+                : body.gatewayAuthMode === "supabase-jwt"
+                  ? "supabase-jwt"
+                  : "none";
             const majorVersion =
               typeof body.majorVersion === "number"
                 ? body.majorVersion
@@ -2688,6 +2698,22 @@ function createBuildPublishedWebPlugin(): VitePlugin {
                 return;
               }
               buildEnv.VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN = bearer;
+            }
+
+            if (gatewayAuthMode === "supabase-jwt") {
+              // Story 47.9 — bundle ships WITHOUT a build-time bearer token.
+              // The deployed gateway expects a Supabase session JWT on
+              // each request; attaching it client-side is the §47.9.5
+              // follow-up (SugarAgent + sibling gateway clients read the
+              // live access token from the SugarProfile provider per call,
+              // since it rotates). Without that wiring, gateway calls from
+              // the deployed bundle will 401 — flagged loudly here so the
+              // failure mode is obvious in stdout.
+              aggregatedStdout +=
+                "\n[sugardeploy] gatewayAuthMode upgraded to supabase-jwt (SugarProfile enabled). " +
+                "Skipping VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN bake; the deployed bundle " +
+                "needs Plan 047 §47.9.5 (per-request Supabase session JWT) before gateway " +
+                "calls from the browser will authenticate.\n";
             }
 
             // 1. pnpm --filter @sugarmagic/target-web build

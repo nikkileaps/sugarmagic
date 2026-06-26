@@ -39,6 +39,49 @@ export type GoogleCloudRunIngress =
  */
 export type GatewayAuthMode = "none" | "bearer";
 
+/**
+ * Story 47.9 — runtime-only superset of GatewayAuthMode. Persisted
+ * overrides keep `"none" | "bearer"` (so old project files load
+ * unchanged); the planner promotes a user-selected `"bearer"` to
+ * `"supabase-jwt"` when SugarProfile is enabled, and passes the
+ * effective mode to the codegen. Codegen doesn't need to know
+ * which user toggle produced `"supabase-jwt"` — just that it
+ * should emit the JWT verifier instead of the shared-token check.
+ */
+export type EffectiveGatewayAuthMode = GatewayAuthMode | "supabase-jwt";
+
+const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
+
+function isSugarProfileLoginEnabled(gameProject: GameProject): boolean {
+  const configuration = gameProject.pluginConfigurations.find(
+    (entry) => entry.pluginId === SUGARPROFILE_PLUGIN_ID
+  );
+  if (!configuration || !configuration.enabled) return false;
+  const config = (configuration.config ?? {}) as Record<string, unknown>;
+  return config.enableLogin === true;
+}
+
+/**
+ * Story 47.9 — given the persisted Cloud Run overrides + the
+ * game project, return the effective gateway auth mode the
+ * gateway will run in:
+ *
+ *   - persisted "none"   → "none"
+ *   - persisted "bearer" + SugarProfile login DISABLED → "bearer"
+ *   - persisted "bearer" + SugarProfile login ENABLED  → "supabase-jwt"
+ *
+ * "supabase-jwt" supersedes the shared-token path: the Supabase
+ * JWT carries per-user identity (`sub` = userId), removing the
+ * need for a single shared bearer token.
+ */
+export function deriveEffectiveGatewayAuthMode(
+  persistedMode: GatewayAuthMode,
+  gameProject: GameProject
+): EffectiveGatewayAuthMode {
+  if (persistedMode !== "bearer") return persistedMode;
+  return isSugarProfileLoginEnabled(gameProject) ? "supabase-jwt" : "bearer";
+}
+
 export interface GoogleCloudRunDeploymentTargetOverrides {
   workingDirectory: string;
   projectId: string;

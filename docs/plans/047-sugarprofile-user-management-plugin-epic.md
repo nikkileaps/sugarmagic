@@ -1075,53 +1075,104 @@ auto-created with default `locale: 'en'` and empty
 `preferences`. Updating the user's `locale` via SugarProfile's
 runtime API persists across sessions.
 
-### 47.9 — Gateway-side JWT validation middleware
+### 47.9 — Gateway-side JWT validation (JWKS, ES256 + HS256)
 
-Validates `Authorization: Bearer <jwt>` against the Supabase JWT
-secret. Contributed by SugarProfile via the gateway scaffold's
-existing middleware contribution slot. Supersedes the shared-token
-path when SugarProfile is enabled.
+Validates `Authorization: Bearer <jwt>` against the Supabase
+project's JSON Web Key Set, fetched at
+`<supabaseUrl>/auth/v1/.well-known/jwks.json`. The gateway is a
+code-generated `server.mjs` (Plan 045 §45.5), so JWT verification
+is emitted inline rather than imported from a runtime module.
+Supersedes the shared-token path when SugarProfile is enabled.
+
+**Algorithm support:** Supabase's signing-keys migration defaults
+new projects to asymmetric ES256 (P-256 ECC) per their docs. The
+emitted verifier handles ES256 + HS256 by reading the JWT's `kid`
+header, looking up the matching JWK in the cached JWKS, and
+verifying with the appropriate algorithm. No shared HS256 secret
+is needed — for HS256-only legacy projects the secret material is
+embedded in the JWK itself (`kty: "oct"`).
+
+**Implemented shape (revised — supersedes the original "runtime
+middleware contribution" sketch above):** the gateway is a
+generated `server.mjs`, not a Hono/Express app with a middleware
+slot, so the verifier is emitted as inline JS source by
+`buildSupabaseJwtVerifierSource()` in
+`packages/plugins/src/deployment/supabase.ts`. Codegen wires it
+in when `EffectiveGatewayAuthMode === "supabase-jwt"`.
 
 **Files (new):**
 
-- `packages/plugins/src/catalog/sugarprofile/runtime/gateway-jwt-middleware.ts`
-  ```ts
-  import { createHmac, timingSafeEqual } from "node:crypto";
-  export function createSupabaseJwtVerifyMiddleware(
-    options: { jwtSecret: string }
-  ): GatewayMiddleware { ... }
-  ```
-  - Parses `Authorization` header, splits + verifies HS256 signature
-    (compute HMAC-SHA256 of `header.payload`, constant-time compare
-    against the supplied signature).
-  - Decodes payload + asserts `aud === "authenticated"`, `exp > now`.
-  - Attaches `req.user = { userId: payload.sub, email: payload.email }`
-    on the request when valid.
-  - Returns 401 with `{ ok: false, reason }` on any failure (missing
-    header, bad shape, expired, signature mismatch).
-- `packages/plugins/src/catalog/sugarprofile/runtime/index.ts`
-  - Exports a `createSugarProfileGatewayContribution()` that returns
-    the gateway middleware factory hook.
+- `packages/plugins/src/deployment/supabase.ts`
+  - `buildSupabaseJwtVerifierSource()` — returns the JS source for
+    an async `verifySupabaseJwt(req)` function that:
+    - Reads `SUGARMAGIC_SUGARPROFILE_SUPABASE_URL` (already plumbed
+      by SugarProfile's `gatewayRuntimeConfigKeys`).
+    - Fetches `<url>/auth/v1/.well-known/jwks.json`, cached
+      module-level with a 10-minute TTL.
+    - Parses the JWT header, looks up the matching `kid` in the
+      JWKS, picks the algorithm from the JWK.
+    - **ES256:** imports the JWK as a public key
+      (`createPublicKey({key, format: "jwk"})`), converts the
+      JWS-concat signature to DER, verifies with
+      `crypto.verify("SHA256", ...)`.
+    - **HS256:** decodes `jwk.k` (base64url) as the HMAC secret,
+      recomputes `HMAC-SHA256(header.payload)`, constant-time
+      compares with `timingSafeEqual`.
+    - Decodes the payload, asserts `aud === "authenticated"`,
+      `exp > now`, `sub` non-empty.
+    - Returns `{ userId, email }` on success; `null` on any
+      failure.
 
 **Files (modify):**
 
-- Plan 045's gateway scaffold composes plugin-contributed middlewares
-  AFTER `/health` and BEFORE route dispatch. When SugarProfile is
-  enabled, the JWT middleware replaces the existing
-  `authorizeBearer` middleware. If SugarProfile is enabled AND
-  `gatewayAuthMode === "bearer"`, the JWT middleware wins and the
-  shared-token path is dropped — settled to "remove the shared
-  token when SugarProfile is enabled" per the open question.
+- `packages/plugins/src/deployment/index.ts`
+  - `buildGatewayServerFile()` — added `EffectiveGatewayAuthMode`
+    union type; emits the verifier source after `authorizeBearer`,
+    extends the inline gate to dispatch on `"none" | "bearer" |
+    "supabase-jwt"`. In supabase-jwt mode the gate is
+    `const verifiedUser = await verifySupabaseJwt(req); if
+    (!verifiedUser) { 401 } req.user = verifiedUser;`. Server.mjs
+    imports `createPublicKey` + `verify as cryptoVerify` from
+    node:crypto alongside the existing `createHmac` +
+    `timingSafeEqual`.
+- `packages/plugins/src/deployment/overrides.ts`
+  - `EffectiveGatewayAuthMode = GatewayAuthMode | "supabase-jwt"`
+    (runtime-only superset; persisted overrides stay
+    `"none" | "bearer"`).
+  - `deriveEffectiveGatewayAuthMode(persistedMode, gameProject)`
+    promotes `"bearer"` to `"supabase-jwt"` when SugarProfile's
+    `enableLogin` is true.
+- `apps/studio/src/plugins/catalog/sugardeploy/index.tsx` +
+  `packages/plugins/src/catalog/sugardeploy/host/middleware.ts`
+  - Studio POSTs the effective mode (not the persisted toggle) to
+    the Build Frontend host action. The host accepts
+    `"supabase-jwt"` and skips the build-time bearer fetch — the
+    deployed bundle has no auth header until §47.9.5 wires
+    per-request session JWTs.
+- `packages/plugins/src/catalog/sugarprofile/index.ts`
+  - The originally-planned `supabase-jwt-secret` deployment
+    requirement was REMOVED. JWKS doesn't need a shared secret;
+    new asymmetric-keys projects have no shared HS256 secret at
+    all. Service-role key requirement remains (used by the
+    migration runner).
 
 **Tests:**
 
-- Unit: valid HS256-signed payload with audience + exp -> 200, user
-  attached.
-- Expired payload -> 401.
-- Bad signature -> 401.
-- Missing Authorization header -> 401.
-- Wrong audience -> 401.
-- Header shape `Bearer ` with empty token -> 401.
+- `packages/testing/src/plugin-infrastructure.test.ts`
+  - Codegen content test: SugarProfile enabled + bearer →
+    server.mjs has async `verifySupabaseJwt`, references
+    `SUGARMAGIC_SUGARPROFILE_SUPABASE_URL`, hits
+    `/auth/v1/.well-known/jwks.json`, gate awaits the verifier +
+    attaches `req.user`. Gateway unit has no
+    `gateway-shared-token` / `supabase-jwt-secret`; deploy.sh +
+    tfvars omit both.
+  - Behavior test: stands up a localhost HTTP server serving a
+    fake JWKS with a real ES256 P-256 keypair + an HS256 oct
+    JWK, writes the emitted verifier source to a temp `.mjs`,
+    dynamic-imports it, and exercises both algorithms plus
+    cached-JWKS, expired, tampered, kid-mismatch, wrong-aud,
+    missing-header, empty-Bearer, garbage, missing-sub,
+    missing-email cases.
 
 **Dependencies:** 47.6 (plugin scaffold). 47.7 isn't strictly
 required (the middleware is pure server-side) but story exit
@@ -1133,6 +1184,80 @@ authenticates a real Supabase-signed JWT end-to-end:
 SugarAgent's `/api/sugaragent/generate` rejects unauthenticated
 requests with 401 + accepts a request carrying a valid signed-in
 user's JWT.
+
+**Verification recipe (until §47.9.5 wires the frontend):**
+
+Once Setup Infra has refreshed the Cloud Run secret container set
+(JWT secret now in, shared-token out) and the gateway is
+redeployed with the new server.mjs:
+
+```sh
+# 1. Sign in via the deployed login modal in an incognito tab.
+# 2. In devtools console:
+const { data } = await supabase.auth.getSession();
+const jwt = data.session.access_token;
+
+# 3. From any terminal:
+curl -i \
+  -H "Authorization: Bearer $JWT" \
+  -H "content-type: application/json" \
+  -d '{"prompt":"hi"}' \
+  https://<gateway-host>/api/sugaragent/generate
+# → 200 (or normal 4xx from the upstream LLM if prompt is empty)
+curl -i https://<gateway-host>/api/sugaragent/generate
+# → 401 Unauthorized
+```
+
+**Footnote — frontend wiring is §47.9.5:** §47.9 lands the
+server-side verifier. The deployed bundle's per-request bearer is
+still build-time-baked from §46.14, so browser gateway calls will
+401 until §47.9.5 wires SugarAgent (and any other gateway-routed
+plugin) to read the live access token from SugarProfile per
+request. Studio's Build Frontend already detects supabase-jwt
+mode and skips the stale shared-token bake to keep the build from
+failing; the bundle just ships without an authorization header
+until §47.9.5.
+
+### 47.9.5 — Per-request session JWT from gateway-routed clients
+
+§47.9 dropped the build-time `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN`
+bake for supabase-jwt mode. The deployed bundle still needs SOME
+Bearer header on every gateway call or the gate 401s. §47.9.5
+adds a per-request token source backed by the live SugarProfile
+session.
+
+**Files (modify):**
+
+- `packages/plugins/src/catalog/sugaragent/runtime/clients.ts`
+  - Replace the `private readonly bearerToken: string` constructor
+    arg with `private readonly getBearerToken: () => string | null`.
+    Call it inline in each `authHeaders` invocation so the token
+    rotates with the live session.
+- `packages/plugins/src/catalog/sugaragent/runtime/provider.ts`
+  - Wire the getter to `supabase.auth.getSession()` via the
+    SugarProfile-resolved identity provider. The provider lookup
+    is already at the runtime root; thread it down to the
+    clients factory.
+- `targets/web/src/runtimeHost.ts` / Studio preview
+  - The Anonymous-Local fallback path returns `null` from
+    `getBearerToken`. The provider chain must tolerate that — a
+    gateway call without a session yields a 401 rather than a
+    silent crash.
+
+**Tests:**
+
+- Unit: client builds Authorization header from getter on each
+  call; rotation between calls picks up a new token.
+- Unit: getter returns null → no Authorization header sent (lets
+  the gateway respond 401 with a real message rather than throwing
+  client-side).
+
+**Dependencies:** 47.9.
+
+**Exit:** the deployed wordlark bundle, signed in via the modal,
+sends `Authorization: Bearer <jwt>` on `/api/sugaragent/*` calls
+and the gateway accepts them. Signing out causes subsequent calls
+to omit the header and the gateway returns 401.
 
 ### 47.10 — Autosave loop + migrate-local-to-cloud on sign-in
 
