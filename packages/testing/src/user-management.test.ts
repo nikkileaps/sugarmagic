@@ -1667,3 +1667,481 @@ describe("createSupabaseIdentityProvider", () => {
     expect(provider.currentUser()?.userId).toBe("u_external");
   });
 });
+
+// Story 47.8 — pure helpers + mocked-client tests for the
+// SugarProfile Supabase managed-files emission, the
+// SupabaseGameSaveStore, and the SupabaseProfileStore.
+describe("extractSupabaseProjectRef", () => {
+  it("pulls the ref out of a canonical Supabase URL", async () => {
+    const { extractSupabaseProjectRef } = await import("@sugarmagic/plugins");
+    expect(extractSupabaseProjectRef("https://fhhcmtbtozlxaboqhrla.supabase.co")).toBe(
+      "fhhcmtbtozlxaboqhrla"
+    );
+  });
+
+  it("tolerates a trailing slash", async () => {
+    const { extractSupabaseProjectRef } = await import("@sugarmagic/plugins");
+    expect(extractSupabaseProjectRef("https://abc123def.supabase.co/")).toBe(
+      "abc123def"
+    );
+  });
+
+  it("returns null on a non-Supabase URL", async () => {
+    const { extractSupabaseProjectRef } = await import("@sugarmagic/plugins");
+    expect(extractSupabaseProjectRef("https://example.com")).toBeNull();
+    expect(extractSupabaseProjectRef("")).toBeNull();
+  });
+
+  it("matches http:// fallback for local Supabase dev setups", async () => {
+    const { extractSupabaseProjectRef } = await import("@sugarmagic/plugins");
+    expect(extractSupabaseProjectRef("http://abc.supabase.co")).toBe("abc");
+  });
+});
+
+describe("buildSupabaseManagedFiles", () => {
+  // Domain helpers needed only by this block — import lazily so
+  // the existing test setup at the top of the file stays focused.
+  async function loadDomainHelpers() {
+    return await import("@sugarmagic/domain");
+  }
+
+  async function makeGameProjectWithSugarProfile(config: {
+    enabled: boolean;
+    enableLogin: boolean;
+    supabaseUrl: string;
+  }) {
+    const { normalizeGameProject, createDefaultDeploymentSettings, createPluginConfigurationRecord } = await loadDomainHelpers();
+    return normalizeGameProject({
+      identity: { id: "wordlark", schema: "GameProject", version: 1 },
+      displayName: "Wordlark",
+      gameRootPath: ".",
+      deployment: createDefaultDeploymentSettings(),
+      regionRegistry: [],
+      pluginConfigurations: [
+        createPluginConfigurationRecord("sugarprofile", config.enabled, {
+          enableLogin: config.enableLogin,
+          supabaseUrl: config.supabaseUrl,
+          supabaseAnonKey: "anon-key",
+          allowAnonymous: false
+        })
+      ],
+      contentLibraryId: "wordlark:content-library",
+      playerDefinition: {
+        definitionId: "player",
+        displayName: "Player",
+        physicalProfile: { height: 1.8, radius: 0.35, eyeHeight: 1.62 },
+        movementProfile: { walkSpeed: 4.5, runSpeed: 6.5, acceleration: 10 },
+        presentation: {
+          modelAssetDefinitionId: null,
+          animationAssetBindings: { idle: null, walk: null, run: null }
+        },
+        casterProfile: {
+          initialBattery: 100,
+          rechargeRate: 1,
+          initialResonance: 0,
+          allowedSpellTags: [],
+          blockedSpellTags: []
+        }
+      },
+      spellDefinitions: [],
+      itemDefinitions: [],
+      documentDefinitions: [],
+      npcDefinitions: [],
+      dialogueDefinitions: [],
+      questDefinitions: []
+    });
+  }
+
+  it("emits no files when SugarProfile is disabled", async () => {
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const project = await makeGameProjectWithSugarProfile({
+      enabled: false,
+      enableLogin: true,
+      supabaseUrl: "https://fhhcmtbtozlxaboqhrla.supabase.co"
+    });
+    expect(buildSupabaseManagedFiles(project)).toEqual([]);
+  });
+
+  it("emits no files when enableLogin is off", async () => {
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const project = await makeGameProjectWithSugarProfile({
+      enabled: true,
+      enableLogin: false,
+      supabaseUrl: "https://fhhcmtbtozlxaboqhrla.supabase.co"
+    });
+    expect(buildSupabaseManagedFiles(project)).toEqual([]);
+  });
+
+  it("emits no files when supabaseUrl is empty", async () => {
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const project = await makeGameProjectWithSugarProfile({
+      enabled: true,
+      enableLogin: true,
+      supabaseUrl: ""
+    });
+    expect(buildSupabaseManagedFiles(project)).toEqual([]);
+  });
+
+  it("emits config.toml + 0001_initial.sql when fully configured", async () => {
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const project = await makeGameProjectWithSugarProfile({
+      enabled: true,
+      enableLogin: true,
+      supabaseUrl: "https://fhhcmtbtozlxaboqhrla.supabase.co"
+    });
+    const files = buildSupabaseManagedFiles(project);
+    expect(files.map((f) => f.relativePath).sort()).toEqual([
+      "deployment/supabase/config.toml",
+      "deployment/supabase/migrations/0001_initial.sql"
+    ]);
+    const configToml = files.find(
+      (f) => f.relativePath === "deployment/supabase/config.toml"
+    );
+    expect(configToml?.content).toContain('project_id = "fhhcmtbtozlxaboqhrla"');
+    const migration = files.find(
+      (f) => f.relativePath === "deployment/supabase/migrations/0001_initial.sql"
+    );
+    expect(migration?.content).toContain("create table if not exists public.saves");
+    expect(migration?.content).toContain("create table if not exists public.profiles");
+    expect(migration?.content).toContain(
+      "create trigger on_auth_user_created"
+    );
+    expect(migration?.content).toContain(
+      "alter table public.saves enable row level security"
+    );
+    expect(migration?.content).toContain(
+      "alter table public.profiles enable row level security"
+    );
+  });
+});
+
+// Mocked Supabase client for the save + profile stores. Builds a
+// tiny in-memory PostgREST-shaped client; rejects writes when the
+// suppressed mode is on (simulates RLS denial).
+describe("SupabaseGameSaveStore", () => {
+  interface MockGameSaveRow {
+    user_id: string;
+    last_played: string;
+    schema_version: number;
+    payload: unknown;
+  }
+
+  function createMockPostgrestClient() {
+    const records = new Map<string, MockGameSaveRow>();
+    let rlsBlocked = false;
+    function makeQuery(table: string) {
+      const filters: Array<{ column: string; value: string }> = [];
+      return {
+        select(_columns: string) {
+          return {
+            eq(column: string, value: string) {
+              filters.push({ column, value });
+              return {
+                async maybeSingle<T>() {
+                  if (table !== "saves") return { data: null, error: null };
+                  const eqUserId = filters.find((f) => f.column === "user_id");
+                  const found = eqUserId ? records.get(eqUserId.value) : null;
+                  return {
+                    data: (found as T | undefined) ?? null,
+                    error: null
+                  };
+                }
+              };
+            }
+          };
+        },
+        async upsert(
+          row: Record<string, unknown>,
+          _options: { onConflict: string }
+        ) {
+          if (rlsBlocked) {
+            return {
+              error: {
+                message:
+                  "new row violates row-level security policy for table saves"
+              }
+            };
+          }
+          const userId = String(row.user_id);
+          records.set(userId, {
+            user_id: userId,
+            last_played: String(row.last_played),
+            schema_version: Number(row.schema_version),
+            payload: row.payload
+          });
+          return { error: null };
+        },
+        delete() {
+          return {
+            async eq(column: string, value: string) {
+              if (column === "user_id") records.delete(value);
+              return { error: null };
+            }
+          };
+        }
+      };
+    }
+    return {
+      from(table: string) {
+        return makeQuery(table);
+      },
+      _records: records,
+      _setRlsBlocked: (next: boolean) => {
+        rlsBlocked = next;
+      }
+    };
+  }
+
+  it("load returns null when no row exists", async () => {
+    const mock = createMockPostgrestClient();
+    const { createSupabaseGameSaveStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseGameSaveStore({ client: mock as never });
+    const result = await store.load("u_missing");
+    expect(result).toBeNull();
+  });
+
+  it("save then load round-trips the payload", async () => {
+    const mock = createMockPostgrestClient();
+    const { createSupabaseGameSaveStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseGameSaveStore({ client: mock as never });
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "(ignored, stamped server-side)",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: {
+        currentRegionId: "hollow-station",
+        currentQuestId: "find-the-cat",
+        playerPosition: { x: 1, y: 2, z: 3 }
+      }
+    });
+    const reloaded = await store.load("u_alpha");
+    expect(reloaded?.userId).toBe("u_alpha");
+    expect(reloaded?.payload.currentRegionId).toBe("hollow-station");
+    expect(reloaded?.payload.playerPosition).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it("save throws on RLS denial (cross-user write attempt)", async () => {
+    const mock = createMockPostgrestClient();
+    mock._setRlsBlocked(true);
+    const { createSupabaseGameSaveStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseGameSaveStore({ client: mock as never });
+    await expect(
+      store.save("u_alpha", {
+        userId: "u_alpha",
+        lastPlayed: "",
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        payload: {
+          currentRegionId: null,
+          currentQuestId: null,
+          playerPosition: null
+        }
+      })
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("save refuses when GameSave.userId mismatches the key", async () => {
+    const mock = createMockPostgrestClient();
+    const { createSupabaseGameSaveStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseGameSaveStore({ client: mock as never });
+    await expect(
+      store.save("u_alpha", {
+        userId: "u_beta",
+        lastPlayed: "",
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        payload: {
+          currentRegionId: null,
+          currentQuestId: null,
+          playerPosition: null
+        }
+      })
+    ).rejects.toThrow(/cross-user state/);
+  });
+
+  it("clear removes the record", async () => {
+    const mock = createMockPostgrestClient();
+    const { createSupabaseGameSaveStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseGameSaveStore({ client: mock as never });
+    await store.save("u_alpha", {
+      userId: "u_alpha",
+      lastPlayed: "",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: {
+        currentRegionId: null,
+        currentQuestId: null,
+        playerPosition: null
+      }
+    });
+    expect(await store.load("u_alpha")).not.toBeNull();
+    await store.clear("u_alpha");
+    expect(await store.load("u_alpha")).toBeNull();
+  });
+});
+
+describe("SupabaseProfileStore", () => {
+  interface MockProfileRow {
+    user_id: string;
+    display_name: string | null;
+    locale: string;
+    preferences: Record<string, unknown>;
+    updated_at: string;
+  }
+
+  function createMockProfilesClient() {
+    const records = new Map<string, MockProfileRow>();
+    function selectChain(table: string) {
+      const filters: Array<{ column: string; value: string }> = [];
+      return {
+        eq(column: string, value: string) {
+          filters.push({ column, value });
+          return {
+            async maybeSingle<T>() {
+              if (table !== "profiles") return { data: null, error: null };
+              const eqUserId = filters.find((f) => f.column === "user_id");
+              const found = eqUserId ? records.get(eqUserId.value) : null;
+              return {
+                data: (found as T | undefined) ?? null,
+                error: null
+              };
+            },
+            async single<T>() {
+              const eqUserId = filters.find((f) => f.column === "user_id");
+              const found = eqUserId ? records.get(eqUserId.value) : null;
+              if (!found) {
+                return {
+                  data: null,
+                  error: { message: "row not found" }
+                };
+              }
+              return { data: found as T, error: null };
+            }
+          };
+        }
+      };
+    }
+    function upsertChain(table: string) {
+      return (
+        row: Record<string, unknown>,
+        _options: { onConflict: string }
+      ) => {
+        if (table !== "profiles") {
+          return {
+            select: () => ({
+              async single() {
+                return { data: null, error: { message: "wrong table" } };
+              }
+            }),
+            then(resolve: (v: { error: null }) => unknown) {
+              return Promise.resolve({ error: null }).then(resolve);
+            }
+          };
+        }
+        const userId = String(row.user_id);
+        const existing = records.get(userId);
+        const next: MockProfileRow = {
+          user_id: userId,
+          display_name:
+            row.display_name === undefined
+              ? (existing?.display_name ?? null)
+              : (row.display_name as string | null),
+          locale:
+            row.locale === undefined
+              ? (existing?.locale ?? "en")
+              : String(row.locale),
+          preferences:
+            row.preferences === undefined
+              ? (existing?.preferences ?? {})
+              : (row.preferences as Record<string, unknown>),
+          updated_at: String(
+            row.updated_at ?? existing?.updated_at ?? "2026-06-26T00:00:00.000Z"
+          )
+        };
+        records.set(userId, next);
+        return {
+          select(_columns: string) {
+            return {
+              async single<T>() {
+                return { data: next as T, error: null };
+              }
+            };
+          },
+          then(resolve: (v: { error: null }) => unknown) {
+            return Promise.resolve({ error: null }).then(resolve);
+          }
+        };
+      };
+    }
+    return {
+      from(table: string) {
+        return {
+          select(_columns: string) {
+            return selectChain(table);
+          },
+          upsert: upsertChain(table)
+        };
+      },
+      _records: records
+    };
+  }
+
+  it("load returns null when no row exists", async () => {
+    const mock = createMockProfilesClient();
+    const { createSupabaseProfileStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseProfileStore({ client: mock as never });
+    expect(await store.load("u_missing")).toBeNull();
+  });
+
+  it("update upserts a profile with the supplied fields + defaults", async () => {
+    const mock = createMockProfilesClient();
+    const { createSupabaseProfileStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseProfileStore({ client: mock as never });
+    const result = await store.update("u_alpha", {
+      displayName: "Nikki",
+      locale: "es-MX"
+    });
+    expect(result.displayName).toBe("Nikki");
+    expect(result.locale).toBe("es-MX");
+    expect(result.preferences).toEqual({});
+  });
+
+  it("update merging respects undefined fields (leaves untouched)", async () => {
+    const mock = createMockProfilesClient();
+    const { createSupabaseProfileStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseProfileStore({ client: mock as never });
+    await store.update("u_alpha", {
+      displayName: "Nikki",
+      locale: "es-MX"
+    });
+    const result = await store.update("u_alpha", {
+      displayName: "Updated"
+    });
+    expect(result.displayName).toBe("Updated");
+    // Locale should NOT be reset to default — undefined patch field
+    // leaves the column alone.
+    expect(result.locale).toBe("es-MX");
+  });
+
+  it("setPreference merges into existing preferences without clobbering siblings", async () => {
+    const mock = createMockProfilesClient();
+    const { createSupabaseProfileStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseProfileStore({ client: mock as never });
+    await store.update("u_alpha", {
+      preferences: { "ui.audio.master": 0.7, "ui.color-mode": "dark" }
+    });
+    await store.setPreference("u_alpha", "sugarlang.uiLocale", "es");
+    const after = await store.load("u_alpha");
+    expect(after?.preferences).toEqual({
+      "ui.audio.master": 0.7,
+      "ui.color-mode": "dark",
+      "sugarlang.uiLocale": "es"
+    });
+  });
+
+  it("setPreference rejects empty key", async () => {
+    const mock = createMockProfilesClient();
+    const { createSupabaseProfileStore } = await import("@sugarmagic/plugins");
+    const store = createSupabaseProfileStore({ client: mock as never });
+    await expect(
+      store.setPreference("u_alpha", "", "value")
+    ).rejects.toThrow(/non-empty key/);
+  });
+});

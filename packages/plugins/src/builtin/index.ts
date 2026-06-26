@@ -36,6 +36,14 @@ export {
   createSupabaseIdentityProvider,
   type SupabaseIdentityProviderOptions
 } from "../catalog/sugarprofile/runtime/identity";
+export {
+  createSupabaseGameSaveStore,
+  type SupabaseGameSaveStoreOptions
+} from "../catalog/sugarprofile/runtime/save-store";
+export {
+  createSupabaseProfileStore,
+  type SupabaseProfileStoreOptions
+} from "../catalog/sugarprofile/runtime/profile-store";
 export { LoginModal, type LoginModalMode, type LoginModalProps } from "../catalog/sugarprofile/ui/LoginModal";
 export {
   SignedInBadge,

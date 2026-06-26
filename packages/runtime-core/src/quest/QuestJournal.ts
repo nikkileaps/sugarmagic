@@ -117,6 +117,18 @@ export function createRuntimeQuestJournal(
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    // Plan 050 band-aid — don't intercept 'j' when the user is
+    // typing into an input/textarea/contenteditable (e.g.
+    // SugarProfile's LoginModal email field).
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+
     if (event.key.toLowerCase() === "j") {
       event.preventDefault();
       setOpen(!open);

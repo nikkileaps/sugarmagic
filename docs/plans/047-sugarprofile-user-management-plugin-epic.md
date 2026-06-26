@@ -45,7 +45,7 @@ SugarProfile: user identity + game saves as a plugin.
 
 - **Per-user save data is row-locked.** Supabase Row-Level Security
   policies guarantee a user can only `select` / `update` / `delete`
-  their own save row. Service-role calls (gateway-side admin) bypass
+  their own saves row. Service-role calls (gateway-side admin) bypass
   RLS deliberately. No game-author code touches a service-role key
   directly; the gateway is the only consumer.
 
@@ -208,33 +208,33 @@ settings panels. SugarProfile is the second hosted-deploy plugin
 
 ### Supabase schema (generated migration)
 
-The plugin emits a single `deployment/supabase/migrations/0001_game_save.sql`
+The plugin emits a single `deployment/supabase/migrations/0001_initial.sql`
 managed file:
 
 ```sql
-create table if not exists public.game_save (
+create table if not exists public.saves (
   user_id uuid primary key references auth.users(id) on delete cascade,
   last_played timestamptz not null default now(),
   schema_version integer not null default 1,
   payload jsonb not null default '{}'::jsonb
 );
 
-alter table public.game_save enable row level security;
+alter table public.saves enable row level security;
 
-create policy "users select own save"
-  on public.game_save for select
+create policy "users select own saves"
+  on public.saves for select
   using (auth.uid() = user_id);
 
-create policy "users insert own save"
-  on public.game_save for insert
+create policy "users insert own saves"
+  on public.saves for insert
   with check (auth.uid() = user_id);
 
-create policy "users update own save"
-  on public.game_save for update
+create policy "users update own saves"
+  on public.saves for update
   using (auth.uid() = user_id);
 
-create policy "users delete own save"
-  on public.game_save for delete
+create policy "users delete own saves"
+  on public.saves for delete
   using (auth.uid() = user_id);
 ```
 
@@ -937,18 +937,18 @@ button.
 **SQL emitted as `0001_initial.sql`:**
 
 ```sql
--- game_save (cross-plugin player state)
-create table public.game_save (
+-- saves (cross-plugin player state)
+create table public.saves (
   user_id uuid primary key references auth.users(id) on delete cascade,
   last_played timestamptz not null default now(),
   schema_version integer not null default 1,
   payload jsonb not null default '{}'::jsonb
 );
-alter table public.game_save enable row level security;
-create policy "users select own save" on public.game_save for select using (auth.uid() = user_id);
-create policy "users insert own save" on public.game_save for insert with check (auth.uid() = user_id);
-create policy "users update own save" on public.game_save for update using (auth.uid() = user_id);
-create policy "users delete own save" on public.game_save for delete using (auth.uid() = user_id);
+alter table public.saves enable row level security;
+create policy "users select own saves" on public.saves for select using (auth.uid() = user_id);
+create policy "users insert own saves" on public.saves for insert with check (auth.uid() = user_id);
+create policy "users update own saves" on public.saves for update using (auth.uid() = user_id);
+create policy "users delete own saves" on public.saves for delete using (auth.uid() = user_id);
 
 -- profiles (per-user authored data)
 create table public.profiles (
@@ -986,13 +986,13 @@ create trigger on_auth_user_created
     options: SupabaseGameSaveStoreOptions
   ): GameSaveStore { ... }
   ```
-  - `load(userId)` -> `client.from("game_save").select("*").eq("user_id",
+  - `load(userId)` -> `client.from("saves").select("*").eq("user_id",
     userId).maybeSingle()`. Asserts the returned `user_id` matches
     (RLS should make this a no-op but cheap).
-  - `save(userId, save)` -> `client.from("game_save").upsert({ user_id:
+  - `save(userId, save)` -> `client.from("saves").upsert({ user_id:
     userId, last_played: now, schema_version: GAME_SAVE_SCHEMA_VERSION,
     payload: save.payload })`.
-  - `clear(userId)` -> `client.from("game_save").delete().eq("user_id",
+  - `clear(userId)` -> `client.from("saves").delete().eq("user_id",
     userId)`.
 - `packages/plugins/src/catalog/sugarprofile/runtime/profile-store.ts`
   ```ts
@@ -1020,7 +1020,7 @@ create trigger on_auth_user_created
   ```
 - `packages/plugins/src/catalog/sugarprofile/migrations/0001_initial.sql`
   - Carries the SQL from the "Supabase schema" deliverables block
-    above (game_save + profiles + handle_new_user trigger).
+    above (saves + profiles + handle_new_user trigger).
   - File is plugin-emitted into the game project as
     `deployment/supabase/migrations/0001_initial.sql` via the
     managed-files mechanism (mirror Plan 046's

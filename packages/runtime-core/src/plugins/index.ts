@@ -23,6 +23,7 @@ import type {
   ConversationTurnEnvelope
 } from "../conversation";
 import type { UserIdentityProvider } from "../identity";
+import type { UserProfileStore } from "../profile";
 import type { GameSaveStore } from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
 import type {
@@ -51,7 +52,8 @@ export type RuntimePluginContributionKind =
   | "project.settings"
   | "mechanics.emitHandler"
   | "identity.provider"
-  | "save.store";
+  | "save.store"
+  | "profile.store";
 
 interface RuntimePluginContributionBase<TKind extends RuntimePluginContributionKind, TPayload> {
   pluginId: string;
@@ -251,6 +253,24 @@ export type GameSaveStoreContribution = RuntimePluginContributionBase<
   }
 >;
 
+// Story 47.8 — plugins that own per-user profile data (display
+// name, locale, preferences) contribute a UserProfileStore here.
+// Unlike identity.provider + save.store, there's no runtime-core
+// default — anonymous-local play has no profile concept, so the
+// resolver returns null when no plugin contributes and consumers
+// fall through to their own defaults (e.g. Sugarlang uses its
+// configured supportLanguage when there's no profile-store
+// contribution).
+export type ProfileStoreContribution = RuntimePluginContributionBase<
+  "profile.store",
+  {
+    storeId: string;
+    summary: string;
+    status: "placeholder" | "ready";
+    store: UserProfileStore;
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
@@ -263,7 +283,8 @@ export type RuntimePluginContribution =
   | ProjectSettingsContribution
   | MechanicsEmitHandlerContribution
   | IdentityProviderContribution
-  | GameSaveStoreContribution;
+  | GameSaveStoreContribution
+  | ProfileStoreContribution;
 
 export interface RuntimePluginContext {
   boot: RuntimeBootModel;
@@ -453,6 +474,34 @@ export function resolveActiveGameSaveStore(
   if (contributions.length > 1) {
     logger.warn(
       `[runtime-core] Multiple plugins contribute save.store; picking highest priority.`,
+      {
+        contributingPluginIds: contributions.map((c) => c.pluginId),
+        priorities: contributions.map((c) => ({
+          pluginId: c.pluginId,
+          priority: c.priority
+        }))
+      }
+    );
+  }
+  const winner = contributions
+    .slice()
+    .sort((a, b) => b.priority - a.priority)[0];
+  return winner.payload.store;
+}
+
+// Story 47.8 — pick the active UserProfileStore at boot. Returns
+// `null` when no plugin contributes (no runtime-core default;
+// anonymous-local play has no profile concept). Consumers handle
+// the null case explicitly.
+export function resolveActiveProfileStore(
+  manager: RuntimePluginManager,
+  logger: ResolverLogger = defaultResolverLogger
+): UserProfileStore | null {
+  const contributions = manager.getContributions("profile.store");
+  if (contributions.length === 0) return null;
+  if (contributions.length > 1) {
+    logger.warn(
+      `[runtime-core] Multiple plugins contribute profile.store; picking highest priority.`,
       {
         contributingPluginIds: contributions.map((c) => c.pluginId),
         priorities: contributions.map((c) => ({

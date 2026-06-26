@@ -35,6 +35,7 @@ import {
   Group,
   Modal,
   NumberInput,
+  PasswordInput,
   Select,
   Stack,
   Text,
@@ -50,7 +51,10 @@ import {
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
-import { SUGARPROFILE_PLUGIN_ID } from "@sugarmagic/plugins";
+import {
+  getDeploymentSettings,
+  SUGARPROFILE_PLUGIN_ID
+} from "@sugarmagic/plugins";
 import { IdChip } from "@sugarmagic/ui";
 import type {
   PluginWorkspaceViewProps,
@@ -142,6 +146,122 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
 
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
+
+  // Story 47.8 — Apply Migration state. Runs supabase db push via
+  // the host endpoint; surfaces stdout/stderr inline.
+  type MigrationPhase =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "success"; stdout: string }
+    | { kind: "failed"; reason: string; stdout?: string; stderr?: string };
+  const [migrationPhase, setMigrationPhase] = useState<MigrationPhase>({
+    kind: "idle"
+  });
+
+  // SugarProfile config — used to decide whether Apply Migration
+  // should be enabled (need enableLogin + supabaseUrl set).
+  const sugarProfileConfig = useMemo(() => {
+    const configuration = pluginConfigurations.find(
+      (entry) => entry.pluginId === SUGARPROFILE_PLUGIN_ID
+    );
+    const config = (configuration?.config ?? {}) as Record<string, unknown>;
+    return {
+      enableLogin: config.enableLogin === true,
+      supabaseUrl:
+        typeof config.supabaseUrl === "string"
+          ? config.supabaseUrl.trim()
+          : ""
+    };
+  }, [pluginConfigurations]);
+
+  const deploymentSettings = useMemo(() => {
+    return gameProject ? getDeploymentSettings(gameProject) : null;
+  }, [gameProject]);
+  const workingDirectory = deploymentSettings?.workingDirectory ?? "";
+
+  // Story 47.8 — Supabase database password. Per-project credential
+  // the user sets at project creation time (Project Settings →
+  // Database → Database password). The migration runner connects
+  // to Postgres directly via `supabase db push --db-url`, which
+  // needs this password embedded in the connection string. Stored
+  // in browser localStorage — never committed to git, never enters
+  // the project's plugin config. Re-paste only when the user nukes
+  // browser data or switches machines.
+  const DB_PASSWORD_STORAGE_KEY = "sugarmagic.supabase-database-password";
+  const [databasePassword, setDatabasePassword] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem(DB_PASSWORD_STORAGE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  function persistDatabasePassword(next: string) {
+    setDatabasePassword(next);
+    try {
+      if (next) {
+        window.localStorage.setItem(DB_PASSWORD_STORAGE_KEY, next);
+      } else {
+        window.localStorage.removeItem(DB_PASSWORD_STORAGE_KEY);
+      }
+    } catch (error) {
+      console.warn("[sugarprofile] failed to persist database password", error);
+    }
+  }
+
+  async function runApplyMigration() {
+    if (!workingDirectory) {
+      setMigrationPhase({
+        kind: "failed",
+        reason:
+          "SugarDeploy's Working Directory must be set in the Provision workspace before applying migrations."
+      });
+      return;
+    }
+    if (!databasePassword) {
+      setMigrationPhase({
+        kind: "failed",
+        reason:
+          "Paste your Supabase database password into the field above before applying migrations. Find it at Project Settings → Database → Database password (you can reset it if forgotten)."
+      });
+      return;
+    }
+    setMigrationPhase({ kind: "running" });
+    try {
+      const response = await fetch("/__sugarprofile/run-migration", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingDirectory,
+          supabaseUrl: sugarProfileConfig.supabaseUrl,
+          databasePassword
+        })
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        reason?: string;
+        stdout?: string;
+        stderr?: string;
+      };
+      if (payload.ok) {
+        setMigrationPhase({
+          kind: "success",
+          stdout: payload.stdout ?? ""
+        });
+      } else {
+        setMigrationPhase({
+          kind: "failed",
+          reason: payload.reason ?? "Migration failed.",
+          stdout: payload.stdout,
+          stderr: payload.stderr
+        });
+      }
+    } catch (error) {
+      setMigrationPhase({
+        kind: "failed",
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 
   const regions = gameProject?.regionRegistry ?? [];
 
@@ -402,6 +522,109 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
                 <Text size="xs" c="var(--sm-color-subtext)">
                   Regenerate Anonymous User only applies to the anonymous-local provider — sign out via SugarProfile to switch users when credentialed.
                 </Text>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Box
+            p="sm"
+            style={{
+              border: "1px solid var(--sm-color-surface3)",
+              borderRadius: 8,
+              background: "var(--sm-color-surface1)"
+            }}
+          >
+            <Stack gap="xs">
+              <Text size="sm" fw={600}>
+                Database Schema
+              </Text>
+              <Text size="xs" c="var(--sm-color-subtext)">
+                Applies <Code>deployment/supabase/migrations/</Code> to the configured Supabase project. Uses the workspace-pinned Supabase CLI (no global install needed) authenticated via the Personal Access Token below.
+              </Text>
+              <PasswordInput
+                label="Supabase Database Password"
+                description={
+                  <Text size="xs" c="var(--sm-color-subtext)">
+                    Project Settings → Database → Database password in the Supabase dashboard. (You can reset it there if forgotten — won't break anything.) Stored in this browser only (localStorage); never committed to git, never sent anywhere except the local migration endpoint.
+                  </Text>
+                }
+                placeholder="password..."
+                value={databasePassword}
+                onChange={(event) =>
+                  persistDatabasePassword(event.currentTarget.value)
+                }
+                autoComplete="off"
+              />
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant="filled"
+                  loading={migrationPhase.kind === "running"}
+                  disabled={
+                    !sugarProfileConfig.enableLogin ||
+                    !sugarProfileConfig.supabaseUrl ||
+                    !workingDirectory ||
+                    !databasePassword ||
+                    migrationPhase.kind === "running"
+                  }
+                  onClick={() => void runApplyMigration()}
+                >
+                  Apply SugarProfile Migration
+                </Button>
+              </Group>
+              {!sugarProfileConfig.enableLogin ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Enable Login at the top of this workspace first; migrations only apply when SugarProfile is contributing identity / save / profile stores.
+                </Text>
+              ) : !sugarProfileConfig.supabaseUrl ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Supabase URL must be configured before the migration knows which project to target.
+                </Text>
+              ) : !workingDirectory ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Set SugarDeploy's Working Directory (Provision workspace) before applying migrations.
+                </Text>
+              ) : !databasePassword ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Paste your Supabase database password above before applying migrations.
+                </Text>
+              ) : null}
+              {migrationPhase.kind === "success" ? (
+                <Alert color="green" variant="light" title="Migration applied">
+                  <Stack gap={4}>
+                    <Text size="sm">
+                      <Code>supabase db push</Code> succeeded. New auth signups will get a profile row auto-created; save loads + writes now hit <Code>public.game_save</Code>.
+                    </Text>
+                    {migrationPhase.stdout.trim() ? (
+                      <Code block>{migrationPhase.stdout.trim()}</Code>
+                    ) : null}
+                  </Stack>
+                </Alert>
+              ) : null}
+              {migrationPhase.kind === "failed" ? (
+                <Alert color="red" variant="light" title="Migration failed">
+                  <Stack gap={4}>
+                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                      {migrationPhase.reason}
+                    </Text>
+                    {migrationPhase.stdout?.trim() ? (
+                      <Stack gap={2}>
+                        <Text size="xs" c="var(--sm-color-subtext)">
+                          stdout
+                        </Text>
+                        <Code block>{migrationPhase.stdout.trim()}</Code>
+                      </Stack>
+                    ) : null}
+                    {migrationPhase.stderr?.trim() ? (
+                      <Stack gap={2}>
+                        <Text size="xs" c="var(--sm-color-subtext)">
+                          stderr
+                        </Text>
+                        <Code block>{migrationPhase.stderr.trim()}</Code>
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                </Alert>
               ) : null}
             </Stack>
           </Box>

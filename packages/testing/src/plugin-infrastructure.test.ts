@@ -369,15 +369,20 @@ describe("plugin infrastructure", () => {
     ]);
   });
 
-  it("only SugarDeploy contributes host middleware in the current registry", () => {
+  it("plugins contributing host middleware in the current registry", () => {
     // 45.4.6 exit signal: SugarLang, SugarAgent, Fireflies, Hello don't
     // shell out to host binaries and shouldn't grow a hostMiddleware
-    // contribution accidentally. Future plugins that need one update this
-    // test along with their definition.
+    // contribution accidentally. SugarDeploy (gcloud / terraform / gh /
+    // git) and SugarProfile (supabase CLI + probe) are the two that
+    // legitimately need one. Future plugins update this test along
+    // with their definition.
     const idsWithHostMiddleware = listDiscoveredPluginDefinitions()
       .filter((definition) => definition.hostMiddleware != null)
-      .map((definition) => definition.manifest.pluginId);
-    expect(idsWithHostMiddleware).toEqual([SUGARDEPLOY_PLUGIN_ID]);
+      .map((definition) => definition.manifest.pluginId)
+      .sort();
+    expect(idsWithHostMiddleware).toEqual(
+      [SUGARDEPLOY_PLUGIN_ID, SUGARPROFILE_PLUGIN_ID].sort()
+    );
   });
 
   it("lists SugarDeploy deployment targets with local as the implemented baseline", () => {

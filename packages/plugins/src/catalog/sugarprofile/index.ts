@@ -24,8 +24,11 @@ import {
   createDeploymentRequirementId,
   type DeploymentRequirement
 } from "@sugarmagic/domain";
+import { createClient } from "@supabase/supabase-js";
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import { createSupabaseIdentityProvider } from "./runtime/identity";
+import { createSupabaseGameSaveStore } from "./runtime/save-store";
+import { createSupabaseProfileStore } from "./runtime/profile-store";
 
 export const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
 
@@ -240,11 +243,31 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           contributions: []
         };
       }
+      // Story 47.8 — one Supabase client shared across the
+      // identity provider + save store + profile store, so JWT
+      // auth state (anonymous / signed-in / signed-out) flows
+      // automatically through every contribution. Constructing
+      // three separate clients would mean separate auth state +
+      // separate token refresh loops.
+      const client = createClient(
+        config.supabaseUrl,
+        config.supabaseAnonKey,
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+          }
+        }
+      );
       const provider = createSupabaseIdentityProvider({
         supabaseUrl: config.supabaseUrl,
         supabaseAnonKey: config.supabaseAnonKey,
-        allowAnonymous: config.allowAnonymous
+        allowAnonymous: config.allowAnonymous,
+        client
       });
+      const saveStore = createSupabaseGameSaveStore({ client });
+      const profileStore = createSupabaseProfileStore({ client });
       return {
         pluginId: configuration.pluginId,
         displayName: "SugarProfile",
@@ -262,9 +285,48 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               status: "ready",
               provider
             }
+          },
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugarprofile.save-store",
+            kind: "save.store",
+            displayName: "Supabase Game Save Store",
+            priority: 100,
+            payload: {
+              storeId: "sugarprofile.supabase-save",
+              summary:
+                "public.saves row keyed on the authenticated user's JWT. RLS gates every read + write to auth.uid() = user_id.",
+              status: "ready",
+              store: saveStore
+            }
+          },
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugarprofile.profile-store",
+            kind: "profile.store",
+            displayName: "Supabase User Profile Store",
+            priority: 100,
+            payload: {
+              storeId: "sugarprofile.supabase-profile",
+              summary:
+                "public.profiles row keyed on the authenticated user's JWT. Auto-create trigger on auth.users insert means a row exists for every signed-up user.",
+              status: "ready",
+              store: profileStore
+            }
           }
         ]
       };
+    }
+  },
+  // Story 47.8 — host middleware for the probe + run-migration
+  // endpoints. Dynamic import because the middleware module uses
+  // node:fs + node:child_process; statically importing would pull
+  // those into the browser bundle and crash plugin discovery on
+  // first access. Mirrors SugarDeploy's hostMiddleware contract.
+  hostMiddleware: {
+    async createMiddleware() {
+      const mod = await import("./host/middleware");
+      return mod.createSugarProfileHostMiddleware();
     }
   },
   shell: {

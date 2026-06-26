@@ -14,7 +14,7 @@
  * Status: active
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -49,6 +49,28 @@ export function LoginModal(props: LoginModalProps) {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Belt + suspenders auto-focus on mount. Mantine Modal's focus
+  // trap looks for `data-autofocus` on a child element, but it
+  // applies the attribute to TextInput's wrapper div — not the
+  // inner <input>. Without focus actually landing on the input,
+  // typed keys fire with event.target = the modal container, which
+  // bypasses runtime-core's shortcut handlers'
+  // `target instanceof HTMLInputElement` guard and triggers
+  // in-game shortcuts (i = inventory, c = caster menu, q = quest
+  // journal, etc.) while the user types their email.
+  //
+  // Imperative focus via ref works regardless of whether Mantine
+  // forwards `autoFocus` or `data-autofocus` to the underlying
+  // input. The setTimeout(0) lets Mantine's modal mount + focus
+  // trap settle before we override.
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      emailInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function resetForm() {
     setEmail("");
@@ -129,12 +151,19 @@ export function LoginModal(props: LoginModalProps) {
         </Tabs>
 
         <TextInput
+          ref={emailInputRef}
           label="Email"
           type="email"
           required
           value={email}
           onChange={(event) => setEmail(event.currentTarget.value)}
           autoComplete="email"
+          // data-autofocus is the Mantine-documented marker; we
+          // also imperatively focus via the ref in a useEffect
+          // because Mantine's TextInput wrapper may absorb the
+          // attribute rather than forwarding it to the inner
+          // input. The two together are belt + suspenders.
+          data-autofocus
         />
         <PasswordInput
           label="Password"

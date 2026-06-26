@@ -51,6 +51,10 @@ import {
   NETLIFY_TEMPLATE_VERSION,
   normalizeNetlifyDeploymentTargetOverrides
 } from "./netlify";
+// Story 47.8 — SugarProfile-emitted Supabase managed files (CLI
+// config + migration SQL). Gated on the plugin being enabled with
+// `enableLogin: true` and a non-empty supabaseUrl.
+import { buildSupabaseManagedFiles } from "./supabase";
 import {
   buildSugarDeployGithubWorkflowFile,
   getSugarDeployGithubWorkflowPath,
@@ -292,6 +296,13 @@ export {
   type GroupedVersionMajor,
   type ParsedVersionTag
 } from "./version-tags";
+
+export {
+  buildSupabaseManagedFiles,
+  extractSupabaseProjectRef,
+  getSugarProfileMigrationDirectory,
+  SUPABASE_MIGRATIONS_TEMPLATE_VERSION
+} from "./supabase";
 
 export {
   CLOUD_RUN_TEMPLATE_VERSION,
@@ -2811,12 +2822,17 @@ export function planGameDeployment(
     ? buildPublishedWebManagedFiles(gameProject, publishedWebSnapshot)
     : [];
 
+  // Story 47.8 — SugarProfile's Supabase migration artifacts.
+  // Empty when SugarProfile is disabled / missing config; emitted
+  // into `deployment/supabase/` when enabled with a configured URL.
+  const supabaseFiles = buildSupabaseManagedFiles(gameProject);
   return {
     ...provisionalPlan,
     managedFiles: [
       ...backendManagedFiles,
       ...frontendManagedFiles,
       ...publishedWebFiles,
+      ...supabaseFiles,
       ...(workflowFile ? [workflowFile] : [])
     ]
   };

@@ -294,6 +294,19 @@ export function createRuntimeSpellMenuUI(
   }
 
   function handleKeyDown(event: KeyboardEvent) {
+    // Plan 050 band-aid — don't intercept shortcut keys when the
+    // user is typing into an input/textarea/contenteditable (e.g.
+    // SugarProfile's LoginModal email field). Without this guard,
+    // typing 'c' in an email triggered the caster menu.
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+
     if (event.key.toLowerCase() === "c") {
       event.preventDefault();
       if (!open && !canOpenProvider()) {

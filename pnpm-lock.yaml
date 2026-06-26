@@ -165,6 +165,9 @@ importers:
         specifier: '>=18'
         version: 19.2.4(react@19.2.4)
     devDependencies:
+      supabase:
+        specifier: ^2.108.0
+        version: 2.108.0
       vite:
         specifier: ^8.0.3
         version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(tsx@4.21.0)
@@ -791,6 +794,46 @@ packages:
     resolution: {integrity: sha512-tNaQmBgodDZwgB40mRwVbxFy8IDYwjdpcZ0BYrWiwlULCSQoJj4QoG4zgJT7QRPXcqipefNOzvO/qAu4dF98ag==}
     engines: {node: '>=20.0.0'}
 
+  '@supabase/cli-darwin-arm64@2.108.0':
+    resolution: {integrity: sha512-QHuH0hVDqu10qc8me0FL8YfaDmXslQp4s7/WwD06O5hR1+Zj12FiWLcXgyWUHZoHsZzAA3ZVi2XpU7rBkJFWIQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@supabase/cli-darwin-x64@2.108.0':
+    resolution: {integrity: sha512-+qFUFqm/3vntX52ZKO6rYbJzWF/+mIoJLRWWckDu3jf9A7VeQskpIs2gxmW2XLwH0LWy8CEml8UzD8WhKn7fuw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@supabase/cli-linux-arm64-musl@2.108.0':
+    resolution: {integrity: sha512-6zFFvvdz8Ty4Q9qiAkjgiS01z1uOuQdageC341HzAD5Ev50ringzzu9SQtDSDy2QeD04YWjvENvZWgsemVwffA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@supabase/cli-linux-arm64@2.108.0':
+    resolution: {integrity: sha512-gC2ivtE0/DDNSJX7Q148HeylI+Mqv8eWr86j7FsnoRBdLjVQyVEZIrl32+avhGQO349QiIaFI1eDIzHr9sczDw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@supabase/cli-linux-x64-musl@2.108.0':
+    resolution: {integrity: sha512-X3cCfgVprMDqN9QFVXzoYwV0E6gQWdUmdbI7ro8vam0/JaoLunNNdAErVmyqGKfrAVu01X6EdEeZAdfgucIN6w==}
+    cpu: [x64]
+    os: [linux]
+
+  '@supabase/cli-linux-x64@2.108.0':
+    resolution: {integrity: sha512-umNOdOmUznlLJlE3j5nHabwm7aH07GZdk2l7kTFUYJhUyLrcIk9bqc7kUw5bjLCjiuIxuNPTfElBkE1GFhBKPw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@supabase/cli-windows-arm64@2.108.0':
+    resolution: {integrity: sha512-yd9lYoeLRdQ3dukQAFCqmAZ7wQebbSmZW5IGeEfmcWY3efXT5Y2Dxx2R8CidO32DuJ8SFTtgzhc9lAu3U5WP5Q==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@supabase/cli-windows-x64@2.108.0':
+    resolution: {integrity: sha512-I24rpbFye5vkoFzuxH7rB4BCSvHY+Eg1LTxbvxQ7IWZTM7xRwvqXgsvmqQpwctwGsIbWZIl6DQ3T39x8yV7F2Q==}
+    cpu: [x64]
+    os: [win32]
+
   '@supabase/functions-js@2.108.2':
     resolution: {integrity: sha512-RNUX8EiBy3iLwAX19jtRzLyePnl11/fHcgwDHLnpKcDSXt/5qBnh3LUwAtIjT21Q66QsmNUR2esrHziLCpNubw==}
     engines: {node: '>=20.0.0'}
@@ -1287,6 +1330,9 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
+  jose@6.2.3:
+    resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -1585,6 +1631,10 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  supabase@2.108.0:
+    resolution: {integrity: sha512-NofgZCCWJTZIVVf3m9mMRr3oVZROeBSTJB4bAmP1MvmhO+jUq7U+HvF1NPqFdvmZA5PKx4vRtpjvg7g6LbeD+w==}
+    hasBin: true
 
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
@@ -2209,6 +2259,30 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@supabase/cli-darwin-arm64@2.108.0':
+    optional: true
+
+  '@supabase/cli-darwin-x64@2.108.0':
+    optional: true
+
+  '@supabase/cli-linux-arm64-musl@2.108.0':
+    optional: true
+
+  '@supabase/cli-linux-arm64@2.108.0':
+    optional: true
+
+  '@supabase/cli-linux-x64-musl@2.108.0':
+    optional: true
+
+  '@supabase/cli-linux-x64@2.108.0':
+    optional: true
+
+  '@supabase/cli-windows-arm64@2.108.0':
+    optional: true
+
+  '@supabase/cli-windows-x64@2.108.0':
+    optional: true
+
   '@supabase/functions-js@2.108.2':
     dependencies:
       tslib: 2.8.1
@@ -2735,6 +2809,8 @@ snapshots:
 
   isexe@2.0.0: {}
 
+  jose@6.2.3: {}
+
   js-tokens@4.0.0: {}
 
   js-yaml@4.1.1:
@@ -2982,6 +3058,19 @@ snapshots:
   std-env@4.0.0: {}
 
   strip-json-comments@3.1.1: {}
+
+  supabase@2.108.0:
+    dependencies:
+      jose: 6.2.3
+    optionalDependencies:
+      '@supabase/cli-darwin-arm64': 2.108.0
+      '@supabase/cli-darwin-x64': 2.108.0
+      '@supabase/cli-linux-arm64': 2.108.0
+      '@supabase/cli-linux-arm64-musl': 2.108.0
+      '@supabase/cli-linux-x64': 2.108.0
+      '@supabase/cli-linux-x64-musl': 2.108.0
+      '@supabase/cli-windows-arm64': 2.108.0
+      '@supabase/cli-windows-x64': 2.108.0
 
   supports-color@7.2.0:
     dependencies:
