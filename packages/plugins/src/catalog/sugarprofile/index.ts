@@ -30,16 +30,27 @@ import { createSupabaseIdentityProvider } from "./runtime/identity";
 export const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
 
 export interface SugarProfilePluginConfig {
-  /** Supabase project URL — e.g. `https://abcde.supabase.co`. */
+  /** Master toggle for the entire SugarProfile contribution. When
+   *  false (the default), SugarProfile contributes NOTHING at
+   *  runtime — anonymous-local stays active and the published-web
+   *  bundle renders no login UI. Daily Studio authoring runs with
+   *  this off so the game author doesn't have to sign in on every
+   *  Playtest. Flip on to test login flows or before deploying to
+   *  an environment that wants real accounts. */
+  enableLogin: boolean;
+  /** Supabase project URL — e.g. `https://abcde.supabase.co`.
+   *  Required when `enableLogin` is true. */
   supabaseUrl: string;
   /** Supabase anon key. Non-secret per Supabase's auth model: the
    *  anon key permits row-level-security-gated reads only. The
-   *  service role key is separate and lives in Secret Manager. */
+   *  service role key is separate and lives in Secret Manager.
+   *  Required when `enableLogin` is true. */
   supabaseAnonKey: string;
   /** When true (default), new players are signed in anonymously on
    *  first page load; "Sign In" is an upgrade affordance, not a
    *  gate. When false, the runtime refuses to construct a Supabase
-   *  session without explicit sign-in. */
+   *  session without explicit sign-in. Only consulted when
+   *  `enableLogin` is true. */
   allowAnonymous: boolean;
 }
 
@@ -47,6 +58,7 @@ export function normalizeSugarProfilePluginConfig(
   config: Record<string, unknown> | null | undefined
 ): SugarProfilePluginConfig {
   return {
+    enableLogin: config?.enableLogin === true,
     supabaseUrl:
       typeof config?.supabaseUrl === "string"
         ? config.supabaseUrl.trim()
@@ -119,6 +131,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     capabilityIds: ["identity.provider", "save.store", "design.workspace"]
   },
   defaultConfig: {
+    enableLogin: false,
     supabaseUrl: "",
     supabaseAnonKey: "",
     allowAnonymous: true
@@ -131,13 +144,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
   // Session Inspector dev panel.
   pluginSettingsSchema: [
     {
+      configKey: "enableLogin",
+      label: "Enable Login",
+      type: "boolean",
+      group: "User Accounts",
+      default: false
+    },
+    {
       configKey: "supabaseUrl",
       label: "Supabase URL",
       type: "text",
       group: "Supabase Project",
       description:
         "Project URL from your Supabase dashboard. Example: https://abcde.supabase.co",
-      placeholder: "https://your-project.supabase.co"
+      placeholder: "https://your-project.supabase.co",
+      showWhen: { configKey: "enableLogin", equals: true }
     },
     {
       configKey: "supabaseAnonKey",
@@ -146,7 +167,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       group: "Supabase Project",
       description:
         "The `anon` key from the Supabase project's API settings. Public — RLS protects the underlying tables. The service role key lives in Secret Manager.",
-      placeholder: "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+      placeholder: "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+      showWhen: { configKey: "enableLogin", equals: true }
     },
     {
       configKey: "allowAnonymous",
@@ -155,7 +177,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       group: "Supabase Project",
       description:
         "When on, new players are signed in anonymously on first boot. Their progress can be migrated up to a credentialed account later via the Sign In affordance.",
-      default: true
+      default: true,
+      showWhen: { configKey: "enableLogin", equals: true }
     }
   ],
   // Story 47.6 — non-secret per-game runtime config the gateway
@@ -195,11 +218,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
   runtime: {
     createRuntimePlugin: ({ configuration }) => {
       const config = normalizeSugarProfilePluginConfig(configuration.config);
+      if (!config.enableLogin) {
+        console.debug(
+          "[sugarprofile] runtime: enableLogin is off; skipping identity.provider contribution. Runtime falls through to anonymous-local default."
+        );
+        return {
+          pluginId: configuration.pluginId,
+          displayName: "SugarProfile",
+          contributions: []
+        };
+      }
       const hasSupabaseConfig =
         config.supabaseUrl.length > 0 && config.supabaseAnonKey.length > 0;
       if (!hasSupabaseConfig) {
-        console.debug(
-          "[sugarprofile] runtime: no Supabase URL/anon-key configured; skipping identity.provider contribution. Runtime falls through to anonymous-local default."
+        console.warn(
+          "[sugarprofile] runtime: enableLogin is on but Supabase URL/anon-key are empty; skipping identity.provider contribution. Fill in the SugarProfile settings or toggle enableLogin off."
         );
         return {
           pluginId: configuration.pluginId,

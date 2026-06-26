@@ -36,6 +36,11 @@ export {
   createSupabaseIdentityProvider,
   type SupabaseIdentityProviderOptions
 } from "../catalog/sugarprofile/runtime/identity";
+export { LoginModal, type LoginModalMode, type LoginModalProps } from "../catalog/sugarprofile/ui/LoginModal";
+export {
+  SignedInBadge,
+  type SignedInBadgeProps
+} from "../catalog/sugarprofile/ui/SignedInBadge";
 
 // Plugin registry — single source of truth for every plugin Sugarmagic
 // ships. Previously used `import.meta.glob("../catalog/*/index.ts")` for

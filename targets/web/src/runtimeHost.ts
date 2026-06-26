@@ -91,9 +91,13 @@ import {
   createPlayerVisualController,
   createSessionHudCard,
   pickActiveRegionId,
+  resolveActiveGameSaveStore,
+  resolveActiveIdentityProvider,
   spawnRuntimePlayerEntity,
   type GameSave,
+  type GameSaveStore,
   type User,
+  type UserIdentityProvider,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -156,6 +160,37 @@ export interface WebRuntimeStartState {
    * card is studio-only; published-web doesn't render the HUD.
    */
   currentUser?: User | null;
+  /**
+   * Story 47.7.5 — fallback identity provider passed when no
+   * plugin contributes an `identity.provider`. The host runs
+   * `resolveActiveIdentityProvider(manager, fallback)` after
+   * plugin init and uses the resolved provider for downstream
+   * consumers (Session HUD card user, the providers-resolved
+   * callback below). When no plugin contributes, the resolved
+   * provider IS the fallback.
+   */
+  fallbackIdentityProvider?: UserIdentityProvider | null;
+  /**
+   * Story 47.7.5 — same shape for the GameSaveStore. The host
+   * doesn't currently use the resolved save store internally
+   * (the save load happens in App.tsx before host.start), but
+   * fires it through `onProvidersResolved` so App.tsx can swap
+   * its own state for the eventual SugarProfile-contributed
+   * cloud store.
+   */
+  fallbackSaveStore?: GameSaveStore | null;
+  /**
+   * Story 47.7.5 — fires synchronously after plugin init + the
+   * resolver call. Receives the resolved active providers (which
+   * may be either the supplied fallbacks or plugin-contributed
+   * overrides). App.tsx uses this to swap UserContext to the
+   * SugarProfile-contributed Supabase provider once SugarProfile
+   * is enabled with a configured URL + anon key.
+   */
+  onProvidersResolved?: (resolved: {
+    identityProvider: UserIdentityProvider;
+    saveStore: GameSaveStore;
+  }) => void;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
@@ -1162,6 +1197,27 @@ export function createWebRuntimeHost(
       state.pluginRuntimeEnvironment ?? {},
       state.pluginBootPayloads ?? {}
     );
+    // Story 47.7.5 — resolve the active identity provider + save
+    // store via the plugin contributions. SugarProfile's runtime
+    // (story 47.7) contributes a Supabase identity provider when
+    // configured; without a contribution the resolver returns the
+    // fallback the caller passed (anonymous-local + IndexedDB
+    // defaults). Fire the resolved providers through the callback
+    // so App.tsx can swap React state.
+    if (state.fallbackIdentityProvider && state.fallbackSaveStore) {
+      const resolvedIdentity = resolveActiveIdentityProvider(
+        pluginManager,
+        state.fallbackIdentityProvider
+      );
+      const resolvedSaveStore = resolveActiveGameSaveStore(
+        pluginManager,
+        state.fallbackSaveStore
+      );
+      state.onProvidersResolved?.({
+        identityProvider: resolvedIdentity,
+        saveStore: resolvedSaveStore
+      });
+    }
     console.info("[web-runtime] plugin-bootstrap", {
       installedPluginIds: state.installedPluginIds,
       pluginConfigurations: state.pluginConfigurations.map((configuration) => ({

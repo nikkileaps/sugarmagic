@@ -13,9 +13,15 @@
  * Story 47.5 — at boot, App.tsx constructs the default identity +
  * save providers (anonymous-local + IndexedDB), loads any existing
  * save for the current user, and threads the save into host.start
- * so a returning player resumes where they left off. The
- * UserContextProvider exposes the identity + store to descendant
- * React UI (today: none; future: SugarProfile login modal).
+ * so a returning player resumes where they left off.
+ *
+ * Story 47.7.5 — App.tsx now passes the defaults to the host as
+ * *fallbacks*, and the host's resolver dance (after plugin init)
+ * swaps in SugarProfile's Supabase-backed providers when configured.
+ * App.tsx receives the resolved providers via the
+ * `onProvidersResolved` callback, subscribes to the active provider's
+ * `onChange`, and mounts the SugarProfile login modal + signed-in
+ * badge when appropriate.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +33,10 @@ import {
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
+import {
+  LoginModal,
+  SignedInBadge
+} from "@sugarmagic/plugins";
 import { readBuildConfigFromViteEnv } from "./buildConfig";
 import { UserContextProvider } from "./identity/useUserContext";
 import {
@@ -40,8 +50,7 @@ type BootPhase =
   | { kind: "running" }
   | { kind: "failed"; reason: string };
 
-interface ResolvedIdentity {
-  user: User;
+interface ProviderBindings {
   identityProvider: UserIdentityProvider;
   saveStore: GameSaveStore;
 }
@@ -51,18 +60,16 @@ export function App() {
   const hostRef = useRef<WebRuntimeHost | null>(null);
   const [phase, setPhase] = useState<BootPhase>({ kind: "loading" });
 
-  // Story 47.5 — construct the default identity + save store ONCE per
-  // App mount. SugarProfile (Plan 047 §47.7) overrides via the
-  // runtime contribution mechanism without this code changing; the
-  // resolver lives behind the runtime plugin manager and picks the
-  // active impl during host start.
-  const identity: ResolvedIdentity | null = useMemo(() => {
+  // Story 47.5 / 47.7.5 — construct the default fallback providers
+  // ONCE per App mount. SugarProfile's runtime contribution (47.7)
+  // overrides via the resolver inside the host; the host fires
+  // `onProvidersResolved` below with the resolved active providers.
+  const fallback: ProviderBindings | null = useMemo(() => {
     try {
-      const identityProvider = createAnonymousLocalIdentityProvider();
-      const saveStore = createIndexedDBGameSaveStore();
-      const user = identityProvider.currentUser();
-      if (!user) return null;
-      return { user, identityProvider, saveStore };
+      return {
+        identityProvider: createAnonymousLocalIdentityProvider(),
+        saveStore: createIndexedDBGameSaveStore()
+      };
     } catch (error) {
       console.error(
         "[target-web] Failed to construct default identity/save providers.",
@@ -72,10 +79,14 @@ export function App() {
     }
   }, []);
 
+  const [active, setActive] = useState<ProviderBindings | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    if (!identity) {
+    if (!fallback) {
       setPhase({
         kind: "failed",
         reason:
@@ -98,13 +109,17 @@ export function App() {
 
     void (async () => {
       try {
-        // Story 47.5 — load the saved game in parallel with the boot
-        // payload. Both must complete before host.start. A null save
-        // means "first-time player"; host falls through to authored
-        // defaults.
+        // Story 47.5 — load the saved game from the FALLBACK store
+        // in parallel with the boot payload. 47.10 will swap the save
+        // load to use the resolved active store; for 47.7.5 the
+        // fallback's save is good enough since the cloud store isn't
+        // wired yet.
+        const fallbackUser = fallback.identityProvider.currentUser();
         const [bootResponse, savedGame] = await Promise.all([
           fetch("/boot.json", { headers: { accept: "application/json" } }),
-          loadSaveSafely(identity.saveStore, identity.user.userId)
+          fallbackUser
+            ? loadSaveSafely(fallback.saveStore, fallbackUser.userId)
+            : Promise.resolve(null)
         ]);
         if (!bootResponse.ok) {
           throw new Error(
@@ -113,11 +128,6 @@ export function App() {
         }
         const payload = (await bootResponse.json()) as WebRuntimeStartState;
         if (cancelled) return;
-        // Story 46.4 — pluginRuntimeEnvironment lives in the build-time
-        // config (env vars baked by the GHA workflow per Story 46.7),
-        // NOT in boot.json (which is the game's authored data). Merge
-        // here so gateway-needing plugins see their URLs / tokens. Any
-        // env value in boot.json would be a misconfig — log + ignore.
         const buildConfig = readBuildConfigFromViteEnv();
         if (payload.pluginRuntimeEnvironment) {
           console.warn(
@@ -128,7 +138,13 @@ export function App() {
           ...payload,
           pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment,
           savedGame,
-          currentUser: identity.user
+          currentUser: fallbackUser,
+          fallbackIdentityProvider: fallback.identityProvider,
+          fallbackSaveStore: fallback.saveStore,
+          onProvidersResolved: (resolved) => {
+            if (cancelled) return;
+            setActive(resolved);
+          }
         });
         setPhase({ kind: "running" });
       } catch (error) {
@@ -145,7 +161,28 @@ export function App() {
       host.dispose();
       hostRef.current = null;
     };
-  }, [identity]);
+  }, [fallback]);
+
+  // Story 47.7.5 — subscribe to the active provider's onChange so
+  // sign-in / sign-out / Supabase async bootstrap settling all flow
+  // through React state. The active provider's currentUser may be
+  // null briefly while Supabase bootstraps; the subscription fires
+  // when it settles.
+  useEffect(() => {
+    if (!active) return;
+    setUser(active.identityProvider.currentUser());
+    const unsubscribe = active.identityProvider.onChange((next) => {
+      setUser(next);
+    });
+    return unsubscribe;
+  }, [active]);
+
+  // Detect whether SugarProfile (or any plugin) overrode the
+  // fallback identity provider. When the resolved provider equals
+  // the fallback, no plugin contributed — anonymous-local owns
+  // identity and there's nothing for the login modal to do.
+  const pluginIdentityActive =
+    active && fallback ? active.identityProvider !== fallback.identityProvider : false;
 
   const overlay =
     phase.kind === "loading" ? (
@@ -162,23 +199,94 @@ export function App() {
           <p>{phase.reason}</p>
         </div>
       </div>
+    ) : pluginIdentityActive && active && user === null ? (
+      <div className="target-overlay">
+        <div className="target-overlay-card">
+          <p className="eyebrow">Sugarmagic</p>
+          <p>Signing in...</p>
+        </div>
+      </div>
     ) : null;
+
+  // Story 47.7.5 — login modal mounts when the active provider has
+  // no user (required sign-in) OR when the user clicks an explicit
+  // "Sign In" affordance to upgrade an anonymous account. The modal
+  // itself decides between `signIn` vs `linkAnonymousToCredentials`
+  // based on the current user state.
+  const requireSignIn =
+    pluginIdentityActive && active && user === null && phase.kind === "running";
+
+  const showLoginModal = loginModalOpen || requireSignIn;
 
   const tree = (
     <main className="target-shell">
       <div ref={rootRef} className="target-runtime-root" />
       {overlay}
+      {pluginIdentityActive && active && user?.isAnonymous ? (
+        <button
+          type="button"
+          className="target-sign-in-pill"
+          onClick={() => setLoginModalOpen(true)}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            zIndex: 18,
+            padding: "6px 14px",
+            borderRadius: 999,
+            border: "1px solid rgba(236, 72, 153, 0.4)",
+            background: "rgba(236, 72, 153, 0.18)",
+            color: "#fff",
+            cursor: "pointer",
+            fontSize: 13
+          }}
+        >
+          Sign In
+        </button>
+      ) : null}
+      {pluginIdentityActive && active && user && !user.isAnonymous ? (
+        <SignedInBadge
+          user={user}
+          provider={active.identityProvider}
+        />
+      ) : null}
+      {showLoginModal && pluginIdentityActive && active ? (
+        <LoginModal
+          provider={active.identityProvider}
+          mode={user?.isAnonymous ? "upgrade" : "required"}
+          onClose={
+            user?.isAnonymous ? () => setLoginModalOpen(false) : undefined
+          }
+        />
+      ) : null}
     </main>
   );
 
-  // Story 47.5 — wrap the React tree in UserContextProvider so future
-  // SugarProfile-contributed UI (login modal, plugin "Logged in as X"
-  // affordances) can read identity + save without prop-drilling. When
-  // identity is null we surface the failed phase from the overlay
-  // above; rendering without a provider would crash any descendant
-  // useUserContext call.
-  return identity ? (
-    <UserContextProvider value={identity}>{tree}</UserContextProvider>
+  // Build the context value from whichever providers + user are
+  // currently active. Render without a provider when nothing is
+  // ready (loading / failed phase); the descendant tree just won't
+  // render any consumers in that case.
+  const contextValue =
+    active && user
+      ? {
+          user,
+          identityProvider: active.identityProvider,
+          saveStore: active.saveStore
+        }
+      : fallback
+        ? (() => {
+            const fb = fallback.identityProvider.currentUser();
+            if (!fb) return null;
+            return {
+              user: fb,
+              identityProvider: fallback.identityProvider,
+              saveStore: fallback.saveStore
+            };
+          })()
+        : null;
+
+  return contextValue ? (
+    <UserContextProvider value={contextValue}>{tree}</UserContextProvider>
   ) : (
     tree
   );

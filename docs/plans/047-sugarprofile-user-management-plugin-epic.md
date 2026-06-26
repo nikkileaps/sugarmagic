@@ -917,11 +917,63 @@ entry). Sign in. Game start menu renders, "Signed in as
 the world (the existing menu wiring still works because no save
 load is involved). Sign Out returns to the LoginModal.
 
-### 47.8 — `SupabaseGameSaveStore` + Postgres migration
+### 47.8 — SupabaseGameSaveStore + profiles + Postgres migration
 
-Implements `GameSaveStore` against Supabase Postgres. Plugin emits
-the migration SQL into a managed file; Studio's Provision
-workspace gets an "Apply SugarProfile Migration" button.
+Implements `GameSaveStore` against Supabase Postgres AND lands the
+SugarProfile-owned `public.profiles` table (per-user authored data
+keyed on `auth.users.id`). Per the architectural boundary settled
+in 47.5, profiles is SugarProfile's domain — plugins that need
+per-user data (Sugarlang's support `locale`, future audio
+preferences, etc.) read it through SugarProfile's runtime API
+rather than owning their own per-user tables. One initial
+migration creates both tables + their RLS policies + an
+auto-create trigger on `auth.users` insert so a profile row
+always exists for every authenticated user.
+
+Plugin emits the migration SQL into a managed file; Studio's
+Provision workspace gets an "Apply SugarProfile Migration"
+button.
+
+**SQL emitted as `0001_initial.sql`:**
+
+```sql
+-- game_save (cross-plugin player state)
+create table public.game_save (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  last_played timestamptz not null default now(),
+  schema_version integer not null default 1,
+  payload jsonb not null default '{}'::jsonb
+);
+alter table public.game_save enable row level security;
+create policy "users select own save" on public.game_save for select using (auth.uid() = user_id);
+create policy "users insert own save" on public.game_save for insert with check (auth.uid() = user_id);
+create policy "users update own save" on public.game_save for update using (auth.uid() = user_id);
+create policy "users delete own save" on public.game_save for delete using (auth.uid() = user_id);
+
+-- profiles (per-user authored data)
+create table public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  locale text not null default 'en',           -- BCP 47 (e.g. 'en-US', 'es-MX')
+  preferences jsonb not null default '{}'::jsonb,  -- plugin-extension catch-all
+  updated_at timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+create policy "users select own profile" on public.profiles for select using (auth.uid() = user_id);
+create policy "users insert own profile" on public.profiles for insert with check (auth.uid() = user_id);
+create policy "users update own profile" on public.profiles for update using (auth.uid() = user_id);
+
+-- Auto-create a profile row for every new auth user
+create function public.handle_new_user() returns trigger language plpgsql security definer as $$
+begin
+  insert into public.profiles (user_id) values (new.id) on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+```
 
 **Files (new):**
 
@@ -942,18 +994,44 @@ workspace gets an "Apply SugarProfile Migration" button.
     payload: save.payload })`.
   - `clear(userId)` -> `client.from("game_save").delete().eq("user_id",
     userId)`.
-- `packages/plugins/src/catalog/sugarprofile/migrations/0001_game_save.sql`
-  - Carries the SQL from the "Supabase schema (generated migration)"
-    deliverables section.
+- `packages/plugins/src/catalog/sugarprofile/runtime/profile-store.ts`
+  ```ts
+  export interface SupabaseProfileStoreOptions {
+    client: SupabaseClient;   // authenticated client (user JWT)
+  }
+  export interface UserProfile {
+    userId: string;
+    displayName: string | null;
+    locale: string;
+    preferences: Record<string, unknown>;
+    updatedAt: string;
+  }
+  export interface UserProfileStore {
+    load(userId: string): Promise<UserProfile | null>;
+    update(userId: string, patch: Partial<Pick<UserProfile,
+      "displayName" | "locale" | "preferences">>): Promise<UserProfile>;
+    /** Convenience for nested preferences. Merges into the
+     *  preferences jsonb without overwriting siblings. */
+    setPreference(userId: string, key: string, value: unknown): Promise<void>;
+  }
+  export function createSupabaseProfileStore(
+    options: SupabaseProfileStoreOptions
+  ): UserProfileStore { ... }
+  ```
+- `packages/plugins/src/catalog/sugarprofile/migrations/0001_initial.sql`
+  - Carries the SQL from the "Supabase schema" deliverables block
+    above (game_save + profiles + handle_new_user trigger).
   - File is plugin-emitted into the game project as
-    `deployment/supabase/migrations/0001_game_save.sql` via the
-    managed-files mechanism (mirror Plan 046's `buildNetlifyManagedFiles`
-    pattern in a new `buildSupabaseManagedFiles`).
+    `deployment/supabase/migrations/0001_initial.sql` via the
+    managed-files mechanism (mirror Plan 046's
+    `buildNetlifyManagedFiles` pattern in a new
+    `buildSupabaseManagedFiles`).
 - `packages/plugins/src/catalog/sugarprofile/host/middleware.ts`
   - `POST /__sugarprofile/run-migration` host endpoint. Reads
     `workingDirectory`, shells out `supabase db push --workdir
-    deployment/supabase`. Service-role key supplied via the existing
-    Plan 045 Set Value modal -> env -> child-process env.
+    deployment/supabase`. Service-role key supplied via the
+    existing Plan 045 Set Value modal -> env -> child-process
+    env.
   - `POST /__sugarprofile/probe-supabase` host endpoint. Validates
     the configured URL + anon key reach a real Supabase project
     (a `select 1` round-trip).
@@ -961,27 +1039,41 @@ workspace gets an "Apply SugarProfile Migration" button.
 **Files (modify):**
 
 - `packages/plugins/src/catalog/sugarprofile/index.ts`
-  - Adds the runtime contribution: `save.store` carrying the store.
+  - Adds the runtime contribution: `save.store` carrying the
+    `SupabaseGameSaveStore`.
+  - Contributes the `UserProfileStore` via a new runtime hook (or
+    extends `UserIdentityProvider` to expose `getProfile()` —
+    settled at implementation time; either way the surface is
+    SugarProfile-owned).
   - Adds the host-middleware contribution.
-- `apps/studio/src/plugins/catalog/sugarprofile/index.tsx` (new file
-  if any custom UI is needed for the "Apply Migration" button beyond
-  the schema-rendered panel)
-  - Adds a Provision-side button "Apply SugarProfile Migration"
-    that POSTs to `/__sugarprofile/run-migration`.
+- `apps/studio/src/plugins/catalog/sugarprofile/index.tsx`
+  - Provision-side button "Apply SugarProfile Migration" that
+    POSTs to `/__sugarprofile/run-migration`.
+  - Session Inspector panel grows a **Current Profile** section
+    (display_name / locale / preferences) alongside Current User
+    and Current Save — useful for dev verification that the
+    profile auto-create trigger fired.
 
 **Tests:**
 
-- Mocked Supabase client unit tests for the store.
+- Mocked Supabase client unit tests for `SupabaseGameSaveStore`.
+- Mocked Supabase client unit tests for `SupabaseProfileStore`
+  (load returns null when no row exists, update merges fields,
+  setPreference doesn't clobber siblings).
 - A registration test asserts the host middleware is contributed.
 
 **Dependencies:** 47.1, 47.7 (need an authenticated client to
-construct the store from).
+construct the stores from).
 
 **Exit:** the migration SQL is emitted into wordlark on save; the
 "Apply SugarProfile Migration" button runs `supabase db push`
 successfully; round-trip save+load works with an authenticated
-JWT against a test Supabase project; an attempt to read another
-user's row returns empty (RLS-enforced).
+JWT against the test Supabase project; an attempt to read
+another user's row returns empty (RLS-enforced). Signing up a
+new user via the LoginModal results in a `public.profiles` row
+auto-created with default `locale: 'en'` and empty
+`preferences`. Updating the user's `locale` via SugarProfile's
+runtime API persists across sessions.
 
 ### 47.9 — Gateway-side JWT validation middleware
 

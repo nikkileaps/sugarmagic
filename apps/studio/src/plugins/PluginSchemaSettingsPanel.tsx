@@ -237,7 +237,11 @@ function PluginSchemaField(props: PluginSchemaFieldProps) {
       );
     case "boolean":
       return (
-        <Group justify="space-between" align="center" wrap="nowrap">
+        <Group gap="xs" align="center" wrap="nowrap">
+          <Switch
+            checked={value === true}
+            onChange={(event) => onChange(event.currentTarget.checked)}
+          />
           <Stack gap={0}>
             <Text size="sm" fw={500}>
               {field.label}
@@ -248,10 +252,6 @@ function PluginSchemaField(props: PluginSchemaFieldProps) {
               </Text>
             ) : null}
           </Stack>
-          <Switch
-            checked={value === true}
-            onChange={(event) => onChange(event.currentTarget.checked)}
-          />
         </Group>
       );
   }

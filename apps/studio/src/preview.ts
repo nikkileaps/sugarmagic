@@ -111,6 +111,17 @@ window.addEventListener("message", (event) => {
         activeEnvironmentId: data.activeEnvironmentId,
         savedGame,
         currentUser: user,
+        // Story 47.7.5 — Studio Playtest doesn't render a Login
+        // modal (the SugarProfile design workspace owns those dev
+        // actions). But the resolver call inside the host still
+        // needs fallbacks so the active provider lookup works
+        // uniformly across published-web + Studio Playtest. The
+        // resolved providers are accepted (and silently dropped)
+        // via onProvidersResolved; future Studio-side surfaces
+        // can consume them if needed.
+        fallbackIdentityProvider: identityProvider,
+        fallbackSaveStore: saveStore,
+        onProvidersResolved: () => undefined,
         installedPluginIds: data.installedPluginIds,
         pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
         pluginConfigurations: data.pluginConfigurations,
