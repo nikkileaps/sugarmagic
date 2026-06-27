@@ -1295,39 +1295,69 @@ When a player signs in mid-game (the LoginModal lands in 47.7.5),
 their anonymous IndexedDB save migrates up to Supabase under the
 new credentialed userId so they don't lose progress.
 
+**Implemented shape (revised — supersedes the original
+debounced-React-state sketch above):** the live game state is
+imperative (Three.js + ECS world), not React state, so the
+debounce-on-payload-change pattern didn't fit. Replaced with a
+fixed-interval poll that reads the host's live state, deep-
+equality-skips no-op writes, and only writes when something
+genuinely changed.
+
 **Files (new):**
 
 - `targets/web/src/save/useAutosave.ts`
-  - `useAutosave(payload: GameSavePayload, store: GameSaveStore,
-    userId: string)` hook. Debounces writes 500ms. Bails on
-    re-renders where `payload` is reference-equal to the last
-    write.
-  - Tracks `lastWriteState` so it can skip no-op writes after a
-    server-confirmed save round-trips back.
+  - `useAutosave(source, store, userId, {intervalMs?})` hook —
+    `setInterval`-driven (default 5s). Each tick polls
+    `source.getCurrentSavePayload()`, skips when deep-equal to
+    the last-written payload, otherwise calls `store.save(userId,
+    GameSave)` with `GAME_SAVE_SCHEMA_VERSION` + a fresh
+    timestamp.
+  - `runAutosaveTick(args)` — the non-React core extracted for
+    direct unit testing. Returns `{ written, payload }`.
+  - `gameSavePayloadsEqual(a, b)` — deep equality on the three
+    GameSavePayload fields.
 - `targets/web/src/save/migrate-local-to-cloud.ts`
-  - `migrateLocalSaveToCloud(localStore, cloudStore, user)` —
-    reads the local IndexedDB save, writes it to the cloud store
-    under the new credentialed userId, clears the local copy on
-    successful write.
+  - `migrateLocalSaveToCloud({localStore, cloudStore, fromUserId,
+    toUserId})` — reads the local save, writes to cloud, clears
+    local. Cloud write failure leaves the local save intact so a
+    retry has something to migrate. Local clear failure logs but
+    returns `{migrated: true}` since the data IS in the cloud.
 
 **Files (modify):**
 
+- `targets/web/src/runtimeHost.ts`
+  - `WebRuntimeHost` gains `getCurrentSavePayload():
+    GameSavePayload | null` — composes player position from the
+    ECS world, the captured active region, and the gameplay
+    session's tracked quest. Returns null before `start()`
+    settles.
 - `targets/web/src/App.tsx`
-  - Wires `useAutosave(currentGameSavePayload, activeSaveStore,
-    currentUser.userId)` against the resolved save store.
-  - On sign-in (subscribe to `provider.onChange`, trigger when
-    isAnonymous flips false): run
-    `migrateLocalSaveToCloud(...)` once and reset the autosave
-    cursor so the cloud write loop takes over cleanly.
+  - Wires `useAutosave` against a stable wrapper around
+    `hostRef.current.getCurrentSavePayload()`, the active (or
+    fallback) save store, and the active (or fallback anonymous)
+    userId. Autosave starts as soon as the host has a payload —
+    pre-sign-in writes still land in IndexedDB.
+  - Tracks the previous user via `useRef`; on the
+    anonymous→credentialed transition (matched by userId, the
+    `linkAnonymousToCredentials` signature) runs
+    `migrateLocalSaveToCloud` once.
+- `apps/studio/src/preview.tsx`
+  - Same autosave + migration wiring as App.tsx, so Studio
+    Playtest exercises the same save loop without a Build
+    Frontend round-trip.
+- `targets/web/src/index.ts`
+  - Re-exports the new helpers + hook for Studio preview + tests.
 
 **Tests:**
 
-- Unit: autosave hook debounces, doesn't re-write reference-equal
-  state.
-- Unit: `migrateLocalSaveToCloud` copies + clears.
-- Browser integration test (Playwright if practical, otherwise
-  manual): open game, move player, close tab, reopen, resume.
-  Repeat signed-in to verify cloud round-trip.
+- Unit: `gameSavePayloadsEqual` true on deep-equal, false on
+  region / quest / position drift, asymmetric null handling.
+- Unit: `runAutosaveTick` writes on change, skips on no-op,
+  writes again on subsequent change, no-ops when source returns
+  null.
+- Unit: `migrateLocalSaveToCloud` copies+clears on happy path, no-
+  ops without a local save, leaves local intact on cloud failure,
+  supports a userId rename.
 
 **Dependencies:** 47.7.5 (resolver + login UI), 47.8 (save store
 contribution), 47.9 (gateway JWT so SugarAgent calls can use the
@@ -1337,6 +1367,63 @@ signed-in user's bearer if needed).
 game, and their progress survives both sign-in and a page reload.
 With SugarProfile NOT installed, the same play loop persists
 locally through IndexedDB.
+
+#### 47.10 boot-ordering follow-up — read from the active save store, not the fallback
+
+Surfaced during verification: closing the tab signed in and
+re-opening would spawn the player at the anonymous-local IDB save
+(or none), not the cloud save under the credentialed userId,
+because App.tsx loaded the save from `fallback.saveStore` BEFORE
+plugin resolution ran inside `host.start`. Every modern game with
+cloud saves blocks startup on sync (Steam Cloud, iCloud, Unity
+Cloud Save, Unreal OSS); we do the same.
+
+**Implemented shape:**
+
+- `WebRuntimeHost.start` is now `async (state) => Promise<void>`.
+- `WebRuntimeStartState.savedGamePromise: Promise<GameSave | null>`
+  added alongside the existing `savedGame: GameSave | null` field.
+  `savedGame` still wins (back-compat); when only the promise is
+  set, the host awaits it.
+- Plugin bootstrap (createResolvedRuntimePluginManager +
+  resolveActiveIdentityProvider/SaveStore +
+  `onProvidersResolved` firing) moved to the TOP of `start` —
+  before scene assembly, region resolution, player spawn — so the
+  active providers are settled before the host needs the save.
+  Then the host awaits `savedGamePromise` and uses the resolved
+  save for region pick + player position override.
+- `waitForActiveUser(provider, {timeoutMs?})` helper added
+  (`targets/web/src/save/waitForActiveUser.ts`). Resolves
+  synchronously when `currentUser()` already returns non-null;
+  otherwise subscribes to `onChange` and resolves on the first
+  non-null user OR after a 5s timeout. Lets App.tsx wait for
+  Supabase's async session-restore before loading the save.
+- App.tsx + preview.tsx build a deferred `savedGamePromise`; in
+  `onProvidersResolved` they await `waitForActiveUser(active)` →
+  `active.saveStore.load(user.userId)` → resolve the promise.
+
+**Files (new):**
+
+- `targets/web/src/save/waitForActiveUser.ts`
+
+**Files (modify):**
+
+- `targets/web/src/runtimeHost.ts` — async start, plugin
+  bootstrap moved up, savedGamePromise await, `state.savedGame` →
+  `resolvedSavedGame` at the three usage sites.
+- `targets/web/src/App.tsx` — fetch boot.json, build deferred
+  promise, pass to host.start, resolve from active store after
+  user settles.
+- `apps/studio/src/preview.tsx` — same shape as App.tsx for the
+  Studio Preview iframe.
+- `targets/web/src/index.ts` — re-export waitForActiveUser.
+
+**Tests:**
+
+- Unit: `waitForActiveUser` resolves synchronously when the
+  provider already has a user; waits for `onChange` to emit a
+  non-null user; resolves to `null` after timeout; ignores
+  spurious null `onChange` emissions.
 
 ### 47.10.5 — Save-aware menu + default starting state
 

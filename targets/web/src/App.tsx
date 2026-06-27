@@ -44,6 +44,9 @@ import {
   type WebRuntimeHost,
   type WebRuntimeStartState
 } from "./runtimeHost";
+import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
+import { useAutosave } from "./save/useAutosave";
+import { waitForActiveUser } from "./save/waitForActiveUser";
 
 type BootPhase =
   | { kind: "loading" }
@@ -109,18 +112,9 @@ export function App() {
 
     void (async () => {
       try {
-        // Story 47.5 — load the saved game from the FALLBACK store
-        // in parallel with the boot payload. 47.10 will swap the save
-        // load to use the resolved active store; for 47.7.5 the
-        // fallback's save is good enough since the cloud store isn't
-        // wired yet.
-        const fallbackUser = fallback.identityProvider.currentUser();
-        const [bootResponse, savedGame] = await Promise.all([
-          fetch("/boot.json", { headers: { accept: "application/json" } }),
-          fallbackUser
-            ? loadSaveSafely(fallback.saveStore, fallbackUser.userId)
-            : Promise.resolve(null)
-        ]);
+        const bootResponse = await fetch("/boot.json", {
+          headers: { accept: "application/json" }
+        });
         if (!bootResponse.ok) {
           throw new Error(
             `Failed to fetch /boot.json: HTTP ${bootResponse.status} ${bootResponse.statusText}`
@@ -134,18 +128,48 @@ export function App() {
             "[target-web] boot.json carried pluginRuntimeEnvironment; ignoring (this lives in the build-time config, not the baked artifact)."
           );
         }
-        host.start({
+        // Story 47.10 boot-ordering follow-up — the save load now
+        // runs INSIDE host.start, after provider resolution, so a
+        // signed-in returning player reads from the active (cloud)
+        // store under the credentialed userId rather than from the
+        // anonymous fallback. Wired via a deferred promise: the host
+        // awaits `savedGamePromise` after firing
+        // `onProvidersResolved`; we resolve the promise here once
+        // we've waited for the active provider's user to settle and
+        // loaded their save.
+        let resolveSavedGame: (save: GameSave | null) => void = () => {};
+        const savedGamePromise = new Promise<GameSave | null>((resolve) => {
+          resolveSavedGame = resolve;
+        });
+        await host.start({
           ...payload,
           pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment,
-          savedGame,
-          currentUser: fallbackUser,
+          savedGamePromise,
+          currentUser: fallback.identityProvider.currentUser(),
           fallbackIdentityProvider: fallback.identityProvider,
           fallbackSaveStore: fallback.saveStore,
           onProvidersResolved: (resolved) => {
             if (cancelled) return;
             setActive(resolved);
+            void (async () => {
+              const settledUser = await waitForActiveUser(
+                resolved.identityProvider
+              );
+              if (cancelled) {
+                resolveSavedGame(null);
+                return;
+              }
+              const save = settledUser
+                ? await loadSaveSafely(
+                    resolved.saveStore,
+                    settledUser.userId
+                  )
+                : null;
+              resolveSavedGame(save);
+            })();
           }
         });
+        if (cancelled) return;
         setPhase({ kind: "running" });
       } catch (error) {
         if (cancelled) return;
@@ -176,6 +200,64 @@ export function App() {
     });
     return unsubscribe;
   }, [active]);
+
+  // Story 47.10 — autosave loop. Polls the host's live save payload
+  // on a fixed interval (default 5s) and writes through to the
+  // active save store under the active userId. Before plugin
+  // resolution settles `active` is null and we fall back to the
+  // anonymous-local + IndexedDB pair so progress survives a tab
+  // close even before SugarProfile boots.
+  const autosaveSource = useMemo(
+    () => ({
+      getCurrentSavePayload: () =>
+        hostRef.current?.getCurrentSavePayload() ?? null
+    }),
+    []
+  );
+  // Story 47.10 verify — bind autosave to the LIVE React user,
+  // not to the anonymous-local fallback's currentUser. See
+  // preview.tsx for the rationale; same considerations apply here.
+  const autosaveStore = active?.saveStore ?? fallback?.saveStore ?? null;
+  const autosaveUserId = user?.userId ?? null;
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+    onWritten: (written) => {
+      hostRef.current?.notifyAutosaveWritten(written);
+    }
+  });
+
+  // Story 47.10 — migrate the anonymous IndexedDB save to the active
+  // (cloud) store when the user upgrades from anonymous to
+  // credentialed via SugarProfile's `linkAnonymousToCredentials`
+  // path (which preserves userId). Sign-in to a DIFFERENT account
+  // (distinct userId) intentionally does NOT migrate — the
+  // anonymous save belongs to whoever was playing before, not the
+  // person who just signed in.
+  const prevUserRef = useRef<User | null>(null);
+  useEffect(() => {
+    const prev = prevUserRef.current;
+    prevUserRef.current = user;
+    if (!user || !active || !fallback) return;
+    if (
+      prev?.isAnonymous &&
+      !user.isAnonymous &&
+      prev.userId === user.userId
+    ) {
+      void (async () => {
+        const result = await migrateLocalSaveToCloud({
+          localStore: fallback.saveStore,
+          cloudStore: active.saveStore,
+          fromUserId: prev.userId,
+          toUserId: user.userId
+        });
+        if (result.error) {
+          console.warn(
+            "[target-web] anonymous->credentialed save migration failed",
+            result.error
+          );
+        }
+      })();
+    }
+  }, [user, active, fallback]);
 
   // Detect whether SugarProfile (or any plugin) overrode the
   // fallback identity provider. When the resolved provider equals

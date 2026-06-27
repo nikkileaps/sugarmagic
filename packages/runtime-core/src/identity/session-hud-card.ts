@@ -3,10 +3,10 @@
  *
  * Purpose: Author-facing live readout of the runtime's
  * user-management state. Contributes a `debug.hudCard` with
- * `hostKinds: ["studio"]` so it appears in Studio Playtest only
- * and never in published-web. Shows the resolved user id, anon
- * flag, the saved game's region/quest/lastPlayed (or "(none)")
- * and the live player position updating per tick from
+ * `hostKinds: ["studio"]` so it appears in the Studio Preview
+ * iframe only and never in published-web. Shows the resolved user
+ * id, anon flag, the saved game's region/quest/lastPlayed (or
+ * "(none)") and the live player position updating per tick from
  * `DebugHudCardContext.gameplaySession.playerPosition`.
  *
  * Reuses the existing `.sm-debug-hud__world-card` /
@@ -14,7 +14,9 @@
  * new CSS is introduced; the row labels + values are styled the
  * same as the existing Renderer + World cards.
  *
- * Implements: Plan 047 §Story 47.5.5
+ * Implements: Plan 047 §Story 47.5.5 (+ 47.10 follow-up — live
+ * user + save updates so the card reflects sign-in and autosave
+ * events rather than only the boot-time snapshot)
  *
  * Status: active
  */
@@ -35,8 +37,15 @@ export interface SessionHudSavedGameSnapshot {
 }
 
 export interface CreateSessionHudCardArgs {
-  user: User | null;
-  savedGameSnapshot: SessionHudSavedGameSnapshot | null;
+  /**
+   * Story 47.10 follow-up — getters instead of static values so the
+   * User / Anon rows update on sign-in / sign-out, and the Save /
+   * Last Played / Region / Quest rows update on autosave writes.
+   * Called once per render and per `updateCard` tick; cheap to
+   * implement as a closure over the host's tracked state.
+   */
+  getUser: () => User | null;
+  getSavedGameSnapshot: () => SessionHudSavedGameSnapshot | null;
 }
 
 const SESSION_PLUGIN_ID = "runtime-core.session";
@@ -80,6 +89,16 @@ function applyChipStyle(element: HTMLElement): void {
   element.style.cursor = "default";
 }
 
+function clearChipStyle(element: HTMLElement): void {
+  element.style.display = "";
+  element.style.padding = "";
+  element.style.borderRadius = "";
+  element.style.fontFamily = "";
+  element.style.background = "";
+  element.style.border = "";
+  element.style.cursor = "";
+}
+
 function formatPosition(
   position: { x: number; y: number; z: number } | null
 ): string {
@@ -113,12 +132,34 @@ function formatQuest(snapshot: SessionHudSavedGameSnapshot | null): string {
   return snapshot?.currentQuestId ?? "-";
 }
 
+function applySessionFields(
+  valueElements: Map<string, HTMLSpanElement>,
+  args: CreateSessionHudCardArgs
+): void {
+  const user = args.getUser();
+  const snapshot = args.getSavedGameSnapshot();
+  const userValue = valueElements.get("User")!;
+  userValue.textContent = formatUserId(user);
+  if (user) {
+    userValue.title = user.userId;
+    applyChipStyle(userValue);
+  } else {
+    userValue.title = "";
+    clearChipStyle(userValue);
+  }
+  valueElements.get("Anon")!.textContent = formatAnonymousFlag(user);
+  valueElements.get("Save")!.textContent = formatSavePresent(snapshot);
+  valueElements.get("Last Played")!.textContent = formatLastPlayed(snapshot);
+  valueElements.get("Region")!.textContent = formatRegion(snapshot);
+  valueElements.get("Quest")!.textContent = formatQuest(snapshot);
+}
+
 /**
  * Builds the Session debug HUD card contribution. The host appends
  * the result to the `pluginCards` list it passes to
  * `createRuntimeDebugHud` when `hostKind === "studio"`. The factory
  * closes over its DOM refs so `updateCard` can refresh the live
- * position row without rebuilding the panel.
+ * rows without rebuilding the panel.
  */
 export function createSessionHudCard(
   args: CreateSessionHudCardArgs
@@ -164,41 +205,19 @@ export function createSessionHudCard(
         }
         container.appendChild(content);
 
-        // Story 47.5.5 — fields sourced from args (resolved at host
-        // start) are static for the card's lifetime. The Position
-        // row is the only one that ticks live; updateCard handles
-        // that.
-        const userValue = valueElements.get("User")!;
-        userValue.textContent = formatUserId(args.user);
-        if (args.user) {
-          // Full uuid surfaces via the browser-native `title`
-          // tooltip on hover. The pill background mirrors the
-          // IdChip React component in @sugarmagic/ui so the visual
-          // language matches across surfaces.
-          userValue.title = args.user.userId;
-          applyChipStyle(userValue);
-        }
-        valueElements.get("Anon")!.textContent = formatAnonymousFlag(args.user);
-        valueElements.get("Save")!.textContent = formatSavePresent(
-          args.savedGameSnapshot
-        );
-        valueElements.get("Last Played")!.textContent = formatLastPlayed(
-          args.savedGameSnapshot
-        );
-        valueElements.get("Region")!.textContent = formatRegion(
-          args.savedGameSnapshot
-        );
-        valueElements.get("Quest")!.textContent = formatQuest(
-          args.savedGameSnapshot
-        );
+        // Initial render. updateCard ticks live afterwards.
+        applySessionFields(valueElements, args);
         valueElements.get("Position")!.textContent = formatPosition(
           context.gameplaySession.playerPosition
         );
       },
       updateCard(context: DebugHudCardContext) {
-        // Position ticks live from the gameplay session snapshot.
-        // The other fields stay static — sign-in / sign-out flows
-        // (47.7+) will reconstruct the card via a fresh host.start.
+        // Story 47.10 follow-up — every row re-reads from the
+        // getters so sign-in / sign-out (User + Anon) and autosave
+        // writes (Save / Last Played / Region / Quest) are
+        // reflected within one tick instead of being frozen at the
+        // boot-time snapshot.
+        applySessionFields(valueElements, args);
         const positionRow = valueElements.get("Position");
         if (positionRow) {
           positionRow.textContent = formatPosition(

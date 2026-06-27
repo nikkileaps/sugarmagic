@@ -710,7 +710,7 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
       >
         <Stack>
           <Text size="sm">
-            Permanently delete the persisted save for this user. Next playtest open will spawn at the region's authored defaults.
+            Permanently delete the persisted save for this user. The next preview session will spawn at the region's authored defaults.
           </Text>
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setClearConfirmOpen(false)}>

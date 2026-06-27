@@ -36,6 +36,12 @@ import {
   SugarAgentGatewayEmbeddingsClient,
   SugarAgentGatewayVectorStoreClient
 } from "@sugarmagic/plugins";
+import {
+  gameSavePayloadsEqual,
+  migrateLocalSaveToCloud,
+  runAutosaveTick,
+  waitForActiveUser
+} from "@sugarmagic/target-web";
 
 function createFakeStorage(): Storage {
   const data = new Map<string, string>();
@@ -861,7 +867,7 @@ describe("IndexedDBGameSaveStore", () => {
 // Story 47.5 — boot-path wiring. Pure helpers the runtime host uses
 // to decide between resuming-from-save and starting-from-authored-
 // defaults. The host integration itself is verified by manual
-// playtest (heavy three.js / WebGL deps make Node-level integration
+// preview sessions (heavy three.js / WebGL deps make Node-level integration
 // testing impractical); these tests cover the swappable surface.
 describe("pickActiveRegionId", () => {
   function makeSave(
@@ -968,7 +974,7 @@ describe("spawnRuntimePlayerEntity with positionOverride", () => {
   });
 });
 
-// Story 47.5.5 — Session debug HUD card. Studio Playtest only; the
+// Story 47.5.5 — Session debug HUD card. Studio Preview only; the
 // `hostKinds: ["studio"]` filter keeps it out of published-web. The
 // factory closes over its DOM refs so updateCard refreshes the live
 // position without rebuilding the panel.
@@ -1085,8 +1091,8 @@ describe("createSessionHudCard", () => {
 
   it("contributes the canonical static fields for the debug HUD registry", () => {
     const card = createSessionHudCard({
-      user: makeUser(),
-      savedGameSnapshot: null
+      getUser: () => makeUser(),
+      getSavedGameSnapshot: () => null
     });
     expect(card.kind).toBe("debug.hudCard");
     expect(card.hostKinds).toEqual(["studio"]);
@@ -1100,12 +1106,12 @@ describe("createSessionHudCard", () => {
 
   it("renders the user + save + position rows with the expected static values", () => {
     const card = createSessionHudCard({
-      user: makeUser({ userId: "ab12cd34ef56gh78" }),
-      savedGameSnapshot: {
+      getUser: () => makeUser({ userId: "ab12cd34ef56gh78" }),
+      getSavedGameSnapshot: () => ({
         lastPlayed: "2026-06-25T12:00:00.000Z",
         currentRegionId: "hollow-station",
         currentQuestId: "find-the-cat"
-      }
+      })
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1125,8 +1131,8 @@ describe("createSessionHudCard", () => {
 
   it("shows '(none)' for save when no save is loaded and dashes for nullable fields", () => {
     const card = createSessionHudCard({
-      user: makeUser({ userId: "uuid-test-1234567890", isAnonymous: false }),
-      savedGameSnapshot: null
+      getUser: () => makeUser({ userId: "uuid-test-1234567890", isAnonymous: false }),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1142,7 +1148,10 @@ describe("createSessionHudCard", () => {
   });
 
   it("shows dashes everywhere when user is null", () => {
-    const card = createSessionHudCard({ user: null, savedGameSnapshot: null });
+    const card = createSessionHudCard({
+      getUser: () => null,
+      getSavedGameSnapshot: () => null
+    });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
       container as unknown as HTMLElement,
@@ -1152,10 +1161,51 @@ describe("createSessionHudCard", () => {
     expect(findRowValue(container, "Anon")).toBe("-");
   });
 
+  it("47.10 — updateCard refreshes User/Anon/Save rows from the getters (sign-in + autosave write)", () => {
+    let liveUser = makeUser({
+      userId: "0bb0684c-131d-4ef2-89e7-b24c28cfee58",
+      isAnonymous: true
+    });
+    let liveSnapshot: {
+      lastPlayed: string;
+      currentRegionId: string | null;
+      currentQuestId: string | null;
+    } | null = null;
+    const card = createSessionHudCard({
+      getUser: () => liveUser,
+      getSavedGameSnapshot: () => liveSnapshot
+    });
+    const container = createFakeElement("div", createFakeDocument());
+    card.payload.renderCard(
+      container as unknown as HTMLElement,
+      makeContext({ x: 0, y: 0, z: 0 })
+    );
+    expect(findRowValue(container, "Anon")).toBe("yes");
+    expect(findRowValue(container, "Save")).toBe("(none)");
+
+    // Simulate sign-in: same userId (linkAnonymousToCredentials)
+    // but isAnonymous flips false. updateCard should reflect both.
+    liveUser = { ...liveUser, isAnonymous: false, email: "p@example.com" };
+    // Simulate autosave write at the same tick.
+    liveSnapshot = {
+      lastPlayed: "2026-06-27T17:00:00.000Z",
+      currentRegionId: "garden",
+      currentQuestId: "find-the-cat"
+    };
+    card.payload.updateCard!(makeContext({ x: 1, y: 0, z: 1 }));
+    expect(findRowValue(container, "Anon")).toBe("no");
+    expect(findRowValue(container, "Save")).toBe("present");
+    expect(findRowValue(container, "Last Played")).toBe(
+      "2026-06-27T17:00:00.000Z"
+    );
+    expect(findRowValue(container, "Region")).toBe("garden");
+    expect(findRowValue(container, "Quest")).toBe("find-the-cat");
+  });
+
   it("updateCard refreshes the position row from a fresh context tick", () => {
     const card = createSessionHudCard({
-      user: makeUser(),
-      savedGameSnapshot: null
+      getUser: () => makeUser(),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1169,8 +1219,8 @@ describe("createSessionHudCard", () => {
 
   it("does not preserve a short userId past 12 chars (no truncation)", () => {
     const card = createSessionHudCard({
-      user: makeUser({ userId: "abc123" }),
-      savedGameSnapshot: null
+      getUser: () => makeUser({ userId: "abc123" }),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1182,10 +1232,11 @@ describe("createSessionHudCard", () => {
 
   it("truncates a real UUID to the first dash-separated segment", () => {
     const card = createSessionHudCard({
-      user: makeUser({
-        userId: "9969d6fa-1234-5678-9abc-def012345678"
-      }),
-      savedGameSnapshot: null
+      getUser: () =>
+        makeUser({
+          userId: "9969d6fa-1234-5678-9abc-def012345678"
+        }),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1198,8 +1249,8 @@ describe("createSessionHudCard", () => {
   it("sets the full userId as the title attribute for hover-to-reveal", () => {
     const fullId = "9969d6fa-1234-5678-9abc-def012345678";
     const card = createSessionHudCard({
-      user: makeUser({ userId: fullId }),
-      savedGameSnapshot: null
+      getUser: () => makeUser({ userId: fullId }),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1212,8 +1263,8 @@ describe("createSessionHudCard", () => {
 
   it("applies chip-pill styling to the User row when a user is present", () => {
     const card = createSessionHudCard({
-      user: makeUser({ userId: "9969d6fa-1234-5678-9abc-def012345678" }),
-      savedGameSnapshot: null
+      getUser: () => makeUser({ userId: "9969d6fa-1234-5678-9abc-def012345678" }),
+      getSavedGameSnapshot: () => null
     });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
@@ -1230,7 +1281,10 @@ describe("createSessionHudCard", () => {
   });
 
   it("does NOT apply chip styling or title when user is null", () => {
-    const card = createSessionHudCard({ user: null, savedGameSnapshot: null });
+    const card = createSessionHudCard({
+      getUser: () => null,
+      getSavedGameSnapshot: () => null
+    });
     const container = createFakeElement("div", createFakeDocument());
     card.payload.renderCard(
       container as unknown as HTMLElement,
@@ -1238,8 +1292,13 @@ describe("createSessionHudCard", () => {
     );
     const userValue = findRowValueElement(container, "User");
     expect(userValue?.title).toBe("");
-    // Style map untouched.
-    expect(Object.keys(userValue?.style ?? {}).length).toBe(0);
+    // Chip-pill styles are absent (47.10 follow-up sets each chip
+    // property explicitly to "" on null users to keep updateCard
+    // idempotent across sign-in/sign-out flips — so we assert the
+    // load-bearing chip indicator is empty, not the whole style map).
+    expect(userValue?.style.borderRadius).toBe("");
+    expect(userValue?.style.background).toBe("");
+    expect(userValue?.style.border).toBe("");
   });
 });
 
@@ -2273,7 +2332,7 @@ describe("47.9.5 — access-token registry", () => {
         throw new NotSupportedError("stub");
       },
       getAccessToken: vi
-        .fn<[], Promise<string | null>>()
+        .fn(async (): Promise<string | null> => null)
         .mockResolvedValueOnce("token-rev-1")
         .mockResolvedValueOnce("token-rev-2")
     };
@@ -2370,11 +2429,354 @@ describe("47.9.5 — SugarAgent gateway clients send Authorization from the live
         "https://gateway.example",
         async () => "   "
       );
-      await client.search({ vectorStoreId: "vs", queryEmbedding: [0.1] });
+      await client.search({ vectorStoreId: "vs", query: "find", maxResults: 1 });
       const headers = (captured.calls[0].headers ?? {}) as Record<string, string>;
       expect(headers.authorization).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("47.10 — gameSavePayloadsEqual", () => {
+  it("treats deep-equal payloads as equal", () => {
+    const a: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: "q1",
+      playerPosition: { x: 1, y: 2, z: 3 }
+    };
+    const b: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: "q1",
+      playerPosition: { x: 1, y: 2, z: 3 }
+    };
+    expect(gameSavePayloadsEqual(a, b)).toBe(true);
+  });
+
+  it("detects position drift", () => {
+    const a: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: null,
+      playerPosition: { x: 1, y: 2, z: 3 }
+    };
+    const b: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: null,
+      playerPosition: { x: 1, y: 2.5, z: 3 }
+    };
+    expect(gameSavePayloadsEqual(a, b)).toBe(false);
+  });
+
+  it("treats null vs object position as not equal", () => {
+    const a: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: null,
+      playerPosition: null
+    };
+    const b: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: null,
+      playerPosition: { x: 0, y: 0, z: 0 }
+    };
+    expect(gameSavePayloadsEqual(a, b)).toBe(false);
+    expect(gameSavePayloadsEqual(b, a)).toBe(false);
+  });
+
+  it("returns false when region or quest changes", () => {
+    const base: GameSavePayload = {
+      currentRegionId: "r1",
+      currentQuestId: "q1",
+      playerPosition: null
+    };
+    expect(
+      gameSavePayloadsEqual(base, { ...base, currentRegionId: "r2" })
+    ).toBe(false);
+    expect(
+      gameSavePayloadsEqual(base, { ...base, currentQuestId: null })
+    ).toBe(false);
+  });
+});
+
+function makeInMemorySaveStore(): GameSaveStore & {
+  records: Map<string, GameSave>;
+  saveCalls: number;
+} {
+  const records = new Map<string, GameSave>();
+  let saveCalls = 0;
+  return {
+    async load(userId) {
+      return records.get(userId) ?? null;
+    },
+    async save(userId, save) {
+      if (save.userId !== userId) {
+        throw new Error("cross-user write");
+      }
+      saveCalls += 1;
+      records.set(userId, { ...save });
+    },
+    async clear(userId) {
+      records.delete(userId);
+    },
+    get saveCalls() {
+      return saveCalls;
+    },
+    records
+  };
+}
+
+describe("47.10 — runAutosaveTick", () => {
+  const payloadA: GameSavePayload = {
+    currentRegionId: "garden",
+    currentQuestId: null,
+    playerPosition: { x: 1, y: 0, z: 1 }
+  };
+  const payloadB: GameSavePayload = {
+    currentRegionId: "garden",
+    currentQuestId: null,
+    playerPosition: { x: 2, y: 0, z: 1 }
+  };
+
+  it("writes when payload changes from lastWritten", async () => {
+    const store = makeInMemorySaveStore();
+    const source = { getCurrentSavePayload: () => payloadA };
+    const result = await runAutosaveTick({
+      source,
+      store,
+      userId: "u_alpha",
+      lastWritten: null,
+      nowIso: () => "2026-06-27T00:00:00.000Z"
+    });
+    expect(result.written).toBe(true);
+    expect(result.payload).toEqual(payloadA);
+    expect(store.records.get("u_alpha")?.payload).toEqual(payloadA);
+    expect(store.records.get("u_alpha")?.lastPlayed).toBe(
+      "2026-06-27T00:00:00.000Z"
+    );
+    expect(store.records.get("u_alpha")?.schemaVersion).toBe(
+      GAME_SAVE_SCHEMA_VERSION
+    );
+  });
+
+  it("skips the write when payload deep-equals lastWritten", async () => {
+    const store = makeInMemorySaveStore();
+    const cloned: GameSavePayload = JSON.parse(JSON.stringify(payloadA));
+    const source = { getCurrentSavePayload: () => cloned };
+    const result = await runAutosaveTick({
+      source,
+      store,
+      userId: "u_alpha",
+      lastWritten: payloadA
+    });
+    expect(result.written).toBe(false);
+    expect(result.payload).toBe(payloadA);
+    expect(store.saveCalls).toBe(0);
+  });
+
+  it("writes again when the payload moves to a new position", async () => {
+    const store = makeInMemorySaveStore();
+    let live: GameSavePayload = payloadA;
+    const source = { getCurrentSavePayload: () => live };
+    let lastWritten: GameSavePayload | null = null;
+    let result = await runAutosaveTick({
+      source,
+      store,
+      userId: "u_alpha",
+      lastWritten
+    });
+    lastWritten = result.payload;
+    live = payloadB;
+    result = await runAutosaveTick({
+      source,
+      store,
+      userId: "u_alpha",
+      lastWritten
+    });
+    expect(result.written).toBe(true);
+    expect(store.saveCalls).toBe(2);
+    expect(store.records.get("u_alpha")?.payload).toEqual(payloadB);
+  });
+
+  it("no-ops when source returns null (boot not settled)", async () => {
+    const store = makeInMemorySaveStore();
+    const source = { getCurrentSavePayload: () => null };
+    const result = await runAutosaveTick({
+      source,
+      store,
+      userId: "u_alpha",
+      lastWritten: null
+    });
+    expect(result.written).toBe(false);
+    expect(store.saveCalls).toBe(0);
+  });
+});
+
+describe("47.10 — migrateLocalSaveToCloud", () => {
+  const samplePayload: GameSavePayload = {
+    currentRegionId: "garden",
+    currentQuestId: "q1",
+    playerPosition: { x: 5, y: 0, z: 7 }
+  };
+
+  it("copies the local save to cloud and clears the local record", async () => {
+    const local = makeInMemorySaveStore();
+    const cloud = makeInMemorySaveStore();
+    await local.save("u_shared", {
+      userId: "u_shared",
+      lastPlayed: "2026-06-26T00:00:00.000Z",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: samplePayload
+    });
+    const result = await migrateLocalSaveToCloud({
+      localStore: local,
+      cloudStore: cloud,
+      fromUserId: "u_shared",
+      toUserId: "u_shared"
+    });
+    expect(result.migrated).toBe(true);
+    expect(cloud.records.get("u_shared")?.payload).toEqual(samplePayload);
+    expect(local.records.has("u_shared")).toBe(false);
+  });
+
+  it("no-ops when the local store has no save under fromUserId", async () => {
+    const local = makeInMemorySaveStore();
+    const cloud = makeInMemorySaveStore();
+    const result = await migrateLocalSaveToCloud({
+      localStore: local,
+      cloudStore: cloud,
+      fromUserId: "u_empty",
+      toUserId: "u_empty"
+    });
+    expect(result.migrated).toBe(false);
+    expect(cloud.records.size).toBe(0);
+  });
+
+  it("leaves the local save intact when the cloud write throws", async () => {
+    const local = makeInMemorySaveStore();
+    const cloud: GameSaveStore = {
+      async load() {
+        return null;
+      },
+      async save() {
+        throw new Error("cloud unavailable");
+      },
+      async clear() {
+        // unused
+      }
+    };
+    await local.save("u_x", {
+      userId: "u_x",
+      lastPlayed: "2026-06-26T00:00:00.000Z",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: samplePayload
+    });
+    const result = await migrateLocalSaveToCloud({
+      localStore: local,
+      cloudStore: cloud,
+      fromUserId: "u_x",
+      toUserId: "u_x"
+    });
+    expect(result.migrated).toBe(false);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(local.records.get("u_x")?.payload).toEqual(samplePayload);
+  });
+
+  it("supports a userId rename when fromUserId !== toUserId", async () => {
+    const local = makeInMemorySaveStore();
+    const cloud = makeInMemorySaveStore();
+    await local.save("u_anon", {
+      userId: "u_anon",
+      lastPlayed: "2026-06-26T00:00:00.000Z",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: samplePayload
+    });
+    const result = await migrateLocalSaveToCloud({
+      localStore: local,
+      cloudStore: cloud,
+      fromUserId: "u_anon",
+      toUserId: "u_real"
+    });
+    expect(result.migrated).toBe(true);
+    expect(cloud.records.get("u_real")?.payload).toEqual(samplePayload);
+    expect(cloud.records.has("u_anon")).toBe(false);
+    expect(local.records.has("u_anon")).toBe(false);
+  });
+});
+
+describe("47.10 boot-ordering — waitForActiveUser", () => {
+  function makeUser(overrides: Partial<User> = {}): User {
+    return {
+      userId: "u_settled",
+      displayName: null,
+      email: null,
+      isAnonymous: false,
+      createdAt: "2026-06-27T00:00:00.000Z",
+      ...overrides
+    };
+  }
+
+  function makeDeferredProvider(initial: User | null): {
+    provider: UserIdentityProvider;
+    emit: (next: User | null) => void;
+  } {
+    let current: User | null = initial;
+    const listeners = new Set<UserIdentityChangeListener>();
+    const provider: UserIdentityProvider = {
+      currentUser: () => current,
+      onChange: (listener) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      signIn: async () => {
+        throw new NotSupportedError("stub");
+      },
+      signUp: async () => {
+        throw new NotSupportedError("stub");
+      },
+      signOut: async () => undefined,
+      linkAnonymousToCredentials: async () => {
+        throw new NotSupportedError("stub");
+      },
+      getAccessToken: async () => null
+    };
+    return {
+      provider,
+      emit: (next) => {
+        current = next;
+        for (const listener of listeners) listener(next);
+      }
+    };
+  }
+
+  it("resolves synchronously when currentUser() already returns a user", async () => {
+    const { provider } = makeDeferredProvider(makeUser());
+    expect(await waitForActiveUser(provider)).toEqual(makeUser());
+  });
+
+  it("waits for onChange to fire then resolves to the first non-null user", async () => {
+    const { provider, emit } = makeDeferredProvider(null);
+    const promise = waitForActiveUser(provider);
+    // Settle async bootstrap.
+    setTimeout(() => emit(makeUser({ userId: "u_late" })), 10);
+    expect(await promise).toEqual(makeUser({ userId: "u_late" }));
+  });
+
+  it("resolves to null when the timeout expires before any user settles", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { provider } = makeDeferredProvider(null);
+    const result = await waitForActiveUser(provider, { timeoutMs: 25 });
+    expect(result).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("ignores onChange events that fire null after subscribing", async () => {
+    const { provider, emit } = makeDeferredProvider(null);
+    const promise = waitForActiveUser(provider, { timeoutMs: 50 });
+    // Spurious null emissions should not resolve early.
+    setTimeout(() => emit(null), 5);
+    setTimeout(() => emit(makeUser({ userId: "u_real" })), 15);
+    expect(await promise).toEqual(makeUser({ userId: "u_real" }));
   });
 });

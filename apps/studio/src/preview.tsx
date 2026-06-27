@@ -1,14 +1,14 @@
 /**
- * Studio Playtest iframe entry point.
+ * Studio Preview iframe entry point.
  *
  * Story 47.7.5+ — originally a vanilla TS script that only mounted
  * the runtime canvas. Now also mounts a React overlay so the
  * SugarProfile-contributed LoginModal + SignedInBadge render in
- * Studio Playtest the same way they render in the published-web
- * bundle. Keeps the iteration loop tight: enable SugarProfile in
- * wordlark's plugin config, click Playtest, see the LoginModal in
- * the iframe with Vite HMR — no Build Frontend / deploy round-trip
- * needed to iterate on auth UI.
+ * the Studio Preview iframe the same way they render in the
+ * published-web bundle. Keeps the iteration loop tight: enable
+ * SugarProfile in wordlark's plugin config, open Preview, see the
+ * LoginModal in the iframe with Vite HMR — no Build Frontend /
+ * deploy round-trip needed to iterate on auth UI.
  *
  * Two roots live in preview.html:
  *   - `#preview-root` — runtime canvas + three.js scene
@@ -47,8 +47,13 @@ import {
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
-import { createWebRuntimeHost } from "@sugarmagic/target-web";
-import { useEffect, useState } from "react";
+import {
+  createWebRuntimeHost,
+  migrateLocalSaveToCloud,
+  useAutosave,
+  waitForActiveUser
+} from "@sugarmagic/target-web";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 import { sugarmagicTheme } from "@sugarmagic/ui";
@@ -152,20 +157,33 @@ window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
     void (async () => {
-      const user = identityProvider.currentUser();
-      const savedGame = user
-        ? await loadSaveSafely(saveStore, user.userId)
-        : null;
-      host.start({
+      // Story 47.10 boot-ordering follow-up — same deferred-save
+      // pattern as App.tsx: the host awaits this promise after
+      // provider resolution so a signed-in author resumes from the
+      // active store rather than the anonymous-local fallback.
+      let resolveSavedGame: (save: GameSave | null) => void = () => {};
+      const savedGamePromise = new Promise<GameSave | null>((resolve) => {
+        resolveSavedGame = resolve;
+      });
+      void host.start({
         regions: data.regions,
         activeRegionId: data.activeRegionId,
         activeEnvironmentId: data.activeEnvironmentId,
-        savedGame,
-        currentUser: user,
+        savedGamePromise,
+        currentUser: identityProvider.currentUser(),
         fallbackIdentityProvider: identityProvider,
         fallbackSaveStore: saveStore,
         onProvidersResolved: (resolved) => {
           publishResolvedBindings(resolved);
+          void (async () => {
+            const settledUser = await waitForActiveUser(
+              resolved.identityProvider
+            );
+            const save = settledUser
+              ? await loadSaveSafely(resolved.saveStore, settledUser.userId)
+              : null;
+            resolveSavedGame(save);
+          })();
         },
         installedPluginIds: data.installedPluginIds,
         pluginRuntimeEnvironment: data.pluginRuntimeEnvironment,
@@ -209,6 +227,17 @@ function PreviewOverlay() {
   useEffect(() => {
     const handler = () => setActive(resolvedBindings);
     providerEvents.addEventListener("change", handler);
+    // Story 47.10 verify — catch-up read of the current value, in
+    // case `publishResolvedBindings` already fired before this
+    // effect attached the listener. Without this, a late-attaching
+    // subscriber misses the only "change" event ever dispatched
+    // (plugin bootstrap runs at the top of host.start; React's
+    // useEffect commits in the next task). See
+    // docs/plans/051-runtime-handoff-load-order-architecture.md
+    // for the proper observable-store replacement.
+    if (resolvedBindings) {
+      setActive(resolvedBindings);
+    }
     return () => providerEvents.removeEventListener("change", handler);
   }, []);
 
@@ -220,6 +249,60 @@ function PreviewOverlay() {
     });
     return unsubscribe;
   }, [active]);
+
+  // Story 47.10 — autosave + migration mirror App.tsx's wiring so a
+  // Studio Preview session carries the same persist-on-tick +
+  // local-to-cloud-on-link behavior as the deployed bundle. Lets us
+  // exercise the full save flow during authoring without round-
+  // tripping through Build Frontend + Deploy.
+  const autosaveSource = useMemo(
+    () => ({
+      getCurrentSavePayload: () => host.getCurrentSavePayload()
+    }),
+    []
+  );
+  // Story 47.10 verify — bind autosave to the LIVE React user (set
+  // by the active provider's onChange subscription), not to the
+  // anonymous-local fallback's currentUser. With SugarProfile
+  // active but no session yet (e.g. allowAnonymous=false, no prior
+  // sign-in), `user` is null and autosave is intentionally idle
+  // until the player signs in. Falling back to the anonymous-local
+  // UUID here would write under a userId Supabase RLS will reject,
+  // and the resulting 403s would be invisible silent failures.
+  const autosaveStore = active?.saveStore ?? saveStore;
+  const autosaveUserId = user?.userId ?? null;
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+    onWritten: (written) => {
+      host.notifyAutosaveWritten(written);
+    }
+  });
+
+  const prevUserRef = useRef<User | null>(null);
+  useEffect(() => {
+    const prev = prevUserRef.current;
+    prevUserRef.current = user;
+    if (!user || !active) return;
+    if (
+      prev?.isAnonymous &&
+      !user.isAnonymous &&
+      prev.userId === user.userId
+    ) {
+      void (async () => {
+        const result = await migrateLocalSaveToCloud({
+          localStore: saveStore,
+          cloudStore: active.saveStore,
+          fromUserId: prev.userId,
+          toUserId: user.userId
+        });
+        if (result.error) {
+          console.warn(
+            "[studio-preview] anonymous->credentialed save migration failed",
+            result.error
+          );
+        }
+      })();
+    }
+  }, [user, active]);
 
   // Detect SugarProfile (or any plugin) overriding the fallback.
   const pluginIdentityActive =

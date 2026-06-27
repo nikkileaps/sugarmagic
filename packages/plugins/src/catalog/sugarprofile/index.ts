@@ -38,7 +38,7 @@ export interface SugarProfilePluginConfig {
    *  runtime — anonymous-local stays active and the published-web
    *  bundle renders no login UI. Daily Studio authoring runs with
    *  this off so the game author doesn't have to sign in on every
-   *  Playtest. Flip on to test login flows or before deploying to
+   *  preview session. Flip on to test login flows or before deploying to
    *  an environment that wants real accounts. */
   enableLogin: boolean;
   /** Supabase project URL — e.g. `https://abcde.supabase.co`.
