@@ -179,6 +179,13 @@ export function createAnonymousLocalIdentityProvider(
         "Anonymous-to-credentialed upgrade requires an identity-provider plugin. Install SugarProfile (Plan 047) to upgrade the anonymous user to a real account.",
         "sugarprofile"
       );
+    },
+    async getAccessToken(): Promise<string | null> {
+      // No upstream session — the anonymous-local provider only
+      // owns a UUID, not a credentialed identity. Backend services
+      // gated on a real JWT will reject the resulting request with
+      // 401, which is the correct behavior.
+      return null;
     }
   };
 }

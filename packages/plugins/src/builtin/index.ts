@@ -19,7 +19,11 @@ export {
 export { HELLO_PLUGIN_ID, normalizeHelloPluginConfig } from "../catalog/hello";
 export {
   SUGARAGENT_PLUGIN_ID,
-  normalizeSugarAgentPluginConfig
+  SugarAgentGatewayLLMClient,
+  SugarAgentGatewayEmbeddingsClient,
+  SugarAgentGatewayVectorStoreClient,
+  normalizeSugarAgentPluginConfig,
+  type BearerTokenGetter
 } from "../catalog/sugaragent";
 export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 export {

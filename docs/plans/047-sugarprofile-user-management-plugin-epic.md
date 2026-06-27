@@ -1226,23 +1226,51 @@ Bearer header on every gateway call or the gate 401s. §47.9.5
 adds a per-request token source backed by the live SugarProfile
 session.
 
-**Files (modify):**
+**Implemented shape:**
 
+- `UserIdentityProvider` gains `getAccessToken(): Promise<string | null>`.
+  Anonymous-local returns `null`; SupabaseIdentityProvider reads
+  `client.auth.getSession()` on every call (supabase-js
+  auto-refreshes in the background, so the cached session is
+  always current). The getter is NOT cached at construction.
+- New runtime-core module-level holder
+  `registerActiveIdentityProvider(provider)` /
+  `getActiveAccessToken()` (in
+  `packages/runtime-core/src/identity/access-token-registry.ts`).
+  Late-binding handoff: gateway clients are constructed before
+  `resolveActiveIdentityProvider` runs, so they capture a getter
+  that defers the lookup to request time via the registry.
+- `targets/web/src/runtimeHost.ts` + `apps/studio/src/preview.tsx`
+  both call `registerActiveIdentityProvider(resolved)` after
+  `resolveActiveIdentityProvider` settles, alongside their existing
+  `onProvidersResolved` callback fire.
+- SugarAgent's gateway client constructors swapped from
+  `bearerToken: string` to
+  `getBearerToken: () => Promise<string | null>`. The getter is
+  invoked on EVERY fetch via the existing `authHeaders` helper.
+- SugarAgent's `resolveProviders` picks the source by mode: if the
+  build-baked `gatewayBearerToken` is set (bearer mode → 45.5.8),
+  wrap it in an async closure; otherwise (supabase-jwt or none),
+  delegate to `getActiveAccessToken` from the registry.
+
+**Files:**
+
+- `packages/runtime-core/src/identity/access-token-registry.ts`
+  (new)
+- `packages/runtime-core/src/identity/index.ts` (extend
+  `UserIdentityProvider`, re-export registry)
+- `packages/runtime-core/src/identity/anonymous-local.ts` (add
+  `getAccessToken: async () => null`)
+- `packages/plugins/src/catalog/sugarprofile/runtime/identity.ts`
+  (add `getAccessToken` reading
+  `client.auth.getSession()`)
 - `packages/plugins/src/catalog/sugaragent/runtime/clients.ts`
-  - Replace the `private readonly bearerToken: string` constructor
-    arg with `private readonly getBearerToken: () => string | null`.
-    Call it inline in each `authHeaders` invocation so the token
-    rotates with the live session.
+  (constructors take a `BearerTokenGetter`)
 - `packages/plugins/src/catalog/sugaragent/runtime/provider.ts`
-  - Wire the getter to `supabase.auth.getSession()` via the
-    SugarProfile-resolved identity provider. The provider lookup
-    is already at the runtime root; thread it down to the
-    clients factory.
-- `targets/web/src/runtimeHost.ts` / Studio preview
-  - The Anonymous-Local fallback path returns `null` from
-    `getBearerToken`. The provider chain must tolerate that — a
-    gateway call without a session yields a 401 rather than a
-    silent crash.
+  (factory picks getter source by mode)
+- `targets/web/src/runtimeHost.ts` (call
+  `registerActiveIdentityProvider(resolved)`)
+- `apps/studio/src/preview.tsx` (same)
 
 **Tests:**
 

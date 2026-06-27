@@ -100,6 +100,18 @@ export interface UserIdentityProvider {
   linkAnonymousToCredentials(
     input: SignInWithPasswordInput
   ): Promise<User>;
+  /**
+   * Story 47.9.5 — return the current session's bearer token for
+   * authenticating with backend services (e.g. the SugarDeploy
+   * gateway's Supabase JWT gate from §47.9). Returns `null` when
+   * the provider has no upstream session (e.g. anonymous-local) or
+   * the current user is signed out. Implementations should always
+   * return the LATEST token — supabase-js auto-refreshes in the
+   * background; this getter reads whatever's currently cached.
+   * Per-request callers invoke this on every fetch so a refresh
+   * mid-session is picked up transparently.
+   */
+  getAccessToken(): Promise<string | null>;
 }
 
 export {
@@ -112,3 +124,8 @@ export {
   type CreateSessionHudCardArgs,
   type SessionHudSavedGameSnapshot
 } from "./session-hud-card";
+
+export {
+  registerActiveIdentityProvider,
+  getActiveAccessToken
+} from "./access-token-registry";

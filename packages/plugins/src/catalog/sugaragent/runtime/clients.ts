@@ -141,24 +141,39 @@ async function parseJsonResponse<T>(response: Response, label: string): Promise<
 }
 
 /**
- * Story 46.14 — when the gateway runs in `bearer` auth mode it
- * requires `Authorization: Bearer <token>` on every non-`/health`
- * request. The token is the `gateway-shared-token` Secret Manager
- * value (45.5.8); Studio reads it from `SUGARMAGIC_GATEWAY_BEARER_TOKEN`
- * (forwarded from the build-time `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN`)
- * and passes it into these clients. Empty bearer = `none` auth mode;
- * the helper omits the header in that case so the request still
- * works against a public gateway.
+ * Story 46.14 / Story 47.9.5 — when the gateway runs in `bearer`
+ * (shared-token) OR `supabase-jwt` auth mode it requires
+ * `Authorization: Bearer <token>` on every non-`/health` request.
+ * The token source differs by mode:
+ *
+ *   - **bearer mode** (Plan 045 §45.5.8): static value baked at
+ *     build time from `gateway-shared-token` Secret Manager
+ *     → `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN`. Same value for the
+ *     life of the bundle.
+ *   - **supabase-jwt mode** (Plan 047 §47.9): the player's live
+ *     Supabase access token, pulled from the active
+ *     `UserIdentityProvider` per request. Auto-refreshes mid-
+ *     session; absent when the player is signed out.
+ *
+ * Either way, the client takes a getter so the policy lives at
+ * the factory call site, not buried in the client. `null` / empty
+ * = `none` auth mode; the helper omits the header so the request
+ * still works against a public gateway.
  */
-function authHeaders(bearerToken: string): Record<string, string> {
-  const token = bearerToken.trim();
-  return token ? { authorization: `Bearer ${token}` } : {};
+export type BearerTokenGetter = () => Promise<string | null>;
+
+async function authHeaders(
+  getBearerToken: BearerTokenGetter
+): Promise<Record<string, string>> {
+  const token = await getBearerToken();
+  const trimmed = typeof token === "string" ? token.trim() : "";
+  return trimmed ? { authorization: `Bearer ${trimmed}` } : {};
 }
 
 export class SugarAgentGatewayLLMClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly bearerToken: string = ""
+    private readonly getBearerToken: BearerTokenGetter = async () => null
   ) {}
 
   async generate(request: GatewayGenerateRequest): Promise<GatewayGenerateResult> {
@@ -168,7 +183,7 @@ export class SugarAgentGatewayLLMClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...authHeaders(this.bearerToken)
+          ...(await authHeaders(this.getBearerToken))
         },
         body: JSON.stringify(request)
       }
@@ -184,7 +199,7 @@ export class SugarAgentGatewayLLMClient {
 export class SugarAgentGatewayEmbeddingsClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly bearerToken: string = ""
+    private readonly getBearerToken: BearerTokenGetter = async () => null
   ) {}
 
   async createEmbedding(
@@ -196,7 +211,7 @@ export class SugarAgentGatewayEmbeddingsClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...authHeaders(this.bearerToken)
+          ...(await authHeaders(this.getBearerToken))
         },
         body: JSON.stringify(request)
       }
@@ -212,7 +227,7 @@ export class SugarAgentGatewayEmbeddingsClient {
 export class SugarAgentGatewayVectorStoreClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly bearerToken: string = ""
+    private readonly getBearerToken: BearerTokenGetter = async () => null
   ) {}
 
   async search(
@@ -224,7 +239,7 @@ export class SugarAgentGatewayVectorStoreClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...authHeaders(this.bearerToken)
+          ...(await authHeaders(this.getBearerToken))
         },
         body: JSON.stringify(request)
       }

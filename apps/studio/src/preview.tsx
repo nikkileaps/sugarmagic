@@ -40,6 +40,7 @@ import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
+  registerActiveIdentityProvider,
   type GameSave,
   type GameSaveStore,
   type RuntimeBootModel,
@@ -139,6 +140,11 @@ let resolvedBindings: ProviderBindings | null = null;
 
 function publishResolvedBindings(next: ProviderBindings) {
   resolvedBindings = next;
+  // Story 47.9.5 — gateway clients (SugarAgent etc.) read the active
+  // user's access token from runtime-core's access-token registry,
+  // refreshed per request. Wire it up at the same point we notify
+  // the React overlay so both paths see consistent state.
+  registerActiveIdentityProvider(next.identityProvider);
   providerEvents.dispatchEvent(new Event("change"));
 }
 

@@ -249,6 +249,28 @@ export function createSupabaseIdentityProvider(
       }
       emit(next);
       return next;
+    },
+    async getAccessToken(): Promise<string | null> {
+      // Story 47.9.5 — supabase-js auto-refreshes the access token
+      // in the background (autoRefreshToken: true above), so
+      // getSession() reads from its in-memory + localStorage cache
+      // without any network call on the hot path. The token rotates
+      // mid-session; per-request callers invoke this on every fetch
+      // so the latest value lands on the wire transparently.
+      try {
+        const { data, error } = await client.auth.getSession();
+        if (error) {
+          console.warn(
+            "[sugarprofile] supabase getSession failed in getAccessToken",
+            error
+          );
+          return null;
+        }
+        return data.session?.access_token ?? null;
+      } catch (error) {
+        console.warn("[sugarprofile] getAccessToken threw", error);
+        return null;
+      }
     }
   };
 }

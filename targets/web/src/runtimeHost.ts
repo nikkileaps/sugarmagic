@@ -91,6 +91,7 @@ import {
   createPlayerVisualController,
   createSessionHudCard,
   pickActiveRegionId,
+  registerActiveIdentityProvider,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   spawnRuntimePlayerEntity,
@@ -1213,6 +1214,13 @@ export function createWebRuntimeHost(
         pluginManager,
         state.fallbackSaveStore
       );
+      // Story 47.9.5 — wire the active identity provider into the
+      // module-level access-token registry so gateway-routed clients
+      // (SugarAgent etc.) read the live access token per request.
+      // The registry's getter returns the provider's getAccessToken()
+      // result on each call, so supabase-js's background refresh
+      // lands on outgoing requests without any extra plumbing here.
+      registerActiveIdentityProvider(resolvedIdentity);
       state.onProvidersResolved?.({
         identityProvider: resolvedIdentity,
         saveStore: resolvedSaveStore

@@ -11,9 +11,11 @@ import {
   createRuntimePluginManager,
   createSessionHudCard,
   GAME_SAVE_SCHEMA_VERSION,
+  getActiveAccessToken,
   NotSupportedError,
   pickActiveRegionId,
   Position,
+  registerActiveIdentityProvider,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   spawnRuntimePlayerEntity,
@@ -29,6 +31,11 @@ import {
   type UserIdentityChangeListener,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
+import {
+  SugarAgentGatewayLLMClient,
+  SugarAgentGatewayEmbeddingsClient,
+  SugarAgentGatewayVectorStoreClient
+} from "@sugarmagic/plugins";
 
 function createFakeStorage(): Storage {
   const data = new Map<string, string>();
@@ -78,7 +85,8 @@ function makeStubIdentityProvider(label: string): UserIdentityProvider {
     signOut: async () => undefined,
     linkAnonymousToCredentials: async () => {
       throw new NotSupportedError(`stub:${label}`);
-    }
+    },
+    getAccessToken: async () => null
   };
 }
 
@@ -223,7 +231,8 @@ describe("UserIdentityProvider contract", () => {
       },
       linkAnonymousToCredentials: async () => {
         throw new NotSupportedError("noop");
-      }
+      },
+      getAccessToken: async () => null
     };
     expect(provider.currentUser()?.userId).toBe("u_test");
 
@@ -2143,5 +2152,229 @@ describe("SupabaseProfileStore", () => {
     await expect(
       store.setPreference("u_alpha", "", "value")
     ).rejects.toThrow(/non-empty key/);
+  });
+});
+
+describe("47.9.5 — getAccessToken on identity providers", () => {
+  it("AnonymousLocalIdentityProvider returns null (no upstream session)", async () => {
+    const provider = createAnonymousLocalIdentityProvider({
+      storage: createFakeStorage(),
+      nowIso: () => "2026-06-26T00:00:00.000Z",
+      randomUuid: createSequentialUuids("anon_")
+    });
+    expect(await provider.getAccessToken()).toBeNull();
+  });
+
+  it("SupabaseIdentityProvider returns the live session access_token", async () => {
+    const session = {
+      access_token: "live-token-rev-1",
+      refresh_token: "refresh",
+      expires_in: 3600,
+      expires_at: 1700000000,
+      token_type: "bearer",
+      user: {
+        id: "u_supabase",
+        aud: "authenticated",
+        role: "authenticated",
+        email: "p@example.com",
+        is_anonymous: false,
+        created_at: "2026-06-26T00:00:00.000Z",
+        app_metadata: {},
+        user_metadata: {}
+      }
+    };
+    const client = {
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: { session },
+          error: null
+        })),
+        onAuthStateChange: vi.fn(() => ({
+          data: { subscription: { unsubscribe: vi.fn() } }
+        })),
+        signInAnonymously: vi.fn(async () => ({
+          data: { session: null, user: null },
+          error: null
+        }))
+      }
+    };
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon",
+      allowAnonymous: false,
+      client: client as never
+    });
+    expect(await provider.getAccessToken()).toBe("live-token-rev-1");
+
+    // Rotation: a subsequent supabase-js refresh changes the cached
+    // session's access_token; the next getAccessToken call must read
+    // the new value (not cached at construction).
+    session.access_token = "live-token-rev-2";
+    expect(await provider.getAccessToken()).toBe("live-token-rev-2");
+    // getSession is also invoked once during the provider's async
+    // bootstrap; the load-bearing assertion is that getAccessToken
+    // calls it AT LEAST once per invocation, not at construction
+    // time only — that's what proves token rotation works.
+    expect(
+      client.auth.getSession.mock.calls.length
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("SupabaseIdentityProvider getAccessToken returns null on getSession error", async () => {
+    const client = {
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: null },
+          error: { message: "network" } as unknown
+        })),
+        onAuthStateChange: vi.fn(() => ({
+          data: { subscription: { unsubscribe: vi.fn() } }
+        })),
+        signInAnonymously: vi.fn(async () => ({
+          data: { session: null, user: null },
+          error: null
+        }))
+      }
+    };
+    const { createSupabaseIdentityProvider } = await import(
+      "@sugarmagic/plugins"
+    );
+    const provider = createSupabaseIdentityProvider({
+      supabaseUrl: "https://example.supabase.co",
+      supabaseAnonKey: "anon",
+      allowAnonymous: false,
+      client: client as never
+    });
+    expect(await provider.getAccessToken()).toBeNull();
+  });
+});
+
+describe("47.9.5 — access-token registry", () => {
+  it("returns null when no provider is registered", async () => {
+    registerActiveIdentityProvider(null);
+    expect(await getActiveAccessToken()).toBeNull();
+  });
+
+  it("forwards to the registered provider on each call", async () => {
+    const stub: UserIdentityProvider = {
+      currentUser: () => null,
+      onChange: () => () => undefined,
+      signIn: async () => {
+        throw new NotSupportedError("stub");
+      },
+      signUp: async () => {
+        throw new NotSupportedError("stub");
+      },
+      signOut: async () => undefined,
+      linkAnonymousToCredentials: async () => {
+        throw new NotSupportedError("stub");
+      },
+      getAccessToken: vi
+        .fn<[], Promise<string | null>>()
+        .mockResolvedValueOnce("token-rev-1")
+        .mockResolvedValueOnce("token-rev-2")
+    };
+    registerActiveIdentityProvider(stub);
+    try {
+      expect(await getActiveAccessToken()).toBe("token-rev-1");
+      expect(await getActiveAccessToken()).toBe("token-rev-2");
+      expect(stub.getAccessToken).toHaveBeenCalledTimes(2);
+    } finally {
+      registerActiveIdentityProvider(null);
+    }
+  });
+});
+
+describe("47.9.5 — SugarAgent gateway clients send Authorization from the live getter", () => {
+  function makeFetchStub(responseBody: Record<string, unknown>) {
+    const captured: { calls: RequestInit[]; urls: string[] } = {
+      calls: [],
+      urls: []
+    };
+    const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      captured.urls.push(typeof input === "string" ? input : String(input));
+      captured.calls.push(init ?? {});
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    return { fetchStub, captured };
+  }
+
+  it("invokes the getter on every request and forwards the latest token", async () => {
+    const tokens = ["token-A", "token-B"];
+    const getter = vi.fn(async () => tokens.shift() ?? null);
+    const { fetchStub, captured } = makeFetchStub({
+      ok: true,
+      reply: "hi",
+      modelUsed: "test",
+      diagnostics: { stage: "generate" }
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const client = new SugarAgentGatewayLLMClient(
+        "https://gateway.example",
+        getter
+      );
+      await client.generate({
+        model: "test",
+        systemPrompt: "s",
+        userPrompt: "u"
+      });
+      await client.generate({
+        model: "test",
+        systemPrompt: "s",
+        userPrompt: "u"
+      });
+      expect(getter).toHaveBeenCalledTimes(2);
+      const headersA = (captured.calls[0].headers ?? {}) as Record<string, string>;
+      const headersB = (captured.calls[1].headers ?? {}) as Record<string, string>;
+      expect(headersA.authorization).toBe("Bearer token-A");
+      expect(headersB.authorization).toBe("Bearer token-B");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("omits the Authorization header when the getter returns null", async () => {
+    const { fetchStub, captured } = makeFetchStub({
+      ok: true,
+      embedding: { values: [0.1] }
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const client = new SugarAgentGatewayEmbeddingsClient(
+        "https://gateway.example",
+        async () => null
+      );
+      await client.createEmbedding({ model: "m", input: "x" });
+      const headers = (captured.calls[0].headers ?? {}) as Record<string, string>;
+      expect(headers.authorization).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("omits the Authorization header when the getter returns empty string", async () => {
+    const { fetchStub, captured } = makeFetchStub({
+      ok: true,
+      matches: []
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const client = new SugarAgentGatewayVectorStoreClient(
+        "https://gateway.example",
+        async () => "   "
+      );
+      await client.search({ vectorStoreId: "vs", queryEmbedding: [0.1] });
+      const headers = (captured.calls[0].headers ?? {}) as Record<string, string>;
+      expect(headers.authorization).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
