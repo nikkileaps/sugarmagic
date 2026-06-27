@@ -39,6 +39,21 @@ export interface GameUILayerProps {
   onHover: (action: UIActionExpression | null) => void;
 }
 
+/**
+ * Story 47.10.5 — true if the node's `visibility` rule passes
+ * against the current runtime state. `"always"` (or omitted)
+ * always passes; `"hasSave"` requires a non-null save; `"noSave"`
+ * requires no save. Unknown values are treated as `"always"` by
+ * normalization so a forward-compat rule stays playable.
+ */
+function isNodeVisible(node: UINode, savePresent: boolean): boolean {
+  const rule = node.visibility ?? "always";
+  if (rule === "always") return true;
+  if (rule === "hasSave") return savePresent;
+  if (rule === "noSave") return !savePresent;
+  return true;
+}
+
 function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
   return {
     ...compileLayout(node.layout, node.anchor),
@@ -46,12 +61,21 @@ function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
   };
 }
 
-function renderNode(input: { node: UINode; theme: UITheme }): JSX.Element {
-  const { node, theme } = input;
+function renderNode(input: {
+  node: UINode;
+  theme: UITheme;
+  savePresent: boolean;
+}): JSX.Element | null {
+  const { node, theme, savePresent } = input;
+  // Story 47.10.5 — skip the whole subtree when the visibility
+  // rule fails. Returning null keeps the parent container layout
+  // intact (gap-based flex collapses cleanly around omitted
+  // children).
+  if (!isNodeVisible(node, savePresent)) return null;
   const style = nodeStyle(node, theme);
-  const children = node.children.map((child) =>
-    renderNode({ node: child, theme })
-  );
+  const children = node.children
+    .map((child) => renderNode({ node: child, theme, savePresent }))
+    .filter((child): child is JSX.Element => child !== null);
 
   if (node.kind === "text") {
     return <UIText key={node.nodeId} text={node.props.text} style={style} />;
@@ -141,7 +165,11 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
         }}
       >
         {props.hudDefinition
-          ? renderNode({ node: props.hudDefinition.root, theme: props.theme })
+          ? renderNode({
+              node: props.hudDefinition.root,
+              theme: props.theme,
+              savePresent: state.savePresent
+            })
           : null}
         {visibleMenu ? (
           <div
@@ -156,7 +184,11 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
               background: "rgba(7, 7, 15, 0.38)"
             }}
           >
-            {renderNode({ node: visibleMenu.root, theme: props.theme })}
+            {renderNode({
+              node: visibleMenu.root,
+              theme: props.theme,
+              savePresent: state.savePresent
+            })}
           </div>
         ) : null}
       </div>

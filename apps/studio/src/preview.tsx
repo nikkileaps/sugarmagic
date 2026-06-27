@@ -42,6 +42,7 @@ import {
   createIndexedDBGameSaveStore,
   registerActiveIdentityProvider,
   type GameSave,
+  type GameSavePayload,
   type GameSaveStore,
   type RuntimeBootModel,
   type User,
@@ -86,6 +87,7 @@ interface PreviewBootMessage {
   audioMixer: AudioMixerSettings;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
+  defaultGameSavePayload?: GameSavePayload | null;
 }
 
 interface PreviewReadyMessage {
@@ -157,6 +159,13 @@ window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
     void (async () => {
+      // Story 47.10.5 — consume the "fresh-start" flag once per boot
+      // so a normal Continue / refresh doesn't accidentally skip the
+      // start menu. sessionStorage clears on tab close anyway, but
+      // this guards against same-tab reloads after the New Game one.
+      const freshStart =
+        sessionStorage.getItem("sugarmagic.fresh-start") === "1";
+      sessionStorage.removeItem("sugarmagic.fresh-start");
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after
       // provider resolution so a signed-in author resumes from the
@@ -203,7 +212,32 @@ window.addEventListener("message", (event) => {
         soundEventBindings: data.soundEventBindings,
         audioMixer: data.audioMixer,
         assetSources: data.assetSources,
-        pluginBootPayloads: data.pluginBootPayloads
+        pluginBootPayloads: data.pluginBootPayloads,
+        defaultGameSavePayload: data.defaultGameSavePayload ?? null,
+        skipStartMenuOnBoot: freshStart,
+        // Story 47.10.5 — "New Game" sequence: clear the save under
+        // the active user, mark a sessionStorage flag so the next
+        // boot drops the player straight into gameplay (instead of
+        // re-showing the start menu and forcing a second click),
+        // then reload. The flag clears on tab close. In-place reset
+        // would skip the reload entirely; deferred to Plan 051 boot
+        // phases.
+        onStartNewGame: async () => {
+          const bindings = resolvedBindings;
+          const user = bindings?.identityProvider.currentUser();
+          if (bindings && user) {
+            try {
+              await bindings.saveStore.clear(user.userId);
+            } catch (error) {
+              console.warn(
+                "[studio-preview] start-new-game: clearing save failed; continuing with reload anyway",
+                error
+              );
+            }
+          }
+          sessionStorage.setItem("sugarmagic.fresh-start", "1");
+          window.location.reload();
+        }
       });
     })();
   }

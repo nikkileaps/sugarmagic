@@ -26,6 +26,13 @@
  * Status: active
  */
 
+// Story 47.10.5 — `GameSavePayload` moved to `@sugarmagic/domain`
+// because `GameProject.defaultGameSavePayload` references it.
+// Re-exported here so every existing import path
+// (`@sugarmagic/runtime-core`) keeps working transparently.
+import { type GameSavePayload, pickGameSavePayload } from "@sugarmagic/domain";
+export { type GameSavePayload, pickGameSavePayload };
+
 /**
  * Schema compatibility token for `GameSave` writes. Stamped into
  * every write by the active store; read back on load so a future
@@ -36,30 +43,6 @@
  * Story 47.1 ships at version 1.
  */
 export const GAME_SAVE_SCHEMA_VERSION = 1;
-
-/**
- * The cross-plugin player record. Owned by runtime-core / Studio
- * core, not by individual plugins. Adding a field here is an
- * intentional core-level decision (analogous to adding to
- * `GameProject`); plugin-domain state never lives in this shape.
- *
- * Every field is nullable on purpose: a brand-new save (player
- * has not yet entered any region, accepted any quest, or moved
- * from their spawn) carries `null` everywhere and the runtime
- * hydrates defaults from `boot.json`. A non-null value here always
- * supersedes the authored default.
- */
-export interface GameSavePayload {
-  /** The region the player was in at the most recent save tick. */
-  currentRegionId: string | null;
-  /** The quest the player has accepted but not yet completed.
-   *  `null` when no quest is active. */
-  currentQuestId: string | null;
-  /** Player avatar position at the most recent save tick, in world
-   *  coordinates. `null` for fresh saves where the runtime should
-   *  fall back to the region's spawn point. */
-  playerPosition: { x: number; y: number; z: number } | null;
-}
 
 /**
  * The persisted save record. `userId` is the key the store uses to

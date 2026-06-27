@@ -91,6 +91,7 @@ import {
   createPlayerVisualController,
   createSessionHudCard,
   pickActiveRegionId,
+  pickGameSavePayload,
   registerActiveIdentityProvider,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
@@ -226,6 +227,42 @@ export interface WebRuntimeStartState {
   audioMixer: AudioMixerSettings;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
+  /**
+   * Story 47.10.5 — authored "fresh start" record from
+   * `GameProject.defaultGameSavePayload`. Used when a returning
+   * player has no save (or just clicked "New Game" + reset) so the
+   * runtime spawns at the project-curated starting state instead
+   * of the implicit boot.json + playerPresence defaults. `null`
+   * (omitted) preserves the implicit composition for projects that
+   * don't author a value.
+   */
+  defaultGameSavePayload?: GameSavePayload | null;
+  /**
+   * Story 47.10.5 — fired when the start menu's "New Game" button
+   * is clicked. Callers (App.tsx, preview.tsx) clear the active save
+   * store and reload the page; the brief flash of "loading" then
+   * re-runs host.start with no saved game, spawning the player at
+   * `defaultGameSavePayload` (or implicit defaults). Omitted →
+   * start-new-game falls back to "just hide the menu" (the 47.5
+   * baseline).
+   */
+  onStartNewGame?: () => void | Promise<void>;
+  /**
+   * Story 47.10.5 — fired when the start menu's "Continue" button
+   * is clicked. Boot-time autosave load already placed the player,
+   * so the default implementation just unpauses; this hook lets
+   * games run extra resume logic (e.g. cutscene resume).
+   */
+  onContinueGame?: () => void | Promise<void>;
+  /**
+   * Story 47.10.5 — when true, the host skips showing the
+   * start-menu at boot and starts unpaused. Used by the "New
+   * Game" flow: after clearing the save + reloading, the caller
+   * sets this so the player doesn't have to click through the
+   * start menu a second time to actually start playing.
+   * Default (false / omitted) preserves the menu-on-boot behavior.
+   */
+  skipStartMenuOnBoot?: boolean;
 }
 
 export interface WebRuntimeHost {
@@ -1091,14 +1128,18 @@ export function createWebRuntimeHost(
       }
     });
 
-    // Story 47.5 — the saved game's currentRegionId wins over the
-    // authored default from boot.json so a returning player resumes
-    // where they left off. First-time players (no save) fall through
-    // to the authored region id.
-    const resolvedActiveRegionId = pickActiveRegionId(
-      state.activeRegionId,
-      resolvedSavedGame
+    // Story 47.5 + 47.10.5 — spawn payload precedence: save wins,
+    // then the project's `defaultGameSavePayload` (a fresh-start
+    // record an author can curate), then the implicit boot.json /
+    // playerPresence defaults. `effectiveSpawnPayload` collapses
+    // those into a single record the region picker + player
+    // spawner consume; null means "fall through to implicit."
+    const effectiveSpawnPayload = pickGameSavePayload(
+      resolvedSavedGame?.payload ?? null,
+      state.defaultGameSavePayload ?? null
     );
+    const resolvedActiveRegionId =
+      effectiveSpawnPayload?.currentRegionId ?? state.activeRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
     const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
@@ -1273,15 +1314,21 @@ export function createWebRuntimeHost(
     }
     world = new World();
     uiContextStore = createUIContextStore();
+    const startMenuExists = state.menuDefinitions.some(
+      (menu) => menu.menuKey === "start-menu"
+    );
+    // Story 47.10.5 — `skipStartMenuOnBoot` lets the New Game reset
+    // flow drop the player straight into gameplay after the reload
+    // instead of forcing a second click on the start menu.
+    const showStartMenu = startMenuExists && !state.skipStartMenuOnBoot;
     uiStateStore = createUIStateStore({
-      visibleMenuKey: state.menuDefinitions.some(
-        (menu) => menu.menuKey === "start-menu"
-      )
-        ? "start-menu"
-        : null,
-      isPaused: state.menuDefinitions.some(
-        (menu) => menu.menuKey === "start-menu"
-      )
+      visibleMenuKey: showStartMenu ? "start-menu" : null,
+      isPaused: showStartMenu,
+      // Story 47.10.5 — boot-time save presence. The Continue
+      // button on the start menu reads this through the
+      // `visibility: "hasSave"` rule. Flips true on autosave write
+      // (notifyAutosaveWritten) and back to false on start-new-game.
+      savePresent: resolvedSavedGame != null
     });
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
@@ -1291,7 +1338,13 @@ export function createWebRuntimeHost(
       // gameplaySession is assigned later in this same start() call; the
       // closures capture the live binding so dispatch (post-boot) sees it.
       onToggleInventory: () => gameplaySession?.toggleInventory(),
-      onToggleCaster: () => gameplaySession?.toggleCaster()
+      onToggleCaster: () => gameplaySession?.toggleCaster(),
+      // Story 47.10.5 — start-menu Continue / New Game callbacks
+      // forwarded from the caller (App.tsx / preview.tsx). Save
+      // clearing + page reload happens caller-side because only
+      // they own the active save store + the page reload mechanism.
+      onStartNewGame: state.onStartNewGame,
+      onContinueGame: state.onContinueGame
     });
     world.addSystem(
       new UIContextSystem({
@@ -1347,7 +1400,7 @@ export function createWebRuntimeHost(
       state.playerDefinition,
       state.mechanics,
       {
-        positionOverride: resolvedSavedGame?.payload.playerPosition ?? null
+        positionOverride: effectiveSpawnPayload?.playerPosition ?? null
       }
     );
     playerEyeHeight = playerSpawn.eyeHeight;
@@ -1581,6 +1634,13 @@ export function createWebRuntimeHost(
       currentRegionId: snapshot.payload.currentRegionId,
       currentQuestId: snapshot.payload.currentQuestId
     };
+    // Story 47.10.5 — flip the UI's save-presence flag so the
+    // start menu's Continue button appears the moment the first
+    // autosave write lands. Reads via `visibility: "hasSave"` on
+    // the menu node.
+    if (uiStateStore) {
+      uiStateStore.setState({ savePresent: true });
+    }
   }
 
   function getCurrentSavePayload(): GameSavePayload | null {

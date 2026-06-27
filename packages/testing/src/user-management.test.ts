@@ -10,12 +10,16 @@ import {
   createRuntimeBootModel,
   createRuntimePluginManager,
   createSessionHudCard,
+  createUIActionRegistry,
+  createUIStateStore,
   GAME_SAVE_SCHEMA_VERSION,
   getActiveAccessToken,
   NotSupportedError,
   pickActiveRegionId,
+  pickGameSavePayload,
   Position,
   registerActiveIdentityProvider,
+  registerDefaultUIActions,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   spawnRuntimePlayerEntity,
@@ -2778,5 +2782,130 @@ describe("47.10 boot-ordering — waitForActiveUser", () => {
     setTimeout(() => emit(null), 5);
     setTimeout(() => emit(makeUser({ userId: "u_real" })), 15);
     expect(await promise).toEqual(makeUser({ userId: "u_real" }));
+  });
+});
+
+describe("47.10.5 — pickGameSavePayload", () => {
+  const samplePayload: GameSavePayload = {
+    currentRegionId: "save-region",
+    currentQuestId: "save-quest",
+    playerPosition: { x: 1, y: 2, z: 3 }
+  };
+  const authoredDefault: GameSavePayload = {
+    currentRegionId: "authored-default-region",
+    currentQuestId: null,
+    playerPosition: { x: 0, y: 0, z: 0 }
+  };
+
+  it("save wins over authored default", () => {
+    expect(pickGameSavePayload(samplePayload, authoredDefault)).toBe(
+      samplePayload
+    );
+  });
+
+  it("authored default wins over null", () => {
+    expect(pickGameSavePayload(null, authoredDefault)).toBe(authoredDefault);
+  });
+
+  it("returns null when neither save nor default is set", () => {
+    expect(pickGameSavePayload(null, null)).toBeNull();
+  });
+});
+
+describe("47.10.5 — save-aware UI actions", () => {
+  it("start-new-game fires the host callback and dismisses the menu", async () => {
+    const stateStore = createUIStateStore({
+      visibleMenuKey: "start-menu",
+      isPaused: true,
+      savePresent: true
+    });
+    const registry = createUIActionRegistry();
+    const onStartNewGame = vi.fn(async () => undefined);
+    registerDefaultUIActions(registry, {
+      stateStore,
+      onStartNewGame
+    });
+    registry.dispatch({ action: "start-new-game" });
+    // Microtask drain so the awaited host callback resolves.
+    await Promise.resolve();
+    expect(onStartNewGame).toHaveBeenCalledTimes(1);
+    expect(stateStore.getState()).toMatchObject({
+      visibleMenuKey: null,
+      isPaused: false
+    });
+  });
+
+  it("continue-game fires the host callback and dismisses the menu", async () => {
+    const stateStore = createUIStateStore({
+      visibleMenuKey: "start-menu",
+      isPaused: true,
+      savePresent: true
+    });
+    const registry = createUIActionRegistry();
+    const onContinueGame = vi.fn(async () => undefined);
+    registerDefaultUIActions(registry, {
+      stateStore,
+      onContinueGame
+    });
+    registry.dispatch({ action: "continue-game" });
+    await Promise.resolve();
+    expect(onContinueGame).toHaveBeenCalledTimes(1);
+    expect(stateStore.getState()).toMatchObject({
+      visibleMenuKey: null,
+      isPaused: false
+    });
+  });
+
+  it("start-new-game still dismisses the menu when no host callback is registered (47.5 baseline)", () => {
+    const stateStore = createUIStateStore({
+      visibleMenuKey: "start-menu",
+      isPaused: true
+    });
+    const registry = createUIActionRegistry();
+    registerDefaultUIActions(registry, { stateStore });
+    registry.dispatch({ action: "start-new-game" });
+    expect(stateStore.getState()).toMatchObject({
+      visibleMenuKey: null,
+      isPaused: false
+    });
+  });
+});
+
+describe("47.10.5 — UIStateStore.savePresent", () => {
+  it("defaults to false when not specified", () => {
+    const store = createUIStateStore();
+    expect(store.getState().savePresent).toBe(false);
+  });
+
+  it("respects the initial value passed in", () => {
+    const store = createUIStateStore({ savePresent: true });
+    expect(store.getState().savePresent).toBe(true);
+  });
+
+  it("setState({savePresent: true}) merges without clobbering other fields", () => {
+    const store = createUIStateStore({
+      visibleMenuKey: "start-menu",
+      isPaused: true,
+      savePresent: false
+    });
+    store.setState({ savePresent: true });
+    expect(store.getState()).toEqual({
+      visibleMenuKey: "start-menu",
+      isPaused: true,
+      savePresent: true
+    });
+  });
+
+  it("subscribers fire on savePresent change", () => {
+    const store = createUIStateStore({ savePresent: false });
+    const listener = vi.fn();
+    const unsubscribe = store.subscribe(listener);
+    store.setState({ savePresent: true });
+    expect(listener).toHaveBeenCalledTimes(1);
+    store.setState({ visibleMenuKey: "pause-menu" });
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    store.setState({ isPaused: true });
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 });

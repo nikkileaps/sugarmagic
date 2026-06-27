@@ -110,6 +110,16 @@ export function App() {
     });
     hostRef.current = host;
 
+    // Story 47.10.5 — consume the "fresh-start" flag once per boot.
+    // Set by the New Game reset path before reload; cleared here so
+    // a normal Continue / refresh later in the same tab doesn't keep
+    // skipping the start menu.
+    const freshStart =
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem("sugarmagic.fresh-start") === "1";
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("sugarmagic.fresh-start");
+    }
     void (async () => {
       try {
         const bootResponse = await fetch("/boot.json", {
@@ -167,6 +177,28 @@ export function App() {
                 : null;
               resolveSavedGame(save);
             })();
+          },
+          skipStartMenuOnBoot: freshStart,
+          // Story 47.10.5 — clear save under the active user, mark a
+          // sessionStorage flag so the next boot drops the player
+          // straight into gameplay (no second click on the start
+          // menu), then reload. sessionStorage clears on tab close.
+          // In-place reset would skip the reload entirely; deferred
+          // to Plan 051 boot phases.
+          onStartNewGame: async () => {
+            const settledUser = active?.identityProvider.currentUser();
+            if (active && settledUser) {
+              try {
+                await active.saveStore.clear(settledUser.userId);
+              } catch (error) {
+                console.warn(
+                  "[target-web] start-new-game: clearing save failed; continuing with reload anyway",
+                  error
+                );
+              }
+            }
+            sessionStorage.setItem("sugarmagic.fresh-start", "1");
+            window.location.reload();
           }
         });
         if (cancelled) return;

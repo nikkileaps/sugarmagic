@@ -32,15 +32,32 @@ export interface RuntimeUIContext {
 export interface RuntimeUIState {
   visibleMenuKey: string | null;
   isPaused: boolean;
+  /**
+   * Story 47.10.5 — whether the active user has a save in the
+   * active save store. Drives `visibility: "hasSave" | "noSave"`
+   * on menu nodes so the start menu can show a Continue button
+   * only when there's something to continue. Host flips it true
+   * on autosave write, false on start-new-game's clear.
+   */
+  savePresent: boolean;
 }
 
 export interface RuntimeStore<TState> {
   getState(): TState;
-  setState(next: TState | ((current: TState) => TState)): void;
+  /**
+   * Story 47.10.5 — accepts a partial patch (merged onto the
+   * current state) OR a full updater function. Partial-patch
+   * semantics make adding new fields to the state type back-
+   * compatible — callers that only set `{visibleMenuKey}` still
+   * compile after a new field lands.
+   */
+  setState(
+    next: Partial<TState> | ((current: TState) => TState)
+  ): void;
   subscribe(listener: () => void): () => void;
 }
 
-function createRuntimeStore<TState>(
+function createRuntimeStore<TState extends object>(
   initialState: TState
 ): RuntimeStore<TState> {
   let state = initialState;
@@ -53,7 +70,7 @@ function createRuntimeStore<TState>(
       state =
         typeof next === "function"
           ? (next as (current: TState) => TState)(state)
-          : next;
+          : { ...state, ...next };
       for (const listener of listeners) {
         listener();
       }
@@ -96,9 +113,13 @@ export function createUIContextStore(
 }
 
 export function createUIStateStore(
-  initialState: RuntimeUIState = { visibleMenuKey: null, isPaused: false }
+  initialState: Partial<RuntimeUIState> = {}
 ): UIStateStore {
-  return createRuntimeStore(initialState);
+  return createRuntimeStore({
+    visibleMenuKey: initialState.visibleMenuKey ?? null,
+    isPaused: initialState.isPaused ?? false,
+    savePresent: initialState.savePresent ?? false
+  });
 }
 
 export function resolveRuntimePath(

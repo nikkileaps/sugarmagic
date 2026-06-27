@@ -547,9 +547,15 @@ function handleStartPreview(
   const capturedAssetSources = assetSources;
   const capturedInstalledPluginIds = installedPluginIds;
   const capturedSnapshot = snapshot;
+  // Story 47.10.5 — listener stays attached for the lifetime of the
+  // preview window so a window.location.reload() inside preview.tsx
+  // (the "New Game" reset path) gets a fresh PREVIEW_BOOT response.
+  // Originally one-shot; removing the listener after the first
+  // READY meant a reloaded preview hung on a blank screen forever
+  // because Studio stopped answering. Removed when the preview
+  // window closes (handled by the same interval below).
   async function onMessage(event: MessageEvent) {
     if (event.data?.type === "PREVIEW_READY") {
-      window.removeEventListener("message", onMessage);
       await postPreviewBootMessage(
         capturedWindow,
         capturedSession,
@@ -565,6 +571,7 @@ function handleStartPreview(
   const checkClosed = setInterval(() => {
     if (previewWindow.closed) {
       clearInterval(checkClosed);
+      window.removeEventListener("message", onMessage);
       handleStopPreview();
     }
   }, 500);
@@ -633,6 +640,11 @@ async function postPreviewBootMessage(
       soundEventBindings: session.gameProject.soundEventBindings,
       audioMixer: session.gameProject.audioMixer,
       assetSources,
+      // Story 47.10.5 — authored fresh-start record. Studio preview
+      // mirrors the published-web boot.json shape so a "New Game"
+      // reset spawns at the project-curated values rather than the
+      // implicit playerPresence defaults.
+      defaultGameSavePayload: session.gameProject.defaultGameSavePayload,
       pluginBootPayloads: {
         sugarlang:
           (await buildSugarlangPreviewBootPayloadForSession(

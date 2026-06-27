@@ -1476,46 +1476,93 @@ implicit defaults — no breaking change to existing games.
   visibility rule (a declarative `showWhen` expression bound to
   the save-presence hook), so no per-game JavaScript needed.
 
+**Implemented shape (revised):** simpler than the original sketch —
+no `save-aware-actions.ts` / `save-presence.ts` / dedicated
+hook. Instead:
+
+1. **`GameSavePayload` moved to domain** so `GameProject` can
+   reference it directly. runtime-core re-exports the type for
+   back-compat.
+2. **`pickGameSavePayload(savePayload, defaultPayload)`** — pure
+   helper in domain. Save wins, then `defaultGameSavePayload`,
+   then null (caller falls through to implicit defaults).
+3. **`GameProject.defaultGameSavePayload: GameSavePayload | null`** —
+   new field on the domain type, normalized defensively.
+   Existing project files deserialize with `null` cleanly.
+4. **Studio's Game UI authoring stays unchanged** for this
+   story — adding a Continue button is a JSON-level edit on
+   the menu definition. A workspace-level editor surface is
+   deferred to a follow-up.
+5. **`RuntimeUIState.savePresent: boolean`** on the existing
+   `UIStateStore`. Set true on autosave write
+   (`notifyAutosaveWritten`), false on
+   `createUIStateStore`'s default. Drives the visibility
+   filter described below.
+6. **`UINode.visibility: "always" | "hasSave" | "noSave"`** —
+   simple declarative rule on every node. GameUILayer skips
+   nodes whose rule fails; the runtime evaluates against
+   `uiStateStore.getState().savePresent`. Unknown values are
+   treated as `"always"` (forward-compat).
+7. **`continue-game` + extended `start-new-game` UI actions** —
+   both dismiss the menu + unpause. Optional host callbacks
+   (`onStartNewGame`, `onContinueGame`) on
+   `DefaultUIActionOptions` let the host run side effects
+   (clear save + reload for New Game; cutscene resume for
+   Continue).
+8. **`RuntimeStore.setState`** widened to `Partial<TState> |
+   ((current) => TState)` so adding new state fields stays
+   back-compat without forcing every caller to spread `...prev`.
+
 **Files (new):**
 
-- `packages/runtime-core/src/ui-actions/save-aware-actions.ts`
-  - `registerSaveAwareUIActions(registry, options)` adds
-    `continue-game` + replaces `start-new-game` with the
-    save-clearing variant. Options carry `saveStore` + `userId
-    Provider` + a clear-confirmation callback the menu layer
-    surfaces as a modal.
-- `packages/runtime-core/src/ui-context/save-presence.ts`
-  - `useSavePresence(saveStore, userId)` — exposes a reactive
-    boolean to the menu system. Updates when the save store
-    changes (post-write, post-clear).
+- `packages/domain/src/save/index.ts` — `GameSavePayload` +
+  `pickGameSavePayload`.
 
 **Files (modify):**
 
-- `packages/domain/src/game-project/index.ts` — adds the
-  `defaultGameSavePayload: GameSavePayload | null` field with a
-  null default. Migration: existing projects deserialize cleanly
-  with `null`; the new field is purely additive.
-- `targets/web/src/runtimeHost.ts` — the existing save-fallback
-  chain becomes:
-  `savedGame.payload -> defaultGameSavePayload -> implicit (boot.json + playerPresence)`.
-- `apps/studio/src/workspaces/GameUIWorkspace.tsx` (or the actual
-  Game UI workspace file) — surfaces the Continue button as a
-  selectable element; authors can style + position it. The
-  visibility rule is wired to `isSaveAvailableForCurrentUser`
-  declaratively.
+- `packages/domain/src/game-project/index.ts` — adds
+  `defaultGameSavePayload` field + defensive normalization.
+- `packages/domain/src/ui-definition/index.ts` — adds
+  `UINode.visibility?: UIVisibilityRule` + forward-compat
+  normalization.
+- `packages/runtime-core/src/save/index.ts` — re-exports
+  `GameSavePayload` + `pickGameSavePayload` from domain so
+  existing imports keep working.
+- `packages/runtime-core/src/ui-context/index.ts` — adds
+  `savePresent` to `RuntimeUIState`, widens `setState` to
+  accept partial patches, adapts `createUIStateStore` to
+  accept a `Partial<RuntimeUIState>` initializer.
+- `packages/runtime-core/src/ui-actions/index.ts` — adds
+  `continue-game` action, extends `start-new-game` to fire a
+  host callback before dismissing the menu.
+- `targets/web/src/runtimeHost.ts` — uses `pickGameSavePayload`
+  for spawn region + position, seeds `savePresent` from the
+  resolved save at boot, sets `savePresent: true` on
+  `notifyAutosaveWritten`, threads `onStartNewGame` /
+  `onContinueGame` callbacks from `WebRuntimeStartState`
+  through `registerDefaultUIActions`.
+- `targets/web/src/GameUILayer.tsx` — `renderNode` filters
+  invisible subtrees via `isNodeVisible(node,
+  state.savePresent)`.
+- `targets/web/src/App.tsx` + `apps/studio/src/preview.tsx` —
+  pass `defaultGameSavePayload` from the boot payload +
+  implement `onStartNewGame` as "clear active save under the
+  current user, then `window.location.reload()`."
+- `apps/studio/src/App.tsx` — Studio's `PREVIEW_BOOT` payload
+  carries `defaultGameSavePayload`.
+- `packages/plugins/src/deployment/published-web.ts` — `boot.json`
+  carries `defaultGameSavePayload`.
 
 **Tests:**
 
-- `pickGameSavePayload(authoredImplicit, defaultPayload, save)`
-  pure helper: save wins -> defaultPayload wins -> authored
-  implicit wins, in that order.
-- `start-new-game` clears the save then dispatches the menu
-  dismiss.
-- `continue-game` no-ops when no save exists.
-- `useSavePresence` reactivity: writes flip it true, clears flip
-  it false.
-- Game UI workspace: rendering the start menu with a save present
-  shows both buttons; without a save shows only New Game.
+- `pickGameSavePayload`: save > authored default > null.
+- `start-new-game` fires `onStartNewGame` callback + dismisses
+  menu; falls back to bare dismiss when no callback.
+- `continue-game` fires `onContinueGame` + dismisses menu.
+- `UIStateStore.savePresent` initial value, default, partial-
+  patch merge, subscriber notification.
+- `ui-action-registry` regression test updated to
+  `toMatchObject` (savePresent now lives on every state).
 
 **Dependencies:** 47.10 (autosave is what makes the menu save-
 aware actually meaningful).

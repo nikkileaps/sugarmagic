@@ -12,6 +12,7 @@ import {
   type QuestDefinition
 } from "../quest-definition";
 import { normalizeNPCDefinition, type NPCDefinition } from "../npc-definition";
+import { type GameSavePayload } from "../save";
 import {
   normalizeItemDefinition,
   type ItemDefinition
@@ -153,6 +154,57 @@ export interface GameProject {
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
   mechanics: MechanicsDefinition;
+  /**
+   * Story 47.10.5 — authored "fresh start" record. When the player
+   * picks "New Game" from the start menu (or a brand-new player
+   * boots with no save), the runtime spawns them at these values
+   * instead of the implicit `boot.json.activeRegionId` +
+   * per-region `playerPresence` defaults. `null` is the
+   * back-compat default — existing projects keep using the
+   * implicit composition unchanged.
+   */
+  defaultGameSavePayload: GameSavePayload | null;
+}
+
+/**
+ * Story 47.10.5 — defensive normalization of the
+ * `defaultGameSavePayload` field. Unknown / malformed values
+ * collapse to `null`; valid records are returned with each field
+ * coerced to its expected nullable shape.
+ */
+function normalizeDefaultGameSavePayload(
+  input: unknown
+): GameSavePayload | null {
+  if (!input || typeof input !== "object") return null;
+  const record = input as Record<string, unknown>;
+  const currentRegionId =
+    typeof record.currentRegionId === "string" ? record.currentRegionId : null;
+  const currentQuestId =
+    typeof record.currentQuestId === "string" ? record.currentQuestId : null;
+  let playerPosition: GameSavePayload["playerPosition"] = null;
+  const rawPosition = record.playerPosition;
+  if (rawPosition && typeof rawPosition === "object") {
+    const positionRecord = rawPosition as Record<string, unknown>;
+    if (
+      typeof positionRecord.x === "number" &&
+      typeof positionRecord.y === "number" &&
+      typeof positionRecord.z === "number"
+    ) {
+      playerPosition = {
+        x: positionRecord.x,
+        y: positionRecord.y,
+        z: positionRecord.z
+      };
+    }
+  }
+  if (
+    currentRegionId === null &&
+    currentQuestId === null &&
+    playerPosition === null
+  ) {
+    return null;
+  }
+  return { currentRegionId, currentQuestId, playerPosition };
 }
 
 /**
@@ -264,6 +316,7 @@ export function normalizeGameProject(
         | "soundEventBindings"
         | "audioMixer"
         | "mechanics"
+        | "defaultGameSavePayload"
       > & {
         majorVersion?: number | null;
         // Legacy fields accepted on input for back-compat with pre-45.7.5
@@ -288,6 +341,7 @@ export function normalizeGameProject(
         soundEventBindings?: Partial<Record<string, string | null>> | null;
         audioMixer?: Partial<AudioMixerSettings> | null;
         mechanics?: Partial<MechanicsDefinition> | null;
+        defaultGameSavePayload?: GameSavePayload | null;
       })
 ): GameProject {
   const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
@@ -363,7 +417,11 @@ export function normalizeGameProject(
       gameProject.soundEventBindings
     ),
     audioMixer: normalizeAudioMixerSettings(gameProject.audioMixer),
-    mechanics
+    mechanics,
+    defaultGameSavePayload: normalizeDefaultGameSavePayload(
+      (gameProject as { defaultGameSavePayload?: unknown })
+        .defaultGameSavePayload
+    )
   };
 }
 
@@ -391,6 +449,7 @@ export function createDefaultGameProject(
     uiTheme: createDefaultUITheme(),
     soundEventBindings: normalizeSoundEventBindings(null),
     audioMixer: createDefaultAudioMixerSettings(),
-    mechanics: createDefaultMechanicsDefinition()
+    mechanics: createDefaultMechanicsDefinition(),
+    defaultGameSavePayload: null
   };
 }
