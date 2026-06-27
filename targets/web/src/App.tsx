@@ -233,6 +233,20 @@ export function App() {
     return unsubscribe;
   }, [active]);
 
+  // Story 47.10.5 — re-open the start menu when the user transitions
+  // null → signed-in AFTER boot. Without this, signing back in after
+  // a mid-game sign-out silently resumes the game wherever the
+  // player was, skipping the Continue / New Game choice entirely.
+  const prevUserForMenuRef = useRef<User | null>(null);
+  useEffect(() => {
+    const prev = prevUserForMenuRef.current;
+    prevUserForMenuRef.current = user;
+    if (phase.kind !== "running") return;
+    if (prev === null && user !== null) {
+      hostRef.current?.showStartMenu();
+    }
+  }, [user, phase]);
+
   // Story 47.10 — autosave loop. Polls the host's live save payload
   // on a fixed interval (default 5s) and writes through to the
   // active save store under the active userId. Before plugin

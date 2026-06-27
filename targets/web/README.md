@@ -104,10 +104,59 @@ The `BOOT_JSON_SCHEMA_VERSION` constant is exported from
 single source of truth for both the emitter and the runtime
 assertion.
 
+## User identity, save store, autosave (Plan 047)
+
+`App.tsx` owns the identity + save provider lifecycle for the
+published-web bundle. The wiring is:
+
+- **Fallback providers** at module mount —
+  `createAnonymousLocalIdentityProvider()` +
+  `createIndexedDBGameSaveStore()`. Gives a bare game running
+  without any plugin a stable userId + local save out of the box.
+- **Active provider resolution** runs at the top of
+  `host.start` (Plan 047 §47.10 boot-ordering). When SugarProfile
+  is enabled it contributes Supabase-backed identity + save
+  store via the `identity.provider` / `save.store` contribution
+  kinds; the host resolves the active pair and fires
+  `onProvidersResolved`.
+- **Boot save load** is deferred via a `savedGamePromise`. After
+  providers resolve, App.tsx `await`s
+  `waitForActiveUser(activeProvider)` (5s timeout) so a returning
+  signed-in player's Supabase session restores before the save
+  loads, then reads from the ACTIVE store under the credentialed
+  userId. Host hydrates the spawn region + player position from
+  the resolved save.
+- **`useAutosave(source, store, userId)` hook** (in
+  `src/save/useAutosave.ts`) polls the host's live save payload
+  on a fixed interval (default 5s), deep-equality-skips no-op
+  writes, and writes through to the active store. Bound to the
+  LIVE React user — when the user is null, autosave is idle (no
+  cross-user writes). The hook's `onWritten` callback fires
+  `host.notifyAutosaveWritten` so the Session HUD card's Save
+  row stays current.
+- **`migrateLocalSaveToCloud`** runs once on the
+  anonymous→credentialed transition (userIds match,
+  Supabase-link case). Copies the local IDB save to the active
+  cloud store, then clears local. Cloud-write failures preserve
+  local for a retry.
+- **`onStartNewGame` callback** wired into the host's start-
+  menu UI actions. Clears the active save store under the
+  current user, sets a `sessionStorage` flag, reloads the page.
+  Next boot reads the flag, sets `skipStartMenuOnBoot: true`,
+  drops the player straight into the world at the project's
+  `defaultGameSavePayload` (or implicit defaults).
+
+The same wiring lives in `apps/studio/src/preview.tsx` for the
+Studio Preview iframe so authoring exercises the full save +
+auth surface without a deploy round-trip.
+
 ## References
 
 - [ADR 018: SugarDeploy Web Publish Target Architecture](/docs/adr/018-sugardeploy-web-publish-target-architecture.md)
 - [ADR 019: Engine vs. Game Lifecycle Split](/docs/adr/019-engine-vs-game-lifecycle-split.md)
+- [ADR 020: SugarProfile User Management Architecture](/docs/adr/020-sugarprofile-user-management-architecture.md)
 - [Plan 046: SugarDeploy Web Publish Target Epic](/docs/plans/046-sugardeploy-web-publish-target-epic.md)
+- [Plan 047: SugarProfile User Management Plugin Epic](/docs/plans/047-sugarprofile-user-management-plugin-epic.md)
+- [Plan 051: Runtime Handoff Load-Order Architecture](/docs/plans/051-runtime-handoff-load-order-architecture.md)
 - [Plan 048: GHCR-Published Engine, Per-Game Pin](/docs/plans/048-ghcr-published-target-web-epic.md)
 - [Proposal 005: Sugarmagic System Architecture](/docs/proposals/005-sugarmagic-system-architecture.md)

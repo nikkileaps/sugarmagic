@@ -24,6 +24,13 @@
 > `frontendBundleVersion` pin + Unity-style upgrade prompt) is designed
 > in [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md).
 >
+> **User-management plugin:** the identity + save store contracts the
+> deployment plugin's gateway JWT mode + per-request bearer wiring
+> consume are implemented in
+> [Plan 047](/docs/plans/047-sugarprofile-user-management-plugin-epic.md);
+> the architectural rules are recorded in
+> [ADR 020](/docs/adr/020-sugarprofile-user-management-architecture.md).
+>
 > Read the relevant ADR + plan pair before changing anything in
 > `packages/plugins/src/catalog/sugardeploy/` or
 > `packages/plugins/src/deployment/`.

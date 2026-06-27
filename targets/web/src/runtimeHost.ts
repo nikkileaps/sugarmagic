@@ -294,6 +294,17 @@ export interface WebRuntimeHost {
     lastPlayed: string;
     payload: GameSavePayload;
   }): void;
+  /**
+   * Story 47.10.5 — re-open the start menu mid-session (paused).
+   * Used by the deployed bundle + Studio Preview when the active
+   * user transitions from null to signed-in AFTER boot (e.g. the
+   * player signed out mid-game and just signed back in). Without
+   * this, the LoginModal closes and the game silently resumes
+   * wherever the player was — they never see Continue / New Game
+   * again. Idempotent; no-op when the start menu is already
+   * visible or the project has no `start-menu` definition.
+   */
+  showStartMenu(): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -1643,6 +1654,11 @@ export function createWebRuntimeHost(
     }
   }
 
+  function showStartMenu(): void {
+    if (!uiStateStore) return;
+    uiStateStore.setState({ visibleMenuKey: "start-menu", isPaused: true });
+  }
+
   function getCurrentSavePayload(): GameSavePayload | null {
     if (!world || !gameplaySession) return null;
     const playerEntities = world.query(PlayerControlled, Position);
@@ -1666,6 +1682,7 @@ export function createWebRuntimeHost(
     start,
     dispose,
     getCurrentSavePayload,
-    notifyAutosaveWritten
+    notifyAutosaveWritten,
+    showStartMenu
   };
 }

@@ -1611,6 +1611,13 @@ shipped behavior. A future plugin author can read ADR 020 +
 `packages/plugins/src/deployment/README.md` + Plan 047 and write a
 competing identity provider plugin without reading source.
 
+**Status:** §47.11 landed alongside §47.10.5 — ADR 020 is in
+place, `packages/plugins/src/deployment/README.md` carries the
+SugarProfile host endpoints + cross-link, `targets/web/README.md`
+documents the identity / save / autosave wiring, the Plan 021
+cross-reference banner names Plan 047 + ADR 020, and the ADR
+index links 020. Plan 047 is complete.
+
 ## Builds On
 
 - [Plan 045: SugarDeploy Cloud Run Plugin-Owned Infrastructure Epic](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md)

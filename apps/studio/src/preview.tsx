@@ -145,6 +145,21 @@ interface ProviderBindings {
 const providerEvents = new EventTarget();
 let resolvedBindings: ProviderBindings | null = null;
 
+// Story 47.10.5 — boot status drives the "Syncing..." overlay so
+// the player sees a deliberate loading state instead of the bare
+// dark canvas while host.start fetches plugins + provider session
+// + save. Same EventTarget late-subscriber catch-up pattern as
+// `resolvedBindings`; the broader fix lives in Plan 051.
+type PreviewBootPhase = "loading" | "running" | "failed";
+let bootPhase: PreviewBootPhase = "loading";
+let bootFailureReason: string | null = null;
+
+function publishBootPhase(next: PreviewBootPhase, reason: string | null = null) {
+  bootPhase = next;
+  bootFailureReason = reason;
+  providerEvents.dispatchEvent(new Event("boot-phase"));
+}
+
 function publishResolvedBindings(next: ProviderBindings) {
   resolvedBindings = next;
   // Story 47.9.5 — gateway clients (SugarAgent etc.) read the active
@@ -238,7 +253,15 @@ window.addEventListener("message", (event) => {
           sessionStorage.setItem("sugarmagic.fresh-start", "1");
           window.location.reload();
         }
-      });
+      })
+        .then(() => publishBootPhase("running"))
+        .catch((error) => {
+          console.error("[studio-preview] host.start failed", error);
+          publishBootPhase(
+            "failed",
+            error instanceof Error ? error.message : String(error)
+          );
+        });
     })();
   }
 });
@@ -251,12 +274,81 @@ if (window.opener) {
   window.opener.postMessage(message, "*");
 }
 
+/**
+ * Story 47.10.5 — full-iframe loading / failure surface. Used by
+ * PreviewOverlay to mask the dark canvas until `host.start`
+ * settles (or to show an error if it throws). Inline styles keep
+ * the component self-contained — Studio Preview owns the iframe;
+ * we don't pull in Mantine just for two lines of text.
+ */
+function BootOverlay(props: {
+  title: string;
+  body: string;
+  tone?: "default" | "error";
+}) {
+  const isError = props.tone === "error";
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(7, 7, 15, 0.85)",
+        color: "#f6f1ff",
+        pointerEvents: "auto",
+        fontFamily:
+          "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+      }}
+    >
+      <div
+        style={{
+          padding: "24px 32px",
+          background: isError
+            ? "rgba(244, 67, 54, 0.16)"
+            : "rgba(236, 72, 153, 0.12)",
+          border: isError
+            ? "1px solid rgba(244, 67, 54, 0.45)"
+            : "1px solid rgba(236, 72, 153, 0.35)",
+          borderRadius: 12,
+          minWidth: 240,
+          textAlign: "center"
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            opacity: 0.7
+          }}
+        >
+          {props.title}
+        </p>
+        <p style={{ margin: "8px 0 0", fontSize: 15 }}>{props.body}</p>
+      </div>
+    </div>
+  );
+}
+
 function PreviewOverlay() {
   const [active, setActive] = useState<ProviderBindings | null>(
     resolvedBindings
   );
   const [user, setUser] = useState<User | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  // Story 47.10.5 — boot phase mirrors the module-level state so the
+  // overlay renders a "Syncing..." surface while host.start fetches
+  // plugins + provider session + save. Same catch-up pattern as
+  // `active` so a late-mounting subscriber doesn't miss the
+  // running-phase event.
+  const [phase, setPhase] = useState<PreviewBootPhase>(bootPhase);
+  const [failureReason, setFailureReason] = useState<string | null>(
+    bootFailureReason
+  );
 
   useEffect(() => {
     const handler = () => setActive(resolvedBindings);
@@ -276,6 +368,18 @@ function PreviewOverlay() {
   }, []);
 
   useEffect(() => {
+    const handler = () => {
+      setPhase(bootPhase);
+      setFailureReason(bootFailureReason);
+    };
+    providerEvents.addEventListener("boot-phase", handler);
+    // Same catch-up as the "change" listener — Plan 051.
+    setPhase(bootPhase);
+    setFailureReason(bootFailureReason);
+    return () => providerEvents.removeEventListener("boot-phase", handler);
+  }, []);
+
+  useEffect(() => {
     if (!active) return;
     setUser(active.identityProvider.currentUser());
     const unsubscribe = active.identityProvider.onChange((next) => {
@@ -283,6 +387,23 @@ function PreviewOverlay() {
     });
     return unsubscribe;
   }, [active]);
+
+  // Story 47.10.5 — re-open the start menu when the user transitions
+  // null → signed-in AFTER boot. Without this, signing back in after
+  // a mid-game sign-out silently resumes the game wherever the player
+  // was, skipping the Continue / New Game choice entirely. The boot-
+  // time null → signed-in transition is excluded: phase stays
+  // "loading" until host.start completes, by which point the menu is
+  // already visible from the host's initial setup.
+  const prevUserForMenuRef = useRef<User | null>(null);
+  useEffect(() => {
+    const prev = prevUserForMenuRef.current;
+    prevUserForMenuRef.current = user;
+    if (phase !== "running") return;
+    if (prev === null && user !== null) {
+      host.showStartMenu();
+    }
+  }, [user, phase]);
 
   // Story 47.10 — autosave + migration mirror App.tsx's wiring so a
   // Studio Preview session carries the same persist-on-tick +
@@ -342,15 +463,39 @@ function PreviewOverlay() {
   const pluginIdentityActive =
     active != null && active.identityProvider !== identityProvider;
 
+  // Story 47.10.5 — boot overlay. Renders above everything else
+  // until `host.start` resolves. Mirrors target-web App.tsx's
+  // `target-overlay` card so the boot UX is consistent across
+  // Studio Preview and the deployed bundle.
+  const bootOverlay =
+    phase === "loading" ? (
+      <BootOverlay title="Sugarmagic" body="Syncing..." />
+    ) : phase === "failed" ? (
+      <BootOverlay
+        title="Failed to load"
+        body={failureReason ?? "Unknown error"}
+        tone="error"
+      />
+    ) : null;
+
   if (!pluginIdentityActive || !active) {
-    return null;
+    return <>{bootOverlay}</>;
   }
 
-  const requireSignIn = user === null;
+  // Story 47.10.5 — only require sign-in once the boot has settled.
+  // Without this gate, the brief window where `active` is set but
+  // Supabase's session restore hasn't completed yet renders the
+  // LoginModal for a frame or two before the user materializes, then
+  // hides it — visible as a "flash of login screen" before the start
+  // menu. The BootOverlay already covers the loading phase visually;
+  // the modal only needs to render AFTER we know there's truly no
+  // user.
+  const requireSignIn = user === null && phase !== "loading";
   const showLoginModal = loginModalOpen || requireSignIn;
 
   return (
     <>
+      {bootOverlay}
       {user?.isAnonymous ? (
         <button
           type="button"
