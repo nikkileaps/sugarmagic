@@ -389,19 +389,24 @@ function PreviewOverlay() {
   }, [active]);
 
   // Story 47.10.5 — re-open the start menu when the user transitions
-  // null → signed-in AFTER boot. Without this, signing back in after
-  // a mid-game sign-out silently resumes the game wherever the player
-  // was, skipping the Continue / New Game choice entirely. The boot-
-  // time null → signed-in transition is excluded: phase stays
-  // "loading" until host.start completes, by which point the menu is
-  // already visible from the host's initial setup.
+  // null → signed-in AFTER having been signed in once already (i.e.
+  // the player signed out mid-game and then back in). The first
+  // boot-time arrival of a signed-in user does NOT count — React
+  // may batch `setUser(signed-in)` with the boot-phase transition
+  // into a single commit, and a naive prev-was-null check would
+  // fire on the very first boot and stomp the host's
+  // `skipStartMenuOnBoot` decision (the New-Game reset path).
   const prevUserForMenuRef = useRef<User | null>(null);
+  const hasEverBeenSignedInRef = useRef(false);
   useEffect(() => {
     const prev = prevUserForMenuRef.current;
     prevUserForMenuRef.current = user;
-    if (phase !== "running") return;
-    if (prev === null && user !== null) {
-      host.showStartMenu();
+    if (user !== null) {
+      const wasSignedIn = hasEverBeenSignedInRef.current;
+      hasEverBeenSignedInRef.current = true;
+      if (phase === "running" && prev === null && wasSignedIn) {
+        host.showStartMenu();
+      }
     }
   }, [user, phase]);
 
