@@ -80,6 +80,25 @@ API credentials NEVER enter this schema. Vendor calls happen
 server-side at the gateway; the gateway holds the credentials
 in Secret Manager and the runtime SA fetches them on demand.
 
+## Deploy-time engine build (Plan 053)
+
+The `dist/` produced by `pnpm --filter @sugarmagic/target-web
+build` does NOT get committed to game repos. Plan 053 moved the
+build into the GHA `deploy-frontend` job: every dispatched deploy
+checks out sugarmagic (default ref: `main`; overridable per
+dispatch via the `sugarmagic_ref` workflow input), runs the engine
+build with `VITE_SUGARMAGIC_*` resolved from `gcloud run services
+describe` (gateway URL) and Secret Manager (bearer token when
+applicable), then copies the dist + overlays `boot.json` before
+`netlify deploy`. Game authors press Deploy in Studio; Studio
+auto-commits + auto-pushes both repos and dispatches.
+
+`Plan 052` (build-mode dev-vs-prod investigation) folded into
+this work as story 053.1; the fix is in
+`packages/plugins/src/catalog/sugardeploy/host/middleware.ts` —
+the host-spawned build subprocess now gets `NODE_ENV=production`
+overridden so `@vitejs/plugin-react` initializes in prod mode.
+
 ## `boot.json` contract
 
 The published-web bundle reads `boot.json` from its origin on
@@ -158,5 +177,6 @@ auth surface without a deploy round-trip.
 - [Plan 046: SugarDeploy Web Publish Target Epic](/docs/plans/046-sugardeploy-web-publish-target-epic.md)
 - [Plan 047: SugarProfile User Management Plugin Epic](/docs/plans/047-sugarprofile-user-management-plugin-epic.md)
 - [Plan 051: Runtime Handoff Load-Order Architecture](/docs/plans/051-runtime-handoff-load-order-architecture.md)
-- [Plan 048: GHCR-Published Engine, Per-Game Pin](/docs/plans/048-ghcr-published-target-web-epic.md)
+- [Plan 048: GHCR-Published Engine, Per-Game Pin](/docs/plans/048-ghcr-published-target-web-epic.md) (deferred — see Plan 053)
+- [Plan 053: Deploy-Time Engine Build](/docs/plans/053-deploy-time-engine-build.md)
 - [Proposal 005: Sugarmagic System Architecture](/docs/proposals/005-sugarmagic-system-architecture.md)
