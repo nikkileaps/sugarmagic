@@ -201,6 +201,14 @@ export function App() {
           // In-place reset would skip the reload entirely; deferred
           // to Plan 051 boot phases.
           onStartNewGame: async () => {
+            // Story 053.7 — halt autosave + flush any in-flight
+            // write BEFORE clearing the save. Otherwise a tick
+            // that's mid-`store.save(userId, payload)` when New
+            // Game fires will resolve AFTER the clear, write the
+            // stale player position back into the store, and the
+            // post-reload boot reads the stale save — player
+            // doesn't return to origin.
+            await autosave.halt();
             const settledUser = active?.identityProvider.currentUser();
             if (active && settledUser) {
               try {
@@ -296,7 +304,15 @@ export function App() {
   // preview.tsx for the rationale; same considerations apply here.
   const autosaveStore = active?.saveStore ?? fallback?.saveStore ?? null;
   const autosaveUserId = user?.userId ?? null;
-  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // Story 053.7 — `onStartNewGame` (defined inside the boot effect
+  // ABOVE) needs to halt + flush autosave before calling
+  // `store.clear()`, otherwise an in-flight autosave write resolves
+  // AFTER the clear and the next boot reads stale player position.
+  // The boot effect closes over `autosave` lexically; that's fine
+  // because `useAutosave`'s internal `haltedRef` /
+  // `inFlightWriteRef` are stable across renders, so any handle
+  // object (first render or later) drives the current state.
+  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       hostRef.current?.notifyAutosaveWritten(written);
     }

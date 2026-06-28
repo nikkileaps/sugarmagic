@@ -95,39 +95,89 @@ export async function runAutosaveTick(args: {
 }
 
 /**
+ * Story 053.7 — handle returned by `useAutosave` so the calling
+ * component can stop autosave + flush any in-flight write before
+ * doing something save-state-destructive (deleting the save,
+ * navigating away, etc.). Without this, the New Game reset flow
+ * could call `store.clear(userId)` while an autosave tick was in
+ * the middle of `await store.save(userId, ...)`; that pending
+ * save would resolve AFTER the clear and the next boot would
+ * read stale player position back from the store.
+ *
+ * Contract:
+ *   - `halt()` flips an internal "halted" flag (so any future
+ *     interval ticks bail at the top), then awaits any
+ *     write Promise currently in flight. After it resolves, no
+ *     more writes will happen from this hook until the hook
+ *     unmounts and a fresh one mounts.
+ *   - Safe to call multiple times; subsequent calls await whatever
+ *     write is in flight (or resolve immediately).
+ *   - `halt()` does NOT clear the saved data — that's the caller's
+ *     job (e.g. `store.clear()`).
+ */
+export interface AutosaveHandle {
+  halt(): Promise<void>;
+}
+
+/**
  * Story 47.10 — polls the host's live save payload on a fixed
  * interval and writes through to the active store when something
  * changed. Inactive when `userId` is null (anonymous fallback may
  * still be running but the caller has chosen not to persist) or
  * `store` is null (boot hasn't resolved providers yet).
+ *
+ * Story 053.7 — returns an `AutosaveHandle`. Callers about to
+ * mutate save-state (start-new-game, sign-out, account deletion)
+ * MUST `await handle.halt()` before destructive store operations
+ * so an in-flight tick can't race past them.
  */
 export function useAutosave(
   source: AutosaveTickSource | null,
   store: GameSaveStore | null,
   userId: string | null,
   options: UseAutosaveOptions = {}
-): void {
+): AutosaveHandle {
   const intervalMs = options.intervalMs ?? 5000;
   const lastWrittenRef = useRef<GameSavePayload | null>(null);
   const onWrittenRef = useRef(options.onWritten);
   onWrittenRef.current = options.onWritten;
+  // Story 053.7 — both refs are populated by the effect below and
+  // read by the `halt` closure returned from the hook.
+  const haltedRef = useRef<boolean>(false);
+  const inFlightWriteRef = useRef<Promise<AutosaveTickResult> | null>(null);
 
   useEffect(() => {
     if (!source || !store || !userId) return;
     lastWrittenRef.current = null;
+    // Each (source, store, userId) generation gets a fresh halted
+    // flag — re-mounting (e.g. after a sign-in) re-arms autosave.
+    haltedRef.current = false;
     let cancelled = false;
 
     async function tick() {
-      if (cancelled) return;
+      if (cancelled || haltedRef.current) return;
       if (!source || !store || !userId) return;
       try {
-        const result = await runAutosaveTick({
+        const writePromise = runAutosaveTick({
           source,
           store,
           userId,
           lastWritten: lastWrittenRef.current
         });
-        if (!cancelled && result.written && result.payload && result.lastPlayed) {
+        // Story 053.7 — publish the in-flight Promise before
+        // awaiting so a concurrent `halt()` call can wait on it.
+        inFlightWriteRef.current = writePromise;
+        const result = await writePromise;
+        if (inFlightWriteRef.current === writePromise) {
+          inFlightWriteRef.current = null;
+        }
+        if (
+          !cancelled &&
+          !haltedRef.current &&
+          result.written &&
+          result.payload &&
+          result.lastPlayed
+        ) {
           lastWrittenRef.current = result.payload;
           onWrittenRef.current?.({
             lastPlayed: result.lastPlayed,
@@ -135,6 +185,7 @@ export function useAutosave(
           });
         }
       } catch (error) {
+        if (inFlightWriteRef.current) inFlightWriteRef.current = null;
         console.warn("[autosave] write failed; will retry on next tick", {
           userId,
           error
@@ -150,4 +201,18 @@ export function useAutosave(
       window.clearInterval(id);
     };
   }, [source, store, userId, intervalMs]);
+
+  return {
+    halt: async () => {
+      haltedRef.current = true;
+      const pending = inFlightWriteRef.current;
+      if (pending) {
+        try {
+          await pending;
+        } catch {
+          // tick() already logged its own warning.
+        }
+      }
+    }
+  };
 }
