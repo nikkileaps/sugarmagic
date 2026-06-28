@@ -411,20 +411,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const setupGithubWorkflowBusy =
     setupGithubWorkflowState?.phase === "running";
 
-  // Story 46.10 follow-up — Build Frontend state machine.
-  type BuildPublishedWebState =
-    | null
-    | { phase: "running" }
-    | { phase: "success"; copiedAt: string; stdout: string }
-    | {
-        phase: "failed";
-        reason: string;
-        stdout: string;
-        stderr: string;
-      };
-  const [buildPublishedWebState, setBuildPublishedWebState] =
-    useState<BuildPublishedWebState>(null);
-
   // Story 053.6 — Deploy-workflow dispatch + poll state machine.
   // - preview: preflight is in flight (or has just returned); UI
   //   shows the deploy plan for BOTH repos (game + sugarmagic
@@ -712,71 +698,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         [targetId]: current.targetOverrides[targetId] ?? {}
       }
     });
-  }
-
-  // Story 46.10 follow-up — Build Frontend trigger. Calls the host
-  // endpoint which runs the vite build in sugarmagic root and copies
-  // the dist into the wordlark project. No-op if the project's
-  // working directory isn't configured.
-  async function runBuildPublishedWeb() {
-    if (!gameProject || !deploymentSettings?.workingDirectory) return;
-    setBuildPublishedWebState({ phase: "running" });
-    try {
-      // Story 46.14 — pass deploy context so the host endpoint can
-      // resolve VITE_SUGARMAGIC_GATEWAY_URL via gcloud and
-      // VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN via Secret Manager
-      // before invoking the vite build.
-      const response = await fetch("/__sugardeploy/build-published-web", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          workingDirectory: deploymentSettings.workingDirectory,
-          gcpProjectId: cloudRunOverrides.projectId,
-          gcpRegion: cloudRunOverrides.region,
-          serviceNamePrefix: cloudRunOverrides.serviceNamePrefix,
-          // Story 47.9 — POST the EFFECTIVE mode (which can be
-          // "supabase-jwt" when SugarProfile is enabled alongside
-          // bearer), not the raw persisted toggle. The host endpoint
-          // switches on this string to decide whether to bake the
-          // shared bearer into the bundle or skip it.
-          gatewayAuthMode: deriveEffectiveGatewayAuthMode(
-            cloudRunOverrides.gatewayAuthMode,
-            gameProject
-          ),
-          majorVersion: gameProject.majorVersion,
-          versionedSlug: cloudRunOverrides.serviceNamePrefix,
-          gameProjectSlug: gameProject.identity.id
-        })
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        reason?: string;
-        stdout?: string;
-        stderr?: string;
-        copiedAt?: string;
-      } | null;
-      if (!payload?.ok) {
-        setBuildPublishedWebState({
-          phase: "failed",
-          reason: payload?.reason ?? `HTTP ${response.status}`,
-          stdout: payload?.stdout ?? "",
-          stderr: payload?.stderr ?? ""
-        });
-        return;
-      }
-      setBuildPublishedWebState({
-        phase: "success",
-        copiedAt: payload.copiedAt ?? new Date().toISOString(),
-        stdout: payload.stdout ?? ""
-      });
-    } catch (error) {
-      setBuildPublishedWebState({
-        phase: "failed",
-        reason: error instanceof Error ? error.message : String(error),
-        stdout: "",
-        stderr: ""
-      });
-    }
   }
 
   // Story 46.10 — deploy-workflow handlers. The modal hits these in
@@ -3255,84 +3176,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           </Stack>
         );
       })() : null}
-
-      {/* Story 46.10 follow-up — Build Frontend. Runs the
-          @sugarmagic/target-web vite build in the sugarmagic
-          monorepo cwd (where Studio is hosted) and copies dist/
-          into the wordlark project's .sugarmagic/published-web/dist/
-          so the deploy-frontend GHA job has a ready-to-ship bundle
-          to drop into Netlify alongside boot.json (regenerated on
-          save). Build step is out-of-band of save (multi-second
-          vite build) — click when target-web itself changes. */}
-      {isProvision && selectedFrontendTargetId === "netlify" ? (
-        <Stack gap="sm">
-          <Group gap="xs" align="baseline">
-            <Text fw={700} size="md">
-              Frontend Build
-            </Text>
-            <Text size="xs" c="var(--sm-color-subtext)">
-              — refresh the @sugarmagic/target-web bundle
-            </Text>
-          </Group>
-          <Box
-            p="sm"
-            style={{
-              border: "1px solid var(--sm-color-surface3)",
-              borderRadius: 8,
-              background: "var(--sm-color-surface1)"
-            }}
-          >
-            <Stack gap="sm">
-              <Text size="sm" c="var(--sm-color-subtext)">
-                Runs <Code>pnpm --filter @sugarmagic/target-web build</Code> in
-                the Studio's sugarmagic root and copies <Code>targets/web/dist</Code>{" "}
-                into <Code>.sugarmagic/published-web/dist</Code>. Re-run only
-                when the engine itself changes; boot.json (per-game data)
-                regenerates automatically on save.
-              </Text>
-              <Group>
-                <Button
-                  size="xs"
-                  variant="filled"
-                  color="grape"
-                  onClick={() => void runBuildPublishedWeb()}
-                  loading={buildPublishedWebState?.phase === "running"}
-                  disabled={
-                    !deploymentSettings?.workingDirectory ||
-                    buildPublishedWebState?.phase === "running"
-                  }
-                >
-                  Build Frontend
-                </Button>
-                {buildPublishedWebState?.phase === "success" ? (
-                  <Text size="xs" c="green">
-                    OK — {new Date(buildPublishedWebState.copiedAt).toLocaleTimeString()}
-                  </Text>
-                ) : buildPublishedWebState?.phase === "failed" ? (
-                  <Text size="xs" c="red">
-                    Failed (see log below)
-                  </Text>
-                ) : null}
-              </Group>
-              {buildPublishedWebState?.phase === "failed" ? (
-                <Alert color="red" variant="light" title="Build failed">
-                  <Stack gap="xs">
-                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                      {buildPublishedWebState.reason}
-                    </Text>
-                    {buildPublishedWebState.stdout.trim() ? (
-                      <Code block>{buildPublishedWebState.stdout}</Code>
-                    ) : null}
-                    {buildPublishedWebState.stderr.trim() ? (
-                      <Code block>{buildPublishedWebState.stderr}</Code>
-                    ) : null}
-                  </Stack>
-                </Alert>
-              ) : null}
-            </Stack>
-          </Box>
-        </Stack>
-      ) : null}
 
       {isProvision && selectedTargetId === "google-cloud-run" ? (
         <Stack gap="xs">

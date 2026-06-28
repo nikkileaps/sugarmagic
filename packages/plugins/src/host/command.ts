@@ -21,11 +21,9 @@ export interface HostCommandInput {
    */
   stdin?: string;
   /**
-   * Optional env var overrides MERGED on top of `process.env` for the
-   * child process. Used by Build Frontend (story 46.14) to inject
-   * resolved `VITE_SUGARMAGIC_*` values into the `pnpm --filter
-   * @sugarmagic/target-web build` subprocess without polluting the
-   * Studio dev-server's own env.
+   * Optional env var overrides MERGED on top of `process.env` for
+   * the child process. Used by the Deploy auto-sync git invocations
+   * to thread per-command env without polluting Studio's own env.
    */
   env?: Record<string, string>;
 }
