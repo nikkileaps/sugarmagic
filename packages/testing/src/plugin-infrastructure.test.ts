@@ -767,9 +767,13 @@ describe("plugin infrastructure", () => {
     // netlify-deploy off the pre-baked .sugarmagic/published-web/)
     // → 46.15 v5 (non-secret runtime config env injection)
     // → 053.2 v6 (deploy-frontend rebuilds target-web on the runner
-    // off a sugarmagic checkout; pre-baked dist/ no longer required).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 6");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(6);
+    // off a sugarmagic checkout; pre-baked dist/ no longer required)
+    // → 053.6 follow-up v7 (deploy-frontend resolves the Cloud Run
+    // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
+    // step; restores the env injection lost when 053.2 moved the
+    // build off Studio's Build Frontend action).
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 7");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(7);
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");
@@ -814,16 +818,14 @@ describe("plugin infrastructure", () => {
     // overlay, netlify deploy.
     expect(yaml).toContain("  deploy-frontend:");
     expect(yaml).toContain("    needs: deploy-backend");
-    // 053.2 — gateway URL is baked at engine-build time inside
-    // the sugarmagic repo (whatever target-web's vite config reads
-    // VITE_SUGARMAGIC_GATEWAY_URL from), not via a runtime
-    // `gcloud run services describe` in the deploy job. The old
-    // gateway lookup step is gone.
+    // 053.6 follow-up — gateway URL resolution IS back inside the
+    // deploy-frontend job (without it the bundle ships with an
+    // empty plugin runtime env and crashes). But the old
+    // `--project=foo --region=bar` argument format (= signs) is
+    // not how the rewritten step writes it; assert the old shape
+    // does not regress.
     expect(yaml).not.toContain(
       "gcloud run services describe wordlark-v1-abcd-sugarmagic-gateway --project=wordlark-v1-abcd --region=us-central1"
-    );
-    expect(yaml).not.toContain(
-      "SUGARMAGIC_GATEWAY_URL: ${{ steps.gateway.outputs.url }}"
     );
     // Dual checkout — game repo + sugarmagic engine into
     // ./sugarmagic/ subdirectory. Default ref is `main`; operator
@@ -850,6 +852,49 @@ describe("plugin infrastructure", () => {
     expect(yaml).toContain("        run: pnpm install --frozen-lockfile");
     expect(yaml).toContain(
       "        run: pnpm --filter @sugarmagic/target-web build"
+    );
+    // 053.6 follow-up — gateway URL resolution + VITE_SUGARMAGIC_*
+    // env injection on the build step. This restores what Build
+    // Frontend used to do; without it the deployed bundle ships
+    // with an empty plugin runtime env and crashes on first
+    // gateway-touching action.
+    expect(yaml).toContain("      - name: Authenticate to GCP via WIF");
+    expect(yaml).toContain("      - name: Resolve Cloud Run gateway URL");
+    expect(yaml).toContain(
+      "          URL=$(gcloud run services describe wordlark-v1-abcd-sugarmagic-gateway --project wordlark-v1-abcd --region us-central1 --format 'value(status.url)')"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GATEWAY_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      `          VITE_SUGARMAGIC_GAME_MAJOR_VERSION: "1"`
+    );
+    expect(yaml).toContain(
+      `          VITE_SUGARMAGIC_VERSIONED_SLUG: "wordlark-v1-abcd"`
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GIT_SHA: ${{ github.sha }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_BUILD_TIMESTAMP: ${{ github.run_started_at }}"
+    );
+    expect(yaml).toContain("          NODE_ENV: production");
+    // This test fixture sets gatewayAuthMode: "bearer" without
+    // SugarProfile (no upgrade to supabase-jwt), so effective mode
+    // is bearer — the gateway-shared-token bake step should appear
+    // and the bearer token should be baked into the bundle.
+    expect(yaml).toContain("      - name: Resolve gateway bearer token");
+    expect(yaml).toContain(
+      "          TOKEN=$(gcloud secrets versions access latest --secret wordlark-v1-abcd-gateway-shared-token --project wordlark-v1-abcd)"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN: ${{ steps.bearer.outputs.token }}"
     );
     // Stage the freshly built dist into the game repo's expected
     // location, then overlay boot.json.

@@ -2848,6 +2848,22 @@ export function planGameDeployment(
   // the backend or Netlify on the frontend), append the
   // `.github/workflows/sugardeploy-deploy.yml`. Local-only backends
   // don't need a workflow (docker-compose handles its own lifecycle).
+  // Story 053.6 follow-up — derive the effective gateway auth mode
+  // here too (the earlier compute inside the targetId loop is
+  // scoped to the secret-injection block). Same pure function;
+  // safe to call twice. The workflow YAML's deploy-frontend job
+  // needs this to gate the bearer-token bake step.
+  const workflowEffectiveGatewayAuthMode =
+    targetId === "google-cloud-run"
+      ? deriveEffectiveGatewayAuthMode(
+          normalizeGoogleCloudRunDeploymentTargetOverrides(
+            deploymentSettings.targetOverrides["google-cloud-run"],
+            gameProject
+          ).gatewayAuthMode,
+          gameProject
+        )
+      : "none";
+
   const workflowFile = buildSugarDeployGithubWorkflowFile(
     provisionalPlan,
     gameProject,
@@ -2858,7 +2874,8 @@ export function planGameDeployment(
     // Story 46.15 reshape — runtime config env was computed
     // earlier into the plan itself from enabled plugins'
     // gatewayRuntimeConfigKeys + their per-game config slots.
-    provisionalPlan.gatewayRuntimeConfigEnv
+    provisionalPlan.gatewayRuntimeConfigEnv,
+    workflowEffectiveGatewayAuthMode
   );
   // Story 46.10 follow-up — when Netlify (or any future frontend
   // target) is configured, regenerate the boot.json + published-web
