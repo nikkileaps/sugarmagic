@@ -55,10 +55,10 @@ The pattern, made concrete for new plugins:
    `.env` populates `VITE_SUGARMAGIC_<PLUGIN>_PROXY_BASE_URL`
    (typically defaulted to a `/__plugin-proxy/<plugin>` path).
 5. **In published-web mode**, the "proxy" is the deployed Cloud
-   Run gateway. SugarDeploy's Build Frontend host action resolves
+   Run gateway. The GHA `deploy-frontend` job (Plan 053.2) resolves
    the gateway URL via `gcloud run services describe` and injects
-   it as `VITE_SUGARMAGIC_GATEWAY_URL`; targets/web's
-   `buildConfig.ts` maps that into
+   it as `VITE_SUGARMAGIC_GATEWAY_URL` on the engine build step;
+   targets/web's `buildConfig.ts` maps that into
    `SUGARMAGIC_<PLUGIN>_PROXY_BASE_URL` for any plugin that hasn't
    set its own override. No plugin work needed for this — your
    plugin only sees the resolved runtime env key.

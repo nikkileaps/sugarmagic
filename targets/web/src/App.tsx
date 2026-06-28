@@ -50,14 +50,17 @@ import { waitForActiveUser } from "./save/waitForActiveUser";
 
 // Story 47.10.5 — consume the "fresh-start" flag at MODULE LOAD,
 // not inside the React useEffect. React StrictMode (active in dev
-// builds — and our `pnpm --filter @sugarmagic/target-web build` is
-// emitting a dev bundle as evidenced by `jsxDEV` calls in the
-// deployed bundle) double-invokes effects: setup → cleanup → setup.
-// If we read+clear inside the effect, setup #1 sees "1" and clears
-// it, then setup #2 sees null. The host then starts twice — the
-// second time with `skipStartMenuOnBoot: false`, which re-opens the
-// menu we were trying to skip. Module-level code runs once per
-// page load regardless of React lifecycle.
+// builds) double-invokes effects: setup → cleanup → setup. If we
+// read+clear inside the effect, setup #1 sees "1" and clears it,
+// then setup #2 sees null. The host then starts twice — the
+// second time with `skipStartMenuOnBoot: false`, which re-opens
+// the menu we were trying to skip. Module-level code runs once
+// per page load regardless of React lifecycle. Plan 053.1 fixed
+// the underlying bug (Studio was shelling the build with
+// `NODE_ENV=development` inherited, which made the deployed
+// bundle a dev-React bundle and turned StrictMode on in prod);
+// the module-level capture stays as belt-and-suspenders so the
+// reset path is correct under either build mode.
 const __freshStartFlag =
   typeof sessionStorage !== "undefined" &&
   sessionStorage.getItem("sugarmagic.fresh-start") === "1";

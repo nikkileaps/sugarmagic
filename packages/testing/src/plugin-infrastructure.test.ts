@@ -351,7 +351,6 @@ describe("plugin infrastructure", () => {
     // - rerun-failed-jobs (/__sugardeploy/rerun-failed-jobs, story 46.10)
     // - cut-major-version prepare/tag/untag/commit (/__sugardeploy/{prepare,tag,untag}-..., story 45.8)
     expect(contributedPlugins.map((plugin) => plugin.name).sort()).toEqual([
-      "sugardeploy-build-published-web",
       "sugardeploy-cut-major-version-commit",
       "sugardeploy-cut-major-version-prepare",
       "sugardeploy-cut-major-version-tag",
@@ -765,9 +764,15 @@ describe("plugin infrastructure", () => {
     // 46.7 v1 → 46.10 v2 (env-var injection) → 46.10 v3 (dropped
     // auth@v2 service_account:) → 46.10 v4 (thin checkout-and-
     // netlify-deploy off the pre-baked .sugarmagic/published-web/)
-    // → 46.15 v5 (non-secret runtime config env injection).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 5");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(5);
+    // → 46.15 v5 (non-secret runtime config env injection)
+    // → 053.2 v6 (deploy-frontend rebuilds target-web on the runner
+    // off a sugarmagic checkout; pre-baked dist/ no longer required)
+    // → 053.6 follow-up v7 (deploy-frontend resolves the Cloud Run
+    // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
+    // step; restores the env injection lost when 053.2 moved the
+    // build off Studio's Build Frontend action).
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 7");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(7);
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");
@@ -805,38 +810,118 @@ describe("plugin infrastructure", () => {
     expect(yaml).toContain("run: bash deploy.sh");
 
     // Frontend job: needs backend (so backend failure aborts
-    // frontend); netlify deploy off the pre-baked
-    // `.sugarmagic/published-web/dist` directory. Story 46.10
-    // follow-up moved the build out of the workflow and onto the
-    // Build Frontend button + save-driven boot.json regeneration,
-    // so the gateway URL resolution / pnpm install / vite build
-    // steps are gone.
+    // frontend). Story 053.2 — deploy-frontend now rebuilds
+    // target-web at deploy time off a sugarmagic checkout instead
+    // of consuming a pre-baked dist. Verifies: dual checkout,
+    // pnpm/node setup, install, build, dist stage, boot.json
+    // overlay, netlify deploy.
     expect(yaml).toContain("  deploy-frontend:");
     expect(yaml).toContain("    needs: deploy-backend");
+    // 053.6 follow-up — gateway URL resolution IS back inside the
+    // deploy-frontend job (without it the bundle ships with an
+    // empty plugin runtime env and crashes). But the old
+    // `--project=foo --region=bar` argument format (= signs) is
+    // not how the rewritten step writes it; assert the old shape
+    // does not regress.
     expect(yaml).not.toContain(
       "gcloud run services describe wordlark-v1-abcd-sugarmagic-gateway --project=wordlark-v1-abcd --region=us-central1"
     );
-    expect(yaml).not.toContain(
-      "SUGARMAGIC_GATEWAY_URL: ${{ steps.gateway.outputs.url }}"
+    // Dual checkout — game repo + sugarmagic engine into
+    // ./sugarmagic/ subdirectory. Default ref is `main`; operator
+    // can override via the workflow_dispatch input.
+    expect(yaml).toContain("      - name: Checkout sugarmagic engine");
+    expect(yaml).toContain("          repository: nikkileaps/sugarmagic");
+    expect(yaml).toContain(
+      "          ref: ${{ github.event.inputs.sugarmagic_ref || 'main' }}"
     );
+    expect(yaml).toContain("          path: sugarmagic");
+    // Workflow_dispatch input for engine ref pin.
+    expect(yaml).toContain("      sugarmagic_ref:");
+    // pnpm + node setup with sugarmagic lockfile cache.
+    expect(yaml).toContain("        uses: pnpm/action-setup@v4");
+    expect(yaml).toContain("          package_json_file: sugarmagic/package.json");
+    expect(yaml).toContain("        uses: actions/setup-node@v4");
+    expect(yaml).toContain("          node-version: '20'");
+    expect(yaml).toContain("          cache: pnpm");
+    expect(yaml).toContain(
+      "          cache-dependency-path: sugarmagic/pnpm-lock.yaml"
+    );
+    // Install + build inside the engine checkout.
+    expect(yaml).toContain("        working-directory: sugarmagic");
+    expect(yaml).toContain("        run: pnpm install --frozen-lockfile");
+    expect(yaml).toContain(
+      "        run: pnpm --filter @sugarmagic/target-web build"
+    );
+    // 053.6 follow-up — gateway URL resolution + VITE_SUGARMAGIC_*
+    // env injection on the build step. This restores what Build
+    // Frontend used to do; without it the deployed bundle ships
+    // with an empty plugin runtime env and crashes on first
+    // gateway-touching action.
+    expect(yaml).toContain("      - name: Authenticate to GCP via WIF");
+    expect(yaml).toContain("      - name: Resolve Cloud Run gateway URL");
+    expect(yaml).toContain(
+      "          URL=$(gcloud run services describe wordlark-v1-abcd-sugarmagic-gateway --project wordlark-v1-abcd --region us-central1 --format 'value(status.url)')"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GATEWAY_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: ${{ steps.gateway.outputs.url }}"
+    );
+    expect(yaml).toContain(
+      `          VITE_SUGARMAGIC_GAME_MAJOR_VERSION: "1"`
+    );
+    expect(yaml).toContain(
+      `          VITE_SUGARMAGIC_VERSIONED_SLUG: "wordlark-v1-abcd"`
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GIT_SHA: ${{ github.sha }}"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_BUILD_TIMESTAMP: ${{ github.run_started_at }}"
+    );
+    expect(yaml).toContain("          NODE_ENV: production");
+    // This test fixture sets gatewayAuthMode: "bearer" without
+    // SugarProfile (no upgrade to supabase-jwt), so effective mode
+    // is bearer — the gateway-shared-token bake step should appear
+    // and the bearer token should be baked into the bundle.
+    expect(yaml).toContain("      - name: Resolve gateway bearer token");
+    expect(yaml).toContain(
+      "          TOKEN=$(gcloud secrets versions access latest --secret wordlark-v1-abcd-gateway-shared-token --project wordlark-v1-abcd)"
+    );
+    expect(yaml).toContain(
+      "          VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN: ${{ steps.bearer.outputs.token }}"
+    );
+    // Stage the freshly built dist into the game repo's expected
+    // location, then overlay boot.json.
+    expect(yaml).toContain("          rm -rf .sugarmagic/published-web/dist");
+    expect(yaml).toContain("          mkdir -p .sugarmagic/published-web/dist");
+    expect(yaml).toContain(
+      "          cp -R sugarmagic/targets/web/dist/. .sugarmagic/published-web/dist/"
+    );
+    expect(yaml).toContain(
+      "          cp .sugarmagic/published-web/boot.json .sugarmagic/published-web/dist/boot.json"
+    );
+    // Netlify deploy off the staged directory.
     expect(yaml).toContain("NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}");
     expect(yaml).toContain(
       "NETLIFY_SITE_ID: abc12345-6789-4def-9012-3456789abcde"
     );
-    // Story 46.10 follow-up — frontend deploy targets the pre-baked
-    // `.sugarmagic/published-web/dist` directory; the workflow no
-    // longer clones sugarmagic / runs pnpm install / runs the vite
-    // build. Boot.json is laid into dist/ as a final step before
-    // netlify-cli deploy.
-    expect(yaml).toContain(
-      "cp .sugarmagic/published-web/boot.json .sugarmagic/published-web/dist/boot.json"
-    );
     expect(yaml).toContain(
       'npx -y netlify-cli@17 deploy --site="$NETLIFY_SITE_ID" --dir=.sugarmagic/published-web/dist'
     );
-    expect(yaml).not.toContain("pnpm install --frozen-lockfile");
-    expect(yaml).not.toContain("pnpm --filter @sugarmagic/target-web build");
     expect(yaml).toContain("--prod");
+    // 053.2 — the pre-baked dist verification step (which used to
+    // error out when `.sugarmagic/published-web/dist` was missing)
+    // is gone, since the dist now regenerates inside the runner.
+    // boot.json verification stays.
+    expect(yaml).not.toContain(
+      "click Build Frontend in Provision and commit before re-dispatching"
+    );
+    expect(yaml).toContain("      - name: Verify boot.json exists");
   });
 
   it("omits backend job when only the Netlify frontend target is configured (story 46.7)", () => {
@@ -862,15 +947,18 @@ describe("plugin infrastructure", () => {
     const yaml = workflow?.content ?? "";
     expect(yaml).not.toContain("deploy-backend:");
     expect(yaml).toContain("deploy-frontend:");
-    // Story 46.10 follow-up — frontend deploy is a thin
-    // checkout-and-netlify-deploy off the pre-baked
-    // `.sugarmagic/published-web/` directory; gateway URL plumbing
-    // is gone from the workflow because target-web is no longer
-    // built on the runner.
+    // Story 053.2 — when the backend job is absent there's no
+    // `needs:` gate. The frontend job still rebuilds target-web on
+    // the runner (sugarmagic checkout + pnpm install + build) and
+    // hands the staged dist to netlify-cli.
     expect(yaml).not.toContain(
       "SUGARMAGIC_GATEWAY_URL: ${{ vars.SUGARMAGIC_GATEWAY_URL }}"
     );
     expect(yaml).not.toContain("needs: deploy-backend");
+    expect(yaml).toContain("          repository: nikkileaps/sugarmagic");
+    expect(yaml).toContain(
+      "        run: pnpm --filter @sugarmagic/target-web build"
+    );
     expect(yaml).toContain(
       'npx -y netlify-cli@17 deploy --site="$NETLIFY_SITE_ID" --dir=.sugarmagic/published-web/dist'
     );
@@ -1117,7 +1205,11 @@ describe("plugin infrastructure", () => {
       (file) => file.relativePath === ".sugarmagic/published-web/README.md"
     );
     expect(readme?.content).toContain("Published-web bundle root");
-    expect(readme?.content).toContain("Generated by the Build Frontend button");
+    // 053.4 — the README's `dist/` section was rewritten when
+    // Build Frontend retired. dist regenerates inside the GHA
+    // deploy-frontend job now.
+    expect(readme?.content).toContain("Generated at deploy time (gitignored)");
+    expect(readme?.content).not.toContain("Generated by the Build Frontend button");
   });
 
   it("omits allowed_origins entries when no frontend target is configured (story 46.9)", () => {

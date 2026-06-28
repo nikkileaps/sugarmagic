@@ -411,32 +411,46 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   const setupGithubWorkflowBusy =
     setupGithubWorkflowState?.phase === "running";
 
-  // Story 46.10 follow-up — Build Frontend state machine.
-  type BuildPublishedWebState =
-    | null
-    | { phase: "running" }
-    | { phase: "success"; copiedAt: string; stdout: string }
-    | {
-        phase: "failed";
-        reason: string;
-        stdout: string;
-        stderr: string;
-      };
-  const [buildPublishedWebState, setBuildPublishedWebState] =
-    useState<BuildPublishedWebState>(null);
-
-  // Story 46.10 — Deploy-workflow dispatch + poll state machine.
-  // - preview: preflight is in flight (or has just returned); UI shows
-  //   the ref/sha the user will dispatch, plus the dirty-tree refuse
-  //   message when applicable
-  // - preview-failed: preflight refused (dirty tree, unpushed, etc.)
-  // - dispatching: POST is in flight
-  // - dispatch-failed: POST returned ok=false
+  // Story 053.6 — Deploy-workflow dispatch + poll state machine.
+  // - preview: preflight is in flight (or has just returned); UI
+  //   shows the deploy plan for BOTH repos (game + sugarmagic
+  //   engine): branch, current head sha, files about to be
+  //   auto-committed, untracked files skipped, ahead-of-remote
+  //   count. nikki confirms the plan and dispatch executes it.
+  // - preview-failed: preflight couldn't even read the state
+  //   (missing tool, no upstream branch, etc.). Recoverable
+  //   errors live here; dirty/unpushed are NOT failures anymore
+  //   in this flow.
+  // - dispatching: dispatch endpoint is in flight; it auto-commits,
+  //   auto-pushes, then runs `gh workflow run`.
+  // - dispatch-failed: dispatch returned ok=false (e.g. a git
+  //   conflict during push, or gh workflow run failed).
   // - tracking: dispatched OK; polling status. `runId` keys the
   //   history entry the poll loop keeps fresh
+  interface DeployPlanRepo {
+    workingDirectory: string;
+    branch: string;
+    headSha: string;
+    trackedDirtyFiles: string[];
+    untrackedFiles: string[];
+    aheadCount: number;
+    hasUpstream: boolean;
+  }
+  interface DeployPlan {
+    game: DeployPlanRepo;
+    engine: DeployPlanRepo;
+    upstreamWarnings: string[];
+  }
   type DeployWorkflowState =
     | null
-    | { phase: "preview"; loading: boolean; ref?: string; headSha?: string; reason?: string }
+    | {
+        phase: "preview";
+        loading: boolean;
+        ref?: string;
+        headSha?: string;
+        plan?: DeployPlan;
+        reason?: string;
+      }
     | { phase: "preview-failed"; reason: string }
     | { phase: "dispatching" }
     | { phase: "dispatch-failed"; reason: string; stdout: string; stderr: string }
@@ -686,71 +700,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     });
   }
 
-  // Story 46.10 follow-up — Build Frontend trigger. Calls the host
-  // endpoint which runs the vite build in sugarmagic root and copies
-  // the dist into the wordlark project. No-op if the project's
-  // working directory isn't configured.
-  async function runBuildPublishedWeb() {
-    if (!gameProject || !deploymentSettings?.workingDirectory) return;
-    setBuildPublishedWebState({ phase: "running" });
-    try {
-      // Story 46.14 — pass deploy context so the host endpoint can
-      // resolve VITE_SUGARMAGIC_GATEWAY_URL via gcloud and
-      // VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN via Secret Manager
-      // before invoking the vite build.
-      const response = await fetch("/__sugardeploy/build-published-web", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          workingDirectory: deploymentSettings.workingDirectory,
-          gcpProjectId: cloudRunOverrides.projectId,
-          gcpRegion: cloudRunOverrides.region,
-          serviceNamePrefix: cloudRunOverrides.serviceNamePrefix,
-          // Story 47.9 — POST the EFFECTIVE mode (which can be
-          // "supabase-jwt" when SugarProfile is enabled alongside
-          // bearer), not the raw persisted toggle. The host endpoint
-          // switches on this string to decide whether to bake the
-          // shared bearer into the bundle or skip it.
-          gatewayAuthMode: deriveEffectiveGatewayAuthMode(
-            cloudRunOverrides.gatewayAuthMode,
-            gameProject
-          ),
-          majorVersion: gameProject.majorVersion,
-          versionedSlug: cloudRunOverrides.serviceNamePrefix,
-          gameProjectSlug: gameProject.identity.id
-        })
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        reason?: string;
-        stdout?: string;
-        stderr?: string;
-        copiedAt?: string;
-      } | null;
-      if (!payload?.ok) {
-        setBuildPublishedWebState({
-          phase: "failed",
-          reason: payload?.reason ?? `HTTP ${response.status}`,
-          stdout: payload?.stdout ?? "",
-          stderr: payload?.stderr ?? ""
-        });
-        return;
-      }
-      setBuildPublishedWebState({
-        phase: "success",
-        copiedAt: payload.copiedAt ?? new Date().toISOString(),
-        stdout: payload.stdout ?? ""
-      });
-    } catch (error) {
-      setBuildPublishedWebState({
-        phase: "failed",
-        reason: error instanceof Error ? error.message : String(error),
-        stdout: "",
-        stderr: ""
-      });
-    }
-  }
-
   // Story 46.10 — deploy-workflow handlers. The modal hits these in
   // sequence: openDeployWorkflowModal() runs preflight, then on
   // confirm dispatchDeployWorkflow() POSTs the dispatch endpoint and
@@ -771,6 +720,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         ok?: boolean;
         ref?: string;
         headSha?: string;
+        plan?: DeployPlan;
         reason?: string;
       } | null;
       if (!payload?.ok) {
@@ -784,7 +734,8 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         phase: "preview",
         loading: false,
         ref: payload.ref,
-        headSha: payload.headSha
+        headSha: payload.headSha,
+        plan: payload.plan
       });
     } catch (error) {
       setDeployWorkflowState({
@@ -3226,84 +3177,6 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         );
       })() : null}
 
-      {/* Story 46.10 follow-up — Build Frontend. Runs the
-          @sugarmagic/target-web vite build in the sugarmagic
-          monorepo cwd (where Studio is hosted) and copies dist/
-          into the wordlark project's .sugarmagic/published-web/dist/
-          so the deploy-frontend GHA job has a ready-to-ship bundle
-          to drop into Netlify alongside boot.json (regenerated on
-          save). Build step is out-of-band of save (multi-second
-          vite build) — click when target-web itself changes. */}
-      {isProvision && selectedFrontendTargetId === "netlify" ? (
-        <Stack gap="sm">
-          <Group gap="xs" align="baseline">
-            <Text fw={700} size="md">
-              Frontend Build
-            </Text>
-            <Text size="xs" c="var(--sm-color-subtext)">
-              — refresh the @sugarmagic/target-web bundle
-            </Text>
-          </Group>
-          <Box
-            p="sm"
-            style={{
-              border: "1px solid var(--sm-color-surface3)",
-              borderRadius: 8,
-              background: "var(--sm-color-surface1)"
-            }}
-          >
-            <Stack gap="sm">
-              <Text size="sm" c="var(--sm-color-subtext)">
-                Runs <Code>pnpm --filter @sugarmagic/target-web build</Code> in
-                the Studio's sugarmagic root and copies <Code>targets/web/dist</Code>{" "}
-                into <Code>.sugarmagic/published-web/dist</Code>. Re-run only
-                when the engine itself changes; boot.json (per-game data)
-                regenerates automatically on save.
-              </Text>
-              <Group>
-                <Button
-                  size="xs"
-                  variant="filled"
-                  color="grape"
-                  onClick={() => void runBuildPublishedWeb()}
-                  loading={buildPublishedWebState?.phase === "running"}
-                  disabled={
-                    !deploymentSettings?.workingDirectory ||
-                    buildPublishedWebState?.phase === "running"
-                  }
-                >
-                  Build Frontend
-                </Button>
-                {buildPublishedWebState?.phase === "success" ? (
-                  <Text size="xs" c="green">
-                    OK — {new Date(buildPublishedWebState.copiedAt).toLocaleTimeString()}
-                  </Text>
-                ) : buildPublishedWebState?.phase === "failed" ? (
-                  <Text size="xs" c="red">
-                    Failed (see log below)
-                  </Text>
-                ) : null}
-              </Group>
-              {buildPublishedWebState?.phase === "failed" ? (
-                <Alert color="red" variant="light" title="Build failed">
-                  <Stack gap="xs">
-                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                      {buildPublishedWebState.reason}
-                    </Text>
-                    {buildPublishedWebState.stdout.trim() ? (
-                      <Code block>{buildPublishedWebState.stdout}</Code>
-                    ) : null}
-                    {buildPublishedWebState.stderr.trim() ? (
-                      <Code block>{buildPublishedWebState.stderr}</Code>
-                    ) : null}
-                  </Stack>
-                </Alert>
-              ) : null}
-            </Stack>
-          </Box>
-        </Stack>
-      ) : null}
-
       {isProvision && selectedTargetId === "google-cloud-run" ? (
         <Stack gap="xs">
           <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
@@ -4230,44 +4103,165 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         !deployWorkflowState.loading ? (
           <Stack>
             <Text size="sm">
-              Will dispatch{" "}
-              <Code>sugardeploy-deploy.yml</Code> against this ref. The
-              workflow runs on GitHub Actions; it only sees what's on the
-              remote, so make sure your local changes are pushed.
+              Deploy will auto-commit and push any pending changes in BOTH
+              the game repo and the sugarmagic engine, then dispatch{" "}
+              <Code>sugardeploy-deploy.yml</Code> against the resulting
+              shas. Untracked files are skipped (add them manually if
+              they should ship).
             </Text>
-            <Box
-              p="sm"
-              style={{
-                border: "1px solid var(--sm-color-surface3)",
-                borderRadius: 8,
-                background: "var(--sm-color-surface1)"
-              }}
-            >
+            {deployWorkflowState.plan?.upstreamWarnings.length ? (
+              <Alert color="orange" variant="light" title="Upstream missing">
+                <Stack gap={4}>
+                  {deployWorkflowState.plan.upstreamWarnings.map((warning) => (
+                    <Text key={warning} size="sm">
+                      {warning}
+                    </Text>
+                  ))}
+                </Stack>
+              </Alert>
+            ) : null}
+            {deployWorkflowState.plan ? (
               <Stack gap="xs">
-                <Group gap="xs" wrap="nowrap">
-                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
-                    Ref:
-                  </Text>
-                  <Code>{deployWorkflowState.ref ?? "(unknown)"}</Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap">
-                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
-                    HEAD sha:
-                  </Text>
-                  <Code>
-                    {deployWorkflowState.headSha
-                      ? deployWorkflowState.headSha.slice(0, 12)
-                      : "(unknown)"}
-                  </Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap">
-                  <Text size="sm" c="var(--sm-color-subtext)" w={120}>
-                    Repo:
-                  </Text>
-                  <Code>{deploymentSettings?.githubRepo ?? "(none)"}</Code>
-                </Group>
+                {(
+                  [
+                    {
+                      title: "Game repo",
+                      subtitle: deploymentSettings?.githubRepo ?? "(no GitHub repo set)",
+                      repo: deployWorkflowState.plan.game
+                    },
+                    {
+                      title: "Sugarmagic engine",
+                      subtitle: "nikkileaps/sugarmagic",
+                      repo: deployWorkflowState.plan.engine
+                    }
+                  ] as const
+                ).map(({ title, subtitle, repo }) => {
+                  const willCommit = repo.trackedDirtyFiles.length > 0;
+                  const willPush = willCommit || repo.aheadCount > 0;
+                  const cleanAndUpToDate = !willCommit && !willPush;
+                  return (
+                    <Box
+                      key={title}
+                      p="sm"
+                      style={{
+                        border: "1px solid var(--sm-color-surface3)",
+                        borderRadius: 8,
+                        background: "var(--sm-color-surface1)"
+                      }}
+                    >
+                      <Stack gap="xs">
+                        <Group justify="space-between" wrap="nowrap">
+                          <Text fw={600}>{title}</Text>
+                          <Code>{subtitle}</Code>
+                        </Group>
+                        <Group gap="xs" wrap="nowrap">
+                          <Text size="sm" c="var(--sm-color-subtext)" w={140}>
+                            Branch / HEAD:
+                          </Text>
+                          <Code>
+                            {repo.branch} @ {repo.headSha.slice(0, 12)}
+                          </Code>
+                        </Group>
+                        {cleanAndUpToDate ? (
+                          <Text size="sm" c="var(--sm-color-subtext)">
+                            Clean and up to date with remote.
+                          </Text>
+                        ) : null}
+                        {willCommit ? (
+                          <Stack gap={2}>
+                            <Text size="sm">
+                              Will auto-commit {repo.trackedDirtyFiles.length} tracked
+                              file{repo.trackedDirtyFiles.length === 1 ? "" : "s"}:
+                            </Text>
+                            <Box
+                              p="xs"
+                              style={{
+                                background: "var(--sm-color-surface2)",
+                                borderRadius: 6,
+                                fontFamily: "var(--mantine-font-family-monospace)",
+                                fontSize: 12
+                              }}
+                            >
+                              {repo.trackedDirtyFiles.slice(0, 12).map((path) => (
+                                <div key={path}>{path}</div>
+                              ))}
+                              {repo.trackedDirtyFiles.length > 12 ? (
+                                <div>
+                                  ...and {repo.trackedDirtyFiles.length - 12} more
+                                </div>
+                              ) : null}
+                            </Box>
+                          </Stack>
+                        ) : null}
+                        {willPush ? (
+                          <Text size="sm">
+                            Will push to <Code>origin/{repo.branch}</Code>
+                            {repo.aheadCount > 0 && !willCommit
+                              ? ` (${repo.aheadCount} commit${repo.aheadCount === 1 ? "" : "s"} ahead)`
+                              : ""}
+                            .
+                          </Text>
+                        ) : null}
+                        {repo.untrackedFiles.length > 0 ? (
+                          <Stack gap={2}>
+                            <Text size="sm" c="var(--sm-color-subtext)">
+                              Untracked (skipped — add with{" "}
+                              <Code>git add</Code> if you want them shipped):
+                            </Text>
+                            <Box
+                              p="xs"
+                              style={{
+                                background: "var(--sm-color-surface2)",
+                                borderRadius: 6,
+                                fontFamily: "var(--mantine-font-family-monospace)",
+                                fontSize: 12
+                              }}
+                            >
+                              {repo.untrackedFiles.slice(0, 8).map((path) => (
+                                <div key={path}>{path}</div>
+                              ))}
+                              {repo.untrackedFiles.length > 8 ? (
+                                <div>
+                                  ...and {repo.untrackedFiles.length - 8} more
+                                </div>
+                              ) : null}
+                            </Box>
+                          </Stack>
+                        ) : null}
+                      </Stack>
+                    </Box>
+                  );
+                })}
               </Stack>
-            </Box>
+            ) : (
+              <Box
+                p="sm"
+                style={{
+                  border: "1px solid var(--sm-color-surface3)",
+                  borderRadius: 8,
+                  background: "var(--sm-color-surface1)"
+                }}
+              >
+                <Stack gap="xs">
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" c="var(--sm-color-subtext)" w={120}>
+                      Ref:
+                    </Text>
+                    <Code>{deployWorkflowState.ref ?? "(unknown)"}</Code>
+                  </Group>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm" c="var(--sm-color-subtext)" w={120}>
+                      HEAD sha:
+                    </Text>
+                    <Code>
+                      {deployWorkflowState.headSha
+                        ? deployWorkflowState.headSha.slice(0, 12)
+                        : "(unknown)"}
+                    </Code>
+                  </Group>
+                </Stack>
+              </Box>
+            )}
             <Group justify="flex-end">
               <Button
                 variant="subtle"
@@ -4276,7 +4270,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 Cancel
               </Button>
               <Button onClick={() => void dispatchDeployWorkflow()}>
-                Dispatch Deploy
+                Deploy
               </Button>
             </Group>
           </Stack>

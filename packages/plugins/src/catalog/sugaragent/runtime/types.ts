@@ -57,8 +57,8 @@ export interface SugarAgentPluginConfig {
    * in `none` auth mode (public) and no header is sent. Sourced
    * from `SUGARMAGIC_GATEWAY_BEARER_TOKEN` at build time (which
    * Studio reads from `VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN` and
-   * SugarDeploy's Build Frontend host action resolves via `gcloud
-   * secrets versions access`).
+   * the GHA `deploy-frontend` job's "Resolve gateway bearer
+   * token" step resolves via `gcloud secrets versions access`).
    */
   gatewayBearerToken: string;
   loreSourceKind: "local" | "github";

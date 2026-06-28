@@ -138,8 +138,9 @@ per-game artifact root at `.sugarmagic/published-web/`:
   origin at boot and asserts compatibility on read. See
   [ADR 019](/docs/adr/019-engine-vs-game-lifecycle-split.md)
   for the engine vs. game compatibility contract.
-- `README.md` -- operational guide for what's generated vs.
-  what the Build Frontend button produces.
+- `README.md` -- operational guide describing how `boot.json`
+  is committed and how `dist/` regenerates inside the
+  `deploy-frontend` GHA job at deploy time.
 
 `frontendDeploymentTargetHandlers` in `index.ts` is the per-host
 registry (mirror of the backend `targetHandlers`). Adding a second
@@ -235,9 +236,8 @@ these endpoints:
 | `POST /__sugardeploy/list-version-tags`           | `git tag --list 'v*.0.*'` grouped by major (Release workspace version history) |
 | `POST /__sugardeploy/tag-patch-version`           | Auto-increment + `git tag v{N}.0.M+1 HEAD`; `dryRun: true` returns the plan without side effects |
 | `POST /__sugardeploy/setup-github-workflow`       | `gh variable set` + `gh secret set --body-file -` for the GHA deploy workflow's identifier + credential set |
-| `POST /__sugardeploy/build-published-web`         | Builds `@sugarmagic/target-web` and copies `dist/` into `.sugarmagic/published-web/dist/` (Plan 046 stopgap; Plan 048 reshapes this into a GHCR pull) |
-| `POST /__sugardeploy/preflight-deploy-workflow`   | `gh run` pre-flight + repo-clean check before dispatching the deploy workflow |
-| `POST /__sugardeploy/dispatch-deploy-workflow`    | `gh workflow run` for `sugardeploy-deploy.yml`        |
+| `POST /__sugardeploy/preflight-deploy-workflow`   | Reads game-repo + sugarmagic-engine git state (branch / dirty files / ahead-of-remote) and returns the Deploy plan the modal renders before dispatch (Plan 053.6) |
+| `POST /__sugardeploy/dispatch-deploy-workflow`    | Auto-commits + auto-pushes both repos, then `gh workflow run sugardeploy-deploy.yml -f sugarmagic_ref=<engine-sha>` (Plan 053.6) |
 | `POST /__sugardeploy/get-deploy-workflow-status`  | `gh run view --json` polled by the Deploy workspace tracker |
 | `POST /__sugardeploy/rerun-failed-jobs`           | `gh run rerun --failed` for a tracked run id          |
 | `POST /__sugarprofile/probe-supabase`             | Reachability + project-ref probe before Apply Migration (SugarProfile / Plan 047) |

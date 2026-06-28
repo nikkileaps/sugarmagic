@@ -355,9 +355,11 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           `middleware in dev; the deployed Cloud Run gateway in published- ` +
           `web). In Studio: confirm the repo-root .env carries ` +
           `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL or ` +
-          `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the ` +
-          `Build Frontend host action injected the gateway URL at build ` +
-          `time. See the plugin SDK docs for the proxy-URL contract.`
+          `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the GHA ` +
+          `deploy-frontend job's "Resolve Cloud Run gateway URL" step ` +
+          `succeeded and that the resulting VITE_SUGARMAGIC_GATEWAY_URL ` +
+          `was set on the engine build step. See the plugin SDK docs for ` +
+          `the proxy-URL contract.`
         );
       }
 
