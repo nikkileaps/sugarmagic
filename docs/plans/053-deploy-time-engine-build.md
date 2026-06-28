@@ -301,8 +301,11 @@ URL appears → site updates. No terminal touched.
 
 ### 053.7 — New Game reset path drops position changes
 
-**Status:** Filed during 053.6 follow-up verification; deferred to
-after the 053 epic merges.
+**Status:** Fixed. See `useAutosave`'s new `AutosaveHandle.halt()`
+in `targets/web/src/save/useAutosave.ts` and the
+`await autosave.halt()` (or `registeredAutosaveHalt`) call before
+`store.clear()` in both `targets/web/src/App.tsx` and
+`apps/studio/src/preview.tsx`.
 
 **Symptom:** clicking "New Game" in the published-web Start menu
 correctly dismisses the menu, but the player is not back at

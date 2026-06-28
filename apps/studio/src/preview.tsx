@@ -145,6 +145,15 @@ interface ProviderBindings {
 const providerEvents = new EventTarget();
 let resolvedBindings: ProviderBindings | null = null;
 
+// Story 053.7 — preview's onStartNewGame is registered with
+// host.start() inside the module-scope window-message handler,
+// BEFORE the React component (where useAutosave lives) mounts.
+// The React component publishes its autosave handle here so
+// onStartNewGame can `await registeredAutosaveHalt?.()` before
+// `store.clear()` and avoid the in-flight-write-after-clear race
+// that strands stale player position in the store.
+let registeredAutosaveHalt: (() => Promise<void>) | null = null;
+
 // Story 47.10.5 — boot status drives the "Syncing..." overlay so
 // the player sees a deliberate loading state instead of the bare
 // dark canvas while host.start fetches plugins + provider session
@@ -238,6 +247,12 @@ window.addEventListener("message", (event) => {
         // would skip the reload entirely; deferred to Plan 051 boot
         // phases.
         onStartNewGame: async () => {
+          // Story 053.7 — halt + flush autosave before clearing
+          // so a tick mid-`store.save` can't race past us and
+          // write stale payload AFTER the clear. The handle was
+          // registered by the React component's useEffect (see
+          // `registeredAutosaveHalt`).
+          if (registeredAutosaveHalt) await registeredAutosaveHalt();
           const bindings = resolvedBindings;
           const user = bindings?.identityProvider.currentUser();
           if (bindings && user) {
@@ -431,11 +446,23 @@ function PreviewOverlay() {
   // and the resulting 403s would be invisible silent failures.
   const autosaveStore = active?.saveStore ?? saveStore;
   const autosaveUserId = user?.userId ?? null;
-  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // Story 053.7 — `onStartNewGame` is defined in module scope (in
+  // the window-message handler that calls host.start), which means
+  // it can't lexically close over this handle. Publish a halt
+  // function via the module-level `registeredAutosaveHalt` slot
+  // instead; the handler awaits it before `store.clear()`. See
+  // module-scope comment above for the race this prevents.
+  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       host.notifyAutosaveWritten(written);
     }
   });
+  useEffect(() => {
+    registeredAutosaveHalt = () => autosave.halt();
+    return () => {
+      registeredAutosaveHalt = null;
+    };
+  }, [autosave]);
 
   const prevUserRef = useRef<User | null>(null);
   useEffect(() => {
