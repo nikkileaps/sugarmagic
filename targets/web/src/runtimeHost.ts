@@ -1325,22 +1325,33 @@ export function createWebRuntimeHost(
     }
     world = new World();
     uiContextStore = createUIContextStore();
+    // Story 47.10.5 — the store always boots in the same "no
+    // menu, not paused" baseline; whether the start menu opens at
+    // boot is a separate decision routed through `showStartMenu()`
+    // below so the boot path and the mid-session re-open path
+    // share ONE function. Single source of truth — if the menu
+    // key ever changes there's one place to update; if the
+    // showStartMenu logic ever grows (audio sweep, telemetry,
+    // analytics), both paths get it for free.
+    uiStateStore = createUIStateStore({
+      visibleMenuKey: null,
+      isPaused: false,
+      // Boot-time save presence. The Continue button on the
+      // start menu reads this through the `visibility: "hasSave"`
+      // rule. Flips true on autosave write
+      // (notifyAutosaveWritten) and back to false on
+      // start-new-game.
+      savePresent: resolvedSavedGame != null
+    });
     const startMenuExists = state.menuDefinitions.some(
       (menu) => menu.menuKey === "start-menu"
     );
-    // Story 47.10.5 — `skipStartMenuOnBoot` lets the New Game reset
-    // flow drop the player straight into gameplay after the reload
-    // instead of forcing a second click on the start menu.
-    const showStartMenu = startMenuExists && !state.skipStartMenuOnBoot;
-    uiStateStore = createUIStateStore({
-      visibleMenuKey: showStartMenu ? "start-menu" : null,
-      isPaused: showStartMenu,
-      // Story 47.10.5 — boot-time save presence. The Continue
-      // button on the start menu reads this through the
-      // `visibility: "hasSave"` rule. Flips true on autosave write
-      // (notifyAutosaveWritten) and back to false on start-new-game.
-      savePresent: resolvedSavedGame != null
-    });
+    // `skipStartMenuOnBoot` lets the New Game reset flow drop the
+    // player straight into gameplay after the reload instead of
+    // forcing a second click on the start menu.
+    if (startMenuExists && !state.skipStartMenuOnBoot) {
+      showStartMenu();
+    }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
       stateStore: uiStateStore,

@@ -48,6 +48,23 @@ import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { waitForActiveUser } from "./save/waitForActiveUser";
 
+// Story 47.10.5 — consume the "fresh-start" flag at MODULE LOAD,
+// not inside the React useEffect. React StrictMode (active in dev
+// builds — and our `pnpm --filter @sugarmagic/target-web build` is
+// emitting a dev bundle as evidenced by `jsxDEV` calls in the
+// deployed bundle) double-invokes effects: setup → cleanup → setup.
+// If we read+clear inside the effect, setup #1 sees "1" and clears
+// it, then setup #2 sees null. The host then starts twice — the
+// second time with `skipStartMenuOnBoot: false`, which re-opens the
+// menu we were trying to skip. Module-level code runs once per
+// page load regardless of React lifecycle.
+const __freshStartFlag =
+  typeof sessionStorage !== "undefined" &&
+  sessionStorage.getItem("sugarmagic.fresh-start") === "1";
+if (typeof sessionStorage !== "undefined") {
+  sessionStorage.removeItem("sugarmagic.fresh-start");
+}
+
 type BootPhase =
   | { kind: "loading" }
   | { kind: "running" }
@@ -110,16 +127,11 @@ export function App() {
     });
     hostRef.current = host;
 
-    // Story 47.10.5 — consume the "fresh-start" flag once per boot.
-    // Set by the New Game reset path before reload; cleared here so
-    // a normal Continue / refresh later in the same tab doesn't keep
-    // skipping the start menu.
-    const freshStart =
-      typeof sessionStorage !== "undefined" &&
-      sessionStorage.getItem("sugarmagic.fresh-start") === "1";
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.removeItem("sugarmagic.fresh-start");
-    }
+    // Story 47.10.5 — `__freshStartFlag` is captured at module load
+    // (see top of file). Using a module-level constant here so the
+    // value is stable across StrictMode double-invocations of this
+    // effect.
+    const freshStart = __freshStartFlag;
     void (async () => {
       try {
         const bootResponse = await fetch("/boot.json", {
