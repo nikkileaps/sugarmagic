@@ -13,10 +13,14 @@
     "@sugarmagic/shell": "workspace:*",
     "@sugarmagic/studio": "workspace:*",
     "@sugarmagic/target-web": "workspace:*",
+    "@sugarmagic/ui": "workspace:*",
     "@sugarmagic/workspaces": "workspace:*",
     "three": "^0.183.2"
   },
   "exports": {
     ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5"
   }
 }

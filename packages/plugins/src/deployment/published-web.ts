@@ -131,7 +131,13 @@ function buildBootJsonPayload(
     uiTheme: gameProject.uiTheme,
     soundEventBindings: gameProject.soundEventBindings,
     audioMixer: gameProject.audioMixer,
-    assetSources: snapshot.assetSources
+    assetSources: snapshot.assetSources,
+    // Story 47.10.5 — authored fresh-start record. When a returning
+    // player loads with no save (or just clicked New Game + reset),
+    // the runtime spawns at these values instead of the implicit
+    // playerPresence defaults. `null` for projects that haven't
+    // curated a value.
+    defaultGameSavePayload: gameProject.defaultGameSavePayload
   };
 }
 

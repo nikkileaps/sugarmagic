@@ -29,8 +29,10 @@ import { getDiscoveredPluginDefinition } from "../builtin";
 import { validateGatewayRuntimeConfigKey } from "../sdk";
 import { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 import {
+  type EffectiveGatewayAuthMode,
   type GoogleCloudRunDeploymentTargetOverrides,
   type LocalDeploymentTargetOverrides,
+  deriveEffectiveGatewayAuthMode,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides
 } from "./overrides";
@@ -51,6 +53,15 @@ import {
   NETLIFY_TEMPLATE_VERSION,
   normalizeNetlifyDeploymentTargetOverrides
 } from "./netlify";
+// Story 47.8 — SugarProfile-emitted Supabase managed files (CLI
+// config + migration SQL). Gated on the plugin being enabled with
+// `enableLogin: true` and a non-empty supabaseUrl.
+import {
+  buildSupabaseManagedFiles,
+  buildSupabaseJwtVerifierSource,
+  SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
+  SUPABASE_URL_ENV_VAR
+} from "./supabase";
 import {
   buildSugarDeployGithubWorkflowFile,
   getSugarDeployGithubWorkflowPath,
@@ -188,9 +199,11 @@ interface FrontendDeploymentTargetHandler {
 
 export {
   GITHUB_REPO_REGEX,
+  deriveEffectiveGatewayAuthMode,
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   normalizeLocalDeploymentTargetOverrides,
   stripGithubRepoPrefixes,
+  type EffectiveGatewayAuthMode,
   type GatewayAuthMode
 } from "./overrides";
 
@@ -292,6 +305,16 @@ export {
   type GroupedVersionMajor,
   type ParsedVersionTag
 } from "./version-tags";
+
+export {
+  buildSupabaseManagedFiles,
+  buildSupabaseJwtVerifierSource,
+  extractSupabaseProjectRef,
+  getSugarProfileMigrationDirectory,
+  SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
+  SUPABASE_MIGRATIONS_TEMPLATE_VERSION,
+  SUPABASE_URL_ENV_VAR
+} from "./supabase";
 
 export {
   CLOUD_RUN_TEMPLATE_VERSION,
@@ -505,7 +528,7 @@ function buildGatewayServerFile(
   targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
   containerPort: number,
-  gatewayAuthMode: "none" | "bearer" = "none"
+  gatewayAuthMode: EffectiveGatewayAuthMode = "none"
 ): ManagedProjectFile {
   // TODO: Move this generated gateway scaffold out of the inline template string
   // and into dedicated template/source files so the gateway implementation can be
@@ -515,7 +538,12 @@ import { createServer } from "node:http";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, relative } from "node:path";
-import { timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  createPublicKey,
+  timingSafeEqual,
+  verify as cryptoVerify
+} from "node:crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -662,6 +690,7 @@ function authorizeBearer(req) {
     return false;
   }
 }
+${gatewayAuthMode === "supabase-jwt" ? buildSupabaseJwtVerifierSource() : `// gatewayAuthMode !== "supabase-jwt" — JWT verifier not emitted.`}
 
 function resolveEnv(name, fallback = "") {
   const value = process.env[name];
@@ -1599,9 +1628,15 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Story 45.5.8 — bearer-token auth gate. Generated based on the
-  // gatewayAuthMode override at plan time. /health stays public above; this
-  // gate runs on EVERY other path before the route dispatcher.
+  // Story 45.5.8 / Story 47.9 — auth gate. Generated based on the effective
+  // gatewayAuthMode at plan time:
+  //   - "none"          → no gate
+  //   - "bearer"        → shared-token check (45.5.8)
+  //   - "supabase-jwt"  → Supabase HS256 verification (47.9) — selected
+  //     automatically when SugarProfile is enabled AND the persisted user
+  //     toggle is "bearer". Attaches \`req.user\` for downstream routes.
+  // /health stays public above; this gate runs on EVERY other path before
+  // the route dispatcher.
 ${gatewayAuthMode === "bearer" ? `  if (!authorizeBearer(req)) {
     logInfo("gateway:unauthorized", { path });
     sendJson(res, 401, {
@@ -1610,9 +1645,21 @@ ${gatewayAuthMode === "bearer" ? `  if (!authorizeBearer(req)) {
       message: "Missing or invalid Authorization header. This gateway requires a Bearer token; set the gateway-shared-token deployment secret and send \\"Authorization: Bearer <token>\\" on every request."
     });
     return;
-  }` : `  // gatewayAuthMode === "none" — no auth check; all routes are public.
+  }` : gatewayAuthMode === "supabase-jwt" ? `  const verifiedUser = await ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req);
+  if (!verifiedUser) {
+    logInfo("gateway:unauthorized", { path });
+    sendJson(res, 401, {
+      ok: false,
+      error: "Unauthorized",
+      message: "Missing or invalid Supabase JWT. This gateway requires \\"Authorization: Bearer <jwt>\\" signed by the configured Supabase project."
+    });
+    return;
+  }
+  req.user = verifiedUser;` : `  // gatewayAuthMode === "none" — no auth check; all routes are public.
   // Set gatewayAuthMode to "bearer" in the Studio's Cloud Run section to
-  // gate plugin routes behind the gateway-shared-token deployment secret.`}
+  // gate plugin routes behind the gateway-shared-token deployment secret;
+  // enable SugarProfile alongside "bearer" to upgrade the gate to Supabase
+  // JWT verification (Plan 047 §47.9).`}
 
   const match = findManagedRoute(path);
   if (!match) {
@@ -1757,7 +1804,7 @@ function buildGatewayScaffoldFiles(
   targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
   containerPort: number,
-  gatewayAuthMode: "none" | "bearer" = "none"
+  gatewayAuthMode: EffectiveGatewayAuthMode = "none"
 ): ManagedProjectFile[] {
   return [
     buildGatewayPackageFile(targetId, unit),
@@ -2256,9 +2303,13 @@ function buildGoogleCloudRunManagedFiles(
     })
   ];
 
+  const effectiveGatewayAuthMode = deriveEffectiveGatewayAuthMode(
+    overrides.gatewayAuthMode,
+    gameProject
+  );
   for (const unit of plan.serviceUnits) {
     const serviceDir = getServiceDirectory("google-cloud-run", unit);
-    files.push(...buildGatewayScaffoldFiles("google-cloud-run", unit, overrides.containerPort, overrides.gatewayAuthMode));
+    files.push(...buildGatewayScaffoldFiles("google-cloud-run", unit, overrides.containerPort, effectiveGatewayAuthMode));
     files.push(
       asTextFile(
         `${serviceDir}/service.yaml`,
@@ -2604,18 +2655,22 @@ export function planGameDeployment(
     targetId
   );
 
-  // Story 45.5.8 — bearer-token auth secret injection. When the Cloud Run
-  // target's gatewayAuthMode is "bearer", inject the gateway-shared-token
-  // SecretRequirement into the gateway service unit's secrets list so it
-  // flows through the existing terraform tfvars + deploy.sh --set-secrets +
-  // Studio Set Value paths. Single shared token across all callers; not
-  // per-user identity (that's Plan 047's job).
+  // Story 45.5.8 / Story 47.9 — gateway auth secret injection. The
+  // persisted GatewayAuthMode is "none" | "bearer"; with SugarProfile
+  // enabled, "bearer" is upgraded to "supabase-jwt" — same gateway, but
+  // the inline gate verifies a Supabase HS256 JWT instead of a shared
+  // token. Each mode injects its own SecretRequirement onto the shared
+  // request-response service units; "none" injects nothing.
   if (targetId === "google-cloud-run") {
     const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
       deploymentSettings.targetOverrides["google-cloud-run"],
       gameProject
     );
-    if (cloudRunOverrides.gatewayAuthMode === "bearer") {
+    const effectiveMode = deriveEffectiveGatewayAuthMode(
+      cloudRunOverrides.gatewayAuthMode,
+      gameProject
+    );
+    if (effectiveMode === "bearer") {
       const bearerSecret: SecretRequirement = {
         requirementId: createDeploymentRequirementId({
           ownerId: SUGARDEPLOY_PLUGIN_ID,
@@ -2643,6 +2698,9 @@ export function planGameDeployment(
         }
       }
     }
+    // "supabase-jwt" mode injects no secret — the JWKS verifier
+    // reads SugarProfile's existing supabase-url runtime env var
+    // and fetches the public JWKS endpoint at request time.
   }
 
   const conflicts = [...sourceConflicts, ...serviceConflicts];
@@ -2811,12 +2869,17 @@ export function planGameDeployment(
     ? buildPublishedWebManagedFiles(gameProject, publishedWebSnapshot)
     : [];
 
+  // Story 47.8 — SugarProfile's Supabase migration artifacts.
+  // Empty when SugarProfile is disabled / missing config; emitted
+  // into `deployment/supabase/` when enabled with a configured URL.
+  const supabaseFiles = buildSupabaseManagedFiles(gameProject);
   return {
     ...provisionalPlan,
     managedFiles: [
       ...backendManagedFiles,
       ...frontendManagedFiles,
       ...publishedWebFiles,
+      ...supabaseFiles,
       ...(workflowFile ? [workflowFile] : [])
     ]
   };

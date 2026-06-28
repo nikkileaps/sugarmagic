@@ -18,6 +18,10 @@ For the engine vs. game lifecycle split that backs the published-web
 managed files, read
 [ADR 019](/docs/adr/019-engine-vs-game-lifecycle-split.md)
 and [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md).
+For the user-management plugin (identity provider + save store
+contracts, Supabase migration runner, gateway JWT verification),
+read [ADR 020](/docs/adr/020-sugarprofile-user-management-architecture.md)
+and [Plan 047](/docs/plans/047-sugarprofile-user-management-plugin-epic.md).
 
 ## File layout
 
@@ -236,6 +240,8 @@ these endpoints:
 | `POST /__sugardeploy/dispatch-deploy-workflow`    | `gh workflow run` for `sugardeploy-deploy.yml`        |
 | `POST /__sugardeploy/get-deploy-workflow-status`  | `gh run view --json` polled by the Deploy workspace tracker |
 | `POST /__sugardeploy/rerun-failed-jobs`           | `gh run rerun --failed` for a tracked run id          |
+| `POST /__sugarprofile/probe-supabase`             | Reachability + project-ref probe before Apply Migration (SugarProfile / Plan 047) |
+| `POST /__sugarprofile/run-migration`              | `supabase db push --db-url <direct-postgres-connection>` against the project's `deployment/supabase/migrations/` directory |
 
 Every endpoint accepts JSON, returns `{ ok: boolean, ... }`. Side-effect
 endpoints re-run the relevant pre-flight inside the handler — the Studio's

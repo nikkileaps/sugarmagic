@@ -144,16 +144,31 @@ export interface RuntimePlayerSpawn {
   position: [number, number, number];
 }
 
+/**
+ * Story 47.5 — optional override for the player spawn position. When
+ * a `GameSave.payload.playerPosition` is present at boot, the runtime
+ * passes it here so the player respawns at their saved coordinates
+ * instead of the region's `playerPresence` default.
+ */
+export interface SpawnRuntimePlayerEntityOptions {
+  positionOverride?: { x: number; y: number; z: number } | null;
+}
+
 export function spawnRuntimePlayerEntity(
   world: World,
   region: RegionDocument | null,
   playerDefinition: PlayerDefinition,
-  mechanics: MechanicsDefinition
+  mechanics: MechanicsDefinition,
+  options: SpawnRuntimePlayerEntityOptions = {}
 ): RuntimePlayerSpawn {
   const entity = world.createEntity();
-  const position = region?.scene.playerPresence?.transform.position ?? [
-    0, 0, 0
-  ];
+  const position: [number, number, number] = options.positionOverride
+    ? [
+        options.positionOverride.x,
+        options.positionOverride.y,
+        options.positionOverride.z
+      ]
+    : region?.scene.playerPresence?.transform.position ?? [0, 0, 0];
   world.addComponent(entity, new Position(...position));
   world.addComponent(entity, new Velocity());
   world.addComponent(

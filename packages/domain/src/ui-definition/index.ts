@@ -51,6 +51,25 @@ export interface UIActionExpression {
   args?: Record<string, unknown>;
 }
 
+/**
+ * Story 47.10.5 — declarative visibility rule for a UINode. The
+ * runtime evaluates the rule against its current state and skips
+ * rendering the node + its subtree when the rule doesn't match.
+ *
+ *   - `"always"` (or omitted) — node always renders.
+ *   - `"hasSave"` — render only when the active user has a save
+ *     present in the active save store. The Continue button on the
+ *     start menu uses this.
+ *   - `"noSave"` — render only when no save exists. Useful for
+ *     "Tutorial?" prompts that only matter on first run.
+ *
+ * Future rules (e.g. "hasQuest:<id>", "signed-in") can join the
+ * union without breaking back-compat; the runtime treats unknown
+ * values as `"always"` so a forward-compat project file stays
+ * playable on older runtimes.
+ */
+export type UIVisibilityRule = "always" | "hasSave" | "noSave";
+
 export interface UINode {
   nodeId: string;
   kind: UINodeKind;
@@ -60,6 +79,9 @@ export interface UINode {
   props: Record<string, UIBindingExpression>;
   events: Record<string, UIActionExpression>;
   children: UINode[];
+  /** Story 47.10.5 — declarative visibility. Optional; omitted /
+   *  unknown values are treated as `"always"`. */
+  visibility?: UIVisibilityRule;
 }
 
 export interface UIStyleDefinition {
@@ -145,6 +167,14 @@ export function createUINode(
 }
 
 export function normalizeUINode(node: Partial<UINode> & Pick<UINode, "kind">): UINode {
+  // Story 47.10.5 — unknown visibility values collapse to `"always"`
+  // so a project file authored against a future runtime stays
+  // playable on older runtimes (forward-compat).
+  const rawVisibility = (node as { visibility?: unknown }).visibility;
+  const visibility: UIVisibilityRule =
+    rawVisibility === "hasSave" || rawVisibility === "noSave"
+      ? rawVisibility
+      : "always";
   return {
     nodeId: node.nodeId ?? `ui-node:${createScopedId(node.kind)}`,
     kind: node.kind,
@@ -153,7 +183,8 @@ export function normalizeUINode(node: Partial<UINode> & Pick<UINode, "kind">): U
     anchor: node.anchor ?? null,
     props: node.props ?? {},
     events: node.events ?? {},
-    children: (node.children ?? []).map((child) => normalizeUINode(child))
+    children: (node.children ?? []).map((child) => normalizeUINode(child)),
+    visibility
   };
 }
 

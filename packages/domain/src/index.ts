@@ -20,6 +20,7 @@ export * from "./player-definition/index";
 export * from "./publish-artifacts/index";
 export * from "./quest-definition/index";
 export * from "./region-authoring/index";
+export * from "./save/index";
 export * from "./shader-graph/index";
 export * from "./shared/index";
 export * from "./spell-definition/index";

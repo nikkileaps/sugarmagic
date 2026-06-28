@@ -381,6 +381,17 @@ export function createRuntimeDocumentReaderUI(
 
   function handleKeyDown(event: KeyboardEvent) {
     if (!open) return;
+    // Plan 050 band-aid — don't intercept document navigation keys
+    // (Escape / Enter / arrow keys) when the user is typing into
+    // an input/textarea/contenteditable elsewhere on the page.
+    const target = event.target;
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLInputElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
     if (event.key === "Escape" || (event.key === "Enter" && activeDefinition?.template !== "image-pages")) {
       event.preventDefault();
       setOpen(false);

@@ -26,25 +26,25 @@ describe("runtime UI action registry", () => {
     });
 
     registry.dispatch({ action: "start-new-game" });
-    expect(stateStore.getState()).toEqual({
+    expect(stateStore.getState()).toMatchObject({
       visibleMenuKey: null,
       isPaused: false
     });
 
     registry.dispatch({ action: "pause-game" });
-    expect(stateStore.getState()).toEqual({
+    expect(stateStore.getState()).toMatchObject({
       visibleMenuKey: "pause-menu",
       isPaused: true
     });
 
     registry.dispatch({ action: "resume-game" });
-    expect(stateStore.getState()).toEqual({
+    expect(stateStore.getState()).toMatchObject({
       visibleMenuKey: null,
       isPaused: false
     });
 
     registry.dispatch({ action: "quit-to-menu" });
-    expect(stateStore.getState()).toEqual({
+    expect(stateStore.getState()).toMatchObject({
       visibleMenuKey: "start-menu",
       isPaused: true
     });

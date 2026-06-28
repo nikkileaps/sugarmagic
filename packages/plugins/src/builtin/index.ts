@@ -10,6 +10,7 @@ import { pluginDefinition as helloPluginDefinition } from "../catalog/hello";
 import { pluginDefinition as sugaragentPluginDefinition } from "../catalog/sugaragent";
 import { pluginDefinition as sugardeployPluginDefinition } from "../catalog/sugardeploy";
 import { pluginDefinition as sugarlangPluginDefinition } from "../catalog/sugarlang";
+import { pluginDefinition as sugarprofilePluginDefinition } from "../catalog/sugarprofile";
 export {
   createFirefliesRuntimePlugin,
   FIREFLIES_PLUGIN_ID,
@@ -18,7 +19,11 @@ export {
 export { HELLO_PLUGIN_ID, normalizeHelloPluginConfig } from "../catalog/hello";
 export {
   SUGARAGENT_PLUGIN_ID,
-  normalizeSugarAgentPluginConfig
+  SugarAgentGatewayLLMClient,
+  SugarAgentGatewayEmbeddingsClient,
+  SugarAgentGatewayVectorStoreClient,
+  normalizeSugarAgentPluginConfig,
+  type BearerTokenGetter
 } from "../catalog/sugaragent";
 export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 export {
@@ -26,6 +31,28 @@ export {
   normalizeSugarLangPluginConfig,
   resolveSugarLangTargetLanguage
 } from "../catalog/sugarlang";
+export {
+  SUGARPROFILE_PLUGIN_ID,
+  normalizeSugarProfilePluginConfig,
+  type SugarProfilePluginConfig
+} from "../catalog/sugarprofile";
+export {
+  createSupabaseIdentityProvider,
+  type SupabaseIdentityProviderOptions
+} from "../catalog/sugarprofile/runtime/identity";
+export {
+  createSupabaseGameSaveStore,
+  type SupabaseGameSaveStoreOptions
+} from "../catalog/sugarprofile/runtime/save-store";
+export {
+  createSupabaseProfileStore,
+  type SupabaseProfileStoreOptions
+} from "../catalog/sugarprofile/runtime/profile-store";
+export { LoginModal, type LoginModalMode, type LoginModalProps } from "../catalog/sugarprofile/ui/LoginModal";
+export {
+  SignedInBadge,
+  type SignedInBadgeProps
+} from "../catalog/sugarprofile/ui/SignedInBadge";
 
 // Plugin registry — single source of truth for every plugin Sugarmagic
 // ships. Previously used `import.meta.glob("../catalog/*/index.ts")` for
@@ -42,7 +69,8 @@ const discoveredPlugins: DiscoveredPluginDefinition[] = [
   helloPluginDefinition,
   sugaragentPluginDefinition,
   sugardeployPluginDefinition,
-  sugarlangPluginDefinition
+  sugarlangPluginDefinition,
+  sugarprofilePluginDefinition
 ].sort((left, right) =>
   left.manifest.displayName.localeCompare(right.manifest.displayName)
 );

@@ -43,6 +43,7 @@ export {
   type SortableListItem,
   type SortableListProps
 } from "./SortableList";
+export { IdChip, truncateIdForChip, type IdChipProps } from "./IdChip";
 export {
   InlineAssetField,
   type InlineAssetFieldProps

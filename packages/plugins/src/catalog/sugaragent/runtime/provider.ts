@@ -1,10 +1,11 @@
 import { createUuid } from "@sugarmagic/domain";
-import type {
-  ConversationExecutionContext,
-  ConversationProvider,
-  ConversationProviderContext,
-  ConversationProviderSession,
-  ConversationTurnEnvelope
+import {
+  getActiveAccessToken,
+  type ConversationExecutionContext,
+  type ConversationProvider,
+  type ConversationProviderContext,
+  type ConversationProviderSession,
+  type ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
 import {
   // Story 46.14 — only the gateway-routed providers remain; direct-API
@@ -17,6 +18,7 @@ import {
   SugarAgentGatewayLLMProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
+  type BearerTokenGetter,
   type EmbeddingsProvider,
   type LLMProvider,
   type VectorStoreProvider
@@ -204,16 +206,33 @@ function resolveProviders(
   vectorStoreProvider: VectorStoreProvider | null;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
-  const bearerToken = config.gatewayBearerToken;
+  // Story 47.9.5 — token source depends on gateway auth mode:
+  //   - bearer mode (45.5.8): the shared token was baked into the
+  //     bundle at build time as VITE_SUGARMAGIC_GATEWAY_BEARER_TOKEN
+  //     and normalized into `config.gatewayBearerToken`. Static value
+  //     for the life of the bundle; wrap in an async closure so the
+  //     client's getter contract is satisfied.
+  //   - supabase-jwt mode (47.9): build-time bake is skipped, so
+  //     `gatewayBearerToken` is empty. Fall back to the runtime-core
+  //     access-token registry, which the runtime host populates with
+  //     the active UserIdentityProvider after onProvidersResolved.
+  //     The getter pulls the LIVE access token per request so
+  //     supabase-js's auto-refresh lands on the wire transparently.
+  //   - none mode: both branches return null → no Authorization
+  //     header sent → public gateway accepts.
+  const staticToken = config.gatewayBearerToken.trim();
+  const getBearerToken: BearerTokenGetter = staticToken
+    ? async () => staticToken
+    : getActiveAccessToken;
   return {
     llmProvider: new SugarAgentGatewayLLMProvider(
-      new SugarAgentGatewayLLMClient(baseUrl, bearerToken)
+      new SugarAgentGatewayLLMClient(baseUrl, getBearerToken)
     ),
     embeddingsProvider: new SugarAgentGatewayEmbeddingsProvider(
-      new SugarAgentGatewayEmbeddingsClient(baseUrl, bearerToken)
+      new SugarAgentGatewayEmbeddingsClient(baseUrl, getBearerToken)
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
-      new SugarAgentGatewayVectorStoreClient(baseUrl, bearerToken)
+      new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
     )
   };
 }

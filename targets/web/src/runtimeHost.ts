@@ -89,7 +89,19 @@ import {
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createPlayerVisualController,
+  createSessionHudCard,
+  pickActiveRegionId,
+  pickGameSavePayload,
+  registerActiveIdentityProvider,
+  resolveActiveGameSaveStore,
+  resolveActiveIdentityProvider,
+  type SessionHudSavedGameSnapshot,
   spawnRuntimePlayerEntity,
+  type GameSave,
+  type GameSavePayload,
+  type GameSaveStore,
+  type User,
+  type UserIdentityProvider,
   type SceneObject,
   type GameCameraState,
   type RuntimeBootModel,
@@ -135,6 +147,67 @@ export interface WebRuntimeStartState {
   regions: RegionDocument[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  /**
+   * Story 47.5 — pre-loaded game save record for the current user.
+   * When non-null, the host hydrates from the save's payload
+   * (currentRegionId, playerPosition) instead of the authored
+   * defaults from boot.json. Callers (App.tsx, preview.ts) load
+   * this via `GameSaveStore.load(userId)` before invoking `start`;
+   * `null` is the explicit "first-time player, no save yet" signal.
+   */
+  savedGame?: GameSave | null;
+  /**
+   * Story 47.10 boot-ordering follow-up — alternative to `savedGame`
+   * when the caller needs to defer the save load until AFTER provider
+   * resolution (e.g. App.tsx waits for SugarProfile's Supabase auth
+   * to settle, then reads from the active cloud save store keyed on
+   * the credentialed userId). When set, the host awaits this promise
+   * AFTER firing `onProvidersResolved` but BEFORE region resolution +
+   * player spawn, so the resumed region + position match the cloud
+   * save rather than a stale anonymous-local one. `savedGame` wins
+   * when both are provided (back-compat for callers that already
+   * have the save in hand).
+   */
+  savedGamePromise?: Promise<GameSave | null>;
+  /**
+   * Story 47.5.5 — resolved user at boot, used to populate the
+   * Session debug HUD card under Studio Preview. Callers
+   * construct the active `UserIdentityProvider` and capture
+   * `currentUser()` before invoking `start`. Optional because the
+   * card is studio-only; published-web doesn't render the HUD.
+   */
+  currentUser?: User | null;
+  /**
+   * Story 47.7.5 — fallback identity provider passed when no
+   * plugin contributes an `identity.provider`. The host runs
+   * `resolveActiveIdentityProvider(manager, fallback)` after
+   * plugin init and uses the resolved provider for downstream
+   * consumers (Session HUD card user, the providers-resolved
+   * callback below). When no plugin contributes, the resolved
+   * provider IS the fallback.
+   */
+  fallbackIdentityProvider?: UserIdentityProvider | null;
+  /**
+   * Story 47.7.5 — same shape for the GameSaveStore. The host
+   * doesn't currently use the resolved save store internally
+   * (the save load happens in App.tsx before host.start), but
+   * fires it through `onProvidersResolved` so App.tsx can swap
+   * its own state for the eventual SugarProfile-contributed
+   * cloud store.
+   */
+  fallbackSaveStore?: GameSaveStore | null;
+  /**
+   * Story 47.7.5 — fires synchronously after plugin init + the
+   * resolver call. Receives the resolved active providers (which
+   * may be either the supplied fallbacks or plugin-contributed
+   * overrides). App.tsx uses this to swap UserContext to the
+   * SugarProfile-contributed Supabase provider once SugarProfile
+   * is enabled with a configured URL + anon key.
+   */
+  onProvidersResolved?: (resolved: {
+    identityProvider: UserIdentityProvider;
+    saveStore: GameSaveStore;
+  }) => void;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
   pluginConfigurations: PluginConfigurationRecord[];
@@ -154,12 +227,84 @@ export interface WebRuntimeStartState {
   audioMixer: AudioMixerSettings;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
+  /**
+   * Story 47.10.5 — authored "fresh start" record from
+   * `GameProject.defaultGameSavePayload`. Used when a returning
+   * player has no save (or just clicked "New Game" + reset) so the
+   * runtime spawns at the project-curated starting state instead
+   * of the implicit boot.json + playerPresence defaults. `null`
+   * (omitted) preserves the implicit composition for projects that
+   * don't author a value.
+   */
+  defaultGameSavePayload?: GameSavePayload | null;
+  /**
+   * Story 47.10.5 — fired when the start menu's "New Game" button
+   * is clicked. Callers (App.tsx, preview.tsx) clear the active save
+   * store and reload the page; the brief flash of "loading" then
+   * re-runs host.start with no saved game, spawning the player at
+   * `defaultGameSavePayload` (or implicit defaults). Omitted →
+   * start-new-game falls back to "just hide the menu" (the 47.5
+   * baseline).
+   */
+  onStartNewGame?: () => void | Promise<void>;
+  /**
+   * Story 47.10.5 — fired when the start menu's "Continue" button
+   * is clicked. Boot-time autosave load already placed the player,
+   * so the default implementation just unpauses; this hook lets
+   * games run extra resume logic (e.g. cutscene resume).
+   */
+  onContinueGame?: () => void | Promise<void>;
+  /**
+   * Story 47.10.5 — when true, the host skips showing the
+   * start-menu at boot and starts unpaused. Used by the "New
+   * Game" flow: after clearing the save + reloading, the caller
+   * sets this so the player doesn't have to click through the
+   * start menu a second time to actually start playing.
+   * Default (false / omitted) preserves the menu-on-boot behavior.
+   */
+  skipStartMenuOnBoot?: boolean;
 }
 
 export interface WebRuntimeHost {
   readonly boot: RuntimeBootModel;
-  start: (state: WebRuntimeStartState) => void;
+  /**
+   * Story 47.10 boot-ordering follow-up — returns a Promise so
+   * callers can await full boot (provider resolution + save load +
+   * scene assembly + player spawn) before hiding their loading
+   * overlay. Existing call sites that fire-and-forget keep working
+   * because they never awaited the result anyway.
+   */
+  start: (state: WebRuntimeStartState) => Promise<void>;
   dispose: () => void;
+  /**
+   * Story 47.10 — compose a fresh `GameSavePayload` from the host's
+   * live runtime state (player ECS position, captured active region,
+   * quest manager's tracked quest). Returns `null` before `start()`
+   * has settled (no world, no gameplay session) so the autosave loop
+   * can no-op cleanly during boot. Cheap; safe to call on any tick.
+   */
+  getCurrentSavePayload(): GameSavePayload | null;
+  /**
+   * Story 47.10 follow-up — callers tell the host when a fresh save
+   * was written (autosave loop) so the Session debug HUD card
+   * reflects the latest snapshot. Idempotent; safe to call after
+   * every successful write even when the payload didn't change.
+   */
+  notifyAutosaveWritten(snapshot: {
+    lastPlayed: string;
+    payload: GameSavePayload;
+  }): void;
+  /**
+   * Story 47.10.5 — re-open the start menu mid-session (paused).
+   * Used by the deployed bundle + Studio Preview when the active
+   * user transitions from null to signed-in AFTER boot (e.g. the
+   * player signed out mid-game and just signed back in). Without
+   * this, the LoginModal closes and the game silently resumes
+   * wherever the player was — they never see Continue / New Game
+   * again. Idempotent; no-op when the start menu is already
+   * visible or the project has no `start-menu` definition.
+   */
+  showStartMenu(): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -565,6 +710,18 @@ export function createWebRuntimeHost(
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
+  // Story 47.10 — last region the host resolved at `start()`. Lifted to
+  // closure scope so `getCurrentSavePayload()` can return it without
+  // re-running pickActiveRegionId. Updated only on `start()` for now —
+  // mid-session region transitions land in a follow-up story.
+  let activeRegionIdForSave: string | null = null;
+  // Story 47.10 follow-up — live user + last-known save snapshot
+  // surfaced to the Session debug HUD card. `latestUser` updates on
+  // identity-provider onChange events (sign-in / sign-out); the save
+  // snapshot updates on autosave writes via `notifyAutosaveWritten`.
+  let latestUser: User | null = null;
+  let latestSavedGameSnapshot: SessionHudSavedGameSnapshot | null = null;
+  let identityUnsubscribe: (() => void) | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
@@ -591,6 +748,11 @@ export function createWebRuntimeHost(
       ownerWindow.cancelAnimationFrame(animationId);
       animationId = null;
     }
+
+    identityUnsubscribe?.();
+    identityUnsubscribe = null;
+    latestUser = null;
+    latestSavedGameSnapshot = null;
 
     inputManager?.detach();
     inputManager = null;
@@ -850,7 +1012,7 @@ export function createWebRuntimeHost(
     animationId = ownerWindow.requestAnimationFrame(renderFrame);
   }
 
-  function start(state: WebRuntimeStartState) {
+  async function start(state: WebRuntimeStartState): Promise<void> {
     if (!started) {
       started = true;
       ownerWindow.addEventListener("resize", handleResize);
@@ -874,6 +1036,59 @@ export function createWebRuntimeHost(
       assetSources: state.assetSources,
       mixer: state.audioMixer
     });
+
+    // Story 47.10 boot-ordering follow-up — plugin bootstrap +
+    // provider resolution run BEFORE region resolution and player
+    // spawn so callers can defer the save read via
+    // `state.savedGamePromise`. SugarProfile's runtime contributes
+    // the Supabase identity + save store via this resolver; once
+    // they're picked, `onProvidersResolved` fires and App.tsx
+    // (preview.tsx) can `await active.saveStore.load(userId)` and
+    // pipe the result back through the savedGamePromise so the
+    // host hydrates from the correct (cloud) save.
+    const pluginManager = createResolvedRuntimePluginManager(
+      adapter.boot,
+      state.installedPluginIds,
+      state.pluginConfigurations,
+      state.pluginRuntimeEnvironment ?? {},
+      state.pluginBootPayloads ?? {}
+    );
+    if (state.fallbackIdentityProvider && state.fallbackSaveStore) {
+      const resolvedIdentity = resolveActiveIdentityProvider(
+        pluginManager,
+        state.fallbackIdentityProvider
+      );
+      const resolvedSaveStore = resolveActiveGameSaveStore(
+        pluginManager,
+        state.fallbackSaveStore
+      );
+      // Story 47.9.5 — wire the active identity provider into the
+      // module-level access-token registry so gateway-routed clients
+      // (SugarAgent etc.) read the live access token per request.
+      registerActiveIdentityProvider(resolvedIdentity);
+      // Story 47.10 follow-up — track the resolved user live so the
+      // Session debug HUD card's User / Anon rows reflect sign-in /
+      // sign-out instead of being frozen at the boot-time user.
+      identityUnsubscribe?.();
+      latestUser = resolvedIdentity.currentUser();
+      identityUnsubscribe = resolvedIdentity.onChange((next) => {
+        latestUser = next;
+      });
+      state.onProvidersResolved?.({
+        identityProvider: resolvedIdentity,
+        saveStore: resolvedSaveStore
+      });
+    }
+
+    // Story 47.10 boot-ordering follow-up — await the caller-
+    // supplied save promise (or fall back to the eagerly-provided
+    // savedGame for back-compat). Resolves to the GameSave the host
+    // should use for region + player spawn. The wait is the boot
+    // overlay's job to mask; once this resolves we proceed to scene
+    // setup and region resolution.
+    const resolvedSavedGame: GameSave | null =
+      state.savedGame ??
+      (state.savedGamePromise ? await state.savedGamePromise : null);
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -924,7 +1139,21 @@ export function createWebRuntimeHost(
       }
     });
 
-    const activeRegion = getActiveRegion(state.regions, state.activeRegionId);
+    // Story 47.5 + 47.10.5 — spawn payload precedence: save wins,
+    // then the project's `defaultGameSavePayload` (a fresh-start
+    // record an author can curate), then the implicit boot.json /
+    // playerPresence defaults. `effectiveSpawnPayload` collapses
+    // those into a single record the region picker + player
+    // spawner consume; null means "fall through to implicit."
+    const effectiveSpawnPayload = pickGameSavePayload(
+      resolvedSavedGame?.payload ?? null,
+      state.defaultGameSavePayload ?? null
+    );
+    const resolvedActiveRegionId =
+      effectiveSpawnPayload?.currentRegionId ?? state.activeRegionId ?? null;
+    activeRegionIdForSave =
+      typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
+    const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
     renderEngineProjector.push(state);
     renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
@@ -1096,16 +1325,33 @@ export function createWebRuntimeHost(
     }
     world = new World();
     uiContextStore = createUIContextStore();
+    // Story 47.10.5 — the store always boots in the same "no
+    // menu, not paused" baseline; whether the start menu opens at
+    // boot is a separate decision routed through `showStartMenu()`
+    // below so the boot path and the mid-session re-open path
+    // share ONE function. Single source of truth — if the menu
+    // key ever changes there's one place to update; if the
+    // showStartMenu logic ever grows (audio sweep, telemetry,
+    // analytics), both paths get it for free.
     uiStateStore = createUIStateStore({
-      visibleMenuKey: state.menuDefinitions.some(
-        (menu) => menu.menuKey === "start-menu"
-      )
-        ? "start-menu"
-        : null,
-      isPaused: state.menuDefinitions.some(
-        (menu) => menu.menuKey === "start-menu"
-      )
+      visibleMenuKey: null,
+      isPaused: false,
+      // Boot-time save presence. The Continue button on the
+      // start menu reads this through the `visibility: "hasSave"`
+      // rule. Flips true on autosave write
+      // (notifyAutosaveWritten) and back to false on
+      // start-new-game.
+      savePresent: resolvedSavedGame != null
     });
+    const startMenuExists = state.menuDefinitions.some(
+      (menu) => menu.menuKey === "start-menu"
+    );
+    // `skipStartMenuOnBoot` lets the New Game reset flow drop the
+    // player straight into gameplay after the reload instead of
+    // forcing a second click on the start menu.
+    if (startMenuExists && !state.skipStartMenuOnBoot) {
+      showStartMenu();
+    }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
       stateStore: uiStateStore,
@@ -1114,7 +1360,13 @@ export function createWebRuntimeHost(
       // gameplaySession is assigned later in this same start() call; the
       // closures capture the live binding so dispatch (post-boot) sees it.
       onToggleInventory: () => gameplaySession?.toggleInventory(),
-      onToggleCaster: () => gameplaySession?.toggleCaster()
+      onToggleCaster: () => gameplaySession?.toggleCaster(),
+      // Story 47.10.5 — start-menu Continue / New Game callbacks
+      // forwarded from the caller (App.tsx / preview.tsx). Save
+      // clearing + page reload happens caller-side because only
+      // they own the active save store + the page reload mechanism.
+      onStartNewGame: state.onStartNewGame,
+      onContinueGame: state.onContinueGame
     });
     world.addSystem(
       new UIContextSystem({
@@ -1126,31 +1378,52 @@ export function createWebRuntimeHost(
             : null
       })
     );
-    const pluginManager = createResolvedRuntimePluginManager(
-      adapter.boot,
-      state.installedPluginIds,
-      state.pluginConfigurations,
-      state.pluginRuntimeEnvironment ?? {},
-      state.pluginBootPayloads ?? {}
-    );
     console.info("[web-runtime] plugin-bootstrap", {
       installedPluginIds: state.installedPluginIds,
       pluginConfigurations: state.pluginConfigurations.map((configuration) => ({
         pluginId: configuration.pluginId,
-        enabled: configuration.enabled
+        enabled: configuration.enabled,
+        // Story 47.10 verify — log the per-game config so we can
+        // see whether an enabled plugin actually carries the values
+        // that drive its contribution decisions (e.g. SugarProfile's
+        // enableLogin + supabaseUrl + supabaseAnonKey).
+        config: configuration.config
       })),
       runtimePluginIds: pluginManager
         .getPlugins()
         .map((plugin) => plugin.pluginId),
+      identityProviderContributions: pluginManager
+        .getContributions("identity.provider")
+        .map((contribution) => ({
+          pluginId: contribution.pluginId,
+          contributionId: contribution.contributionId,
+          providerId: contribution.payload.providerId,
+          priority: contribution.priority
+        })),
+      saveStoreContributions: pluginManager
+        .getContributions("save.store")
+        .map((contribution) => ({
+          pluginId: contribution.pluginId,
+          contributionId: contribution.contributionId,
+          storeId: contribution.payload.storeId,
+          priority: contribution.priority
+        })),
       conversationProviderContributionIds: pluginManager
         .getContributions("conversation.provider")
         .map((contribution) => contribution.payload.providerId)
     });
+    // Story 47.5 — when the saved game carries a playerPosition,
+    // spawn there; otherwise fall through to the region's
+    // playerPresence default (which spawnRuntimePlayerEntity handles
+    // when positionOverride is undefined).
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,
       state.playerDefinition,
-      state.mechanics
+      state.mechanics,
+      {
+        positionOverride: effectiveSpawnPayload?.playerPosition ?? null
+      }
     );
     playerEyeHeight = playerSpawn.eyeHeight;
 
@@ -1225,13 +1498,42 @@ export function createWebRuntimeHost(
     });
     if (adapter.boot.hostKind === "studio") {
       gameplaySession.initializeDebugBillboards();
+      // Story 47.5.5 — append the Session card so the author can
+      // watch user / save / region / position update during a
+      // Preview session. The card is filtered to hostKinds: ["studio"]
+      // inside its factory; it would never appear in published-web
+      // anyway, but the explicit guard here makes the intent
+      // unambiguous at the call site.
+      // Story 47.10 follow-up — pass getters so the card refreshes
+      // live: User / Anon track sign-in / sign-out via `latestUser`
+      // (already populated above from the RESOLVED provider's
+      // currentUser + onChange subscription; do NOT overwrite with
+      // state.currentUser here, which is the boot-time anonymous
+      // fallback and would mask whichever provider actually won
+      // resolution); Save / Last Played / Region / Quest update on
+      // autosave via `latestSavedGameSnapshot` (mutated by
+      // notifyAutosaveWritten).
+      latestSavedGameSnapshot = resolvedSavedGame
+        ? {
+            lastPlayed: resolvedSavedGame.lastPlayed,
+            currentRegionId: resolvedSavedGame.payload.currentRegionId,
+            currentQuestId: resolvedSavedGame.payload.currentQuestId
+          }
+        : null;
+      const sessionHudCard = createSessionHudCard({
+        getUser: () => latestUser,
+        getSavedGameSnapshot: () => latestSavedGameSnapshot
+      });
       debugHud = createRuntimeDebugHud({
         parent: root,
         ownerWindow,
         boot: adapter.boot,
         world,
         blackboard: gameplaySession.blackboard,
-        pluginCards: gameplaySession.getDebugHudCardContributions(),
+        pluginCards: [
+          ...gameplaySession.getDebugHudCardContributions(),
+          sessionHudCard
+        ],
         getRendererStats: () => {
           const renderer = renderView?.renderer;
           if (!renderer) {
@@ -1345,9 +1647,53 @@ export function createWebRuntimeHost(
     engine.dispose();
   }
 
+  function notifyAutosaveWritten(snapshot: {
+    lastPlayed: string;
+    payload: GameSavePayload;
+  }): void {
+    latestSavedGameSnapshot = {
+      lastPlayed: snapshot.lastPlayed,
+      currentRegionId: snapshot.payload.currentRegionId,
+      currentQuestId: snapshot.payload.currentQuestId
+    };
+    // Story 47.10.5 — flip the UI's save-presence flag so the
+    // start menu's Continue button appears the moment the first
+    // autosave write lands. Reads via `visibility: "hasSave"` on
+    // the menu node.
+    if (uiStateStore) {
+      uiStateStore.setState({ savePresent: true });
+    }
+  }
+
+  function showStartMenu(): void {
+    if (!uiStateStore) return;
+    uiStateStore.setState({ visibleMenuKey: "start-menu", isPaused: true });
+  }
+
+  function getCurrentSavePayload(): GameSavePayload | null {
+    if (!world || !gameplaySession) return null;
+    const playerEntities = world.query(PlayerControlled, Position);
+    let playerPosition: { x: number; y: number; z: number } | null = null;
+    if (playerEntities.length > 0) {
+      const pos = world.getComponent(playerEntities[0], Position);
+      if (pos) {
+        playerPosition = { x: pos.x, y: pos.y, z: pos.z };
+      }
+    }
+    const trackedQuest = gameplaySession.questManager.getTrackedQuest();
+    return {
+      currentRegionId: activeRegionIdForSave,
+      currentQuestId: trackedQuest?.questDefinitionId ?? null,
+      playerPosition
+    };
+  }
+
   return {
     boot: adapter.boot,
     start,
-    dispose
+    dispose,
+    getCurrentSavePayload,
+    notifyAutosaveWritten,
+    showStartMenu
   };
 }

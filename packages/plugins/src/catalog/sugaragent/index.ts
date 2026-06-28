@@ -9,6 +9,17 @@ import type { RuntimePluginEnvironment } from "../../runtime";
 
 export const SUGARAGENT_PLUGIN_ID = "sugaragent";
 
+// Story 47.9.5 — gateway client classes are surfaced from the plugin
+// root so behavioral tests (per-request token wiring) can construct
+// them directly. The classes are runtime-only; nothing in Studio
+// imports them.
+export {
+  SugarAgentGatewayLLMClient,
+  SugarAgentGatewayEmbeddingsClient,
+  SugarAgentGatewayVectorStoreClient,
+  type BearerTokenGetter
+} from "./runtime/clients";
+
 const deploymentRequirements: DeploymentRequirement[] = [
   {
     requirementId: createDeploymentRequirementId({

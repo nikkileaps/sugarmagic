@@ -46,6 +46,24 @@ export interface DefaultUIActionOptions {
   onLoadGame?: () => void;
   onToggleInventory?: () => void;
   onToggleCaster?: () => void;
+  /**
+   * Story 47.10.5 — "New Game" sequence: clear any persisted save
+   * for the current user, then respawn the player at the project's
+   * `defaultGameSavePayload` (or the implicit defaults). The host
+   * supplies a callback that does both pieces — clearing the active
+   * GameSaveStore + restarting the world / teleporting the player.
+   * Without this option, `start-new-game` falls back to the original
+   * behavior (just hide the menu + unpause).
+   */
+  onStartNewGame?: () => void | Promise<void>;
+  /**
+   * Story 47.10.5 — "Continue" sequence: with autosave, the boot
+   * already loaded the saved game and spawned the player at their
+   * saved position. So Continue just dismisses the menu + unpauses.
+   * Reserved for projects that want to hook in extra logic (e.g.
+   * resume an autosave timer, kick off a cutscene resume tick).
+   */
+  onContinueGame?: () => void | Promise<void>;
 }
 
 export function registerDefaultUIActions(
@@ -56,6 +74,23 @@ export function registerDefaultUIActions(
   const pauseMenuKey = options.pauseMenuKey ?? "pause-menu";
 
   registry.register("start-new-game", () => {
+    // Story 47.10.5 — clear save + respawn at defaults via the
+    // host-supplied callback (fire-and-forget; the host handles
+    // async). Dismissing the menu happens unconditionally so the
+    // player isn't stuck on the menu if no callback is registered.
+    if (options.onStartNewGame) {
+      void Promise.resolve(options.onStartNewGame());
+    }
+    options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
+  });
+
+  registry.register("continue-game", () => {
+    // Story 47.10.5 — boot-time autosave load already placed the
+    // player; Continue just unpauses. Optional host callback can
+    // run extra logic (telemetry, cutscene resume, etc.).
+    if (options.onContinueGame) {
+      void Promise.resolve(options.onContinueGame());
+    }
     options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
   });
 
