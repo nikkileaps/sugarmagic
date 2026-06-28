@@ -2017,11 +2017,22 @@ function createSetupGithubWorkflowPlugin(): VitePlugin {
   };
 }
 
-// Story 46.10 — dispatch + status endpoints that hand the Deploy
-// workspace off to the generated GHA workflow instead of running
-// `gcloud run deploy` inline. Pre-flight refuses on dirty tree or
-// when HEAD isn't pushed — nikki's preference: deploys must come
-// from a pushed git ref, no auto-snapshot branches behind the back.
+// Story 053.6 — dispatch + status endpoints that hand the Deploy
+// workspace off to the generated GHA workflow. The original 46.10
+// shape refused on dirty/unpushed state; 053.6 makes Deploy the
+// only button nikki has to think about. The preflight inspects
+// both the game repo and the sugarmagic engine and returns a
+// "plan" describing what will be auto-committed + pushed; the
+// dispatch executes the plan, then runs `gh workflow run` with
+// the v6 workflow's `sugarmagic_ref` input pinned to the engine's
+// just-pushed sha (no stale-main race window).
+//
+// Auto-commit semantics: `git add -u` (tracked-file modifications
+// only). Untracked files do NOT get swept in — matches nikki's
+// "never `git add -A`" rule and avoids shipping `.playwright-mcp/`
+// or scratch txt detritus. Untracked files are surfaced in the
+// preview so nikki can add them manually if she wants them in the
+// deploy.
 
 interface DispatchDeployWorkflowRequest {
   workingDirectory: unknown;
@@ -2039,35 +2050,57 @@ interface RerunFailedJobsRequest {
   runId: unknown;
 }
 
-async function readGitWorkflowDispatchPreflight(
-  workingDirectory: string,
-  githubRepo: string
-): Promise<{ ok: false; reason: string } | {
+/**
+ * Story 053.6 — walk up from Studio's vite cwd (usually
+ * `apps/studio/`) looking for the sugarmagic monorepo root marker
+ * (`pnpm-workspace.yaml`). Returns the absolute path on success
+ * or a human-readable reason on failure.
+ */
+function findSugarmagicMonorepoRoot(): { ok: true; root: string } | { ok: false; reason: string } {
+  let candidate = process.cwd();
+  while (!existsSync(resolve(candidate, "pnpm-workspace.yaml"))) {
+    const parent = dirname(candidate);
+    if (parent === candidate) {
+      return {
+        ok: false,
+        reason: `Could not find a sugarmagic monorepo root from Studio's cwd (${process.cwd()}); no ancestor directory contains pnpm-workspace.yaml.`
+      };
+    }
+    candidate = parent;
+  }
+  return { ok: true, root: candidate };
+}
+
+/**
+ * Story 053.6 — read-only snapshot of a repo's git state for the
+ * Deploy preview modal. Returns enough info that the UI can show
+ * "X tracked files dirty (will auto-commit), Y untracked (skipped),
+ * Z commits ahead of remote (will push)."
+ */
+interface RepoStateSnapshot {
   ok: true;
-  ref: string;
+  workingDirectory: string;
+  branch: string;
   headSha: string;
-}> {
+  trackedDirtyFiles: string[];
+  untrackedFiles: string[];
+  aheadCount: number;
+  hasUpstream: boolean;
+}
+
+async function inspectRepoState(
+  workingDirectory: string,
+  options: { repoLabel: string }
+): Promise<RepoStateSnapshot | { ok: false; reason: string }> {
   if (workingDirectory.length === 0) {
-    return { ok: false, reason: "workingDirectory is required." };
+    return { ok: false, reason: `${options.repoLabel}: workingDirectory is required.` };
   }
   if (!existsSync(workingDirectory)) {
     return {
       ok: false,
-      reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+      reason: `${options.repoLabel}: workingDirectory does not exist on disk: ${workingDirectory}`
     };
   }
-  if (githubRepo.length === 0) {
-    return {
-      ok: false,
-      reason:
-        "GitHub Repository is not set on this project. Fill it in under Sources before deploying."
-    };
-  }
-  const gitMissing = await ensureGitOnPath();
-  if (gitMissing) return { ok: false, reason: gitMissing };
-  const ghMissing = await ensureGhCliOnPath();
-  if (ghMissing) return { ok: false, reason: ghMissing };
-
   const insideWorkTree = await runHostCommand({
     command: "git",
     args: ["rev-parse", "--is-inside-work-tree"],
@@ -2079,80 +2112,189 @@ async function readGitWorkflowDispatchPreflight(
   ) {
     return {
       ok: false,
-      reason: `${workingDirectory} is not inside a git working tree.`
+      reason: `${options.repoLabel}: ${workingDirectory} is not inside a git working tree.`
     };
   }
-
-  const porcelain = await runHostCommand({
-    command: "git",
-    args: ["status", "--porcelain"],
-    cwd: workingDirectory
-  });
-  if (porcelain.exitCode !== 0) {
-    return {
-      ok: false,
-      reason: `git status failed: ${porcelain.stderr.trim() || `exit code ${porcelain.exitCode}`}`
-    };
-  }
-  if (porcelain.stdout.trim().length > 0) {
-    return {
-      ok: false,
-      reason:
-        "Working tree is not clean. Commit (or stash) and push your changes before deploying — the GHA workflow only sees what's on the remote."
-    };
-  }
-
-  const headSha = await runHostCommand({
-    command: "git",
-    args: ["rev-parse", "HEAD"],
-    cwd: workingDirectory
-  });
-  if (headSha.exitCode !== 0) {
-    return {
-      ok: false,
-      reason: `git rev-parse HEAD failed: ${headSha.stderr.trim() || `exit code ${headSha.exitCode}`}`
-    };
-  }
-
-  const branchName = await runHostCommand({
+  const branchProbe = await runHostCommand({
     command: "git",
     args: ["rev-parse", "--abbrev-ref", "HEAD"],
     cwd: workingDirectory
   });
-  if (branchName.exitCode !== 0) {
+  if (branchProbe.exitCode !== 0) {
     return {
       ok: false,
-      reason: `git rev-parse --abbrev-ref HEAD failed: ${branchName.stderr.trim() || `exit code ${branchName.exitCode}`}`
+      reason: `${options.repoLabel}: git rev-parse --abbrev-ref HEAD failed.`
     };
   }
-
-  // Verify HEAD is pushed: ahead-count vs upstream must be zero. If
-  // there's no upstream configured, that's also a refuse — the
-  // workflow can't dispatch against an untracked branch.
-  const aheadCount = await runHostCommand({
+  const branch = branchProbe.stdout.trim();
+  if (branch === "HEAD") {
+    return {
+      ok: false,
+      reason: `${options.repoLabel}: detached HEAD. Check out a branch before deploying.`
+    };
+  }
+  const headProbe = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "HEAD"],
+    cwd: workingDirectory
+  });
+  if (headProbe.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `${options.repoLabel}: git rev-parse HEAD failed.`
+    };
+  }
+  const headSha = headProbe.stdout.trim();
+  const status = await runHostCommand({
+    command: "git",
+    args: ["status", "--porcelain"],
+    cwd: workingDirectory
+  });
+  if (status.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `${options.repoLabel}: git status failed.`
+    };
+  }
+  const trackedDirtyFiles: string[] = [];
+  const untrackedFiles: string[] = [];
+  for (const line of status.stdout.split("\n")) {
+    if (line.length < 3) continue;
+    const flag = line.slice(0, 2);
+    const path = line.slice(3);
+    if (flag === "??") {
+      untrackedFiles.push(path);
+    } else {
+      trackedDirtyFiles.push(path);
+    }
+  }
+  const aheadProbe = await runHostCommand({
     command: "git",
     args: ["rev-list", "--count", "@{u}..HEAD"],
     cwd: workingDirectory
   });
-  if (aheadCount.exitCode !== 0) {
+  const hasUpstream = aheadProbe.exitCode === 0;
+  const aheadCount = hasUpstream
+    ? Number.parseInt(aheadProbe.stdout.trim(), 10) || 0
+    : 0;
+  return {
+    ok: true,
+    workingDirectory,
+    branch,
+    headSha,
+    trackedDirtyFiles,
+    untrackedFiles,
+    aheadCount,
+    hasUpstream
+  };
+}
+
+/**
+ * Story 053.6 — auto-sync a repo for deploy. Reads its state, then:
+ *  - if there are dirty tracked files: `git add -u` + `git commit`
+ *    with a `[sugardeploy] auto-commit ...` message.
+ *  - if HEAD is ahead of upstream (either originally, or because we
+ *    just committed): `git push`.
+ *  - then re-read HEAD sha so callers can pin GHA dispatch against
+ *    a sha that's guaranteed to be on the remote.
+ *
+ * Untracked files are surfaced in the return value but NOT
+ * auto-added — never `git add -A` here, per nikki's standing rule.
+ */
+interface RepoAutoSyncResult {
+  ok: true;
+  branch: string;
+  beforeHeadSha: string;
+  afterHeadSha: string;
+  didCommit: boolean;
+  committedFiles: string[];
+  didPush: boolean;
+  untrackedSkipped: string[];
+  commitMessage: string | null;
+}
+
+async function runRepoAutoSync(
+  workingDirectory: string,
+  options: { repoLabel: string; nowIso?: string }
+): Promise<RepoAutoSyncResult | { ok: false; reason: string }> {
+  const snapshot = await inspectRepoState(workingDirectory, { repoLabel: options.repoLabel });
+  if (!snapshot.ok) return snapshot;
+  if (!snapshot.hasUpstream) {
     return {
       ok: false,
-      reason:
-        "Current branch has no upstream / can't compare with remote. Run `git push -u origin <branch>` and try again."
-    };
-  }
-  const ahead = Number.parseInt(aheadCount.stdout.trim(), 10);
-  if (!Number.isFinite(ahead) || ahead > 0) {
-    return {
-      ok: false,
-      reason: `Local branch is ${ahead || "?"} commit(s) ahead of remote. Push your changes (\`git push\`) before deploying — the GHA workflow only sees what's on the remote.`
+      reason: `${options.repoLabel}: branch "${snapshot.branch}" has no upstream. Run \`git push -u origin ${snapshot.branch}\` once, then retry deploy.`
     };
   }
 
+  let didCommit = false;
+  let committedFiles: string[] = [];
+  let commitMessage: string | null = null;
+  if (snapshot.trackedDirtyFiles.length > 0) {
+    const add = await runHostCommand({
+      command: "git",
+      args: ["add", "-u"],
+      cwd: workingDirectory
+    });
+    if (add.exitCode !== 0) {
+      return {
+        ok: false,
+        reason: `${options.repoLabel}: \`git add -u\` failed: ${add.stderr.trim() || `exit ${add.exitCode}`}`
+      };
+    }
+    commitMessage = `[sugardeploy] auto-commit ${options.nowIso ?? new Date().toISOString()}`;
+    const commit = await runHostCommand({
+      command: "git",
+      args: ["commit", "-m", commitMessage],
+      cwd: workingDirectory
+    });
+    if (commit.exitCode !== 0) {
+      return {
+        ok: false,
+        reason: `${options.repoLabel}: \`git commit\` failed: ${commit.stderr.trim() || commit.stdout.trim() || `exit ${commit.exitCode}`}`
+      };
+    }
+    didCommit = true;
+    committedFiles = snapshot.trackedDirtyFiles;
+  }
+
+  let didPush = false;
+  const needsPush = didCommit || snapshot.aheadCount > 0;
+  if (needsPush) {
+    const push = await runHostCommand({
+      command: "git",
+      args: ["push"],
+      cwd: workingDirectory
+    });
+    if (push.exitCode !== 0) {
+      return {
+        ok: false,
+        reason: `${options.repoLabel}: \`git push\` failed: ${push.stderr.trim() || `exit ${push.exitCode}`}`
+      };
+    }
+    didPush = true;
+  }
+
+  const finalHead = await runHostCommand({
+    command: "git",
+    args: ["rev-parse", "HEAD"],
+    cwd: workingDirectory
+  });
+  if (finalHead.exitCode !== 0) {
+    return {
+      ok: false,
+      reason: `${options.repoLabel}: post-sync \`git rev-parse HEAD\` failed.`
+    };
+  }
   return {
     ok: true,
-    ref: branchName.stdout.trim(),
-    headSha: headSha.stdout.trim()
+    branch: snapshot.branch,
+    beforeHeadSha: snapshot.headSha,
+    afterHeadSha: finalHead.stdout.trim(),
+    didCommit,
+    committedFiles,
+    didPush,
+    untrackedSkipped: snapshot.untrackedFiles,
+    commitMessage
   };
 }
 
@@ -2175,18 +2317,92 @@ function createPreflightDeployWorkflowPlugin(): VitePlugin {
                 : "";
             const githubRepo =
               typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
-            const preflight = await readGitWorkflowDispatchPreflight(
-              workingDirectory,
-              githubRepo
-            );
-            if (!preflight.ok) {
-              sendJson(res, 200, { ok: false, reason: preflight.reason });
+            if (workingDirectory.length === 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
               return;
+            }
+            if (githubRepo.length === 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  "GitHub Repository is not set on this project. Fill it in under Sources before deploying."
+              });
+              return;
+            }
+            const gitMissing = await ensureGitOnPath();
+            if (gitMissing) {
+              sendJson(res, 200, { ok: false, reason: gitMissing });
+              return;
+            }
+            const ghMissing = await ensureGhCliOnPath();
+            if (ghMissing) {
+              sendJson(res, 200, { ok: false, reason: ghMissing });
+              return;
+            }
+            const monorepoRoot = findSugarmagicMonorepoRoot();
+            if (!monorepoRoot.ok) {
+              sendJson(res, 200, { ok: false, reason: monorepoRoot.reason });
+              return;
+            }
+            // Story 053.6 — preview-mode preflight: read both
+            // repos read-only and surface what dispatch will do.
+            const gameSnapshot = await inspectRepoState(workingDirectory, {
+              repoLabel: "Game repo"
+            });
+            if (!gameSnapshot.ok) {
+              sendJson(res, 200, { ok: false, reason: gameSnapshot.reason });
+              return;
+            }
+            const engineSnapshot = await inspectRepoState(monorepoRoot.root, {
+              repoLabel: "Sugarmagic engine"
+            });
+            if (!engineSnapshot.ok) {
+              sendJson(res, 200, { ok: false, reason: engineSnapshot.reason });
+              return;
+            }
+            const upstreamWarning: string[] = [];
+            if (!gameSnapshot.hasUpstream) {
+              upstreamWarning.push(
+                `Game repo branch "${gameSnapshot.branch}" has no upstream. Run \`git push -u origin ${gameSnapshot.branch}\` once before deploying.`
+              );
+            }
+            if (!engineSnapshot.hasUpstream) {
+              upstreamWarning.push(
+                `Sugarmagic engine branch "${engineSnapshot.branch}" has no upstream. Run \`git push -u origin ${engineSnapshot.branch}\` once before deploying.`
+              );
             }
             sendJson(res, 200, {
               ok: true,
-              ref: preflight.ref,
-              headSha: preflight.headSha
+              // Legacy fields (still consumed by the dispatch
+              // response polling path so the deploy history
+              // entry's `ref`/`headSha` stay correct):
+              ref: gameSnapshot.branch,
+              headSha: gameSnapshot.headSha,
+              // Story 053.6 — full deploy plan for the modal:
+              plan: {
+                game: {
+                  workingDirectory: gameSnapshot.workingDirectory,
+                  branch: gameSnapshot.branch,
+                  headSha: gameSnapshot.headSha,
+                  trackedDirtyFiles: gameSnapshot.trackedDirtyFiles,
+                  untrackedFiles: gameSnapshot.untrackedFiles,
+                  aheadCount: gameSnapshot.aheadCount,
+                  hasUpstream: gameSnapshot.hasUpstream
+                },
+                engine: {
+                  workingDirectory: engineSnapshot.workingDirectory,
+                  branch: engineSnapshot.branch,
+                  headSha: engineSnapshot.headSha,
+                  trackedDirtyFiles: engineSnapshot.trackedDirtyFiles,
+                  untrackedFiles: engineSnapshot.untrackedFiles,
+                  aheadCount: engineSnapshot.aheadCount,
+                  hasUpstream: engineSnapshot.hasUpstream
+                },
+                upstreamWarnings: upstreamWarning
+              }
             });
           } catch (error) {
             sendJson(res, 500, {
@@ -2222,16 +2438,66 @@ function createDispatchDeployWorkflowPlugin(): VitePlugin {
             const requestedRef =
               typeof body.ref === "string" ? body.ref.trim() : "";
 
-            const preflight = await readGitWorkflowDispatchPreflight(
-              workingDirectory,
-              githubRepo
-            );
-            if (!preflight.ok) {
-              sendJson(res, 200, { ok: false, reason: preflight.reason });
+            if (workingDirectory.length === 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
               return;
             }
-            const ref = requestedRef || preflight.ref;
-            const headSha = preflight.headSha;
+            if (githubRepo.length === 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  "GitHub Repository is not set on this project. Fill it in under Sources before deploying."
+              });
+              return;
+            }
+            const gitMissing = await ensureGitOnPath();
+            if (gitMissing) {
+              sendJson(res, 200, { ok: false, reason: gitMissing });
+              return;
+            }
+            const ghMissing = await ensureGhCliOnPath();
+            if (ghMissing) {
+              sendJson(res, 200, { ok: false, reason: ghMissing });
+              return;
+            }
+            const monorepoRoot = findSugarmagicMonorepoRoot();
+            if (!monorepoRoot.ok) {
+              sendJson(res, 200, { ok: false, reason: monorepoRoot.reason });
+              return;
+            }
+            // Story 053.6 — auto-sync BOTH repos before dispatch,
+            // so nikki only ever touches the Deploy button.
+            // Game repo first (so any regenerated workflow YAML
+            // lands on the remote before we dispatch against it);
+            // engine second (we pin its post-push sha as
+            // `sugarmagic_ref` so GHA checks out exactly what we
+            // just pushed — no stale-main race).
+            const nowIso = new Date().toISOString();
+            const gameSync = await runRepoAutoSync(workingDirectory, {
+              repoLabel: "Game repo",
+              nowIso
+            });
+            if (!gameSync.ok) {
+              sendJson(res, 200, { ok: false, reason: gameSync.reason });
+              return;
+            }
+            const engineSync = await runRepoAutoSync(monorepoRoot.root, {
+              repoLabel: "Sugarmagic engine",
+              nowIso
+            });
+            if (!engineSync.ok) {
+              sendJson(res, 200, { ok: false, reason: engineSync.reason });
+              return;
+            }
+
+            // gh's `workflow run --ref` wants a branch or tag, not
+            // a sha — pass the branch name. Race window between
+            // our push and the dispatch is sub-second.
+            const ref = requestedRef || gameSync.branch;
+            const headSha = gameSync.afterHeadSha;
 
             const dispatch = await runHostCommand({
               command: "gh",
@@ -2242,7 +2508,9 @@ function createDispatchDeployWorkflowPlugin(): VitePlugin {
                 "--repo",
                 githubRepo,
                 "--ref",
-                ref
+                ref,
+                "-f",
+                `sugarmagic_ref=${engineSync.afterHeadSha}`
               ],
               cwd: workingDirectory
             });
@@ -2330,7 +2598,33 @@ function createDispatchDeployWorkflowPlugin(): VitePlugin {
               runId: resolved.databaseId,
               runUrl: resolved.url,
               ref,
-              headSha
+              headSha,
+              // Story 053.6 — surface what auto-sync actually did
+              // so the modal can show "committed N files, pushed
+              // both repos" instead of guessing.
+              sugarmagicRef: engineSync.afterHeadSha,
+              autoSync: {
+                game: {
+                  branch: gameSync.branch,
+                  beforeHeadSha: gameSync.beforeHeadSha,
+                  afterHeadSha: gameSync.afterHeadSha,
+                  didCommit: gameSync.didCommit,
+                  committedFiles: gameSync.committedFiles,
+                  didPush: gameSync.didPush,
+                  untrackedSkipped: gameSync.untrackedSkipped,
+                  commitMessage: gameSync.commitMessage
+                },
+                engine: {
+                  branch: engineSync.branch,
+                  beforeHeadSha: engineSync.beforeHeadSha,
+                  afterHeadSha: engineSync.afterHeadSha,
+                  didCommit: engineSync.didCommit,
+                  committedFiles: engineSync.committedFiles,
+                  didPush: engineSync.didPush,
+                  untrackedSkipped: engineSync.untrackedSkipped,
+                  commitMessage: engineSync.commitMessage
+                }
+              }
             });
           } catch (error) {
             sendJson(res, 500, {
@@ -2598,6 +2892,21 @@ function createBuildPublishedWebPlugin(): VitePlugin {
                 : "";
 
             const buildEnv: Record<string, string> = {
+              // Story 053.1 — override the inherited `NODE_ENV`.
+              // Studio runs as a Vite dev server with
+              // `NODE_ENV=development`; `runHostCommand` spreads
+              // `process.env` before this map, so without the
+              // override the spawned `vite build` would inherit
+              // dev mode at the point `@vitejs/plugin-react`
+              // initializes (which fixes the JSX runtime choice
+              // BEFORE `vite build`'s own mode handling kicks in).
+              // That bake-time dev pick is what produced `jsxDEV`
+              // calls in the deployed bundle, which silently
+              // turned React StrictMode into a double-invoker in
+              // prod and broke the Plan 047 §47.10.5 New Game
+              // reset path. Forcing `NODE_ENV=production` here
+              // gives the plugin the correct mode at init.
+              NODE_ENV: "production",
               VITE_SUGARMAGIC_GAME_MAJOR_VERSION: String(majorVersion),
               VITE_SUGARMAGIC_VERSIONED_SLUG: versionedSlug,
               VITE_SUGARMAGIC_BUILD_TIMESTAMP: new Date().toISOString()

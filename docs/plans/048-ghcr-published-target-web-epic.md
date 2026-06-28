@@ -1,5 +1,17 @@
 # Plan 048: Engine Released via Manual GHA, Game Pins Engine Version
 
+**Status:** Deferred (superseded for immediate use by
+[Plan 053](/docs/plans/053-deploy-time-engine-build.md)).
+
+> The full GHCR-published versioned engine remains the right
+> design for the multi-game / breaking-schema-change future. For
+> the current single-game development loop, [Plan 053](/docs/plans/053-deploy-time-engine-build.md)
+> ships the smaller win (no committed `dist/`, no Build Frontend
+> button, GHA builds the engine on each deploy) without version
+> pinning. Pick this plan back up when (a) wordlark isn't the
+> only game, OR (b) deploy-time builds become a friction point,
+> OR (c) we hit a regression cycle bad enough to want pinning.
+
 ## Epic
 
 ### Title

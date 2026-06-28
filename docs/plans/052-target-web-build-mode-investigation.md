@@ -1,6 +1,6 @@
 # Plan 052: target-web Production Build Mode Investigation
 
-**Status:** Proposed
+**Status:** Folded into [Plan 053](/docs/plans/053-deploy-time-engine-build.md) story 053.1.
 **Date:** 2026-06-27
 
 > Surfaced during Plan 047 §47.10.5 prod verification. The
