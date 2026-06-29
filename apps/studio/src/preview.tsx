@@ -69,11 +69,13 @@ import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
+  createSerializedSaveStore,
   createObservableValue,
   registerActiveIdentityProvider,
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type SerializedSaveStore,
   type MutableObservableValue,
   type RuntimeBootModel,
   type User,
@@ -153,7 +155,7 @@ const host = createWebRuntimeHost({
 });
 
 const identityProvider = createAnonymousLocalIdentityProvider();
-const saveStore = createIndexedDBGameSaveStore();
+const saveStore = createSerializedSaveStore(createIndexedDBGameSaveStore());
 
 async function loadSaveSafely(
   store: GameSaveStore,
@@ -172,7 +174,10 @@ async function loadSaveSafely(
 
 interface ProviderBindings {
   identityProvider: UserIdentityProvider;
-  saveStore: GameSaveStore;
+  // SerializedSaveStore: the resolver inside the host wraps
+  // unconditionally so callers can use `resetForNewGame` without
+  // narrowing checks.
+  saveStore: SerializedSaveStore;
 }
 
 // Story 51.2 — replaced the previous module-level
@@ -185,15 +190,6 @@ interface ProviderBindings {
 // incident structurally fixed). Other module-scope readers
 // (window-message handler, onStartNewGame) read via
 // `host.state.activeProviders.getSnapshot()`.
-
-// Story 053.7 — preview's onStartNewGame is registered with
-// host.start() inside the module-scope window-message handler,
-// BEFORE the React component (where useAutosave lives) mounts.
-// The React component publishes its autosave handle here so
-// onStartNewGame can `await registeredAutosaveHalt?.()` before
-// `store.clear()` and avoid the in-flight-write-after-clear race
-// that strands stale player position in the store.
-let registeredAutosaveHalt: (() => Promise<void>) | null = null;
 
 // Story 47.10.5 + 51.2 — boot status drives the "Syncing..."
 // overlay so the player sees a deliberate loading state instead
@@ -295,24 +291,21 @@ window.addEventListener("message", (event) => {
         // would skip the reload entirely; deferred to Plan 051 boot
         // phases.
         onStartNewGame: async () => {
-          // Story 053.7 — halt + flush autosave before clearing
-          // so a tick mid-`store.save` can't race past us and
-          // write stale payload AFTER the clear. The handle was
-          // registered by the React component's useEffect (see
-          // `registeredAutosaveHalt`).
-          if (registeredAutosaveHalt) await registeredAutosaveHalt();
-          // Story 51.2 — read the current providers from the
-          // host's observable store. No more module-level
-          // mirror; this is the canonical snapshot at the
-          // moment New Game fires.
+          // resetForNewGame is the structural guarantee against
+          // the autosave-after-clear race that 053.7 fixed by
+          // convention. The serialized store waits for any
+          // in-flight save, performs the delete, and freezes
+          // future save() calls — no per-callsite halt handle
+          // needed. See
+          // `packages/runtime-core/src/save/serialized-store.ts`.
           const bindings = host.state.activeProviders.getSnapshot();
           const user = bindings?.identityProvider.currentUser();
           if (bindings && user) {
             try {
-              await bindings.saveStore.clear(user.userId);
+              await bindings.saveStore.resetForNewGame(user.userId);
             } catch (error) {
               console.warn(
-                "[studio-preview] start-new-game: clearing save failed; continuing with reload anyway",
+                "[studio-preview] start-new-game: resetForNewGame failed; store is frozen, reload below rebuilds from scratch.",
                 error
               );
             }
@@ -475,23 +468,17 @@ function PreviewOverlay() {
   // and the resulting 403s would be invisible silent failures.
   const autosaveStore = active?.saveStore ?? saveStore;
   const autosaveUserId = user?.userId ?? null;
-  // Story 053.7 — `onStartNewGame` is defined in module scope (in
-  // the window-message handler that calls host.start), which means
-  // it can't lexically close over this handle. Publish a halt
-  // function via the module-level `registeredAutosaveHalt` slot
-  // instead; the handler awaits it before `store.clear()`. See
-  // module-scope comment above for the race this prevents.
-  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // The 053.7 halt() handle is gone: the SerializedSaveStore
+  // wrapper now owns the in-flight-flush + freeze guarantee, so
+  // module-scope onStartNewGame (which can't lexically close
+  // over this hook anyway) doesn't need a callback bridge to
+  // the hook. The hook just polls + writes; it knows nothing
+  // about destructive flows.
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       host.notifyAutosaveWritten(written);
     }
   });
-  useEffect(() => {
-    registeredAutosaveHalt = () => autosave.halt();
-    return () => {
-      registeredAutosaveHalt = null;
-    };
-  }, [autosave]);
 
   const prevUserRef = useRef<User | null>(null);
   useEffect(() => {

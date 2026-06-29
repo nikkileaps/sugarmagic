@@ -50,8 +50,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
+  createSerializedSaveStore,
   type GameSave,
   type GameSaveStore,
+  type SerializedSaveStore,
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
@@ -97,7 +99,12 @@ type BootPhase =
 
 interface ProviderBindings {
   identityProvider: UserIdentityProvider;
-  saveStore: GameSaveStore;
+  // Always the SerializedSaveStore subtype: both the IndexedDB
+  // fallback constructed below and the resolved active store
+  // (wrapped inside `resolveActiveGameSaveStore`) carry
+  // `resetForNewGame`. App-level reset flows depend on that
+  // being present unconditionally.
+  saveStore: SerializedSaveStore;
 }
 
 export function App() {
@@ -113,7 +120,7 @@ export function App() {
     try {
       return {
         identityProvider: createAnonymousLocalIdentityProvider(),
-        saveStore: createIndexedDBGameSaveStore()
+        saveStore: createSerializedSaveStore(createIndexedDBGameSaveStore())
       };
     } catch (error) {
       console.error(
@@ -223,21 +230,32 @@ export function App() {
           // In-place reset would skip the reload entirely; deferred
           // to Plan 051 boot phases.
           onStartNewGame: async () => {
-            // Story 053.7 — halt autosave + flush any in-flight
-            // write BEFORE clearing the save. Otherwise a tick
-            // that's mid-`store.save(userId, payload)` when New
-            // Game fires will resolve AFTER the clear, write the
-            // stale player position back into the store, and the
-            // post-reload boot reads the stale save — player
-            // doesn't return to origin.
-            await autosave.halt();
+            // `resetForNewGame` is the structural guarantee that
+            // replaced the older halt() + clear() dance:
+            //   1. The store's serialized chain awaits any
+            //      already-accepted save() (so a tick mid-write
+            //      finishes before the delete runs).
+            //   2. The store deletes the row.
+            //   3. The store freezes — every subsequent save()
+            //      against this instance becomes a no-op, so
+            //      autosave ticks scheduled after this point
+            //      can't reintroduce stale state.
+            // No per-callsite halt handle, no useAutosave
+            // contract, no "remember to call halt first" rule.
+            // See `packages/runtime-core/src/save/serialized-store.ts`.
             const settledUser = active?.identityProvider.currentUser();
             if (active && settledUser) {
               try {
-                await active.saveStore.clear(settledUser.userId);
+                await active.saveStore.resetForNewGame(settledUser.userId);
               } catch (error) {
+                // The store stays frozen on failure (defense in
+                // depth — no autosave can re-corrupt). Logging is
+                // enough; the reload below is still the correct
+                // recovery, since the next page load constructs a
+                // fresh store and the next autosave write is
+                // the canonical write-after-reset path.
                 console.warn(
-                  "[target-web] start-new-game: clearing save failed; continuing with reload anyway",
+                  "[target-web] start-new-game: resetForNewGame failed; the store is frozen and the reload below will rebuild from scratch.",
                   error
                 );
               }
@@ -326,15 +344,13 @@ export function App() {
   // preview.tsx for the rationale; same considerations apply here.
   const autosaveStore = active?.saveStore ?? fallback?.saveStore ?? null;
   const autosaveUserId = user?.userId ?? null;
-  // Story 053.7 — `onStartNewGame` (defined inside the boot effect
-  // ABOVE) needs to halt + flush autosave before calling
-  // `store.clear()`, otherwise an in-flight autosave write resolves
-  // AFTER the clear and the next boot reads stale player position.
-  // The boot effect closes over `autosave` lexically; that's fine
-  // because `useAutosave`'s internal `haltedRef` /
-  // `inFlightWriteRef` are stable across renders, so any handle
-  // object (first render or later) drives the current state.
-  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // The 053.7 halt() handle is gone — its job (flushing
+  // in-flight writes before a destructive store op) now lives
+  // inside the SerializedSaveStore wrapper that wraps every
+  // active store via resolveActiveGameSaveStore. The hook just
+  // polls + writes; it doesn't need to know about start-new-
+  // game or sign-out flows.
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       hostRef.current?.notifyAutosaveWritten(written);
     }

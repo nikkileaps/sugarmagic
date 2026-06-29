@@ -447,14 +447,42 @@ describe("identity.provider + save.store contribution kinds", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("resolveActiveGameSaveStore returns the fallback when no plugin contributes", () => {
+  // resolveActiveGameSaveStore wraps the resolved store via
+  // createSerializedSaveStore so resetForNewGame is always
+  // available on the active store. These tests assert
+  // delegation to the underlying instead of instance equality.
+  async function expectResolvedDelegatesTo(
+    resolved: GameSaveStore,
+    target: GameSaveStore,
+    label: string
+  ): Promise<void> {
+    const baseSave: GameSave = {
+      userId: "u",
+      lastPlayed: "iso",
+      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+      payload: {
+        currentRegionId: "r",
+        currentQuestId: null,
+        playerPosition: null
+      }
+    };
+    await resolved.save("u", baseSave);
+    const direct = await target.load("u");
+    expect(direct?.lastPlayed).toBe(`${label}:iso`);
+    // resetForNewGame is the new structural primitive — the
+    // wrapped resolver output must expose it.
+    expect(typeof (resolved as { resetForNewGame?: unknown }).resetForNewGame)
+      .toBe("function");
+  }
+
+  it("resolveActiveGameSaveStore returns the fallback when no plugin contributes", async () => {
     const fallback = makeStubGameSaveStore("fallback");
     const manager = buildManager([]);
     const resolved = resolveActiveGameSaveStore(manager, fallback);
-    expect(resolved).toBe(fallback);
+    await expectResolvedDelegatesTo(resolved, fallback, "fallback");
   });
 
-  it("resolveActiveGameSaveStore returns the single contributing store", () => {
+  it("resolveActiveGameSaveStore returns the single contributing store", async () => {
     const fallback = makeStubGameSaveStore("fallback");
     const cloud = makeStubGameSaveStore("cloud");
     const manager = buildManager([
@@ -472,10 +500,10 @@ describe("identity.provider + save.store contribution kinds", () => {
       }
     ]);
     const resolved = resolveActiveGameSaveStore(manager, fallback);
-    expect(resolved).toBe(cloud);
+    await expectResolvedDelegatesTo(resolved, cloud, "cloud");
   });
 
-  it("resolveActiveGameSaveStore returns the highest-priority contribution when two plugins contribute", () => {
+  it("resolveActiveGameSaveStore returns the highest-priority contribution when two plugins contribute", async () => {
     const fallback = makeStubGameSaveStore("fallback");
     const low = makeStubGameSaveStore("low");
     const high = makeStubGameSaveStore("high");
@@ -507,7 +535,7 @@ describe("identity.provider + save.store contribution kinds", () => {
     ]);
     const warn = vi.fn();
     const resolved = resolveActiveGameSaveStore(manager, fallback, { warn });
-    expect(resolved).toBe(high);
+    await expectResolvedDelegatesTo(resolved, high, "high");
     expect(warn).toHaveBeenCalledTimes(1);
     const [message] = warn.mock.calls[0];
     expect(message).toContain("save.store");
@@ -2813,12 +2841,23 @@ describe("47.10.5 — pickGameSavePayload", () => {
 });
 
 describe("47.10.5 — save-aware UI actions", () => {
-  it("start-new-game fires the host callback and dismisses the menu", async () => {
-    const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
+  it("start-new-game fires the host callback and leaves the menu state ALONE (host owns the reload)", async () => {
+    // The host callback is contractually responsible for the
+    // entire flow: destroy the save (via the store's
+    // resetForNewGame), set the fresh-start sessionStorage
+    // flag, and call window.location.reload(). The reload
+    // navigates the page away, so any local menu dismissal
+    // here would just briefly reveal stale gameplay state
+    // (and give a queued autosave a window to fire) between
+    // "menu hides" and "page actually reloads."
+    // ui-actions deliberately leaves the menu in place — the
+    // reload is what closes it.
+    const initialMenuState = {
+      visibleMenuKey: "start-menu" as const,
       isPaused: true,
       savePresent: true
-    });
+    };
+    const stateStore = createUIStateStore(initialMenuState);
     const registry = createUIActionRegistry();
     const onStartNewGame = vi.fn(async () => undefined);
     registerDefaultUIActions(registry, {
@@ -2826,13 +2865,11 @@ describe("47.10.5 — save-aware UI actions", () => {
       onStartNewGame
     });
     registry.dispatch({ action: "start-new-game" });
-    // Microtask drain so the awaited host callback resolves.
     await Promise.resolve();
     expect(onStartNewGame).toHaveBeenCalledTimes(1);
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: null,
-      isPaused: false
-    });
+    // Menu still showing: the host callback's reload is what
+    // closes it, not ui-actions.
+    expect(stateStore.getState()).toMatchObject(initialMenuState);
   });
 
   it("continue-game fires the host callback and dismisses the menu", async () => {

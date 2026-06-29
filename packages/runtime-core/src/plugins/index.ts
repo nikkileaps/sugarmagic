@@ -24,7 +24,11 @@ import type {
 } from "../conversation";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
-import type { GameSaveStore } from "../save";
+import {
+  createSerializedSaveStore,
+  type GameSaveStore,
+  type SerializedSaveStore
+} from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
 import type {
   DocumentDefinition,
@@ -464,13 +468,21 @@ export function resolveActiveIdentityProvider(
 // Story 47.2 — pick the active GameSaveStore at boot. Same shape as
 // resolveActiveIdentityProvider; the two run side-by-side at boot and
 // are typically resolved together.
+//
+// The resolved store is ALWAYS wrapped via createSerializedSaveStore
+// so the New Game flow's resetForNewGame() is structurally
+// guaranteed regardless of which plugin (or none) contributed the
+// underlying store. Plugin contributors return plain GameSaveStore
+// values; the wrapping is the platform's responsibility, not theirs.
+// Idempotent — if a contributor already wraps, the second wrap is
+// a no-op.
 export function resolveActiveGameSaveStore(
   manager: RuntimePluginManager,
   fallback: GameSaveStore,
   logger: ResolverLogger = defaultResolverLogger
-): GameSaveStore {
+): SerializedSaveStore {
   const contributions = manager.getContributions("save.store");
-  if (contributions.length === 0) return fallback;
+  if (contributions.length === 0) return createSerializedSaveStore(fallback);
   if (contributions.length > 1) {
     logger.warn(
       `[runtime-core] Multiple plugins contribute save.store; picking highest priority.`,
@@ -486,7 +498,7 @@ export function resolveActiveGameSaveStore(
   const winner = contributions
     .slice()
     .sort((a, b) => b.priority - a.priority)[0];
-  return winner.payload.store;
+  return createSerializedSaveStore(winner.payload.store);
 }
 
 // Story 47.8 — pick the active UserProfileStore at boot. Returns

@@ -100,6 +100,7 @@ import {
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type SerializedSaveStore,
   type User,
   type UserIdentityProvider,
   type SceneObject,
@@ -211,7 +212,10 @@ export interface WebRuntimeStartState {
    */
   onProvidersResolved?: (resolved: {
     identityProvider: UserIdentityProvider;
-    saveStore: GameSaveStore;
+    // Always wrapped via `createSerializedSaveStore` inside
+    // `resolveActiveGameSaveStore` so callers can call
+    // `resetForNewGame` without checking for it.
+    saveStore: SerializedSaveStore;
   }) => void;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
@@ -280,7 +284,10 @@ export interface WebRuntimeStartState {
  */
 export interface ProviderBindings {
   identityProvider: UserIdentityProvider;
-  saveStore: GameSaveStore;
+  // SerializedSaveStore (the subtype with `resetForNewGame`).
+  // `resolveActiveGameSaveStore` wraps unconditionally so callers
+  // can rely on the reset API without per-callsite null checks.
+  saveStore: SerializedSaveStore;
 }
 
 /**
