@@ -71,3 +71,58 @@ The pattern, made concrete for new plugins:
 The reference implementations are SugarAgent (`catalog/sugaragent/`)
 and Sugarlang (`catalog/sugarlang/`). Both went through this
 refactor as part of story 46.14.
+
+## Host-side gcloud auth (Plan 049)
+
+If your plugin's host middleware shells `gcloud` (or `terraform`,
+or any tool that reads Google Application Default Credentials),
+you get the developer's persistent SA auth for free. Specifically:
+
+- `runHostCommand` inherits the Studio process's `process.env`,
+  so `GOOGLE_APPLICATION_CREDENTIALS` propagates into every
+  subprocess the host action spawns. ADC-aware tools pick it up.
+- Studio is launched from a shell where `~/.zshrc` exports the
+  env var (per `docs/setup/persistent-gcloud-auth.md`). Plugins
+  don't configure this, don't read this, don't validate this —
+  it's developer-machine setup, out of scope for plugin code.
+
+What plugins SHOULD do when they shell gcloud:
+
+1. **Pre-flight auth state** by calling `ensureGcloudAuthReady`
+   (in `catalog/sugardeploy/host/gcloud-auth.ts`) before any
+   real gcloud command. Returns `null` on success or a reason
+   string pointing the user at the setup docs on failure.
+   Modeled on `ensureGhCliOnPath` / `ensureGitOnPath` — same
+   return shape, identical call site pattern.
+2. **Don't** add `--account` flags to your gcloud invocations.
+   The active gcloud account is the developer SA (set once by
+   `gcloud auth activate-service-account` during Layer A). Your
+   shell-outs just use it. No identity routing needed in plugin
+   code.
+3. **Don't** call `gcloud auth login` from a host action. User
+   reauth is out-of-band — if `ensureGcloudAuthReady` fails,
+   surface the docs link in the response message and let the
+   developer run `gcloud auth login` themselves in a terminal
+   (or, better, finish the SA setup in the docs).
+
+If your plugin needs IAM bindings on a target project
+(Layer B-style "the SA needs roles here"), follow SugarDeploy's
+pattern: surface a `code: "developer-sa-needs-project-grant"` in
+the action response with the missing roles list, and let
+Studio's modal render a copy-pasteable terminal command for the
+developer to run as themselves. Plugins NEVER run
+`add-iam-policy-binding` directly — the SA can't grant itself,
+and routing user-identity through plugin code muddies the
+SA-only boundary.
+
+See:
+
+- `packages/plugins/src/catalog/sugardeploy/host/gcloud-auth.ts`
+  — the `ensureGcloudAuthReady` helper.
+- `packages/plugins/src/catalog/sugardeploy/host/developer-sa.ts`
+  — `DEVELOPER_SA_REQUIRED_ROLES`, `resolveDeveloperSaEmail`,
+  `checkDeveloperSaProjectAccess`.
+- `docs/setup/persistent-gcloud-auth.md` — developer-machine
+  setup recipe.
+- [Plan 049](/docs/plans/049-persistent-gcloud-developer-service-account-epic.md)
+  — design and rationale.

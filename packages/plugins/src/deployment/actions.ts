@@ -41,6 +41,21 @@ export interface DeploymentActionExecutionResult {
   stdout: string;
   stderr: string;
   message: string;
+  /**
+   * Plan 049 §49.4 — surfaced by the action dispatcher when Layer B
+   * detection finds the developer SA missing required IAM roles on
+   * the target game project's GCP. Present only on failure
+   * responses (`ok: false`); absent on success paths. Consumed by
+   * Studio's Layer B modal (49.5) to render the copy-pasteable
+   * bootstrap command block.
+   */
+  code?: "developer-sa-needs-project-grant";
+  /** §49.4 — populated alongside `code`. */
+  missingRoles?: string[];
+  /** §49.4 — populated alongside `code`. */
+  gcpProjectId?: string;
+  /** §49.4 — populated alongside `code`. */
+  saEmail?: string;
 }
 
 interface DeploymentExecutionContext {

@@ -18,6 +18,8 @@ import {
   runHostCommandSequence,
   type HostCommandStep
 } from "../../../host";
+import { ensureGcloudAuthReady } from "./gcloud-auth";
+import { checkDeveloperSaProjectAccess } from "./developer-sa";
 import {
   normalizeDeploymentSettings,
   normalizeGameProject,
@@ -567,6 +569,21 @@ async function probeServiceHealth(
         error: gcloudError
       };
     }
+    // Story 49.2 — gcloud binary is on PATH; verify it can actually
+    // mint a credential. Without this, the next `gcloud run services
+    // describe` would 401 with a raw gcloud reauth-needed blob; the
+    // setup-docs pointer is much friendlier.
+    const gcloudAuthError = await ensureGcloudAuthReady();
+    if (gcloudAuthError !== null) {
+      return {
+        ok: false,
+        statusCode: null,
+        durationMs: 0,
+        bodyPreview: "",
+        resolvedUrl: null,
+        error: gcloudAuthError
+      };
+    }
     // Probe the FIRST service unit. Multi-service plans get treated as
     // single-gateway for now; per-unit probe expansion is a follow-up.
     const describeResult = await runHostCommand({
@@ -725,6 +742,63 @@ function createActionDispatcherPlugin(): VitePlugin {
                   descriptor.reason ?? "SugarDeploy action is not supported."
               } satisfies DeploymentActionExecutionResult);
               return;
+            }
+
+            // Story 49.2 + 49.4 — Cloud Run actions (deploy / status /
+            // destroy / setup-infra / teardown-infra / health) all touch
+            // gcloud (or terraform-against-GCP) somewhere. Pre-flight
+            // BEFORE any of the action-specific branches below so that
+            // auth + Layer B detection fire uniformly — including for
+            // the health probe, which shells `gcloud run services
+            // describe` to resolve the service URL.
+            if (descriptor.targetId === "google-cloud-run") {
+              const gcloudAuthError = await ensureGcloudAuthReady();
+              if (gcloudAuthError !== null) {
+                sendJson(res, 412, {
+                  ok: false,
+                  descriptor,
+                  exitCode: null,
+                  stdout: "",
+                  stderr: gcloudAuthError,
+                  message: gcloudAuthError
+                } satisfies DeploymentActionExecutionResult);
+                return;
+              }
+              // Story 49.4 — probe the developer SA's IAM coverage on
+              // the target game project's GCP. Returns the
+              // `developer-sa-needs-project-grant` code on failure so
+              // Studio's modal (49.5) can surface the copy-paste
+              // bootstrap. Silently no-op when no developer SA is
+              // configured (user is on `gcloud auth login` instead —
+              // their own owner roles carry the action).
+              if (normalizedGameProject) {
+                const cloudRunOverrides =
+                  normalizeGoogleCloudRunDeploymentTargetOverrides(
+                    deploymentSettings.targetOverrides["google-cloud-run"],
+                    normalizedGameProject
+                  );
+                const layerBProjectId = cloudRunOverrides.projectId;
+                if (layerBProjectId.length > 0) {
+                  const access = await checkDeveloperSaProjectAccess(
+                    layerBProjectId
+                  );
+                  if (!access.ok) {
+                    sendJson(res, 412, {
+                      ok: false,
+                      descriptor,
+                      exitCode: null,
+                      stdout: "",
+                      stderr: access.reason,
+                      message: access.reason,
+                      code: access.code,
+                      missingRoles: access.missingRoles,
+                      gcpProjectId: access.gcpProjectId,
+                      saEmail: access.saEmail
+                    } satisfies DeploymentActionExecutionResult);
+                    return;
+                  }
+                }
+              }
             }
 
             // Story 45.6 — health probe. No shell command runs; instead the
@@ -1029,6 +1103,19 @@ function createBillingListPlugin(): VitePlugin {
               });
               return;
             }
+            // Story 49.2 — auth pre-flight before billing call.
+            const gcloudAuthError = await ensureGcloudAuthReady();
+            if (gcloudAuthError !== null) {
+              sendJson(res, 400, {
+                ok: false,
+                accounts: [],
+                exitCode: null,
+                stdout: "",
+                stderr: gcloudAuthError,
+                message: gcloudAuthError
+              });
+              return;
+            }
 
             const runResult = await runHostCommand({
               command: "gcloud",
@@ -1112,6 +1199,19 @@ function createGcpProjectLifecyclePlugin(): VitePlugin {
                 stdout: "",
                 stderr: gcloudError,
                 message: gcloudError
+              });
+              return;
+            }
+            // Story 49.2 — auth pre-flight before project probe.
+            const gcloudAuthError = await ensureGcloudAuthReady();
+            if (gcloudAuthError !== null) {
+              sendJson(res, 400, {
+                ok: false,
+                status: "unknown",
+                exitCode: null,
+                stdout: "",
+                stderr: gcloudAuthError,
+                message: gcloudAuthError
               });
               return;
             }
@@ -1212,6 +1312,18 @@ function createGcpProjectLifecyclePlugin(): VitePlugin {
                 stdout: "",
                 stderr: gcloudError,
                 message: gcloudError
+              });
+              return;
+            }
+            // Story 49.2 — auth pre-flight before project create.
+            const gcloudAuthError = await ensureGcloudAuthReady();
+            if (gcloudAuthError !== null) {
+              sendJson(res, 400, {
+                ok: false,
+                exitCode: null,
+                stdout: "",
+                stderr: gcloudAuthError,
+                message: gcloudAuthError
               });
               return;
             }
@@ -3090,6 +3202,7 @@ function createTagPatchVersionPlugin(): VitePlugin {
     }
   };
 }
+
 
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [

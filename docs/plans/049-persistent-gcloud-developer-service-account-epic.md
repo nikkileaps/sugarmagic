@@ -43,25 +43,37 @@ that match nikki's mental model:
   has no UI for SA creation, no wizard, no bootstrap. There's a
   docs page (`docs/setup/persistent-gcloud-auth.md`) explaining
   how to do it.
-- **Layer B — Per-project access grant (INSIDE sugarmagic, on-
+- **Layer B — Per-project access prompt (INSIDE sugarmagic, on-
   demand).** When opening a project whose Cloud Run target needs
   the developer SA to have specific roles in the project's GCP,
-  sugarmagic prompts contextually and runs the IAM bindings.
-  Idempotent.
+  sugarmagic detects the gap and surfaces a copy-pasteable
+  terminal command block. The user runs the bindings themselves
+  (as their own gcloud user account, which has the required
+  project-IAM-admin perms by virtue of being project owner);
+  sugarmagic re-detects after they click Retry. Sugarmagic
+  never runs the grant itself — keeps the user/SA boundary
+  explicit. One-time bootstrap per game project.
 
-Sugarmagic's job at the auth layer is narrowly scoped:
+Sugarmagic's job at the auth layer is narrowly scoped and
+deliberately mirrors how `gh auth` is handled today (see
+`ensureGhCliOnPath` in
+`packages/plugins/src/catalog/sugardeploy/host/middleware.ts`):
 
-1. **Detect** whether a persistent credential is configured (via
-   the standard `GOOGLE_APPLICATION_CREDENTIALS` env var path).
-2. **Use it** if present — `runHostCommand` propagates the env
-   to every gcloud / terraform subprocess.
-3. **Warn** if it's missing AND a gcloud-needing action is about
-   to run, asking whether the user wants to proceed with
-   interactive gcloud login as a fallback. Link to the setup docs
-   from the warning.
+1. **Use it transparently.** `runHostCommand` already propagates
+   `process.env` to every subprocess; whatever the developer set
+   in their shell flows through. No per-command env injection.
+2. **Check at action time.** Each gcloud-needing host action
+   pre-flights the auth state (parallel to the `gh auth status`
+   check the GitHub workflow setup action already runs). If
+   gcloud can't authenticate, the action returns ok:false with
+   a message pointing the developer at
+   `docs/setup/persistent-gcloud-auth.md`.
 
 That's it. Sugarmagic does not create SAs, does not generate
-keys, does not modify shell rc files.
+keys, does not modify shell rc files, does NOT surface a
+proactive banner at studio load. Same pattern as gh: the CLI
+either works or it doesn't, and we error at first use with a
+clear next step.
 
 ### Goal
 
@@ -75,10 +87,12 @@ keys, does not modify shell rc files.
   to their shell rc themselves (with a Claude session's help if
   they want — Layer A is just a docs page in this repo, no UI
   and no host action).
-- Sugarmagic's auth-layer job is narrow: detect that ADC is set,
-  inherit it via `process.env` for any host subprocess, and warn
-  contextually when it's missing. That's the entirety of
-  sugarmagic's involvement on the credential side.
+- Sugarmagic's auth-layer job is narrow and matches the gh
+  pattern: inherit ADC via `process.env` for any host
+  subprocess, and surface an at-action-time error pointing at
+  the setup docs when gcloud auth fails. No banner-at-load, no
+  reauth-pattern-specific overlay. Same UX shape as
+  `ensureGhCliOnPath` today.
 - Per-project IAM bindings (Layer B) happen inside sugarmagic as
   a contextual banner in Provision — not a button, not a wizard.
 - Other CLIs the developer runs (`gh`, terraform, Python clients,
@@ -110,23 +124,21 @@ keys, does not modify shell rc files.
   the first gcloud-needing action.
 - **No automatic per-project access on Layer A setup.** When the
   developer creates the SA (outside sugarmagic), they don't have
-  to remember which roles each game project needs. Layer B grants
-  per-project access on demand the first time sugarmagic
-  encounters a gap.
-- **Detect-and-warn UX, not bootstrap-in-sugarmagic.** Sugarmagic
-  surfaces the gap; it doesn't fix Layer A. The fix is the user
-  going to their terminal (or a Claude session) and following
-  the setup docs.
-  - Studio launch with `GOOGLE_APPLICATION_CREDENTIALS` unset
-    AND any project loaded has SugarDeploy enabled with a Cloud
-    Run target -> top-of-window banner: "Persistent gcloud auth
-    not configured. See docs/setup/persistent-gcloud-auth.md to
-    set it up; or proceed and sugarmagic will fall back to
-    interactive `gcloud auth login` when needed."
-  - A gcloud-needing host action fails with a reauth-pattern
-    error -> error overlay offers the same guidance + a "Open
-    setup docs" link, plus a "Run gcloud auth login now"
-    one-shot instructional message.
+  to remember which roles each game project needs. Layer B
+  prompts on demand the first time sugarmagic encounters a gap
+  and surfaces the exact commands to run; the developer runs
+  them in a terminal once per project.
+- **At-action-time error, not banner-at-load.** Sugarmagic does
+  not proactively surface a "you need to set up gcloud auth"
+  banner when Studio loads. Instead, each gcloud-needing host
+  action runs a pre-flight (parallel to `gh auth status` that
+  the GitHub workflow setup action already runs today). On
+  failure, the action returns ok:false with a message pointing
+  at `docs/setup/persistent-gcloud-auth.md`. Same UX shape as
+  `ensureGhCliOnPath` produces today; chosen for consistency
+  with the existing pattern, not because banners are wrong in
+  principle. Revisit if the at-action-time surfaces are getting
+  hit so often that proactive warning would actually save time.
 
 ### What is NOT in scope
 
@@ -153,33 +165,25 @@ keys, does not modify shell rc files.
 
 ## Deliverables
 
-### Layer A — Detect + warn (sugarmagic's only responsibility)
+### Layer A — Pre-flight at action time (sugarmagic's only responsibility)
 
-- New host module `packages/plugins/src/host/gcp-developer-key.ts`:
-  - `developerCredentialPath() -> string | null` — reads
-    `process.env.GOOGLE_APPLICATION_CREDENTIALS`; returns the
-    path when the env var is set AND the file exists on disk,
-    null otherwise.
-  - `hasPersistentGcloudAuth() -> boolean` — true iff
-    `developerCredentialPath()` returns non-null.
-- Studio session-load probe: when `GOOGLE_APPLICATION_CREDENTIALS`
-  is unset AND the loaded project has a Cloud Run target
-  configured, render a top-of-window dismissible banner: "No
-  persistent gcloud auth configured (`GOOGLE_APPLICATION_CREDENTIALS`
-  env var not set). Studio will fall back to interactive `gcloud
-  auth login` when needed — see [setup
-  docs](/docs/setup/persistent-gcloud-auth.md) to make this
-  go away." Stores the dismissal per-session.
-- Existing host actions that shell gcloud detect reauth-pattern
-  error messages in stderr (`reauthentication`, `auth login`,
-  `expired credentials`) and append a one-screen instructional
-  panel to the error overlay: "Your gcloud auth has expired.
-  Either run `gcloud auth login` in a terminal once and retry,
-  or set up persistent auth (see setup docs) to avoid this
-  going forward."
-- `runHostCommand` does NOT inject `GOOGLE_APPLICATION_CREDENTIALS`
-  itself — `process.env` propagates whatever the developer set.
-  The wiring is the developer's job; sugarmagic just inherits.
+- New host module `packages/plugins/src/host/gcloud-auth.ts`
+  exposing the pre-flight check used by every gcloud-needing
+  action:
+  - `ensureGcloudAuthReady(): Promise<string | null>` — invokes
+    `gcloud auth print-access-token` (or `gcloud auth list
+    --filter=status:ACTIVE`); returns null when gcloud can
+    authenticate; returns a human-readable reason string
+    pointing at `docs/setup/persistent-gcloud-auth.md` when it
+    can't. Modeled exactly on `ensureGhCliOnPath` /
+    `ensureGitOnPath` already in the codebase.
+- Existing host actions that already call `ensureGhCliOnPath`
+  before shelling `gh` add a parallel `ensureGcloudAuthReady`
+  call before shelling `gcloud`. Failure returns ok:false with
+  the setup-docs link in the reason.
+- `runHostCommand` is unchanged. `process.env` propagates
+  whatever the developer set in their shell rc; no per-command
+  env injection.
 
 ### Layer A docs — `docs/setup/persistent-gcloud-auth.md`
 
@@ -221,30 +225,38 @@ Contents:
   project with a Cloud Run target will prompt them through Layer
   B on first contact, no extra commands needed.
 
-### Layer B — Per-project access grant (on-demand)
+### Layer B — Per-project access prompt (on-demand)
 
 - Detection happens at the FIRST gcloud-needing host action on a
   project after Layer A is configured. If the SA is missing the
   IAM roles SugarDeploy needs in the project's GCP, the action's
-  failure response carries a special `code: "developer-sa-needs-project-grant"`
-  along with the missing role list.
-- Studio's per-project action result handlers (one shared utility)
-  intercepts that code and surfaces a modal: "Your developer SA
-  doesn't yet have access to this project. Grant the required
-  roles?" Listing them transparently. Confirm runs `gcloud
-  projects add-iam-policy-binding <project> --member=serviceAccount:<sa-email>
-  --role=<role>` for each.
+  failure response carries a special
+  `code: "developer-sa-needs-project-grant"` along with the
+  missing role list and the SA email.
+- Studio's per-project action result handlers (one shared
+  utility) intercept that code and surface a modal: "Your
+  developer SA doesn't yet have access to this project. Run
+  these commands in a terminal where your `gcloud auth login`
+  user creds are fresh — they grant the SA the roles it needs."
+  Followed by a copy-to-clipboard command block of N explicit
+  `gcloud projects add-iam-policy-binding ... --account=$USER`
+  invocations OR a single shell loop. The user runs them in
+  their terminal, returns to the modal, clicks Retry.
+- Sugarmagic does NOT execute the bindings. The SA can't grant
+  itself IAM (chicken-and-egg on a fresh project); the
+  alternatives (sugarmagic auto-detecting + using `--account=
+  USER`, or org-level `projectIamAdmin` on the SA) all drag
+  user-identity routing or expanded blast radius into the
+  plugin layer. Per AGENTS.md "narrow modules with obvious
+  ownership," sugarmagic only ever acts as the SA; the user
+  only ever acts as themselves.
 - Roles SugarDeploy needs in a project's GCP (initial set; tune
-  on first real run): `roles/run.admin`, `roles/iam.serviceAccountAdmin`,
+  on first real run): `roles/run.admin`,
+  `roles/iam.serviceAccountAdmin`,
   `roles/iam.serviceAccountUser`, `roles/secretmanager.admin`,
   `roles/artifactregistry.admin`, `roles/storage.admin`,
-  `roles/cloudbuild.builds.editor`, `roles/serviceusage.serviceUsageConsumer`.
-- New host endpoint
-  `POST /__sugardeploy/grant-developer-sa-project-access` —
-  takes `{ gcpProjectId }`, runs the per-role bindings, returns
-  aggregated stdout. Re-running on an already-granted project is
-  a no-op (`gcloud projects add-iam-policy-binding` is
-  idempotent).
+  `roles/cloudbuild.builds.editor`,
+  `roles/serviceusage.serviceUsageConsumer`.
 
 ### Plugin SDK docs
 
@@ -258,35 +270,240 @@ Contents:
 
 ### Tests
 
-- `getDeveloperKeyPath` returns the right path on Mac / Linux.
-- `readDeveloperKeyEnv` returns the env map when the file exists,
-  empty map when absent.
-- `runHostCommand` injects the env when the command is `gcloud`
-  or `terraform`; doesn't inject for `git`, `gh`, `pnpm`,
-  `docker`.
-- Mock-shelled tests for the wizard's pre-flight + SA creation +
-  key generation steps.
-- Mock-shelled tests for the per-project access grant including
-  the idempotent re-run case.
+- `ensureGcloudAuthReady` returns null when gcloud can
+  authenticate; returns a reason string pointing at the setup
+  docs when it can't. Mocked subprocess shells; both the
+  expired-creds and no-creds-at-all cases.
+- Layer B grant endpoint runs the role bindings; idempotent
+  re-run on an already-granted project is a no-op.
+- Layer B detection produces the
+  `developer-sa-needs-project-grant` code with the missing role
+  list on the first action against a fresh project.
+
+Out of scope for tests: `runHostCommand` env injection. Sugarmagic
+does not inject `GOOGLE_APPLICATION_CREDENTIALS` per command;
+Node's `process.env` already propagates whatever the developer
+set in their shell. No conditional-by-command logic to test.
+
+## Open Questions
+
+- **Which gcloud probe command to use.** `gcloud auth
+  print-access-token` is the most direct: success exit code
+  means a usable credential is configured. `gcloud auth list
+  --filter=status:ACTIVE --format=value(account)` returns the
+  active account; empty output means none configured. Both
+  work; pick whichever is faster to invoke + has a cleaner
+  error path. Resolve in 49.2 with whichever the existing gh
+  pre-flight pattern most closely mirrors.
+- **Layer B role list completeness.** The initial set
+  (`roles/run.admin`, `roles/iam.serviceAccountAdmin`,
+  `roles/iam.serviceAccountUser`, `roles/secretmanager.admin`,
+  `roles/artifactregistry.admin`, `roles/storage.admin`,
+  `roles/cloudbuild.builds.editor`,
+  `roles/serviceusage.serviceUsageConsumer`) is a best-guess.
+  First real run against an empty GCP project will surface gaps
+  as PERMISSION_DENIED errors with specific missing role IDs.
+  Plan: 49.6 emits whatever role list we have; first real
+  failure adds the missing role(s) and we ship a docs note.
+- **One project vs many.** Layer B prompts on first contact with
+  each new project (idempotent re-runs skip). When nikki spins
+  up a second game, the prompt fires again for that game's
+  separate GCP project. That's fine for the solo-dev shape;
+  flagged here in case a future "team" mode wants to batch the
+  grants.
+
+## Stories
+
+### 49.1 — Layer A setup doc
+
+**Files (create):**
+
+- `docs/setup/persistent-gcloud-auth.md` — recipe per the
+  Deliverables outline above. Numbered terminal commands, no
+  sugarmagic-side artifacts. Steps end with a `gcloud auth list`
+  verification that doesn't require a fresh `gcloud auth login`.
+
+**Exit:** nikki follows the doc in a regular terminal (with a
+regular Claude session helping if needed) and verifies
+`gcloud auth list` shows the developer SA active. Sugarmagic
+was not opened during this story.
+
+### 49.2 — gcloud auth pre-flight + wire into existing host actions
+
+**Files (create):**
+
+- `packages/plugins/src/host/gcloud-auth.ts`:
+  - `ensureGcloudAuthReady(): Promise<string | null>` — shells
+    the probe command resolved per Open Question #1; returns
+    null on success; returns a reason string ending with
+    "See `docs/setup/persistent-gcloud-auth.md`." on failure.
+  - Modeled on `ensureGhCliOnPath` /
+    `ensureGitOnPath` already in the codebase — same return
+    shape (null on success, reason string on failure) so host
+    actions can use it identically.
+
+**Files (modify):**
+
+- Every host action that already calls `ensureGhCliOnPath`
+  before shelling gcloud — add a parallel
+  `ensureGcloudAuthReady()` call. Failure returns ok:false with
+  the reason as the response message.
+
+**Tests:** mocked-subprocess unit tests for both branches of
+`ensureGcloudAuthReady`. No tests for the per-action wiring
+beyond a spot-check that at least one host action returns the
+expected reason when the probe fails.
+
+**Exit:** with `GOOGLE_APPLICATION_CREDENTIALS` unset (or
+pointing at a non-existent file), Provision actions that shell
+gcloud return a clear "See `docs/setup/...`" reason instead of
+the raw gcloud error.
+
+### 49.3 — [DELETED] Layer B grant endpoint
+
+Originally proposed: `POST /__sugardeploy/grant-developer-sa-project-access`
+that ran `gcloud projects add-iam-policy-binding` per required
+role as the SA. Initial implementation shipped, then deleted
+during 49.4 design review.
+
+**Why deleted:** the SA can't grant itself IAM bindings on a
+fresh project (it has no `roles/resourcemanager.projectIamAdmin`
+there yet — chicken-and-egg). Workarounds explored:
+- `--account=USER@EMAIL` inside the endpoint (sugarmagic
+  auto-detecting the user from `gcloud auth list`). Rejected:
+  drags user-identity routing into sugarmagic; AGENTS.md
+  "narrow modules with obvious ownership" violated.
+- Org-level `projectIamAdmin` grant on the SA at Layer A time.
+  Rejected: long-lived key with org-wide IAM admin = real
+  blast-radius increase.
+- Partial bootstrap (user grants projectIamAdmin manually,
+  sugarmagic grants the other 7). Rejected: half-and-half
+  responsibility split.
+
+**Resolution:** sugarmagic doesn't grant IAM. It detects (49.4)
+and surfaces a copy-pasteable terminal command (49.5). The user
+runs the bindings themselves in a terminal where their own
+gcloud user creds carry the necessary owner permission. Clean
+boundary: sugarmagic only ever acts as the SA; the user only
+ever acts as themselves.
+
+Per AGENTS.md: "Prefer deletion over coexistence." The grant
+endpoint stayed deleted; no fallback / no compatibility shim.
+
+### 49.4 — Layer B detection in gcloud-needing host actions
+
+**Files (modify):**
+
+- Shared utility (likely in
+  `packages/plugins/src/catalog/sugardeploy/host/middleware.ts`)
+  that wraps existing host actions: BEFORE running the action's
+  real gcloud calls, probe the developer SA's roles in the
+  target project (`gcloud projects get-iam-policy ... --filter
+  member:serviceAccount:<sa-email>`). If the result is missing
+  any role from the required set, return ok:false with
+  `code: "developer-sa-needs-project-grant"` and a
+  `missingRoles: string[]` field.
+- Existing host actions that hit gcloud are reshaped to flow
+  through this check on entry.
+
+**Tests:** mock-shelled — required-set vs actual-set
+permutations produce the expected code or pass-through.
+
+**Exit:** opening a project where the SA has zero project
+access produces the `developer-sa-needs-project-grant` code on
+the first gcloud-needing action.
+
+### 49.5 — Layer B modal in Studio (copy-paste bootstrap)
+
+**Files (modify):**
+
+- Studio's per-host-action response handlers (likely a shared
+  utility around `fetch('/__sugardeploy/...')` calls).
+- New modal component.
+
+**Behavior:** when a host action returns ok:false with
+`code: "developer-sa-needs-project-grant"`, surface a modal
+that:
+1. Names the target project + the developer SA.
+2. Lists the missing roles (from the response payload's
+   `missingRoles[]`).
+3. Renders a copy-to-clipboard command block containing a
+   single shell loop (or N explicit `gcloud projects
+   add-iam-policy-binding` commands) with
+   `--account=$DETECTED_USER` baked in so the user's gcloud
+   user-creds-as-themselves run the bindings. The `$USER`
+   placeholder is shown explicitly with instructions to swap
+   in their actual email — sugarmagic never tries to read or
+   know their user identity.
+4. After the user runs the commands in their terminal, they
+   click "Retry" in the modal. Sugarmagic re-dispatches the
+   original action; Layer B detection (49.4) re-runs;
+   missing-role list should now be empty and the action
+   proceeds.
+
+Sugarmagic does NOT execute the grants. It detects and
+instructs; the user runs the bindings in their own terminal.
+This keeps sugarmagic narrowly focused on "act as the SA" and
+avoids any --account user-identity routing in plugin code.
+
+**Tests:** logic-level — given the
+`developer-sa-needs-project-grant` response shape, assert the
+modal renders with the right project / SA / role list, and the
+retry path re-fires the original action.
+
+**Exit:** Provision -> click a fresh-project action -> modal
+appears with copy-pasteable bootstrap block -> user runs in
+terminal -> clicks Retry -> action proceeds.
+
+### 49.6 — Plugin SDK docs + close-out
+
+**Files (modify):**
+
+- `packages/plugins/README.md` — new "Host-side gcloud auth"
+  section per Deliverables.
+- `docs/setup/persistent-gcloud-auth.md` — final pass; ensure
+  the doc references Layer B's per-project prompt at the end.
+
+**Verification:** the Verification section above, run
+end-to-end.
+
+**Exit:** docs match the shipped behavior; verification passes;
+Plan 049 marked complete.
 
 ## Verification
 
-- On a machine where gcloud is freshly auth-logged-in: open
-  Studio, see the banner. Click through Developer Setup. Choose
-  a GCP project. Wizard completes. `~/.config/sugarmagic/gcp-developer-key.json`
-  exists with `600` perms.
-- Wait long enough for the user's `gcloud auth login` to expire
-  (or manually revoke it). Click a sugardeploy action that
-  shells gcloud. It still works — `runHostCommand` injected the
-  SA key path and gcloud used it instead of the expired user
-  credential.
-- Open a wordlark project with SugarDeploy enabled. Click Setup
-  Infra. Errors out with "developer SA needs project grant" code.
-  Modal appears listing the roles. Confirm. `gcloud projects
-  add-iam-policy-binding` runs for each. Retry Setup Infra — it
-  proceeds.
-- Re-click Setup Infra without revoking access. Goes straight
-  through (no second grant prompt).
+- **Layer A setup is done outside sugarmagic.** Follow
+  `docs/setup/persistent-gcloud-auth.md` in a regular terminal:
+  create the SA, generate the key, `chmod 600`, export
+  `GOOGLE_APPLICATION_CREDENTIALS` +
+  `CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE` in `~/.zshrc`,
+  restart shell. Verify `gcloud auth list` shows the SA as
+  active. Sugarmagic was not involved in any of this.
+- **User-credential expiry no longer matters.** Wait long enough
+  for the developer's last `gcloud auth login` to expire (or
+  revoke it manually). Click a sugardeploy action that shells
+  gcloud. Action still succeeds because `process.env` carried
+  `GOOGLE_APPLICATION_CREDENTIALS` into the subprocess and
+  gcloud read the SA key.
+- **Missing-auth error path is friendly.** Launch Studio in a
+  shell where `GOOGLE_APPLICATION_CREDENTIALS` is NOT set AND
+  the developer has no `gcloud auth login` either. Click a
+  gcloud-needing action. Error response carries the
+  `ensureGcloudAuthReady` reason: a clear "See
+  `docs/setup/persistent-gcloud-auth.md`" message, not a raw
+  gcloud stderr blob.
+- **Layer B prompts on first contact with a new project.** Open
+  a project pointed at a GCP project the developer SA has not
+  yet been granted access to. First gcloud-needing action fails
+  with the `developer-sa-needs-project-grant` code; Studio
+  surfaces the modal listing the missing roles + a copy-paste
+  command block. Run the commands in a terminal (with your
+  fresh `gcloud auth login` user creds via `--account=$USER`).
+  Click Retry in the modal. Detection re-runs; missing-role
+  list is empty; the original action proceeds.
+- **Layer B detection is idempotent.** Re-click the same
+  action without revoking access. No second prompt; action
+  goes straight through (detection sees zero missing roles).
 
 ## Builds On
 
