@@ -1,16 +1,34 @@
 /**
  * Runtime UI context bridge.
  *
- * This is the single runtime-owned projection from ECS/game state into the
- * flat data object that target UI renderers consume. React DOM targets,
- * Studio previews, and future targets resolve bindings through this module
- * instead of reaching into ECS or duplicating path semantics.
+ * The single ECS -> UI projection: walks the live ECS world
+ * each frame, computes a flat `RuntimeUIContext` snapshot, and
+ * stores it for authored UI bindings to read. React DOM
+ * targets, Studio previews, and future targets resolve
+ * bindings through this module instead of reaching into ECS or
+ * duplicating path semantics.
+ *
+ * Plan 054 §054.4 — the UIStateStore + RuntimeUIState live in
+ * `../ui-state/`; this module now only owns the binding-context
+ * shape and projection. The `RuntimeUIContext.game.{visibleMenuKey,
+ * isPaused}` output stays for authored binding compat —
+ * `visibleMenuKey` is derived from lifecycle + overlay key,
+ * `isPaused` from lifecycle.
  */
 
 import type { UIBindingExpression } from "@sugarmagic/domain";
 import { STAT_ROLE_BATTERY } from "@sugarmagic/domain";
 import { Caster, PlayerControlled, Position } from "../ecs/components";
 import { System, type World } from "../ecs/core";
+import {
+  createRuntimeStore,
+  type RuntimeStore,
+  type RuntimeUIState,
+  type UIStateStore
+} from "../ui-state";
+// Type-only — avoids a circular import (game-state imports
+// createRuntimeStore from ui-state, which is fine).
+import type { GameStateSnapshot, GameStateStore } from "../game-state";
 
 export interface RuntimeUIContext {
   player: {
@@ -29,97 +47,7 @@ export interface RuntimeUIContext {
   };
 }
 
-export interface RuntimeUIState {
-  /**
-   * Plan 054 §054.4 — overlay-menu key. Carries dialogue,
-   * future inventory / plugin overlays — NEVER lifecycle menus
-   * (`"start-menu"` / `"pause-menu"`); those live on
-   * `GameStateStore.lifecycle`. During the 054 migration window
-   * this field still receives lifecycle menu writes (the host
-   * bridge mirrors them into `gameState.lifecycle`); once all
-   * writers migrate, the semantic narrows.
-   */
-  activeOverlayMenuKey: string | null;
-  /**
-   * Legacy. Plan 054 §054.4 retires this field once all readers
-   * migrate to `gameState.lifecycle !== "playing"` (via
-   * `isGamePaused(gameState)` selector). The host bridge keeps
-   * it in sync with the canonical `lifecycle` during the
-   * migration window.
-   */
-  isPaused: boolean;
-  /**
-   * Story 47.10.5 — whether the active user has a save in the
-   * active save store. Drives `visibility: "hasSave" | "noSave"`
-   * on menu nodes so the start menu can show a Continue button
-   * only when there's something to continue. Host flips it true
-   * on autosave write, false on start-new-game's clear.
-   */
-  savePresent: boolean;
-  /**
-   * Story 50.1 — true while SugarProfile's LoginModal (or any
-   * future focus-stealing modal overlaying the canvas) is
-   * mounted. The input-modes resolver consumes this to switch
-   * `RuntimeMode` to "login-modal", which disables every other
-   * keyboard action so typing into the modal's email input
-   * doesn't simultaneously toggle the inventory.
-   *
-   * Modal owner flips it true on mount, false on unmount. Lives
-   * on `RuntimeUIState` (the single source of truth for "what's
-   * on top of the game right now?") rather than a sibling store
-   * so the mode resolver stays a pure function over one input.
-   */
-  loginModalOpen: boolean;
-}
-
-export interface RuntimeStore<TState> {
-  getState(): TState;
-  /**
-   * Story 47.10.5 — accepts a partial patch (merged onto the
-   * current state) OR a full updater function. Partial-patch
-   * semantics make adding new fields to the state type back-
-   * compatible — callers that only set `{visibleMenuKey}` still
-   * compile after a new field lands.
-   */
-  setState(
-    next: Partial<TState> | ((current: TState) => TState)
-  ): void;
-  subscribe(listener: () => void): () => void;
-}
-
-/**
- * Shared store factory used by both `createUIStateStore` and
- * `createGameStateStore` (Plan 054). Don't reach for this in
- * application code — use the typed factory for the store you
- * actually need, so callers' setState patches stay typed.
- */
-export function createRuntimeStore<TState extends object>(
-  initialState: TState
-): RuntimeStore<TState> {
-  let state = initialState;
-  const listeners = new Set<() => void>();
-  return {
-    getState() {
-      return state;
-    },
-    setState(next) {
-      state =
-        typeof next === "function"
-          ? (next as (current: TState) => TState)(state)
-          : { ...state, ...next };
-      for (const listener of listeners) {
-        listener();
-      }
-    },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }
-  };
-}
-
 export type UIContextStore = RuntimeStore<RuntimeUIContext>;
-export type UIStateStore = RuntimeStore<RuntimeUIState>;
 
 export function createDefaultRuntimeUIContext(
   patch: Partial<RuntimeUIContext> = {}
@@ -146,17 +74,6 @@ export function createUIContextStore(
   initialState: RuntimeUIContext = createDefaultRuntimeUIContext()
 ): UIContextStore {
   return createRuntimeStore(initialState);
-}
-
-export function createUIStateStore(
-  initialState: Partial<RuntimeUIState> = {}
-): UIStateStore {
-  return createRuntimeStore({
-    activeOverlayMenuKey: initialState.activeOverlayMenuKey ?? null,
-    isPaused: initialState.isPaused ?? false,
-    savePresent: initialState.savePresent ?? false,
-    loginModalOpen: initialState.loginModalOpen ?? false
-  });
 }
 
 export function resolveRuntimePath(
@@ -198,7 +115,37 @@ export function resolveBinding(
 export interface UIContextSystemOptions {
   contextStore: UIContextStore;
   stateStore: UIStateStore;
+  /** Project `game.isPaused` + `game.visibleMenuKey` from the
+   *  canonical lifecycle. Optional for back-compat with tests
+   *  that don't construct a real host; absent => defaults to
+   *  the legacy "always playing" projection. */
+  gameStateStore?: GameStateStore;
   getRegion?: () => { id: string; name: string } | null;
+}
+
+/**
+ * Derive the bound `game.visibleMenuKey` for authored UI from
+ * the canonical sources:
+ *   - lifecycle === "start-menu" -> "start-menu"
+ *   - lifecycle === "paused" -> "pause-menu"
+ *   - playing -> whatever overlay is up (`activeOverlayMenuKey`)
+ *   - booting / no gameState -> null
+ */
+function deriveBindingVisibleMenuKey(
+  gameState: GameStateSnapshot | undefined,
+  uiState: RuntimeUIState
+): string | null {
+  if (!gameState) return uiState.activeOverlayMenuKey;
+  switch (gameState.lifecycle) {
+    case "start-menu":
+      return "start-menu";
+    case "paused":
+      return "pause-menu";
+    case "playing":
+      return uiState.activeOverlayMenuKey;
+    case "booting":
+      return null;
+  }
 }
 
 function runtimeUIContextsEqual(
@@ -256,13 +203,13 @@ export class UIContextSystem extends System {
         name: region?.name ?? "Region"
       },
       game: {
-        // Plan 054 §054.4 — `RuntimeUIContext.game.visibleMenuKey`
-        // is the AUTHORED BINDING surface (game projects reference
-        // `binding: "game.visibleMenuKey"`). It stays as the
-        // projected output even though the underlying field
-        // renamed to `activeOverlayMenuKey` during the rename.
-        visibleMenuKey: state.activeOverlayMenuKey,
-        isPaused: state.isPaused
+        visibleMenuKey: deriveBindingVisibleMenuKey(
+          this.options.gameStateStore?.getState(),
+          state
+        ),
+        isPaused: this.options.gameStateStore
+          ? this.options.gameStateStore.getState().lifecycle !== "playing"
+          : false
       }
     };
 

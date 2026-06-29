@@ -18,7 +18,7 @@
  */
 
 import type { GameStateStore } from "../game-state";
-import type { UIStateStore } from "../ui-context";
+import type { UIStateStore } from "../ui-state";
 import {
   resolveRuntimeMode,
   type RuntimeMode

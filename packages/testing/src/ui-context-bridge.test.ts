@@ -16,6 +16,7 @@ import {
   Position,
   UIContextSystem,
   World,
+  createGameStateStore,
   createStatCarrier,
   createUIContextStore,
   createUIStateStore,
@@ -34,12 +35,13 @@ describe("runtime UI context bridge", () => {
 
     const contextStore = createUIContextStore();
     const stateStore = createUIStateStore({
-      activeOverlayMenuKey: "pause-menu",
-      isPaused: true
+      activeOverlayMenuKey: "dialogue"
     });
+    const gameStateStore = createGameStateStore({ lifecycle: "paused" });
     const system = new UIContextSystem({
       contextStore,
       stateStore,
+      gameStateStore,
       getRegion: () => ({ id: "region:one", name: "Opening Meadow" })
     });
 

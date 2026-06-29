@@ -1,54 +1,32 @@
 /**
  * packages/runtime-core/src/game-state/index.ts
  *
- * Plan 054 §054.2 — the canonical Model layer for the game's
- * lifecycle. Separate from `UIStateStore` (presentation) so the
- * answer to "is the game in progress?" lives in one explicit
+ * Plan 054 — the canonical Model layer for the game's
+ * lifecycle. Separate from `UIStateStore` (presentation) along
+ * the domain/presentation seam, mirroring how Unreal / Unity /
+ * Godot all split game-state from UI-state. The answer to "is
+ * the game in progress?" lives in one explicit `lifecycle`
  * field instead of being derived from menu state.
- *
- * Why split out of `UIStateStore`: the original store mixed
- * domain (`visibleMenuKey === "start-menu"` / `isPaused` /
- * `savePresent`) with presentation (`loginModalOpen`). The
- * menu-driven framing inverted the right direction of data flow
- * (the menu reflected lifecycle, but lifecycle was derived from
- * the menu — see Plan 054 problem statement). Splitting along
- * the domain/presentation seam lines up with how Unreal /
- * Unity / Godot all do it (separate state machines for game
- * lifecycle vs UI).
- *
- * Migration: 054.2 introduces this store alongside the existing
- * `UIStateStore`. 054.3 wires both onto `WebRuntimeHost.state`
- * and adds the coordinating bridge so legacy `setState` calls
- * on `UIStateStore.{visibleMenuKey, isPaused}` ALSO update
- * `GameStateStore.lifecycle` during the migration window. 054.4
- * migrates writers + readers per the 054.1 audit. Once the
- * legacy fields have no consumers, `UIStateStore` slims to
- * presentation-only and `GameStateStore` owns lifecycle outright.
  *
  * Status: active
  */
 
-import { createRuntimeStore, type RuntimeStore } from "../ui-context";
+import { createRuntimeStore, type RuntimeStore } from "../ui-state";
 
 /**
  * Discriminated lifecycle states for the game. One field is the
  * canonical answer to "what phase of the game is the player
  * in?"; menus / pause flags / etc. are downstream derivations.
+ *
+ * `"game-over"` is parked for v1. Add when wordlark has a
+ * death/end UI flow that needs distinguishing from `"paused"`.
  */
 export type GameLifecycle =
   | "booting"
   | "start-menu"
   | "playing"
   | "paused";
-// "game-over" is parked for v1. Add when wordlark has a
-// death/end UI flow that needs distinguishing from "paused".
 
-/**
- * The game's domain state. Single canonical field —
- * `lifecycle`. `savePresent` is intentionally NOT here; it
- * stays on `UIStateStore` for now (legacy field, no readers on
- * the game-state side want it yet — when one does we move it).
- */
 export interface GameStateSnapshot {
   lifecycle: GameLifecycle;
 }
@@ -70,33 +48,26 @@ export function createGameStateStore(
 }
 
 /**
- * Selector: "is the game actively running gameplay?" Use this
- * in callsites that previously read `!state.isPaused && state.visibleMenuKey === null` (or equivalent).
+ * Selector: "is the game actively running gameplay?"
  */
 export function isGameInProgress(snapshot: GameStateSnapshot): boolean {
   return snapshot.lifecycle === "playing";
 }
 
 /**
- * Selector: "is the game paused?" Use this in callsites that
- * previously read `state.isPaused`. Returns true for every
- * lifecycle EXCEPT "playing" — the start menu and booting
- * states are "not running", same as paused, from the
- * perspective of input gating and gameplay tick suspension.
+ * Selector: "is the game paused?" Returns true for every
+ * lifecycle EXCEPT `"playing"` — start-menu and booting are
+ * "not running", same as paused from the perspective of input
+ * gating and gameplay tick suspension.
  */
 export function isGamePaused(snapshot: GameStateSnapshot): boolean {
   return snapshot.lifecycle !== "playing";
 }
 
-// Plan 054 §054.3 migration bridge has retired in 054.4 Pass
-// C — lifecycle is no longer derived from UI state. Writers
-// call `host.startNewGame()` / `pauseGame()` / etc., which
-// mutate `gameStateStore.lifecycle` directly.
-
 /**
- * Plan 054 §054.4 — the transition methods the host owns,
- * defined here in runtime-core so ui-actions (which lives here)
- * can call them without depending on target-web.
+ * The transition methods the host owns, defined here in
+ * runtime-core so ui-actions can call them without depending on
+ * target-web.
  *
  * Target-web's `WebRuntimeHost` implements this interface
  * (`host.startNewGame` / `host.continueGame` / ...). The host

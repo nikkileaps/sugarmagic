@@ -252,8 +252,7 @@ describe("createRuntimeActionRegistry", () => {
   it('"any" mode actions fire regardless of current mode', () => {
     const target = makeTarget();
     const stateStore = createUIStateStore({
-      activeOverlayMenuKey: "start-menu",
-      isPaused: true
+      activeOverlayMenuKey: "start-menu"
     });
     const handler = vi.fn();
     const registry = createRuntimeActionRegistry({

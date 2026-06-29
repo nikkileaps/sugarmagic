@@ -2847,7 +2847,6 @@ describe("47.10.5 — save-aware UI actions", () => {
     // is the host's job; ui-actions just dispatches.
     const stateStore = createUIStateStore({
       activeOverlayMenuKey: "start-menu",
-      isPaused: true,
       savePresent: true
     });
     const registry = createUIActionRegistry();
@@ -2870,7 +2869,6 @@ describe("47.10.5 — save-aware UI actions", () => {
   it("continue-game delegates to transitions.continueGame()", async () => {
     const stateStore = createUIStateStore({
       activeOverlayMenuKey: "start-menu",
-      isPaused: true,
       savePresent: true
     });
     const registry = createUIActionRegistry();
@@ -2904,13 +2902,11 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
   it("setState({savePresent: true}) merges without clobbering other fields", () => {
     const store = createUIStateStore({
       activeOverlayMenuKey: "start-menu",
-      isPaused: true,
       savePresent: false
     });
     store.setState({ savePresent: true });
     expect(store.getState()).toEqual({
       activeOverlayMenuKey: "start-menu",
-      isPaused: true,
       savePresent: true,
       // Story 50.1 — added to RuntimeUIState; defaults false.
       loginModalOpen: false
@@ -2926,7 +2922,7 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
     store.setState({ activeOverlayMenuKey: "pause-menu" });
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
-    store.setState({ isPaused: true });
+    store.setState({ activeOverlayMenuKey: null });
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });

@@ -1613,7 +1613,6 @@ export function createWebRuntimeHost(
     // (savePresent depends on whether boot loaded a save).
     uiStateStore.setState({
       activeOverlayMenuKey: null,
-      isPaused: false,
       // Boot-time save presence. The Continue button on the
       // start menu reads this through the `visibility: "hasSave"`
       // rule. Flips true on autosave write
@@ -1661,6 +1660,7 @@ export function createWebRuntimeHost(
       new UIContextSystem({
         contextStore: uiContextStore,
         stateStore: uiStateStore,
+        gameStateStore,
         getRegion: () =>
           activeRegion
             ? { id: activeRegion.identity.id, name: activeRegion.displayName }

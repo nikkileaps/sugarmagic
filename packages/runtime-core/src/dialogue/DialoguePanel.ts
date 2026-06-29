@@ -145,7 +145,7 @@ export function createRuntimeDialoguePanel(
      * actions are active. Cleared on hide. Optional so legacy
      * callers (tests, headless construction) still work.
      */
-    uiStateStore?: import("../ui-context").UIStateStore;
+    uiStateStore?: import("../ui-state").UIStateStore;
   }
 ): RuntimeDialoguePanel {
   const entryDecorators = options?.entryDecorators ?? [];

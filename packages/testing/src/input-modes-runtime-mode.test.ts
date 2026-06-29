@@ -18,7 +18,6 @@ import {
 function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
   return {
     activeOverlayMenuKey: null,
-    isPaused: false,
     savePresent: false,
     loginModalOpen: false,
     ...patch
@@ -41,7 +40,6 @@ describe("resolveRuntimeMode", () => {
       resolveRuntimeMode(
         makeState({
           loginModalOpen: true,
-          isPaused: true,
           activeOverlayMenuKey: "start-menu"
         })
       )

@@ -9,7 +9,7 @@
 import type { UIActionExpression } from "@sugarmagic/domain";
 import type { World } from "../ecs/core";
 import type { GameLifecycleTransitions } from "../game-state";
-import type { UIStateStore } from "../ui-context";
+import type { UIStateStore } from "../ui-state";
 
 export type UIActionHandler = (
   args: Record<string, unknown>,
