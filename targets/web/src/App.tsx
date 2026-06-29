@@ -230,6 +230,21 @@ export function App() {
           // In-place reset would skip the reload entirely; deferred
           // to Plan 051 boot phases.
           onStartNewGame: async () => {
+            // CRITICAL: read the active providers from the host's
+            // observable store, NOT the React `active` const in
+            // the outer scope. This closure was created inside a
+            // useEffect with deps `[fallback]` (stable), so it
+            // captured the React state binding at MOUNT time —
+            // when `active` was still null. `setActive(resolved)`
+            // updates React for re-renders but the closure here
+            // never sees the updated value. Reading the React
+            // const here would silently skip resetForNewGame
+            // every time, leaving the stale save in place and
+            // sending the post-reload player back to their saved
+            // position. (Preview.tsx hit the same shape and
+            // resolved it the same way — see Plan 051 §51.2's
+            // ObservableValue work.)
+            //
             // `resetForNewGame` is the structural guarantee that
             // replaced the older halt() + clear() dance:
             //   1. The store's serialized chain awaits any
@@ -240,25 +255,27 @@ export function App() {
             //      against this instance becomes a no-op, so
             //      autosave ticks scheduled after this point
             //      can't reintroduce stale state.
-            // No per-callsite halt handle, no useAutosave
-            // contract, no "remember to call halt first" rule.
             // See `packages/runtime-core/src/save/serialized-store.ts`.
-            const settledUser = active?.identityProvider.currentUser();
-            if (active && settledUser) {
+            const bindings = host.state.activeProviders.getSnapshot();
+            const settledUser = bindings?.identityProvider.currentUser();
+            if (bindings && settledUser) {
               try {
-                await active.saveStore.resetForNewGame(settledUser.userId);
+                await bindings.saveStore.resetForNewGame(settledUser.userId);
               } catch (error) {
                 // The store stays frozen on failure (defense in
-                // depth — no autosave can re-corrupt). Logging is
-                // enough; the reload below is still the correct
-                // recovery, since the next page load constructs a
-                // fresh store and the next autosave write is
-                // the canonical write-after-reset path.
+                // depth — no autosave can re-corrupt). Logging
+                // is enough; the reload below rebuilds from
+                // scratch.
                 console.warn(
                   "[target-web] start-new-game: resetForNewGame failed; the store is frozen and the reload below will rebuild from scratch.",
                   error
                 );
               }
+            } else {
+              console.warn(
+                "[target-web] start-new-game: no active providers at click time; reload anyway. " +
+                  "If this fires the player just clicked New Game before providers resolved — extremely rare."
+              );
             }
             sessionStorage.setItem("sugarmagic.fresh-start", "1");
             window.location.reload();
