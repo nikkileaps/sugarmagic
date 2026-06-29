@@ -22,6 +22,28 @@
  * `onProvidersResolved` callback, subscribes to the active provider's
  * `onChange`, and mounts the SugarProfile login modal + signed-in
  * badge when appropriate.
+ *
+ * ## Runtime host scope: COMPONENT-scoped here. (ADR 021)
+ *
+ * The host is constructed INSIDE `useEffect` and lives in a
+ * `hostRef`. React subscriptions to host state are done via plain
+ * `useState` + setters called from host callbacks like
+ * `onProvidersResolved`. This is the right shape because the host's
+ * root DOM element is a `<div ref={rootRef}>` rendered by React —
+ * it doesn't exist until React's first commit, so the host can't be
+ * created any earlier than `useEffect`.
+ *
+ * Compare with `apps/studio/src/preview.tsx`, which uses MODULE-
+ * scoped host + `useSyncExternalStore`. preview's root is a static
+ * `<div>` in the iframe's HTML so it's available at module load,
+ * AND preview's `window.addEventListener("message")` handler needs
+ * to call `host.start` outside any React lifecycle. Different
+ * structural constraints → different scope choices. Same `host.state.*`
+ * source of truth, same runtime code; just different React APIs
+ * for the subscription edge.
+ *
+ * See [ADR 021](/docs/adr/021-runtime-host-lifetime-scope.md) for
+ * the architectural rule + why unifying isn't worth it.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";

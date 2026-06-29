@@ -1,7 +1,7 @@
 # Plan 051: Runtime Handoff Load-Order Architecture
 
 **Status:** Proposed
-**Date:** 2026-06-27
+**Date:** 2026-06-27 (scoped down 2026-06-29)
 
 > Surfaced during Plan 047 §47.10 boot-ordering verification.
 > When plugin bootstrap moved to the top of `host.start`,
@@ -10,61 +10,66 @@
 > overlay missed the only event ever dispatched and silently
 > rendered nothing. Took an hour of "no errors, no modal, why" to
 > track down. A textbook late-subscriber race. This plan replaces
-> the one-shot EventTarget handoff with patterns that make this
-> class of bug structurally impossible.
+> the one-shot EventTarget handoff with a snapshot+subscribe
+> pattern that makes this class of bug structurally impossible.
 
 ## Epic
 
 ### Title
 
-A snapshot-plus-subscribe model for runtime-host handoffs, so any
-subscriber — early, late, async, React, non-React — always reads
-the correct current state.
+A snapshot-plus-subscribe model for runtime-host handoffs, so
+any subscriber — early, late, async, React, non-React — always
+reads the correct current state.
 
 ### Why this matters
 
-The bug pattern is recurring. Three different `host.start`
-side-channels currently use one-shot push notifications:
+The bug pattern is recurring. Two concrete incidents in the
+last sprint:
 
-- `onProvidersResolved(resolved)` — identity / save store handoff
-- `savedGamePromise` — caller-supplied save load (47.10
-  boot-ordering)
-- `notifyAutosaveWritten(snapshot)` — autosave → HUD signal
-- (implicit) gateway client construction — closes over a token
-  getter that reads a module-level registry
+- **47.10 late-subscriber race**: hour of "no errors, no modal,
+  why" debugging because Studio Preview's React effect attached
+  AFTER `onProvidersResolved` fired. Band-aided by reading
+  `resolvedBindings` defensively when the effect first attached;
+  every future subscriber would have to remember the same
+  dance.
+- **47.10 `latestUser = state.currentUser ?? latestUser`
+  overwrite bug**: Session HUD's module-level `latestUser`
+  state got clobbered by a stale value during sign-in; only
+  caught because nikki noticed the "Anon: yes" badge while
+  signed in.
 
-Each is an ad-hoc shape. Adding the next one (region transitions?
-camera mode? input mode from Plan 050?) means another bespoke
-event + another race risk + another debugging session. We have a
-generic "handoff between async boot steps and many subscribers"
-problem; we should solve it once.
+Same root cause both times: ad-hoc state mirroring with
+push-only events + module-level "last known value." AGENTS.md
+"single enforcer" says state should have ONE observable home.
+
+The handoffs DOING this DIY today:
+
+- `onProvidersResolved(resolved)` (identity + save store)
+- `savedGamePromise` (save load)
+- `notifyAutosaveWritten(snapshot)` (HUD signal)
+- the access-token registry module-level state
+
+Four shapes for one problem. Solve it once.
 
 ### Goal
 
 - **No late-subscriber races.** A subscriber attached at any
   point in the host lifetime sees the current state immediately
-  AND every subsequent change. No "I missed the only event"
-  failure mode.
-- **One pattern, applied uniformly.** The same shape works for
-  React components, for non-React runtime code (HUD card,
-  gateway clients), and for code that only needs to peek at the
-  current value (not subscribe).
-- **Phase-aware.** Some state is "available after phase X." The
-  host advances through phases (loading → plugins-resolved →
-  save-loaded → world-ready → running); subscribers can wait on
-  a specific phase or read state that's only meaningful from
-  that phase onward.
-- **Debuggable.** A misfiring subscriber should be diagnosable
-  by reading the current store snapshot — not by adding
-  diagnostic `console.info` and reasoning about microtask /
-  postMessage timing.
+  AND every subsequent change. "I missed the only event" stops
+  being a failure mode.
+- **One pattern across React + non-React.** React subscribers
+  use `useSyncExternalStore` (purpose-built for this). Non-
+  React subscribers (HUD card getters, gateway clients) read
+  `getSnapshot()` directly. Both see the same canonical store.
+- **Debuggable.** A misfiring subscriber is diagnosable by
+  inspecting the current snapshot — no more
+  `console.info("about to dispatch")` + microtask timing
+  reasoning.
 
-## Context
+### Context
 
-### The pattern we have today
-
-`apps/studio/src/preview.tsx` (and `targets/web/src/App.tsx`)
-both use an `EventTarget` + module-level state:
+`apps/studio/src/preview.tsx` and `targets/web/src/App.tsx`
+both use an `EventTarget` + module-level state today:
 
 ```ts
 let resolvedBindings: ProviderBindings | null = null;
@@ -83,259 +88,212 @@ useEffect(() => {
 }, []);
 ```
 
-This is RxJS's `Subject` ([learnrxjs.io][rxjs-subject]) — emits
-to *active* subscribers only, no replay. The well-known fix is
-`BehaviorSubject`: store the current value, replay it on
-subscribe. Subscribers always get the current value at
-subscribe time.
-
-[rxjs-subject]: https://www.learnrxjs.io/learn-rxjs/subjects/behaviorsubject
-
-The bug we just hit:
-
-1. PREVIEW_BOOT message arrives → `host.start` runs.
-2. Plugin bootstrap runs at the top of `host.start` (Plan 047
-   §47.10 boot-ordering) → fires `onProvidersResolved`
-   synchronously → `publishResolvedBindings` →
-   `dispatchEvent("change")`.
-3. PreviewOverlay's `useEffect` HAD NOT YET ATTACHED its "change"
-   listener — React commits + queues effects, effects run after
-   the current task. In some boot paths (HMR warm-up, fast
-   bootstrap), the order flipped.
-4. The "change" event fired to zero listeners.
-5. The listener attached AFTER the event. Forever waiting for an
-   event that already happened. Overlay returns `null`. No
-   login modal. Hour of debugging.
-
-Workaround landed (preview.tsx + App.tsx now read `resolvedBindings`
-defensively when their effect first attaches), but it's a
-band-aid. Every future subscriber would have to remember the
-same dance.
-
-### The patterns to adopt
-
-**1. Snapshot + subscribe** ([React's
-useSyncExternalStore][react-uses]). Subscribers always read the
-current value via `getSnapshot()` at subscribe time, plus a
-`subscribe(callback)` for change notifications. No race
-possible — the store IS the source of truth, events are derived
-from state transitions.
+This is RxJS's `Subject` shape — emits to *active* subscribers
+only, no replay. The well-known fix is `BehaviorSubject`:
+store the current value, replay it on subscribe. React's
+`useSyncExternalStore` ([docs][react-uses]) implements that
+contract directly.
 
 [react-uses]: https://react.dev/reference/react/useSyncExternalStore
 
-```ts
-interface ObservableStore<T> {
-  getSnapshot(): T;
-  subscribe(listener: () => void): () => void;
-}
-```
+### What is NOT in scope
 
-**2. Phase-aware lifecycle**. The host advances through known
-phases. Subscribers can `await` a specific phase or read state
-that's only defined after a phase.
+(Permanent exclusions, not deferrals. Truly out of scope; see
+`Deferred` below for items we're postponing-with-trigger.)
 
-This is VS Code's [activation events][vscode-events] pattern,
-generalized: extensions declare WHEN they should activate; the
-host fires phases deterministically.
+- **Replacing the existing input-modes registry** (Plan 050).
+  Its `subscribe to UIStateStore` mechanism already works on
+  the snapshot pattern (it reads `stateStore.getState()`
+  synchronously on each keydown, no subscribe-time race
+  possible). Leave it alone.
+- **A general dependency-injection / IoC container.** This
+  plan adds ONE primitive + a handful of named stores on the
+  host. Not a framework.
 
-[vscode-events]: https://code.visualstudio.com/api/references/activation-events
+### Resolved Decisions
 
-```ts
-type RuntimeBootPhase =
-  | "loading"          // host.start called, nothing resolved yet
-  | "plugins-resolved" // active identity + save providers known
-  | "save-loaded"      // savedGamePromise resolved
-  | "world-ready"      // scene + region + player spawned
-  | "running"          // render loop running
-  | "disposed";
+- **`ObservableValue<T>` shape is `{getSnapshot, subscribe}`**,
+  matching React's `useSyncExternalStore` contract verbatim.
+  Subscribers receive a notifier (`() => void`), not the
+  value — they call `getSnapshot()` to pull. Same shape as
+  React's hook needs; same shape Zustand / Jotai / every modern
+  store uses.
+- **Single value per store**, equality-checked via `Object.is`
+  per React's contract. No selectors in the API.
+- **Host owns the stores**, plugins / UI / gateway clients
+  read them. Plugins do NOT mutate `host.state.*`; only the
+  host transitions phases / publishes provider bindings / etc.
 
-interface RuntimeBootStore {
-  getPhase(): RuntimeBootPhase;
-  subscribePhase(listener: (phase: RuntimeBootPhase) => void): () => void;
-  whenPhase(phase: RuntimeBootPhase): Promise<void>;
-}
-```
+### Open Questions (that block the MVP)
 
-## Proposed Architecture
+- **Where does `ObservableValue<T>` live?** `packages/
+  runtime-core/src/util/` is the cleanest home — generic
+  utility, used by everything downstream. Resolution: yes,
+  put it there.
+- **Does `host.state.user` mirror the active provider's user,
+  or proxy it?** The provider's `currentUser` + `onChange` is
+  already authoritative. Resolution: `host.state.user` proxies
+  the active provider via subscription — no parallel mirror.
+  Cuts the entire `latestUser = state.currentUser ?? latestUser`
+  bug class structurally.
 
-### A small `ObservableValue<T>` primitive in runtime-core
+## Stories
 
-```ts
-// packages/runtime-core/src/util/observable-value.ts
-export interface ObservableValue<T> {
-  getSnapshot(): T;
-  subscribe(listener: () => void): () => void;
-}
+### 51.1 — `ObservableValue<T>` primitive
 
-export interface MutableObservableValue<T> extends ObservableValue<T> {
-  set(next: T): void;
-}
+**Files (create):**
 
-export function createObservableValue<T>(
-  initial: T
-): MutableObservableValue<T> { ... }
-```
+- `packages/runtime-core/src/util/observable-value.ts`:
+  - `ObservableValue<T>` interface with `getSnapshot()` and
+    `subscribe(listener)` returning an unsubscribe fn.
+  - `MutableObservableValue<T>` extends with `set(next)`.
+  - `createObservableValue<T>(initial: T): MutableObservableValue<T>`.
+  - Equality-checked via `Object.is` — subscribers don't fire
+    on no-op `set` calls. React's contract requires stable
+    snapshots; this gives it directly.
+  - **Add an in-file comment at the top of the file pointing
+    back to the `Deferred` section of this plan** for anyone
+    considering adding selector-based subscription OR
+    fine-grained value diffing.
 
-Tiny. Zero deps. Replaces every `EventTarget`-plus-module-let in
-the codebase.
+**Tests:** pure-function unit tests:
+- initial getSnapshot returns the initial value
+- set + getSnapshot reflects the new value
+- subscribe fires on set
+- subscribe does NOT fire on a set whose `Object.is`-equal
+- unsubscribe stops firing
+- multiple subscribers all fire
 
-### Host exposes named stores
+**Exit:** the primitive exists with passing tests; no
+consumers yet.
 
-`WebRuntimeHost` gains a `state` field whose shape mirrors the
-boot phases. Each entry is an `ObservableValue` the host
-mutates as it progresses.
+### 51.2 — Migrate Studio Preview's module-scoped EventTarget handoff
 
-```ts
-interface WebRuntimeHost {
-  readonly boot: RuntimeBootModel;
-  readonly state: {
-    phase: ObservableValue<RuntimeBootPhase>;
-    activeProviders: ObservableValue<ProviderBindings | null>;
-    savedGame: ObservableValue<GameSave | null>;
-    user: ObservableValue<User | null>;
-    latestAutosave: ObservableValue<SessionHudSavedGameSnapshot | null>;
-  };
-  start(state: WebRuntimeStartState): Promise<void>;
-  dispose(): void;
-}
-```
+**Why only preview, not App.tsx (sharpened during 51.2 design):**
+the actual late-subscriber race lives in `preview.tsx` because
+its host is constructed at MODULE scope, before any React
+component mounts. `App.tsx`'s host is COMPONENT-scoped (created
+inside `useEffect`) — its `useState` + `setActive(resolved)` in
+the `onProvidersResolved` callback is already race-free because
+the callback fires inside the same effect that owns the host.
+We add `host.state.activeProviders` for ALL consumers; App.tsx
+keeps its existing `useState` mirror (downstream React
+subscriber), but the host store is still authoritative for the
+non-React reads in 51.3.
 
-Subscribers query and subscribe at any time. The current
-`onProvidersResolved` callback, `savedGamePromise`,
-`notifyAutosaveWritten` shapes all collapse into "mutate the
-right store."
+**Files (modify):**
 
-### React subscribers use `useSyncExternalStore`
+- `targets/web/src/runtimeHost.ts` — add
+  `host.state.activeProviders: ObservableValue<ProviderBindings | null>`
+  and mutate it at the existing `onProvidersResolved` callback
+  site (callback continues to fire in parallel for back-compat
+  during this story; retires per `Deferred` trigger).
+- `apps/studio/src/preview.tsx`:
+  - Replace `EventTarget`-based `providerEvents` +
+    `resolvedBindings` module-level state with
+    `useSyncExternalStore(host.state.activeProviders.subscribe,
+    host.state.activeProviders.getSnapshot)`.
+  - Drop the catch-up defensive read on first effect attach
+    (the 47.10 band-aid).
+- `targets/web/src/App.tsx`: NOT migrated. Its `useState`
+  pattern stays — locally race-free. The new host store is
+  populated for downstream non-React consumers (51.3) to read.
 
-```ts
-const active = useSyncExternalStore(
-  host.state.activeProviders.subscribe,
-  host.state.activeProviders.getSnapshot
-);
-```
+**Tests:**
+- Manual: open Studio Preview from a cold start, verify the
+  login modal appears (no missed-event silent failure).
+- The original race condition is structurally impossible now
+  in preview.tsx; no automated test required (the abstraction
+  IS the test).
 
-One line replaces the `useEffect` + `useState` +
-`addEventListener` + race-prone catch-up dance. React's hook
-already handles the snapshot-at-subscribe semantics correctly.
+**Exit:** preview.tsx uses `useSyncExternalStore`; the
+defensive catch-up read deletes; module-level
+`resolvedBindings` + `providerEvents` delete; preview boots
+cleanly with the login modal appearing reliably.
 
-### Non-React subscribers (HUD, gateway clients) use the same store
+### 51.3 — Migrate non-React module-level state
 
-The Session HUD card's `getUser` getter currently reads a
-module-level `latestUser` mutated by host code. Replace with:
+**Files (modify):**
 
-```ts
-createSessionHudCard({
-  getUser: () => host.state.user.getSnapshot(),
-  getSavedGameSnapshot: () => host.state.latestAutosave.getSnapshot()
-});
-```
+- `targets/web/src/runtimeHost.ts` — add
+  `host.state.user: ObservableValue<User | null>` and
+  `host.state.latestAutosave: ObservableValue<SessionHudSavedGameSnapshot | null>`.
+  The user store proxies the active provider's `currentUser` +
+  `onChange` (per Resolved Decisions — no parallel mirror).
+- `packages/runtime-core/src/identity/session-hud-card.ts`:
+  - Replace `getUser: () => latestUser` with
+    `getUser: () => host.state.user.getSnapshot()`.
+  - Replace `getSavedGameSnapshot: () => latestSavedGameSnapshot`
+    with `getSavedGameSnapshot: () => host.state.latestAutosave.getSnapshot()`.
+  - Delete the module-level `latestUser` /
+    `latestSavedGameSnapshot` lets and any
+    `latestUser = state.currentUser ?? latestUser`-style
+    overwrite logic. (That's the structural fix for the second
+    47.10 incident.)
+- `packages/runtime-core/src/identity/access-token-registry.ts`:
+  - Replace the module-level token getter registry with a
+    `host.state.user.getSnapshot()?.getAccessToken?.()` read at
+    call time.
+  - Delete the `registerActiveIdentityProvider` function and
+    its module-level state.
 
-Same shape. No more `latestUser = state.currentUser ?? latestUser`
-overwrite bug.
+**Tests:**
+- Verify Session HUD's "Anon: <yes|no>" badge stays correct
+  through sign-in / sign-out / sign-in transitions (the
+  scenario that surfaced the 47.10 overwrite bug).
+- Verify gateway calls authenticate correctly after a sign-in
+  mid-session (the access-token registry replacement).
 
-The access-token registry (`packages/runtime-core/src/identity/
-access-token-registry.ts`) is the same pattern, ad-hoc'd. Move
-its state into `host.state.user` and have gateway clients pull
-the token via the user's `getAccessToken()`.
+**Exit:** no module-level "last-known-X" state in runtime-core's
+identity / HUD modules; everything reads from `host.state.*`.
 
-### Promise-based phase waits
+## Deferred
 
-Callers that need to "wait until plugins resolve, then load
-save" use a promise interface instead of a callback:
+(Per the `deferred-scope-triggers` memory rule: each item has
+a concrete trigger condition. The natural revisit points in
+code carry comments pointing back to this section.)
 
-```ts
-async function loadSaveAfterProvidersResolve() {
-  await host.state.phase.whenPhase("plugins-resolved");
-  const active = host.state.activeProviders.getSnapshot()!;
-  const user = await waitForActiveUser(active.identityProvider);
-  return active.saveStore.load(user!.userId);
-}
-```
-
-Cleaner than the current `onProvidersResolved` callback
-threading a deferred `savedGamePromise`.
-
-## Migration sketch
-
-Not a one-shot rewrite. Land the primitive first, migrate
-boot-critical handoffs, leave the rest to incremental clean-up.
-
-### Phase 1: introduce `ObservableValue<T>` + `host.state` skeleton
-
-- Add the primitive in `packages/runtime-core/src/util/`.
-- Add `host.state.{phase, activeProviders, savedGame, user,
-  latestAutosave}` to `WebRuntimeHost`.
-- Host mutates them at the existing transition points.
-- Keep the legacy `onProvidersResolved` + `notifyAutosaveWritten`
-  callbacks firing in parallel for back-compat.
-
-### Phase 2: migrate Studio Preview + App.tsx subscribers
-
-- Replace `EventTarget`-based `resolvedBindings` with
-  `useSyncExternalStore(host.state.activeProviders.{subscribe,
-  getSnapshot})`.
-- Drop the catch-up branch in preview.tsx / App.tsx.
-- Drop the module-level `resolvedBindings` + `providerEvents`.
-
-### Phase 3: migrate Session HUD card + access-token registry
-
-- HUD card reads from `host.state.user` + `host.state.latestAutosave`.
-- Delete the `registerActiveIdentityProvider` module-level
-  registry; gateway clients read the token via
-  `host.state.user.getSnapshot()?.getAccessToken?.()`.
-
-### Phase 4: remove deprecated callbacks
-
-- Delete `onProvidersResolved` from `WebRuntimeStartState`.
-- Delete `notifyAutosaveWritten` from `WebRuntimeHost`.
-- Delete `savedGamePromise` field (replaced by phase wait).
-
-## Open Questions
-
-- **Where does `ObservableValue<T>` live?** runtime-core is the
-  cleanest home (everything depends on it), but it's a generic
-  utility. ADR-able decision.
-- **Do we need fine-grained selectors?** For now, each store is
-  a single value, equality-checked via `Object.is` per React's
-  contract. If we later need selector-based subscriptions
-  (`subscribe to user.email only`) we can layer on top.
-- **Boot phase enum stability.** `running` and `disposed` are
-  obvious; the middle phases will firm up as more handoffs
-  migrate. Adding a phase is a versioned change — any subscriber
-  doing `.whenPhase("save-loaded")` would silently never resolve
-  if we renamed the phase.
-- **Does `host.state.user` belong on the host or on the
-  identity provider?** The provider already exposes `currentUser`
-  + `onChange`. Maybe `host.state.user` just proxies the active
-  provider's user instead of mirroring it. Reduces the "two
-  sources of truth" bug class.
-- **React-server-rendering.** `useSyncExternalStore`'s
-  `getServerSnapshot` parameter — do we need it? Probably not for
-  target-web (CSR only), but worth noting.
+- **Boot-phase enum + `whenPhase` Promise API.** The full plan
+  proposed `host.state.phase` as an `ObservableValue<RuntimeBootPhase>`
+  with `whenPhase("save-loaded")`-style awaits. Cut because no
+  current handoff demands it — `savedGamePromise` works for
+  the one "wait for save load" handoff. **Revisit when**:
+  - A second handoff needs to wait for a specific boot phase
+    that `savedGamePromise` can't express, OR
+  - Three or more deferred-Promise patterns crop up in the
+    host (e.g. `regionLoadPromise`, `audioReadyPromise`,
+    `pluginsLoadedPromise`) — at that point the ad-hoc shape
+    is duplication, generalize into phases.
+- **Fine-grained selectors on a store** (`subscribe to
+  user.email only`). Cut because each `host.state.*` store
+  currently holds a single primitive-ish value. **Revisit
+  when**:
+  - A single store grows to a structurally complex object AND
+  - Multiple subscribers need only a sub-property AND
+  - We observe re-render performance issues that would benefit
+    from selector-based diffing.
+- **"Remove deprecated callbacks" as its own dedicated cleanup
+  story.** The legacy `onProvidersResolved`, `savedGamePromise`,
+  and `notifyAutosaveWritten` may stick around in parallel
+  with the new stores for a bit. Cut because we can retire
+  each callback naturally as its last call site migrates.
+  **Revisit when**: any of these three callbacks still has
+  live callers two PRs after 51.3 lands — at that point, do a
+  one-PR sweep to delete them rather than letting them rot.
 
 ## Builds On
 
 - [Plan 047 §47.10 boot-ordering](/docs/plans/047-sugarprofile-user-management-plugin-epic.md)
-  — the late-subscriber race that motivated this work surfaced
-  here.
+  — the late-subscriber race + the `latestUser` overwrite both
+  surfaced here.
 - [AGENTS.md — Non-Negotiable Principles](/AGENTS.md) — "one
   source of truth" applies directly: every piece of resolved
-  runtime state should have exactly one observable store; React
-  state, HUD cards, and gateway clients all read from the same
+  runtime state should have exactly one observable store; React,
+  HUD cards, and gateway clients all read from the same
   snapshot.
-
-## Followed By
-
-- Plan 050 (input mode / action map system) — the input router
-  benefits from the same pattern; the active mode is an
-  `ObservableValue<RuntimeMode>` that the input router and any
-  HUD overlay can subscribe to.
 
 ## References
 
-- [useSyncExternalStore — React docs][react-uses]
-- [BehaviorSubject — Learn RxJS][rxjs-bs]
-- [Subject vs BehaviorSubject vs ReplaySubject — Learn RxJS][rxjs-subject]
-- [Activation Events — VS Code Extension API][vscode-events]
-
-[rxjs-bs]: https://www.learnrxjs.io/learn-rxjs/subjects/behaviorsubject
+- [useSyncExternalStore — React docs](https://react.dev/reference/react/useSyncExternalStore)
+- [BehaviorSubject — Learn RxJS](https://www.learnrxjs.io/learn-rxjs/subjects/behaviorsubject)
+- [Subject vs BehaviorSubject — Learn RxJS](https://www.learnrxjs.io/learn-rxjs/subjects/behaviorsubject)

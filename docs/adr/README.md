@@ -24,3 +24,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 018: SugarDeploy Web Publish Target Architecture](/Users/nikki/projects/sugarmagic/docs/adr/018-sugardeploy-web-publish-target-architecture.md)
 - [ADR 019: Engine vs. Game Lifecycle Split](/Users/nikki/projects/sugarmagic/docs/adr/019-engine-vs-game-lifecycle-split.md)
 - [ADR 020: SugarProfile User Management Architecture](/Users/nikki/projects/sugarmagic/docs/adr/020-sugarprofile-user-management-architecture.md)
+- [ADR 021: Runtime Host Lifetime — Component-Scope vs Module-Scope](/Users/nikki/projects/sugarmagic/docs/adr/021-runtime-host-lifetime-scope.md)
