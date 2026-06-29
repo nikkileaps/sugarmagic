@@ -27,6 +27,7 @@ export * from "./player";
 export * from "./plugins";
 export * from "./profile";
 export * from "./quest";
+export * from "./game-state";
 export * from "./save";
 export * from "./scene";
 export * from "./state";

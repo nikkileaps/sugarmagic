@@ -71,7 +71,13 @@ export interface RuntimeStore<TState> {
   subscribe(listener: () => void): () => void;
 }
 
-function createRuntimeStore<TState extends object>(
+/**
+ * Shared store factory used by both `createUIStateStore` and
+ * `createGameStateStore` (Plan 054). Don't reach for this in
+ * application code — use the typed factory for the store you
+ * actually need, so callers' setState patches stay typed.
+ */
+export function createRuntimeStore<TState extends object>(
   initialState: TState
 ): RuntimeStore<TState> {
   let state = initialState;
