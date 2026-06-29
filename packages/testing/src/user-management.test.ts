@@ -2892,7 +2892,9 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
     expect(store.getState()).toEqual({
       visibleMenuKey: "start-menu",
       isPaused: true,
-      savePresent: true
+      savePresent: true,
+      // Story 50.1 — added to RuntimeUIState; defaults false.
+      loginModalOpen: false
     });
   });
 

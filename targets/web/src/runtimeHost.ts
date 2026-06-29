@@ -109,10 +109,12 @@ import {
   type RuntimeContentSource,
   type RuntimeHostKind,
   UIContextSystem,
+  createRuntimeActionRegistry,
   createUIActionRegistry,
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
+  type RuntimeActionRegistry,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -305,6 +307,17 @@ export interface WebRuntimeHost {
    * visible or the project has no `start-menu` definition.
    */
   showStartMenu(): void;
+  /**
+   * Story 50.6 — flip the `loginModalOpen` flag on the host's
+   * UIStateStore. The runtime-mode resolver returns
+   * "login-modal" when the flag is true, which makes the
+   * keyboard action registry disable every in-game / dialogue
+   * action so typing into the modal's email field can't co-fire
+   * inventory etc. Callers (App.tsx, preview.tsx) call this
+   * from a useEffect that mirrors their `showLoginModal` boolean
+   * — true on mount, false on unmount. Idempotent.
+   */
+  setLoginModalOpen(open: boolean): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -737,6 +750,14 @@ export function createWebRuntimeHost(
   let uiContextStore: UIContextStore | null = null;
   let uiStateStore: UIStateStore | null = null;
   let uiActionRegistry: UIActionRegistry | null = null;
+  // Story 50.3 — central keyboard action registry. One window
+  // listener per session lifetime; handlers (inventory, quest
+  // journal, etc.) register against it via the registry's
+  // register() return value (an unregister fn called on
+  // module dispose). The registry's `dispose()` runs on session
+  // teardown, clearing any remaining registrations and removing
+  // the window listener.
+  let runtimeActionRegistry: RuntimeActionRegistry | null = null;
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
@@ -785,6 +806,13 @@ export function createWebRuntimeHost(
     uiContextStore = null;
     uiStateStore = null;
     uiActionRegistry = null;
+    // Story 50.3 — clearing registrations + removing the window
+    // listener happens via dispose(); the registry's own
+    // handlers (inventory etc.) already unregistered via their
+    // module dispose(), but dispose() is a belt-and-suspenders
+    // guarantee against stale window listeners after teardown.
+    runtimeActionRegistry?.dispose();
+    runtimeActionRegistry = null;
     webAudioAdapter?.dispose();
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
@@ -1343,6 +1371,12 @@ export function createWebRuntimeHost(
       // start-new-game.
       savePresent: resolvedSavedGame != null
     });
+    // Story 50.3 — create the central keyboard action registry
+    // immediately after the state store; both share the same
+    // lifecycle (one per host.start() invocation).
+    runtimeActionRegistry = createRuntimeActionRegistry({
+      stateStore: uiStateStore
+    });
     const startMenuExists = state.menuDefinitions.some(
       (menu) => menu.menuKey === "start-menu"
     );
@@ -1467,6 +1501,15 @@ export function createWebRuntimeHost(
       soundEventBindings: state.soundEventBindings,
       audioMixer: state.audioMixer,
       pluginManager,
+      // Story 50.3 — same registry the host owns above; gameplay-
+      // session passes it to every UI module that wants a
+      // keyboard shortcut.
+      actionRegistry: runtimeActionRegistry ?? undefined,
+      // Story 50.5 — DialoguePanel needs the state store to flip
+      // `visibleMenuKey = "dialogue"` on show() so the mode
+      // resolver routes dialogue keys to the dialogue panel and
+      // suppresses in-game shortcuts.
+      uiStateStore: uiStateStore ?? undefined,
       // Closure over `currentAssetSources` so the inventory UI re-resolves
       // thumbnail URLs against the current map (which can change when the
       // user regenerates a thumbnail mid-session).
@@ -1530,6 +1573,10 @@ export function createWebRuntimeHost(
         boot: adapter.boot,
         world,
         blackboard: gameplaySession.blackboard,
+        // Story 50.5 — debug HUD registers its F3 / ` toggle
+        // against `modes: ["any"]` so the diagnostic stays
+        // accessible regardless of game state.
+        actionRegistry: runtimeActionRegistry ?? undefined,
         pluginCards: [
           ...gameplaySession.getDebugHudCardContributions(),
           sessionHudCard
@@ -1670,6 +1717,16 @@ export function createWebRuntimeHost(
     uiStateStore.setState({ visibleMenuKey: "start-menu", isPaused: true });
   }
 
+  function setLoginModalOpen(open: boolean): void {
+    // Story 50.6 — runtime mode resolver reads this; flipping it
+    // to true forces mode "login-modal", which the action
+    // registry treats as "no in-game / dialogue actions fire."
+    // No-op when host.start() hasn't run yet — there's no game
+    // running for shortcuts to interfere with anyway.
+    if (!uiStateStore) return;
+    uiStateStore.setState({ loginModalOpen: open });
+  }
+
   function getCurrentSavePayload(): GameSavePayload | null {
     if (!world || !gameplaySession) return null;
     const playerEntities = world.query(PlayerControlled, Position);
@@ -1694,6 +1751,7 @@ export function createWebRuntimeHost(
     dispose,
     getCurrentSavePayload,
     notifyAutosaveWritten,
-    showStartMenu
+    showStartMenu,
+    setLoginModalOpen
   };
 }

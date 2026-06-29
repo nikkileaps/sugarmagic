@@ -40,6 +40,20 @@ export interface RuntimeUIState {
    * on autosave write, false on start-new-game's clear.
    */
   savePresent: boolean;
+  /**
+   * Story 50.1 — true while SugarProfile's LoginModal (or any
+   * future focus-stealing modal overlaying the canvas) is
+   * mounted. The input-modes resolver consumes this to switch
+   * `RuntimeMode` to "login-modal", which disables every other
+   * keyboard action so typing into the modal's email input
+   * doesn't simultaneously toggle the inventory.
+   *
+   * Modal owner flips it true on mount, false on unmount. Lives
+   * on `RuntimeUIState` (the single source of truth for "what's
+   * on top of the game right now?") rather than a sibling store
+   * so the mode resolver stays a pure function over one input.
+   */
+  loginModalOpen: boolean;
 }
 
 export interface RuntimeStore<TState> {
@@ -118,7 +132,8 @@ export function createUIStateStore(
   return createRuntimeStore({
     visibleMenuKey: initialState.visibleMenuKey ?? null,
     isPaused: initialState.isPaused ?? false,
-    savePresent: initialState.savePresent ?? false
+    savePresent: initialState.savePresent ?? false,
+    loginModalOpen: initialState.loginModalOpen ?? false
   });
 }
 

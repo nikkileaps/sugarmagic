@@ -156,6 +156,16 @@ export interface RuntimeInventoryUI {
 
 export interface RuntimeInventoryUIOptions {
   getAssetUrl?: (relativePath: string) => string | undefined;
+  /**
+   * Story 50.3 — the central keyboard action registry the
+   * inventory's open/close shortcuts register against. Replaces
+   * the previous per-handler `window.addEventListener("keydown")`
+   * and its inline `event.target instanceof HTMLInputElement`
+   * check. When omitted (e.g. legacy callers / unit tests),
+   * keyboard shortcuts are not installed — the inventory still
+   * exposes `toggle()` for programmatic control.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
 }
 
 export function createRuntimeInventoryUI(
@@ -233,29 +243,39 @@ export function createRuntimeInventoryUI(
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    const target = event.target;
-    if (
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLInputElement ||
-      (target instanceof HTMLElement && target.isContentEditable)
-    ) {
-      return;
-    }
-
-    if (event.key.toLowerCase() === "i") {
-      event.preventDefault();
-      setOpen(!open);
-      return;
-    }
-
-    if (open && event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-    }
+  // Story 50.3 — register keyboard shortcuts through the central
+  // action registry (modes-aware) instead of installing per-
+  // handler window listeners. The registry owns the
+  // input-focus check + the "should this fire right now?" gate
+  // based on `resolveRuntimeMode(uiStateStore)`. Inventory keeps
+  // owning its open/close behaviour; the registry just decides
+  // when the keystroke reaches the handlers below.
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-inventory-toggle",
+        modes: ["in-game"],
+        key: "i",
+        handler: (event) => {
+          event.preventDefault();
+          setOpen(!open);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-inventory-close",
+        modes: ["in-game"],
+        key: "Escape",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     update(nextEntries) {
@@ -275,7 +295,7 @@ export function createRuntimeInventoryUI(
       onInspectItem = handler;
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       parentContainer.removeChild(container);
     }
   };
@@ -290,10 +310,27 @@ export interface RuntimeItemViewUI {
   dispose: () => void;
 }
 
+export interface RuntimeItemViewUIOptions {
+  documentDefinitions?: DocumentDefinition[];
+  /**
+   * Story 50.3 — central keyboard action registry the item-
+   * view's Escape-to-close shortcut registers against. Same
+   * shape as inventory + quest journal.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+}
+
 export function createRuntimeItemViewUI(
   parentContainer: HTMLElement,
-  documentDefinitions: DocumentDefinition[] = []
+  optionsOrDocs: RuntimeItemViewUIOptions | DocumentDefinition[] = {}
 ): RuntimeItemViewUI {
+  // Back-compat: existing callers pass `documentDefinitions`
+  // positionally as the second arg. New callers pass an options
+  // object. Normalise to the options shape.
+  const options: RuntimeItemViewUIOptions = Array.isArray(optionsOrDocs)
+    ? { documentDefinitions: optionsOrDocs }
+    : optionsOrDocs;
+  const documentDefinitions = options.documentDefinitions ?? [];
   injectInventoryStyles();
 
   const container = document.createElement("div");
@@ -360,15 +397,28 @@ export function createRuntimeItemViewUI(
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    if (!open) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-    }
+  // Story 50.3 — item-view Escape-to-close routes through the
+  // central registry. Inventory + journal + item-view all
+  // register their own Escape handler against "in-game" mode;
+  // each guards with `if (!open) return` so only the open
+  // overlay closes. Pressing Escape with multiple overlays open
+  // (an unusual case) closes them all — same behaviour as the
+  // pre-migration scattered listeners.
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-item-view-close",
+        modes: ["in-game"],
+        key: "Escape",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     show(definition, quantity) {
@@ -391,7 +441,7 @@ export function createRuntimeItemViewUI(
       onConsume = handler;
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       parentContainer.removeChild(container);
     }
   };

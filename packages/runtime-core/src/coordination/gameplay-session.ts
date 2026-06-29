@@ -174,6 +174,23 @@ export interface RuntimeGameplaySessionControllerOptions {
    * the underlying map can change without re-creating the session.
    */
   getAssetUrl?: (relativePath: string) => string | undefined;
+  /**
+   * Story 50.3 — central keyboard action registry. Threaded
+   * through to every UI module that wants a keyboard shortcut
+   * (inventory, quest journal, document, spell menu, dialogue,
+   * debug HUD) so they all flow through one window-listener +
+   * one mode-aware dispatcher. The host (target-web's
+   * runtimeHost.ts, Studio's bootPreviewSession.ts) owns
+   * registry creation alongside its `UIStateStore`.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+  /**
+   * Story 50.5 — the same `UIStateStore` the host owns. Threaded
+   * through to the DialoguePanel so its show()/hide() can flip
+   * `visibleMenuKey = "dialogue"` for the runtime-mode resolver
+   * to pick up.
+   */
+  uiStateStore?: import("../ui-context").UIStateStore;
 }
 
 export interface RuntimeGameplaySessionController {
@@ -373,6 +390,8 @@ export function createRuntimeGameplaySessionController(
     .filter((h): h is NonNullable<typeof h> => h != null);
   const dialoguePanel = createRuntimeDialoguePanel(root, {
     entryDecorators,
+    actionRegistry: options.actionRegistry,
+    uiStateStore: options.uiStateStore,
     onTermHover:
       hoverHandlers.length > 0
         ? (event) => {
@@ -386,21 +405,30 @@ export function createRuntimeGameplaySessionController(
         : undefined
   });
   const questTracker = createRuntimeQuestTracker(root);
-  const questJournal = createRuntimeQuestJournal(root);
+  const questJournal = createRuntimeQuestJournal(root, {
+    actionRegistry: options.actionRegistry
+  });
   const questNotificationCenter = createRuntimeQuestNotificationCenter(root);
   const casterManager = new CasterManager();
   const casterSystem = new CasterSystem(casterManager);
-  const spellMenuUi = createRuntimeSpellMenuUI(root, casterManager);
+  const spellMenuUi = createRuntimeSpellMenuUI(root, casterManager, {
+    actionRegistry: options.actionRegistry
+  });
   const inventoryManager = new InventoryManager();
   const inventoryUi = createRuntimeInventoryUI(root, {
-    getAssetUrl: options.getAssetUrl
+    getAssetUrl: options.getAssetUrl,
+    actionRegistry: options.actionRegistry
   });
-  const itemViewUi = createRuntimeItemViewUI(root, documentDefinitions);
+  const itemViewUi = createRuntimeItemViewUI(root, {
+    documentDefinitions,
+    actionRegistry: options.actionRegistry
+  });
   const itemPickupNotifications =
     createRuntimeItemPickupNotificationCenter(root);
   const interactionPrompt = createRuntimeInteractionPrompt(root);
   const documentReaderUi = createRuntimeDocumentReaderUI(root, {
-    getAssetUrl: options.getAssetUrl
+    getAssetUrl: options.getAssetUrl,
+    actionRegistry: options.actionRegistry
   });
   const dialogueManager = new DialogueManager(dialoguePanel);
   const questManager = new QuestManager();

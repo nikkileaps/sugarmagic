@@ -33,6 +33,8 @@ export * from "./state";
 export * from "./spatial";
 export * from "./streaming";
 export * from "./shader";
+export * from "./input-modes/registry";
+export * from "./input-modes/runtime-mode";
 export * from "./ui-actions";
 export * from "./ui-context";
 export * from "./vfx";

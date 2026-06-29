@@ -129,10 +129,29 @@ export function createRuntimeDialoguePanel(
   options?: {
     entryDecorators?: DialogueEntryDecorator[];
     onTermHover?: DialogueTermHoverCallback;
+    /**
+     * Story 50.5 — central keyboard action registry. The
+     * dialogue panel registers its Escape (cancel) + Enter
+     * (advance / submit) + 1-9 (choice pick) actions against
+     * `modes: ["dialogue"]` so they fire only during dialogue.
+     * Replaces the previous per-handler window listener +
+     * inline visible-check.
+     */
+    actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+    /**
+     * Story 50.5 — when the panel becomes visible, it flips
+     * `uiStateStore.visibleMenuKey = "dialogue"` so the runtime
+     * mode resolver returns "dialogue" and only this panel's
+     * actions are active. Cleared on hide. Optional so legacy
+     * callers (tests, headless construction) still work.
+     */
+    uiStateStore?: import("../ui-context").UIStateStore;
   }
 ): RuntimeDialoguePanel {
   const entryDecorators = options?.entryDecorators ?? [];
   const onTermHover = options?.onTermHover ?? null;
+  const actionRegistry = options?.actionRegistry;
+  const uiStateStore = options?.uiStateStore;
   injectStyles();
 
   const container = document.createElement("div");
@@ -677,46 +696,77 @@ export function createRuntimeDialoguePanel(
     );
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    if (!container.classList.contains("visible")) return;
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel?.();
-      return;
-    }
-
-    if (currentInputMode === "free_text") {
-      if (event.key === "Enter" && !event.shiftKey) {
-        const target = event.target;
-        if (target instanceof HTMLTextAreaElement && target === textInput) {
+  // Story 50.5 — dialogue keyboard shortcuts route through the
+  // central registry against `modes: ["dialogue"]`. Three logical
+  // bindings (Escape cancel, Enter advance, 1-9 choice pick),
+  // expanded to 11 registrations because the registry matches a
+  // single key per action. Each handler guards with the visible
+  // check so dispose-without-hide doesn't leave stray listeners.
+  // Free-text + placement_questionnaire input modes still submit
+  // via the form's own submit event (Enter inside the textarea
+  // is captured by `textInput.addEventListener("keydown", ...)`'s
+  // stopPropagation; the registry's `isInputContext` check would
+  // also bail), so we don't need a special-case Enter handler
+  // there.
+  const unregisterActions: Array<() => void> = [];
+  function isVisible() {
+    return container.classList.contains("visible");
+  }
+  if (actionRegistry) {
+    unregisterActions.push(
+      actionRegistry.register({
+        actionId: "runtime-dialogue-cancel",
+        modes: ["dialogue"],
+        key: "Escape",
+        handler: (event) => {
+          if (!isVisible()) return;
           event.preventDefault();
-          submitInput({ kind: "free_text", text: target.value });
+          onCancel?.();
         }
-      }
-      return;
-    }
-
-    if (currentInputMode === "placement_questionnaire") {
-      return;
-    }
-
-    if (currentChoices.length > 1) {
-      const index = Number.parseInt(event.key, 10) - 1;
-      if (index >= 0 && index < currentChoices.length) {
-        event.preventDefault();
-        submitInput({ kind: "choice", choiceId: currentChoices[index]!.choiceId });
-      }
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      submitInput({ kind: "advance" });
+      })
+    );
+    unregisterActions.push(
+      actionRegistry.register({
+        actionId: "runtime-dialogue-advance",
+        modes: ["dialogue"],
+        key: "Enter",
+        handler: (event) => {
+          if (!isVisible()) return;
+          // Free-text / placement-questionnaire modes own Enter
+          // via their own input elements; the advance shortcut
+          // is only meaningful when the dialogue is in
+          // straight-advance mode (no input field).
+          if (currentInputMode === "free_text") return;
+          if (currentInputMode === "placement_questionnaire") return;
+          if (currentChoices.length > 1) return;
+          event.preventDefault();
+          submitInput({ kind: "advance" });
+        }
+      })
+    );
+    // Digit shortcuts 1-9 for multi-choice dialogue.
+    for (let digit = 1; digit <= 9; digit += 1) {
+      const choiceIndex = digit - 1;
+      unregisterActions.push(
+        actionRegistry.register({
+          actionId: `runtime-dialogue-choice-${digit}`,
+          modes: ["dialogue"],
+          key: String(digit),
+          handler: (event) => {
+            if (!isVisible()) return;
+            if (currentInputMode === "free_text") return;
+            if (currentInputMode === "placement_questionnaire") return;
+            if (choiceIndex >= currentChoices.length) return;
+            event.preventDefault();
+            submitInput({
+              kind: "choice",
+              choiceId: currentChoices[choiceIndex]!.choiceId
+            });
+          }
+        })
+      );
     }
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     getElement() {
@@ -724,6 +774,11 @@ export function createRuntimeDialoguePanel(
     },
     show() {
       container.classList.add("visible");
+      // Story 50.5 — flip the UI state into "dialogue" mode so
+      // the action registry routes Escape / Enter / 1-9 to this
+      // panel and skips in-game shortcuts (inventory, journal,
+      // etc.). Cleared on hide().
+      uiStateStore?.setState({ visibleMenuKey: "dialogue" });
     },
     hide() {
       container.classList.remove("visible");
@@ -733,6 +788,14 @@ export function createRuntimeDialoguePanel(
       inputContainer.innerHTML = "";
       entryCount = 0;
       stopCurrent();
+      // Story 50.5 — restore the in-game mode. If something else
+      // had set visibleMenuKey to a non-dialogue value before this
+      // call, we'd clobber it — but in practice dialogue is
+      // mutually exclusive with other menu states (the
+      // interaction system locks input first).
+      if (uiStateStore?.getState().visibleMenuKey === "dialogue") {
+        uiStateStore.setState({ visibleMenuKey: null });
+      }
     },
     clearHistory() {
       historyContainer.innerHTML = "";
@@ -773,7 +836,7 @@ export function createRuntimeDialoguePanel(
       scrollToBottom();
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       stopCurrent();
       parentContainer.removeChild(container);
     }

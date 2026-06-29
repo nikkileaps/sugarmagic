@@ -393,6 +393,17 @@ export function App() {
 
   const showLoginModal = loginModalOpen || requireSignIn;
 
+  // Story 50.6 — mirror the modal-open boolean into the host's
+  // `UIStateStore.loginModalOpen` so the runtime mode resolver
+  // switches to "login-modal" mode while the modal is mounted.
+  // This is what makes typing into the email/password input
+  // safe from co-firing in-game shortcuts — the central action
+  // registry's mode gate skips everything that isn't registered
+  // against "login-modal".
+  useEffect(() => {
+    hostRef.current?.setLoginModalOpen(Boolean(showLoginModal));
+  }, [showLoginModal]);
+
   const tree = (
     <main className="target-shell">
       <div ref={rootRef} className="target-runtime-root" />
