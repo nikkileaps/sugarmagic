@@ -146,6 +146,36 @@ function isDeploymentActionExecutionResult(
   );
 }
 
+// Story 49.5 — produces the copy-pasteable bootstrap command the
+// Layer B modal renders. Single shell loop that grants the
+// developer SA every missing role on the target project,
+// running as the user (via `--account=YOUR_USER@EMAIL`) so the
+// bindings actually succeed (the SA can't grant itself the
+// first time). The placeholder must be replaced by the user
+// before pasting; sugarmagic deliberately doesn't try to detect
+// the user's email — keeps the user/SA boundary explicit per
+// Plan 049 §49.5.
+function buildLayerBBootstrapCommand(input: {
+  saEmail: string;
+  gcpProjectId: string;
+  missingRoles: readonly string[];
+}): string {
+  const rolesList = input.missingRoles.join(" \\\n  ");
+  return [
+    `# Replace YOUR_USER@EMAIL with your gcloud user account, then run.`,
+    `# Idempotent — re-running a binding that already exists is a no-op.`,
+    `for role in \\`,
+    `  ${rolesList}`,
+    `; do`,
+    `  gcloud projects add-iam-policy-binding ${input.gcpProjectId} \\`,
+    `    --member=serviceAccount:${input.saEmail} \\`,
+    `    --role=$role \\`,
+    `    --condition=None \\`,
+    `    --account=YOUR_USER@EMAIL`,
+    `done`
+  ].join("\n");
+}
+
 // Story 45.5 — Set Value modal body. Lives at module scope so it has its
 // own component lifecycle: when the modal closes, this unmounts, and the
 // typed `value` in its useState vanishes. The parent NEVER holds the
@@ -228,6 +258,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     error: null,
     running: false
   });
+
+  // Story 49.5 — when the action dispatcher returns ok:false with
+  // code "developer-sa-needs-project-grant", show this modal
+  // instead of the normal action-failed UI. Modal renders a copy-
+  // pasteable terminal command block; user runs it once (per new
+  // game project's GCP) in a shell with fresh gcloud user creds,
+  // then clicks Retry — which re-fires the original action.
+  // Sugarmagic never runs the bindings itself (the SA can't grant
+  // itself), keeping the user/SA identity boundary explicit per
+  // Plan 049 + AGENTS.md.
+  const [layerBBootstrap, setLayerBBootstrap] = useState<{
+    pendingActionKind: DeploymentActionKind;
+    saEmail: string;
+    gcpProjectId: string;
+    missingRoles: string[];
+  } | null>(null);
 
   // Story 45.4.5 — Create GCP Project button state machine.
   const [probeState, setProbeState] = useState<ProbeState>({
@@ -1039,6 +1085,29 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       // actually needs to see, not "HTTP 500." Only the malformed-response
       // path gets the error-string fallback.
       if (isDeploymentActionExecutionResult(payload)) {
+        // Story 49.5 — Layer B detection produced
+        // `developer-sa-needs-project-grant`. Skip the normal
+        // result render; show the bootstrap modal instead.
+        if (
+          payload.code === "developer-sa-needs-project-grant" &&
+          typeof payload.saEmail === "string" &&
+          typeof payload.gcpProjectId === "string" &&
+          Array.isArray(payload.missingRoles)
+        ) {
+          setActionState({
+            kind: null,
+            result: null,
+            error: null,
+            running: false
+          });
+          setLayerBBootstrap({
+            pendingActionKind: actionKind,
+            saEmail: payload.saEmail,
+            gcpProjectId: payload.gcpProjectId,
+            missingRoles: payload.missingRoles
+          });
+          return;
+        }
         setActionState({
           kind: actionKind,
           result: payload,
@@ -4440,6 +4509,103 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               >
                 Close
               </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
+
+      {/* Story 49.5 — Layer B bootstrap modal. Surfaced when the
+          action dispatcher returns the
+          `developer-sa-needs-project-grant` code; renders a copy-
+          pasteable shell loop the user runs ONCE in a terminal
+          (with their gcloud user login fresh). Sugarmagic doesn't
+          run the bindings itself — see Plan 049 §49.5 + AGENTS.md
+          "narrow modules with obvious ownership." */}
+      <Modal
+        opened={layerBBootstrap !== null}
+        onClose={() => setLayerBBootstrap(null)}
+        title="Developer SA needs project access"
+        centered
+        size="lg"
+      >
+        {layerBBootstrap ? (
+          <Stack>
+            <Text size="sm">
+              Your developer service account doesn't yet have the
+              IAM roles SugarDeploy needs on this game's GCP
+              project. The SA can't grant itself (chicken-and-
+              egg), so this is a one-time-per-project bootstrap
+              you run in a terminal as yourself.
+            </Text>
+            <Box
+              p="sm"
+              style={{
+                border: "1px solid var(--sm-color-surface3)",
+                borderRadius: 8,
+                background: "var(--sm-color-surface1)"
+              }}
+            >
+              <Stack gap="xs">
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={140}>
+                    GCP project:
+                  </Text>
+                  <Code>{layerBBootstrap.gcpProjectId}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={140}>
+                    Developer SA:
+                  </Text>
+                  <Code>{layerBBootstrap.saEmail}</Code>
+                </Group>
+                <Group gap="xs" wrap="nowrap" align="flex-start">
+                  <Text size="sm" c="var(--sm-color-subtext)" w={140}>
+                    Missing roles:
+                  </Text>
+                  <Stack gap={2}>
+                    {layerBBootstrap.missingRoles.map((role) => (
+                      <Code key={role}>{role}</Code>
+                    ))}
+                  </Stack>
+                </Group>
+              </Stack>
+            </Box>
+            <Text size="sm">
+              Replace <Code>YOUR_USER@EMAIL</Code> with your gcloud
+              user account, then paste into a terminal where your
+              <Code> gcloud auth login</Code> session is fresh:
+            </Text>
+            <Code block style={{ whiteSpace: "pre" }}>
+              {buildLayerBBootstrapCommand(layerBBootstrap)}
+            </Code>
+            <Group justify="space-between">
+              <Button
+                variant="subtle"
+                onClick={() => {
+                  void navigator.clipboard.writeText(
+                    buildLayerBBootstrapCommand(layerBBootstrap)
+                  );
+                }}
+              >
+                Copy command
+              </Button>
+              <Group>
+                <Button
+                  variant="subtle"
+                  onClick={() => setLayerBBootstrap(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    const pending = layerBBootstrap.pendingActionKind;
+                    setLayerBBootstrap(null);
+                    void runAction(pending);
+                  }}
+                >
+                  Retry
+                </Button>
+              </Group>
             </Group>
           </Stack>
         ) : null}
