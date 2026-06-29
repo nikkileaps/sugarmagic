@@ -195,6 +195,14 @@ export interface RuntimeDocumentReaderUI {
 
 export interface RuntimeDocumentReaderUIOptions {
   getAssetUrl?: (relativePath: string) => string | undefined;
+  /**
+   * Story 50.4 — central keyboard action registry. The document
+   * reader registers Escape (close), Enter (close, image-pages
+   * excluded), and ArrowLeft / ArrowRight (image-page nav)
+   * against "in-game" mode. Replaces the previous per-handler
+   * window listener + inline `event.target` input-focus check.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
 }
 
 export function createRuntimeDocumentReaderUI(
@@ -379,50 +387,80 @@ export function createRuntimeDocumentReaderUI(
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    if (!open) return;
-    // Plan 050 band-aid — don't intercept document navigation keys
-    // (Escape / Enter / arrow keys) when the user is typing into
-    // an input/textarea/contenteditable elsewhere on the page.
-    const target = event.target;
-    if (
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLInputElement ||
-      (target instanceof HTMLElement && target.isContentEditable)
-    ) {
-      return;
-    }
-    if (event.key === "Escape" || (event.key === "Enter" && activeDefinition?.template !== "image-pages")) {
-      event.preventDefault();
-      setOpen(false);
-      return;
-    }
-    if (activeDefinition?.template !== "image-pages") {
-      return;
-    }
-    if (event.key === "ArrowLeft" && imagePageIndex > 0) {
-      event.preventDefault();
-      imagePageIndex -= 1;
-      imageZoom = 1;
-      imagePanX = 0;
-      imagePanY = 0;
-      render(activeOptions);
-      return;
-    }
-    if (
-      event.key === "ArrowRight" &&
-      imagePageIndex < activeDefinition.imagePages.length - 1
-    ) {
-      event.preventDefault();
-      imagePageIndex += 1;
-      imageZoom = 1;
-      imagePanX = 0;
-      imagePanY = 0;
-      render(activeOptions);
-    }
+  // Story 50.4 — document reader keyboard actions route through
+  // the central registry. Four discrete actions instead of one
+  // chunky handler: Escape close, Enter close (skipped on
+  // image-pages), page back, page forward. Each handler guards
+  // with `if (!open) return` so the registered Escape doesn't
+  // co-fire with other "in-game" Escape handlers (inventory
+  // close, item view close).
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-document-reader-close-escape",
+        modes: ["in-game"],
+        key: "Escape",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-document-reader-close-enter",
+        modes: ["in-game"],
+        key: "Enter",
+        handler: (event) => {
+          if (!open) return;
+          // Image-pages mode uses arrow keys; Enter is reserved
+          // there in case future image actions want it.
+          if (activeDefinition?.template === "image-pages") return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-document-reader-page-left",
+        modes: ["in-game"],
+        key: "ArrowLeft",
+        handler: (event) => {
+          if (!open) return;
+          if (activeDefinition?.template !== "image-pages") return;
+          if (imagePageIndex <= 0) return;
+          event.preventDefault();
+          imagePageIndex -= 1;
+          imageZoom = 1;
+          imagePanX = 0;
+          imagePanY = 0;
+          render(activeOptions);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-document-reader-page-right",
+        modes: ["in-game"],
+        key: "ArrowRight",
+        handler: (event) => {
+          if (!open) return;
+          if (activeDefinition?.template !== "image-pages") return;
+          if (imagePageIndex >= activeDefinition.imagePages.length - 1)
+            return;
+          event.preventDefault();
+          imagePageIndex += 1;
+          imageZoom = 1;
+          imagePanX = 0;
+          imagePanY = 0;
+          render(activeOptions);
+        }
+      })
+    );
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     show(definition, options) {
@@ -449,7 +487,7 @@ export function createRuntimeDocumentReaderUI(
       onOpenChange = handler;
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       parentContainer.removeChild(container);
     }
   };

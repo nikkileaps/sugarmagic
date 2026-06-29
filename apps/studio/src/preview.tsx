@@ -525,6 +525,15 @@ function PreviewOverlay() {
   const requireSignIn = user === null && phase !== "loading";
   const showLoginModal = loginModalOpen || requireSignIn;
 
+  // Story 50.6 — same as target-web App.tsx: mirror the modal-
+  // open boolean into the host's `UIStateStore.loginModalOpen`
+  // so the runtime mode resolver routes to "login-modal" mode
+  // while the modal is mounted. Disables all in-game / dialogue
+  // shortcuts so typing the email doesn't co-fire inventory.
+  useEffect(() => {
+    host.setLoginModalOpen(showLoginModal);
+  }, [showLoginModal]);
+
   return (
     <>
       {bootOverlay}

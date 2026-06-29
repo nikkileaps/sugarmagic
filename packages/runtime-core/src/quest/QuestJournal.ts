@@ -14,8 +14,22 @@ export interface RuntimeQuestJournal {
   dispose: () => void;
 }
 
+export interface RuntimeQuestJournalOptions {
+  /**
+   * Story 50.3 — the central keyboard action registry the
+   * quest journal's `j` toggle + `Escape` close shortcuts
+   * register against. Replaces the previous per-handler
+   * `window.addEventListener("keydown")` and its inline
+   * `event.target` input-focus check. When omitted, keyboard
+   * shortcuts are not installed; the journal still exposes
+   * `isOpen()` for programmatic inspection.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+}
+
 export function createRuntimeQuestJournal(
-  parentContainer: HTMLElement
+  parentContainer: HTMLElement,
+  options: RuntimeQuestJournalOptions = {}
 ): RuntimeQuestJournal {
   injectStyles();
 
@@ -116,32 +130,35 @@ export function createRuntimeQuestJournal(
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    // Plan 050 band-aid — don't intercept 'j' when the user is
-    // typing into an input/textarea/contenteditable (e.g.
-    // SugarProfile's LoginModal email field).
-    const target = event.target;
-    if (
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLInputElement ||
-      (target instanceof HTMLElement && target.isContentEditable)
-    ) {
-      return;
-    }
-
-    if (event.key.toLowerCase() === "j") {
-      event.preventDefault();
-      setOpen(!open);
-      return;
-    }
-
-    if (open && event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-    }
+  // Story 50.3 — keyboard shortcuts now flow through the central
+  // action registry. The registry handles the input-focus
+  // bail-out + the mode gate; this module just declares intent.
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-quest-journal-toggle",
+        modes: ["in-game"],
+        key: "j",
+        handler: (event) => {
+          event.preventDefault();
+          setOpen(!open);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-quest-journal-close",
+        modes: ["in-game"],
+        key: "Escape",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     update(data) {
@@ -158,7 +175,7 @@ export function createRuntimeQuestJournal(
       onTrackedQuestChange = handler;
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       parentContainer.removeChild(container);
     }
   };

@@ -115,9 +115,21 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
+export interface RuntimeSpellMenuUIOptions {
+  /**
+   * Story 50.4 — central keyboard action registry. The spell
+   * menu registers `c` (toggle), `Escape` (close), `Enter`
+   * (cast), and ArrowLeft/Up / ArrowRight/Down (selection nav)
+   * against "in-game" mode. Replaces the previous per-handler
+   * window listener.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+}
+
 export function createRuntimeSpellMenuUI(
   parentContainer: HTMLElement,
-  casterManager: CasterManager
+  casterManager: CasterManager,
+  options: RuntimeSpellMenuUIOptions = {}
 ): RuntimeSpellMenuUI {
   injectStyles();
 
@@ -293,56 +305,94 @@ export function createRuntimeSpellMenuUI(
     }
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    // Plan 050 band-aid — don't intercept shortcut keys when the
-    // user is typing into an input/textarea/contenteditable (e.g.
-    // SugarProfile's LoginModal email field). Without this guard,
-    // typing 'c' in an email triggered the caster menu.
-    const target = event.target;
-    if (
-      target instanceof HTMLTextAreaElement ||
-      target instanceof HTMLInputElement ||
-      (target instanceof HTMLElement && target.isContentEditable)
-    ) {
-      return;
-    }
-
-    if (event.key.toLowerCase() === "c") {
-      event.preventDefault();
-      if (!open && !canOpenProvider()) {
-        return;
-      }
-      setOpen(!open);
-      return;
-    }
-
-    if (!open) return;
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      castSelectedSpell();
-      return;
-    }
-
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+  // Story 50.4 — spell menu keyboard actions route through the
+  // central registry. Six discrete actions instead of one chunky
+  // handler. Each non-toggle handler guards with
+  // `if (!open) return` so they don't co-fire with other in-game
+  // actions sharing the same key (e.g. inventory Escape).
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-toggle",
+        modes: ["in-game"],
+        key: "c",
+        handler: (event) => {
+          event.preventDefault();
+          // Refuse to open when another gameplay UI holds the
+          // input lock; closing is always allowed.
+          if (!open && !canOpenProvider()) return;
+          setOpen(!open);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-close",
+        modes: ["in-game"],
+        key: "Escape",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          setOpen(false);
+        }
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-cast",
+        modes: ["in-game"],
+        key: "Enter",
+        handler: (event) => {
+          if (!open) return;
+          event.preventDefault();
+          castSelectedSpell();
+        }
+      })
+    );
+    const moveSelectionPrev = (event: KeyboardEvent) => {
+      if (!open) return;
       event.preventDefault();
       moveSelection(-1);
-      return;
-    }
-
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    };
+    const moveSelectionNext = (event: KeyboardEvent) => {
+      if (!open) return;
       event.preventDefault();
       moveSelection(1);
-    }
+    };
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-select-prev-left",
+        modes: ["in-game"],
+        key: "ArrowLeft",
+        handler: moveSelectionPrev
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-select-prev-up",
+        modes: ["in-game"],
+        key: "ArrowUp",
+        handler: moveSelectionPrev
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-select-next-right",
+        modes: ["in-game"],
+        key: "ArrowRight",
+        handler: moveSelectionNext
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-spell-menu-select-next-down",
+        modes: ["in-game"],
+        key: "ArrowDown",
+        handler: moveSelectionNext
+      })
+    );
   }
-
-  window.addEventListener("keydown", handleKeyDown);
 
   return {
     update() {
@@ -366,7 +416,7 @@ export function createRuntimeSpellMenuUI(
       onOpenChange = handler;
     },
     dispose() {
-      window.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       parentContainer.removeChild(container);
     }
   };

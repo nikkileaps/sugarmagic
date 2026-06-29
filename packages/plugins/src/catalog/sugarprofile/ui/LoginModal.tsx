@@ -50,20 +50,28 @@ export function LoginModal(props: LoginModalProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Belt + suspenders auto-focus on mount. Mantine Modal's focus
-  // trap looks for `data-autofocus` on a child element, but it
-  // applies the attribute to TextInput's wrapper div — not the
-  // inner <input>. Without focus actually landing on the input,
-  // typed keys fire with event.target = the modal container, which
-  // bypasses runtime-core's shortcut handlers'
-  // `target instanceof HTMLInputElement` guard and triggers
-  // in-game shortcuts (i = inventory, c = caster menu, q = quest
-  // journal, etc.) while the user types their email.
+  // Auto-focus on mount — pure UX nicety as of Plan 050 §50.6.
   //
-  // Imperative focus via ref works regardless of whether Mantine
-  // forwards `autoFocus` or `data-autofocus` to the underlying
-  // input. The setTimeout(0) lets Mantine's modal mount + focus
-  // trap settle before we override.
+  // Original story 47.7.5 reasoning (PRE-Plan 050): Mantine
+  // Modal's focus trap looks for `data-autofocus` on a child
+  // element, but it applies the attribute to TextInput's
+  // wrapper div — not the inner <input>. Without focus actually
+  // landing on the input, typed keys fired with event.target =
+  // the modal container, which bypassed runtime-core's shortcut
+  // handlers' `target instanceof HTMLInputElement` guard and
+  // triggered in-game shortcuts (i = inventory, c = caster
+  // menu, q = quest journal, etc.) while the user typed their
+  // email. The imperative focus was the only thing keeping
+  // those shortcuts from firing.
+  //
+  // POST Plan 050: the host's runtime-mode resolver returns
+  // "login-modal" while this modal is mounted (`useEffect` in
+  // App.tsx / preview.tsx flips `UIStateStore.loginModalOpen`),
+  // and the central action registry refuses to fire any in-
+  // game / dialogue action in that mode. So even if the input
+  // didn't auto-focus, shortcut keys wouldn't co-fire anymore.
+  // The autofocus stays for UX (user starts typing without an
+  // extra click) but is no longer load-bearing for correctness.
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => {

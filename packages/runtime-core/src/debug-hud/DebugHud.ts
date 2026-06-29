@@ -38,6 +38,16 @@ interface RuntimeDebugHudOptions {
   getGameplaySessionSnapshot: () => DebugHudGameplaySessionSnapshot;
   setDebugBillboardsEnabled: (enabled: boolean) => void;
   refreshDebugBillboards: () => void;
+  /**
+   * Story 50.5 — central keyboard action registry. Debug HUD
+   * registers against `modes: ["any"]` so its toggle shortcut
+   * (F3 or `) fires regardless of mode — it's a developer
+   * diagnostic, intentionally global. The `dialogueActive`
+   * guard inside the handler preserves the existing "don't
+   * pop the debug HUD mid-conversation" UX without forcing the
+   * registration to enumerate every non-dialogue mode.
+   */
+  actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
 }
 
 export interface RuntimeDebugHud {
@@ -176,17 +186,38 @@ export function createRuntimeDebugHud(
     syncDebugBillboardVisibility();
   });
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (dialogueActive) {
-      return;
-    }
-    if (event.code !== "F3" && event.code !== "Backquote") {
-      return;
-    }
-    event.preventDefault();
-    setHudOpen(!hudOpen);
-  };
-  ownerWindow.addEventListener("keydown", handleKeyDown);
+  // Story 50.5 — debug HUD toggle registers against
+  // `modes: ["any"]` so it fires regardless of mode (debug
+  // diagnostic; intentionally global). Registered twice — once
+  // for `F3` (function key, layout-independent) and once for
+  // "`" (backtick on US layouts; matches the previous
+  // `event.code === "Backquote"` shortcut). The dialogueActive
+  // guard inside the handler preserves the existing "don't pop
+  // the HUD mid-conversation" UX.
+  const unregisterActions: Array<() => void> = [];
+  if (options.actionRegistry) {
+    const toggleHud = (event: KeyboardEvent) => {
+      if (dialogueActive) return;
+      event.preventDefault();
+      setHudOpen(!hudOpen);
+    };
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-debug-hud-toggle-f3",
+        modes: ["any"],
+        key: "F3",
+        handler: toggleHud
+      })
+    );
+    unregisterActions.push(
+      options.actionRegistry.register({
+        actionId: "runtime-debug-hud-toggle-backtick",
+        modes: ["any"],
+        key: "`",
+        handler: toggleHud
+      })
+    );
+  }
 
   function buildContext(deltaSeconds: number): DebugHudCardContext {
     lastDeltaSeconds = deltaSeconds;
@@ -302,7 +333,7 @@ export function createRuntimeDebugHud(
       }
     },
     dispose() {
-      ownerWindow.removeEventListener("keydown", handleKeyDown);
+      for (const unregister of unregisterActions) unregister();
       for (const card of cardRuntimes) {
         card.disposeCard?.();
       }
