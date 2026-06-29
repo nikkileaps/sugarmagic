@@ -100,6 +100,7 @@ import {
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type SerializedSaveStore,
   type User,
   type UserIdentityProvider,
   type SceneObject,
@@ -109,11 +110,14 @@ import {
   type RuntimeContentSource,
   type RuntimeHostKind,
   UIContextSystem,
+  createObservableValue,
   createRuntimeActionRegistry,
   createUIActionRegistry,
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
+  type MutableObservableValue,
+  type ObservableValue,
   type RuntimeActionRegistry,
   type UIActionRegistry,
   type UIContextStore,
@@ -208,7 +212,10 @@ export interface WebRuntimeStartState {
    */
   onProvidersResolved?: (resolved: {
     identityProvider: UserIdentityProvider;
-    saveStore: GameSaveStore;
+    // Always wrapped via `createSerializedSaveStore` inside
+    // `resolveActiveGameSaveStore` so callers can call
+    // `resetForNewGame` without checking for it.
+    saveStore: SerializedSaveStore;
   }) => void;
   installedPluginIds: string[];
   pluginRuntimeEnvironment?: RuntimePluginEnvironment;
@@ -267,8 +274,72 @@ export interface WebRuntimeStartState {
   skipStartMenuOnBoot?: boolean;
 }
 
+/**
+ * Story 51.2 — shared shape of the active identity + save
+ * store pair the host resolves at the top of `start()`.
+ * Previously duplicated as a local interface in target-web's
+ * App.tsx and Studio's preview.tsx; now exported from the host
+ * module so both sides import the same type AND can hold a
+ * snapshot of it via `WebRuntimeHost.state.activeProviders`.
+ */
+export interface ProviderBindings {
+  identityProvider: UserIdentityProvider;
+  // SerializedSaveStore (the subtype with `resetForNewGame`).
+  // `resolveActiveGameSaveStore` wraps unconditionally so callers
+  // can rely on the reset API without per-callsite null checks.
+  saveStore: SerializedSaveStore;
+}
+
+/**
+ * Story 51.2 — host-owned observable stores that React + non-
+ * React subscribers read from. Replaces the previous
+ * `EventTarget`-based handoffs (which had a late-subscriber
+ * race — see Plan 047 §47.10 incident). Subscribers attached
+ * at ANY point read the current value via `getSnapshot()` at
+ * subscribe time + receive change notifications going forward.
+ *
+ * The host mutates these; plugin code, React components, HUD
+ * card getters, and gateway clients only READ.
+ */
+export interface WebRuntimeHostState {
+  /**
+   * Story 51.2 — the resolved identity + save store pair the
+   * runtime is using right now. `null` until plugin bootstrap
+   * settles inside `host.start()`. React subscribers should
+   * use `useSyncExternalStore(activeProviders.subscribe,
+   * activeProviders.getSnapshot)`.
+   */
+  activeProviders: ObservableValue<ProviderBindings | null>;
+  /**
+   * Story 51.3 — the currently-signed-in user, proxied from
+   * the active identity provider's `currentUser` + `onChange`.
+   * The host doesn't maintain a parallel "last known user"
+   * mirror; this store IS the canonical snapshot for non-React
+   * readers (Session HUD's User row, future Studio shell
+   * surfaces). When `activeProviders` swaps providers, this
+   * store's subscription re-attaches; reads via `getSnapshot()`
+   * always return the live user.
+   */
+  user: ObservableValue<User | null>;
+  /**
+   * Story 51.3 — last autosave snapshot the Session HUD card
+   * displays. Mutated by `notifyAutosaveWritten`. Same
+   * snapshot+subscribe shape as the others; non-React getters
+   * (`getSavedGameSnapshot: () => host.state.latestAutosave.getSnapshot()`)
+   * replace the previous module-let mirror inside the host's
+   * closure.
+   */
+  latestAutosave: ObservableValue<SessionHudSavedGameSnapshot | null>;
+}
+
 export interface WebRuntimeHost {
   readonly boot: RuntimeBootModel;
+  /**
+   * Story 51.2 — host-owned observable state. See
+   * `WebRuntimeHostState`. Stable across the host's lifetime
+   * (the same store objects are returned for every read).
+   */
+  readonly state: WebRuntimeHostState;
   /**
    * Story 47.10 boot-ordering follow-up — returns a Promise so
    * callers can await full boot (provider resolution + save load +
@@ -689,6 +760,26 @@ export function createWebRuntimeHost(
   const { root, ownerWindow = window, request } = options;
   const adapter = createWebTargetAdapter(request);
 
+  // Story 51.2 — host-owned observable stores. Created once per
+  // host instance (BEFORE start()), populated as `start()`
+  // progresses. Subscribers attached anytime (before start, after
+  // start, during start) read via getSnapshot() — late-subscriber
+  // races become structurally impossible.
+  const activeProvidersStore: MutableObservableValue<ProviderBindings | null> =
+    createObservableValue<ProviderBindings | null>(null);
+  // Story 51.3 — host.state.user store, proxies the active
+  // provider's user. Updated in lockstep with the existing
+  // identity-onChange wiring below; getter calls
+  // `userStore.getSnapshot()` instead of reading the module-let
+  // mirror that used to live here.
+  const userStore: MutableObservableValue<User | null> =
+    createObservableValue<User | null>(null);
+  // Story 51.3 — host.state.latestAutosave. Replaces the
+  // `latestSavedGameSnapshot` module-let. `notifyAutosaveWritten`
+  // calls `set()`; Session HUD getter reads via `getSnapshot()`.
+  const latestAutosaveStore: MutableObservableValue<SessionHudSavedGameSnapshot | null> =
+    createObservableValue<SessionHudSavedGameSnapshot | null>(null);
+
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
@@ -729,11 +820,11 @@ export function createWebRuntimeHost(
   // mid-session region transitions land in a follow-up story.
   let activeRegionIdForSave: string | null = null;
   // Story 47.10 follow-up — live user + last-known save snapshot
-  // surfaced to the Session debug HUD card. `latestUser` updates on
-  // identity-provider onChange events (sign-in / sign-out); the save
-  // snapshot updates on autosave writes via `notifyAutosaveWritten`.
-  let latestUser: User | null = null;
-  let latestSavedGameSnapshot: SessionHudSavedGameSnapshot | null = null;
+  // surfaced to the Session debug HUD card. Story 51.3 migrated
+  // both off module-let mirrors onto host.state observables
+  // (`userStore`, `latestAutosaveStore` defined above). The
+  // identity onChange subscription below now writes into
+  // `userStore.set(next)` instead of mutating a local `latestUser`.
   let identityUnsubscribe: (() => void) | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
@@ -772,8 +863,8 @@ export function createWebRuntimeHost(
 
     identityUnsubscribe?.();
     identityUnsubscribe = null;
-    latestUser = null;
-    latestSavedGameSnapshot = null;
+    userStore.set(null);
+    latestAutosaveStore.set(null);
 
     inputManager?.detach();
     inputManager = null;
@@ -813,6 +904,11 @@ export function createWebRuntimeHost(
     // guarantee against stale window listeners after teardown.
     runtimeActionRegistry?.dispose();
     runtimeActionRegistry = null;
+    // Story 51.2 — clear the active-providers store on teardown
+    // so a fresh `start()` reads `null` until plugins resolve
+    // again. Subscribers (React + non-React) see the transition
+    // back to null and re-render accordingly.
+    activeProvidersStore.set(null);
     webAudioAdapter?.dispose();
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
@@ -1098,9 +1194,21 @@ export function createWebRuntimeHost(
       // Session debug HUD card's User / Anon rows reflect sign-in /
       // sign-out instead of being frozen at the boot-time user.
       identityUnsubscribe?.();
-      latestUser = resolvedIdentity.currentUser();
+      userStore.set(resolvedIdentity.currentUser());
       identityUnsubscribe = resolvedIdentity.onChange((next) => {
-        latestUser = next;
+        userStore.set(next);
+      });
+      // Story 51.2 — push the resolved pair into the host's
+      // observable store BEFORE the back-compat callback fires.
+      // Subscribers via `host.state.activeProviders.subscribe`
+      // (useSyncExternalStore in React) pick it up; the legacy
+      // callback path continues to fire in parallel so any
+      // unmigrated consumer still works. The callback retires
+      // when all call sites have migrated (see Plan 051
+      // `Deferred` for the trigger condition).
+      activeProvidersStore.set({
+        identityProvider: resolvedIdentity,
+        saveStore: resolvedSaveStore
       });
       state.onProvidersResolved?.({
         identityProvider: resolvedIdentity,
@@ -1547,25 +1655,32 @@ export function createWebRuntimeHost(
       // inside its factory; it would never appear in published-web
       // anyway, but the explicit guard here makes the intent
       // unambiguous at the call site.
-      // Story 47.10 follow-up — pass getters so the card refreshes
-      // live: User / Anon track sign-in / sign-out via `latestUser`
-      // (already populated above from the RESOLVED provider's
-      // currentUser + onChange subscription; do NOT overwrite with
-      // state.currentUser here, which is the boot-time anonymous
-      // fallback and would mask whichever provider actually won
-      // resolution); Save / Last Played / Region / Quest update on
-      // autosave via `latestSavedGameSnapshot` (mutated by
-      // notifyAutosaveWritten).
-      latestSavedGameSnapshot = resolvedSavedGame
-        ? {
-            lastPlayed: resolvedSavedGame.lastPlayed,
-            currentRegionId: resolvedSavedGame.payload.currentRegionId,
-            currentQuestId: resolvedSavedGame.payload.currentQuestId
-          }
-        : null;
+      // Story 47.10 follow-up + 51.3 migration — pass getters so
+      // the card refreshes live. User / Anon row reads
+      // `host.state.user.getSnapshot()` (populated from the
+      // RESOLVED provider's currentUser + onChange subscription
+      // above; do NOT overwrite with state.currentUser anywhere,
+      // which would be the boot-time anonymous fallback and would
+      // mask whichever provider actually won resolution). Save /
+      // Last Played / Region / Quest row reads
+      // `host.state.latestAutosave.getSnapshot()` (mutated by
+      // notifyAutosaveWritten + initial snapshot below).
+      latestAutosaveStore.set(
+        resolvedSavedGame
+          ? {
+              lastPlayed: resolvedSavedGame.lastPlayed,
+              currentRegionId: resolvedSavedGame.payload.currentRegionId,
+              currentQuestId: resolvedSavedGame.payload.currentQuestId
+            }
+          : null
+      );
+      // Story 51.3 — read via host.state.{user,latestAutosave}.
+      // No more parallel `latestUser` / `latestSavedGameSnapshot`
+      // mirrors inside this closure; the snapshot+subscribe
+      // primitive owns both.
       const sessionHudCard = createSessionHudCard({
-        getUser: () => latestUser,
-        getSavedGameSnapshot: () => latestSavedGameSnapshot
+        getUser: () => userStore.getSnapshot(),
+        getSavedGameSnapshot: () => latestAutosaveStore.getSnapshot()
       });
       debugHud = createRuntimeDebugHud({
         parent: root,
@@ -1698,11 +1813,11 @@ export function createWebRuntimeHost(
     lastPlayed: string;
     payload: GameSavePayload;
   }): void {
-    latestSavedGameSnapshot = {
+    latestAutosaveStore.set({
       lastPlayed: snapshot.lastPlayed,
       currentRegionId: snapshot.payload.currentRegionId,
       currentQuestId: snapshot.payload.currentQuestId
-    };
+    });
     // Story 47.10.5 — flip the UI's save-presence flag so the
     // start menu's Continue button appears the moment the first
     // autosave write lands. Reads via `visibility: "hasSave"` on
@@ -1745,8 +1860,19 @@ export function createWebRuntimeHost(
     };
   }
 
+  // Story 51.2 — expose the observable stores as a stable
+  // `state` field. The same store objects are returned for the
+  // host's entire lifetime; subscribers can grab a reference
+  // once and use it across renders.
+  const state: WebRuntimeHostState = {
+    activeProviders: activeProvidersStore,
+    user: userStore,
+    latestAutosave: latestAutosaveStore
+  };
+
   return {
     boot: adapter.boot,
+    state,
     start,
     dispose,
     getCurrentSavePayload,

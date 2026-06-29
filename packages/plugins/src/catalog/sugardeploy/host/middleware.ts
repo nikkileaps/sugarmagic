@@ -2139,12 +2139,20 @@ function createSetupGithubWorkflowPlugin(): VitePlugin {
 // the v6 workflow's `sugarmagic_ref` input pinned to the engine's
 // just-pushed sha (no stale-main race window).
 //
-// Auto-commit semantics: `git add -u` (tracked-file modifications
-// only). Untracked files do NOT get swept in — matches nikki's
-// "never `git add -A`" rule and avoids shipping `.playwright-mcp/`
-// or scratch txt detritus. Untracked files are surfaced in the
-// preview so nikki can add them manually if she wants them in the
-// deploy.
+// Auto-commit semantics (revised 2026-06-29): `git add -A` —
+// stages BOTH modified tracked files AND new untracked files.
+// The original 053.6 design used `-u` to honor nikki's standing
+// "never git add -A" rule, but that rule is about scratch
+// detritus in MANUAL commits — deploy auto-sync exists to push
+// a complete, deployable snapshot. The `-u` form silently
+// skipped new files that modified tracked files referenced
+// (bit us twice: Plan 053 plan doc, Plan 051 new
+// ObservableValue source files — GHA build failed with
+// "Could not resolve" because the export referenced a file
+// that never reached the remote). `.playwright-mcp/` etc. are
+// in `.gitignore`, so `-A` still skips them. The deploy modal
+// surfaces the full file list before nikki confirms, so any
+// stray detritus can be caught at preview time.
 
 interface DispatchDeployWorkflowRequest {
   workingDirectory: unknown;
@@ -2302,16 +2310,33 @@ async function inspectRepoState(
 }
 
 /**
- * Story 053.6 — auto-sync a repo for deploy. Reads its state, then:
- *  - if there are dirty tracked files: `git add -u` + `git commit`
- *    with a `[sugardeploy] auto-commit ...` message.
+ * Story 053.6 (revised 2026-06-29) — auto-sync a repo for deploy.
+ *
+ * Reads its state, then:
+ *  - if there are dirty tracked files OR untracked files: `git add
+ *    -A` + `git commit` with a `[sugardeploy] auto-commit ...`
+ *    message.
  *  - if HEAD is ahead of upstream (either originally, or because we
  *    just committed): `git push`.
  *  - then re-read HEAD sha so callers can pin GHA dispatch against
  *    a sha that's guaranteed to be on the remote.
  *
- * Untracked files are surfaced in the return value but NOT
- * auto-added — never `git add -A` here, per nikki's standing rule.
+ * **Why `-A`, not `-u`:** the original 053.6 design used
+ * `git add -u` (tracked-modifications-only) per nikki's standing
+ * "never `git add -A`" rule. That rule was about preventing
+ * scratch detritus from being swept into manual commits I make;
+ * it was NOT meant to apply to the deploy auto-sync, which exists
+ * to push a complete, deployable snapshot. The `-u` form bit us
+ * twice (Plan 053 plan doc untracked → fixed at commit time;
+ * Plan 051 new ObservableValue source files untracked → GHA
+ * build failed at "Could not resolve" because `index.ts`
+ * referenced files that never got committed).
+ *
+ * Safety net: real detritus (`.playwright-mcp/` etc.) is in
+ * `.gitignore`, so `git add -A` skips it. Anything beyond that
+ * gets surfaced in the deploy modal's preview BEFORE nikki
+ * confirms — she can Cancel and clean up rather than accidentally
+ * ship a `scratch.txt`.
  */
 interface RepoAutoSyncResult {
   ok: true;
@@ -2321,7 +2346,6 @@ interface RepoAutoSyncResult {
   didCommit: boolean;
   committedFiles: string[];
   didPush: boolean;
-  untrackedSkipped: string[];
   commitMessage: string | null;
 }
 
@@ -2341,16 +2365,19 @@ async function runRepoAutoSync(
   let didCommit = false;
   let committedFiles: string[] = [];
   let commitMessage: string | null = null;
-  if (snapshot.trackedDirtyFiles.length > 0) {
+  const hasDirty =
+    snapshot.trackedDirtyFiles.length > 0 ||
+    snapshot.untrackedFiles.length > 0;
+  if (hasDirty) {
     const add = await runHostCommand({
       command: "git",
-      args: ["add", "-u"],
+      args: ["add", "-A"],
       cwd: workingDirectory
     });
     if (add.exitCode !== 0) {
       return {
         ok: false,
-        reason: `${options.repoLabel}: \`git add -u\` failed: ${add.stderr.trim() || `exit ${add.exitCode}`}`
+        reason: `${options.repoLabel}: \`git add -A\` failed: ${add.stderr.trim() || `exit ${add.exitCode}`}`
       };
     }
     commitMessage = `[sugardeploy] auto-commit ${options.nowIso ?? new Date().toISOString()}`;
@@ -2366,7 +2393,10 @@ async function runRepoAutoSync(
       };
     }
     didCommit = true;
-    committedFiles = snapshot.trackedDirtyFiles;
+    committedFiles = [
+      ...snapshot.trackedDirtyFiles,
+      ...snapshot.untrackedFiles
+    ];
   }
 
   let didPush = false;
@@ -2405,7 +2435,6 @@ async function runRepoAutoSync(
     didCommit,
     committedFiles,
     didPush,
-    untrackedSkipped: snapshot.untrackedFiles,
     commitMessage
   };
 }
@@ -2723,7 +2752,6 @@ function createDispatchDeployWorkflowPlugin(): VitePlugin {
                   didCommit: gameSync.didCommit,
                   committedFiles: gameSync.committedFiles,
                   didPush: gameSync.didPush,
-                  untrackedSkipped: gameSync.untrackedSkipped,
                   commitMessage: gameSync.commitMessage
                 },
                 engine: {
@@ -2733,7 +2761,6 @@ function createDispatchDeployWorkflowPlugin(): VitePlugin {
                   didCommit: engineSync.didCommit,
                   committedFiles: engineSync.committedFiles,
                   didPush: engineSync.didPush,
-                  untrackedSkipped: engineSync.untrackedSkipped,
                   commitMessage: engineSync.commitMessage
                 }
               }

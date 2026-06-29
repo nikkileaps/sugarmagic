@@ -94,6 +94,11 @@ export {
   type IndexedDBGameSaveStoreOptions
 } from "./indexeddb-store";
 
+export {
+  createSerializedSaveStore,
+  type SerializedSaveStore
+} from "./serialized-store";
+
 /**
  * Story 47.5 — picks the region id the runtime should spawn into.
  * The save's `currentRegionId` wins when a non-null save is present

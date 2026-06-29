@@ -15,6 +15,35 @@
  *   - `#preview-overlay-root` — React tree (MantineProvider +
  *     LoginModal / SignedInBadge / SignIn pill)
  *
+ * ## Runtime host scope: MODULE-scoped here. (ADR 021)
+ *
+ * The host is constructed at MODULE scope (just below the
+ * imports). React subscriptions to host state use
+ * `useSyncExternalStore` against the host's `host.state.*`
+ * (Plan 051's `ObservableValue` primitive). This shape is
+ * forced by two constraints:
+ *
+ *   1. **Root DOM is static.** `#preview-root` lives in
+ *      preview.html, present at module load. The host can be
+ *      constructed immediately — no need to wait for a React
+ *      ref to populate.
+ *   2. **postMessage handler lives outside React.** Studio's
+ *      parent window sends `PREVIEW_BOOT` to this iframe; the
+ *      `window.addEventListener("message", ...)` handler needs
+ *      access to `host` to call `host.start({...})`. That
+ *      handler runs outside any React component, so the host
+ *      MUST exist outside React's tree.
+ *
+ * Compare with `targets/web/src/App.tsx`, which uses COMPONENT-
+ * scoped host + plain `useState` + host callbacks. Its root is
+ * a React-rendered `<div ref={rootRef}>` that only exists after
+ * React's first commit. Same `host.state.*` source of truth,
+ * same runtime code; just different React APIs for the
+ * subscription edge.
+ *
+ * See [ADR 021](/docs/adr/021-runtime-host-lifetime-scope.md)
+ * for the architectural rule + why unifying isn't worth it.
+ *
  * Status: active
  */
 
@@ -40,21 +69,33 @@ import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
+  createSerializedSaveStore,
+  createObservableValue,
   registerActiveIdentityProvider,
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type SerializedSaveStore,
+  type MutableObservableValue,
   type RuntimeBootModel,
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
 import {
+  consumeFreshStartFlag,
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
+  resetSaveAndReload,
   useAutosave,
   waitForActiveUser
 } from "@sugarmagic/target-web";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from "react";
 import { createRoot } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 import { sugarmagicTheme } from "@sugarmagic/ui";
@@ -116,7 +157,7 @@ const host = createWebRuntimeHost({
 });
 
 const identityProvider = createAnonymousLocalIdentityProvider();
-const saveStore = createIndexedDBGameSaveStore();
+const saveStore = createSerializedSaveStore(createIndexedDBGameSaveStore());
 
 async function loadSaveSafely(
   store: GameSaveStore,
@@ -135,61 +176,64 @@ async function loadSaveSafely(
 
 interface ProviderBindings {
   identityProvider: UserIdentityProvider;
-  saveStore: GameSaveStore;
+  // SerializedSaveStore: the resolver inside the host wraps
+  // unconditionally so callers can use `resetForNewGame` without
+  // narrowing checks.
+  saveStore: SerializedSaveStore;
 }
 
-// Shared state across the postMessage handler + the React overlay:
-// the host calls into `publishResolvedBindings` after the resolver
-// fires, and the React tree reflects whichever providers are
-// active. EventTarget keeps the two sides decoupled.
-const providerEvents = new EventTarget();
-let resolvedBindings: ProviderBindings | null = null;
+// Story 51.2 — replaced the previous module-level
+// `providerEvents = new EventTarget()` + `let resolvedBindings`
+// with the host's own `host.state.activeProviders`
+// ObservableValue. The host mutates it inside `host.start()`
+// after plugin bootstrap resolves; React subscribers attach via
+// `useSyncExternalStore` and read the current snapshot at
+// subscribe time (no late-subscriber race — Plan 047 §47.10
+// incident structurally fixed). Other module-scope readers
+// (window-message handler, onStartNewGame) read via
+// `host.state.activeProviders.getSnapshot()`.
 
-// Story 053.7 — preview's onStartNewGame is registered with
-// host.start() inside the module-scope window-message handler,
-// BEFORE the React component (where useAutosave lives) mounts.
-// The React component publishes its autosave handle here so
-// onStartNewGame can `await registeredAutosaveHalt?.()` before
-// `store.clear()` and avoid the in-flight-write-after-clear race
-// that strands stale player position in the store.
-let registeredAutosaveHalt: (() => Promise<void>) | null = null;
-
-// Story 47.10.5 — boot status drives the "Syncing..." overlay so
-// the player sees a deliberate loading state instead of the bare
-// dark canvas while host.start fetches plugins + provider session
-// + save. Same EventTarget late-subscriber catch-up pattern as
-// `resolvedBindings`; the broader fix lives in Plan 051.
+// Story 47.10.5 + 51.2 — boot status drives the "Syncing..."
+// overlay so the player sees a deliberate loading state instead
+// of the bare dark canvas while host.start fetches plugins +
+// provider session + save. Migrated from the previous
+// EventTarget-backed module state to an `ObservableValue` so the
+// React subscriber's `useSyncExternalStore` gets the same race-
+// free snapshot+subscribe contract as activeProviders.
 type PreviewBootPhase = "loading" | "running" | "failed";
-let bootPhase: PreviewBootPhase = "loading";
-let bootFailureReason: string | null = null;
+interface PreviewBootStatus {
+  phase: PreviewBootPhase;
+  reason: string | null;
+}
+
+const bootStatusStore: MutableObservableValue<PreviewBootStatus> =
+  createObservableValue<PreviewBootStatus>({ phase: "loading", reason: null });
 
 function publishBootPhase(next: PreviewBootPhase, reason: string | null = null) {
-  bootPhase = next;
-  bootFailureReason = reason;
-  providerEvents.dispatchEvent(new Event("boot-phase"));
+  bootStatusStore.set({ phase: next, reason });
 }
 
+// Story 51.2 — host's `state.activeProviders` is the source of
+// truth; this helper still exists because it ALSO updates
+// runtime-core's access-token registry (Story 47.9.5). The
+// access-token registry is targeted for retirement in Story 51.3,
+// at which point this helper retires too. Until then, treat it
+// as a co-ordination point: host store gets set inside
+// `host.start()`; THIS helper fires alongside, mirroring the
+// active identity provider into the access-token side-channel.
 function publishResolvedBindings(next: ProviderBindings) {
-  resolvedBindings = next;
-  // Story 47.9.5 — gateway clients (SugarAgent etc.) read the active
-  // user's access token from runtime-core's access-token registry,
-  // refreshed per request. Wire it up at the same point we notify
-  // the React overlay so both paths see consistent state.
   registerActiveIdentityProvider(next.identityProvider);
-  providerEvents.dispatchEvent(new Event("change"));
 }
 
 window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
     void (async () => {
-      // Story 47.10.5 — consume the "fresh-start" flag once per boot
-      // so a normal Continue / refresh doesn't accidentally skip the
-      // start menu. sessionStorage clears on tab close anyway, but
-      // this guards against same-tab reloads after the New Game one.
-      const freshStart =
-        sessionStorage.getItem("sugarmagic.fresh-start") === "1";
-      sessionStorage.removeItem("sugarmagic.fresh-start");
+      // Consume the fresh-start flag once per boot so a normal
+      // Continue / refresh doesn't accidentally skip the start
+      // menu. sessionStorage clears on tab close anyway; this
+      // guards against same-tab reloads after a New Game click.
+      const freshStart = consumeFreshStartFlag();
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after
       // provider resolution so a signed-in author resumes from the
@@ -239,35 +283,7 @@ window.addEventListener("message", (event) => {
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
         skipStartMenuOnBoot: freshStart,
-        // Story 47.10.5 — "New Game" sequence: clear the save under
-        // the active user, mark a sessionStorage flag so the next
-        // boot drops the player straight into gameplay (instead of
-        // re-showing the start menu and forcing a second click),
-        // then reload. The flag clears on tab close. In-place reset
-        // would skip the reload entirely; deferred to Plan 051 boot
-        // phases.
-        onStartNewGame: async () => {
-          // Story 053.7 — halt + flush autosave before clearing
-          // so a tick mid-`store.save` can't race past us and
-          // write stale payload AFTER the clear. The handle was
-          // registered by the React component's useEffect (see
-          // `registeredAutosaveHalt`).
-          if (registeredAutosaveHalt) await registeredAutosaveHalt();
-          const bindings = resolvedBindings;
-          const user = bindings?.identityProvider.currentUser();
-          if (bindings && user) {
-            try {
-              await bindings.saveStore.clear(user.userId);
-            } catch (error) {
-              console.warn(
-                "[studio-preview] start-new-game: clearing save failed; continuing with reload anyway",
-                error
-              );
-            }
-          }
-          sessionStorage.setItem("sugarmagic.fresh-start", "1");
-          window.location.reload();
-        }
+        onStartNewGame: () => resetSaveAndReload(host, "studio-preview")
       })
         .then(() => publishBootPhase("running"))
         .catch((error) => {
@@ -350,49 +366,26 @@ function BootOverlay(props: {
 }
 
 function PreviewOverlay() {
-  const [active, setActive] = useState<ProviderBindings | null>(
-    resolvedBindings
+  // Story 51.2 — `useSyncExternalStore` replaces the previous
+  // useState + EventTarget pattern + catch-up read. React calls
+  // the snapshot getter at subscribe time, so a late-mounting
+  // subscriber always reads the current value (no "I missed the
+  // only event" race). The host's `state.activeProviders` is
+  // the single source of truth.
+  const active = useSyncExternalStore(
+    host.state.activeProviders.subscribe,
+    host.state.activeProviders.getSnapshot
   );
   const [user, setUser] = useState<User | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
-  // Story 47.10.5 — boot phase mirrors the module-level state so the
-  // overlay renders a "Syncing..." surface while host.start fetches
-  // plugins + provider session + save. Same catch-up pattern as
-  // `active` so a late-mounting subscriber doesn't miss the
-  // running-phase event.
-  const [phase, setPhase] = useState<PreviewBootPhase>(bootPhase);
-  const [failureReason, setFailureReason] = useState<string | null>(
-    bootFailureReason
+  // Same snapshot+subscribe shape for the boot phase. One store,
+  // {phase, reason}; reading via destructure below.
+  const bootStatus = useSyncExternalStore(
+    bootStatusStore.subscribe,
+    bootStatusStore.getSnapshot
   );
-
-  useEffect(() => {
-    const handler = () => setActive(resolvedBindings);
-    providerEvents.addEventListener("change", handler);
-    // Story 47.10 verify — catch-up read of the current value, in
-    // case `publishResolvedBindings` already fired before this
-    // effect attached the listener. Without this, a late-attaching
-    // subscriber misses the only "change" event ever dispatched
-    // (plugin bootstrap runs at the top of host.start; React's
-    // useEffect commits in the next task). See
-    // docs/plans/051-runtime-handoff-load-order-architecture.md
-    // for the proper observable-store replacement.
-    if (resolvedBindings) {
-      setActive(resolvedBindings);
-    }
-    return () => providerEvents.removeEventListener("change", handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = () => {
-      setPhase(bootPhase);
-      setFailureReason(bootFailureReason);
-    };
-    providerEvents.addEventListener("boot-phase", handler);
-    // Same catch-up as the "change" listener — Plan 051.
-    setPhase(bootPhase);
-    setFailureReason(bootFailureReason);
-    return () => providerEvents.removeEventListener("boot-phase", handler);
-  }, []);
+  const phase = bootStatus.phase;
+  const failureReason = bootStatus.reason;
 
   useEffect(() => {
     if (!active) return;
@@ -446,23 +439,17 @@ function PreviewOverlay() {
   // and the resulting 403s would be invisible silent failures.
   const autosaveStore = active?.saveStore ?? saveStore;
   const autosaveUserId = user?.userId ?? null;
-  // Story 053.7 — `onStartNewGame` is defined in module scope (in
-  // the window-message handler that calls host.start), which means
-  // it can't lexically close over this handle. Publish a halt
-  // function via the module-level `registeredAutosaveHalt` slot
-  // instead; the handler awaits it before `store.clear()`. See
-  // module-scope comment above for the race this prevents.
-  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // The 053.7 halt() handle is gone: the SerializedSaveStore
+  // wrapper now owns the in-flight-flush + freeze guarantee, so
+  // module-scope onStartNewGame (which can't lexically close
+  // over this hook anyway) doesn't need a callback bridge to
+  // the hook. The hook just polls + writes; it knows nothing
+  // about destructive flows.
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       host.notifyAutosaveWritten(written);
     }
   });
-  useEffect(() => {
-    registeredAutosaveHalt = () => autosave.halt();
-    return () => {
-      registeredAutosaveHalt = null;
-    };
-  }, [autosave]);
 
   const prevUserRef = useRef<User | null>(null);
   useEffect(() => {
@@ -510,10 +497,6 @@ function PreviewOverlay() {
       />
     ) : null;
 
-  if (!pluginIdentityActive || !active) {
-    return <>{bootOverlay}</>;
-  }
-
   // Story 47.10.5 — only require sign-in once the boot has settled.
   // Without this gate, the brief window where `active` is set but
   // Supabase's session restore hasn't completed yet renders the
@@ -522,17 +505,31 @@ function PreviewOverlay() {
   // menu. The BootOverlay already covers the loading phase visually;
   // the modal only needs to render AFTER we know there's truly no
   // user.
-  const requireSignIn = user === null && phase !== "loading";
+  //
+  // Computed BEFORE the early-return on `!pluginIdentityActive ||
+  // !active` so the `useEffect` below runs unconditionally on every
+  // render (React Rules of Hooks: hook order must be stable; a hook
+  // after a conditional early-return changes hook count between
+  // renders and React throws). The gate on `pluginIdentityActive
+  // && active != null` defends the boolean against the early-return
+  // case — when those are false, showLoginModal stays false and the
+  // useEffect tells the host the modal isn't open.
+  const requireSignIn =
+    pluginIdentityActive && active != null && user === null && phase !== "loading";
   const showLoginModal = loginModalOpen || requireSignIn;
 
-  // Story 50.6 — same as target-web App.tsx: mirror the modal-
-  // open boolean into the host's `UIStateStore.loginModalOpen`
-  // so the runtime mode resolver routes to "login-modal" mode
-  // while the modal is mounted. Disables all in-game / dialogue
-  // shortcuts so typing the email doesn't co-fire inventory.
+  // Story 50.6 — mirror the modal-open boolean into the host's
+  // `UIStateStore.loginModalOpen` so the runtime mode resolver
+  // routes to "login-modal" mode while the modal is mounted.
+  // Disables all in-game / dialogue shortcuts so typing the email
+  // doesn't co-fire inventory.
   useEffect(() => {
     host.setLoginModalOpen(showLoginModal);
   }, [showLoginModal]);
+
+  if (!pluginIdentityActive || !active) {
+    return <>{bootOverlay}</>;
+  }
 
   return (
     <>

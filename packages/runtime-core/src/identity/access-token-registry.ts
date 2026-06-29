@@ -22,6 +22,31 @@
  * `resolveActiveIdentityProvider`; gateway clients read via
  * `getActiveAccessToken` per request.
  *
+ * ## Plan 051 §51.3 considered migrating this; intentionally not.
+ *
+ * Plan 051 introduces `host.state.user` (an `ObservableValue`
+ * snapshot of the active provider's user). The plan's original
+ * sketch said gateway clients could just call
+ * `host.state.user.getSnapshot()?.getAccessToken?.()` and the
+ * registry could retire. When 51.3 actually walked the code,
+ * the structural reason this registry exists (above) still
+ * holds: gateway-client factories live in PLUGIN code, which
+ * has no reference to `host`. Killing this registry would
+ * require either moving the host into runtime-core OR
+ * threading the host through every plugin's factory context —
+ * exactly the churn this registry was created to avoid. So the
+ * registry stays. `host.state.user` is the source of truth for
+ * READ-from-host paths (Session HUD, future Studio shell
+ * surfaces); this registry is the source of truth for the
+ * READ-from-plugin-runtime path. Both live downstream of the
+ * same identity provider; no parallel-truth bug class exists.
+ *
+ * **Trigger to revisit:** if a future story moves the host
+ * into runtime-core OR formalizes a host-to-plugin handle that
+ * plugins can read through their factory context, this
+ * registry retires in favor of that handle. Until then, leave
+ * alone.
+ *
  * Implements: Plan 047 §Story 47.9.5
  *
  * Status: active

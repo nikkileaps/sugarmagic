@@ -37,6 +37,7 @@ export * from "./input-modes/registry";
 export * from "./input-modes/runtime-mode";
 export * from "./ui-actions";
 export * from "./ui-context";
+export * from "./util/observable-value";
 export * from "./vfx";
 
 export type RuntimeHostKind = "studio" | "published-web";

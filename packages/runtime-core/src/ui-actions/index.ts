@@ -74,12 +74,17 @@ export function registerDefaultUIActions(
   const pauseMenuKey = options.pauseMenuKey ?? "pause-menu";
 
   registry.register("start-new-game", () => {
-    // Story 47.10.5 — clear save + respawn at defaults via the
-    // host-supplied callback (fire-and-forget; the host handles
-    // async). Dismissing the menu happens unconditionally so the
-    // player isn't stuck on the menu if no callback is registered.
+    // When a host callback is registered, IT owns the flow
+    // (resetForNewGame -> set fresh-start flag -> reload). We
+    // deliberately do NOT dismiss the menu here: dismissing
+    // before the reload would reveal stale gameplay between
+    // "menu hides" and "page navigates", which is exactly the
+    // window the serialized-store freeze guards against on the
+    // data side. Without a host callback we still need to do
+    // SOMETHING on the click, so fall back to a local dismiss.
     if (options.onStartNewGame) {
       void Promise.resolve(options.onStartNewGame());
+      return;
     }
     options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
   });

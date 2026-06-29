@@ -22,14 +22,38 @@
  * `onProvidersResolved` callback, subscribes to the active provider's
  * `onChange`, and mounts the SugarProfile login modal + signed-in
  * badge when appropriate.
+ *
+ * ## Runtime host scope: COMPONENT-scoped here. (ADR 021)
+ *
+ * The host is constructed INSIDE `useEffect` and lives in a
+ * `hostRef`. React subscriptions to host state are done via plain
+ * `useState` + setters called from host callbacks like
+ * `onProvidersResolved`. This is the right shape because the host's
+ * root DOM element is a `<div ref={rootRef}>` rendered by React —
+ * it doesn't exist until React's first commit, so the host can't be
+ * created any earlier than `useEffect`.
+ *
+ * Compare with `apps/studio/src/preview.tsx`, which uses MODULE-
+ * scoped host + `useSyncExternalStore`. preview's root is a static
+ * `<div>` in the iframe's HTML so it's available at module load,
+ * AND preview's `window.addEventListener("message")` handler needs
+ * to call `host.start` outside any React lifecycle. Different
+ * structural constraints → different scope choices. Same `host.state.*`
+ * source of truth, same runtime code; just different React APIs
+ * for the subscription edge.
+ *
+ * See [ADR 021](/docs/adr/021-runtime-host-lifetime-scope.md) for
+ * the architectural rule + why unifying isn't worth it.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createAnonymousLocalIdentityProvider,
   createIndexedDBGameSaveStore,
+  createSerializedSaveStore,
   type GameSave,
   type GameSaveStore,
+  type SerializedSaveStore,
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
@@ -44,29 +68,20 @@ import {
   type WebRuntimeHost,
   type WebRuntimeStartState
 } from "./runtimeHost";
+import { consumeFreshStartFlag, resetSaveAndReload } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { waitForActiveUser } from "./save/waitForActiveUser";
 
-// Story 47.10.5 — consume the "fresh-start" flag at MODULE LOAD,
-// not inside the React useEffect. React StrictMode (active in dev
-// builds) double-invokes effects: setup → cleanup → setup. If we
-// read+clear inside the effect, setup #1 sees "1" and clears it,
-// then setup #2 sees null. The host then starts twice — the
-// second time with `skipStartMenuOnBoot: false`, which re-opens
-// the menu we were trying to skip. Module-level code runs once
-// per page load regardless of React lifecycle. Plan 053.1 fixed
-// the underlying bug (Studio was shelling the build with
-// `NODE_ENV=development` inherited, which made the deployed
-// bundle a dev-React bundle and turned StrictMode on in prod);
-// the module-level capture stays as belt-and-suspenders so the
-// reset path is correct under either build mode.
-const __freshStartFlag =
-  typeof sessionStorage !== "undefined" &&
-  sessionStorage.getItem("sugarmagic.fresh-start") === "1";
-if (typeof sessionStorage !== "undefined") {
-  sessionStorage.removeItem("sugarmagic.fresh-start");
-}
+// Story 47.10.5 — capture the fresh-start flag at MODULE LOAD,
+// not inside a React effect. StrictMode (active in dev builds)
+// double-invokes effects: setup -> cleanup -> setup. Reading +
+// clearing inside the effect would make setup #1 consume the
+// flag and setup #2 see nothing, so the host starts twice and
+// the second start re-opens the menu we wanted to skip. Module-
+// level runs once per page load regardless. Belt-and-suspenders
+// for both dev and prod builds.
+const __freshStartFlag = consumeFreshStartFlag();
 
 type BootPhase =
   | { kind: "loading" }
@@ -75,7 +90,12 @@ type BootPhase =
 
 interface ProviderBindings {
   identityProvider: UserIdentityProvider;
-  saveStore: GameSaveStore;
+  // Always the SerializedSaveStore subtype: both the IndexedDB
+  // fallback constructed below and the resolved active store
+  // (wrapped inside `resolveActiveGameSaveStore`) carry
+  // `resetForNewGame`. App-level reset flows depend on that
+  // being present unconditionally.
+  saveStore: SerializedSaveStore;
 }
 
 export function App() {
@@ -91,7 +111,7 @@ export function App() {
     try {
       return {
         identityProvider: createAnonymousLocalIdentityProvider(),
-        saveStore: createIndexedDBGameSaveStore()
+        saveStore: createSerializedSaveStore(createIndexedDBGameSaveStore())
       };
     } catch (error) {
       console.error(
@@ -194,35 +214,7 @@ export function App() {
             })();
           },
           skipStartMenuOnBoot: freshStart,
-          // Story 47.10.5 — clear save under the active user, mark a
-          // sessionStorage flag so the next boot drops the player
-          // straight into gameplay (no second click on the start
-          // menu), then reload. sessionStorage clears on tab close.
-          // In-place reset would skip the reload entirely; deferred
-          // to Plan 051 boot phases.
-          onStartNewGame: async () => {
-            // Story 053.7 — halt autosave + flush any in-flight
-            // write BEFORE clearing the save. Otherwise a tick
-            // that's mid-`store.save(userId, payload)` when New
-            // Game fires will resolve AFTER the clear, write the
-            // stale player position back into the store, and the
-            // post-reload boot reads the stale save — player
-            // doesn't return to origin.
-            await autosave.halt();
-            const settledUser = active?.identityProvider.currentUser();
-            if (active && settledUser) {
-              try {
-                await active.saveStore.clear(settledUser.userId);
-              } catch (error) {
-                console.warn(
-                  "[target-web] start-new-game: clearing save failed; continuing with reload anyway",
-                  error
-                );
-              }
-            }
-            sessionStorage.setItem("sugarmagic.fresh-start", "1");
-            window.location.reload();
-          }
+          onStartNewGame: () => resetSaveAndReload(host, "target-web")
         });
         if (cancelled) return;
         setPhase({ kind: "running" });
@@ -304,15 +296,13 @@ export function App() {
   // preview.tsx for the rationale; same considerations apply here.
   const autosaveStore = active?.saveStore ?? fallback?.saveStore ?? null;
   const autosaveUserId = user?.userId ?? null;
-  // Story 053.7 — `onStartNewGame` (defined inside the boot effect
-  // ABOVE) needs to halt + flush autosave before calling
-  // `store.clear()`, otherwise an in-flight autosave write resolves
-  // AFTER the clear and the next boot reads stale player position.
-  // The boot effect closes over `autosave` lexically; that's fine
-  // because `useAutosave`'s internal `haltedRef` /
-  // `inFlightWriteRef` are stable across renders, so any handle
-  // object (first render or later) drives the current state.
-  const autosave = useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
+  // The 053.7 halt() handle is gone — its job (flushing
+  // in-flight writes before a destructive store op) now lives
+  // inside the SerializedSaveStore wrapper that wraps every
+  // active store via resolveActiveGameSaveStore. The hook just
+  // polls + writes; it doesn't need to know about start-new-
+  // game or sign-out flows.
+  useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       hostRef.current?.notifyAutosaveWritten(written);
     }
