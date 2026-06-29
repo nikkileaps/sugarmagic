@@ -74,26 +74,14 @@ export function registerDefaultUIActions(
   const pauseMenuKey = options.pauseMenuKey ?? "pause-menu";
 
   registry.register("start-new-game", () => {
-    // When a host-supplied `onStartNewGame` is registered, IT
-    // owns the entire flow — destroy the save (via
-    // resetForNewGame), set the fresh-start flag, reload. We
-    // DELIBERATELY do NOT dismiss the menu here: dismissing
-    // before the reload would reveal stale gameplay state (and
-    // give a queued autosave tick a window to fire) between
-    // "menu closes" and "page actually reloads." Leaving the
-    // menu visible until window.location.reload() navigates
-    // away closes that window.
-    //
-    // The fire-and-forget remains — dispatch() is synchronous
-    // and can't await — but the destructive part (the in-flight
-    // write race) is now structurally blocked by the
-    // SerializedSaveStore's freeze-after-reset, not by ordering
-    // here. See `runtime-core/src/save/serialized-store.ts`.
-    //
-    // Only when NO host callback is registered do we fall back
-    // to the original "just hide the menu + unpause" behavior —
-    // tests and bare hosts without a reset implementation need
-    // some response to the click.
+    // When a host callback is registered, IT owns the flow
+    // (resetForNewGame -> set fresh-start flag -> reload). We
+    // deliberately do NOT dismiss the menu here: dismissing
+    // before the reload would reveal stale gameplay between
+    // "menu hides" and "page navigates", which is exactly the
+    // window the serialized-store freeze guards against on the
+    // data side. Without a host callback we still need to do
+    // SOMETHING on the click, so fall back to a local dismiss.
     if (options.onStartNewGame) {
       void Promise.resolve(options.onStartNewGame());
       return;

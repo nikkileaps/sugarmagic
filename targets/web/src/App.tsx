@@ -68,29 +68,20 @@ import {
   type WebRuntimeHost,
   type WebRuntimeStartState
 } from "./runtimeHost";
+import { consumeFreshStartFlag, resetSaveAndReload } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { waitForActiveUser } from "./save/waitForActiveUser";
 
-// Story 47.10.5 — consume the "fresh-start" flag at MODULE LOAD,
-// not inside the React useEffect. React StrictMode (active in dev
-// builds) double-invokes effects: setup → cleanup → setup. If we
-// read+clear inside the effect, setup #1 sees "1" and clears it,
-// then setup #2 sees null. The host then starts twice — the
-// second time with `skipStartMenuOnBoot: false`, which re-opens
-// the menu we were trying to skip. Module-level code runs once
-// per page load regardless of React lifecycle. Plan 053.1 fixed
-// the underlying bug (Studio was shelling the build with
-// `NODE_ENV=development` inherited, which made the deployed
-// bundle a dev-React bundle and turned StrictMode on in prod);
-// the module-level capture stays as belt-and-suspenders so the
-// reset path is correct under either build mode.
-const __freshStartFlag =
-  typeof sessionStorage !== "undefined" &&
-  sessionStorage.getItem("sugarmagic.fresh-start") === "1";
-if (typeof sessionStorage !== "undefined") {
-  sessionStorage.removeItem("sugarmagic.fresh-start");
-}
+// Story 47.10.5 — capture the fresh-start flag at MODULE LOAD,
+// not inside a React effect. StrictMode (active in dev builds)
+// double-invokes effects: setup -> cleanup -> setup. Reading +
+// clearing inside the effect would make setup #1 consume the
+// flag and setup #2 see nothing, so the host starts twice and
+// the second start re-opens the menu we wanted to skip. Module-
+// level runs once per page load regardless. Belt-and-suspenders
+// for both dev and prod builds.
+const __freshStartFlag = consumeFreshStartFlag();
 
 type BootPhase =
   | { kind: "loading" }
@@ -223,63 +214,7 @@ export function App() {
             })();
           },
           skipStartMenuOnBoot: freshStart,
-          // Story 47.10.5 — clear save under the active user, mark a
-          // sessionStorage flag so the next boot drops the player
-          // straight into gameplay (no second click on the start
-          // menu), then reload. sessionStorage clears on tab close.
-          // In-place reset would skip the reload entirely; deferred
-          // to Plan 051 boot phases.
-          onStartNewGame: async () => {
-            // CRITICAL: read the active providers from the host's
-            // observable store, NOT the React `active` const in
-            // the outer scope. This closure was created inside a
-            // useEffect with deps `[fallback]` (stable), so it
-            // captured the React state binding at MOUNT time —
-            // when `active` was still null. `setActive(resolved)`
-            // updates React for re-renders but the closure here
-            // never sees the updated value. Reading the React
-            // const here would silently skip resetForNewGame
-            // every time, leaving the stale save in place and
-            // sending the post-reload player back to their saved
-            // position. (Preview.tsx hit the same shape and
-            // resolved it the same way — see Plan 051 §51.2's
-            // ObservableValue work.)
-            //
-            // `resetForNewGame` is the structural guarantee that
-            // replaced the older halt() + clear() dance:
-            //   1. The store's serialized chain awaits any
-            //      already-accepted save() (so a tick mid-write
-            //      finishes before the delete runs).
-            //   2. The store deletes the row.
-            //   3. The store freezes — every subsequent save()
-            //      against this instance becomes a no-op, so
-            //      autosave ticks scheduled after this point
-            //      can't reintroduce stale state.
-            // See `packages/runtime-core/src/save/serialized-store.ts`.
-            const bindings = host.state.activeProviders.getSnapshot();
-            const settledUser = bindings?.identityProvider.currentUser();
-            if (bindings && settledUser) {
-              try {
-                await bindings.saveStore.resetForNewGame(settledUser.userId);
-              } catch (error) {
-                // The store stays frozen on failure (defense in
-                // depth — no autosave can re-corrupt). Logging
-                // is enough; the reload below rebuilds from
-                // scratch.
-                console.warn(
-                  "[target-web] start-new-game: resetForNewGame failed; the store is frozen and the reload below will rebuild from scratch.",
-                  error
-                );
-              }
-            } else {
-              console.warn(
-                "[target-web] start-new-game: no active providers at click time; reload anyway. " +
-                  "If this fires the player just clicked New Game before providers resolved — extremely rare."
-              );
-            }
-            sessionStorage.setItem("sugarmagic.fresh-start", "1");
-            window.location.reload();
-          }
+          onStartNewGame: () => resetSaveAndReload(host, "target-web")
         });
         if (cancelled) return;
         setPhase({ kind: "running" });

@@ -465,17 +465,12 @@ export function resolveActiveIdentityProvider(
   return winner.payload.provider;
 }
 
-// Story 47.2 — pick the active GameSaveStore at boot. Same shape as
-// resolveActiveIdentityProvider; the two run side-by-side at boot and
-// are typically resolved together.
-//
-// The resolved store is ALWAYS wrapped via createSerializedSaveStore
-// so the New Game flow's resetForNewGame() is structurally
-// guaranteed regardless of which plugin (or none) contributed the
-// underlying store. Plugin contributors return plain GameSaveStore
-// values; the wrapping is the platform's responsibility, not theirs.
-// Idempotent — if a contributor already wraps, the second wrap is
-// a no-op.
+// Story 47.2 — pick the active GameSaveStore at boot. Wraps the
+// result via createSerializedSaveStore so callers always get the
+// resetForNewGame guarantee regardless of which plugin (or none)
+// contributed the underlying store. Plugins return plain
+// GameSaveStore values; wrapping is the platform's job. The wrap
+// is idempotent — a contributor that pre-wraps is a no-op here.
 export function resolveActiveGameSaveStore(
   manager: RuntimePluginManager,
   fallback: GameSaveStore,

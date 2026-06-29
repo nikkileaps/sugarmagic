@@ -82,8 +82,10 @@ import {
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
 import {
+  consumeFreshStartFlag,
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
+  resetSaveAndReload,
   useAutosave,
   waitForActiveUser
 } from "@sugarmagic/target-web";
@@ -227,13 +229,11 @@ window.addEventListener("message", (event) => {
   const data = event.data as PreviewBootMessage | undefined;
   if (data?.type === "PREVIEW_BOOT") {
     void (async () => {
-      // Story 47.10.5 — consume the "fresh-start" flag once per boot
-      // so a normal Continue / refresh doesn't accidentally skip the
-      // start menu. sessionStorage clears on tab close anyway, but
-      // this guards against same-tab reloads after the New Game one.
-      const freshStart =
-        sessionStorage.getItem("sugarmagic.fresh-start") === "1";
-      sessionStorage.removeItem("sugarmagic.fresh-start");
+      // Consume the fresh-start flag once per boot so a normal
+      // Continue / refresh doesn't accidentally skip the start
+      // menu. sessionStorage clears on tab close anyway; this
+      // guards against same-tab reloads after a New Game click.
+      const freshStart = consumeFreshStartFlag();
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after
       // provider resolution so a signed-in author resumes from the
@@ -283,36 +283,7 @@ window.addEventListener("message", (event) => {
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
         skipStartMenuOnBoot: freshStart,
-        // Story 47.10.5 — "New Game" sequence: clear the save under
-        // the active user, mark a sessionStorage flag so the next
-        // boot drops the player straight into gameplay (instead of
-        // re-showing the start menu and forcing a second click),
-        // then reload. The flag clears on tab close. In-place reset
-        // would skip the reload entirely; deferred to Plan 051 boot
-        // phases.
-        onStartNewGame: async () => {
-          // resetForNewGame is the structural guarantee against
-          // the autosave-after-clear race that 053.7 fixed by
-          // convention. The serialized store waits for any
-          // in-flight save, performs the delete, and freezes
-          // future save() calls — no per-callsite halt handle
-          // needed. See
-          // `packages/runtime-core/src/save/serialized-store.ts`.
-          const bindings = host.state.activeProviders.getSnapshot();
-          const user = bindings?.identityProvider.currentUser();
-          if (bindings && user) {
-            try {
-              await bindings.saveStore.resetForNewGame(user.userId);
-            } catch (error) {
-              console.warn(
-                "[studio-preview] start-new-game: resetForNewGame failed; store is frozen, reload below rebuilds from scratch.",
-                error
-              );
-            }
-          }
-          sessionStorage.setItem("sugarmagic.fresh-start", "1");
-          window.location.reload();
-        }
+        onStartNewGame: () => resetSaveAndReload(host, "studio-preview")
       })
         .then(() => publishBootPhase("running"))
         .catch((error) => {

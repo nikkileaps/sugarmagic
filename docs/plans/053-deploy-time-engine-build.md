@@ -1,6 +1,6 @@
 # Plan 053: Deploy-Time Engine Build (GHA builds target-web on each deploy)
 
-**Status:** Proposed
+**Status:** Shipped 2026-06-29. Story 053.7 replaced by [Plan 054](/docs/plans/054-player-session-owner-epic.md) (PlayerSession) — the per-callsite halt() handle is gone; structural guarantee now lives in `SerializedSaveStore`.
 **Date:** 2026-06-27
 
 > **Supersedes the immediate scope of [Plan 048](/docs/plans/048-ghcr-published-target-web-epic.md).**

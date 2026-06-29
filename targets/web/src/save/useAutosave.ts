@@ -1,32 +1,25 @@
 /**
  * targets/web/src/save/useAutosave.ts
  *
- * Purpose: Drive cross-plugin game progress writes (player position,
+ * Drive cross-plugin game progress writes (player position,
  * region, tracked quest) from the live runtime host on a fixed
- * interval so a player's progress survives a closed tab or browser
- * crash. The hook composes a `GameSavePayload` via
- * `host.getCurrentSavePayload()` on every tick, skips writes where
- * the payload deep-equals the last-written value, and forwards the
- * write to the active save store under the active userId.
+ * interval so a player's progress survives a closed tab.
+ * Composes a `GameSavePayload` via
+ * `host.getCurrentSavePayload()` on every tick, skips writes
+ * where the payload deep-equals the last-written value, and
+ * forwards through to the active save store under the active
+ * userId.
  *
- * Cancellation: a fresh `userId` or `store` re-arms the interval
- * (previous timer cleared, lastWritten cache reset) so a sign-in or
- * mid-session store swap doesn't accidentally write the previous
- * user's payload under the new id.
+ * A fresh `userId` or `store` re-arms the interval (previous
+ * timer cleared, lastWritten cache reset) so a sign-in or
+ * mid-session store swap doesn't write the previous user's
+ * payload under the new id.
  *
- * Race protection: NONE here. The previous 053.7 halt() handle
- * lived in this hook and required every save-state-mutating
- * callsite (start-new-game, sign-out, account deletion) to call it
- * first. That contract was fragile — the haltedRef reset whenever
- * the hook's deps changed, and any new caller had to remember the
- * rule. The structural replacement is a `SerializedSaveStore`
- * wrapping every active store (see
- * `runtime-core/src/save/serialized-store.ts`): the store itself
- * awaits in-flight writes before its `resetForNewGame(userId)`
- * runs, then permanently freezes future `save()` calls until the
- * page reloads. This hook can therefore be naive about
- * destructive flows — even if it fires a tick mid-reset, the
- * store rejects it.
+ * No race protection lives here. The active store is wrapped
+ * by `createSerializedSaveStore` (see
+ * `runtime-core/src/save/serialized-store.ts`), which is what
+ * sequences in-flight writes against `resetForNewGame` and
+ * freezes the store after reset. This hook can stay naive.
  *
  * Implements: Plan 047 §Story 47.10
  *
