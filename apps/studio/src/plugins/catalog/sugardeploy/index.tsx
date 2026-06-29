@@ -4172,11 +4172,14 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         !deployWorkflowState.loading ? (
           <Stack>
             <Text size="sm">
-              Deploy will auto-commit and push any pending changes in BOTH
-              the game repo and the sugarmagic engine, then dispatch{" "}
+              Deploy will auto-commit (via <Code>git add -A</Code>) and
+              push any pending changes in BOTH the game repo and the
+              sugarmagic engine, then dispatch{" "}
               <Code>sugardeploy-deploy.yml</Code> against the resulting
-              shas. Untracked files are skipped (add them manually if
-              they should ship).
+              shas. Both modified tracked files AND new untracked files
+              are committed — review the per-repo breakdown below
+              before confirming. <Code>.gitignore</Code>'d files
+              (<Code>.playwright-mcp/</Code> etc.) stay out.
             </Text>
             {deployWorkflowState.plan?.upstreamWarnings.length ? (
               <Alert color="orange" variant="light" title="Upstream missing">
@@ -4273,9 +4276,12 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                         ) : null}
                         {repo.untrackedFiles.length > 0 ? (
                           <Stack gap={2}>
-                            <Text size="sm" c="var(--sm-color-subtext)">
-                              Untracked (skipped — add with{" "}
-                              <Code>git add</Code> if you want them shipped):
+                            <Text size="sm">
+                              Will also add + commit{" "}
+                              {repo.untrackedFiles.length} new
+                              {" "}file{repo.untrackedFiles.length === 1 ? "" : "s"}
+                              {" "}(untracked, will be staged via{" "}
+                              <Code>git add -A</Code>):
                             </Text>
                             <Box
                               p="xs"
