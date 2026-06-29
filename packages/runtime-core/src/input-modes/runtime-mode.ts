@@ -25,6 +25,7 @@
  * Status: active (Story 50.1)
  */
 
+import type { GameStateSnapshot } from "../game-state";
 import type { RuntimeUIState } from "../ui-context";
 
 /**
@@ -78,11 +79,13 @@ export type RuntimeMode =
  * `visibleMenuKey === "dialogue"` when active; until then, the
  * "dialogue" branch is forward-looking.
  */
-const MODE_DEFINING_MENU_KEYS: Readonly<
+// Plan 054 §054.4 Pass C — overlay-only mode mappings.
+// "start-menu" and "pause-menu" used to live here but those are
+// now game lifecycle states, mapped directly from
+// `gameState.lifecycle` in `resolveRuntimeMode`.
+const MODE_DEFINING_OVERLAY_KEYS: Readonly<
   Record<string, Exclude<RuntimeMode, "any">>
 > = {
-  "start-menu": "start-menu",
-  "pause-menu": "paused",
   dialogue: "dialogue"
 };
 
@@ -104,13 +107,20 @@ const MODE_DEFINING_MENU_KEYS: Readonly<
  * is a fixed-cost decision tree.
  */
 export function resolveRuntimeMode(
-  state: RuntimeUIState
+  uiState: RuntimeUIState,
+  gameState: GameStateSnapshot = { lifecycle: "playing" }
 ): Exclude<RuntimeMode, "any"> {
-  if (state.loginModalOpen) return "login-modal";
-  if (state.activeOverlayMenuKey !== null) {
-    const mapped = MODE_DEFINING_MENU_KEYS[state.activeOverlayMenuKey];
+  if (uiState.loginModalOpen) return "login-modal";
+  // Lifecycle dominates: start menu / paused / booting all hold
+  // gameplay even if an overlay also opened.
+  if (gameState.lifecycle === "start-menu") return "start-menu";
+  if (gameState.lifecycle === "paused") return "paused";
+  if (gameState.lifecycle === "booting") return "paused";
+  // While playing, an overlay key may still gate input.
+  if (uiState.activeOverlayMenuKey !== null) {
+    const mapped =
+      MODE_DEFINING_OVERLAY_KEYS[uiState.activeOverlayMenuKey];
     if (mapped !== undefined) return mapped;
   }
-  if (state.isPaused) return "paused";
   return "in-game";
 }

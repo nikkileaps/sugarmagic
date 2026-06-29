@@ -28,11 +28,7 @@
  * Status: active
  */
 
-import {
-  createRuntimeStore,
-  type RuntimeStore,
-  type RuntimeUIState
-} from "../ui-context";
+import { createRuntimeStore, type RuntimeStore } from "../ui-context";
 
 /**
  * Discriminated lifecycle states for the game. One field is the
@@ -48,23 +44,20 @@ export type GameLifecycle =
 // death/end UI flow that needs distinguishing from "paused".
 
 /**
- * The game's domain state, as observed by every system that
- * cares about "what's going on right now." `savePresent` is
- * domain data (does the user have a save?), kept here so the
- * start menu's Continue button can render conditionally without
- * coupling to UI state.
+ * The game's domain state. Single canonical field —
+ * `lifecycle`. `savePresent` is intentionally NOT here; it
+ * stays on `UIStateStore` for now (legacy field, no readers on
+ * the game-state side want it yet — when one does we move it).
  */
 export interface GameStateSnapshot {
   lifecycle: GameLifecycle;
-  savePresent: boolean;
 }
 
 export type GameStateStore = RuntimeStore<GameStateSnapshot>;
 
 /**
  * Constructs a store with the default initial state
- * (`lifecycle: "booting"`, `savePresent: false`). Callers can
- * override either field via `initial`. The store is
+ * (`lifecycle: "booting"`). The store is
  * useSyncExternalStore-compatible — pass `store.subscribe` and
  * `store.getState` directly to React's hook.
  */
@@ -72,8 +65,7 @@ export function createGameStateStore(
   initial: Partial<GameStateSnapshot> = {}
 ): GameStateStore {
   return createRuntimeStore<GameStateSnapshot>({
-    lifecycle: initial.lifecycle ?? "booting",
-    savePresent: initial.savePresent ?? false
+    lifecycle: initial.lifecycle ?? "booting"
   });
 }
 
@@ -96,36 +88,10 @@ export function isGamePaused(snapshot: GameStateSnapshot): boolean {
   return snapshot.lifecycle !== "playing";
 }
 
-/**
- * Plan 054 §054.3 migration bridge — derive the lifecycle a UI
- * state snapshot implies. While legacy writers still set
- * `visibleMenuKey` / `isPaused` directly, the host subscribes
- * to UI changes and mirrors the derived lifecycle into
- * `gameStateStore` via this function.
- *
- * Mapping:
- *   - `visibleMenuKey === "start-menu"` -> `"start-menu"`
- *   - `visibleMenuKey === "pause-menu"` -> `"paused"`
- *   - `isPaused === true` (no menu key) -> `"paused"`
- *   - anything else -> `"playing"`
- *
- * Note: there's no derivation for `"booting"` because the UI
- * state has no signal for it; boot starts the game state at
- * `"booting"` directly and the bridge takes over once the boot
- * sequence kicks the UI into `"start-menu"` or skips straight
- * to `"playing"`.
- *
- * Retires once 054.4 migrates writers to call the host's
- * lifecycle transition methods directly.
- */
-export function deriveLifecycleFromUIState(
-  ui: RuntimeUIState
-): GameLifecycle {
-  if (ui.activeOverlayMenuKey === "start-menu") return "start-menu";
-  if (ui.activeOverlayMenuKey === "pause-menu") return "paused";
-  if (ui.isPaused) return "paused";
-  return "playing";
-}
+// Plan 054 §054.3 migration bridge has retired in 054.4 Pass
+// C — lifecycle is no longer derived from UI state. Writers
+// call `host.startNewGame()` / `pauseGame()` / etc., which
+// mutate `gameStateStore.lifecycle` directly.
 
 /**
  * Plan 054 §054.4 — the transition methods the host owns,

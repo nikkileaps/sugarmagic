@@ -17,6 +17,7 @@
  * Status: active (Story 50.2)
  */
 
+import type { GameStateStore } from "../game-state";
 import type { UIStateStore } from "../ui-context";
 import {
   resolveRuntimeMode,
@@ -139,6 +140,13 @@ export interface RuntimeActionRegistry {
 export interface CreateRuntimeActionRegistryOptions {
   stateStore: UIStateStore;
   /**
+   * Plan 054 §054.4 — `resolveRuntimeMode` reads the game's
+   * lifecycle from this store to decide paused / start-menu
+   * input modes. Optional for backwards-compat with tests; when
+   * absent the resolver treats lifecycle as "playing".
+   */
+  gameStateStore?: GameStateStore;
+  /**
    * Where to install the keydown listener. Defaults to
    * `globalThis.window` so production callers don't have to
    * thread it through. Tests inject a mock target.
@@ -187,7 +195,10 @@ export function createRuntimeActionRegistry(
   function onKeyDown(event: KeyboardEvent): void {
     const matches = planKeydownDispatch({
       actions: Array.from(actions.values()),
-      mode: resolveRuntimeMode(options.stateStore.getState()),
+      mode: resolveRuntimeMode(
+        options.stateStore.getState(),
+        options.gameStateStore?.getState()
+      ),
       eventKey: event.key,
       isInputFocused: isInputContext(event.target)
     });

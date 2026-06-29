@@ -9,53 +9,33 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createGameStateStore,
-  deriveLifecycleFromUIState,
   isGameInProgress,
   isGamePaused,
-  type GameLifecycle,
-  type RuntimeUIState
+  type GameLifecycle
 } from "@sugarmagic/runtime-core";
 
 describe("createGameStateStore", () => {
-  it("defaults to booting / no save", () => {
+  it("defaults to lifecycle: 'booting'", () => {
     const store = createGameStateStore();
-    expect(store.getState()).toEqual({
-      lifecycle: "booting",
-      savePresent: false
-    });
+    expect(store.getState()).toEqual({ lifecycle: "booting" });
   });
 
-  it("accepts initial overrides", () => {
-    const store = createGameStateStore({
-      lifecycle: "start-menu",
-      savePresent: true
-    });
-    expect(store.getState()).toEqual({
-      lifecycle: "start-menu",
-      savePresent: true
-    });
+  it("accepts initial lifecycle override", () => {
+    const store = createGameStateStore({ lifecycle: "start-menu" });
+    expect(store.getState()).toEqual({ lifecycle: "start-menu" });
   });
 
   it("setState patches merge onto current state", () => {
-    const store = createGameStateStore({ savePresent: true });
+    const store = createGameStateStore({ lifecycle: "start-menu" });
     store.setState({ lifecycle: "playing" });
-    expect(store.getState()).toEqual({
-      lifecycle: "playing",
-      savePresent: true
-    });
-    store.setState({ savePresent: false });
-    expect(store.getState()).toEqual({
-      lifecycle: "playing",
-      savePresent: false
-    });
+    expect(store.getState()).toEqual({ lifecycle: "playing" });
+    store.setState({ lifecycle: "paused" });
+    expect(store.getState()).toEqual({ lifecycle: "paused" });
   });
 
   it("setState accepts an updater function", () => {
     const store = createGameStateStore();
-    store.setState((prev) => ({
-      ...prev,
-      lifecycle: "playing"
-    }));
+    store.setState((prev) => ({ ...prev, lifecycle: "playing" }));
     expect(store.getState().lifecycle).toBe("playing");
   });
 
@@ -72,10 +52,8 @@ describe("createGameStateStore", () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
-  it("subscribe / getState are useSyncExternalStore-compatible (subscribe returns an unsubscribe fn; getState returns a snapshot)", () => {
+  it("subscribe / getState are useSyncExternalStore-compatible", () => {
     const store = createGameStateStore();
-    expect(typeof store.subscribe).toBe("function");
-    expect(typeof store.getState).toBe("function");
     const unsubscribe = store.subscribe(() => {});
     expect(typeof unsubscribe).toBe("function");
     unsubscribe();
@@ -97,62 +75,9 @@ describe("selectors", () => {
 
   for (const { lifecycle, inProgress, paused } of cases) {
     it(`lifecycle="${lifecycle}" -> inProgress=${inProgress}, paused=${paused}`, () => {
-      const snapshot = { lifecycle, savePresent: false };
+      const snapshot = { lifecycle };
       expect(isGameInProgress(snapshot)).toBe(inProgress);
       expect(isGamePaused(snapshot)).toBe(paused);
-    });
-  }
-});
-
-// Plan 054 §054.3 — migration bridge derivation.
-describe("deriveLifecycleFromUIState", () => {
-  const base: RuntimeUIState = {
-    activeOverlayMenuKey: null,
-    isPaused: false,
-    savePresent: false,
-    loginModalOpen: false
-  };
-
-  const cases: Array<{
-    name: string;
-    patch: Partial<RuntimeUIState>;
-    expected: GameLifecycle;
-  }> = [
-    {
-      name: "activeOverlayMenuKey='start-menu' -> start-menu (regardless of isPaused)",
-      patch: { activeOverlayMenuKey: "start-menu", isPaused: true },
-      expected: "start-menu"
-    },
-    {
-      name: "activeOverlayMenuKey='pause-menu' -> paused",
-      patch: { activeOverlayMenuKey: "pause-menu", isPaused: true },
-      expected: "paused"
-    },
-    {
-      name: "isPaused=true (no menu key) -> paused",
-      patch: { isPaused: true },
-      expected: "paused"
-    },
-    {
-      name: "everything default (menu null, not paused) -> playing",
-      patch: {},
-      expected: "playing"
-    },
-    {
-      name: "overlay menu (dialogue) does NOT trigger lifecycle change",
-      patch: { activeOverlayMenuKey: "dialogue", isPaused: false },
-      expected: "playing"
-    },
-    {
-      name: "loginModalOpen alone does NOT trigger lifecycle change",
-      patch: { loginModalOpen: true },
-      expected: "playing"
-    }
-  ];
-
-  for (const { name, patch, expected } of cases) {
-    it(name, () => {
-      expect(deriveLifecycleFromUIState({ ...base, ...patch })).toBe(expected);
     });
   }
 });

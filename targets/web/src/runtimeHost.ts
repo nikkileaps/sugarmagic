@@ -112,7 +112,6 @@ import {
   UIContextSystem,
   createGameStateStore,
   createObservableValue,
-  deriveLifecycleFromUIState,
   createRuntimeActionRegistry,
   createUIActionRegistry,
   createUIContextStore,
@@ -849,28 +848,10 @@ export function createWebRuntimeHost(
   const gameStateStore: GameStateStore = createGameStateStore();
   const uiStateStore: UIStateStore = createUIStateStore();
 
-  // Plan 054 §054.3 — migration bridge. Until 054.4 migrates
-  // every legacy writer of `visibleMenuKey`/`isPaused`, those
-  // fields are still authoritative for menu state. This
-  // subscription derives a lifecycle from each UI-state update
-  // (`deriveLifecycleFromUIState` exported from runtime-core for
-  // test coverage) and mirrors it into `gameStateStore`. Once
-  // 054.4 retires the legacy writers, this bridge comes out.
-  function syncGameStateFromUI(): void {
-    const ui = uiStateStore.getState();
-    const derived = deriveLifecycleFromUIState(ui);
-    const current = gameStateStore.getState();
-    if (
-      current.lifecycle !== derived ||
-      current.savePresent !== ui.savePresent
-    ) {
-      gameStateStore.setState({
-        lifecycle: derived,
-        savePresent: ui.savePresent
-      });
-    }
-  }
-  uiStateStore.subscribe(syncGameStateFromUI);
+  // The 054.3 ui-state -> game-state migration bridge retired
+  // in 054.4 Pass C. Lifecycle transitions go through the host's
+  // transition methods directly; uiState carries overlay-only
+  // concerns.
 
   // Plan 054 §054.3 — lifecycle transition methods. During the
   // 054 migration window these methods write to the legacy
@@ -900,7 +881,7 @@ export function createWebRuntimeHost(
     ownerWindow.location.reload();
   }
   function hostContinueGame(): void {
-    uiStateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
+    gameStateStore.setState({ lifecycle: "playing" });
   }
   function hostPauseGame(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
@@ -910,10 +891,7 @@ export function createWebRuntimeHost(
       );
       return;
     }
-    uiStateStore.setState({
-      activeOverlayMenuKey: "pause-menu",
-      isPaused: true
-    });
+    gameStateStore.setState({ lifecycle: "paused" });
   }
   function hostResumeGame(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
@@ -923,7 +901,7 @@ export function createWebRuntimeHost(
       );
       return;
     }
-    uiStateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
+    gameStateStore.setState({ lifecycle: "playing" });
   }
   function hostQuitToMenu(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
@@ -933,10 +911,7 @@ export function createWebRuntimeHost(
       );
       return;
     }
-    uiStateStore.setState({
-      activeOverlayMenuKey: "start-menu",
-      isPaused: true
-    });
+    gameStateStore.setState({ lifecycle: "start-menu" });
   }
 
   let world: World | null = null;
@@ -1651,7 +1626,8 @@ export function createWebRuntimeHost(
     // immediately after the state store; both share the same
     // lifecycle (one per host.start() invocation).
     runtimeActionRegistry = createRuntimeActionRegistry({
-      stateStore: uiStateStore
+      stateStore: uiStateStore,
+      gameStateStore
     });
     const startMenuExists = state.menuDefinitions.some(
       (menu) => menu.menuKey === "start-menu"
@@ -1934,6 +1910,7 @@ export function createWebRuntimeHost(
         theme: state.uiTheme,
         uiContextStore,
         uiStateStore,
+        gameStateStore,
         onAction: (action) => {
           const previousMenuKey =
             uiStateStore?.getState().activeOverlayMenuKey ?? null;
@@ -2000,7 +1977,9 @@ export function createWebRuntimeHost(
 
   function showStartMenu(): void {
     if (!uiStateStore) return;
-    uiStateStore.setState({ activeOverlayMenuKey: "start-menu", isPaused: true });
+    // Plan 054 §054.4 Pass C — showStartMenu transitions the
+    // lifecycle directly, doesn't write a menu key into uiState.
+    gameStateStore.setState({ lifecycle: "start-menu" });
   }
 
   function setLoginModalOpen(open: boolean): void {
