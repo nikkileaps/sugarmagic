@@ -9,9 +9,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createGameStateStore,
+  deriveLifecycleFromUIState,
   isGameInProgress,
   isGamePaused,
-  type GameLifecycle
+  type GameLifecycle,
+  type RuntimeUIState
 } from "@sugarmagic/runtime-core";
 
 describe("createGameStateStore", () => {
@@ -98,6 +100,59 @@ describe("selectors", () => {
       const snapshot = { lifecycle, savePresent: false };
       expect(isGameInProgress(snapshot)).toBe(inProgress);
       expect(isGamePaused(snapshot)).toBe(paused);
+    });
+  }
+});
+
+// Plan 054 §054.3 — migration bridge derivation.
+describe("deriveLifecycleFromUIState", () => {
+  const base: RuntimeUIState = {
+    visibleMenuKey: null,
+    isPaused: false,
+    savePresent: false,
+    loginModalOpen: false
+  };
+
+  const cases: Array<{
+    name: string;
+    patch: Partial<RuntimeUIState>;
+    expected: GameLifecycle;
+  }> = [
+    {
+      name: "visibleMenuKey='start-menu' -> start-menu (regardless of isPaused)",
+      patch: { visibleMenuKey: "start-menu", isPaused: true },
+      expected: "start-menu"
+    },
+    {
+      name: "visibleMenuKey='pause-menu' -> paused",
+      patch: { visibleMenuKey: "pause-menu", isPaused: true },
+      expected: "paused"
+    },
+    {
+      name: "isPaused=true (no menu key) -> paused",
+      patch: { isPaused: true },
+      expected: "paused"
+    },
+    {
+      name: "everything default (menu null, not paused) -> playing",
+      patch: {},
+      expected: "playing"
+    },
+    {
+      name: "overlay menu (dialogue) does NOT trigger lifecycle change",
+      patch: { visibleMenuKey: "dialogue", isPaused: false },
+      expected: "playing"
+    },
+    {
+      name: "loginModalOpen alone does NOT trigger lifecycle change",
+      patch: { loginModalOpen: true },
+      expected: "playing"
+    }
+  ];
+
+  for (const { name, patch, expected } of cases) {
+    it(name, () => {
+      expect(deriveLifecycleFromUIState({ ...base, ...patch })).toBe(expected);
     });
   }
 });

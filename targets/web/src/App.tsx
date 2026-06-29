@@ -68,7 +68,7 @@ import {
   type WebRuntimeHost,
   type WebRuntimeStartState
 } from "./runtimeHost";
-import { consumeFreshStartFlag, resetSaveAndReload } from "./save/freshStart";
+import { consumeFreshStartFlag } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { waitForActiveUser } from "./save/waitForActiveUser";
@@ -213,8 +213,11 @@ export function App() {
               resolveSavedGame(save);
             })();
           },
-          skipStartMenuOnBoot: freshStart,
-          onStartNewGame: () => resetSaveAndReload(host, "target-web")
+          skipStartMenuOnBoot: freshStart
+          // Plan 054 §054.3 — `onStartNewGame` is gone from
+          // host.start opts. The host owns the destructive
+          // transition (`host.startNewGame()`) and wires the
+          // ui-action handler internally.
         });
         if (cancelled) return;
         setPhase({ kind: "running" });
