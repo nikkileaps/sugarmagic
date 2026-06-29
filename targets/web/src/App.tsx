@@ -62,7 +62,6 @@ import {
   SignedInBadge
 } from "@sugarmagic/plugins";
 import { readBuildConfigFromViteEnv } from "./buildConfig";
-import { UserContextProvider } from "./identity/useUserContext";
 import {
   createWebRuntimeHost,
   type WebRuntimeHost,
@@ -441,34 +440,10 @@ export function App() {
     </main>
   );
 
-  // Build the context value from whichever providers + user are
-  // currently active. Render without a provider when nothing is
-  // ready (loading / failed phase); the descendant tree just won't
-  // render any consumers in that case.
-  const contextValue =
-    active && user
-      ? {
-          user,
-          identityProvider: active.identityProvider,
-          saveStore: active.saveStore
-        }
-      : fallback
-        ? (() => {
-            const fb = fallback.identityProvider.currentUser();
-            if (!fb) return null;
-            return {
-              user: fb,
-              identityProvider: fallback.identityProvider,
-              saveStore: fallback.saveStore
-            };
-          })()
-        : null;
-
-  return contextValue ? (
-    <UserContextProvider value={contextValue}>{tree}</UserContextProvider>
-  ) : (
-    tree
-  );
+  // Plan 054 §054.5 — `UserContextProvider` had zero consumers
+  // (`useUserContext` was never called from any component). The
+  // mounting ceremony retired alongside the hook.
+  return tree;
 }
 
 async function loadSaveSafely(
