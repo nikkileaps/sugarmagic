@@ -33,113 +33,149 @@ All four sources land on the same pattern: a **Model** layer holding canonical g
 
 ## What we want
 
-Apply the pattern to sugarmagic:
+Apply the pattern to sugarmagic as a **two-store decomposition**. The existing `UIStateStore` is already a mix of domain + presentation concerns (it carries `loginModalOpen` alongside `visibleMenuKey + isPaused + savePresent`). The split untangles them along the domain/presentation seam.
 
-- **`GameStateStore`** (renamed from `UIStateStore`, relocated) owns the canonical game lifecycle. One field:
+### Two stores, one criterion
 
-  ```ts
-  type GameLifecycle =
-    | "booting"      // page loading, providers resolving
-    | "start-menu"   // on the start menu, player chooses New Game / Continue
-    | "playing"      // gameplay active
-    | "paused"       // pause menu visible
-    // | "game-over"  // future, when wordlark has a death/end flow
-  ```
+| Store | Lives in | Holds | Owns |
+|---|---|---|---|
+| **`GameStateStore`** (NEW) | `packages/runtime-core/src/game-state/` | `lifecycle`, `savePresent`, future region/quest/score | the Model — what's the state of the GAME |
+| **`UIStateStore`** (slimmed + renamed) | `packages/runtime-core/src/ui-state/` (rename from `ui-context/`) | `activeOverlayMenuKey` (renamed from `visibleMenuKey`, semantic narrows to non-lifecycle overlays), `loginModalOpen`, future UI-only concerns | the View — what's on screen |
 
-  `savePresent` stays (it's domain data — "does the user have a save?"). `visibleMenuKey` and `isPaused` collapse into derived selectors over `lifecycle`.
+Criterion: is this **state of the GAME** (lifecycle, save, world data) or **state of the UI** (panels visible, modals open, hover/animation)? The fact that the runtime-mode resolver READS both stores (to derive input mode) is normal MVVM composition, not a reason to merge them.
 
-- **`WebRuntimeHost`** exposes named transition methods:
+### GameStateStore
 
-  ```ts
-  host.startNewGame(): Promise<void>
-  host.continueGame(): void
-  host.pauseGame(): void
-  host.resumeGame(): void
-  host.quitToMenu(): void
-  ```
+```ts
+type GameLifecycle =
+  | "booting"      // page loading, providers resolving
+  | "start-menu"   // on the start menu, player chooses New Game / Continue
+  | "playing"      // gameplay active
+  | "paused"       // pause menu visible
+  // | "game-over"  // future, when wordlark has a death/end flow
 
-  Each one mutates `gameState.lifecycle` (+ side effects for the destructive `startNewGame`). One module owns "what does each transition do."
+GameStateStore {
+  lifecycle: GameLifecycle
+  savePresent: boolean
+}
+```
 
-- **ui-actions handlers** become one-line delegates: `"start-new-game"` -> `host.startNewGame()`, `"pause-game"` -> `host.pauseGame()`, etc. The `host.start({onStartNewGame})` option goes away; the host wires its own transitions.
+`visibleMenuKey === "start-menu"` and `visibleMenuKey === "pause-menu"` and `isPaused` all derive from `lifecycle`. The original three fields go away (after consumers migrate).
 
-- **React + HUD + menus** read `lifecycle` (via `host.state.gameState` observable, same `useSyncExternalStore` pattern as `activeProviders`) and re-render. They don't keep their own "is the menu open" copy.
+### UIStateStore (slimmed)
 
-After this, the answer to "where is the game in progress flagged?" is one observable, one field: `host.state.gameState.getSnapshot().lifecycle === "playing"`. Adding a Pause or Quit button later is a one-line ui-action handler + one method on the host.
+```ts
+UIStateStore {
+  activeOverlayMenuKey: string | null   // "dialogue" / "inventory" / plugin overlays; NEVER "start-menu" / "pause-menu" (those become lifecycle)
+  loginModalOpen: boolean
+}
+```
+
+Overlay menus are presentation: which panel is visible while gameplay runs. Their gameplay side effects (input gating, player can't move during dialogue) are DERIVED via the runtime-mode resolver — they aren't authoritative domain state.
+
+### WebRuntimeHost transition methods
+
+The host exposes named methods that mutate `gameState` (+ side effects for the destructive `startNewGame`):
+
+```ts
+host.startNewGame(): Promise<void>   // destructive: save reset + sessionStorage flag + reload
+host.continueGame(): void            // lifecycle = "playing"; boot already loaded save
+host.pauseGame(): void               // lifecycle = "paused"
+host.resumeGame(): void              // lifecycle = "playing"
+host.quitToMenu(): void              // lifecycle = "start-menu"; save untouched
+```
+
+Overlay mutations (open-inventory, show-dialogue, login-modal-open) go through different paths — direct `setState` on `uiState` from the relevant subsystem (DialoguePanel, inventory action, App.tsx's modal toggle). They aren't lifecycle transitions, so no transition-method ceremony needed.
+
+### How everything composes
+
+- **ui-actions handlers** become one-line delegates for the lifecycle ones: `"start-new-game"` -> `host.startNewGame()`, `"pause-game"` -> `host.pauseGame()`, etc. The `host.start({onStartNewGame})` option goes away. Overlay handlers (`"open-inventory"`, etc.) stay direct.
+- **Runtime-mode resolver** reads from BOTH stores (composes them into input mode). This is the normal MVVM pattern: View Model + Model compose into derived concerns.
+- **React + HUD + menus** subscribe to either store via `useSyncExternalStore` against `host.state.gameState` or `host.state.uiState`. GameUILayer renders lifecycle menus from `gameState` and overlay menus from `uiState`.
+
+After this, the answer to "where is the game in progress flagged?" is one observable, one field: `host.state.gameState.getSnapshot().lifecycle === "playing"`. The answer to "where is the dialogue overlay flagged?" is `host.state.uiState.getSnapshot().activeOverlayMenuKey === "dialogue"`. Two distinct questions, two distinct stores.
 
 ## Non-goals
 
 - **GameSession (playtime span)** — the analytics-style "sessions table" concept from the scrapped Plan 055. Not in 054. Revisit when there's a concrete consumer (recent-play-history UI, telemetry dashboard, etc.).
 - **Plugin lifecycle hook contribution kind** — no `gameState.onLifecycleChange` plugin contribution. Plugins that need to react subscribe to `host.state.gameState` directly via the existing ObservableValue pattern. If we see every plugin re-implementing the same subscription shape, extract a contribution kind THEN.
-- **UI-only state store** — don't speculatively create a sibling `UIStateStore` for presentation-only state. Create it when a real UI-only concern shows up (hover state, modal animation flags, etc.). Today nothing in the current `UIStateStore` qualifies.
-- **Replace `RuntimeMode` from Plan 050** — that's input-mode (gameplay / dialogue / inventory / login-modal), orthogonal to lifecycle. Stays.
+- **Replace `RuntimeMode` from Plan 050** — that's input-mode (in-game / dialogue / inventory / login-modal / paused), orthogonal to lifecycle. Stays. Its resolver gets cleaner because it reads two well-named stores instead of one overloaded one.
+- **Merge GameStateStore + UIStateStore into one** — would re-conflate what we're untangling. Two stores, two concerns. The composition cost (resolvers read both) is small and explicit.
 
 ## Stories
 
-### 054.1 — Audit consumers of `visibleMenuKey` and `isPaused`
+### 054.1 — Audit consumers of `visibleMenuKey` and `isPaused` ✓ done
 
-Before any rename: catalog every read site. Output is a checklist appended to this plan doc. Covers at minimum:
-- `packages/runtime-core/src/ui-actions/index.ts` — handlers mutate these fields directly
-- `runtime-core` menu rendering / runtime-mode resolver / audio system
-- `targets/web/src/App.tsx` — start-menu reopen logic, `isPaused`-driven render
-- `apps/studio/src/preview.tsx` — same
+Catalog every read + write site, categorize as "lifecycle" (goes to `GameStateStore`) or "overlay" (stays in `UIStateStore` under new field name). See appendix at bottom of this doc.
 
-Each row in the checklist has: file path, line, current usage, target migration (read `lifecycle` directly OR a named derived selector). Drives the 054.4 migration.
+### 054.2 — Create `GameStateStore`; keep legacy fields on `UIStateStore` as derived
 
-### 054.2 — Introduce `lifecycle` field; keep legacy fields as derived
+In `packages/runtime-core/src/game-state/` (new directory):
 
-In `packages/runtime-core/src/ui-context/` (rename to `game-state/` in 054.4):
+- Define `GameLifecycle` type and `GameStateStore` interface.
+- Implement `createGameStateStore(initial?)` — same shape as the existing `createUIStateStore` (subscribe / getState / setState).
+- Initial state: `{ lifecycle: "booting", savePresent: false }`.
+- Export from runtime-core barrel.
 
-- Add `lifecycle: GameLifecycle` to the store shape.
-- Implement `visibleMenuKey` and `isPaused` as derived getters computed from `lifecycle`. Mutators that previously set them ALSO update `lifecycle` so writes stay coherent during migration.
-- Default state on boot: `lifecycle: "booting"`. Boot path transitions to `"start-menu"` once providers resolve and the start menu opens.
+In `packages/runtime-core/src/ui-context/` (still named that until 054.4):
 
-Tests verify:
-- Derived `visibleMenuKey` / `isPaused` agree with `lifecycle` across all transitions.
-- Legacy `setState({visibleMenuKey, isPaused})` mutations also update `lifecycle`.
+- DON'T remove `visibleMenuKey` or `isPaused` yet — preserve writers + readers. But:
+- When `setState` writes `visibleMenuKey: "start-menu"` / `"pause-menu"` / `null` or `isPaused: true/false`, ALSO derive a lifecycle and write it into the GameStateStore via a coordinating closure (the host wires the two stores together — see 054.3).
+- This is the migration scaffolding: both stores stay in sync during 054.4, then legacy fields retire.
 
-### 054.3 — Add transition methods on `WebRuntimeHost`
+Tests:
+- `GameStateStore` round-trips: subscribe / setState / getState semantics match `UIStateStore`'s.
+- Initial state defaults are correct.
+
+### 054.3 — Host owns both stores; add transition methods
 
 In `targets/web/src/runtimeHost.ts`:
 
-- `startNewGame()` — destructive flow: read `state.activeProviders.getSnapshot()`, call `saveStore.resetForNewGame(userId)`, set sessionStorage flag, `window.location.reload()`. Lifecycle transition happens implicitly via post-reload boot.
-- `continueGame()` — `gameState.lifecycle = "playing"`. Boot already loaded the save; this just hides the start menu.
-- `pauseGame()` — assert `lifecycle === "playing"`, then `lifecycle = "paused"`.
-- `resumeGame()` — assert `lifecycle === "paused"`, then `lifecycle = "playing"`.
-- `quitToMenu()` — assert `lifecycle === "playing" || "paused"`, then `lifecycle = "start-menu"`. Does NOT touch the save.
+- Construct both stores at host boot. Expose via `host.state.gameState: ObservableValue<GameStateSnapshot>` and `host.state.uiState: ObservableValue<UIStateSnapshot>`. ObservableValue-style, matching `host.state.activeProviders`.
+- Add the transition methods:
+  - `startNewGame()` — destructive: read `state.activeProviders.getSnapshot()`, call `saveStore.resetForNewGame(userId)`, set sessionStorage flag, `window.location.reload()`. Lifecycle transition is implicit via post-reload boot.
+  - `continueGame()` — `gameState.setState({ lifecycle: "playing" })`. Save already loaded at boot.
+  - `pauseGame()` — assert `lifecycle === "playing"`, then `gameState.setState({ lifecycle: "paused" })`.
+  - `resumeGame()` — assert `lifecycle === "paused"`, then `gameState.setState({ lifecycle: "playing" })`.
+  - `quitToMenu()` — assert `lifecycle === "playing" || "paused"`, then `gameState.setState({ lifecycle: "start-menu" })`. Does NOT touch save.
+- During the migration window: wire legacy `UIStateStore.setState({visibleMenuKey, isPaused})` calls so they ALSO update `GameStateStore.lifecycle` (the host installs this coordinating subscription). Keeps both stores coherent until 054.4 migrates the writers.
+- `host.start({onStartNewGame})` option retires.
+- Move `freshStart.ts` machinery (sessionStorage key + `consumeFreshStartFlag()` + reset+reload sequence) inside the host as a private helper. `freshStart.ts` removed from public target-web exports.
 
-`host.start({onStartNewGame})` option retires. The host's internal `registerDefaultUIActions` call wires the new ui-action handlers (054.5) to its own methods.
+Tests: unit-test each transition method against the resulting `gameState` snapshot + side effects (mock saveStore + sessionStorage + reload).
 
-Move `freshStart.ts` machinery (the sessionStorage key + `consumeFreshStartFlag()` + the reset+reload sequence) inside the host as a private helper. `freshStart.ts` is removed from the public target-web exports.
+### 054.4 — Migrate writers + readers per audit
 
-Tests: unit-test each transition method. Mock save store / sessionStorage / reload. Verify lifecycle transitions and side effects.
+Per the 054.1 audit table. Two passes:
 
-### 054.4 — Migrate readers to `lifecycle`
+**Pass A — writers (lifecycle category)**:
+- `ui-actions/index.ts` handlers: replace direct `stateStore.setState({visibleMenuKey, isPaused})` with calls to `host.startNewGame()` / `continueGame()` / etc. Drop the `onStartNewGame` / `onContinueGame` callback params from `DefaultUIActionOptions` (the host owns the wiring).
+- `runtimeHost.ts:957-963` (Q key pause toggle): replace direct setState with `host.pauseGame()` / `host.resumeGame()`.
+- `runtimeHost.ts:1832` (`showStartMenu()`): retire or rewrite to call `host.quitToMenu()` (depending on caller context).
+- `runtimeHost.ts:1473-1474` (boot initial state): initialize via `lifecycle: "booting"`.
+- Fixtures (`bootPreviewSession.ts`, `apps/studio/src/preview/sampleRuntimeContext.ts`): initialize via `lifecycle`, drop the legacy field writes.
 
-Per the 054.1 audit. Each consumer migrated file-by-file (one commit per file or small group, easier review). Replace `visibleMenuKey` reads with `lifecycle` reads (or named selectors). Replace `isPaused` reads with `lifecycle !== "playing"` or a named `isGamePaused(state)` selector.
+**Pass B — overlay writers + readers**:
+- `DialoguePanel.ts:781, 797`: writes `visibleMenuKey: "dialogue"` / clearing. Migrate to write `uiState.setState({ activeOverlayMenuKey: "dialogue" })`. The `visibleMenuKey === "dialogue"` read at line 796 becomes a read against `activeOverlayMenuKey`.
+- Rename the field everywhere from `visibleMenuKey` to `activeOverlayMenuKey` in `UIStateStore`. The narrowed semantic: only overlay keys (`"dialogue"`, future inventory / plugin overlays). Never carries `"start-menu"` or `"pause-menu"` after this.
 
-Once all consumers migrated:
-- Retire `visibleMenuKey` and `isPaused` from the store shape entirely.
-- Rename `UIStateStore` -> `GameStateStore`. Relocate `runtime-core/src/ui-context/` -> `runtime-core/src/game-state/`. Update barrel re-exports.
-- Rename relevant types (`UIStateStoreSnapshot` -> `GameStateStoreSnapshot`, etc.).
-- Update `host.state.uiState` (if exposed) to `host.state.gameState`.
+**Pass C — readers**:
+- `input-modes/runtime-mode.ts`: split the resolver to read both stores. `lifecycle === "paused"` -> `"paused"` mode. `activeOverlayMenuKey` lookup -> overlay-driven modes. `loginModalOpen` stays in `uiState`.
+- `GameUILayer.tsx`: derive menu definition lookup from `(lifecycle, activeOverlayMenuKey)` — lifecycle menus first (`lifecycle === "start-menu"` -> start menu def; `lifecycle === "paused"` -> pause menu def), then overlay menus.
+- `runtimeHost.ts:1640, 1768, 1775` (menu-sound transitions): emit on EITHER store changing; subscribe to both.
 
-### 054.5 — ui-actions handlers delegate to host
+After all three passes:
+- Retire `visibleMenuKey` / `isPaused` legacy fields entirely from `UIStateStore`.
+- Rename `UIStateStore` location to `runtime-core/src/ui-state/` (from `ui-context/`).
+- Retire the host's coordinating subscription from 054.3 (it was only for the migration window).
 
-In `packages/runtime-core/src/ui-actions/index.ts`:
+### 054.5 — Verify in prod + final cleanup
 
-- `"start-new-game"` handler: call `host.startNewGame()` (passed in via `registerDefaultUIActions` opts). Drop the inline `onStartNewGame` callback parameter.
-- `"continue-game"` -> `host.continueGame()`. Drop `onContinueGame`.
-- Add `"pause-game"`, `"resume-game"`, `"quit-to-menu"` handlers wired to the corresponding host methods.
-- Update `DefaultUIActionOptions` shape: instead of taking callbacks, takes a `host: WebRuntimeHost` reference (or just the relevant transition methods if we want a thinner contract).
-
-Tests: unit-test that each dispatch reaches the right host method. Existing user-management.test.ts tests for start-new-game / continue-game adapt to the new shape.
-
-### 054.6 — Verify in prod + final cleanup
-
-- End-to-end: New Game in prod (player at origin post-reload). Continue (player at saved position). Add a Pause button to wordlark's start menu definition; verify Pause / Resume / Quit-to-Menu flows.
-- Delete `freshStart.ts` from `targets/web/src/save/` (machinery moved into host in 054.3). Confirm zero external references.
-- Update memory rules if any new constraint emerges (the [[stale-closure-react-state-in-effects]] rule still applies; might be worth adding a "lifecycle reads come from gameState observable, not derived UI state" rule).
-- Drop the `useUserContext` shape change attempted in the scrapped 054 — `useUserContext` reverts to its pre-054 shape (or gets retired entirely if nothing reads it; it had zero consumers as of main).
+- End-to-end: New Game in prod (player at origin post-reload). Continue (player at saved position).
+- Add a Pause button to wordlark's start menu definition; verify Pause / Resume / Quit-to-Menu flows.
+- Delete `freshStart.ts` from `targets/web/src/save/`. Confirm zero external references.
+- `useUserContext` reverts to pre-054 shape (or retires entirely if it has zero consumers — verify with grep).
+- Memory rule update if a new constraint emerges (likely: "lifecycle reads come from `gameState`, overlay reads come from `uiState`; do not conflate them").
 
 ## Open questions
 
@@ -162,10 +198,12 @@ Tests: unit-test that each dispatch reaches the right host method. Existing user
 
 `visibleMenuKey` carries TWO orthogonal concerns today that the rename has to untangle:
 
-1. **Lifecycle menus** — `"start-menu"` and `"pause-menu"`. Set when the game lifecycle transitions; the menu UI renders to match. These MIGRATE to deriving from `lifecycle`.
-2. **Overlay menus** — `"dialogue"` (and future: inventory / custom plugin UIs). Set while gameplay is running, to gate input mode (Plan 050 RuntimeMode) and to render plugin-contributed UI. These STAY in a per-overlay field (probably rename `visibleMenuKey` -> `activeOverlayMenuKey` once lifecycle menus are gone).
+1. **Lifecycle menus** — `"start-menu"` and `"pause-menu"`. Set when the game lifecycle transitions. These MIGRATE to `GameStateStore.lifecycle`.
+2. **Overlay menus** — `"dialogue"` (and future: inventory / custom plugin UIs). Set while gameplay is running, gates input mode (Plan 050 RuntimeMode), renders plugin-contributed UI. These STAY in `UIStateStore`, in a field renamed from `visibleMenuKey` -> `activeOverlayMenuKey` (semantic narrows to non-lifecycle overlays only).
 
-The split is the load-bearing insight: a single string field can't be both "what phase of the game am I in" and "what plugin overlay is showing." Today the field is overloaded and that's why it feels off.
+`loginModalOpen` is already a separate field on `UIStateStore` and stays there — it's pure UI presentation.
+
+`isPaused` is the legacy "is gameplay frozen" flag. After the migration it's purely derived from `gameState.lifecycle !== "playing"`. Retires from the store shape.
 
 ### Writers
 
