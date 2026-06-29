@@ -1106,7 +1106,7 @@ export function createWebRuntimeHost(
     // Q toggles the pause menu. Escape is reserved for dismissing other modal
     // UIs (inventory, journal, dialogue, etc.), each of which already owns its
     // own Escape handler — overloading Escape here would double-fire.
-    if (event.key.toLowerCase() !== "q" || !uiStateStore) return;
+    if (event.key.toLowerCase() !== "q") return;
     const target = event.target;
     if (
       target instanceof HTMLTextAreaElement ||
@@ -1115,15 +1115,17 @@ export function createWebRuntimeHost(
     ) {
       return;
     }
-    const current = uiStateStore.getState();
-    if (current.visibleMenuKey === null) {
-      const previousMenuKey = current.visibleMenuKey;
-      uiStateStore.setState({ isPaused: true, visibleMenuKey: "pause-menu" });
-      emitMenuSoundTransition(previousMenuKey, "pause-menu");
-    } else if (current.visibleMenuKey === "pause-menu") {
-      const previousMenuKey = current.visibleMenuKey;
-      uiStateStore.setState({ isPaused: false, visibleMenuKey: null });
-      emitMenuSoundTransition(previousMenuKey, null);
+    // Plan 054 §054.4 Pass A — read the game's lifecycle, not
+    // the legacy visibleMenuKey. Q is only meaningful during
+    // gameplay (toggles pause) or while paused (resumes); start
+    // menu and booting states ignore Q.
+    const lifecycle = gameStateStore.getState().lifecycle;
+    if (lifecycle === "playing") {
+      hostPauseGame();
+      emitMenuSoundTransition(null, "pause-menu");
+    } else if (lifecycle === "paused") {
+      hostResumeGame();
+      emitMenuSoundTransition("pause-menu", null);
     }
   }
 
@@ -1663,21 +1665,21 @@ export function createWebRuntimeHost(
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
       stateStore: uiStateStore,
-      startMenuKey: "start-menu",
-      pauseMenuKey: "pause-menu",
+      // Plan 054 §054.4 — all lifecycle ui-actions delegate to
+      // the host. ui-actions doesn't touch `stateStore` for
+      // start/continue/pause/resume/quit anymore; the host owns
+      // those transitions.
+      transitions: {
+        startNewGame: hostStartNewGame,
+        continueGame: hostContinueGame,
+        pauseGame: hostPauseGame,
+        resumeGame: hostResumeGame,
+        quitToMenu: hostQuitToMenu
+      },
       // gameplaySession is assigned later in this same start() call; the
       // closures capture the live binding so dispatch (post-boot) sees it.
       onToggleInventory: () => gameplaySession?.toggleInventory(),
-      onToggleCaster: () => gameplaySession?.toggleCaster(),
-      // Plan 054 §054.3 — the host owns these transitions
-      // directly. `host.startNewGame()` reads
-      // `state.activeProviders.getSnapshot()` and dispatches the
-      // destructive reset + reload; the closure trap that gated
-      // the original 053.7 fix is gone because there's no React
-      // state in the closure path. `host.continueGame()` is a
-      // straight lifecycle transition.
-      onStartNewGame: hostStartNewGame,
-      onContinueGame: hostContinueGame
+      onToggleCaster: () => gameplaySession?.toggleCaster()
     });
     world.addSystem(
       new UIContextSystem({

@@ -126,3 +126,28 @@ export function deriveLifecycleFromUIState(
   if (ui.isPaused) return "paused";
   return "playing";
 }
+
+/**
+ * Plan 054 §054.4 — the transition methods the host owns,
+ * defined here in runtime-core so ui-actions (which lives here)
+ * can call them without depending on target-web.
+ *
+ * Target-web's `WebRuntimeHost` implements this interface
+ * (`host.startNewGame` / `host.continueGame` / ...). The host
+ * passes the methods bound to a `transitions` object when
+ * registering default ui-actions; ui-action handlers call them
+ * instead of mutating UIStateStore directly.
+ */
+export interface GameLifecycleTransitions {
+  /** Destructive: resets the save and reloads the page. */
+  startNewGame(): Promise<void> | void;
+  /** Transitions to "playing" from the start menu (save was
+   *  loaded at boot). */
+  continueGame(): void;
+  /** "playing" -> "paused". Warns on illegal source state. */
+  pauseGame(): void;
+  /** "paused" -> "playing". Warns on illegal source state. */
+  resumeGame(): void;
+  /** "playing" | "paused" -> "start-menu". Save untouched. */
+  quitToMenu(): void;
+}

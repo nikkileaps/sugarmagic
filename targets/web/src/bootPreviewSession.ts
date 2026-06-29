@@ -14,7 +14,9 @@ import {
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
-  type RuntimeUIContext
+  type GameLifecycleTransitions,
+  type RuntimeUIContext,
+  type UIStateStore
 } from "@sugarmagic/runtime-core";
 import { GameUILayer } from "./GameUILayer";
 
@@ -34,6 +36,47 @@ export interface PreviewSession {
   dispose(): void;
 }
 
+/**
+ * Studio's preview session has no real `WebRuntimeHost` (no
+ * save store, no plugin manager, no reload semantics) — it's a
+ * lightweight non-interactive playthrough viewer. ui-actions
+ * still needs `transitions`, so we provide stubs that mutate
+ * the local UIStateStore directly, mirroring what the real
+ * host's transition methods would do post-bridge.
+ */
+function createPreviewLifecycleTransitions(
+  stateStore: UIStateStore
+): GameLifecycleTransitions {
+  return {
+    // Preview can't actually reset a save or reload; treat as
+    // "back to start menu" so the preview viewer doesn't crash.
+    startNewGame: () => {
+      stateStore.setState({
+        visibleMenuKey: "start-menu",
+        isPaused: true
+      });
+    },
+    continueGame: () => {
+      stateStore.setState({ visibleMenuKey: null, isPaused: false });
+    },
+    pauseGame: () => {
+      stateStore.setState({
+        visibleMenuKey: "pause-menu",
+        isPaused: true
+      });
+    },
+    resumeGame: () => {
+      stateStore.setState({ visibleMenuKey: null, isPaused: false });
+    },
+    quitToMenu: () => {
+      stateStore.setState({
+        visibleMenuKey: "start-menu",
+        isPaused: true
+      });
+    }
+  };
+}
+
 export function bootPreviewSession(
   options: PreviewSessionOptions
 ): PreviewSession {
@@ -47,12 +90,7 @@ export function bootPreviewSession(
   const actionRegistry = createUIActionRegistry();
   registerDefaultUIActions(actionRegistry, {
     stateStore,
-    startMenuKey: options.project.menuDefinitions.find(
-      (menu) => menu.menuKey === "start-menu"
-    )?.menuKey,
-    pauseMenuKey: options.project.menuDefinitions.find(
-      (menu) => menu.menuKey === "pause-menu"
-    )?.menuKey
+    transitions: createPreviewLifecycleTransitions(stateStore)
   });
 
   const root: Root = createRoot(options.mountInto);
