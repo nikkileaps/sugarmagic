@@ -778,7 +778,7 @@ export function createRuntimeDialoguePanel(
       // the action registry routes Escape / Enter / 1-9 to this
       // panel and skips in-game shortcuts (inventory, journal,
       // etc.). Cleared on hide().
-      uiStateStore?.setState({ visibleMenuKey: "dialogue" });
+      uiStateStore?.setState({ activeOverlayMenuKey: "dialogue" });
     },
     hide() {
       container.classList.remove("visible");
@@ -789,12 +789,12 @@ export function createRuntimeDialoguePanel(
       entryCount = 0;
       stopCurrent();
       // Story 50.5 — restore the in-game mode. If something else
-      // had set visibleMenuKey to a non-dialogue value before this
-      // call, we'd clobber it — but in practice dialogue is
-      // mutually exclusive with other menu states (the
+      // had set activeOverlayMenuKey to a non-dialogue value before
+      // this call, we'd clobber it — but in practice dialogue is
+      // mutually exclusive with other overlay states (the
       // interaction system locks input first).
-      if (uiStateStore?.getState().visibleMenuKey === "dialogue") {
-        uiStateStore.setState({ visibleMenuKey: null });
+      if (uiStateStore?.getState().activeOverlayMenuKey === "dialogue") {
+        uiStateStore.setState({ activeOverlayMenuKey: null });
       }
     },
     clearHistory() {

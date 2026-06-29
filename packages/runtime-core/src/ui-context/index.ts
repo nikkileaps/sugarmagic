@@ -30,7 +30,23 @@ export interface RuntimeUIContext {
 }
 
 export interface RuntimeUIState {
-  visibleMenuKey: string | null;
+  /**
+   * Plan 054 §054.4 — overlay-menu key. Carries dialogue,
+   * future inventory / plugin overlays — NEVER lifecycle menus
+   * (`"start-menu"` / `"pause-menu"`); those live on
+   * `GameStateStore.lifecycle`. During the 054 migration window
+   * this field still receives lifecycle menu writes (the host
+   * bridge mirrors them into `gameState.lifecycle`); once all
+   * writers migrate, the semantic narrows.
+   */
+  activeOverlayMenuKey: string | null;
+  /**
+   * Legacy. Plan 054 §054.4 retires this field once all readers
+   * migrate to `gameState.lifecycle !== "playing"` (via
+   * `isGamePaused(gameState)` selector). The host bridge keeps
+   * it in sync with the canonical `lifecycle` during the
+   * migration window.
+   */
   isPaused: boolean;
   /**
    * Story 47.10.5 — whether the active user has a save in the
@@ -136,7 +152,7 @@ export function createUIStateStore(
   initialState: Partial<RuntimeUIState> = {}
 ): UIStateStore {
   return createRuntimeStore({
-    visibleMenuKey: initialState.visibleMenuKey ?? null,
+    activeOverlayMenuKey: initialState.activeOverlayMenuKey ?? null,
     isPaused: initialState.isPaused ?? false,
     savePresent: initialState.savePresent ?? false,
     loginModalOpen: initialState.loginModalOpen ?? false
@@ -240,7 +256,12 @@ export class UIContextSystem extends System {
         name: region?.name ?? "Region"
       },
       game: {
-        visibleMenuKey: state.visibleMenuKey,
+        // Plan 054 §054.4 — `RuntimeUIContext.game.visibleMenuKey`
+        // is the AUTHORED BINDING surface (game projects reference
+        // `binding: "game.visibleMenuKey"`). It stays as the
+        // projected output even though the underlying field
+        // renamed to `activeOverlayMenuKey` during the rename.
+        visibleMenuKey: state.activeOverlayMenuKey,
         isPaused: state.isPaused
       }
     };

@@ -15,7 +15,7 @@ import {
 
 function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
   return {
-    visibleMenuKey: null,
+    activeOverlayMenuKey: null,
     isPaused: false,
     savePresent: false,
     loginModalOpen: false,
@@ -34,16 +34,16 @@ describe("resolveRuntimeMode", () => {
         makeState({
           loginModalOpen: true,
           isPaused: true,
-          visibleMenuKey: "start-menu"
+          activeOverlayMenuKey: "start-menu"
         })
       )
     ).toBe("login-modal");
   });
 
-  it("returns start-menu when visibleMenuKey is the start menu", () => {
+  it("returns start-menu when activeOverlayMenuKey is the start menu", () => {
     expect(
       resolveRuntimeMode(
-        makeState({ visibleMenuKey: "start-menu", isPaused: true })
+        makeState({ activeOverlayMenuKey: "start-menu", isPaused: true })
       )
     ).toBe("start-menu");
   });
@@ -51,15 +51,15 @@ describe("resolveRuntimeMode", () => {
   it("returns paused when the pause menu is up", () => {
     expect(
       resolveRuntimeMode(
-        makeState({ visibleMenuKey: "pause-menu", isPaused: true })
+        makeState({ activeOverlayMenuKey: "pause-menu", isPaused: true })
       )
     ).toBe("paused");
   });
 
-  it("returns dialogue when visibleMenuKey is dialogue (50.5 wires this end-to-end)", () => {
+  it("returns dialogue when activeOverlayMenuKey is dialogue (50.5 wires this end-to-end)", () => {
     expect(
       resolveRuntimeMode(
-        makeState({ visibleMenuKey: "dialogue", isPaused: true })
+        makeState({ activeOverlayMenuKey: "dialogue", isPaused: true })
       )
     ).toBe("dialogue");
   });
@@ -77,7 +77,7 @@ describe("resolveRuntimeMode", () => {
     // handler to register `modes: ["in-game"]`, pressing `i`
     // again to close still fires.
     expect(
-      resolveRuntimeMode(makeState({ visibleMenuKey: "inventory" }))
+      resolveRuntimeMode(makeState({ activeOverlayMenuKey: "inventory" }))
     ).toBe("in-game");
   });
 
@@ -92,21 +92,21 @@ describe("resolveRuntimeMode", () => {
       {
         patch: {
           loginModalOpen: true,
-          visibleMenuKey: "start-menu",
+          activeOverlayMenuKey: "start-menu",
           isPaused: true
         },
         expected: "login-modal"
       },
       {
-        patch: { visibleMenuKey: "start-menu", isPaused: true },
+        patch: { activeOverlayMenuKey: "start-menu", isPaused: true },
         expected: "start-menu"
       },
       {
-        patch: { visibleMenuKey: "dialogue", isPaused: true },
+        patch: { activeOverlayMenuKey: "dialogue", isPaused: true },
         expected: "dialogue"
       },
       {
-        patch: { visibleMenuKey: "pause-menu", isPaused: true },
+        patch: { activeOverlayMenuKey: "pause-menu", isPaused: true },
         expected: "paused"
       },
       { patch: { isPaused: true }, expected: "paused" },

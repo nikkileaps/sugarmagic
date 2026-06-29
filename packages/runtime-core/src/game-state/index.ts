@@ -121,8 +121,8 @@ export function isGamePaused(snapshot: GameStateSnapshot): boolean {
 export function deriveLifecycleFromUIState(
   ui: RuntimeUIState
 ): GameLifecycle {
-  if (ui.visibleMenuKey === "start-menu") return "start-menu";
-  if (ui.visibleMenuKey === "pause-menu") return "paused";
+  if (ui.activeOverlayMenuKey === "start-menu") return "start-menu";
+  if (ui.activeOverlayMenuKey === "pause-menu") return "paused";
   if (ui.isPaused) return "paused";
   return "playing";
 }

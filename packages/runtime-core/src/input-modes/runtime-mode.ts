@@ -107,8 +107,8 @@ export function resolveRuntimeMode(
   state: RuntimeUIState
 ): Exclude<RuntimeMode, "any"> {
   if (state.loginModalOpen) return "login-modal";
-  if (state.visibleMenuKey !== null) {
-    const mapped = MODE_DEFINING_MENU_KEYS[state.visibleMenuKey];
+  if (state.activeOverlayMenuKey !== null) {
+    const mapped = MODE_DEFINING_MENU_KEYS[state.activeOverlayMenuKey];
     if (mapped !== undefined) return mapped;
   }
   if (state.isPaused) return "paused";

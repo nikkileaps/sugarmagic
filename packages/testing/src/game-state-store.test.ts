@@ -107,7 +107,7 @@ describe("selectors", () => {
 // Plan 054 §054.3 — migration bridge derivation.
 describe("deriveLifecycleFromUIState", () => {
   const base: RuntimeUIState = {
-    visibleMenuKey: null,
+    activeOverlayMenuKey: null,
     isPaused: false,
     savePresent: false,
     loginModalOpen: false
@@ -119,13 +119,13 @@ describe("deriveLifecycleFromUIState", () => {
     expected: GameLifecycle;
   }> = [
     {
-      name: "visibleMenuKey='start-menu' -> start-menu (regardless of isPaused)",
-      patch: { visibleMenuKey: "start-menu", isPaused: true },
+      name: "activeOverlayMenuKey='start-menu' -> start-menu (regardless of isPaused)",
+      patch: { activeOverlayMenuKey: "start-menu", isPaused: true },
       expected: "start-menu"
     },
     {
-      name: "visibleMenuKey='pause-menu' -> paused",
-      patch: { visibleMenuKey: "pause-menu", isPaused: true },
+      name: "activeOverlayMenuKey='pause-menu' -> paused",
+      patch: { activeOverlayMenuKey: "pause-menu", isPaused: true },
       expected: "paused"
     },
     {
@@ -140,7 +140,7 @@ describe("deriveLifecycleFromUIState", () => {
     },
     {
       name: "overlay menu (dialogue) does NOT trigger lifecycle change",
-      patch: { visibleMenuKey: "dialogue", isPaused: false },
+      patch: { activeOverlayMenuKey: "dialogue", isPaused: false },
       expected: "playing"
     },
     {

@@ -2846,7 +2846,7 @@ describe("47.10.5 — save-aware UI actions", () => {
     // transition object. The destructive flow (reset + reload)
     // is the host's job; ui-actions just dispatches.
     const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
+      activeOverlayMenuKey: "start-menu",
       isPaused: true,
       savePresent: true
     });
@@ -2869,7 +2869,7 @@ describe("47.10.5 — save-aware UI actions", () => {
 
   it("continue-game delegates to transitions.continueGame()", async () => {
     const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
+      activeOverlayMenuKey: "start-menu",
       isPaused: true,
       savePresent: true
     });
@@ -2903,13 +2903,13 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
 
   it("setState({savePresent: true}) merges without clobbering other fields", () => {
     const store = createUIStateStore({
-      visibleMenuKey: "start-menu",
+      activeOverlayMenuKey: "start-menu",
       isPaused: true,
       savePresent: false
     });
     store.setState({ savePresent: true });
     expect(store.getState()).toEqual({
-      visibleMenuKey: "start-menu",
+      activeOverlayMenuKey: "start-menu",
       isPaused: true,
       savePresent: true,
       // Story 50.1 — added to RuntimeUIState; defaults false.
@@ -2923,7 +2923,7 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
     const unsubscribe = store.subscribe(listener);
     store.setState({ savePresent: true });
     expect(listener).toHaveBeenCalledTimes(1);
-    store.setState({ visibleMenuKey: "pause-menu" });
+    store.setState({ activeOverlayMenuKey: "pause-menu" });
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
     store.setState({ isPaused: true });

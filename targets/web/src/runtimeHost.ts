@@ -900,7 +900,7 @@ export function createWebRuntimeHost(
     ownerWindow.location.reload();
   }
   function hostContinueGame(): void {
-    uiStateStore.setState({ visibleMenuKey: null, isPaused: false });
+    uiStateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
   }
   function hostPauseGame(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
@@ -911,7 +911,7 @@ export function createWebRuntimeHost(
       return;
     }
     uiStateStore.setState({
-      visibleMenuKey: "pause-menu",
+      activeOverlayMenuKey: "pause-menu",
       isPaused: true
     });
   }
@@ -923,7 +923,7 @@ export function createWebRuntimeHost(
       );
       return;
     }
-    uiStateStore.setState({ visibleMenuKey: null, isPaused: false });
+    uiStateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
   }
   function hostQuitToMenu(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
@@ -934,7 +934,7 @@ export function createWebRuntimeHost(
       return;
     }
     uiStateStore.setState({
-      visibleMenuKey: "start-menu",
+      activeOverlayMenuKey: "start-menu",
       isPaused: true
     });
   }
@@ -1637,7 +1637,7 @@ export function createWebRuntimeHost(
     // lifetime; start() resets it to the boot-time defaults
     // (savePresent depends on whether boot loaded a save).
     uiStateStore.setState({
-      visibleMenuKey: null,
+      activeOverlayMenuKey: null,
       isPaused: false,
       // Boot-time save presence. The Continue button on the
       // start menu reads this through the `visibility: "hasSave"`
@@ -1808,7 +1808,7 @@ export function createWebRuntimeHost(
       }
     });
     gameplaySession = gameplayAssembly.gameplaySession;
-    emitMenuSoundTransition(null, uiStateStore.getState().visibleMenuKey);
+    emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {
       if (isMoving) {
         gameplaySession?.audioController.emitEvent("player.footstep", {
@@ -1936,14 +1936,14 @@ export function createWebRuntimeHost(
         uiStateStore,
         onAction: (action) => {
           const previousMenuKey =
-            uiStateStore?.getState().visibleMenuKey ?? null;
+            uiStateStore?.getState().activeOverlayMenuKey ?? null;
           gameplaySession?.audioController.emitEvent("ui.click", {
             instanceKey: `ui.click:${action.action}`
           });
           uiActionRegistry?.dispatch(action, world);
           emitMenuSoundTransition(
             previousMenuKey,
-            uiStateStore?.getState().visibleMenuKey ?? null
+            uiStateStore?.getState().activeOverlayMenuKey ?? null
           );
         },
         onHover: (action) => {
@@ -2000,7 +2000,7 @@ export function createWebRuntimeHost(
 
   function showStartMenu(): void {
     if (!uiStateStore) return;
-    uiStateStore.setState({ visibleMenuKey: "start-menu", isPaused: true });
+    uiStateStore.setState({ activeOverlayMenuKey: "start-menu", isPaused: true });
   }
 
   function setLoginModalOpen(open: boolean): void {

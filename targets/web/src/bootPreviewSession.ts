@@ -52,25 +52,25 @@ function createPreviewLifecycleTransitions(
     // "back to start menu" so the preview viewer doesn't crash.
     startNewGame: () => {
       stateStore.setState({
-        visibleMenuKey: "start-menu",
+        activeOverlayMenuKey: "start-menu",
         isPaused: true
       });
     },
     continueGame: () => {
-      stateStore.setState({ visibleMenuKey: null, isPaused: false });
+      stateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
     },
     pauseGame: () => {
       stateStore.setState({
-        visibleMenuKey: "pause-menu",
+        activeOverlayMenuKey: "pause-menu",
         isPaused: true
       });
     },
     resumeGame: () => {
-      stateStore.setState({ visibleMenuKey: null, isPaused: false });
+      stateStore.setState({ activeOverlayMenuKey: null, isPaused: false });
     },
     quitToMenu: () => {
       stateStore.setState({
-        visibleMenuKey: "start-menu",
+        activeOverlayMenuKey: "start-menu",
         isPaused: true
       });
     }
@@ -84,7 +84,7 @@ export function bootPreviewSession(
     createDefaultRuntimeUIContext(options.sampleRuntimeContext)
   );
   const stateStore = createUIStateStore({
-    visibleMenuKey: options.initialVisibleMenuKey ?? null,
+    activeOverlayMenuKey: options.initialVisibleMenuKey ?? null,
     isPaused: options.initialVisibleMenuKey !== null
   });
   const actionRegistry = createUIActionRegistry();

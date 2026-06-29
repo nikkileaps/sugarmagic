@@ -34,7 +34,7 @@ describe("runtime UI context bridge", () => {
 
     const contextStore = createUIContextStore();
     const stateStore = createUIStateStore({
-      visibleMenuKey: "pause-menu",
+      activeOverlayMenuKey: "pause-menu",
       isPaused: true
     });
     const system = new UIContextSystem({

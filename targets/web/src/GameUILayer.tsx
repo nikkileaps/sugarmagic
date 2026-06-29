@@ -139,10 +139,10 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
     props.uiStateStore.getState
   );
   const visibleMenu =
-    state.visibleMenuKey === null
+    state.activeOverlayMenuKey === null
       ? null
       : (props.menuDefinitions.find(
-          (definition) => definition.menuKey === state.visibleMenuKey
+          (definition) => definition.menuKey === state.activeOverlayMenuKey
         ) ?? null);
 
   return (
