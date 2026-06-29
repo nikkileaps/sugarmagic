@@ -155,3 +155,58 @@ Tests: unit-test that each dispatch reaches the right host method. Existing user
 - `game-over` lifecycle — add when wordlark has the UI for it.
 - Separate UI-only state store — create when a real UI-only concern needs persistence.
 - Validation for illegal lifecycle transitions (above).
+
+---
+
+## 054.1 — Audit (appended after 054.1 ran)
+
+`visibleMenuKey` carries TWO orthogonal concerns today that the rename has to untangle:
+
+1. **Lifecycle menus** — `"start-menu"` and `"pause-menu"`. Set when the game lifecycle transitions; the menu UI renders to match. These MIGRATE to deriving from `lifecycle`.
+2. **Overlay menus** — `"dialogue"` (and future: inventory / custom plugin UIs). Set while gameplay is running, to gate input mode (Plan 050 RuntimeMode) and to render plugin-contributed UI. These STAY in a per-overlay field (probably rename `visibleMenuKey` -> `activeOverlayMenuKey` once lifecycle menus are gone).
+
+The split is the load-bearing insight: a single string field can't be both "what phase of the game am I in" and "what plugin overlay is showing." Today the field is overloaded and that's why it feels off.
+
+### Writers
+
+| Site | Current | Category | Target migration |
+|---|---|---|---|
+| `packages/runtime-core/src/ui-actions/index.ts:89` (start-new-game handler) | `setState({visibleMenuKey: null, isPaused: false})` | lifecycle | call `host.startNewGame()` |
+| `packages/runtime-core/src/ui-actions/index.ts:99` (continue-game handler) | `setState({visibleMenuKey: null, isPaused: false})` | lifecycle | call `host.continueGame()` |
+| `packages/runtime-core/src/ui-actions/index.ts:104` (pause-game handler) | `setState({visibleMenuKey: pauseMenuKey, isPaused: true})` | lifecycle | call `host.pauseGame()` |
+| `packages/runtime-core/src/ui-actions/index.ts:110` (resume-game handler) | `setState({visibleMenuKey: null, isPaused: false})` | lifecycle | call `host.resumeGame()` |
+| `packages/runtime-core/src/ui-actions/index.ts:116, 121` (quit-to-menu) | `setState({visibleMenuKey: startMenuKey, isPaused: true})` | lifecycle | call `host.quitToMenu()` |
+| `targets/web/src/runtimeHost.ts:959, 963` (keyboard Q pause toggle) | direct setState of both fields | lifecycle | call `host.pauseGame()` / `host.resumeGame()` |
+| `targets/web/src/runtimeHost.ts:1473-1474` (host start initial state) | initialize `{visibleMenuKey: null, isPaused: false}` | lifecycle | initialize `{lifecycle: "booting"}`; the legacy fields are derived |
+| `targets/web/src/runtimeHost.ts:1832` (`showStartMenu()`) | `setState({visibleMenuKey: "start-menu", isPaused: true})` | lifecycle | call `host.quitToMenu()` (or rename `showStartMenu` -> bootstrap transition to `"start-menu"`) |
+| `packages/runtime-core/src/dialogue/DialoguePanel.ts:781` (dialogue show) | `setState({visibleMenuKey: "dialogue"})` | overlay | STAYS — writes `activeOverlayMenuKey`, NOT lifecycle |
+| `packages/runtime-core/src/dialogue/DialoguePanel.ts:797` (dialogue hide) | `setState({visibleMenuKey: null})` | overlay | STAYS — clears `activeOverlayMenuKey` |
+| `targets/web/src/bootPreviewSession.ts:44-45` | initial fixture for preview sessions | lifecycle | initialize via `lifecycle` (derived `visibleMenuKey` / `isPaused` follow) |
+| `apps/studio/src/preview/sampleRuntimeContext.ts:24-25` | fixture | lifecycle | initialize via `lifecycle` |
+
+### Readers
+
+| Site | Current | Category | Target migration |
+|---|---|---|---|
+| `packages/runtime-core/src/input-modes/runtime-mode.ts:110` | `state.visibleMenuKey !== null` -> mode-defining-menu-keys lookup | overlay | STAYS — but the input mode mapping for `"start-menu"` / `"pause-menu"` retires (lifecycle drives those modes directly: `lifecycle === "paused"` -> `"paused"` input mode; `lifecycle === "start-menu"` -> probably new `"start-menu"` input mode or just default) |
+| `packages/runtime-core/src/input-modes/runtime-mode.ts:114` | `state.isPaused` -> `"paused"` input mode | lifecycle | read `lifecycle === "paused"` |
+| `packages/runtime-core/src/dialogue/DialoguePanel.ts:796` | `visibleMenuKey === "dialogue"` (don't clear if non-dialogue overlay set itself first) | overlay | STAYS — reads `activeOverlayMenuKey` |
+| `targets/web/src/runtimeHost.ts:957-963` (keyboard Q decision) | reads `visibleMenuKey === null` / `"pause-menu"` to decide pause vs resume | lifecycle | read `lifecycle === "playing"` / `"paused"` |
+| `targets/web/src/runtimeHost.ts:1640, 1768, 1775` (menu-sound transitions) | `visibleMenuKey` snapshots before/after for sound emission | mixed | needs both `lifecycle` (for menu opens/closes from lifecycle transitions) AND `activeOverlayMenuKey` (for dialogue open/close). Simplest: emit on EITHER field changing |
+| `targets/web/src/GameUILayer.tsx:142-145` | `visibleMenuKey === null` to hide all; else look up `menuKey` in menu definitions | mixed | render decision becomes: if `lifecycle === "start-menu"` -> show start menu definition; if `lifecycle === "paused"` -> show pause menu definition; if `activeOverlayMenuKey !== null` -> show that definition. Three-branch derived. |
+
+### Knock-on observations
+
+- **`ui-actions` `DefaultUIActionOptions`** currently passes `stateStore: UIStateStore` + several `on...` callbacks. After 054.3+054.5 this contracts to receive a `host: WebRuntimeHost` reference (or just the transition methods). The `stateStore` parameter retires for lifecycle handlers but stays for overlay handlers (open-inventory, etc.) where direct setState is still appropriate.
+- **`MODE_DEFINING_MENU_KEYS`** in `runtime-mode.ts` currently maps `"start-menu"` and `"pause-menu"` into input modes. Those two entries retire when their menus stop appearing in `visibleMenuKey`. Remaining entries (`"dialogue"`, future overlays) stay.
+- **`showStartMenu()`** in `runtimeHost.ts:1832` is called from the boot path and from sign-out flows. With lifecycle in place, the boot path sets `lifecycle = "start-menu"` directly, and sign-out flows call `host.quitToMenu()`. `showStartMenu` retires as a public method (or stays as a thin alias).
+- **Plan 050's RuntimeMode** stays untouched as an axis. The mapping from `(lifecycle, activeOverlayMenuKey, loginModalOpen)` -> `RuntimeMode` becomes cleaner because lifecycle is its own first-class input.
+- **No external tests** in `packages/testing/` directly read `visibleMenuKey` / `isPaused` (skipped from the audit grep, but worth re-grepping in 054.4 to confirm before deleting).
+
+### Migration order (refining 054.4)
+
+Per the audit:
+
+1. Migrate WRITERS first (054.3+054.5). After this, only `lifecycle` is written for lifecycle concerns; only `activeOverlayMenuKey` is written for overlays. Legacy fields are derived.
+2. Migrate READERS (054.4). Each consumer switches to reading `lifecycle` directly (or named selector) or `activeOverlayMenuKey` directly. The mixed-category sites (menu-sound transitions, GameUILayer render) split their reads into the two appropriate sources.
+3. Once all readers migrated, retire the `visibleMenuKey` legacy compat (it gets renamed to `activeOverlayMenuKey` and its semantic narrows) and retire `isPaused` entirely.
