@@ -8,7 +8,8 @@
 
 import type { UIActionExpression } from "@sugarmagic/domain";
 import type { World } from "../ecs/core";
-import type { UIStateStore } from "../ui-context";
+import type { GameLifecycleTransitions } from "../game-state";
+import type { UIStateStore } from "../ui-state";
 
 export type UIActionHandler = (
   args: Record<string, unknown>,
@@ -38,89 +39,62 @@ export function createUIActionRegistry(): UIActionRegistry {
 }
 
 export interface DefaultUIActionOptions {
+  /** Still passed for non-lifecycle handlers (load-region close,
+   *  future overlay handlers). Lifecycle handlers go through
+   *  `transitions`. */
   stateStore: UIStateStore;
-  startMenuKey?: string;
-  pauseMenuKey?: string;
+  /**
+   * Plan 054 §054.4 — lifecycle transition methods that the
+   * host owns. ui-action handlers delegate to these instead of
+   * mutating `stateStore` directly so the host stays the single
+   * owner of "what does each lifecycle transition do."
+   */
+  transitions: GameLifecycleTransitions;
   onLoadRegion?: (regionId: string) => void;
   onSaveGame?: () => void;
   onLoadGame?: () => void;
   onToggleInventory?: () => void;
   onToggleCaster?: () => void;
-  /**
-   * Story 47.10.5 — "New Game" sequence: clear any persisted save
-   * for the current user, then respawn the player at the project's
-   * `defaultGameSavePayload` (or the implicit defaults). The host
-   * supplies a callback that does both pieces — clearing the active
-   * GameSaveStore + restarting the world / teleporting the player.
-   * Without this option, `start-new-game` falls back to the original
-   * behavior (just hide the menu + unpause).
-   */
-  onStartNewGame?: () => void | Promise<void>;
-  /**
-   * Story 47.10.5 — "Continue" sequence: with autosave, the boot
-   * already loaded the saved game and spawned the player at their
-   * saved position. So Continue just dismisses the menu + unpauses.
-   * Reserved for projects that want to hook in extra logic (e.g.
-   * resume an autosave timer, kick off a cutscene resume tick).
-   */
-  onContinueGame?: () => void | Promise<void>;
 }
 
 export function registerDefaultUIActions(
   registry: UIActionRegistry,
   options: DefaultUIActionOptions
 ): void {
-  const startMenuKey = options.startMenuKey ?? "start-menu";
-  const pauseMenuKey = options.pauseMenuKey ?? "pause-menu";
-
   registry.register("start-new-game", () => {
-    // When a host callback is registered, IT owns the flow
-    // (resetForNewGame -> set fresh-start flag -> reload). We
-    // deliberately do NOT dismiss the menu here: dismissing
-    // before the reload would reveal stale gameplay between
-    // "menu hides" and "page navigates", which is exactly the
-    // window the serialized-store freeze guards against on the
-    // data side. Without a host callback we still need to do
-    // SOMETHING on the click, so fall back to a local dismiss.
-    if (options.onStartNewGame) {
-      void Promise.resolve(options.onStartNewGame());
-      return;
-    }
-    options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
+    // The host owns the destructive flow (resetForNewGame ->
+    // freshStart flag -> reload). We DELIBERATELY do not
+    // dismiss the menu here: dismissing before the reload
+    // would reveal stale gameplay between "menu hides" and
+    // "page navigates" — exactly the window the
+    // SerializedSaveStore freeze guards on the data side.
+    void Promise.resolve(options.transitions.startNewGame());
   });
 
   registry.register("continue-game", () => {
-    // Story 47.10.5 — boot-time autosave load already placed the
-    // player; Continue just unpauses. Optional host callback can
-    // run extra logic (telemetry, cutscene resume, etc.).
-    if (options.onContinueGame) {
-      void Promise.resolve(options.onContinueGame());
-    }
-    options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
+    options.transitions.continueGame();
   });
 
   registry.register("pause-game", () => {
-    options.stateStore.setState({
-      visibleMenuKey: pauseMenuKey,
-      isPaused: true
-    });
+    options.transitions.pauseGame();
   });
 
   registry.register("resume-game", () => {
-    options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
+    options.transitions.resumeGame();
+  });
+
+  registry.register("quit-to-menu", () => {
+    options.transitions.quitToMenu();
   });
 
   registry.register("load-region", (args) => {
     const regionId = typeof args.regionId === "string" ? args.regionId : null;
     if (regionId) options.onLoadRegion?.(regionId);
-    options.stateStore.setState({ visibleMenuKey: null, isPaused: false });
-  });
-
-  registry.register("quit-to-menu", () => {
-    options.stateStore.setState({
-      visibleMenuKey: startMenuKey,
-      isPaused: true
-    });
+    // Load-region implicitly resumes from any menu. After 054.4
+    // overlay/menu unification this can route through a named
+    // transition; for now go through continueGame which has the
+    // correct effect (clear pause + visibleMenuKey).
+    options.transitions.continueGame();
   });
 
   registry.register("save-game", () => {

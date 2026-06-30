@@ -85,7 +85,6 @@ import {
   consumeFreshStartFlag,
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
-  resetSaveAndReload,
   useAutosave,
   waitForActiveUser
 } from "@sugarmagic/target-web";
@@ -282,8 +281,8 @@ window.addEventListener("message", (event) => {
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
-        skipStartMenuOnBoot: freshStart,
-        onStartNewGame: () => resetSaveAndReload(host, "studio-preview")
+        skipStartMenuOnBoot: freshStart
+        // Plan 054 §054.3 — host owns the destructive transition.
       })
         .then(() => publishBootPhase("running"))
         .catch((error) => {

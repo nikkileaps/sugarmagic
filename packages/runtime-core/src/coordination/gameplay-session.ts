@@ -190,7 +190,7 @@ export interface RuntimeGameplaySessionControllerOptions {
    * `visibleMenuKey = "dialogue"` for the runtime-mode resolver
    * to pick up.
    */
-  uiStateStore?: import("../ui-context").UIStateStore;
+  uiStateStore?: import("../ui-state").UIStateStore;
 }
 
 export interface RuntimeGameplaySessionController {

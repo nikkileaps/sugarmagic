@@ -14,7 +14,11 @@ import type {
   UINode,
   UITheme
 } from "@sugarmagic/domain";
-import type { UIContextStore, UIStateStore } from "@sugarmagic/runtime-core";
+import type {
+  GameStateStore,
+  UIContextStore,
+  UIStateStore
+} from "@sugarmagic/runtime-core";
 import { compileLayout } from "./ui/layout";
 import {
   compileStyleDefinition,
@@ -35,6 +39,11 @@ export interface GameUILayerProps {
   theme: UITheme;
   uiContextStore: UIContextStore;
   uiStateStore: UIStateStore;
+  /** Plan 054 §054.4 — lifecycle drives which menu (if any) is
+   *  visible: start-menu while lifecycle === "start-menu", pause-
+   *  menu while "paused"; otherwise the overlay key from
+   *  uiStateStore (dialogue / future plugin overlays). */
+  gameStateStore: GameStateStore;
   onAction: (action: UIActionExpression) => void;
   onHover: (action: UIActionExpression | null) => void;
 }
@@ -138,11 +147,29 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
     props.uiStateStore.getState,
     props.uiStateStore.getState
   );
+  const gameState = useSyncExternalStore(
+    props.gameStateStore.subscribe,
+    props.gameStateStore.getState,
+    props.gameStateStore.getState
+  );
+  // Plan 054 §054.4 Pass C — derive the menu key to render
+  // from lifecycle first (start-menu / paused render their
+  // canonical menu definitions), then fall through to the
+  // overlay key (dialogue / future plugin overlays) while
+  // playing. Booting renders nothing.
+  const displayedMenuKey =
+    gameState.lifecycle === "start-menu"
+      ? "start-menu"
+      : gameState.lifecycle === "paused"
+        ? "pause-menu"
+        : gameState.lifecycle === "playing"
+          ? state.activeOverlayMenuKey
+          : null;
   const visibleMenu =
-    state.visibleMenuKey === null
+    displayedMenuKey === null
       ? null
       : (props.menuDefinitions.find(
-          (definition) => definition.menuKey === state.visibleMenuKey
+          (definition) => definition.menuKey === displayedMenuKey
         ) ?? null);
 
   return (

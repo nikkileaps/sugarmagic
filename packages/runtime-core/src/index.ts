@@ -27,6 +27,7 @@ export * from "./player";
 export * from "./plugins";
 export * from "./profile";
 export * from "./quest";
+export * from "./game-state";
 export * from "./save";
 export * from "./scene";
 export * from "./state";
@@ -37,6 +38,7 @@ export * from "./input-modes/registry";
 export * from "./input-modes/runtime-mode";
 export * from "./ui-actions";
 export * from "./ui-context";
+export * from "./ui-state";
 export * from "./util/observable-value";
 export * from "./vfx";
 

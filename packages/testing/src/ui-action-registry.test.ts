@@ -2,63 +2,63 @@
  * Runtime UI action registry tests.
  *
  * Verifies authored string-keyed UI actions are resolved by runtime-core
- * handlers instead of target-specific or authored JavaScript.
+ * handlers, which (post Plan 054 §054.4) delegate to the host's
+ * `transitions` object instead of mutating UIStateStore directly.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createUIActionRegistry,
   createUIStateStore,
-  registerDefaultUIActions
+  registerDefaultUIActions,
+  type GameLifecycleTransitions
 } from "@sugarmagic/runtime-core";
 
+function makeStubTransitions(): {
+  transitions: GameLifecycleTransitions;
+  spies: Record<keyof GameLifecycleTransitions, ReturnType<typeof vi.fn>>;
+} {
+  const spies = {
+    startNewGame: vi.fn(),
+    continueGame: vi.fn(),
+    pauseGame: vi.fn(),
+    resumeGame: vi.fn(),
+    quitToMenu: vi.fn()
+  };
+  return { transitions: spies, spies };
+}
+
 describe("runtime UI action registry", () => {
-  it("handles the default menu visibility actions", () => {
-    const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
-      isPaused: true
-    });
+  it("lifecycle ui-actions delegate to the host's transition methods", () => {
+    const stateStore = createUIStateStore();
+    const { transitions, spies } = makeStubTransitions();
     const registry = createUIActionRegistry();
-    registerDefaultUIActions(registry, {
-      stateStore,
-      startMenuKey: "start-menu",
-      pauseMenuKey: "pause-menu"
-    });
+    registerDefaultUIActions(registry, { stateStore, transitions });
 
     registry.dispatch({ action: "start-new-game" });
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: null,
-      isPaused: false
-    });
+    expect(spies.startNewGame).toHaveBeenCalledTimes(1);
+
+    registry.dispatch({ action: "continue-game" });
+    expect(spies.continueGame).toHaveBeenCalledTimes(1);
 
     registry.dispatch({ action: "pause-game" });
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: "pause-menu",
-      isPaused: true
-    });
+    expect(spies.pauseGame).toHaveBeenCalledTimes(1);
 
     registry.dispatch({ action: "resume-game" });
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: null,
-      isPaused: false
-    });
+    expect(spies.resumeGame).toHaveBeenCalledTimes(1);
 
     registry.dispatch({ action: "quit-to-menu" });
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: "start-menu",
-      isPaused: true
-    });
+    expect(spies.quitToMenu).toHaveBeenCalledTimes(1);
   });
 
-  it("routes load-region through an injected runtime callback", () => {
-    const stateStore = createUIStateStore({
-      visibleMenuKey: "pause-menu",
-      isPaused: true
-    });
+  it("routes load-region through the injected runtime callback and resumes via continueGame", () => {
+    const stateStore = createUIStateStore();
     const loadedRegions: string[] = [];
+    const { transitions, spies } = makeStubTransitions();
     const registry = createUIActionRegistry();
     registerDefaultUIActions(registry, {
       stateStore,
+      transitions,
       onLoadRegion: (regionId) => loadedRegions.push(regionId)
     });
 
@@ -68,6 +68,8 @@ describe("runtime UI action registry", () => {
     });
 
     expect(loadedRegions).toEqual(["region:two"]);
-    expect(stateStore.getState().visibleMenuKey).toBeNull();
+    // load-region implicitly "returns to gameplay" after picking the
+    // region — same effect as Continue.
+    expect(spies.continueGame).toHaveBeenCalledTimes(1);
   });
 });

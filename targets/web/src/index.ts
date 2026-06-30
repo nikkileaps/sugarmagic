@@ -19,6 +19,5 @@ export {
 } from "./save/waitForActiveUser";
 export {
   FRESH_START_SESSION_STORAGE_KEY,
-  consumeFreshStartFlag,
-  resetSaveAndReload
+  consumeFreshStartFlag
 } from "./save/freshStart";

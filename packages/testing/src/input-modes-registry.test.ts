@@ -11,6 +11,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  createGameStateStore,
   createRuntimeActionRegistry,
   createUIStateStore,
   planKeydownDispatch,
@@ -183,10 +184,12 @@ describe("createRuntimeActionRegistry", () => {
 
   it("skips dispatch when the current mode does not match", () => {
     const target = makeTarget();
-    const stateStore = createUIStateStore({ isPaused: true });
+    const stateStore = createUIStateStore();
+    const gameStateStore = createGameStateStore({ lifecycle: "paused" });
     const handler = vi.fn();
     const registry = createRuntimeActionRegistry({
       stateStore,
+      gameStateStore,
       target,
       isInputContext: () => false
     });
@@ -219,12 +222,14 @@ describe("createRuntimeActionRegistry", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("reacts live to UIStateStore mode changes between keydowns", () => {
+  it("reacts live to GameStateStore lifecycle changes between keydowns", () => {
     const target = makeTarget();
     const stateStore = createUIStateStore();
+    const gameStateStore = createGameStateStore({ lifecycle: "playing" });
     const handler = vi.fn();
     const registry = createRuntimeActionRegistry({
       stateStore,
+      gameStateStore,
       target,
       isInputContext: () => false
     });
@@ -236,10 +241,10 @@ describe("createRuntimeActionRegistry", () => {
     });
     target.fire({ key: "i" });
     expect(handler).toHaveBeenCalledTimes(1);
-    stateStore.setState({ isPaused: true });
+    gameStateStore.setState({ lifecycle: "paused" });
     target.fire({ key: "i" });
     expect(handler).toHaveBeenCalledTimes(1); // didn't fire again
-    stateStore.setState({ isPaused: false });
+    gameStateStore.setState({ lifecycle: "playing" });
     target.fire({ key: "i" });
     expect(handler).toHaveBeenCalledTimes(2);
   });
@@ -247,8 +252,7 @@ describe("createRuntimeActionRegistry", () => {
   it('"any" mode actions fire regardless of current mode', () => {
     const target = makeTarget();
     const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
-      isPaused: true
+      activeOverlayMenuKey: "start-menu"
     });
     const handler = vi.fn();
     const registry = createRuntimeActionRegistry({

@@ -10,17 +10,24 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveRuntimeMode,
+  type GameLifecycle,
+  type GameStateSnapshot,
   type RuntimeUIState
 } from "@sugarmagic/runtime-core";
 
 function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
   return {
-    visibleMenuKey: null,
-    isPaused: false,
+    activeOverlayMenuKey: null,
     savePresent: false,
     loginModalOpen: false,
     ...patch
   };
+}
+
+function makeGameState(
+  lifecycle: GameLifecycle = "playing"
+): GameStateSnapshot {
+  return { lifecycle };
 }
 
 describe("resolveRuntimeMode", () => {
@@ -33,40 +40,45 @@ describe("resolveRuntimeMode", () => {
       resolveRuntimeMode(
         makeState({
           loginModalOpen: true,
-          isPaused: true,
-          visibleMenuKey: "start-menu"
+          activeOverlayMenuKey: "start-menu"
         })
       )
     ).toBe("login-modal");
   });
 
-  it("returns start-menu when visibleMenuKey is the start menu", () => {
+  it("returns start-menu when lifecycle is 'start-menu'", () => {
     expect(
-      resolveRuntimeMode(
-        makeState({ visibleMenuKey: "start-menu", isPaused: true })
-      )
+      resolveRuntimeMode(makeState(), makeGameState("start-menu"))
     ).toBe("start-menu");
   });
 
-  it("returns paused when the pause menu is up", () => {
+  it("returns paused when lifecycle is 'paused'", () => {
     expect(
-      resolveRuntimeMode(
-        makeState({ visibleMenuKey: "pause-menu", isPaused: true })
-      )
+      resolveRuntimeMode(makeState(), makeGameState("paused"))
     ).toBe("paused");
   });
 
-  it("returns dialogue when visibleMenuKey is dialogue (50.5 wires this end-to-end)", () => {
+  it("returns dialogue when activeOverlayMenuKey is dialogue and lifecycle is playing", () => {
     expect(
       resolveRuntimeMode(
-        makeState({ visibleMenuKey: "dialogue", isPaused: true })
+        makeState({ activeOverlayMenuKey: "dialogue" }),
+        makeGameState("playing")
       )
     ).toBe("dialogue");
   });
 
-  it("returns paused when isPaused is set but no menu key is mode-defining", () => {
+  it("lifecycle 'paused' overrides dialogue overlay (lifecycle dominates)", () => {
     expect(
-      resolveRuntimeMode(makeState({ isPaused: true }))
+      resolveRuntimeMode(
+        makeState({ activeOverlayMenuKey: "dialogue" }),
+        makeGameState("paused")
+      )
+    ).toBe("paused");
+  });
+
+  it("booting maps to paused (gameplay frozen)", () => {
+    expect(
+      resolveRuntimeMode(makeState(), makeGameState("booting"))
     ).toBe("paused");
   });
 
@@ -77,43 +89,45 @@ describe("resolveRuntimeMode", () => {
     // handler to register `modes: ["in-game"]`, pressing `i`
     // again to close still fires.
     expect(
-      resolveRuntimeMode(makeState({ visibleMenuKey: "inventory" }))
+      resolveRuntimeMode(makeState({ activeOverlayMenuKey: "inventory" }))
     ).toBe("in-game");
   });
 
-  it("login-modal beats start-menu beats dialogue beats paused beats in-game", () => {
-    // Sanity: explicit priority cascade exercised as a single
-    // matrix so adding a new mode-defining key in the future
-    // also lands a deliberate spot in the priority order.
+  it("login-modal beats lifecycle beats overlay; lifecycle beats overlay", () => {
+    // Explicit priority matrix. Lifecycle is the dominant axis
+    // (because it represents the game's actual phase); overlays
+    // only matter while playing.
     const cascade: Array<{
-      patch: Partial<RuntimeUIState>;
+      ui: Partial<RuntimeUIState>;
+      lifecycle: GameLifecycle;
       expected: ReturnType<typeof resolveRuntimeMode>;
     }> = [
       {
-        patch: {
-          loginModalOpen: true,
-          visibleMenuKey: "start-menu",
-          isPaused: true
-        },
+        ui: { loginModalOpen: true, activeOverlayMenuKey: "dialogue" },
+        lifecycle: "playing",
         expected: "login-modal"
       },
       {
-        patch: { visibleMenuKey: "start-menu", isPaused: true },
+        ui: { activeOverlayMenuKey: "dialogue" },
+        lifecycle: "start-menu",
         expected: "start-menu"
       },
       {
-        patch: { visibleMenuKey: "dialogue", isPaused: true },
-        expected: "dialogue"
-      },
-      {
-        patch: { visibleMenuKey: "pause-menu", isPaused: true },
+        ui: { activeOverlayMenuKey: "dialogue" },
+        lifecycle: "paused",
         expected: "paused"
       },
-      { patch: { isPaused: true }, expected: "paused" },
-      { patch: {}, expected: "in-game" }
+      {
+        ui: { activeOverlayMenuKey: "dialogue" },
+        lifecycle: "playing",
+        expected: "dialogue"
+      },
+      { ui: {}, lifecycle: "playing", expected: "in-game" }
     ];
-    for (const { patch, expected } of cascade) {
-      expect(resolveRuntimeMode(makeState(patch))).toBe(expected);
+    for (const { ui, lifecycle, expected } of cascade) {
+      expect(
+        resolveRuntimeMode(makeState(ui), makeGameState(lifecycle))
+      ).toBe(expected);
     }
   });
 });

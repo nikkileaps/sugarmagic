@@ -110,12 +110,14 @@ import {
   type RuntimeContentSource,
   type RuntimeHostKind,
   UIContextSystem,
+  createGameStateStore,
   createObservableValue,
   createRuntimeActionRegistry,
   createUIActionRegistry,
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
+  type GameStateStore,
   type MutableObservableValue,
   type ObservableValue,
   type RuntimeActionRegistry,
@@ -129,6 +131,7 @@ import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
 import { createRuntimeRenderEngineProjector } from "./RenderEngineProjector";
 import { GameUILayer } from "./GameUILayer";
 import { WebAudioAdapter } from "./audio";
+import { FRESH_START_SESSION_STORAGE_KEY } from "./save/freshStart";
 
 export interface WebTargetAdapter {
   boot: RuntimeBootModel;
@@ -246,23 +249,10 @@ export interface WebRuntimeStartState {
    * don't author a value.
    */
   defaultGameSavePayload?: GameSavePayload | null;
-  /**
-   * Story 47.10.5 — fired when the start menu's "New Game" button
-   * is clicked. Callers (App.tsx, preview.tsx) clear the active save
-   * store and reload the page; the brief flash of "loading" then
-   * re-runs host.start with no saved game, spawning the player at
-   * `defaultGameSavePayload` (or implicit defaults). Omitted →
-   * start-new-game falls back to "just hide the menu" (the 47.5
-   * baseline).
-   */
-  onStartNewGame?: () => void | Promise<void>;
-  /**
-   * Story 47.10.5 — fired when the start menu's "Continue" button
-   * is clicked. Boot-time autosave load already placed the player,
-   * so the default implementation just unpauses; this hook lets
-   * games run extra resume logic (e.g. cutscene resume).
-   */
-  onContinueGame?: () => void | Promise<void>;
+  // Plan 054 §054.3 retired `onStartNewGame` and `onContinueGame`
+  // from this state shape. The host owns those transitions now
+  // (`host.startNewGame()` / `host.continueGame()`); ui-actions
+  // dispatch goes through them directly.
   /**
    * Story 47.10.5 — when true, the host skips showing the
    * start-menu at boot and starts unpaused. Used by the "New
@@ -330,6 +320,35 @@ export interface WebRuntimeHostState {
    * closure.
    */
   latestAutosave: ObservableValue<SessionHudSavedGameSnapshot | null>;
+  /**
+   * Plan 054 §054.3 — the canonical Model layer for game
+   * lifecycle. `lifecycle: "booting" | "start-menu" | "playing"
+   * | "paused"` answers "what phase of the game is the player
+   * in?" in one place. React subscribers via
+   * `useSyncExternalStore(state.gameState.subscribe,
+   * state.gameState.getState)`. Plugin readers + non-React
+   * consumers use `state.gameState.getState()`.
+   *
+   * Mutated through the host's transition methods
+   * (`startNewGame`, `pauseGame`, `quitToMenu`, etc.), NOT by
+   * direct `setState`. The transition methods are the only
+   * sanctioned way to advance the lifecycle.
+   */
+  gameState: GameStateStore;
+  /**
+   * Plan 054 §054.3 — the View / presentation store. Holds
+   * `visibleMenuKey` (overlay menu key — dialogue / inventory /
+   * future plugin overlays; NOT lifecycle menus after 054.4),
+   * `isPaused` (legacy; derived from `gameState.lifecycle` in
+   * the meantime), `savePresent` (legacy; mirrored from
+   * `gameState`), `loginModalOpen` (modal flag).
+   *
+   * During the 054 migration window, writes to `visibleMenuKey`
+   * / `isPaused` are bridged to `gameState.lifecycle` via a
+   * host-installed subscription. 054.4 migrates callsites; once
+   * complete, the lifecycle fields retire from this store.
+   */
+  uiState: UIStateStore;
 }
 
 export interface WebRuntimeHost {
@@ -389,6 +408,43 @@ export interface WebRuntimeHost {
    * — true on mount, false on unmount. Idempotent.
    */
   setLoginModalOpen(open: boolean): void;
+  /**
+   * Plan 054 §054.3 — destructive New Game flow. Reads the
+   * active providers, calls `saveStore.resetForNewGame(userId)`
+   * (atomic in-flight-flush + delete + freeze), sets the fresh-
+   * start sessionStorage flag, then `window.location.reload()`.
+   * Never resolves on the happy path — the reload navigates the
+   * page away. Callers shouldn't sequence anything after the
+   * await.
+   */
+  startNewGame(): Promise<void>;
+  /**
+   * Plan 054 §054.3 — "Continue" transition. Boot already
+   * loaded the save; this just transitions the lifecycle out of
+   * "start-menu" into "playing" (and hides the start menu via
+   * the legacy field bridge). No save side effects.
+   */
+  continueGame(): void;
+  /**
+   * Plan 054 §054.3 — pause the active game. Transitions
+   * `lifecycle: "playing" -> "paused"`. No-op + warn from any
+   * other lifecycle.
+   */
+  pauseGame(): void;
+  /**
+   * Plan 054 §054.3 — resume from pause. Transitions
+   * `lifecycle: "paused" -> "playing"`. No-op + warn from any
+   * other lifecycle.
+   */
+  resumeGame(): void;
+  /**
+   * Plan 054 §054.3 — return to start menu mid-session. Save
+   * is NOT touched (player can press Continue to resume).
+   * Transitions `lifecycle: "playing" | "paused" -> "start-menu"`.
+   * Replaces the old `showStartMenu()` for the mid-session case
+   * (boot still uses `showStartMenu()` for the initial menu open).
+   */
+  quitToMenu(): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -780,6 +836,84 @@ export function createWebRuntimeHost(
   const latestAutosaveStore: MutableObservableValue<SessionHudSavedGameSnapshot | null> =
     createObservableValue<SessionHudSavedGameSnapshot | null>(null);
 
+  // Plan 054 §054.3 — game-lifecycle + UI-presentation stores
+  // constructed at host construction time (not inside start()).
+  // Stable identity across start/dispose cycles; React subscribers
+  // attach via `useSyncExternalStore(store.subscribe, store.getState)`.
+  //
+  // `uiStateStore` was previously created inside start(); moving
+  // it out here means start() does `setState(...)` to set the
+  // initial boot values instead of allocating a new store. Any
+  // pre-start subscribers keep working.
+  const gameStateStore: GameStateStore = createGameStateStore();
+  const uiStateStore: UIStateStore = createUIStateStore();
+
+  // The 054.3 ui-state -> game-state migration bridge retired
+  // in 054.4 Pass C. Lifecycle transitions go through the host's
+  // transition methods directly; uiState carries overlay-only
+  // concerns.
+
+  // Plan 054 §054.3 — lifecycle transition methods. During the
+  // 054 migration window these methods write to the legacy
+  // `uiStateStore` fields; the bridge above mirrors the change
+  // into `gameStateStore.lifecycle`. 054.4 will flip the
+  // direction (write `gameState` directly; legacy fields retire).
+  async function hostStartNewGame(): Promise<void> {
+    const bindings = activeProvidersStore.getSnapshot();
+    const settledUser = bindings?.identityProvider.currentUser();
+    if (bindings && settledUser) {
+      try {
+        await bindings.saveStore.resetForNewGame(settledUser.userId);
+      } catch (error) {
+        // resetForNewGame leaves the store frozen on failure;
+        // the reload below rebuilds from scratch.
+        console.warn(
+          "[web-runtime] startNewGame: resetForNewGame failed; store frozen, reloading anyway.",
+          error
+        );
+      }
+    } else {
+      console.warn(
+        "[web-runtime] startNewGame: no active providers/user at click time; reloading anyway."
+      );
+    }
+    sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+    ownerWindow.location.reload();
+  }
+  function hostContinueGame(): void {
+    gameStateStore.setState({ lifecycle: "playing" });
+  }
+  function hostPauseGame(): void {
+    const lifecycle = gameStateStore.getState().lifecycle;
+    if (lifecycle !== "playing") {
+      console.warn(
+        `[web-runtime] pauseGame ignored — lifecycle is "${lifecycle}", expected "playing".`
+      );
+      return;
+    }
+    gameStateStore.setState({ lifecycle: "paused" });
+  }
+  function hostResumeGame(): void {
+    const lifecycle = gameStateStore.getState().lifecycle;
+    if (lifecycle !== "paused") {
+      console.warn(
+        `[web-runtime] resumeGame ignored — lifecycle is "${lifecycle}", expected "paused".`
+      );
+      return;
+    }
+    gameStateStore.setState({ lifecycle: "playing" });
+  }
+  function hostQuitToMenu(): void {
+    const lifecycle = gameStateStore.getState().lifecycle;
+    if (lifecycle !== "playing" && lifecycle !== "paused") {
+      console.warn(
+        `[web-runtime] quitToMenu ignored — lifecycle is "${lifecycle}", expected "playing" or "paused".`
+      );
+      return;
+    }
+    gameStateStore.setState({ lifecycle: "start-menu" });
+  }
+
   let world: World | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
@@ -839,7 +973,8 @@ export function createWebRuntimeHost(
   let uiLayerRoot: ReactRoot | null = null;
   let uiLayerElement: HTMLDivElement | null = null;
   let uiContextStore: UIContextStore | null = null;
-  let uiStateStore: UIStateStore | null = null;
+  // `uiStateStore` is constructed at host factory time above
+  // (Plan 054 §054.3); no `let` here anymore.
   let uiActionRegistry: UIActionRegistry | null = null;
   // Story 50.3 — central keyboard action registry. One window
   // listener per session lifetime; handlers (inventory, quest
@@ -895,7 +1030,9 @@ export function createWebRuntimeHost(
     }
     uiLayerElement = null;
     uiContextStore = null;
-    uiStateStore = null;
+    // uiStateStore is the host-lifetime const from factory time;
+    // not nulled here. Plan 054 §054.3 — same lifetime model as
+    // `activeProvidersStore` / `userStore` / `latestAutosaveStore`.
     uiActionRegistry = null;
     // Story 50.3 — clearing registrations + removing the window
     // listener happens via dispose(); the registry's own
@@ -944,7 +1081,7 @@ export function createWebRuntimeHost(
     // Q toggles the pause menu. Escape is reserved for dismissing other modal
     // UIs (inventory, journal, dialogue, etc.), each of which already owns its
     // own Escape handler — overloading Escape here would double-fire.
-    if (event.key.toLowerCase() !== "q" || !uiStateStore) return;
+    if (event.key.toLowerCase() !== "q") return;
     const target = event.target;
     if (
       target instanceof HTMLTextAreaElement ||
@@ -953,15 +1090,17 @@ export function createWebRuntimeHost(
     ) {
       return;
     }
-    const current = uiStateStore.getState();
-    if (current.visibleMenuKey === null) {
-      const previousMenuKey = current.visibleMenuKey;
-      uiStateStore.setState({ isPaused: true, visibleMenuKey: "pause-menu" });
-      emitMenuSoundTransition(previousMenuKey, "pause-menu");
-    } else if (current.visibleMenuKey === "pause-menu") {
-      const previousMenuKey = current.visibleMenuKey;
-      uiStateStore.setState({ isPaused: false, visibleMenuKey: null });
-      emitMenuSoundTransition(previousMenuKey, null);
+    // Plan 054 §054.4 Pass A — read the game's lifecycle, not
+    // the legacy visibleMenuKey. Q is only meaningful during
+    // gameplay (toggles pause) or while paused (resumes); start
+    // menu and booting states ignore Q.
+    const lifecycle = gameStateStore.getState().lifecycle;
+    if (lifecycle === "playing") {
+      hostPauseGame();
+      emitMenuSoundTransition(null, "pause-menu");
+    } else if (lifecycle === "paused") {
+      hostResumeGame();
+      emitMenuSoundTransition("pause-menu", null);
     }
   }
 
@@ -1469,21 +1608,25 @@ export function createWebRuntimeHost(
     // key ever changes there's one place to update; if the
     // showStartMenu logic ever grows (audio sweep, telemetry,
     // analytics), both paths get it for free.
-    uiStateStore = createUIStateStore({
-      visibleMenuKey: null,
-      isPaused: false,
+    // Plan 054 §054.3 — `uiStateStore` lives for the host's
+    // lifetime; start() resets it to the boot-time defaults
+    // (savePresent depends on whether boot loaded a save).
+    uiStateStore.setState({
+      activeOverlayMenuKey: null,
       // Boot-time save presence. The Continue button on the
       // start menu reads this through the `visibility: "hasSave"`
       // rule. Flips true on autosave write
       // (notifyAutosaveWritten) and back to false on
       // start-new-game.
-      savePresent: resolvedSavedGame != null
+      savePresent: resolvedSavedGame != null,
+      loginModalOpen: false
     });
     // Story 50.3 — create the central keyboard action registry
     // immediately after the state store; both share the same
     // lifecycle (one per host.start() invocation).
     runtimeActionRegistry = createRuntimeActionRegistry({
-      stateStore: uiStateStore
+      stateStore: uiStateStore,
+      gameStateStore
     });
     const startMenuExists = state.menuDefinitions.some(
       (menu) => menu.menuKey === "start-menu"
@@ -1497,23 +1640,27 @@ export function createWebRuntimeHost(
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
       stateStore: uiStateStore,
-      startMenuKey: "start-menu",
-      pauseMenuKey: "pause-menu",
+      // Plan 054 §054.4 — all lifecycle ui-actions delegate to
+      // the host. ui-actions doesn't touch `stateStore` for
+      // start/continue/pause/resume/quit anymore; the host owns
+      // those transitions.
+      transitions: {
+        startNewGame: hostStartNewGame,
+        continueGame: hostContinueGame,
+        pauseGame: hostPauseGame,
+        resumeGame: hostResumeGame,
+        quitToMenu: hostQuitToMenu
+      },
       // gameplaySession is assigned later in this same start() call; the
       // closures capture the live binding so dispatch (post-boot) sees it.
       onToggleInventory: () => gameplaySession?.toggleInventory(),
-      onToggleCaster: () => gameplaySession?.toggleCaster(),
-      // Story 47.10.5 — start-menu Continue / New Game callbacks
-      // forwarded from the caller (App.tsx / preview.tsx). Save
-      // clearing + page reload happens caller-side because only
-      // they own the active save store + the page reload mechanism.
-      onStartNewGame: state.onStartNewGame,
-      onContinueGame: state.onContinueGame
+      onToggleCaster: () => gameplaySession?.toggleCaster()
     });
     world.addSystem(
       new UIContextSystem({
         contextStore: uiContextStore,
         stateStore: uiStateStore,
+        gameStateStore,
         getRegion: () =>
           activeRegion
             ? { id: activeRegion.identity.id, name: activeRegion.displayName }
@@ -1637,7 +1784,7 @@ export function createWebRuntimeHost(
       }
     });
     gameplaySession = gameplayAssembly.gameplaySession;
-    emitMenuSoundTransition(null, uiStateStore.getState().visibleMenuKey);
+    emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {
       if (isMoving) {
         gameplaySession?.audioController.emitEvent("player.footstep", {
@@ -1763,16 +1910,17 @@ export function createWebRuntimeHost(
         theme: state.uiTheme,
         uiContextStore,
         uiStateStore,
+        gameStateStore,
         onAction: (action) => {
           const previousMenuKey =
-            uiStateStore?.getState().visibleMenuKey ?? null;
+            uiStateStore?.getState().activeOverlayMenuKey ?? null;
           gameplaySession?.audioController.emitEvent("ui.click", {
             instanceKey: `ui.click:${action.action}`
           });
           uiActionRegistry?.dispatch(action, world);
           emitMenuSoundTransition(
             previousMenuKey,
-            uiStateStore?.getState().visibleMenuKey ?? null
+            uiStateStore?.getState().activeOverlayMenuKey ?? null
           );
         },
         onHover: (action) => {
@@ -1829,7 +1977,9 @@ export function createWebRuntimeHost(
 
   function showStartMenu(): void {
     if (!uiStateStore) return;
-    uiStateStore.setState({ visibleMenuKey: "start-menu", isPaused: true });
+    // Plan 054 §054.4 Pass C — showStartMenu transitions the
+    // lifecycle directly, doesn't write a menu key into uiState.
+    gameStateStore.setState({ lifecycle: "start-menu" });
   }
 
   function setLoginModalOpen(open: boolean): void {
@@ -1867,7 +2017,9 @@ export function createWebRuntimeHost(
   const state: WebRuntimeHostState = {
     activeProviders: activeProvidersStore,
     user: userStore,
-    latestAutosave: latestAutosaveStore
+    latestAutosave: latestAutosaveStore,
+    gameState: gameStateStore,
+    uiState: uiStateStore
   };
 
   return {
@@ -1878,6 +2030,11 @@ export function createWebRuntimeHost(
     getCurrentSavePayload,
     notifyAutosaveWritten,
     showStartMenu,
-    setLoginModalOpen
+    setLoginModalOpen,
+    startNewGame: hostStartNewGame,
+    continueGame: hostContinueGame,
+    pauseGame: hostPauseGame,
+    resumeGame: hostResumeGame,
+    quitToMenu: hostQuitToMenu
   };
 }

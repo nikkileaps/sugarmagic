@@ -2841,70 +2841,50 @@ describe("47.10.5 — pickGameSavePayload", () => {
 });
 
 describe("47.10.5 — save-aware UI actions", () => {
-  it("start-new-game fires the host callback and leaves the menu state ALONE (host owns the reload)", async () => {
-    // The host callback is contractually responsible for the
-    // entire flow: destroy the save (via the store's
-    // resetForNewGame), set the fresh-start sessionStorage
-    // flag, and call window.location.reload(). The reload
-    // navigates the page away, so any local menu dismissal
-    // here would just briefly reveal stale gameplay state
-    // (and give a queued autosave a window to fire) between
-    // "menu hides" and "page actually reloads."
-    // ui-actions deliberately leaves the menu in place — the
-    // reload is what closes it.
-    const initialMenuState = {
-      visibleMenuKey: "start-menu" as const,
-      isPaused: true,
+  it("start-new-game delegates to transitions.startNewGame()", async () => {
+    // Plan 054 §054.4 — ui-actions hands off to the host's
+    // transition object. The destructive flow (reset + reload)
+    // is the host's job; ui-actions just dispatches.
+    const stateStore = createUIStateStore({
+      activeOverlayMenuKey: "start-menu",
       savePresent: true
-    };
-    const stateStore = createUIStateStore(initialMenuState);
+    });
     const registry = createUIActionRegistry();
-    const onStartNewGame = vi.fn(async () => undefined);
+    const startNewGame = vi.fn(async () => undefined);
     registerDefaultUIActions(registry, {
       stateStore,
-      onStartNewGame
+      transitions: {
+        startNewGame,
+        continueGame: vi.fn(),
+        pauseGame: vi.fn(),
+        resumeGame: vi.fn(),
+        quitToMenu: vi.fn()
+      }
     });
     registry.dispatch({ action: "start-new-game" });
     await Promise.resolve();
-    expect(onStartNewGame).toHaveBeenCalledTimes(1);
-    // Menu still showing: the host callback's reload is what
-    // closes it, not ui-actions.
-    expect(stateStore.getState()).toMatchObject(initialMenuState);
+    expect(startNewGame).toHaveBeenCalledTimes(1);
   });
 
-  it("continue-game fires the host callback and dismisses the menu", async () => {
+  it("continue-game delegates to transitions.continueGame()", async () => {
     const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
-      isPaused: true,
+      activeOverlayMenuKey: "start-menu",
       savePresent: true
     });
     const registry = createUIActionRegistry();
-    const onContinueGame = vi.fn(async () => undefined);
+    const continueGame = vi.fn();
     registerDefaultUIActions(registry, {
       stateStore,
-      onContinueGame
+      transitions: {
+        startNewGame: vi.fn(),
+        continueGame,
+        pauseGame: vi.fn(),
+        resumeGame: vi.fn(),
+        quitToMenu: vi.fn()
+      }
     });
     registry.dispatch({ action: "continue-game" });
-    await Promise.resolve();
-    expect(onContinueGame).toHaveBeenCalledTimes(1);
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: null,
-      isPaused: false
-    });
-  });
-
-  it("start-new-game still dismisses the menu when no host callback is registered (47.5 baseline)", () => {
-    const stateStore = createUIStateStore({
-      visibleMenuKey: "start-menu",
-      isPaused: true
-    });
-    const registry = createUIActionRegistry();
-    registerDefaultUIActions(registry, { stateStore });
-    registry.dispatch({ action: "start-new-game" });
-    expect(stateStore.getState()).toMatchObject({
-      visibleMenuKey: null,
-      isPaused: false
-    });
+    expect(continueGame).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -2921,14 +2901,12 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
 
   it("setState({savePresent: true}) merges without clobbering other fields", () => {
     const store = createUIStateStore({
-      visibleMenuKey: "start-menu",
-      isPaused: true,
+      activeOverlayMenuKey: "start-menu",
       savePresent: false
     });
     store.setState({ savePresent: true });
     expect(store.getState()).toEqual({
-      visibleMenuKey: "start-menu",
-      isPaused: true,
+      activeOverlayMenuKey: "start-menu",
       savePresent: true,
       // Story 50.1 — added to RuntimeUIState; defaults false.
       loginModalOpen: false
@@ -2941,10 +2919,10 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
     const unsubscribe = store.subscribe(listener);
     store.setState({ savePresent: true });
     expect(listener).toHaveBeenCalledTimes(1);
-    store.setState({ visibleMenuKey: "pause-menu" });
+    store.setState({ activeOverlayMenuKey: "pause-menu" });
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
-    store.setState({ isPaused: true });
+    store.setState({ activeOverlayMenuKey: null });
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });

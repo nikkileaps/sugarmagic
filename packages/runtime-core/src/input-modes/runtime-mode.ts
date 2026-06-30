@@ -25,7 +25,8 @@
  * Status: active (Story 50.1)
  */
 
-import type { RuntimeUIState } from "../ui-context";
+import type { GameStateSnapshot } from "../game-state";
+import type { RuntimeUIState } from "../ui-state";
 
 /**
  * The full set of input modes runtime-core understands today.
@@ -74,29 +75,32 @@ export type RuntimeMode =
  * transitions. The game is still "in-game" while the inventory
  * is open; the inventory action just toggles its own visibility.
  *
- * Story 50.5 will wire DialoguePanel to set
- * `visibleMenuKey === "dialogue"` when active; until then, the
- * "dialogue" branch is forward-looking.
+ * Story 50.5 — DialoguePanel sets `activeOverlayMenuKey ===
+ * "dialogue"` when active so the resolver returns the dialogue
+ * input mode. Only relevant while `gameState.lifecycle ===
+ * "playing"` — lifecycle dominates the resolver.
  */
-const MODE_DEFINING_MENU_KEYS: Readonly<
+// Plan 054 §054.4 Pass C — overlay-only mode mappings.
+// "start-menu" and "pause-menu" used to live here but those are
+// now game lifecycle states, mapped directly from
+// `gameState.lifecycle` in `resolveRuntimeMode`.
+const MODE_DEFINING_OVERLAY_KEYS: Readonly<
   Record<string, Exclude<RuntimeMode, "any">>
 > = {
-  "start-menu": "start-menu",
-  "pause-menu": "paused",
   dialogue: "dialogue"
 };
 
 /**
- * Pure function: given the current `RuntimeUIState`, return the
- * single active mode. Priority cascade (highest first):
+ * Pure function: given the current UI + game state, return the
+ * single active input mode. Priority cascade (highest first):
  *
- *   1. `loginModalOpen` — the most overriding state; a modal
- *      stealing focus disables everything else.
- *   2. `visibleMenuKey` — when set to a mode-defining key,
- *      that menu's mode wins. Non-mode-defining menus
- *      (inventory etc.) fall through to "in-game".
- *   3. `isPaused` — generic pause without one of the specific
- *      menus above.
+ *   1. `uiState.loginModalOpen` — the most overriding state; a
+ *      focus-stealing modal disables every other shortcut.
+ *   2. `gameState.lifecycle` — start-menu / paused / booting
+ *      hold gameplay regardless of overlay key.
+ *   3. `uiState.activeOverlayMenuKey` — when set to a mode-
+ *      defining overlay (dialogue / inventory), that key wins
+ *      while playing.
  *   4. default — "in-game".
  *
  * Pure / referentially-transparent / no side effects. Safe to
@@ -104,13 +108,20 @@ const MODE_DEFINING_MENU_KEYS: Readonly<
  * is a fixed-cost decision tree.
  */
 export function resolveRuntimeMode(
-  state: RuntimeUIState
+  uiState: RuntimeUIState,
+  gameState: GameStateSnapshot = { lifecycle: "playing" }
 ): Exclude<RuntimeMode, "any"> {
-  if (state.loginModalOpen) return "login-modal";
-  if (state.visibleMenuKey !== null) {
-    const mapped = MODE_DEFINING_MENU_KEYS[state.visibleMenuKey];
+  if (uiState.loginModalOpen) return "login-modal";
+  // Lifecycle dominates: start menu / paused / booting all hold
+  // gameplay even if an overlay also opened.
+  if (gameState.lifecycle === "start-menu") return "start-menu";
+  if (gameState.lifecycle === "paused") return "paused";
+  if (gameState.lifecycle === "booting") return "paused";
+  // While playing, an overlay key may still gate input.
+  if (uiState.activeOverlayMenuKey !== null) {
+    const mapped =
+      MODE_DEFINING_OVERLAY_KEYS[uiState.activeOverlayMenuKey];
     if (mapped !== undefined) return mapped;
   }
-  if (state.isPaused) return "paused";
   return "in-game";
 }
