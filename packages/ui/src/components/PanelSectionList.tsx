@@ -1,15 +1,20 @@
 /**
  * Reusable flat list for workspace left panels.
  *
- * This intentionally small component standardizes the common "PanelSection
- * with search, selectable rows, add action, and optional context actions" UX.
- * It does not own workspace state, command dispatch, tree semantics, drag/drop,
+ * Standardizes the common "PanelSection with search, selectable rows, add
+ * action, and per-item context actions" UX. When `contextActions` is provided,
+ * each row gets a visible kebab (vertical ellipsis) button on the right that
+ * opens the action menu — discoverable affordance, not hidden behind
+ * right-click (right-click still works for power users).
+ *
+ * Doesn't own workspace state, command dispatch, tree semantics, drag/drop,
  * or inspector behavior.
  */
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
   ActionIcon,
+  Box,
   Menu,
   Stack,
   Text,
@@ -100,13 +105,13 @@ export function PanelSectionList<TItem>({
             const id = getId(item);
             const isSelected = id === selectedId;
             const description = getDescription?.(item);
-            const row = (
+            const hasContextActions = contextActions.length > 0;
+
+            const rowBody = (
               <UnstyledButton
                 onClick={() => onSelect(id, item)}
                 onContextMenu={(event) => {
-                  if (contextActions.length === 0) {
-                    return;
-                  }
+                  if (!hasContextActions) return;
                   event.preventDefault();
                   onSelect(id, item);
                   setContextMenuItemId(id);
@@ -125,45 +130,80 @@ export function PanelSectionList<TItem>({
                     color: isSelected
                       ? "var(--sm-accent-blue)"
                       : "var(--sm-color-text)",
-                    width: "100%"
+                    flex: 1,
+                    minWidth: 0
                   }
                 }}
               >
-                <Text size="xs" fw={isSelected ? 600 : 500}>
+                <Text size="xs" fw={isSelected ? 600 : 500} truncate>
                   {getLabel(item)}
                 </Text>
                 {description ? (
-                  <Text size="xs" c="var(--sm-color-overlay0)">
+                  <Text size="xs" c="var(--sm-color-overlay0)" truncate>
                     {description}
                   </Text>
                 ) : null}
               </UnstyledButton>
             );
 
-            if (contextActions.length === 0) {
-              return <div key={id}>{row}</div>;
+            if (!hasContextActions) {
+              return <div key={id}>{rowBody}</div>;
             }
 
+            // Row + kebab side-by-side. Kebab is always visible (no
+            // hover-only reveal) so the menu is discoverable; click
+            // toggles, right-click on the row body also opens (handled
+            // by `rowBody` above). The Menu anchors to the kebab so
+            // positioning stays consistent regardless of trigger.
             return (
-              <Menu
+              <Box
                 key={id}
-                opened={contextMenuItemId === id}
-                onChange={(opened) => setContextMenuItemId(opened ? id : null)}
-                withinPortal
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2
+                }}
               >
-                <Menu.Target>{row}</Menu.Target>
-                <Menu.Dropdown>
-                  {contextActions.map((action) => (
-                    <Menu.Item
-                      key={action.label}
-                      color={action.color}
-                      onClick={() => action.onSelect(item)}
+                {rowBody}
+                <Menu
+                  opened={contextMenuItemId === id}
+                  onChange={(opened) =>
+                    setContextMenuItemId(opened ? id : null)
+                  }
+                  position="bottom-end"
+                  withinPortal
+                  shadow="md"
+                >
+                  <Menu.Target>
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      aria-label="Item actions"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setContextMenuItemId(
+                          contextMenuItemId === id ? null : id
+                        );
+                      }}
                     >
-                      {action.label}
-                    </Menu.Item>
-                  ))}
-                </Menu.Dropdown>
-              </Menu>
+                      <Text size="sm" lh={1}>
+                        {"⋮"}
+                      </Text>
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    {contextActions.map((action) => (
+                      <Menu.Item
+                        key={action.label}
+                        color={action.color}
+                        onClick={() => action.onSelect(item)}
+                      >
+                        {action.label}
+                      </Menu.Item>
+                    ))}
+                  </Menu.Dropdown>
+                </Menu>
+              </Box>
             );
           })}
           {items.length === 0 && emptyText ? (
