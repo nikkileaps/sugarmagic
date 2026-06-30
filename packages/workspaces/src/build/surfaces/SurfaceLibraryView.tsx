@@ -5,7 +5,7 @@
  */
 
 import { type ReactNode } from "react";
-import { Button, Stack, Text, TextInput } from "@mantine/core";
+import { Stack, Text, TextInput } from "@mantine/core";
 import type {
   FlowerTypeDefinition,
   GrassTypeDefinition,
@@ -97,6 +97,14 @@ export function useSurfaceLibraryView(
             onSelectSurfaceDefinition(created.definitionId);
           }
         }}
+        contextActions={[
+          {
+            label: "Delete",
+            color: "red",
+            onSelect: (definition) =>
+              onRemoveSurfaceDefinition(definition.definitionId)
+          }
+        ]}
       />
     ),
     rightPanel: (
@@ -133,17 +141,6 @@ export function useSurfaceLibraryView(
                 });
               }}
             />
-            <Button
-              size="compact-sm"
-              variant="subtle"
-              color="red"
-              justify="flex-start"
-              onClick={() =>
-                onRemoveSurfaceDefinition(selectedDefinition.definitionId)
-              }
-            >
-              Remove Surface
-            </Button>
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
