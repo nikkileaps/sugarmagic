@@ -6,7 +6,7 @@
  * while presenting a familiar swatch + hex input editing affordance.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ColorInput,
   ColorPicker,
@@ -131,6 +131,14 @@ export function ColorField({
 }: ColorFieldProps) {
   const [popoverOpened, setPopoverOpened] = useState(false);
   const hexValue = useMemo(() => formatHexColor(value), [value]);
+  // Local draft so the user can type partial values (e.g. `#8080`) without
+  // the controlled input snapping back. parseHexColor() requires a complete
+  // 6-digit string; until then, the draft holds the in-progress text and the
+  // committed parent value stays put. On blur, garbage reverts.
+  const [hexDraft, setHexDraft] = useState(hexValue);
+  useEffect(() => {
+    setHexDraft(hexValue);
+  }, [hexValue]);
 
   return (
     <Stack gap={4}>
@@ -183,12 +191,19 @@ export function ColorField({
         </Popover>
         <TextInput
           size="xs"
-          value={hexValue}
+          value={hexDraft}
           disabled={disabled}
           onChange={(event) => {
-            const next = parseHexColor(event.currentTarget.value);
-            if (next !== null) {
-              onChange(next);
+            const next = event.currentTarget.value;
+            setHexDraft(next);
+            const parsed = parseHexColor(next);
+            if (parsed !== null) {
+              onChange(parsed);
+            }
+          }}
+          onBlur={() => {
+            if (parseHexColor(hexDraft) === null) {
+              setHexDraft(hexValue);
             }
           }}
           styles={{
