@@ -3231,6 +3231,151 @@ function createTagPatchVersionPlugin(): VitePlugin {
 }
 
 
+/**
+ * Idempotent auto-bootstrap for the current major's base git tag
+ * (`v{currentMajor}.0.0`). Lets the Release workspace + Tag Patch
+ * flow Just Work for new projects without forcing the user to
+ * terminal-tag a v1.0.0 once. Studio calls this on every Release
+ * workspace mount (alongside list-version-tags); the work happens
+ * server-side because git is.
+ *
+ * Behavior:
+ *   - Tag already exists -> `{ok: true, action: "already-exists"}`.
+ *     Nothing to do.
+ *   - Working tree dirty -> `{ok: true, action: "deferred", reason}`.
+ *     Auto-tag refuses to capture half-done work; user commits +
+ *     next save retries.
+ *   - Otherwise -> `git tag v{currentMajor}.0.0 HEAD`,
+ *     `{ok: true, action: "created", tag}`.
+ *
+ * Idempotency makes the call cheap on every Release-workspace
+ * mount and safe to wire into autosync. Errors during git itself
+ * surface as `{ok: false, reason}`; Studio logs but doesn't
+ * block (this is best-effort auto-magic, not load-bearing).
+ */
+function createEnsureCurrentMajorTagPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-ensure-current-major-tag",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/ensure-current-major-tag",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as {
+              workingDirectory?: unknown;
+              currentMajor?: unknown;
+            };
+            const workingDirectory = readWorkingDirectory(body.workingDirectory);
+            const currentMajor = readPositiveInteger(body.currentMajor);
+            if (workingDirectory.length === 0) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "workingDirectory is required."
+              });
+              return;
+            }
+            if (currentMajor === null) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "currentMajor must be a positive integer."
+              });
+              return;
+            }
+            if (!existsSync(workingDirectory)) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `workingDirectory does not exist on disk: ${workingDirectory}`
+              });
+              return;
+            }
+            const gitErr = await ensureGitOnPath();
+            if (gitErr) {
+              sendJson(res, 200, { ok: false, reason: gitErr });
+              return;
+            }
+            const inside = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--is-inside-work-tree"],
+              cwd: workingDirectory
+            });
+            if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `${workingDirectory} is not inside a git working tree.`
+              });
+              return;
+            }
+            const tagName = `v${currentMajor}.0.0`;
+            const tagCheck = await runHostCommand({
+              command: "git",
+              args: ["rev-parse", "--verify", "--quiet", `refs/tags/${tagName}`],
+              cwd: workingDirectory
+            });
+            if (tagCheck.exitCode === 0) {
+              sendJson(res, 200, {
+                ok: true,
+                action: "already-exists",
+                tag: tagName
+              });
+              return;
+            }
+            const status = await runHostCommand({
+              command: "git",
+              args: ["status", "--porcelain"],
+              cwd: workingDirectory
+            });
+            if (status.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git status failed: ${status.stderr.trim() || `exit code ${status.exitCode}`}`
+              });
+              return;
+            }
+            if (status.stdout.trim().length > 0) {
+              sendJson(res, 200, {
+                ok: true,
+                action: "deferred",
+                tag: tagName,
+                reason:
+                  "Working tree has uncommitted changes; auto-tag will retry after the next clean save."
+              });
+              return;
+            }
+            const tagResult = await runHostCommand({
+              command: "git",
+              args: ["tag", tagName, "HEAD"],
+              cwd: workingDirectory
+            });
+            if (tagResult.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag ${tagName} failed: ${tagResult.stderr.trim() || `exit code ${tagResult.exitCode}`}`,
+                stdout: tagResult.stdout,
+                stderr: tagResult.stderr
+              });
+              return;
+            }
+            sendJson(res, 200, {
+              ok: true,
+              action: "created",
+              tag: tagName
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
@@ -3249,6 +3394,7 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createCutMajorVersionUntagPlugin(),
     createCutMajorVersionCommitPlugin(),
     createListVersionTagsPlugin(),
-    createTagPatchVersionPlugin()
+    createTagPatchVersionPlugin(),
+    createEnsureCurrentMajorTagPlugin()
   ];
 }

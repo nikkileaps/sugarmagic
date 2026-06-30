@@ -21,3 +21,4 @@ export {
   FRESH_START_SESSION_STORAGE_KEY,
   consumeFreshStartFlag
 } from "./save/freshStart";
+export { SUGARMAGIC_VERSION } from "./version";

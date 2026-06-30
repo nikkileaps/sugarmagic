@@ -61,6 +61,15 @@ export interface GameSave {
   /** Pinned to `GAME_SAVE_SCHEMA_VERSION` on write; read back to
    *  decide if a migration is needed at load time. */
   schemaVersion: number;
+  /**
+   * Build version of the engine that wrote this save (e.g.
+   * `v0.1.0`, `v0.1.0-3-gabc1234`, or just a sha for untagged
+   * commits). Optional because pre-this-field saves don't carry
+   * it; null means "unknown / pre-stamping era". Future
+   * migrations can branch on this to know which schema the
+   * payload was authored under.
+   */
+  writtenByVersion?: string | null;
   /** Cross-plugin player state. */
   payload: GameSavePayload;
 }

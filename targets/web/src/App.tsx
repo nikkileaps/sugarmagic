@@ -71,6 +71,7 @@ import { consumeFreshStartFlag } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { waitForActiveUser } from "./save/waitForActiveUser";
+import { SUGARMAGIC_VERSION } from "./version";
 
 // Story 47.10.5 — capture the fresh-start flag at MODULE LOAD,
 // not inside a React effect. StrictMode (active in dev builds)
@@ -437,6 +438,30 @@ export function App() {
           }
         />
       ) : null}
+      {/* Build version chip — dimmed footer in the bottom-left.
+          Always visible in the published bundle so bug reports
+          and screenshots include the exact engine build. */}
+      <div
+        aria-label="Build version"
+        style={{
+          position: "absolute",
+          bottom: 8,
+          left: 12,
+          zIndex: 5,
+          padding: "2px 8px",
+          borderRadius: 4,
+          background: "rgba(0, 0, 0, 0.35)",
+          color: "rgba(255, 255, 255, 0.55)",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: 10,
+          letterSpacing: 0.4,
+          pointerEvents: "none",
+          userSelect: "none"
+        }}
+      >
+        {SUGARMAGIC_VERSION}
+      </div>
     </main>
   );
 

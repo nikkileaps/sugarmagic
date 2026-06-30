@@ -1624,6 +1624,53 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     }
   }
 
+  // Auto-bootstrap the current major's base tag (`v{N}.0.0`)
+  // before listing so new projects + projects that never went
+  // through cut-major land with a usable base for the Tag Patch
+  // flow. Best-effort, idempotent: silent no-op when the tag
+  // already exists or the tree is dirty. Errors log + continue;
+  // the list call below still renders whatever's on disk.
+  async function ensureCurrentMajorTag(workingDirectory: string) {
+    if (!gameProject) return;
+    try {
+      const response = await fetch(
+        "/__sugardeploy/ensure-current-major-tag",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            workingDirectory,
+            currentMajor: gameProject.majorVersion
+          })
+        }
+      );
+      const payload = (await response.json()) as {
+        ok: boolean;
+        action?: "already-exists" | "deferred" | "created";
+        tag?: string;
+        reason?: string;
+      };
+      if (!payload.ok) {
+        console.warn(
+          "[sugardeploy] ensure-current-major-tag returned not-ok",
+          payload
+        );
+        return;
+      }
+      if (payload.action === "created") {
+        console.info(
+          `[sugardeploy] auto-created base tag ${payload.tag} at HEAD`
+        );
+      } else if (payload.action === "deferred") {
+        console.info(
+          `[sugardeploy] auto-tag deferred (${payload.reason ?? ""}); will retry on next refresh.`
+        );
+      }
+    } catch (error) {
+      console.warn("[sugardeploy] ensure-current-major-tag threw", error);
+    }
+  }
+
   // Story 46.12 — fetch the live tag list from git via the host
   // middleware. Called on mount + after every Tag Patch action so
   // the version history list always reflects on-disk reality.
@@ -1636,6 +1683,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       setVersionTagsLoadError(null);
       return;
     }
+    // Bootstrap the base tag before listing so a freshly-installed
+    // project sees its v1.0.0 in the rendered history immediately.
+    await ensureCurrentMajorTag(workingDirectory);
     try {
       const response = await fetch("/__sugardeploy/list-version-tags", {
         method: "POST",

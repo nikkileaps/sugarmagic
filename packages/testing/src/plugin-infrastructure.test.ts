@@ -356,6 +356,11 @@ describe("plugin infrastructure", () => {
       "sugardeploy-cut-major-version-tag",
       "sugardeploy-cut-major-version-untag",
       "sugardeploy-dispatch-deploy-workflow",
+      // Auto-bootstrap the current major's base tag (v{N}.0.0)
+      // on Release-workspace mount so new projects + projects
+      // that never went through cut-major don't dead-end the
+      // Tag Patch flow.
+      "sugardeploy-ensure-current-major-tag",
       "sugardeploy-gcp-billing-list",
       "sugardeploy-gcp-project-lifecycle",
       "sugardeploy-get-deploy-workflow-status",
@@ -771,8 +776,8 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 7");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(7);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 8");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(8);
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");
@@ -835,6 +840,10 @@ describe("plugin infrastructure", () => {
       "          ref: ${{ github.event.inputs.sugarmagic_ref || 'main' }}"
     );
     expect(yaml).toContain("          path: sugarmagic");
+    // Template v8 — fetch full history + tags so `git describe`
+    // inside the build resolves to the actual tag name (e.g.
+    // `v0.1.0`) instead of just a short sha.
+    expect(yaml).toContain("          fetch-depth: 0");
     // Workflow_dispatch input for engine ref pin.
     expect(yaml).toContain("      sugarmagic_ref:");
     // pnpm + node setup with sugarmagic lockfile cache.
