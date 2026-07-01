@@ -30,8 +30,12 @@
 // because `GameProject.defaultGameSavePayload` references it.
 // Re-exported here so every existing import path
 // (`@sugarmagic/runtime-core`) keeps working transparently.
-import { type GameSavePayload, pickGameSavePayload } from "@sugarmagic/domain";
-export { type GameSavePayload, pickGameSavePayload };
+import {
+  type GameSavePayload,
+  pickGameSavePayload,
+  upgradeLegacyPayload
+} from "@sugarmagic/domain";
+export { type GameSavePayload, pickGameSavePayload, upgradeLegacyPayload };
 
 /**
  * Schema compatibility token for `GameSave` writes. Stamped into
@@ -107,6 +111,17 @@ export {
   createSerializedSaveStore,
   type SerializedSaveStore
 } from "./serialized-store";
+
+export {
+  type SaveParticipant,
+  type SaveParticipantTier,
+  SaveParticipantRegistry
+} from "./participant";
+
+// SaveSlice authored in domain (Plan 055.2). Re-exported here so
+// runtime-core consumers keep pulling every save type from one
+// package.
+export { type SaveSlice } from "@sugarmagic/domain";
 
 /**
  * Story 47.5 — picks the region id the runtime should spawn into.

@@ -62,7 +62,37 @@ After this epic:
 - **Multi-save slots.** Single save per user, mirroring current behavior.
 - **Save-file migration UI.** If a slice's schema bumps and an old save can't be upgraded gracefully, the slice resets and the player's progress in that system rolls back. Acceptable for v1.
 
-## Shape
+## Pattern
+
+Two GoF patterns composed:
+
+- **Memento** — each runtime system produces an opaque envelope (a "slice") capturing its internal state and can restore itself from one later. The system owns the envelope shape; nobody outside inspects it. This is why each participant carries its own `schemaVersion` and owns its own upgrade path.
+- **Registry + Mediator** — a `SaveParticipantRegistry` tracks the set of participants and orchestrates collect-on-save / dispatch-on-load across all of them without knowing what's in any slice. The host holds one registry for its lifetime.
+
+Naming: this codebase calls the interface `SaveParticipant`. Equally valid names in the wild would be `Persistable` (adjective form), `SaveContributor` (Eclipse plugin-style), or straight `Memento`. Participant sticks because a) it lines up with the MVVM framing (participants are Model contributors to a save View), and b) it emphasizes the composition angle over the state-envelope angle.
+
+### How save/load flows end-to-end
+
+**Save tick (every autosave):**
+
+1. `useAutosave` fires; asks host for `getCurrentSavePayload()`.
+2. Host calls `registry.serializeAll()`, which walks every registered participant in registration order, calls `participant.serialize()`, and wraps each return in `{ schemaVersion, data }`.
+3. Failures in one participant's serialize log + drop THAT slice from the map; the rest still flow through.
+4. The map goes into `GameSavePayload.slices` (added in 055.2) and is written to the active `GameSaveStore`.
+
+**Load / boot (once per `host.start`):**
+
+1. `host.start` resolves the save via the store, gets a `GameSavePayload` (or null for a fresh player).
+2. Host reads `payload.slices` (or `{}` if fresh / legacy).
+3. Host calls `registry.deserializeAll(slices)`. The registry dispatches `participant.deserialize(slice ?? null)` for every registered participant, ordered by tier: `host-owned` first (things ECS spawn depends on — player position, region), then `region-aware` (things that depend on the region being picked, e.g. world-presence), then `default`.
+4. Failures in one participant's deserialize log and leave that participant in partial state; others still restore.
+5. AFTER all deserializes complete, host proceeds with world / player spawn using the now-hydrated state.
+
+**Adding a new persistable system later:**
+
+1. Implement `SaveParticipant<TSlice>` on the system.
+2. In whatever assembly wires that system up, call `host.registerSaveParticipant(instance)`.
+3. Done. No central schema edit, no other participants touched. Existing saves without a slice for the new participant get `null` on deserialize and the system restores defaults.
 
 ### `SaveParticipant` contract (in runtime-core)
 
@@ -192,6 +222,7 @@ The `world.presence` participant is the only NEW module. The others all exist; w
 - **Cross-region item presence handling.** Are world-presence collected items tracked per-region or globally? Per-region is simpler (a presenceId is unique within a region, not globally). Lean per-region.
 - **Schema-bump migrations across slices.** If `quest.manager` bumps from v1 to v2, who writes the v1->v2 upgrader? The participant itself (it's the only one who knows its slice shape). Versioned `migrateFromV1ToV2(slice)` inside the participant, called from `deserialize` when the loaded slice's schemaVersion is lower than the current.
 - **Save participant ordering hazards.** `host.player` and the world-presence tracker both inform spawn. World presence has to be deserialized BEFORE the region scene loads (so the scene knows which presences to skip). Worth being explicit about tier ordering in 055.1's host orchestration: "host-owned" tier first, then "region-aware" tier, then everything else.
+- **`world.presence` scope when Season/Episode ships (Plan 056).** Current slice is `Record<regionId, string[]>` — episode-agnostic. If a later episode needs to un-collect a presence in a shared region to re-story it, that has to be handled at authoring time or via a runtime override rule. If that pattern gets common we bump `world.presence` schemaVersion to `Record<regionId, Record<episodeId, string[]>>` and migrate. Not blocking 055; revisit when 056 defines the episode content-load contract.
 
 ## Defers
 

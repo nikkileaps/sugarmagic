@@ -31,6 +31,7 @@ import {
 
 function buildPayload(x: number): GameSavePayload {
   return {
+    slices: {},
     currentRegionId: "region:test",
     currentQuestId: null,
     playerPosition: { x, y: 0, z: 0 }

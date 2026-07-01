@@ -204,7 +204,11 @@ function normalizeDefaultGameSavePayload(
   ) {
     return null;
   }
-  return { currentRegionId, currentQuestId, playerPosition };
+  // Plan 055 §055.2 — authored defaults never carry participant
+  // slices (those are runtime state); `slices: {}` is the correct
+  // starting shape. If a legacy default happens to reach this
+  // helper it upgrades cleanly through `upgradeLegacyPayload`.
+  return { slices: {}, currentRegionId, currentQuestId, playerPosition };
 }
 
 /**

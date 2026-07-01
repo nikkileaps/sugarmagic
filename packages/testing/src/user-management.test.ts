@@ -297,6 +297,7 @@ describe("GameSaveStore contract", () => {
     // contract; runtime falls back to authored defaults from
     // boot.json when a field is null.
     const payload: GameSavePayload = {
+      slices: {},
       currentRegionId: null,
       currentQuestId: null,
       playerPosition: null
@@ -306,6 +307,7 @@ describe("GameSaveStore contract", () => {
 
   it("typechecks a GameSavePayload with populated state", () => {
     const payload: GameSavePayload = {
+      slices: {},
       currentRegionId: "hollow-station",
       currentQuestId: "find-the-cat",
       playerPosition: { x: 12.5, y: 0, z: -8.25 }
@@ -320,6 +322,7 @@ describe("GameSaveStore contract", () => {
       lastPlayed: new Date(0).toISOString(),
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: "hollow-station",
         currentQuestId: null,
         playerPosition: null
@@ -461,6 +464,7 @@ describe("identity.provider + save.store contribution kinds", () => {
       lastPlayed: "iso",
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: "r",
         currentQuestId: null,
         playerPosition: null
@@ -746,6 +750,7 @@ describe("IndexedDBGameSaveStore", () => {
     playerPosition: { x: number; y: number; z: number } | null;
   }> = {}) {
     return {
+      slices: {},
       currentRegionId: "hollow-station",
       currentQuestId: "find-the-cat",
       playerPosition: { x: 1, y: 2, z: 3 },
@@ -914,6 +919,7 @@ describe("pickActiveRegionId", () => {
       lastPlayed: "2026-06-25T12:00:00.000Z",
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: "saved-region",
         currentQuestId: null,
         playerPosition: null,
@@ -1141,6 +1147,7 @@ describe("createSessionHudCard", () => {
       getUser: () => makeUser({ userId: "ab12cd34ef56gh78" }),
       getSavedGameSnapshot: () => ({
         lastPlayed: "2026-06-25T12:00:00.000Z",
+        slices: {},
         currentRegionId: "hollow-station",
         currentQuestId: "find-the-cat"
       })
@@ -2009,6 +2016,7 @@ describe("SupabaseGameSaveStore", () => {
       lastPlayed: "(ignored, stamped server-side)",
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: "hollow-station",
         currentQuestId: "find-the-cat",
         playerPosition: { x: 1, y: 2, z: 3 }
@@ -2031,6 +2039,7 @@ describe("SupabaseGameSaveStore", () => {
         lastPlayed: "",
         schemaVersion: GAME_SAVE_SCHEMA_VERSION,
         payload: {
+          slices: {},
           currentRegionId: null,
           currentQuestId: null,
           playerPosition: null
@@ -2049,6 +2058,7 @@ describe("SupabaseGameSaveStore", () => {
         lastPlayed: "",
         schemaVersion: GAME_SAVE_SCHEMA_VERSION,
         payload: {
+          slices: {},
           currentRegionId: null,
           currentQuestId: null,
           playerPosition: null
@@ -2066,6 +2076,7 @@ describe("SupabaseGameSaveStore", () => {
       lastPlayed: "",
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: null,
         currentQuestId: null,
         playerPosition: null
@@ -2473,11 +2484,13 @@ describe("47.9.5 — SugarAgent gateway clients send Authorization from the live
 describe("47.10 — gameSavePayloadsEqual", () => {
   it("treats deep-equal payloads as equal", () => {
     const a: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: "q1",
       playerPosition: { x: 1, y: 2, z: 3 }
     };
     const b: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: "q1",
       playerPosition: { x: 1, y: 2, z: 3 }
@@ -2487,11 +2500,13 @@ describe("47.10 — gameSavePayloadsEqual", () => {
 
   it("detects position drift", () => {
     const a: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: null,
       playerPosition: { x: 1, y: 2, z: 3 }
     };
     const b: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: null,
       playerPosition: { x: 1, y: 2.5, z: 3 }
@@ -2501,11 +2516,13 @@ describe("47.10 — gameSavePayloadsEqual", () => {
 
   it("treats null vs object position as not equal", () => {
     const a: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: null,
       playerPosition: null
     };
     const b: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: null,
       playerPosition: { x: 0, y: 0, z: 0 }
@@ -2516,6 +2533,7 @@ describe("47.10 — gameSavePayloadsEqual", () => {
 
   it("returns false when region or quest changes", () => {
     const base: GameSavePayload = {
+      slices: {},
       currentRegionId: "r1",
       currentQuestId: "q1",
       playerPosition: null
@@ -2558,11 +2576,13 @@ function makeInMemorySaveStore(): GameSaveStore & {
 
 describe("47.10 — runAutosaveTick", () => {
   const payloadA: GameSavePayload = {
+    slices: {},
     currentRegionId: "garden",
     currentQuestId: null,
     playerPosition: { x: 1, y: 0, z: 1 }
   };
   const payloadB: GameSavePayload = {
+    slices: {},
     currentRegionId: "garden",
     currentQuestId: null,
     playerPosition: { x: 2, y: 0, z: 1 }
@@ -2644,6 +2664,7 @@ describe("47.10 — runAutosaveTick", () => {
 
 describe("47.10 — migrateLocalSaveToCloud", () => {
   const samplePayload: GameSavePayload = {
+    slices: {},
     currentRegionId: "garden",
     currentQuestId: "q1",
     playerPosition: { x: 5, y: 0, z: 7 }
@@ -2815,11 +2836,13 @@ describe("47.10 boot-ordering — waitForActiveUser", () => {
 
 describe("47.10.5 — pickGameSavePayload", () => {
   const samplePayload: GameSavePayload = {
+    slices: {},
     currentRegionId: "save-region",
     currentQuestId: "save-quest",
     playerPosition: { x: 1, y: 2, z: 3 }
   };
   const authoredDefault: GameSavePayload = {
+    slices: {},
     currentRegionId: "authored-default-region",
     currentQuestId: null,
     playerPosition: { x: 0, y: 0, z: 0 }

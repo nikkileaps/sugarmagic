@@ -275,6 +275,7 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
       lastPlayed: new Date().toISOString(),
       schemaVersion: GAME_SAVE_SCHEMA_VERSION,
       payload: {
+        slices: {},
         currentRegionId: seedRegionId,
         currentQuestId: seedQuestId.trim() || null,
         playerPosition: { x, y, z }
