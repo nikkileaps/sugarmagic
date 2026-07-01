@@ -776,8 +776,18 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 8");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(8);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 9");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(9);
+    // Template v9 — the game-repo checkout fetches full history
+    // (so `git describe` in the next step sees tags) and exports
+    // SUGARMAGIC_GAME_VERSION into the engine build env.
+    expect(yaml).toContain("      - name: Resolve game version");
+    expect(yaml).toContain(
+      "          GAME_VERSION=$(git describe --tags --always --dirty)"
+    );
+    expect(yaml).toContain(
+      "          SUGARMAGIC_GAME_VERSION: ${{ steps.game-version.outputs.version }}"
+    );
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");

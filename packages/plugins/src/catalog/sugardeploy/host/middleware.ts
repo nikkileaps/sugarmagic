@@ -3210,6 +3210,30 @@ function createTagPatchVersionPlugin(): VitePlugin {
               });
               return;
             }
+            // Push the fresh tag to origin so the deploy GHA sees it.
+            // Plain `git push` doesn't push tags, and our tags are
+            // lightweight so `--follow-tags` wouldn't catch them either.
+            // Roll back the local tag on push failure — matches the
+            // orphan-tag cleanup pattern used elsewhere in this file.
+            const pushResult = await runHostCommand({
+              command: "git",
+              args: ["push", "origin", next.nextTag],
+              cwd: workingDirectory
+            });
+            if (pushResult.exitCode !== 0) {
+              await runHostCommand({
+                command: "git",
+                args: ["tag", "-d", next.nextTag],
+                cwd: workingDirectory
+              });
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git push origin ${next.nextTag} failed (local tag rolled back): ${pushResult.stderr.trim() || `exit code ${pushResult.exitCode}`}`,
+                stdout: pushResult.stdout,
+                stderr: pushResult.stderr
+              });
+              return;
+            }
             sendJson(res, 200, {
               ok: true,
               tagName: next.nextTag,
@@ -3316,6 +3340,40 @@ function createEnsureCurrentMajorTagPlugin(): VitePlugin {
               cwd: workingDirectory
             });
             if (tagCheck.exitCode === 0) {
+              // Tag exists locally, but it may predate the push-on-create
+              // behavior (older bootstrap runs left tags stranded locally).
+              // Check whether origin has it; if not, push it now so the
+              // deploy GHA can see it.
+              const remoteCheck = await runHostCommand({
+                command: "git",
+                args: ["ls-remote", "--tags", "origin", `refs/tags/${tagName}`],
+                cwd: workingDirectory
+              });
+              const remoteHasTag =
+                remoteCheck.exitCode === 0 &&
+                remoteCheck.stdout.trim().length > 0;
+              if (!remoteHasTag) {
+                const pushResult = await runHostCommand({
+                  command: "git",
+                  args: ["push", "origin", tagName],
+                  cwd: workingDirectory
+                });
+                if (pushResult.exitCode !== 0) {
+                  sendJson(res, 200, {
+                    ok: false,
+                    reason: `local tag ${tagName} exists but push to origin failed: ${pushResult.stderr.trim() || `exit code ${pushResult.exitCode}`}`,
+                    stdout: pushResult.stdout,
+                    stderr: pushResult.stderr
+                  });
+                  return;
+                }
+                sendJson(res, 200, {
+                  ok: true,
+                  action: "pushed-existing",
+                  tag: tagName
+                });
+                return;
+              }
               sendJson(res, 200, {
                 ok: true,
                 action: "already-exists",
@@ -3356,6 +3414,28 @@ function createEnsureCurrentMajorTagPlugin(): VitePlugin {
                 reason: `git tag ${tagName} failed: ${tagResult.stderr.trim() || `exit code ${tagResult.exitCode}`}`,
                 stdout: tagResult.stdout,
                 stderr: tagResult.stderr
+              });
+              return;
+            }
+            // Push the fresh tag to origin so the deploy GHA sees it.
+            // Roll back the local tag on push failure so the next auto-
+            // bootstrap attempt is a clean create.
+            const pushResult = await runHostCommand({
+              command: "git",
+              args: ["push", "origin", tagName],
+              cwd: workingDirectory
+            });
+            if (pushResult.exitCode !== 0) {
+              await runHostCommand({
+                command: "git",
+                args: ["tag", "-d", tagName],
+                cwd: workingDirectory
+              });
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git push origin ${tagName} failed (local tag rolled back): ${pushResult.stderr.trim() || `exit code ${pushResult.exitCode}`}`,
+                stdout: pushResult.stdout,
+                stderr: pushResult.stderr
               });
               return;
             }

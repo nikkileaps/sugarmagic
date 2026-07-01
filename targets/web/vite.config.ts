@@ -5,13 +5,24 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
- * Build-time version stamp. Prefers `git describe --tags --always
- * --dirty` so any tagged commit deploys with its tag name verbatim
- * (e.g. `v0.1.0`); untagged commits get `<tag>-<n>-g<sha>` or just
- * `<sha>` when no tags exist. Falls back to `package.json#version`
- * if git is unreachable.
+ * Build-time version stamp shown in the deployed bundle (footer
+ * chip, X-Game-Version response header, autosave's
+ * `writtenByVersion` stamp). Resolution cascade:
+ *
+ *   1. `SUGARMAGIC_GAME_VERSION` env var — the GHA deploy workflow
+ *      sets this from `git describe` run inside the GAME repo
+ *      (wordlark), so the player-facing chip carries the game's
+ *      release tag (`v1.0.0`), not the engine's commit. This is
+ *      always the right source for production builds.
+ *   2. `git describe --tags --always --dirty` in THIS (engine)
+ *      working tree — local dev fallback when there's no game
+ *      context around. Useful while iterating on the engine.
+ *   3. `package.json#version` — last-resort defensive fallback if
+ *      git is unreachable.
  */
 function resolveBuildVersion(): string {
+  const fromEnv = process.env.SUGARMAGIC_GAME_VERSION?.trim();
+  if (fromEnv) return fromEnv;
   try {
     return execSync("git describe --tags --always --dirty", {
       encoding: "utf-8",

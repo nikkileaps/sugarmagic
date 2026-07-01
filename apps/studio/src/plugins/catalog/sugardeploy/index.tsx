@@ -18,7 +18,7 @@ import {
   TextInput,
   Tooltip
 } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DeploymentSettings } from "@sugarmagic/domain";
 import {
   buildSetVersionedProjectIdentifierCommand,
@@ -565,7 +565,16 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     lastResultMessage: null
   });
 
-  const plan = gameProject ? planGameDeployment(gameProject) : null;
+  // Memoize so `plan?.managedFiles` (used as a useEffect dep below)
+  // keeps a stable reference across renders. Without this, plan was
+  // a fresh object every render, the template-version probe's
+  // useEffect re-fired every render, setTemplateDriftState triggered
+  // another render, and template-version requests spammed the network
+  // tab once a frame.
+  const plan = useMemo(
+    () => (gameProject ? planGameDeployment(gameProject) : null),
+    [gameProject]
+  );
   // Story 45.7.5 — SugarDeploy state reads route through the plugin-state
   // helpers, NOT through `gameProject.deployment` / `gameProject.versionedProjectIdentifiers`.
   // The two top-level fields are being removed from GameProject; the
@@ -1646,7 +1655,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       );
       const payload = (await response.json()) as {
         ok: boolean;
-        action?: "already-exists" | "deferred" | "created";
+        action?: "already-exists" | "deferred" | "created" | "pushed-existing";
         tag?: string;
         reason?: string;
       };
@@ -1660,6 +1669,10 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       if (payload.action === "created") {
         console.info(
           `[sugardeploy] auto-created base tag ${payload.tag} at HEAD`
+        );
+      } else if (payload.action === "pushed-existing") {
+        console.info(
+          `[sugardeploy] auto-pushed existing local base tag ${payload.tag} to origin`
         );
       } else if (payload.action === "deferred") {
         console.info(
