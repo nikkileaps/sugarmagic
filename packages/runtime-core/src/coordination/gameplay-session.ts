@@ -31,6 +31,7 @@ import {
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
+  type RegionItemPresence,
   type SpellDefinition,
   type RegionDocument,
   type SoundEventBindingMap
@@ -86,6 +87,7 @@ import {
   Interactable,
   InteractionSystem
 } from "../interaction";
+import { iterateActiveItemPresences } from "../scene";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -1026,47 +1028,54 @@ export function createRuntimeGameplaySessionController(
     }
   }
 
+  function registerOneItemInteractable(presence: RegionItemPresence) {
+    const itemDefinition = itemDefinitions.find(
+      (definition) => definition.definitionId === presence.itemDefinitionId
+    );
+    const promptText =
+      itemDefinition?.interactionView.kind === "trigger-castable"
+        ? itemDefinition.interactionView.title.trim() ||
+          `Interact with ${itemDefinition.displayName}`
+        : `Pick up ${itemDefinition?.displayName ?? "Item"}`;
+    const interactableEntity = world.createEntity();
+    world.addComponent(
+      interactableEntity,
+      new Position(...presence.transform.position)
+    );
+    world.addComponent(
+      interactableEntity,
+      new Interactable(
+        "item",
+        presence.presenceId,
+        presence.itemDefinitionId,
+        promptText,
+        1.6,
+        true
+      )
+    );
+    itemInteractableEntities.set(presence.presenceId, {
+      itemDefinitionId: presence.itemDefinitionId,
+      quantity: presence.quantity,
+      entity: interactableEntity
+    });
+  }
+
   function registerItemInteractables() {
     if (!activeRegion) return;
-
-    for (const presence of activeRegion.scene.itemPresences) {
-      // Plan 055 §055.6 — the host's WorldPresenceTracker tells
-      // us which presence IDs have already been collected in this
-      // region across previous sessions. Skip them so re-entering
-      // doesn't respawn the item.
-      if (shouldSkipItemPresence?.(presence.presenceId)) {
-        continue;
-      }
-      const itemDefinition = itemDefinitions.find(
-        (definition) => definition.definitionId === presence.itemDefinitionId
-      );
-      const promptText =
-        itemDefinition?.interactionView.kind === "trigger-castable"
-          ? itemDefinition.interactionView.title.trim() ||
-            `Interact with ${itemDefinition.displayName}`
-          : `Pick up ${itemDefinition?.displayName ?? "Item"}`;
-      const interactableEntity = world.createEntity();
-      world.addComponent(
-        interactableEntity,
-        new Position(...presence.transform.position)
-      );
-      world.addComponent(
-        interactableEntity,
-        new Interactable(
-          "item",
-          presence.presenceId,
-          presence.itemDefinitionId,
-          promptText,
-          1.6,
-          true
-        )
-      );
-      itemInteractableEntities.set(presence.presenceId, {
-        itemDefinitionId: presence.itemDefinitionId,
-        quantity: presence.quantity,
-        entity: interactableEntity
-      });
-    }
+    // Plan 057 — iterate through the shared filter helper so
+    // the ECS spawn path here and the visual mesh spawn path
+    // (in target-web's runtimeHost) apply the same filter set.
+    // Any future filter (Plan 056 episode gating, etc.)
+    // composes into `shouldSkipItemPresence` at the host and
+    // both paths pick it up automatically.
+    iterateActiveItemPresences(
+      activeRegion.scene.itemPresences,
+      {
+        shouldSkip: (presenceId) =>
+          shouldSkipItemPresence?.(presenceId) ?? false
+      },
+      registerOneItemInteractable
+    );
   }
 
   function registerInspectableInteractables() {

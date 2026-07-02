@@ -26,7 +26,7 @@
 
 **Meta-lesson:** Any function whose bug can be silently hidden by unrelated systems (input manager here bypassing the action registry) deserves either (a) direct test coverage or (b) an assertion that the transition landed. Prefer (a).
 
-### 3. Region items spawn through TWO independent paths — visual mesh vs ECS Interactable
+### 3. Region items spawn through TWO independent paths — visual mesh vs ECS Interactable [FIXED — this branch, via Plan 057]
 
 **Severity:** Medium (already caused one bug; will cause more)
 
