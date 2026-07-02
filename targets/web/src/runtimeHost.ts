@@ -89,6 +89,8 @@ import {
   createInventoryPlayerSaveParticipant,
   createQuestManagerSaveParticipant,
   createRuntimeGameplayAssembly,
+  createWorldPresenceSaveParticipant,
+  WorldPresenceTracker,
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
@@ -995,6 +997,15 @@ export function createWebRuntimeHost(
       }
     })
   );
+  // Plan 055 §055.6 — world.presence tracker + participant.
+  // Host-owned lifetime (survives assembly rebuilds when we
+  // eventually support mid-session region transitions).
+  // Registered at factory time; Phase 1 deserialize populates it
+  // before `gameplayAssembly` reads shouldSkipItemPresence.
+  const worldPresenceTracker = new WorldPresenceTracker();
+  saveParticipantRegistry.register(
+    createWorldPresenceSaveParticipant({ tracker: worldPresenceTracker })
+  );
   // Story 47.10 follow-up — live user + last-known save snapshot
   // surfaced to the Session debug HUD card. Story 51.3 migrated
   // both off module-let mirrors onto host.state observables
@@ -1472,14 +1483,20 @@ export function createWebRuntimeHost(
     const upgradedPayload = seedPayload
       ? upgradeLegacyPayload(seedPayload)
       : null;
-    // Plan 055 §055.4 — Phase 1: dispatch host-owned tier
-    // participants only. `host.player` restores here, before
-    // spawn. Phase 2 (region-aware + default tiers) runs later,
-    // AFTER gameplayAssembly is constructed and its dependent
-    // participants (quest.manager, later inventory + world-
-    // presence) have registered.
+    // Plan 055 §055.4 + §055.6 — Phase 1: dispatch host-owned +
+    // region-aware tier participants. `host.player` (host-owned)
+    // restores here before spawn; `world.presence` (region-aware)
+    // restores here too because `gameplayAssembly`'s
+    // `registerItemInteractables` consults it during
+    // construction to skip already-collected item presences.
+    // Phase 2 (default tier: quest.manager, inventory.player)
+    // runs later, AFTER `gameplayAssembly` is constructed and
+    // those subsystems exist for their participants to reach.
     const restoredSlices = upgradedPayload?.slices ?? {};
-    saveParticipantRegistry.deserializeAll(restoredSlices, ["host-owned"]);
+    saveParticipantRegistry.deserializeAll(restoredSlices, [
+      "host-owned",
+      "region-aware"
+    ]);
     // hostPlayerRestore now reflects whatever the host.player
     // participant received. Region + position spawn from there;
     // fall through to state.activeRegionId for the implicit
@@ -1507,6 +1524,23 @@ export function createWebRuntimeHost(
         includePlayerPresence: false
       });
       for (const object of objects) {
+        // Plan 055 §055.6 — skip visual meshes for item presences
+        // the WorldPresenceTracker has recorded as collected in
+        // this region. `registerItemInteractables` already skips
+        // their ECS Interactable component; without this filter
+        // the mesh would still spawn (no E prompt but the item's
+        // model floats there). For kind "item" the SceneObject's
+        // `instanceId` equals the presenceId — see
+        // scene/index.ts:createItemSceneObject.
+        if (
+          object.kind === "item" &&
+          worldPresenceTracker.shouldSkip(
+            activeRegionIdForSave,
+            object.instanceId
+          )
+        ) {
+          continue;
+        }
         const rootObject = new THREE.Group();
         const shaderApplication = createRenderableShaderApplicationState();
         rootObject.name = object.instanceId;
@@ -1853,12 +1887,23 @@ export function createWebRuntimeHost(
         webAudioAdapter?.handleCommands(commands);
       },
       onItemPresenceCollected: (presenceId) => {
+        // Plan 055 §055.6 — record for the world.presence tracker
+        // so the item stays collected across save+load. Reads the
+        // captured region id, not the live one, so a mid-session
+        // transition (future story) picks the region the item was
+        // actually in.
+        worldPresenceTracker.markCollected(
+          activeRegionIdForSave,
+          presenceId
+        );
         const entry = sceneObjectEntries.get(presenceId);
         if (!entry || !scene) return;
         scene.remove(entry.root);
         disposeRenderableObject(entry.root);
         sceneObjectEntries.delete(presenceId);
-      }
+      },
+      shouldSkipItemPresence: (presenceId) =>
+        worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
     });
     gameplaySession = gameplayAssembly.gameplaySession;
     // Plan 055 §055.4 — Phase 2: register participants whose
@@ -1884,10 +1929,7 @@ export function createWebRuntimeHost(
         getInventoryManager: () => gameplaySession?.inventoryManager ?? null
       })
     );
-    saveParticipantRegistry.deserializeAll(restoredSlices, [
-      "region-aware",
-      "default"
-    ]);
+    saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);
     gameplayAssembly.gameplaySession.startInitialQuests();
     emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {

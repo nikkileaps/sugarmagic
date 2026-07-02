@@ -25,3 +25,15 @@
 **Action:** Extract the boot-time lifecycle decision into a small pure helper: `pickBootLifecycle({startMenuExists, skipStartMenuOnBoot}) -> "start-menu" | "playing"`. Move the transition call into a one-line switch off that return value. The helper is trivially unit-testable and its four-case truth table pins the behavior. Ancillary: an integration test that boots a minimal host and asserts `getState().lifecycle` post-`start()` is `"playing"` for the fresh-start case would catch any future regressions in the wiring layer, but the pure helper is the cheapest first step.
 
 **Meta-lesson:** Any function whose bug can be silently hidden by unrelated systems (input manager here bypassing the action registry) deserves either (a) direct test coverage or (b) an assertion that the transition landed. Prefer (a).
+
+### 3. Region items spawn through TWO independent paths — visual mesh vs ECS Interactable
+
+**Severity:** Medium (already caused one bug; will cause more)
+
+**Symptom:** In 055.6, filtering item presences with `shouldSkipItemPresence` in `registerItemInteractables` (`packages/runtime-core/src/coordination/gameplay-session.ts`) correctly suppressed the E prompt for already-collected items — but the visual three.js mesh still spawned because it's rendered by a totally separate iteration over `region.scene.itemPresences` at `targets/web/src/runtimeHost.ts:1519` (`resolveSceneObjects` -> mesh spawn loop). Fixed by adding a second identical filter to the mesh path. Two filters means two places to remember, and next time we need to filter (e.g., episode-scoped presence gating for Plan 056) we'll forget again.
+
+**Root cause:** "Should this item be in the world?" has no single source of truth. The three.js renderer iterates `region.scene.itemPresences` -> `resolveSceneObjects` (visual). The gameplay assembly ALSO iterates `region.scene.itemPresences` -> `registerItemInteractables` (ECS Interactable). Both derive from the same authored list but neither subscribes to the other. Any filter has to be applied in both places, and there's no compile-time check that we did.
+
+**Action:** Fold both spawn paths behind a single "presence spawn pipeline" — a host-owned iteration over `region.scene.itemPresences` (and later NPC + inspectable presences) that applies filters ONCE, then hands off spawn semantics to a renderer callback and an ECS callback. Filters (world.presence collected-list, future episode gating, future proximity culling) live at the pipeline level. Renderer and gameplay-session become downstream consumers instead of independent iterators.
+
+**Meta-lesson (again):** When the same concept lives in two systems, expect one to be updated and the other to not. AGENTS.md's "one source of truth" rule is load-bearing; the moment you notice a copy of iteration logic, either unify or flag for unification. Two-way inconsistency bugs are silent by construction — the systems don't know about each other.

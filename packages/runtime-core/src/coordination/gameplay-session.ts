@@ -165,6 +165,14 @@ export interface RuntimeGameplaySessionControllerOptions {
   audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
   onItemPresenceCollected?: (presenceId: string) => void;
+  /**
+   * Plan 055 §055.6 — the host consults its WorldPresenceTracker
+   * and returns true for item presences the player has already
+   * collected in the active region. `registerItemInteractables`
+   * skips those so re-entering the region doesn't respawn them.
+   * Undefined defaults to "skip nothing" (pre-055.6 behavior).
+   */
+  shouldSkipItemPresence?: (presenceId: string) => boolean;
   onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
   onAudioCommands?: (commands: RuntimeSoundCommand[]) => void;
   /**
@@ -376,7 +384,8 @@ export function createRuntimeGameplaySessionController(
     pluginManager,
     onItemPresenceCollected,
     onSpellCastSuccess,
-    onAudioCommands
+    onAudioCommands,
+    shouldSkipItemPresence
   } = options;
   assertValidMechanicsDefinition(mechanics, {
     consumers: collectMechanicsConsumerInvocations({
@@ -1021,6 +1030,13 @@ export function createRuntimeGameplaySessionController(
     if (!activeRegion) return;
 
     for (const presence of activeRegion.scene.itemPresences) {
+      // Plan 055 §055.6 — the host's WorldPresenceTracker tells
+      // us which presence IDs have already been collected in this
+      // region across previous sessions. Skip them so re-entering
+      // doesn't respawn the item.
+      if (shouldSkipItemPresence?.(presence.presenceId)) {
+        continue;
+      }
       const itemDefinition = itemDefinitions.find(
         (definition) => definition.definitionId === presence.itemDefinitionId
       );
