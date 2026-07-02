@@ -24,6 +24,7 @@ import {
   Button,
   Group,
   Menu,
+  Modal,
   NumberInput,
   Paper,
   ScrollArea,
@@ -50,6 +51,7 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
+  createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
@@ -134,6 +136,9 @@ function validateQuest(quest: QuestDefinition): string[] {
       }
       if (node.nodeBehavior === "objective" && node.objectiveSubtype === "talk" && !node.targetId) {
         warnings.push(`Talk node "${node.displayName}" has no NPC target.`);
+      }
+      if (node.nodeBehavior === "objective" && node.objectiveSubtype === "talk" && !node.dialogueDefinitionId) {
+        warnings.push(`Talk node "${node.displayName}" has no dialogue linked.`);
       }
       if (node.nodeBehavior === "objective" && node.objectiveSubtype === "collect" && !node.targetId) {
         warnings.push(`Collect node "${node.displayName}" has no item target.`);
@@ -571,6 +576,12 @@ export function useQuestWorkspaceView({
   const [graphStageId, setGraphStageId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [contextMenuQuestId, setContextMenuQuestId] = useState<string | null>(null);
+  // Paper cut #1 modal state — target node the picker was on when
+  // "+ Add New Dialogue" fired, and the pending name the author is
+  // typing. Null target means the modal is closed.
+  const [newDialogueForNode, setNewDialogueForNode] =
+    useState<QuestNodeDefinition | null>(null);
+  const [newDialogueName, setNewDialogueName] = useState("");
 
   const [graphContainerElement, setGraphContainerElement] =
     useState<HTMLDivElement | null>(null);
@@ -737,6 +748,80 @@ export function useQuestWorkspaceView({
     },
     [selectedStage, updateStage]
   );
+
+  // Paper cut #1 (docs/backlog/002-authoring-ux-paper-cuts.md) —
+  // smooth-flow shortcut for the required Dialogue picker on talk
+  // objectives. Opens a modal for naming the placeholder dialogue
+  // (default suggestion is NPC-based so hitting Enter accepts).
+  // On confirm, creates a dialogue bound to the NPC as its ambient
+  // interaction and points the objective node at it. Cancel bails
+  // without creating anything. Author stays in the quest graph
+  // editor; goes over to the dialogue editor to write actual
+  // content whenever.
+  const suggestedDialogueName = useMemo(() => {
+    if (!newDialogueForNode) return "New Dialogue";
+    const npc = newDialogueForNode.targetId
+      ? npcDefinitions.find(
+          (candidate) => candidate.definitionId === newDialogueForNode.targetId
+        )
+      : null;
+    return npc ? `Talk to ${npc.displayName}` : "New Dialogue";
+  }, [newDialogueForNode, npcDefinitions]);
+
+  const openCreateDialogueModal = useCallback(
+    (node: QuestNodeDefinition) => {
+      const npc = node.targetId
+        ? npcDefinitions.find(
+            (candidate) => candidate.definitionId === node.targetId
+          )
+        : null;
+      setNewDialogueName(npc ? `Talk to ${npc.displayName}` : "New Dialogue");
+      setNewDialogueForNode(node);
+    },
+    [npcDefinitions]
+  );
+
+  const closeCreateDialogueModal = useCallback(() => {
+    setNewDialogueForNode(null);
+    setNewDialogueName("");
+  }, []);
+
+  const confirmCreateDialogueForTalkObjective = useCallback(() => {
+    if (!gameProjectId || !newDialogueForNode) return;
+    const npc = newDialogueForNode.targetId
+      ? npcDefinitions.find(
+          (candidate) => candidate.definitionId === newDialogueForNode.targetId
+        )
+      : null;
+    const displayName = newDialogueName.trim() || suggestedDialogueName;
+    const definition = createDefaultDialogueDefinition({
+      displayName,
+      npcDefinitionId: npc?.definitionId ?? null
+    });
+    onCommand({
+      kind: "CreateDialogueDefinition",
+      target: { aggregateKind: "game-project", aggregateId: gameProjectId },
+      subject: {
+        subjectKind: "dialogue-definition",
+        subjectId: definition.definitionId
+      },
+      payload: { definition }
+    });
+    updateNode({
+      ...newDialogueForNode,
+      dialogueDefinitionId: definition.definitionId
+    });
+    closeCreateDialogueModal();
+  }, [
+    closeCreateDialogueModal,
+    gameProjectId,
+    newDialogueForNode,
+    newDialogueName,
+    npcDefinitions,
+    onCommand,
+    suggestedDialogueName,
+    updateNode
+  ]);
 
   const updateGraphCanvas = useCallback(() => {
     const graphCanvas = graphCanvasRef.current;
@@ -1111,6 +1196,44 @@ export function useQuestWorkspaceView({
   );
 
   const rightPanel = (
+    <>
+      <Modal
+        opened={newDialogueForNode !== null}
+        onClose={closeCreateDialogueModal}
+        title="Create placeholder dialogue"
+        size="sm"
+      >
+        <Stack gap="sm">
+          <TextInput
+            label="Dialogue name"
+            placeholder={suggestedDialogueName}
+            value={newDialogueName}
+            onChange={(event) =>
+              setNewDialogueName(event.currentTarget.value)
+            }
+            data-autofocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                confirmCreateDialogueForTalkObjective();
+              }
+            }}
+          />
+          <Text size="xs" c="var(--sm-color-subtext)">
+            A placeholder dialogue with this name will be created and
+            linked. Edit the actual dialogue content over in the
+            Dialogue workspace whenever.
+          </Text>
+          <Group justify="flex-end" gap="xs">
+            <Button variant="default" onClick={closeCreateDialogueModal}>
+              Cancel
+            </Button>
+            <Button onClick={confirmCreateDialogueForTalkObjective}>
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     <Inspector
       selectionLabel={
         selectedNode
@@ -1358,10 +1481,30 @@ export function useQuestWorkspaceView({
                 <>
                   <Select
                     label="Dialogue"
-                    clearable
+                    required
                     value={selectedNode.dialogueDefinitionId ?? null}
-                    data={dialogueDefinitions.map((dialogue) => ({ value: dialogue.definitionId, label: dialogue.displayName }))}
-                    onChange={(value) => updateNode({ ...selectedNode, dialogueDefinitionId: value ?? undefined })}
+                    error={
+                      selectedNode.dialogueDefinitionId
+                        ? undefined
+                        : "Pick a dialogue or create one below."
+                    }
+                    data={[
+                      { value: "__add_new__", label: "+ Add New Dialogue" },
+                      ...dialogueDefinitions.map((dialogue) => ({
+                        value: dialogue.definitionId,
+                        label: dialogue.displayName
+                      }))
+                    ]}
+                    onChange={(value) => {
+                      if (value === "__add_new__") {
+                        openCreateDialogueModal(selectedNode);
+                        return;
+                      }
+                      updateNode({
+                        ...selectedNode,
+                        dialogueDefinitionId: value ?? undefined
+                      });
+                    }}
                   />
                   <TextInput
                     label="Complete On"
@@ -1486,6 +1629,7 @@ export function useQuestWorkspaceView({
         selectedQuestNode: selectedNode
       }) ?? null}
     </Inspector>
+    </>
   );
 
   return {
