@@ -3926,18 +3926,15 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
             <Alert color="green" variant="light" title="Done">
               <Stack gap="xs">
                 <Text size="sm">
-                  Tag <Code>{tagPatchModalState.tagName}</Code> created
-                  locally at HEAD.
+                  Tag <Code>{tagPatchModalState.tagName}</Code> created at
+                  HEAD and pushed to origin.
                 </Text>
                 <Text size="sm" c="var(--sm-color-subtext)">
-                  Push to deploy:
-                </Text>
-                <Code block>{`git push --tags`}</Code>
-                <Text size="sm" c="var(--sm-color-subtext)">
-                  Pushing the tag fires the GHA workflow's tag trigger,
-                  which redeploys the v
+                  The push fired the GHA workflow's tag trigger, so a
+                  deploy of the v
                   {tagPatchModalState.tagName.split(".")[0].slice(1)}{" "}
-                  slot.
+                  slot is already in flight — no need to click Deploy.
+                  Watch the run at your project's Actions tab.
                 </Text>
               </Stack>
             </Alert>
