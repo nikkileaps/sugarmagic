@@ -4,7 +4,7 @@ Status: proposed
 Owner: nikki + claude
 Date: 2026-07-02
 
-Related: Runtime paper cut #3 (`docs/backlog/003-runtime-paper-cuts.md`) — the class of bug this closes. Plan 055.6 — the first filter (`world.presence.shouldSkip`) that made the risk concrete. Plan 056 (draft) — future episode gating will add a second filter and would silently break one of the two spawn paths if this isn't unified first.
+Related: Runtime paper cut #3 (`docs/backlog/003-runtime-paper-cuts.md`) — the class of bug this closes. Plan 055.6 — the first filter (`world.presence.shouldSkip`) that made the risk concrete. Plan 058 (draft) — future episode gating will add a second filter and would silently break one of the two spawn paths if this isn't unified first.
 
 ## Problem
 
@@ -15,7 +15,7 @@ Region items spawn through TWO independent code paths that both iterate `region.
 
 Both loops need to apply the same filters. Currently: one filter (`worldPresenceTracker.shouldSkip` for already-collected items). Applied in both places manually. When Plan 055.6 shipped, the first version added the filter only to path #2, leaving already-collected items still visually spawned (mesh floating with no E prompt). Fixed at the time by adding the same filter to path #1. Two places to remember.
 
-Plan 056's episode-scoped presence gating will add a SECOND filter (per-episode `isPresenceUnlocked`). If we haven't unified by then, we get the same silent-divergence bug twice. This plan pre-empts that.
+Plan 058's episode-scoped presence gating will add a SECOND filter (per-episode `isPresenceUnlocked`). If we haven't unified by then, we get the same silent-divergence bug twice. This plan pre-empts that.
 
 ## Goal
 

@@ -87,6 +87,7 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
+  createCasterStatsSaveParticipant,
   createInventoryPlayerSaveParticipant,
   createQuestManagerSaveParticipant,
   type QuestManagerSlice,
@@ -1542,7 +1543,7 @@ export function createWebRuntimeHost(
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
-      // filters (Plan 056 episode gating, etc.) compose into
+      // filters (Plan 058 episode gating, etc.) compose into
       // `worldPresenceTracker.shouldSkip` at the host and both
       // paths see them automatically. Non-item scene objects
       // (NPCs, static assets) don't have a filter surface today
@@ -1951,6 +1952,15 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createInventoryPlayerSaveParticipant({
         getInventoryManager: () => gameplaySession?.inventoryManager ?? null
+      })
+    );
+    // Plan 056 §056.1 — caster.stats restores battery + resonance
+    // (and any authored stats) across sessions. Prevents the
+    // "full battery cheese" of every reload; the StatCarrier's
+    // clamp-to-definition handles legacy values gracefully.
+    saveParticipantRegistry.register(
+      createCasterStatsSaveParticipant({
+        getCasterManager: () => gameplaySession?.casterManager ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);

@@ -3,6 +3,7 @@ import {
   STAT_ROLE_BATTERY,
   STAT_ROLE_RESONANCE,
   type StatRole,
+  type SaveSlice,
   type SpellDefinition,
   type SpellEffectDefinition
 } from "@sugarmagic/domain";
@@ -305,4 +306,69 @@ export class CasterManager {
 
     return true;
   }
+
+  // ---- Plan 056 §056.1 — save participation --------------------------
+
+  /**
+   * Capture live caster stats (battery, resonance, plus any
+   * authored stats) into a serialize-safe slice. Keyed by caster
+   * id so future NPC casters slot in as additional entries; v1
+   * only writes `"player"`.
+   */
+  serializeSaveSlice(): CasterStatsSlice {
+    const caster = this.getCasterComponent();
+    if (!caster) return { casters: {} };
+    return {
+      casters: {
+        [PLAYER_CASTER_ID]: { stats: caster.stats.snapshot() }
+      }
+    };
+  }
+
+  /**
+   * Restore caster stats from a persisted slice.
+   *
+   * Uses `StatCarrier.set()` per stat, which clamps values to the
+   * authored bounds — legacy values from a save that predates a
+   * mechanics tightening land back inside the current range.
+   * Unknown stat IDs (mechanics renamed a stat between save and
+   * load) drop with a `console.warn`; the caster keeps its
+   * default value for that stat, matching the rest-of-Epic-55
+   * "tolerate a definition rename gracefully" pattern.
+   *
+   * `null` slice = fresh player. Nothing to restore.
+   */
+  deserializeSaveSlice(
+    slice: SaveSlice<CasterStatsSlice> | null
+  ): void {
+    if (!slice) return;
+    const caster = this.getCasterComponent();
+    if (!caster) return;
+    const entry = slice.data.casters?.[PLAYER_CASTER_ID];
+    if (!entry) return;
+    for (const [statId, value] of Object.entries(entry.stats ?? {})) {
+      if (caster.stats.getDefinition(statId) === null) {
+        console.warn(
+          `[caster] restore: dropping stat "${statId}" — no matching mechanics definition.`
+        );
+        continue;
+      }
+      caster.stats.set(statId, value);
+    }
+  }
+}
+
+// ---- Plan 056 §056.1 — persisted slice shape (wire format) ----------
+
+/**
+ * Identifier used as the map key inside `CasterStatsSlice`. V1
+ * has one caster — the player. When future stories add NPC
+ * casters they'll get their own IDs (probably matching
+ * `RegionNPCPresence.presenceId`); the map shape is designed to
+ * accommodate them without a schema bump.
+ */
+export const PLAYER_CASTER_ID = "player";
+
+export interface CasterStatsSlice {
+  casters: Record<string, { stats: Record<string, number> }>;
 }

@@ -58,13 +58,14 @@ export function gameSavePayloadsEqual(
   a: GameSavePayload,
   b: GameSavePayload
 ): boolean {
-  if (a.currentRegionId !== b.currentRegionId) return false;
-  if (a.currentQuestId !== b.currentQuestId) return false;
-  const ap = a.playerPosition;
-  const bp = b.playerPosition;
-  if (ap === bp) return true;
-  if (!ap || !bp) return false;
-  return ap.x === bp.x && ap.y === bp.y && ap.z === bp.z;
+  // Payloads are JSON-serializable by construction (they round-
+  // trip through GameSaveStore.save / .load). Stringify equality
+  // is exact and covers `slices` — pre-055.7 this function only
+  // compared the legacy 3-field carriers, which post-055.7 are
+  // always null and made the check silently return true, causing
+  // autosave to skip every write after the first tick. Fixed
+  // 2026-07-02.
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export interface AutosaveTickResult {
