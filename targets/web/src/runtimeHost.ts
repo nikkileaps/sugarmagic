@@ -117,6 +117,7 @@ import {
   type RuntimeHostKind,
   UIContextSystem,
   createGameStateStore,
+  pickBootLifecycle,
   createObservableValue,
   createRuntimeActionRegistry,
   createUIActionRegistry,
@@ -1737,25 +1738,21 @@ export function createWebRuntimeHost(
       stateStore: uiStateStore,
       gameStateStore
     });
-    const startMenuExists = state.menuDefinitions.some(
-      (menu) => menu.menuKey === "start-menu"
-    );
-    // `skipStartMenuOnBoot` lets the New Game reset flow drop the
-    // player straight into gameplay after the reload instead of
-    // forcing a second click on the start menu.
-    //
-    // Pre-055 bug: when the start menu was skipped (fresh-start
-    // flow) OR when the project had no start-menu menu at all,
-    // NOTHING transitioned lifecycle out of the initial "booting"
-    // state. `resolveRuntimeMode` treats "booting" as "paused",
-    // which silently killed every mode-gated action (dialogue
-    // Enter/Escape, inventory `i`, quest journal, etc.).
-    // Movement + `E`-to-interact still worked because they go
-    // through the input manager, not the action registry —
-    // making the bug easy to miss end-to-end. Surfaced 2026-07-01
-    // while wiring 055.4's quest-manager restore path; fixed by
-    // driving lifecycle to "playing" in the else branch.
-    if (startMenuExists && !state.skipStartMenuOnBoot) {
+    // Paper cut #2 (docs/backlog/003-runtime-paper-cuts.md) —
+    // decision extracted into `pickBootLifecycle` so the four-
+    // case truth table is unit-testable. Pre-055.7 the "else"
+    // branch here was missing, silently leaving lifecycle at
+    // "booting" for fresh-start / no-menu boots. Movement +
+    // E-interact bypass the mode gate so the bug looked
+    // cosmetic; only mode-gated keys (dialogue Enter/Escape,
+    // inventory `i`, quest journal) were dead.
+    const bootLifecycle = pickBootLifecycle({
+      startMenuExists: state.menuDefinitions.some(
+        (menu) => menu.menuKey === "start-menu"
+      ),
+      skipStartMenuOnBoot: state.skipStartMenuOnBoot ?? false
+    });
+    if (bootLifecycle === "start-menu") {
       showStartMenu();
     } else {
       gameStateStore.setState({ lifecycle: "playing" });

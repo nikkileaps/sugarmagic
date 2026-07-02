@@ -75,6 +75,36 @@ export function isGamePaused(snapshot: GameStateSnapshot): boolean {
  * registering default ui-actions; ui-action handlers call them
  * instead of mutating UIStateStore directly.
  */
+/**
+ * Pure decision for what lifecycle the host should land in at
+ * the end of `host.start()`. Extracted from `runtimeHost.ts` so
+ * the four-case truth table is unit-testable without standing up
+ * a full web target.
+ *
+ *   - `startMenuExists === true` AND `skipStartMenuOnBoot ===
+ *     false` -> `"start-menu"` (show the menu, wait for
+ *     Continue / New Game).
+ *   - Every other combination -> `"playing"` (drop straight
+ *     into gameplay).
+ *
+ * The `"playing"` fallback is load-bearing: pre-Plan-055.7 the
+ * host had an implicit `else` that did nothing, silently leaving
+ * lifecycle at `"booting"`, which the runtime-mode resolver
+ * treats as `"paused"` — killing every mode-gated keyboard
+ * action. Every keyboard-shortcut bug we saw across 054-055 was
+ * downstream of that. This helper makes the mapping explicit and
+ * pinned by tests.
+ */
+export function pickBootLifecycle(input: {
+  startMenuExists: boolean;
+  skipStartMenuOnBoot: boolean;
+}): Extract<GameLifecycle, "start-menu" | "playing"> {
+  if (input.startMenuExists && !input.skipStartMenuOnBoot) {
+    return "start-menu";
+  }
+  return "playing";
+}
+
 export interface GameLifecycleTransitions {
   /** Destructive: resets the save and reloads the page. */
   startNewGame(): Promise<void> | void;
