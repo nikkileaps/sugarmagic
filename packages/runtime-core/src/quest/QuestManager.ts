@@ -4,7 +4,8 @@ import type {
   QuestDefinition,
   QuestNodeDefinition,
   QuestStageDefinition,
-  QuestStageState
+  QuestStageState,
+  SaveSlice
 } from "@sugarmagic/domain";
 
 export interface QuestRuntimeActionHandler {
@@ -771,4 +772,178 @@ export class QuestManager {
     this.onEvent?.(event);
     this.onStateChange?.();
   }
+
+  // ---- Plan 055 §055.4 — save participation ---------------------------
+
+  /**
+   * Capture live quest-manager state into a serialize-safe slice.
+   * Maps/Sets flatten to Records/arrays so the payload survives
+   * JSON round-trip through any GameSaveStore backend.
+   */
+  serializeSaveSlice(): QuestManagerSlice {
+    const activeQuests: Record<string, SerializedActiveQuest> = {};
+    for (const [questId, state] of this.activeQuests) {
+      const stageProgress: Record<string, SerializedQuestStageProgress> = {};
+      for (const [stageId, progress] of state.stageProgress) {
+        const nodeProgress: Record<string, SerializedQuestNodeProgress> = {};
+        for (const [nodeId, node] of progress.nodeProgress) {
+          nodeProgress[nodeId] = {
+            nodeId: node.nodeId,
+            status: node.status,
+            branchResult: node.branchResult
+          };
+        }
+        stageProgress[stageId] = {
+          stageId: progress.stageId,
+          nodeProgress,
+          forcedNodeIds: Array.from(progress.forcedNodeIds)
+        };
+      }
+      activeQuests[questId] = {
+        questDefinitionId: state.questDefinitionId,
+        currentStageId: state.currentStageId,
+        stageProgress
+      };
+    }
+    const runtimeFlags: Record<string, unknown> = {};
+    for (const [key, value] of this.runtimeFlags) {
+      runtimeFlags[key] = value;
+    }
+    return {
+      activeQuests,
+      completedQuestIds: Array.from(this.completedQuestIds),
+      trackedQuestDefinitionId: this.trackedQuestDefinitionId,
+      runtimeFlags
+    };
+  }
+
+  /**
+   * Restore quest-manager state from a persisted slice.
+   *
+   * Called by the `quest.manager` SaveParticipant during
+   * host.start's Phase 2 deserialize — AFTER definitions are
+   * loaded (`registerDefinitions`) but BEFORE `startInitialQuests`
+   * runs. That ordering matters: `startInitialQuests` short-
+   * circuits on quests already in `activeQuests` or
+   * `completedQuestIds`, so this call populates the "you've
+   * touched these" set first and leaves fresh initial quest state
+   * for definitions the save didn't know about (new quests added
+   * to the project after the save was written).
+   *
+   * Merge semantics for `activeQuests`: only quests present in
+   * the slice AND still known to `definitions` are restored; the
+   * rest of the map is untouched. Quests referenced by the slice
+   * whose definition can't be found are dropped with a
+   * console.warn (usually authoring renamed the id after the save
+   * was written).
+   *
+   * `completedQuestIds`, `trackedQuestDefinitionId`, and
+   * `runtimeFlags` fully replace whatever's currently there —
+   * they're single-value stores, not composed.
+   *
+   * `null` slice = fresh player. Nothing to restore.
+   */
+  deserializeSaveSlice(
+    slice: SaveSlice<QuestManagerSlice> | null
+  ): void {
+    if (!slice) return;
+    const data = slice.data;
+
+    for (const [questId, saved] of Object.entries(data.activeQuests ?? {})) {
+      const definition = this.definitions.get(questId);
+      if (!definition) {
+        console.warn(
+          `[quest] restore: dropping active quest "${questId}" — no matching definition.`
+        );
+        continue;
+      }
+      const stageProgress = new Map<string, QuestStageProgress>();
+      for (const [stageId, savedStage] of Object.entries(saved.stageProgress ?? {})) {
+        const nodeProgressMap = new Map<string, QuestNodeProgress>();
+        for (const [nodeId, savedNode] of Object.entries(savedStage.nodeProgress ?? {})) {
+          nodeProgressMap.set(nodeId, {
+            nodeId: savedNode.nodeId,
+            status: savedNode.status,
+            branchResult: savedNode.branchResult
+          });
+        }
+        stageProgress.set(stageId, {
+          stageId: savedStage.stageId,
+          nodeProgress: nodeProgressMap,
+          forcedNodeIds: new Set(savedStage.forcedNodeIds ?? [])
+        });
+      }
+      this.activeQuests.set(questId, {
+        questDefinitionId: saved.questDefinitionId,
+        currentStageId: saved.currentStageId,
+        stageProgress
+      });
+    }
+
+    this.completedQuestIds = new Set(data.completedQuestIds ?? []);
+    if (data.trackedQuestDefinitionId !== undefined) {
+      this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
+    }
+    this.runtimeFlags = new Map(Object.entries(data.runtimeFlags ?? {}));
+  }
+}
+
+// ---- Plan 055 §055.4 — persisted slice shape (wire format) ----------
+
+/**
+ * Serialize-safe shape of `QuestNodeProgress`. Same fields — the
+ * type re-declared here so the wire type isn't tied to the
+ * internal one, and future internal renames don't silently break
+ * old saves.
+ */
+export interface SerializedQuestNodeProgress {
+  nodeId: string;
+  status: "inactive" | "active" | "completed";
+  branchResult: "pass" | "fail" | null;
+}
+
+/**
+ * Serialize-safe shape of `QuestStageProgress`. `Set<string>` on
+ * the internal side flattens to `string[]` here so JSON survives.
+ */
+export interface SerializedQuestStageProgress {
+  stageId: string;
+  nodeProgress: Record<string, SerializedQuestNodeProgress>;
+  forcedNodeIds: string[];
+}
+
+/**
+ * Serialize-safe shape of `ActiveQuestRuntimeState`.
+ * `Map<string, QuestStageProgress>` -> `Record<...>`.
+ */
+export interface SerializedActiveQuest {
+  questDefinitionId: string;
+  currentStageId: string;
+  stageProgress: Record<string, SerializedQuestStageProgress>;
+}
+
+/**
+ * The persisted slice the `quest.manager` SaveParticipant hands
+ * to and receives from the save store.
+ *
+ * Design notes:
+ *   - `activeQuests` keyed by questDefinitionId, values contain
+ *     the full stage/node progress tree.
+ *   - `completedQuestIds` a plain array; converted to a Set on
+ *     restore.
+ *   - `runtimeFlags` `Record` mirrors the internal
+ *     `Map<string, unknown>`. Values are opaque scalars authors
+ *     poke via quest actions; whatever survives JSON round-trip
+ *     is fine.
+ *
+ * Legacy pre-055 saves reach `deserializeSaveSlice` with only
+ * `trackedQuestDefinitionId` populated (synthesized by
+ * `upgradeLegacyPayload`) — the other fields default via `??`
+ * to their empty forms.
+ */
+export interface QuestManagerSlice {
+  activeQuests: Record<string, SerializedActiveQuest>;
+  completedQuestIds: string[];
+  trackedQuestDefinitionId: string | null;
+  runtimeFlags: Record<string, unknown>;
 }

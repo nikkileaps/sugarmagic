@@ -137,17 +137,35 @@ export class SaveParticipantRegistry {
   }
 
   /**
-   * Dispatch `deserialize(slice)` on every registered participant,
-   * in tier order: `host-owned` -> `region-aware` -> `default`.
+   * Dispatch `deserialize(slice)` on registered participants, in
+   * tier order: `host-owned` -> `region-aware` -> `default`.
    * Within a tier, registration order.
    *
    * `slices` is a keyed map from participantId to persisted slice;
    * a participant whose id is missing from the map receives `null`.
    * Errors from any individual `deserialize` are caught, logged,
    * and swallowed — a broken participant doesn't take out the rest.
+   *
+   * `tierFilter` optionally restricts dispatch to specific tiers.
+   * Motivation: some subsystems (QuestManager, InventoryManager,
+   * world-presence tracker) don't exist at host.start until after
+   * `gameplayAssembly` is created — but `host.player` needs to
+   * deserialize BEFORE ECS spawn. The host runs two phases: first
+   * `["host-owned"]` before spawn, then `["region-aware",
+   * "default"]` after those subsystems are constructed and their
+   * participants have registered.
+   *
+   * Omitting `tierFilter` runs every tier (single-pass mode,
+   * matches how tests call it).
    */
-  deserializeAll(slices: Record<string, SaveSlice<unknown>>): void {
+  deserializeAll(
+    slices: Record<string, SaveSlice<unknown>>,
+    tierFilter?: readonly SaveParticipantTier[]
+  ): void {
+    const filterSet = tierFilter ? new Set(tierFilter) : null;
     for (const participant of this.orderedForDeserialize()) {
+      const participantTier = participant.tier ?? "default";
+      if (filterSet && !filterSet.has(participantTier)) continue;
       const slice = slices[participant.participantId] ?? null;
       try {
         participant.deserialize(slice);

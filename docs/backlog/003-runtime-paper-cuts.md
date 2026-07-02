@@ -1,0 +1,27 @@
+# Backlog: Runtime paper cuts
+
+**Source:** Running collector for runtime-side robustness gaps found in code review / debugging. Each one is a real correctness hazard that survived shipping; individually low-severity, worth clearing before they compound.
+
+## Items
+
+### 1. `hostQuitToMenu` doesn't clear `activeOverlayMenuKey`
+
+**Severity:** Low (edge case, but leaves the runtime in an inconsistent state)
+
+**Symptom:** Player opens a dialogue with an NPC, presses `Q` to pause, clicks Quit-to-Menu from the pause menu. Lifecycle transitions to `"start-menu"` but `uiState.activeOverlayMenuKey` stays `"dialogue"` from when the dialogue panel called `show()`. When the player clicks Continue back into gameplay, mode returns to `"dialogue"` immediately (because lifecycle `"playing"` + overlay key `"dialogue"` -> resolver returns `"dialogue"`). The dialogue panel's DOM has been sitting stale the whole time.
+
+**Root cause:** `hostQuitToMenu` (`targets/web/src/runtimeHost.ts:929`) only sets lifecycle. There's no companion cleanup of `activeOverlayMenuKey`, no `dialogueManager.end("cancelled")` call, no "clear all active overlays" seam. Overlays are individually responsible for calling `hide()` and each has its own effects (dialogue: `presenter.hide()` -> `activeOverlayMenuKey: null` at `DialoguePanel.ts:797`), but nothing invokes that from the lifecycle transition.
+
+**Action:** Either (a) add a "cancel all active overlays" step to `hostQuitToMenu` (probably the cleanest — the pause menu quit action should end any in-flight dialogue / close inventory / etc.), or (b) make GameUILayer's render decision "if lifecycle is not `"playing"`, ignore `activeOverlayMenuKey`" (already happens for rendering, but the RESOLVER still returns `"dialogue"`, which is a separate bug). Prefer (a); it's a real cleanup semantic, not a resolver band-aid.
+
+### 2. Zero test coverage for the boot -> lifecycle transition
+
+**Severity:** Medium (a shippable bug already slipped through here once — Plan 054 fresh-start branch, fixed 2026-07-01)
+
+**Symptom:** The bug in `runtimeHost.ts:1697-1710` (skipStartMenuOnBoot / no-start-menu paths silently left lifecycle at `"booting"`, killing every mode-gated keyboard action) survived Plan 054's completion and every subsequent verification pass because none of them tested a keyboard shortcut through a fresh New Game click. Movement (WASD) and `E`-to-interact both bypass the mode gate, so the game looked functional except for dialogue advance / inventory `i` / quest journal `j`. Found while debugging 055.4, but the root cause was pre-055.
+
+**Root cause:** `packages/testing/src/` has zero tests exercising the boot-time lifecycle decision. The whole block that decides "call showStartMenu vs. transition directly to playing" is only reachable through a full `createWebRuntimeHost({...}).start(...)` setup, which requires Three.js, ECS world, plugin bootstrap, saved-game loading — expensive scaffolding to stand up in a test.
+
+**Action:** Extract the boot-time lifecycle decision into a small pure helper: `pickBootLifecycle({startMenuExists, skipStartMenuOnBoot}) -> "start-menu" | "playing"`. Move the transition call into a one-line switch off that return value. The helper is trivially unit-testable and its four-case truth table pins the behavior. Ancillary: an integration test that boots a minimal host and asserts `getState().lifecycle` post-`start()` is `"playing"` for the fresh-start case would catch any future regressions in the wiring layer, but the pure helper is the cheapest first step.
+
+**Meta-lesson:** Any function whose bug can be silently hidden by unrelated systems (input manager here bypassing the action registry) deserves either (a) direct test coverage or (b) an assertion that the transition landed. Prefer (a).

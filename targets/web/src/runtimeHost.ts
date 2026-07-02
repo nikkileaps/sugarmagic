@@ -86,6 +86,7 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
+  createQuestManagerSaveParticipant,
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
   createPlayerVisualController,
@@ -1470,7 +1471,14 @@ export function createWebRuntimeHost(
     const upgradedPayload = seedPayload
       ? upgradeLegacyPayload(seedPayload)
       : null;
-    saveParticipantRegistry.deserializeAll(upgradedPayload?.slices ?? {});
+    // Plan 055 §055.4 — Phase 1: dispatch host-owned tier
+    // participants only. `host.player` restores here, before
+    // spawn. Phase 2 (region-aware + default tiers) runs later,
+    // AFTER gameplayAssembly is constructed and its dependent
+    // participants (quest.manager, later inventory + world-
+    // presence) have registered.
+    const restoredSlices = upgradedPayload?.slices ?? {};
+    saveParticipantRegistry.deserializeAll(restoredSlices, ["host-owned"]);
     // hostPlayerRestore now reflects whatever the host.player
     // participant received. Region + position spawn from there;
     // fall through to state.activeRegionId for the implicit
@@ -1686,8 +1694,22 @@ export function createWebRuntimeHost(
     // `skipStartMenuOnBoot` lets the New Game reset flow drop the
     // player straight into gameplay after the reload instead of
     // forcing a second click on the start menu.
+    //
+    // Pre-055 bug: when the start menu was skipped (fresh-start
+    // flow) OR when the project had no start-menu menu at all,
+    // NOTHING transitioned lifecycle out of the initial "booting"
+    // state. `resolveRuntimeMode` treats "booting" as "paused",
+    // which silently killed every mode-gated action (dialogue
+    // Enter/Escape, inventory `i`, quest journal, etc.).
+    // Movement + `E`-to-interact still worked because they go
+    // through the input manager, not the action registry —
+    // making the bug easy to miss end-to-end. Surfaced 2026-07-01
+    // while wiring 055.4's quest-manager restore path; fixed by
+    // driving lifecycle to "playing" in the else branch.
     if (startMenuExists && !state.skipStartMenuOnBoot) {
       showStartMenu();
+    } else {
+      gameStateStore.setState({ lifecycle: "playing" });
     }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
@@ -1838,6 +1860,25 @@ export function createWebRuntimeHost(
       }
     });
     gameplaySession = gameplayAssembly.gameplaySession;
+    // Plan 055 §055.4 — Phase 2: register participants whose
+    // subsystems only exist now that gameplayAssembly is
+    // constructed, then run the region-aware + default tier
+    // deserialize. AFTER that, kick startInitialQuests so
+    // authored initial quests fill in for anything the save
+    // didn't already restore (new quests added since the save
+    // was written). Order matters: participants deserialize
+    // FIRST, startInitialQuests runs SECOND — otherwise fresh
+    // initial state would stomp restored progress.
+    saveParticipantRegistry.register(
+      createQuestManagerSaveParticipant({
+        getQuestManager: () => gameplaySession?.questManager ?? null
+      })
+    );
+    saveParticipantRegistry.deserializeAll(restoredSlices, [
+      "region-aware",
+      "default"
+    ]);
+    gameplayAssembly.gameplaySession.startInitialQuests();
     emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {
       if (isMoving) {

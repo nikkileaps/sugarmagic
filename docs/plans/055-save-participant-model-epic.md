@@ -80,13 +80,15 @@ Naming: this codebase calls the interface `SaveParticipant`. Equally valid names
 3. Failures in one participant's serialize log + drop THAT slice from the map; the rest still flow through.
 4. The map goes into `GameSavePayload.slices` (added in 055.2) and is written to the active `GameSaveStore`.
 
-**Load / boot (once per `host.start`):**
+**Load / boot (two-phase per `host.start`):**
 
-1. `host.start` resolves the save via the store, gets a `GameSavePayload` (or null for a fresh player).
-2. Host reads `payload.slices` (or `{}` if fresh / legacy).
-3. Host calls `registry.deserializeAll(slices)`. The registry dispatches `participant.deserialize(slice ?? null)` for every registered participant, ordered by tier: `host-owned` first (things ECS spawn depends on — player position, region), then `region-aware` (things that depend on the region being picked, e.g. world-presence), then `default`.
-4. Failures in one participant's deserialize log and leave that participant in partial state; others still restore.
-5. AFTER all deserializes complete, host proceeds with world / player spawn using the now-hydrated state.
+Deserialize runs in TWO PHASES because some subsystems (QuestManager, InventoryManager, world-presence tracker) don't exist until after `gameplayAssembly` is constructed part-way through `host.start`, but `host.player` needs to have restored its slice BEFORE ECS spawn.
+
+1. `host.start` resolves the save via the store, gets a `GameSavePayload` (or falls through to the project's `defaultGameSavePayload`; null if neither exists).
+2. Whichever seed payload is chosen flows through `upgradeLegacyPayload` — pre-055 3-field payloads normalize into the same slice shape post-055 writes produce.
+3. **Phase 1 (before spawn):** Host calls `registry.deserializeAll(slices, ["host-owned"])`. Only the `host.player` participant fires; it stashes its slice's data. Host reads the stashed values to resolve spawn region + position, then spawns the world / player entity.
+4. **Phase 2 (after gameplayAssembly):** After `gameplayAssembly` is constructed, host registers the remaining participants (`quest.manager` in 055.4, `inventory.player` in 055.5, `world.presence` in 055.6) — they can now reach their subsystems via getter. Host then calls `registry.deserializeAll(slices, ["region-aware", "default"])`. Each participant hydrates its subsystem from its slice.
+5. Failures in one participant's deserialize log and leave that participant in partial state; others still restore.
 
 **Adding a new persistable system later:**
 

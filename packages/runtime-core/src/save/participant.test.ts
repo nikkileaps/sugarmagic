@@ -210,6 +210,41 @@ describe("SaveParticipantRegistry", () => {
       expect(order).toEqual(["h1", "h2", "r1", "d1", "d2"]);
     });
 
+    it("tier filter restricts dispatch to matching tiers only", () => {
+      const registry = new SaveParticipantRegistry();
+      const order: string[] = [];
+      registry.register(
+        makeParticipant({
+          id: "h",
+          tier: "host-owned",
+          onDeserialize: () => order.push("h")
+        })
+      );
+      registry.register(
+        makeParticipant({
+          id: "r",
+          tier: "region-aware",
+          onDeserialize: () => order.push("r")
+        })
+      );
+      registry.register(
+        makeParticipant({
+          id: "d",
+          tier: "default",
+          onDeserialize: () => order.push("d")
+        })
+      );
+
+      // Phase 1: host-owned only
+      registry.deserializeAll({}, ["host-owned"]);
+      expect(order).toEqual(["h"]);
+
+      // Phase 2: everyone else
+      order.length = 0;
+      registry.deserializeAll({}, ["region-aware", "default"]);
+      expect(order).toEqual(["r", "d"]);
+    });
+
     it("isolates a throwing deserialize — others still run and error is logged", () => {
       const registry = new SaveParticipantRegistry();
       const order: string[] = [];
