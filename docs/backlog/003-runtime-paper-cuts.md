@@ -14,7 +14,7 @@
 
 **Action:** Either (a) add a "cancel all active overlays" step to `hostQuitToMenu` (probably the cleanest — the pause menu quit action should end any in-flight dialogue / close inventory / etc.), or (b) make GameUILayer's render decision "if lifecycle is not `"playing"`, ignore `activeOverlayMenuKey`" (already happens for rendering, but the RESOLVER still returns `"dialogue"`, which is a separate bug). Prefer (a); it's a real cleanup semantic, not a resolver band-aid.
 
-### 2. Zero test coverage for the boot -> lifecycle transition
+### 2. Zero test coverage for the boot -> lifecycle transition [FIXED — this branch]
 
 **Severity:** Medium (a shippable bug already slipped through here once — Plan 054 fresh-start branch, fixed 2026-07-01)
 
