@@ -473,3 +473,9 @@ function getCharacterModelSourceDescriptor(
     definition: null
   };
 }
+
+// Plan 057 — shared item-presence iteration helper. Both the
+// visual mesh spawner (target-web) and the ECS Interactable
+// spawner (gameplay-session) call this so the "should this
+// item be here?" filter set stays in one place.
+export * from "./item-presence-filters";

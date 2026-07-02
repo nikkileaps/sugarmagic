@@ -76,6 +76,7 @@ import {
   PlayerControlled,
   Position,
   Velocity,
+  iterateActiveItemPresences,
   resolveSceneObjects,
   DEFAULT_CAMERA_CONFIG,
   createCameraState,
@@ -1538,21 +1539,33 @@ export function createWebRuntimeHost(
         npcDefinitions: state.npcDefinitions,
         includePlayerPresence: false
       });
+      // Plan 057 — item presences run through the shared filter
+      // helper so this visual-spawn path and the ECS spawn path
+      // in gameplay-session apply the same filter set. New
+      // filters (Plan 056 episode gating, etc.) compose into
+      // `worldPresenceTracker.shouldSkip` at the host and both
+      // paths see them automatically. Non-item scene objects
+      // (NPCs, static assets) don't have a filter surface today
+      // and pass through unchanged.
+      const activeItemPresenceIds = new Set<string>();
+      iterateActiveItemPresences(
+        region.scene.itemPresences,
+        {
+          shouldSkip: (presenceId) =>
+            worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
+        },
+        (presence) => {
+          activeItemPresenceIds.add(presence.presenceId);
+        }
+      );
       for (const object of objects) {
-        // Plan 055 §055.6 — skip visual meshes for item presences
-        // the WorldPresenceTracker has recorded as collected in
-        // this region. `registerItemInteractables` already skips
-        // their ECS Interactable component; without this filter
-        // the mesh would still spawn (no E prompt but the item's
-        // model floats there). For kind "item" the SceneObject's
-        // `instanceId` equals the presenceId — see
-        // scene/index.ts:createItemSceneObject.
+        // For kind "item" the SceneObject's `instanceId` equals
+        // the presenceId — see scene/index.ts:createItemSceneObject.
+        // If the filter pass didn't include this presence,
+        // don't spawn its visual either.
         if (
           object.kind === "item" &&
-          worldPresenceTracker.shouldSkip(
-            activeRegionIdForSave,
-            object.instanceId
-          )
+          !activeItemPresenceIds.has(object.instanceId)
         ) {
           continue;
         }
