@@ -48,6 +48,8 @@ import {
   GAME_SAVE_SCHEMA_VERSION,
   type GameSave,
   type GameSaveStore,
+  type QuestManagerSlice,
+  upgradeLegacyPayload,
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
@@ -433,38 +435,65 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
                 </Text>
               </Alert>
             ) : save ? (
-              <Stack gap={4}>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text size="xs" c="var(--sm-color-subtext)" w={120}>
-                    Last Played
-                  </Text>
-                  <Code>{save.lastPlayed}</Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text size="xs" c="var(--sm-color-subtext)" w={120}>
-                    Region
-                  </Text>
-                  <Code>{save.payload.currentRegionId ?? "(none)"}</Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text size="xs" c="var(--sm-color-subtext)" w={120}>
-                    Quest
-                  </Text>
-                  <Code>{save.payload.currentQuestId ?? "(none)"}</Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text size="xs" c="var(--sm-color-subtext)" w={120}>
-                    Position
-                  </Text>
-                  <Code>{formatPosition(save.payload.playerPosition)}</Code>
-                </Group>
-                <Group gap="xs" wrap="nowrap" align="center">
-                  <Text size="xs" c="var(--sm-color-subtext)" w={120}>
-                    Schema Ver
-                  </Text>
-                  <Code>{save.schemaVersion}</Code>
-                </Group>
-              </Stack>
+              (() => {
+                // Plan 055 §055.7 — display fields derive from slices.
+                // `upgradeLegacyPayload` normalizes pre-055 payloads
+                // into slice shape so this reads uniformly for legacy
+                // and post-055 saves.
+                const upgraded = upgradeLegacyPayload(save.payload);
+                const hostPlayerData = upgraded.slices["host.player"]?.data as
+                  | {
+                      currentRegionId: string | null;
+                      playerPosition: {
+                        x: number;
+                        y: number;
+                        z: number;
+                      } | null;
+                    }
+                  | undefined;
+                const questManagerData = upgraded.slices["quest.manager"]
+                  ?.data as QuestManagerSlice | undefined;
+                return (
+                  <Stack gap={4}>
+                    <Group gap="xs" wrap="nowrap" align="center">
+                      <Text size="xs" c="var(--sm-color-subtext)" w={120}>
+                        Last Played
+                      </Text>
+                      <Code>{save.lastPlayed}</Code>
+                    </Group>
+                    <Group gap="xs" wrap="nowrap" align="center">
+                      <Text size="xs" c="var(--sm-color-subtext)" w={120}>
+                        Region
+                      </Text>
+                      <Code>
+                        {hostPlayerData?.currentRegionId ?? "(none)"}
+                      </Code>
+                    </Group>
+                    <Group gap="xs" wrap="nowrap" align="center">
+                      <Text size="xs" c="var(--sm-color-subtext)" w={120}>
+                        Quest
+                      </Text>
+                      <Code>
+                        {questManagerData?.trackedQuestDefinitionId ?? "(none)"}
+                      </Code>
+                    </Group>
+                    <Group gap="xs" wrap="nowrap" align="center">
+                      <Text size="xs" c="var(--sm-color-subtext)" w={120}>
+                        Position
+                      </Text>
+                      <Code>
+                        {formatPosition(hostPlayerData?.playerPosition ?? null)}
+                      </Code>
+                    </Group>
+                    <Group gap="xs" wrap="nowrap" align="center">
+                      <Text size="xs" c="var(--sm-color-subtext)" w={120}>
+                        Schema Ver
+                      </Text>
+                      <Code>{save.schemaVersion}</Code>
+                    </Group>
+                  </Stack>
+                );
+              })()
             ) : (
               <Text size="sm" c="var(--sm-color-subtext)">
                 No save yet for this user.

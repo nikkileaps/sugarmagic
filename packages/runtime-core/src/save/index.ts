@@ -123,25 +123,3 @@ export {
 // package.
 export { type SaveSlice } from "@sugarmagic/domain";
 
-/**
- * Story 47.5 — picks the region id the runtime should spawn into.
- * The save's `currentRegionId` wins when a non-null save is present
- * AND it carries a non-null region id; otherwise the authored
- * default from `boot.json` (i.e. the project's published-web
- * snapshot) is used. Returns the same nullish surface the authored
- * default has so callers can pass the result straight to the
- * existing region-lookup path.
- *
- * Used by `targets/web/src/runtimeHost.ts` during `start` to choose
- * between "resume where the player was" and "spawn at the authored
- * starting region."
- */
-export function pickActiveRegionId(
-  authoredRegionId: string | null | undefined,
-  save: GameSave | null
-): string | null | undefined {
-  if (save && save.payload.currentRegionId) {
-    return save.payload.currentRegionId;
-  }
-  return authoredRegionId;
-}

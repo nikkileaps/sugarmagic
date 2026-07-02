@@ -88,13 +88,13 @@ import {
   createRuntimeDebugHud,
   createInventoryPlayerSaveParticipant,
   createQuestManagerSaveParticipant,
+  type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
   WorldPresenceTracker,
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
-  pickActiveRegionId,
   registerActiveIdentityProvider,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
@@ -974,10 +974,11 @@ export function createWebRuntimeHost(
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
-  // Story 47.10 — last region the host resolved at `start()`. Lifted to
-  // closure scope so `getCurrentSavePayload()` can return it without
-  // re-running pickActiveRegionId. Updated only on `start()` for now —
-  // mid-session region transitions land in a follow-up story.
+  // Story 47.10 — last region the host resolved at `start()`.
+  // Read by the host.player participant's serialize and by the
+  // world.presence tracker to key its per-region set. Updated
+  // only on `start()` for now — mid-session region transitions
+  // land in a follow-up story.
   let activeRegionIdForSave: string | null = null;
   // Plan 055 §055.1 — one registry per host lifetime. Systems
   // register at construction; the registry survives host.start /
@@ -1963,8 +1964,7 @@ export function createWebRuntimeHost(
         resolvedSavedGame
           ? {
               lastPlayed: resolvedSavedGame.lastPlayed,
-              currentRegionId: resolvedSavedGame.payload.currentRegionId,
-              currentQuestId: resolvedSavedGame.payload.currentQuestId
+              ...deriveAutosaveDisplayFields(resolvedSavedGame.payload)
             }
           : null
       );
@@ -2104,14 +2104,40 @@ export function createWebRuntimeHost(
     engine.dispose();
   }
 
+  /**
+   * Plan 055 §055.7 — derive the HUD-facing display fields from
+   * a save payload's slices. `upgradeLegacyPayload` normalizes
+   * pre-055 payloads into the same slice shape, so this helper
+   * is uniform across legacy and current saves. Returns `null`
+   * defaults when a slice is missing (fresh save, participant
+   * added since the save was written, etc.).
+   */
+  function deriveAutosaveDisplayFields(payload: GameSavePayload): {
+    currentRegionId: string | null;
+    currentQuestId: string | null;
+  } {
+    const upgraded = upgradeLegacyPayload(payload);
+    const hostPlayer = upgraded.slices["host.player"]?.data as
+      | HostPlayerSlice
+      | undefined;
+    const questManager = upgraded.slices["quest.manager"]?.data as
+      | QuestManagerSlice
+      | undefined;
+    return {
+      currentRegionId: hostPlayer?.currentRegionId ?? null,
+      currentQuestId: questManager?.trackedQuestDefinitionId ?? null
+    };
+  }
+
   function notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
   }): void {
+    const display = deriveAutosaveDisplayFields(snapshot.payload);
     latestAutosaveStore.set({
       lastPlayed: snapshot.lastPlayed,
-      currentRegionId: snapshot.payload.currentRegionId,
-      currentQuestId: snapshot.payload.currentQuestId
+      currentRegionId: display.currentRegionId,
+      currentQuestId: display.currentQuestId
     });
     // Story 47.10.5 — flip the UI's save-presence flag so the
     // start menu's Continue button appears the moment the first
@@ -2141,25 +2167,12 @@ export function createWebRuntimeHost(
 
   function getCurrentSavePayload(): GameSavePayload | null {
     if (!world || !gameplaySession) return null;
-    const playerEntities = world.query(PlayerControlled, Position);
-    let playerPosition: { x: number; y: number; z: number } | null = null;
-    if (playerEntities.length > 0) {
-      const pos = world.getComponent(playerEntities[0], Position);
-      if (pos) {
-        playerPosition = { x: pos.x, y: pos.y, z: pos.z };
-      }
-    }
-    const trackedQuest = gameplaySession.questManager.getTrackedQuest();
-    // Plan 055 §055.2 — collect slices from every registered
-    // participant. Empty `{}` until 055.3 registers the first
-    // real participant (host.player). Legacy fields still
-    // populated for back-compat through 055.6.
-    return {
-      slices: saveParticipantRegistry.serializeAll(),
-      currentRegionId: activeRegionIdForSave,
-      currentQuestId: trackedQuest?.questDefinitionId ?? null,
-      playerPosition
-    };
+    // Plan 055 §055.7 — slice-only writes. Every participant
+    // that owns persistable state serializes here; no more legacy
+    // 3-field carriers. Reads (upgradeLegacyPayload) still handle
+    // pre-055 saves by synthesizing the host.player + quest.manager
+    // slices from those saves' legacy fields.
+    return { slices: saveParticipantRegistry.serializeAll() };
   }
 
   // Story 51.2 — expose the observable stores as a stable

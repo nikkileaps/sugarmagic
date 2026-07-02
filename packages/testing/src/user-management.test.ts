@@ -15,7 +15,6 @@ import {
   GAME_SAVE_SCHEMA_VERSION,
   getActiveAccessToken,
   NotSupportedError,
-  pickActiveRegionId,
   pickGameSavePayload,
   Position,
   registerActiveIdentityProvider,
@@ -898,67 +897,6 @@ describe("IndexedDBGameSaveStore", () => {
     });
     const fromB = await storeB.load("u_alpha");
     expect(fromB?.payload.currentRegionId).toBe("shared");
-  });
-});
-
-// Story 47.5 — boot-path wiring. Pure helpers the runtime host uses
-// to decide between resuming-from-save and starting-from-authored-
-// defaults. The host integration itself is verified by manual
-// preview sessions (heavy three.js / WebGL deps make Node-level integration
-// testing impractical); these tests cover the swappable surface.
-describe("pickActiveRegionId", () => {
-  function makeSave(
-    overrides: Partial<{
-      currentRegionId: string | null;
-      currentQuestId: string | null;
-      playerPosition: { x: number; y: number; z: number } | null;
-    }> = {}
-  ) {
-    return {
-      userId: "u_alpha",
-      lastPlayed: "2026-06-25T12:00:00.000Z",
-      schemaVersion: GAME_SAVE_SCHEMA_VERSION,
-      payload: {
-        slices: {},
-        currentRegionId: "saved-region",
-        currentQuestId: null,
-        playerPosition: null,
-        ...overrides
-      }
-    };
-  }
-
-  it("returns the save's currentRegionId when a save with a region is present", () => {
-    expect(
-      pickActiveRegionId("authored-region", makeSave({ currentRegionId: "saved" }))
-    ).toBe("saved");
-  });
-
-  it("falls back to the authored region id when no save is present", () => {
-    expect(pickActiveRegionId("authored-region", null)).toBe("authored-region");
-  });
-
-  it("falls back to the authored region id when the save carries a null currentRegionId", () => {
-    expect(
-      pickActiveRegionId("authored-region", makeSave({ currentRegionId: null }))
-    ).toBe("authored-region");
-  });
-
-  it("returns the authored value unchanged when both are undefined / null", () => {
-    expect(pickActiveRegionId(null, null)).toBeNull();
-    expect(pickActiveRegionId(undefined, null)).toBeUndefined();
-  });
-
-  it("the save still wins even when the authored value is null / undefined", () => {
-    expect(
-      pickActiveRegionId(null, makeSave({ currentRegionId: "saved-from-save" }))
-    ).toBe("saved-from-save");
-    expect(
-      pickActiveRegionId(
-        undefined,
-        makeSave({ currentRegionId: "saved-from-save" })
-      )
-    ).toBe("saved-from-save");
   });
 });
 

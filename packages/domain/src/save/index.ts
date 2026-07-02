@@ -38,17 +38,19 @@ export interface SaveSlice<TData = unknown> {
  * stores read/write this shape. Plugin-domain per-user state
  * never lives here; see ADR 020 for the boundary rationale.
  *
- * Post Plan 055.2 shape:
- *   - `slices` is the primary carrier — one per registered
- *     SaveParticipant, keyed by participantId. Post-055 writes
- *     populate this exclusively; older reads still flow through
- *     `upgradeLegacyPayload` which synthesizes slices from the
- *     legacy fields below.
+ * Post Plan 055.7 shape:
+ *   - `slices` is the ONLY canonical carrier — one per registered
+ *     SaveParticipant, keyed by participantId. Post-055.7 writes
+ *     emit `slices` exclusively. Reading a slice is uniform:
+ *     pre-055 legacy 3-field payloads flow through
+ *     `upgradeLegacyPayload` on load which synthesizes the
+ *     `host.player` + `quest.manager` slices from the legacy
+ *     fields, so downstream code never needs a legacy branch.
  *   - Legacy `currentRegionId` / `currentQuestId` / `playerPosition`
- *     remain readable/writable during the 055.3-055.6 rollout so
- *     mid-migration saves round-trip cleanly. Plan 055.7 marks
- *     them deprecated; a follow-up story deletes them once no
- *     live save references them.
+ *     are DEPRECATED (see `@deprecated` on each field). They stay
+ *     optional and readable so pre-055 saves still load. A
+ *     follow-up story (Plan 055.8 draft) deletes them entirely
+ *     once no live save references them.
  *
  * Every field is nullable on purpose: a brand-new save (player
  * has not yet entered any region, accepted any quest, or moved
@@ -62,21 +64,29 @@ export interface GameSavePayload {
    *  by SaveParticipant.participantId. Empty `{}` for fresh
    *  saves and for legacy pre-055 saves before upgrade. */
   slices: Record<string, SaveSlice>;
-  /** The region the player was in at the most recent save tick.
-   *  Legacy field kept readable through Plan 055.6; migrates into
-   *  the `host.player` slice via `upgradeLegacyPayload`. */
-  currentRegionId: string | null;
-  /** The quest the player has accepted but not yet completed.
-   *  `null` when no quest is active. Legacy field kept readable
-   *  through Plan 055.6; migrates into the `quest.manager` slice
-   *  via `upgradeLegacyPayload`. */
-  currentQuestId: string | null;
-  /** Player avatar position at the most recent save tick, in
-   *  world coordinates. `null` for fresh saves where the runtime
-   *  should fall back to the region's spawn point. Legacy field
-   *  kept readable through Plan 055.6; migrates into the
-   *  `host.player` slice via `upgradeLegacyPayload`. */
-  playerPosition: { x: number; y: number; z: number } | null;
+  /**
+   * @deprecated Plan 055.7 — the current region moved into the
+   * `host.player` slice's `data.currentRegionId`. Legacy pre-055
+   * saves still carry this field on the wire; `upgradeLegacyPayload`
+   * migrates it into the slice on load. Post-055.7 writes DO NOT
+   * populate this field. Optional so writers may omit it. Plan
+   * 055.8 draft deletes the field entirely.
+   */
+  currentRegionId?: string | null;
+  /**
+   * @deprecated Plan 055.7 — the tracked quest moved into the
+   * `quest.manager` slice's `data.trackedQuestDefinitionId`. See
+   * `currentRegionId` above for the migration rationale. Legacy
+   * saves carry this; post-055.7 writes do not.
+   */
+  currentQuestId?: string | null;
+  /**
+   * @deprecated Plan 055.7 — the player position moved into the
+   * `host.player` slice's `data.playerPosition`. See
+   * `currentRegionId` above for the migration rationale. Legacy
+   * saves carry this; post-055.7 writes do not.
+   */
+  playerPosition?: { x: number; y: number; z: number } | null;
 }
 
 /**
