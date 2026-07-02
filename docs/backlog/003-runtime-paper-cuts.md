@@ -4,7 +4,7 @@
 
 ## Items
 
-### 1. `hostQuitToMenu` doesn't clear `activeOverlayMenuKey`
+### 1. `hostQuitToMenu` doesn't clear `activeOverlayMenuKey` [FIXED — this branch]
 
 **Severity:** Low (edge case, but leaves the runtime in an inconsistent state)
 

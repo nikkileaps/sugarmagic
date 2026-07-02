@@ -937,6 +937,19 @@ export function createWebRuntimeHost(
       );
       return;
     }
+    // Paper cut #1 (docs/backlog/003-runtime-paper-cuts.md) —
+    // if a dialogue is mid-flight when the player quits to menu,
+    // cancel it explicitly so the panel hides and
+    // `activeOverlayMenuKey` clears. Otherwise the next Continue
+    // resumes into a stale dialogue overlay with the resolver
+    // returning "dialogue" mode, trapping the player. `end()` is
+    // a safe no-op when no dialogue is active.
+    gameplaySession?.dialogueManager.end("cancelled");
+    // Belt + suspenders — any future overlay that forgets to
+    // clear its own key on hide() would otherwise leak into the
+    // start-menu lifecycle. The dialogue.end() above already
+    // clears "dialogue"; this catches everything else.
+    uiStateStore.setState({ activeOverlayMenuKey: null });
     gameStateStore.setState({ lifecycle: "start-menu" });
   }
 
