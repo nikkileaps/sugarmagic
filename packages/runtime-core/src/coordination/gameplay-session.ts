@@ -196,6 +196,7 @@ export interface RuntimeGameplaySessionControllerOptions {
 export interface RuntimeGameplaySessionController {
   readonly dialogueManager: DialogueManager;
   readonly questManager: QuestManager;
+  readonly inventoryManager: InventoryManager;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
@@ -1805,6 +1806,7 @@ export function createRuntimeGameplaySessionController(
   return {
     dialogueManager,
     questManager,
+    inventoryManager,
     interactionSystem,
     questSystem,
     blackboard,

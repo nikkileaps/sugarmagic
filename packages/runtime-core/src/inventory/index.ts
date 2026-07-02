@@ -1,8 +1,14 @@
-import type { DocumentDefinition, ItemDefinition } from "@sugarmagic/domain";
+import type {
+  DocumentDefinition,
+  ItemDefinition,
+  SaveSlice
+} from "@sugarmagic/domain";
 import {
   createDocumentDefinitionFromItem,
   renderDocumentDefinitionHtml
 } from "../document";
+
+export * from "./inventoryPlayerSaveParticipant";
 
 function escapeHtml(value: string): string {
   return value
@@ -143,6 +149,69 @@ export class InventoryManager {
   private emitChange(): void {
     this.onChange?.();
   }
+
+  // ---- Plan 055 §055.5 — save participation ---------------------------
+
+  /**
+   * Capture live inventory into a serialize-safe slice. Map
+   * flattens to an array so the payload survives JSON round-trip
+   * through any GameSaveStore backend.
+   */
+  serializeSaveSlice(): InventoryPlayerSlice {
+    const entries: InventoryPlayerSlice["entries"] = [];
+    for (const [definitionId, count] of this.quantities) {
+      entries.push({ definitionId, count });
+    }
+    return { entries };
+  }
+
+  /**
+   * Restore inventory from a persisted slice.
+   *
+   * CLOBBER semantics: whatever's currently in `quantities` gets
+   * discarded and replaced by the slice's entries. Safe because
+   * nothing else populates `quantities` at boot — items only
+   * arrive via `addItem` during gameplay, and the participant
+   * deserialize runs before gameplay starts.
+   *
+   * Entries whose `definitionId` isn't in the current item
+   * catalog (project re-authored, item renamed / deleted) are
+   * dropped with a warn — the player loses that count, but the
+   * rest of the inventory survives.
+   *
+   * `null` slice = fresh player. Nothing to restore.
+   */
+  deserializeSaveSlice(
+    slice: SaveSlice<InventoryPlayerSlice> | null
+  ): void {
+    if (!slice) return;
+    this.quantities.clear();
+    for (const entry of slice.data.entries ?? []) {
+      if (!this.definitions.has(entry.definitionId)) {
+        console.warn(
+          `[inventory] restore: dropping unknown item "${entry.definitionId}" — no matching definition.`
+        );
+        continue;
+      }
+      const count = Math.max(0, Math.floor(entry.count));
+      if (count > 0) {
+        this.quantities.set(entry.definitionId, count);
+      }
+    }
+    this.emitChange();
+  }
+}
+
+// ---- Plan 055 §055.5 — persisted slice shape (wire format) ----------
+
+/**
+ * The persisted slice the `inventory.player` SaveParticipant
+ * hands to and receives from the save store. Flat list of
+ * `{definitionId, count}` pairs; the runtime rebuilds its
+ * internal Map at deserialize.
+ */
+export interface InventoryPlayerSlice {
+  entries: Array<{ definitionId: string; count: number }>;
 }
 
 export interface RuntimeInventoryUI {

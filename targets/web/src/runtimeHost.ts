@@ -86,6 +86,7 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
+  createInventoryPlayerSaveParticipant,
   createQuestManagerSaveParticipant,
   createRuntimeGameplayAssembly,
   type RuntimeBannerContribution,
@@ -1872,6 +1873,15 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createQuestManagerSaveParticipant({
         getQuestManager: () => gameplaySession?.questManager ?? null
+      })
+    );
+    // Plan 055 §055.5 — inventory.player restores collected items
+    // (definitionId + count) across sessions. Same Phase 2 sweep;
+    // clobber semantics (nothing else populates the inventory pre-
+    // deserialize).
+    saveParticipantRegistry.register(
+      createInventoryPlayerSaveParticipant({
+        getInventoryManager: () => gameplaySession?.inventoryManager ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, [
