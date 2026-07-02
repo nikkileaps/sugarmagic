@@ -3157,6 +3157,42 @@ function createTagPatchVersionPlugin(): VitePlugin {
               });
               return;
             }
+            // Paper cut #4 (docs/backlog/003-runtime-paper-cuts.md)
+            // — refuse if HEAD is already tagged with any v*.*.*
+            // tag. Otherwise Tag Patch Version happily creates
+            // e.g. v1.0.1 on the same commit as v1.0.0, which
+            // makes `git describe` tie-break unpredictably (the
+            // 2026-07-02 incident that motivated this guard).
+            // The auto-sync step that runs during Deploy usually
+            // moves HEAD past the existing tag; if HEAD is still
+            // on it, the author needs a real commit before a
+            // meaningful patch bump.
+            const headTagged = await runHostCommand({
+              command: "git",
+              args: ["tag", "--points-at", "HEAD", "--list", "v*.*.*"],
+              cwd: workingDirectory
+            });
+            if (headTagged.exitCode !== 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason: `git tag --points-at HEAD failed: ${headTagged.stderr.trim() || `exit code ${headTagged.exitCode}`}`
+              });
+              return;
+            }
+            const existingHeadTags = headTagged.stdout
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0);
+            if (existingHeadTags.length > 0) {
+              sendJson(res, 200, {
+                ok: false,
+                reason:
+                  `HEAD is already tagged (${existingHeadTags.join(", ")}). ` +
+                  `Tagging another version at the same commit would make git describe tie-break unpredictably. ` +
+                  `Make one or more commits past this tag before Tag Patch Version.`
+              });
+              return;
+            }
             const listResult = await runHostCommand({
               command: "git",
               args: ["tag", "--list", "v*.0.*"],

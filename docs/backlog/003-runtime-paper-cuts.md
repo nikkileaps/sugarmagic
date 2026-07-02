@@ -37,3 +37,13 @@
 **Action:** Fold both spawn paths behind a single "presence spawn pipeline" — a host-owned iteration over `region.scene.itemPresences` (and later NPC + inspectable presences) that applies filters ONCE, then hands off spawn semantics to a renderer callback and an ECS callback. Filters (world.presence collected-list, future episode gating, future proximity culling) live at the pipeline level. Renderer and gameplay-session become downstream consumers instead of independent iterators.
 
 **Meta-lesson (again):** When the same concept lives in two systems, expect one to be updated and the other to not. AGENTS.md's "one source of truth" rule is load-bearing; the moment you notice a copy of iteration logic, either unify or flag for unification. Two-way inconsistency bugs are silent by construction — the systems don't know about each other.
+
+### 4. Tag Patch Version happily tags the same commit as an existing tag [FIXED — this branch]
+
+**Severity:** Low (rarely hit in normal flow, but confusing when it does bite)
+
+**Symptom:** 2026-07-02 incident. Nikki hit "Tag Patch Version" in the Release workspace while wordlark HEAD was still on the `v1.0.0` commit (deploy 1's auto-sync had nothing to commit -> HEAD unchanged from the auto-bootstrap tag). The endpoint tagged `v1.0.1` onto the same commit as `v1.0.0`. Both tags now point at the same commit. `git describe` (used by the version chip) tie-breaks between them nondeterministically — displayed `v1.0.0-N-g<sha>` instead of `v1.0.1-N-g<sha>` after the next deploy advanced HEAD.
+
+**Root cause:** `sugardeploy-tag-patch-version` endpoint (`packages/plugins/src/catalog/sugardeploy/host/middleware.ts:3058`) validates that HEAD is a descendant of the base tag but doesn't check whether HEAD is EXACTLY AT an existing `v*.*.*` tag. When HEAD is on an existing tag, a patch bump is meaningless — the new tag can't produce a distinguishable `git describe` output because both tags are 0 commits away from HEAD.
+
+**Action:** In the endpoint, after the base-tag ancestor check, run `git tag --points-at HEAD --list 'v*.*.*'`. If it returns any tag, refuse with a message explaining that the author needs at least one commit past the existing tag before Tag Patch Version means anything. The Deploy auto-sync usually creates that commit; if the author hasn't deployed since the last tag, nothing has changed and the patch bump would be spurious anyway.
