@@ -86,20 +86,26 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
+  createInventoryPlayerSaveParticipant,
+  createQuestManagerSaveParticipant,
+  type QuestManagerSlice,
   createRuntimeGameplayAssembly,
+  createWorldPresenceSaveParticipant,
+  WorldPresenceTracker,
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
-  pickActiveRegionId,
-  pickGameSavePayload,
   registerActiveIdentityProvider,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
+  upgradeLegacyPayload,
   type SessionHudSavedGameSnapshot,
   spawnRuntimePlayerEntity,
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
+  type SaveParticipant,
+  SaveParticipantRegistry,
   type SerializedSaveStore,
   type User,
   type UserIdentityProvider,
@@ -125,6 +131,10 @@ import {
   type UIContextStore,
   type UIStateStore
 } from "@sugarmagic/runtime-core";
+import {
+  createHostPlayerParticipant,
+  type HostPlayerSlice
+} from "./save/hostPlayerParticipant";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
@@ -445,6 +455,22 @@ export interface WebRuntimeHost {
    * (boot still uses `showStartMenu()` for the initial menu open).
    */
   quitToMenu(): void;
+  /**
+   * Plan 055 §055.1 — register a save participant. Called by
+   * runtime-core systems (QuestManager, Inventory, world-presence
+   * tracker, host-owned player/region tracker) at construction
+   * time. Participants registered here contribute slices to
+   * `getCurrentSavePayload()` and receive `deserialize` calls in
+   * tier order at `host.start()` after the save loads. See Plan
+   * 055 §Pattern for save/load flow.
+   */
+  registerSaveParticipant(participant: SaveParticipant): void;
+  /**
+   * Plan 055 §055.1 — unregister a save participant by id. Used
+   * when a system tears down mid-session (rare). No-op if the id
+   * isn't currently registered.
+   */
+  unregisterSaveParticipant(participantId: string): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -948,11 +974,39 @@ export function createWebRuntimeHost(
   let gameplaySession:
     | ReturnType<typeof createRuntimeGameplayAssembly>["gameplaySession"]
     | null = null;
-  // Story 47.10 — last region the host resolved at `start()`. Lifted to
-  // closure scope so `getCurrentSavePayload()` can return it without
-  // re-running pickActiveRegionId. Updated only on `start()` for now —
-  // mid-session region transitions land in a follow-up story.
+  // Story 47.10 — last region the host resolved at `start()`.
+  // Read by the host.player participant's serialize and by the
+  // world.presence tracker to key its per-region set. Updated
+  // only on `start()` for now — mid-session region transitions
+  // land in a follow-up story.
   let activeRegionIdForSave: string | null = null;
+  // Plan 055 §055.1 — one registry per host lifetime. Systems
+  // register at construction; the registry survives host.start /
+  // dispose cycles.
+  const saveParticipantRegistry = new SaveParticipantRegistry();
+  // Plan 055 §055.3 — host.player is the first real participant.
+  // deserialize writes into `hostPlayerRestore` so the spawn
+  // resolution block in `start()` can prefer restored values over
+  // authored defaults without re-running any picker helper.
+  let hostPlayerRestore: HostPlayerSlice | null = null;
+  saveParticipantRegistry.register(
+    createHostPlayerParticipant({
+      getWorld: () => world,
+      getCurrentRegionId: () => activeRegionIdForSave,
+      applyRestoredSlice: (data) => {
+        hostPlayerRestore = data;
+      }
+    })
+  );
+  // Plan 055 §055.6 — world.presence tracker + participant.
+  // Host-owned lifetime (survives assembly rebuilds when we
+  // eventually support mid-session region transitions).
+  // Registered at factory time; Phase 1 deserialize populates it
+  // before `gameplayAssembly` reads shouldSkipItemPresence.
+  const worldPresenceTracker = new WorldPresenceTracker();
+  saveParticipantRegistry.register(
+    createWorldPresenceSaveParticipant({ tracker: worldPresenceTracker })
+  );
   // Story 47.10 follow-up — live user + last-known save snapshot
   // surfaced to the Session debug HUD card. Story 51.3 migrated
   // both off module-let mirrors onto host.state observables
@@ -1414,18 +1468,43 @@ export function createWebRuntimeHost(
       }
     });
 
-    // Story 47.5 + 47.10.5 — spawn payload precedence: save wins,
+    // Plan 055 §055.3 — spawn state hydrates through the
+    // participant pipeline. Seed precedence: real save wins,
     // then the project's `defaultGameSavePayload` (a fresh-start
-    // record an author can curate), then the implicit boot.json /
-    // playerPresence defaults. `effectiveSpawnPayload` collapses
-    // those into a single record the region picker + player
-    // spawner consume; null means "fall through to implicit."
-    const effectiveSpawnPayload = pickGameSavePayload(
-      resolvedSavedGame?.payload ?? null,
-      state.defaultGameSavePayload ?? null
-    );
+    // record an author can curate), then null (implicit
+    // boot.json / playerPresence defaults). Whichever is picked
+    // feeds `upgradeLegacyPayload` so pre-055 legacy shape and
+    // post-055 new shape both normalize into slices, then
+    // deserializeAll dispatches to every registered participant
+    // BEFORE any world/player spawn work. Host-owned tier
+    // (host.player) restores first so region + position are
+    // ready when spawn resolution reads them below.
+    const seedPayload =
+      resolvedSavedGame?.payload ?? state.defaultGameSavePayload ?? null;
+    const upgradedPayload = seedPayload
+      ? upgradeLegacyPayload(seedPayload)
+      : null;
+    // Plan 055 §055.4 + §055.6 — Phase 1: dispatch host-owned +
+    // region-aware tier participants. `host.player` (host-owned)
+    // restores here before spawn; `world.presence` (region-aware)
+    // restores here too because `gameplayAssembly`'s
+    // `registerItemInteractables` consults it during
+    // construction to skip already-collected item presences.
+    // Phase 2 (default tier: quest.manager, inventory.player)
+    // runs later, AFTER `gameplayAssembly` is constructed and
+    // those subsystems exist for their participants to reach.
+    const restoredSlices = upgradedPayload?.slices ?? {};
+    saveParticipantRegistry.deserializeAll(restoredSlices, [
+      "host-owned",
+      "region-aware"
+    ]);
+    // hostPlayerRestore now reflects whatever the host.player
+    // participant received. Region + position spawn from there;
+    // fall through to state.activeRegionId for the implicit
+    // boot.json case where neither save nor authored default set
+    // a region.
     const resolvedActiveRegionId =
-      effectiveSpawnPayload?.currentRegionId ?? state.activeRegionId ?? null;
+      hostPlayerRestore?.currentRegionId ?? state.activeRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
     const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
@@ -1446,6 +1525,23 @@ export function createWebRuntimeHost(
         includePlayerPresence: false
       });
       for (const object of objects) {
+        // Plan 055 §055.6 — skip visual meshes for item presences
+        // the WorldPresenceTracker has recorded as collected in
+        // this region. `registerItemInteractables` already skips
+        // their ECS Interactable component; without this filter
+        // the mesh would still spawn (no E prompt but the item's
+        // model floats there). For kind "item" the SceneObject's
+        // `instanceId` equals the presenceId — see
+        // scene/index.ts:createItemSceneObject.
+        if (
+          object.kind === "item" &&
+          worldPresenceTracker.shouldSkip(
+            activeRegionIdForSave,
+            object.instanceId
+          )
+        ) {
+          continue;
+        }
         const rootObject = new THREE.Group();
         const shaderApplication = createRenderableShaderApplicationState();
         rootObject.name = object.instanceId;
@@ -1634,8 +1730,22 @@ export function createWebRuntimeHost(
     // `skipStartMenuOnBoot` lets the New Game reset flow drop the
     // player straight into gameplay after the reload instead of
     // forcing a second click on the start menu.
+    //
+    // Pre-055 bug: when the start menu was skipped (fresh-start
+    // flow) OR when the project had no start-menu menu at all,
+    // NOTHING transitioned lifecycle out of the initial "booting"
+    // state. `resolveRuntimeMode` treats "booting" as "paused",
+    // which silently killed every mode-gated action (dialogue
+    // Enter/Escape, inventory `i`, quest journal, etc.).
+    // Movement + `E`-to-interact still worked because they go
+    // through the input manager, not the action registry —
+    // making the bug easy to miss end-to-end. Surfaced 2026-07-01
+    // while wiring 055.4's quest-manager restore path; fixed by
+    // driving lifecycle to "playing" in the else branch.
     if (startMenuExists && !state.skipStartMenuOnBoot) {
       showStartMenu();
+    } else {
+      gameStateStore.setState({ lifecycle: "playing" });
     }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
@@ -1701,17 +1811,19 @@ export function createWebRuntimeHost(
         .getContributions("conversation.provider")
         .map((contribution) => contribution.payload.providerId)
     });
-    // Story 47.5 — when the saved game carries a playerPosition,
-    // spawn there; otherwise fall through to the region's
-    // playerPresence default (which spawnRuntimePlayerEntity handles
-    // when positionOverride is undefined).
+    // Plan 055 §055.3 — playerPosition now comes from the
+    // host.player participant's restored slice (which itself
+    // came from either the real save or the authored default
+    // via upgradeLegacyPayload). Null falls through to the
+    // region's playerPresence default (spawnRuntimePlayerEntity
+    // handles that when positionOverride is null).
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
       activeRegion,
       state.playerDefinition,
       state.mechanics,
       {
-        positionOverride: effectiveSpawnPayload?.playerPosition ?? null
+        positionOverride: hostPlayerRestore?.playerPosition ?? null
       }
     );
     playerEyeHeight = playerSpawn.eyeHeight;
@@ -1776,14 +1888,50 @@ export function createWebRuntimeHost(
         webAudioAdapter?.handleCommands(commands);
       },
       onItemPresenceCollected: (presenceId) => {
+        // Plan 055 §055.6 — record for the world.presence tracker
+        // so the item stays collected across save+load. Reads the
+        // captured region id, not the live one, so a mid-session
+        // transition (future story) picks the region the item was
+        // actually in.
+        worldPresenceTracker.markCollected(
+          activeRegionIdForSave,
+          presenceId
+        );
         const entry = sceneObjectEntries.get(presenceId);
         if (!entry || !scene) return;
         scene.remove(entry.root);
         disposeRenderableObject(entry.root);
         sceneObjectEntries.delete(presenceId);
-      }
+      },
+      shouldSkipItemPresence: (presenceId) =>
+        worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
     });
     gameplaySession = gameplayAssembly.gameplaySession;
+    // Plan 055 §055.4 — Phase 2: register participants whose
+    // subsystems only exist now that gameplayAssembly is
+    // constructed, then run the region-aware + default tier
+    // deserialize. AFTER that, kick startInitialQuests so
+    // authored initial quests fill in for anything the save
+    // didn't already restore (new quests added since the save
+    // was written). Order matters: participants deserialize
+    // FIRST, startInitialQuests runs SECOND — otherwise fresh
+    // initial state would stomp restored progress.
+    saveParticipantRegistry.register(
+      createQuestManagerSaveParticipant({
+        getQuestManager: () => gameplaySession?.questManager ?? null
+      })
+    );
+    // Plan 055 §055.5 — inventory.player restores collected items
+    // (definitionId + count) across sessions. Same Phase 2 sweep;
+    // clobber semantics (nothing else populates the inventory pre-
+    // deserialize).
+    saveParticipantRegistry.register(
+      createInventoryPlayerSaveParticipant({
+        getInventoryManager: () => gameplaySession?.inventoryManager ?? null
+      })
+    );
+    saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);
+    gameplayAssembly.gameplaySession.startInitialQuests();
     emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {
       if (isMoving) {
@@ -1816,8 +1964,7 @@ export function createWebRuntimeHost(
         resolvedSavedGame
           ? {
               lastPlayed: resolvedSavedGame.lastPlayed,
-              currentRegionId: resolvedSavedGame.payload.currentRegionId,
-              currentQuestId: resolvedSavedGame.payload.currentQuestId
+              ...deriveAutosaveDisplayFields(resolvedSavedGame.payload)
             }
           : null
       );
@@ -1957,14 +2104,40 @@ export function createWebRuntimeHost(
     engine.dispose();
   }
 
+  /**
+   * Plan 055 §055.7 — derive the HUD-facing display fields from
+   * a save payload's slices. `upgradeLegacyPayload` normalizes
+   * pre-055 payloads into the same slice shape, so this helper
+   * is uniform across legacy and current saves. Returns `null`
+   * defaults when a slice is missing (fresh save, participant
+   * added since the save was written, etc.).
+   */
+  function deriveAutosaveDisplayFields(payload: GameSavePayload): {
+    currentRegionId: string | null;
+    currentQuestId: string | null;
+  } {
+    const upgraded = upgradeLegacyPayload(payload);
+    const hostPlayer = upgraded.slices["host.player"]?.data as
+      | HostPlayerSlice
+      | undefined;
+    const questManager = upgraded.slices["quest.manager"]?.data as
+      | QuestManagerSlice
+      | undefined;
+    return {
+      currentRegionId: hostPlayer?.currentRegionId ?? null,
+      currentQuestId: questManager?.trackedQuestDefinitionId ?? null
+    };
+  }
+
   function notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
   }): void {
+    const display = deriveAutosaveDisplayFields(snapshot.payload);
     latestAutosaveStore.set({
       lastPlayed: snapshot.lastPlayed,
-      currentRegionId: snapshot.payload.currentRegionId,
-      currentQuestId: snapshot.payload.currentQuestId
+      currentRegionId: display.currentRegionId,
+      currentQuestId: display.currentQuestId
     });
     // Story 47.10.5 — flip the UI's save-presence flag so the
     // start menu's Continue button appears the moment the first
@@ -1994,20 +2167,12 @@ export function createWebRuntimeHost(
 
   function getCurrentSavePayload(): GameSavePayload | null {
     if (!world || !gameplaySession) return null;
-    const playerEntities = world.query(PlayerControlled, Position);
-    let playerPosition: { x: number; y: number; z: number } | null = null;
-    if (playerEntities.length > 0) {
-      const pos = world.getComponent(playerEntities[0], Position);
-      if (pos) {
-        playerPosition = { x: pos.x, y: pos.y, z: pos.z };
-      }
-    }
-    const trackedQuest = gameplaySession.questManager.getTrackedQuest();
-    return {
-      currentRegionId: activeRegionIdForSave,
-      currentQuestId: trackedQuest?.questDefinitionId ?? null,
-      playerPosition
-    };
+    // Plan 055 §055.7 — slice-only writes. Every participant
+    // that owns persistable state serializes here; no more legacy
+    // 3-field carriers. Reads (upgradeLegacyPayload) still handle
+    // pre-055 saves by synthesizing the host.player + quest.manager
+    // slices from those saves' legacy fields.
+    return { slices: saveParticipantRegistry.serializeAll() };
   }
 
   // Story 51.2 — expose the observable stores as a stable
@@ -2035,6 +2200,10 @@ export function createWebRuntimeHost(
     continueGame: hostContinueGame,
     pauseGame: hostPauseGame,
     resumeGame: hostResumeGame,
-    quitToMenu: hostQuitToMenu
+    quitToMenu: hostQuitToMenu,
+    registerSaveParticipant: (participant) =>
+      saveParticipantRegistry.register(participant),
+    unregisterSaveParticipant: (participantId) =>
+      saveParticipantRegistry.unregister(participantId)
   };
 }

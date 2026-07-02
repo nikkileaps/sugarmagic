@@ -41,6 +41,7 @@ export * from "./ui-context";
 export * from "./ui-state";
 export * from "./util/observable-value";
 export * from "./vfx";
+export * from "./world";
 
 export type RuntimeHostKind = "studio" | "published-web";
 export type RuntimeContentSource = "authored-game-root" | "published-artifact";

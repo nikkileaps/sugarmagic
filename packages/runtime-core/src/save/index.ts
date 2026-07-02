@@ -30,8 +30,12 @@
 // because `GameProject.defaultGameSavePayload` references it.
 // Re-exported here so every existing import path
 // (`@sugarmagic/runtime-core`) keeps working transparently.
-import { type GameSavePayload, pickGameSavePayload } from "@sugarmagic/domain";
-export { type GameSavePayload, pickGameSavePayload };
+import {
+  type GameSavePayload,
+  pickGameSavePayload,
+  upgradeLegacyPayload
+} from "@sugarmagic/domain";
+export { type GameSavePayload, pickGameSavePayload, upgradeLegacyPayload };
 
 /**
  * Schema compatibility token for `GameSave` writes. Stamped into
@@ -61,6 +65,15 @@ export interface GameSave {
   /** Pinned to `GAME_SAVE_SCHEMA_VERSION` on write; read back to
    *  decide if a migration is needed at load time. */
   schemaVersion: number;
+  /**
+   * Build version of the engine that wrote this save (e.g.
+   * `v0.1.0`, `v0.1.0-3-gabc1234`, or just a sha for untagged
+   * commits). Optional because pre-this-field saves don't carry
+   * it; null means "unknown / pre-stamping era". Future
+   * migrations can branch on this to know which schema the
+   * payload was authored under.
+   */
+  writtenByVersion?: string | null;
   /** Cross-plugin player state. */
   payload: GameSavePayload;
 }
@@ -99,25 +112,14 @@ export {
   type SerializedSaveStore
 } from "./serialized-store";
 
-/**
- * Story 47.5 — picks the region id the runtime should spawn into.
- * The save's `currentRegionId` wins when a non-null save is present
- * AND it carries a non-null region id; otherwise the authored
- * default from `boot.json` (i.e. the project's published-web
- * snapshot) is used. Returns the same nullish surface the authored
- * default has so callers can pass the result straight to the
- * existing region-lookup path.
- *
- * Used by `targets/web/src/runtimeHost.ts` during `start` to choose
- * between "resume where the player was" and "spawn at the authored
- * starting region."
- */
-export function pickActiveRegionId(
-  authoredRegionId: string | null | undefined,
-  save: GameSave | null
-): string | null | undefined {
-  if (save && save.payload.currentRegionId) {
-    return save.payload.currentRegionId;
-  }
-  return authoredRegionId;
-}
+export {
+  type SaveParticipant,
+  type SaveParticipantTier,
+  SaveParticipantRegistry
+} from "./participant";
+
+// SaveSlice authored in domain (Plan 055.2). Re-exported here so
+// runtime-core consumers keep pulling every save type from one
+// package.
+export { type SaveSlice } from "@sugarmagic/domain";
+

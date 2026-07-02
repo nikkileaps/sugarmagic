@@ -165,6 +165,14 @@ export interface RuntimeGameplaySessionControllerOptions {
   audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
   onItemPresenceCollected?: (presenceId: string) => void;
+  /**
+   * Plan 055 §055.6 — the host consults its WorldPresenceTracker
+   * and returns true for item presences the player has already
+   * collected in the active region. `registerItemInteractables`
+   * skips those so re-entering the region doesn't respawn them.
+   * Undefined defaults to "skip nothing" (pre-055.6 behavior).
+   */
+  shouldSkipItemPresence?: (presenceId: string) => boolean;
   onSpellCastSuccess?: (feedback: RuntimeSpellCastFeedback) => void;
   onAudioCommands?: (commands: RuntimeSoundCommand[]) => void;
   /**
@@ -196,10 +204,18 @@ export interface RuntimeGameplaySessionControllerOptions {
 export interface RuntimeGameplaySessionController {
   readonly dialogueManager: DialogueManager;
   readonly questManager: QuestManager;
+  readonly inventoryManager: InventoryManager;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
   readonly audioController: RuntimeAudioController;
+  /** Plan 055 §055.4 — kick off every loaded quest definition
+   *  via the quest-dialogue coordinator. Idempotent: startQuest
+   *  short-circuits on quests already active or completed. The
+   *  host calls this AFTER the Phase 2 save-participant
+   *  deserialize so restored progress isn't stomped by fresh
+   *  initial state. */
+  startInitialQuests: () => void;
   update: (deltaSeconds?: number) => void;
   syncBillboards: (
     cameraSnapshot: CameraSnapshot,
@@ -368,7 +384,8 @@ export function createRuntimeGameplaySessionController(
     pluginManager,
     onItemPresenceCollected,
     onSpellCastSuccess,
-    onAudioCommands
+    onAudioCommands,
+    shouldSkipItemPresence
   } = options;
   assertValidMechanicsDefinition(mechanics, {
     consumers: collectMechanicsConsumerInvocations({
@@ -1013,6 +1030,13 @@ export function createRuntimeGameplaySessionController(
     if (!activeRegion) return;
 
     for (const presence of activeRegion.scene.itemPresences) {
+      // Plan 055 §055.6 — the host's WorldPresenceTracker tells
+      // us which presence IDs have already been collected in this
+      // region across previous sessions. Skip them so re-entering
+      // doesn't respawn the item.
+      if (shouldSkipItemPresence?.(presence.presenceId)) {
+        continue;
+      }
       const itemDefinition = itemDefinitions.find(
         (definition) => definition.definitionId === presence.itemDefinitionId
       );
@@ -1780,7 +1804,13 @@ export function createRuntimeGameplaySessionController(
   }
   registerItemInteractables();
   registerInspectableInteractables();
-  questDialogueCoordinator.startInitialQuests();
+  // Plan 055 §055.4 — startInitialQuests is now called by the
+  // runtime host AFTER the Phase 2 save-participant deserialize
+  // finishes. The quest.manager participant needs to populate
+  // activeQuests + completedQuestIds from the save BEFORE
+  // startInitialQuests runs, otherwise fresh quest states would
+  // stomp restored progress. Exposed via
+  // `assembly.startInitialQuests()` below.
   syncBlackboardSpatialFacts();
   syncBlackboardQuestFacts();
   syncInventoryUi();
@@ -1792,10 +1822,19 @@ export function createRuntimeGameplaySessionController(
   return {
     dialogueManager,
     questManager,
+    inventoryManager,
     interactionSystem,
     questSystem,
     blackboard,
     audioController,
+    // Plan 055 §055.4 — the host calls this AFTER the Phase 2
+    // save-participant deserialize so quest.manager's restored
+    // activeQuests + completedQuestIds are in place before
+    // startQuest short-circuits kick in. Called unconditionally
+    // (idempotent) for both fresh and returning players; already-
+    // active or already-completed quests are no-op'd inside
+    // startQuest.
+    startInitialQuests: () => questDialogueCoordinator.startInitialQuests(),
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
       const trackedQuest = questManager.getTrackedQuest();

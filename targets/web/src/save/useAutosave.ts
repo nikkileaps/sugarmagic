@@ -32,6 +32,7 @@ import {
   type GameSavePayload,
   type GameSaveStore
 } from "@sugarmagic/runtime-core";
+import { SUGARMAGIC_VERSION } from "../version";
 
 export interface AutosaveTickSource {
   getCurrentSavePayload(): GameSavePayload | null;
@@ -96,6 +97,7 @@ export async function runAutosaveTick(args: {
     userId: args.userId,
     lastPlayed,
     schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+    writtenByVersion: SUGARMAGIC_VERSION,
     payload
   });
   return { written: true, payload, lastPlayed };
