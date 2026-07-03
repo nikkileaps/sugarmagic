@@ -2,7 +2,7 @@
 
 Status: proposed
 Owner: nikki + claude
-Date: 2026-07-01, rescoped 2026-07-02 (framing pass 5 — placed-asset scope decision)
+Date: 2026-07-01, rescoped 2026-07-02 (framing pass 6 — per-Scene environment / audio / transitions + cross-Scene scoping)
 
 Related: Plan 055 (SaveParticipant model — the persistence mechanism this plan uses). Plan 057 (item-presence filter helper — survives 058 with a source swap, not a shape change). Downstream users: quest authoring, dialogue authoring, world/region authoring, content release / gating. Refactor scope: current `region.scene` splits between Region base and Scene overlay depending on the field.
 
@@ -59,6 +59,34 @@ Presences (items, NPCs, player) are **overlay-only** — they're inherently Scen
 
 Regions themselves stay in the shared library — they're the base shell. NPC definitions, item definitions, spell definitions, mechanics all stay in the shared library (they're referenced by presences and quests; the definitions themselves aren't Scene-scoped).
 
+## Per-Scene environment / audio / transition config
+
+Framing pass 6 addition — three fields every Scene overlay carries that Unity + Unreal treat as first-class:
+
+- **`environmentOverride`**: optional `{ environmentId: string }` on the Scene. When set, runtime uses this environment (lighting, skybox, ambient) for the Scene's atmosphere instead of the region's or project's default. Unreal analog: post-process volumes tagged to a Data Layer. Unity analog: per-Scene lighting settings. Load-bearing for narrative games — Scene 3 as twilight fog, Scene 5 as storm at night.
+- **`audioOverride`**: optional `{ soundEventBindingsOverride?, backgroundMusicId?, ambientSoundId? }` on the Scene. When set, runtime applies these audio bindings for the Scene's active period. Melancholy piano in Scene 3, tension strings in Scene 5. Null fields fall through to project-level bindings.
+- **`transitionConfig`**: optional `{ titleText?: string, subtitleText?: string, durationMs?: number, fadeStyle?: "cross" | "black" | "white" }` for the player-facing UI when the game advances into this Scene. Runtime renders a title card during the transition tick between `currentSceneId` values. Author-configurable; null = no title card, hard cut.
+
+All three are Scene-level fields (not per-region overlay), because they scope to the Scene's atmosphere as a whole. Runtime reads them at Scene load time and on transition.
+
+## Scene metadata
+
+Framing pass 6 addition — every Scene also carries author-facing metadata:
+
+- `displayName: string` — the Scene's title (rendered in the transitionConfig title card by default, and in Studio's Scene selector)
+- `description: string` — one-paragraph author summary
+- `notes: string` — free-form author notes (design intent, dependencies, TODOs)
+
+No changelog field for v1 — the git history and Studio's diff view fill that role.
+
+## Cross-Scene reference scoping — hard boundary at authoring time
+
+Framing pass 6 assertion: **Scene-scoped items in one Scene must not appear in dropdowns / pickers when editing a different Scene's items.** A quest authored in Scene 1 cannot be selected as a "prerequisite quest" for something being authored in Scene 3 — Studio's picker won't show it. The runtime enforces this at compile / boot: a Scene-scoped reference across Scene boundaries is a lint error.
+
+Library items (NPC definitions, item definitions, shared dialogues, mechanics, spells) DO appear in every Scene's dropdowns — they're Base, not Scene-scoped.
+
+This is enforced by pattern 2 (Ambient Context) at authoring time — every workspace's picker filters by "is this item in the current Scene's scope OR the shared library?" No workspace exposes cross-Scene picking.
+
 Studio surface: every placed asset's inspector gets a **Scope** dropdown: `"Base — always visible"` or `"Scene <N>: <name>"`. Default on creation is the active Scene's overlay (matching the Ambient Context expectation), but the author can flip to Base immediately. Migration defaults to **Base** for all existing `region.scene.placedAssets` (see 058.1) — safest, preserves current behavior.
 
 ## No "Season" concept in the engine
@@ -88,7 +116,14 @@ Sequencing revised 2026-07-02 after code audit + placed-asset scope refinement.
 
 Single atomic story — no dual-source-of-truth window.
 
-- Define `Scene`, `SceneOverlay`, `RegionSceneOverlay` domain types in `packages/domain/src/scenes/` (plural, avoids collision with existing `packages/runtime-core/src/scene/` for visual SceneObject concerns).
+- Define `Scene`, `SceneOverlay`, `RegionSceneOverlay` domain types in `packages/domain/src/scenes/` (plural, avoids collision with existing `packages/runtime-core/src/scene/` for visual SceneObject concerns). Fields on `Scene`:
+  - `sceneId: string`, `sceneOrder: number`
+  - `displayName: string`, `description: string`, `notes: string`
+  - `unlockCondition: SceneUnlockCondition`
+  - `environmentOverride: { environmentId: string } | null`
+  - `audioOverride: { soundEventBindingsOverride?, backgroundMusicId?, ambientSoundId? } | null`
+  - `transitionConfig: { titleText?, subtitleText?, durationMs?, fadeStyle? } | null`
+  - `regionOverlays: Record<regionId, RegionSceneOverlay>`
 - Add `scenes: Scene[]` to `GameProject`. On existing projects (wordlark), a **load-time migration** (Studio's project-load path, `apps/studio/src/**`) creates a single default Scene and moves every region's `scene.*` fields as follows:
   - `region.scene.placedAssets` → **stays on Region as `region.placedAssets`** (Base scope by default — safest, preserves current visual behavior).
   - `region.scene.folders` → stays on Region as `region.folders` (they group the base-scope assets that just stayed put).
@@ -124,8 +159,11 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 - **Scope dropdown** on the placed-asset inspector: `"Base — always visible"` or `"Scene N: <name>"`. Default new placements to the active Scene's overlay. Changing scope on an existing asset dispatches a MOVE command (base → overlay or overlay → different scene). Model this after Unreal's Data Layer picker.
 - "All Scenes" mode on the selector as an escape hatch for cross-Scene overview. When active, LayoutWorkspaceView shows presences from every Scene's overlay flattened.
 - Design workspace tabs (Quests, Dialogues, NPCs, Items) filter by active Scene where content is Scene-scoped. Library items (NPC defs, item defs) show regardless.
+- **Cross-Scene reference scoping** — every workspace's picker / dropdown that references authored content filters by (current Scene's overlay ⋃ shared library). Scene 1's quest is NOT selectable when authoring Scene 3's content. This is a load-bearing invariant of Pattern 2 (Ambient Context).
+- **Scene inspector** — a small inspector panel for the currently-active Scene lets the author edit `displayName`, `description`, `notes`, `unlockCondition`, `environmentOverride`, `audioOverride`, `transitionConfig`. Probably nested inside the selector's "Manage Scenes" panel.
+- **Preview uses Ambient Context** — Studio's Preview button boots into the currently-active Scene in the editor. No separate "preview which Scene?" picker; the selector's current value drives Preview.
 - `scenesUiLabel` project field wired to the selector's label ("Chapter 3" vs "Scene 3").
-- Add tests: switching Scenes changes what LayoutWorkspaceView shows; Base assets visible across every Scene context; overlay assets only visible in their own Scene; Scope dropdown moves assets correctly.
+- Add tests: switching Scenes changes what LayoutWorkspaceView shows; Base assets visible across every Scene context; overlay assets only visible in their own Scene; Scope dropdown moves assets correctly; cross-Scene picker filtering (a quest in Scene 1 doesn't appear in Scene 3's dropdowns).
 
 ### 058.3 — Author multiple Scenes; end-to-end multi-Scene UX
 
@@ -149,6 +187,8 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 - Runtime at boot: after Phase 2 deserialize, resolve `unlockedSceneIds` by evaluating each `scene.unlockCondition` against the current save state. wallClock reads `Date.now()` — runtime read, NOT a persisted value, so [[no-wallclock-in-slice]] doesn't apply.
 - `currentSceneId` restoration picks which Scene's overlay the runtime composes. On first boot, falls through to the first Scene by `sceneOrder`.
 - `runtimeHost.ts` — spawn picks `activeSceneId` from `campaign.progression`, then `activeRegionId` per host.player as today, then composes `region.placedAssets ⋃ activeScene.regionOverlays[activeRegionId]` as the effective world contents.
+- **Apply `environmentOverride`**: at Scene load, if `activeScene.environmentOverride?.environmentId` is set, the runtime uses it instead of the region's default environment. Falls through to region default when null.
+- **Apply `audioOverride`**: same pattern for audio bindings and background music at Scene load. Falls through to project defaults per field when null.
 - Content loading gates by `unlockedSceneIds` — Scene overlays not in the set are excluded from composition (bake-everything model per tension #1).
 - Add tests: unlock condition round-trips; `campaign.progression` slice serialize/deserialize; runtime skips overlays for non-unlocked Scenes; base assets remain visible regardless of Scene unlock state.
 
@@ -157,6 +197,7 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 **Pattern applied**: Base + Overlay (for the world.presence schema bump), Filtered Composition at Runtime (for transitions).
 
 - Scene transition hook: quest-complete-triggers-next-scene as the primary path. Author-side: quest action of type `"advanceToNextScene"` or `"unlockScene"` with `sceneId` targetId. Runtime dispatcher handles the action and mutates `campaign.progression`.
+- **Player-facing transition UI**: when `currentSceneId` changes, if the new Scene has a `transitionConfig`, the runtime renders a title card (title + subtitle) over the game with the configured fade style and duration. Blocks player input during the animation. Skips if `transitionConfig` is null (hard cut).
 - Migrate Plan 055's `world.presence` slice from `Record<regionId, string[]>` to `Record<regionId, Record<sceneId, string[]>>`. Bump `world.presence` `schemaVersion` from 1 to 2. Deserialize handles v1 → v2 upgrade by wrapping existing `string[]` in `{"scene:default": [...]}`.
 - Update `WorldPresenceTracker.shouldSkip(regionId, presenceId)` to `shouldSkip(regionId, sceneId, presenceId)`. Callers in `runtimeHost.ts` visual-mesh path and `gameplay-session.ts` ECS-Interactable path get the current sceneId from `activeScene.sceneId`.
 - End-to-end verify in prod: author 2 Scenes in wordlark, advance from Scene 1 to Scene 2 via a quest completion, autosave, hard-refresh, Continue → land in Scene 2 with Scene 2's overlays active.
@@ -171,6 +212,8 @@ Filtered Composition at Runtime, per Pattern 3. All Scene overlays ship in the b
 ### 2. Save safety across content deploys
 
 Additive-only content contract: existing content definition IDs cannot be renamed or deleted, only added to. Renames become deprecations with content-layer aliases.
+
+**Enforcement is delegated to the Release workspace / versioning system, not to this epic.** Studio's Release system already knows which content shipped in which version tag; extending it to refuse destructive edits on shipped content (deletes / renames of IDs that appear in a shipped version's manifest) is Release-system work, not Scene-model work. This epic just needs to not fight that system.
 
 ### 3. Cross-Scene presence state (link to Plan 055)
 
@@ -191,6 +234,8 @@ Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration 
 - **`scenesUiLabel` scope** — project-level only for v1; per-Scene override defers.
 - **Extending regionAreas from a Scene overlay** — currently `regionAreas` lives on Region shell. If Scene 5 wants a new market-stall area that earlier Scenes don't have, can it? Leaning no: areas are geographic base. Author adds it to the Region shell and just doesn't place presences in it during earlier Scenes.
 - **Command replay / audit history** — if commands change targeting from Region to Scene, does any recorded history need migration? Investigate during 058.1.
+- **Multi-condition unlock DAG** — current unlockCondition is single-value. Scene 5 requiring (Scene 3 AND Scene 4) needs a combinator. Fine for v1 (linear "Scene N unlocks when (N-1) completes" is common); revisit when a real branching story arc needs it.
+- **Undo/redo scope on Scene switch** — probably wipe the undo stack when the selector changes Scene (simpler and less confusing). Confirm at 058.2 implementation.
 
 ## Prerequisites
 
@@ -203,6 +248,8 @@ Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration 
 
 - Cross-project meta-progression (a "Wordlark Hollow completed unlocks something in Rackwick City" concept). Not engine core; plugin territory if it ever ships.
 - Multi-overlay composition (two Scenes stacking on the same region at once). Additive extension.
+- **Scene templates / duplicate-Scene** ("copy Scene 3 as starting point for Scene 4"). UX nicety; add later if authoring the second Scene from scratch feels painful.
+- **Scene metadata changelog field** — git history + Studio diff view fill this role.
 - Per-Scene achievements / metrics rollup (adjacent to Plan 020 telemetry).
 - Content-side i18n / localization scoping by Scene.
 - Multi-Scene scheduling / calendar UI (Studio surface for authoring "Scene 2 unlocks 2026-09-15") — comes with the wallClock unlock-schedule tension resolution.
