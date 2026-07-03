@@ -51,6 +51,8 @@ import {
   type UITheme,
   composeRegionContents,
   migrateToScenes,
+  resolveActiveScene,
+  resolveUnlockedSceneIds,
   type Scene
 } from "@sugarmagic/domain";
 import {
@@ -134,6 +136,7 @@ import {
   type MutableObservableValue,
   type ObservableValue,
   type RuntimeActionRegistry,
+  QUEST_MANAGER_PARTICIPANT_ID,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -142,6 +145,10 @@ import {
   createHostPlayerParticipant,
   type HostPlayerSlice
 } from "./save/hostPlayerParticipant";
+import {
+  createCampaignProgressionParticipant,
+  type CampaignProgressionSlice
+} from "./save/campaignProgressionParticipant";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
@@ -1036,6 +1043,25 @@ export function createWebRuntimeHost(
       }
     })
   );
+  // Plan 058 §058.4 — campaign.progression. Host-owned tier:
+  // `currentSceneId` decides which Scene overlay composes the
+  // world, so it must restore in Phase 1 before spawn (same class
+  // as host.player's currentRegionId). The closures below are the
+  // live state; 058.5's advance/unlock actions mutate them.
+  let activeSceneIdForSave: string | null = null;
+  let manuallyUnlockedSceneIds: string[] = [];
+  let completedSceneIds: string[] = [];
+  let campaignRestore: CampaignProgressionSlice | null = null;
+  saveParticipantRegistry.register(
+    createCampaignProgressionParticipant({
+      getCurrentSceneId: () => activeSceneIdForSave,
+      getManuallyUnlockedSceneIds: () => manuallyUnlockedSceneIds,
+      getCompletedSceneIds: () => completedSceneIds,
+      applyRestoredSlice: (data) => {
+        campaignRestore = data;
+      }
+    })
+  );
   // Plan 055 §055.6 — world.presence tracker + participant.
   // Host-owned lifetime (survives assembly rebuilds when we
   // eventually support mid-session region transitions).
@@ -1548,21 +1574,39 @@ export function createWebRuntimeHost(
     // Plan 058 §058.1 — belt-and-suspenders migration for stale
     // pre-058 boot payloads (regions carrying legacy `scene`
     // nests, no `scenes` array). Idempotent no-op on current
-    // payloads. Then pick the active Scene: first by sceneOrder
-    // until Plan 058.4 restores it from campaign.progression.
+    // payloads.
     const migratedContent = migrateToScenes({
       scenes: state.scenes ?? [],
       regions: state.regions
     });
-    // Plan 058 §058.2 — explicit activeSceneId (Studio Preview's
-    // ambient selection) wins; fall through to first-by-order.
-    // Plan 058.4 inserts campaign.progression restoration here.
-    const activeScene =
-      migratedContent.scenes.find(
-        (scene) => scene.sceneId === state.activeSceneId
-      ) ??
-      migratedContent.scenes[0] ??
-      null;
+    // Plan 058 §058.4 — Pattern 3 (Filtered Composition at
+    // Runtime): evaluate unlock conditions against the restored
+    // save, then pick the boot Scene. Precedence: saved
+    // currentSceneId > Studio Preview's ambient selection > first
+    // unlocked by order. questComplete conditions read the
+    // quest.manager slice's raw data here because unlock
+    // evaluation happens in Phase 1, before the quest system
+    // exists (Phase 2) — a deliberate cross-slice READ of plain
+    // save data, not a reach into another system.
+    manuallyUnlockedSceneIds = [...(campaignRestore?.unlockedSceneIds ?? [])];
+    completedSceneIds = [...(campaignRestore?.completedSceneIds ?? [])];
+    const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
+      ?.data as { completedQuestIds?: string[] } | undefined;
+    const unlockedSceneIds = resolveUnlockedSceneIds({
+      scenes: migratedContent.scenes,
+      manuallyUnlockedSceneIds,
+      completedQuestIds: questSliceData?.completedQuestIds ?? [],
+      // Runtime read at the seam — never persisted (the
+      // no-wallclock rule applies to slices, not boot evaluation).
+      now: Date.now()
+    });
+    const activeScene = resolveActiveScene({
+      scenes: migratedContent.scenes,
+      unlockedSceneIds,
+      requestedSceneId:
+        campaignRestore?.currentSceneId ?? state.activeSceneId ?? null
+    });
+    activeSceneIdForSave = activeScene?.sceneId ?? null;
     const activeRegion = getActiveRegion(
       migratedContent.regions,
       resolvedActiveRegionId
@@ -1572,7 +1616,21 @@ export function createWebRuntimeHost(
     const activeRegionContents = activeRegion
       ? composeRegionContents(activeRegion, activeScene)
       : null;
-    renderEngineProjector.push(state);
+    // Plan 058 §058.4 — per-Scene environment override: the
+    // projector reads state.activeEnvironmentId, so a Scene with
+    // an override shadows the authored/boot value; null falls
+    // through untouched. (audioOverride is authored on the Scene
+    // type but NOT applied yet — the runtime has no background-
+    // music system to override; revisit when one exists. See plan
+    // 058 Deferred.)
+    renderEngineProjector.push(
+      activeScene?.environmentOverride
+        ? {
+            ...state,
+            activeEnvironmentId: activeScene.environmentOverride.environmentId
+          }
+        : state
+    );
     renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
       state.contentLibrary,

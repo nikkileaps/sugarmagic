@@ -327,6 +327,79 @@ export function normalizeScene(input: unknown): Scene | null {
 }
 
 /**
+ * Plan 058 §058.4 — Pattern 3 (Filtered Composition at Runtime):
+ * evaluate every Scene's unlock condition against the player's
+ * save state at boot. Pure; the caller supplies `now` (epoch ms)
+ * so the wall-clock read stays at the seam, never persisted.
+ */
+export function resolveUnlockedSceneIds(input: {
+  scenes: readonly Scene[];
+  /** Scene ids explicitly unlocked by gameplay (the `unlockScene`
+   *  quest action, Plan 058.5) — from campaign.progression. */
+  manuallyUnlockedSceneIds: readonly string[];
+  /** From the quest.manager slice — drives `questComplete`. */
+  completedQuestIds: readonly string[];
+  now: number;
+}): Set<string> {
+  const manual = new Set(input.manuallyUnlockedSceneIds);
+  const quests = new Set(input.completedQuestIds);
+  const unlocked = new Set<string>();
+  for (const scene of input.scenes) {
+    const condition = scene.unlockCondition;
+    if (condition === "always") {
+      unlocked.add(scene.sceneId);
+    } else if (condition.kind === "manual") {
+      if (manual.has(scene.sceneId)) unlocked.add(scene.sceneId);
+    } else if (condition.kind === "questComplete") {
+      if (
+        quests.has(condition.questDefinitionId) ||
+        manual.has(scene.sceneId)
+      ) {
+        unlocked.add(scene.sceneId);
+      }
+    } else {
+      const unlockAt = Date.parse(condition.unlockAtIso);
+      if (
+        (Number.isFinite(unlockAt) && input.now >= unlockAt) ||
+        manual.has(scene.sceneId)
+      ) {
+        unlocked.add(scene.sceneId);
+      }
+    }
+  }
+  return unlocked;
+}
+
+/**
+ * Plan 058 §058.4 — pick the Scene the runtime boots into.
+ * Precedence: the requested Scene (saved `currentSceneId`, or
+ * Studio Preview's ambient selection) IF it is unlocked; else the
+ * first unlocked Scene by order; else the first Scene outright (a
+ * project whose every Scene is locked still has to boot — authors
+ * lock Scene 1 by accident, players shouldn't hit a black screen).
+ */
+export function resolveActiveScene(input: {
+  scenes: readonly Scene[];
+  unlockedSceneIds: ReadonlySet<string>;
+  requestedSceneId: string | null;
+}): Scene | null {
+  const ordered = [...input.scenes].sort(
+    (left, right) => left.sceneOrder - right.sceneOrder
+  );
+  const requested = ordered.find(
+    (scene) =>
+      scene.sceneId === input.requestedSceneId &&
+      input.unlockedSceneIds.has(scene.sceneId)
+  );
+  return (
+    requested ??
+    ordered.find((scene) => input.unlockedSceneIds.has(scene.sceneId)) ??
+    ordered[0] ??
+    null
+  );
+}
+
+/**
  * Normalize a project's `scenes` array. Drops malformed entries,
  * dedupes by sceneId (first wins), and sorts by `sceneOrder` so
  * every consumer sees a stable narrative sequence.

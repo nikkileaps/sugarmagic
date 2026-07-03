@@ -17,7 +17,9 @@ import {
   createDefaultScene,
   createRegionSceneOverlay,
   normalizeScene,
-  normalizeScenes
+  normalizeScenes,
+  resolveActiveScene,
+  resolveUnlockedSceneIds
 } from "./index";
 
 describe("createDefaultScene", () => {
@@ -171,5 +173,108 @@ describe("normalizeScenes", () => {
       "s:mid",
       "s:late"
     ]);
+  });
+});
+
+describe("resolveUnlockedSceneIds", () => {
+  const NOW = Date.parse("2026-07-03T12:00:00Z");
+  const scenes = [
+    createDefaultScene({ sceneId: "s:always", sceneOrder: 0 }),
+    createDefaultScene({
+      sceneId: "s:manual",
+      sceneOrder: 1,
+      unlockCondition: { kind: "manual" }
+    }),
+    createDefaultScene({
+      sceneId: "s:quest",
+      sceneOrder: 2,
+      unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" }
+    }),
+    createDefaultScene({
+      sceneId: "s:timed",
+      sceneOrder: 3,
+      unlockCondition: {
+        kind: "wallClock",
+        unlockAtIso: "2026-07-04T00:00:00Z"
+      }
+    })
+  ];
+
+  it("evaluates each condition kind against save state", () => {
+    const unlocked = resolveUnlockedSceneIds({
+      scenes,
+      manuallyUnlockedSceneIds: [],
+      completedQuestIds: [],
+      now: NOW
+    });
+    expect([...unlocked]).toEqual(["s:always"]);
+  });
+
+  it("quest completion and manual unlocks open their Scenes", () => {
+    const unlocked = resolveUnlockedSceneIds({
+      scenes,
+      manuallyUnlockedSceneIds: ["s:manual"],
+      completedQuestIds: ["q:1"],
+      now: NOW
+    });
+    expect(unlocked.has("s:manual")).toBe(true);
+    expect(unlocked.has("s:quest")).toBe(true);
+    expect(unlocked.has("s:timed")).toBe(false);
+  });
+
+  it("wall clock unlocks at the configured instant", () => {
+    const unlocked = resolveUnlockedSceneIds({
+      scenes,
+      manuallyUnlockedSceneIds: [],
+      completedQuestIds: [],
+      now: Date.parse("2026-07-04T00:00:00Z")
+    });
+    expect(unlocked.has("s:timed")).toBe(true);
+  });
+
+  it("a manual unlock overrides any condition kind", () => {
+    const unlocked = resolveUnlockedSceneIds({
+      scenes,
+      manuallyUnlockedSceneIds: ["s:quest", "s:timed"],
+      completedQuestIds: [],
+      now: NOW
+    });
+    expect(unlocked.has("s:quest")).toBe(true);
+    expect(unlocked.has("s:timed")).toBe(true);
+  });
+});
+
+describe("resolveActiveScene", () => {
+  const scenes = [
+    createDefaultScene({ sceneId: "s:1", sceneOrder: 0 }),
+    createDefaultScene({ sceneId: "s:2", sceneOrder: 1 }),
+    createDefaultScene({ sceneId: "s:3", sceneOrder: 2 })
+  ];
+
+  it("honors the requested Scene when unlocked", () => {
+    const active = resolveActiveScene({
+      scenes,
+      unlockedSceneIds: new Set(["s:1", "s:2"]),
+      requestedSceneId: "s:2"
+    });
+    expect(active?.sceneId).toBe("s:2");
+  });
+
+  it("falls back to the first unlocked Scene when the request is locked", () => {
+    const active = resolveActiveScene({
+      scenes,
+      unlockedSceneIds: new Set(["s:2"]),
+      requestedSceneId: "s:3"
+    });
+    expect(active?.sceneId).toBe("s:2");
+  });
+
+  it("boots the first Scene outright when everything is locked", () => {
+    const active = resolveActiveScene({
+      scenes,
+      unlockedSceneIds: new Set(),
+      requestedSceneId: null
+    });
+    expect(active?.sceneId).toBe("s:1");
   });
 });

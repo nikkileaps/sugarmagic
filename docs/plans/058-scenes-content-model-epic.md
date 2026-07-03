@@ -183,7 +183,7 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 **Pattern applied**: Filtered Composition at Runtime.
 
 - Domain type for scene unlock condition: `"always"` | `{kind: "manual"}` | `{kind: "questComplete", questId}` | `{kind: "wallClock", unlockAt}`.
-- `campaign.progression` SaveParticipant per Plan 055 pattern — carries `currentSceneId`, `unlockedSceneIds`, `completedSceneIds`. Tier: `default`. Same nullable-getter pattern as `quest.manager` / `inventory.player` / `caster.stats` / `npc.behavior`. The rule [[save-participant-for-new-state]] applies unchanged (fifth participant to use it).
+- `campaign.progression` SaveParticipant per Plan 055 pattern — carries `currentSceneId`, `unlockedSceneIds` (MANUAL unlocks only; condition-derived unlocks are re-evaluated each boot so retuned conditions never strand players), `completedSceneIds`. Tier: `host-owned` (implementation deviation from the original `default` sketch: `currentSceneId` decides which overlay composes the world, so it must restore in Phase 1 BEFORE spawn — same boot-ordering class as `host.player.currentRegionId`, and it uses the same restore-closure pattern rather than the nullable-getter pattern). The rule [[save-participant-for-new-state]] applies unchanged (sixth participant to use it).
 - Runtime at boot: after Phase 2 deserialize, resolve `unlockedSceneIds` by evaluating each `scene.unlockCondition` against the current save state. wallClock reads `Date.now()` — runtime read, NOT a persisted value, so [[no-wallclock-in-slice]] doesn't apply.
 - `currentSceneId` restoration picks which Scene's overlay the runtime composes. On first boot, falls through to the first Scene by `sceneOrder`.
 - `runtimeHost.ts` — spawn picks `activeSceneId` from `campaign.progression`, then `activeRegionId` per host.player as today, then composes `region.placedAssets ⋃ activeScene.regionOverlays[activeRegionId]` as the effective world contents.
@@ -240,6 +240,7 @@ Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration 
 
 ## Defers
 
+- **Applying `audioOverride` at runtime** — the Scene type carries `audioOverride` (backgroundMusicId / ambientSoundId) but the runtime has NO background-music system to override: `RuntimeSoundEventKey` is all SFX/UI events, and region audio is emitters + ambience zones. Authored data is preserved; application is deferred. Revisit trigger: when a background-music/soundtrack system lands in the runtime (code comment at the activeScene resolution in `targets/web/src/runtimeHost.ts` marks the seam).
 - Cross-project meta-progression (a "Wordlark Hollow completed unlocks something in Rackwick City" concept). Not engine core; plugin territory if it ever ships.
 - Multi-overlay composition (two Scenes stacking on the same region at once). Additive extension.
 - **Scene templates / duplicate-Scene** ("copy Scene 3 as starting point for Scene 4"). UX nicety; add later if authoring the second Scene from scratch feels painful.
