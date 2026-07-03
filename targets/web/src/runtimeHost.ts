@@ -87,7 +87,9 @@ import {
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
+  createCasterStatsSaveParticipant,
   createInventoryPlayerSaveParticipant,
+  createNpcBehaviorSaveParticipant,
   createQuestManagerSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
@@ -1542,7 +1544,7 @@ export function createWebRuntimeHost(
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
-      // filters (Plan 056 episode gating, etc.) compose into
+      // filters (Plan 058 episode gating, etc.) compose into
       // `worldPresenceTracker.shouldSkip` at the host and both
       // paths see them automatically. Non-item scene objects
       // (NPCs, static assets) don't have a filter surface today
@@ -1951,6 +1953,27 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createInventoryPlayerSaveParticipant({
         getInventoryManager: () => gameplaySession?.inventoryManager ?? null
+      })
+    );
+    // Plan 056 §056.1 — caster.stats restores battery + resonance
+    // (and any authored stats) across sessions. Prevents the
+    // "full battery cheese" of every reload; the StatCarrier's
+    // clamp-to-definition handles legacy values gracefully.
+    saveParticipantRegistry.register(
+      createCasterStatsSaveParticipant({
+        getCasterManager: () => gameplaySession?.casterManager ?? null
+      })
+    );
+    // Plan 056 §056.2 — npc.behavior restores per-NPC position +
+    // movement status/target so returning players don't see NPCs
+    // teleport back to spawn and re-walk to their task target on
+    // every reload. Wall-clock timestamps (stuck detection) reset
+    // to "now" at restore per the slice design; visually
+    // indistinguishable from the pre-reload state.
+    saveParticipantRegistry.register(
+      createNpcBehaviorSaveParticipant({
+        getNpcBehaviorSystem: () =>
+          gameplaySession?.npcBehaviorSystem ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);

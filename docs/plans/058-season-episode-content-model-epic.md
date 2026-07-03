@@ -1,4 +1,4 @@
-# Plan 056 — Season / Episode content model + progress persistence
+# Plan 058 — Season / Episode content model + progress persistence
 
 Status: placeholder / not yet designed
 Owner: nikki + claude

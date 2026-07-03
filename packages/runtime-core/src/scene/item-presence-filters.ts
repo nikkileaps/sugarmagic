@@ -21,7 +21,7 @@ import type { RegionItemPresence } from "@sugarmagic/domain";
 /**
  * The filter surface both spawn paths consult. Single
  * `shouldSkip` predicate today; when a second filter arrives
- * (Plan 056 episode gating), it composes into this predicate at
+ * (Plan 058 episode gating), it composes into this predicate at
  * a single call site (the filters object the host constructs).
  * Callers stay unchanged.
  */

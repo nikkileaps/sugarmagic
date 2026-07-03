@@ -207,6 +207,8 @@ export interface RuntimeGameplaySessionController {
   readonly dialogueManager: DialogueManager;
   readonly questManager: QuestManager;
   readonly inventoryManager: InventoryManager;
+  readonly casterManager: CasterManager;
+  readonly npcBehaviorSystem: RuntimeNpcBehaviorSystem | null;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
@@ -1065,7 +1067,7 @@ export function createRuntimeGameplaySessionController(
     // Plan 057 — iterate through the shared filter helper so
     // the ECS spawn path here and the visual mesh spawn path
     // (in target-web's runtimeHost) apply the same filter set.
-    // Any future filter (Plan 056 episode gating, etc.)
+    // Any future filter (Plan 058 episode gating, etc.)
     // composes into `shouldSkipItemPresence` at the host and
     // both paths pick it up automatically.
     iterateActiveItemPresences(
@@ -1832,6 +1834,8 @@ export function createRuntimeGameplaySessionController(
     dialogueManager,
     questManager,
     inventoryManager,
+    casterManager,
+    npcBehaviorSystem,
     interactionSystem,
     questSystem,
     blackboard,
