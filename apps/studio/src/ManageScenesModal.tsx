@@ -109,12 +109,15 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                 size="xs"
                 style={{ flex: 1 }}
                 value={renameDrafts[scene.sceneId] ?? scene.displayName}
-                onChange={(event) =>
+                onChange={(event) => {
+                  // Read synchronously — currentTarget is null by
+                  // the time the state updater callback runs.
+                  const value = event.currentTarget.value;
                   setRenameDrafts((drafts) => ({
                     ...drafts,
-                    [scene.sceneId]: event.currentTarget.value
-                  }))
-                }
+                    [scene.sceneId]: value
+                  }));
+                }}
                 onBlur={() => commitRename(scene)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitRename(scene);
