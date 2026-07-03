@@ -181,6 +181,14 @@ export interface WebRuntimeStartState {
    * lifts at start().
    */
   scenes?: Scene[];
+  /**
+   * Plan 058 §058.2 — which Scene to boot into. Studio Preview
+   * passes the editor's ambient Scene selection; the deployed
+   * game omits it (the player's Scene comes from the
+   * `campaign.progression` save slice in Plan 058.4, falling
+   * through to the first Scene by order until then).
+   */
+  activeSceneId?: string | null;
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   /**
@@ -1546,7 +1554,15 @@ export function createWebRuntimeHost(
       scenes: state.scenes ?? [],
       regions: state.regions
     });
-    const activeScene = migratedContent.scenes[0] ?? null;
+    // Plan 058 §058.2 — explicit activeSceneId (Studio Preview's
+    // ambient selection) wins; fall through to first-by-order.
+    // Plan 058.4 inserts campaign.progression restoration here.
+    const activeScene =
+      migratedContent.scenes.find(
+        (scene) => scene.sceneId === state.activeSceneId
+      ) ??
+      migratedContent.scenes[0] ??
+      null;
     const activeRegion = getActiveRegion(
       migratedContent.regions,
       resolvedActiveRegionId

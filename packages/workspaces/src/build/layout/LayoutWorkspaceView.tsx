@@ -48,7 +48,8 @@ import {
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
   createSceneFolderId,
-  type ComposedRegionContents
+  type ComposedRegionContents,
+  type Scene
 } from "@sugarmagic/domain";
 import {
   PanelSection,
@@ -88,6 +89,12 @@ export interface LayoutWorkspaceViewProps {
    * itself only supplies identity / landscape / areas).
    */
   getRegionContents: () => ComposedRegionContents | null;
+  /**
+   * Plan 058 §058.2 — the author's ambient Scene. New placements
+   * land in its overlay; the explorer badges overlay-scope
+   * entities; the inspector shows each asset's scope.
+   */
+  getActiveScene: () => Scene | null;
   assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
@@ -114,6 +121,7 @@ const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
 function buildSceneTree(
   region: RegionDocument,
   regionContents: ComposedRegionContents,
+  overlayAssetIds: Set<string>,
   assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
@@ -169,13 +177,18 @@ function buildSceneTree(
             ) ?? null)
           : null;
 
+        const baseName =
+          asset.inspectable && documentDefinition
+            ? `${asset.displayName} · ${documentDefinition.displayName}`
+            : asset.displayName;
         return {
           type: "entity" as const,
           instanceId: asset.instanceId,
-          displayName:
-            asset.inspectable && documentDefinition
-              ? `${asset.displayName} · ${documentDefinition.displayName}`
-              : asset.displayName,
+          // Plan 058 §058.2 — overlay-scope assets get a Scene
+          // marker; base assets (always visible) stay unmarked.
+          displayName: overlayAssetIds.has(asset.instanceId)
+            ? `${baseName} · 🎬`
+            : baseName,
           entityKind: "asset" as const,
           assetKind:
             assetKindsByDefinitionId.get(asset.assetDefinitionId) ?? "asset",
@@ -268,6 +281,7 @@ export function useLayoutWorkspaceView(
     onCommand,
     getRegion,
     getRegionContents,
+    getActiveScene,
     assetDefinitions,
     playerDefinition,
     itemDefinitions,
@@ -318,6 +332,18 @@ export function useLayoutWorkspaceView(
   // empty contents when no region is active so downstream reads
   // stay unconditional.
   const regionContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
+  const activeScene = getActiveScene();
+  // Plan 058 §058.2 — which assets in the composed view came from
+  // the Scene overlay (vs the always-visible region base). Drives
+  // explorer badges + the inspector's Scope row.
+  const overlayAssetIds = useMemo(() => {
+    if (!region || !activeScene) return new Set<string>();
+    return new Set(
+      (
+        activeScene.regionOverlays[region.identity.id]?.placedAssets ?? []
+      ).map((asset) => asset.instanceId)
+    );
+  }, [region, activeScene]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -402,6 +428,7 @@ export function useLayoutWorkspaceView(
         ? buildSceneTree(
             region,
             regionContents,
+            overlayAssetIds,
             assetDefinitions,
             playerDefinition,
             itemDefinitions,
@@ -414,6 +441,7 @@ export function useLayoutWorkspaceView(
       documentDefinitions,
       itemDefinitions,
       npcDefinitions,
+      overlayAssetIds,
       playerDefinition,
       region,
       regionContents
@@ -631,11 +659,14 @@ export function useLayoutWorkspaceView(
         payload: {
           folderId,
           displayName: displayName.trim(),
-          parentFolderId
+          parentFolderId,
+          // Plan 058 §058.2 — folders follow the same ambient
+          // scoping as the assets they'll group.
+          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
         }
       });
     },
-    [getRegion, onCommand]
+    [activeScene, getRegion, onCommand]
   );
 
   const handleCreateFolderAtSelection = useCallback(() => {
@@ -875,11 +906,15 @@ export function useLayoutWorkspaceView(
           selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
         position: [0, 0.5, 0],
         rotation: [0, 0, 0],
-        scale: [1, 1, 1]
+        scale: [1, 1, 1],
+        // Plan 058 §058.2 — Ambient Context: new placements land
+        // in the active Scene's overlay. Promote to Base via the
+        // scope-conversion action (Plan 058.3).
+        scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
       }
     });
     onSelect([instanceId]);
-  }, [onCommand, onImportAsset, onSelect, region, selectedFolderId]);
+  }, [activeScene, onCommand, onImportAsset, onSelect, region, selectedFolderId]);
 
   const handleAddPlayerToScene = useCallback(() => {
     if (!region || !playerDefinition) return;
@@ -1297,6 +1332,24 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedAsset ? (
           <Stack gap="md">
+            {/* Plan 058 §058.2 — where this asset lives in the
+                Base + Overlay split. Read-only for now; scope
+                conversion ships with Plan 058.3. */}
+            <Stack gap={2}>
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
+                Scope
+              </Text>
+              <Text size="sm">
+                {overlayAssetIds.has(selectedAsset.instanceId)
+                  ? `🎬 ${activeScene?.displayName ?? "Scene"}`
+                  : "Base — always visible"}
+              </Text>
+            </Stack>
             <TransformInspector
               label="Position"
               value={selectedAsset.transform.position}

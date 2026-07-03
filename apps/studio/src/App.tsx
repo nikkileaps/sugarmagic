@@ -41,6 +41,8 @@ import {
   undoSession,
   markSessionClean,
   switchActiveRegion,
+  switchActiveScene,
+  getActiveScene,
   addRegionToSession,
   getActiveRegion,
   getAllRegions,
@@ -504,6 +506,15 @@ function handleRegionSelect(regionId: string) {
   shellStore.getState().setActiveRegionId(regionId);
 }
 
+// Plan 058 §058.2 — Ambient Context switch: the top-bar Scene
+// selector routes here. Every Design workspace + Preview follows
+// the session's activeSceneId.
+function handleSceneSelect(sceneId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore.getState().updateSession(switchActiveScene(session, sceneId));
+}
+
 // --- Preview ---
 
 function handleStartPreview(
@@ -627,6 +638,9 @@ async function postPreviewBootMessage(
       // (explicit activeSceneId threading lands with 058.2's
       // selector).
       scenes: session.gameProject.scenes,
+      // Ambient Context: Preview boots whichever Scene is active
+      // in the editor — no separate "preview which Scene?" picker.
+      activeSceneId: session.activeSceneId,
       activeRegionId: session.activeRegionId,
       activeEnvironmentId: snapshot.activeEnvironmentId,
       installedPluginIds,
@@ -2830,6 +2844,67 @@ export function App() {
                 >
                   v{session.gameProject.majorVersion}
                 </Badge>
+                {/* Plan 058 §058.2 — Scene selector (Ambient
+                    Context). Scope narrows left to right:
+                    project > version > Scene > workspaces. */}
+                <Menu position="bottom-start" width={240}>
+                  <Menu.Target>
+                    <UnstyledButton
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        background: "var(--sm-active-bg)",
+                        color: "var(--sm-color-text)",
+                        fontSize: "var(--sm-font-size-sm)",
+                        fontWeight: 600
+                      }}
+                    >
+                      🎬{" "}
+                      {getActiveScene(session)?.displayName ??
+                        session.gameProject.scenesUiLabel}
+                      <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
+                    </UnstyledButton>
+                  </Menu.Target>
+                  <Menu.Dropdown
+                    styles={{
+                      dropdown: {
+                        background: "var(--sm-color-surface1)",
+                        border: "1px solid var(--sm-panel-border)",
+                        padding: "var(--sm-space-xs) 0"
+                      }
+                    }}
+                  >
+                    <Menu.Label>
+                      {session.gameProject.scenesUiLabel}s
+                    </Menu.Label>
+                    {session.gameProject.scenes.map((scene) => (
+                      <Menu.Item
+                        key={scene.sceneId}
+                        onClick={() => handleSceneSelect(scene.sceneId)}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color:
+                              scene.sceneId ===
+                              getActiveScene(session)?.sceneId
+                                ? "var(--sm-accent-blue)"
+                                : "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        {scene.sceneId === getActiveScene(session)?.sceneId
+                          ? "✓ "
+                          : ""}
+                        {scene.displayName}
+                      </Menu.Item>
+                    ))}
+                  </Menu.Dropdown>
+                </Menu>
               </Group>
             )}
             <ModeBar

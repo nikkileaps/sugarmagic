@@ -38,6 +38,7 @@ import {
   createEmptyContentLibrarySnapshot,
   getActiveRegion,
   getActiveRegionContents,
+  getActiveScene,
   type AuthoringSession
 } from "@sugarmagic/domain";
 import {
@@ -279,6 +280,7 @@ export function useBuildProductModeView(
     getRegion: () => (session ? getActiveRegion(session) : null),
     getRegionContents: () =>
       session ? getActiveRegionContents(session) : null,
+    getActiveScene: () => (session ? getActiveScene(session) : null),
     assetDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
