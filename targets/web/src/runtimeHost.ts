@@ -89,6 +89,7 @@ import {
   createRuntimeDebugHud,
   createCasterStatsSaveParticipant,
   createInventoryPlayerSaveParticipant,
+  createNpcBehaviorSaveParticipant,
   createQuestManagerSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
@@ -1961,6 +1962,18 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createCasterStatsSaveParticipant({
         getCasterManager: () => gameplaySession?.casterManager ?? null
+      })
+    );
+    // Plan 056 §056.2 — npc.behavior restores per-NPC position +
+    // movement status/target so returning players don't see NPCs
+    // teleport back to spawn and re-walk to their task target on
+    // every reload. Wall-clock timestamps (stuck detection) reset
+    // to "now" at restore per the slice design; visually
+    // indistinguishable from the pre-reload state.
+    saveParticipantRegistry.register(
+      createNpcBehaviorSaveParticipant({
+        getNpcBehaviorSystem: () =>
+          gameplaySession?.npcBehaviorSystem ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);

@@ -2,7 +2,8 @@ import type {
   RegionDocument,
   RegionBehaviorWorldFlagCondition,
   RegionNPCBehaviorDefinition,
-  RegionNPCBehaviorTask
+  RegionNPCBehaviorTask,
+  SaveSlice
 } from "@sugarmagic/domain";
 import { Position, type Entity, type World } from "../ecs";
 import {
@@ -62,7 +63,32 @@ export interface RuntimeNpcBehaviorSystem {
   }) => RuntimeNpcBehaviorSyncResult;
   getCurrentTask: (npcDefinitionId: string) => RuntimeNpcCurrentTask | null;
   reset: () => void;
+  serializeSaveSlice: () => NpcBehaviorSlice;
+  deserializeSaveSlice: (slice: NpcBehaviorSaveSlice | null) => void;
 }
+
+/**
+ * Plan 056 §056.2 — persisted per-NPC state. Keyed by
+ * `npcDefinitionId` to match the internal `movementStateByNpcId`
+ * keying. Wall-clock timestamps (`lastProgressAtMs`,
+ * `blockedAtMs`) and sampled waypoints (`targetX/Z`) are
+ * explicitly OMITTED from the wire — timestamps would look
+ * "stuck for hours" on reload; waypoints get re-sampled inside
+ * the target area on next tick with no visible difference.
+ */
+export interface NpcBehaviorSlice {
+  npcs: Record<
+    string,
+    {
+      position: { x: number; y: number; z: number };
+      target: { areaId: string | null; taskId: string | null } | null;
+      status: "idle" | "en_route" | "at_target" | "blocked";
+    }
+  >;
+}
+
+/** Envelope alias matching the other participants' shapes. */
+export type NpcBehaviorSaveSlice = SaveSlice<NpcBehaviorSlice>;
 
 interface MovementState {
   targetAreaId: string | null;
@@ -561,6 +587,81 @@ export function createRuntimeNpcBehaviorSystem(
     reset() {
       movementStateByNpcId.clear();
       currentTaskByNpcId.clear();
+    },
+    // ---- Plan 056 §056.2 — save participation ------------------------
+    serializeSaveSlice(): NpcBehaviorSlice {
+      const npcs: NpcBehaviorSlice["npcs"] = {};
+      for (const npc of resolveNpcEntities()) {
+        const position = world.getComponent(npc.entity, Position);
+        if (!position) continue;
+        const state = movementStateByNpcId.get(npc.npcDefinitionId) ?? null;
+        npcs[npc.npcDefinitionId] = {
+          position: { x: position.x, y: position.y, z: position.z },
+          target: state
+            ? {
+                areaId: state.targetAreaId,
+                taskId: state.targetTaskId
+              }
+            : null,
+          status: state?.status ?? "idle"
+        };
+      }
+      return { npcs };
+    },
+    deserializeSaveSlice(slice) {
+      if (!slice) return;
+      // Iterate the current NPC entities (already spawned by
+      // `registerNpcInteractables` at assembly setup time).
+      // For each NPC in the slice, look up its entity and
+      // overwrite the Position component + reconstitute a
+      // MovementState. NPCs in the slice whose definition is no
+      // longer present (npcDefinition renamed / removed) drop
+      // with a warn; NPCs newly-added since the save start at
+      // their authored spawn point (no restoration needed).
+      const entitiesByDefinitionId = new Map<
+        string,
+        { entity: Entity }
+      >();
+      for (const npc of resolveNpcEntities()) {
+        entitiesByDefinitionId.set(npc.npcDefinitionId, {
+          entity: npc.entity
+        });
+      }
+      for (const [npcDefinitionId, saved] of Object.entries(
+        slice.data.npcs ?? {}
+      )) {
+        const entry = entitiesByDefinitionId.get(npcDefinitionId);
+        if (!entry) {
+          console.warn(
+            `[behavior] restore: dropping NPC "${npcDefinitionId}" — no matching definition in this region.`
+          );
+          continue;
+        }
+        const position = world.getComponent(entry.entity, Position);
+        if (position) {
+          position.x = saved.position.x;
+          position.y = saved.position.y;
+          position.z = saved.position.z;
+        }
+        // Rebuild movement state. Timestamps re-init to "now"
+        // so stuck-detection has a fresh baseline (see slice
+        // comment for the rationale on why we don't persist
+        // wall-clock timestamps).
+        const nowMs = now();
+        movementStateByNpcId.set(npcDefinitionId, {
+          targetAreaId: saved.target?.areaId ?? null,
+          targetTaskId: saved.target?.taskId ?? null,
+          // targetX/Z re-sampled on next sync tick when the
+          // MovementDirective resolves.
+          targetX: null,
+          targetZ: null,
+          lastX: saved.position.x,
+          lastZ: saved.position.z,
+          lastProgressAtMs: nowMs,
+          blockedAtMs: null,
+          status: saved.status
+        });
+      }
     }
   };
 }

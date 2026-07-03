@@ -208,6 +208,7 @@ export interface RuntimeGameplaySessionController {
   readonly questManager: QuestManager;
   readonly inventoryManager: InventoryManager;
   readonly casterManager: CasterManager;
+  readonly npcBehaviorSystem: RuntimeNpcBehaviorSystem | null;
   readonly interactionSystem: InteractionSystem;
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
@@ -1834,6 +1835,7 @@ export function createRuntimeGameplaySessionController(
     questManager,
     inventoryManager,
     casterManager,
+    npcBehaviorSystem,
     interactionSystem,
     questSystem,
     blackboard,
