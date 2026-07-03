@@ -209,21 +209,15 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 
 Filtered Composition at Runtime, per Pattern 3. All Scene overlays ship in the bundle; the runtime just doesn't compose non-unlocked Scenes' overlays into the active view. Load-per-Scene defers.
 
-### 2. Save safety across content deploys
-
-Additive-only content contract: existing content definition IDs cannot be renamed or deleted, only added to. Renames become deprecations with content-layer aliases.
-
-**Enforcement is delegated to the Release workspace / versioning system, not to this epic.** Studio's Release system already knows which content shipped in which version tag; extending it to refuse destructive edits on shipped content (deletes / renames of IDs that appear in a shipped version's manifest) is Release-system work, not Scene-model work. This epic just needs to not fight that system.
-
-### 3. Cross-Scene presence state (link to Plan 055)
+### 2. Cross-Scene presence state (link to Plan 055)
 
 `world.presence` slice moves from `Record<regionId, string[]>` to `Record<regionId, Record<sceneId, string[]>>` in 058.5. v1 saves migrate cleanly.
 
-### 4. Command-shape change
+### 3. Command-shape change
 
 Presence + placed asset + folder commands change their targeting. Placed asset / folder commands gain a `scope` field. Studio dispatch + executor + any command replay update in lockstep during 058.1.
 
-### 5. Placed asset scope authoring UX
+### 4. Placed asset scope authoring UX
 
 Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration defaults everything to Base (safe). Authors flip individual assets to Overlay as they add more Scenes and want per-Scene decoration.
 
@@ -250,6 +244,8 @@ Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration 
 - Multi-overlay composition (two Scenes stacking on the same region at once). Additive extension.
 - **Scene templates / duplicate-Scene** ("copy Scene 3 as starting point for Scene 4"). UX nicety; add later if authoring the second Scene from scratch feels painful.
 - **Scene metadata changelog field** — git history + Studio diff view fill this role.
+- **Additive-only content contract + shipped-content manifest enforcement**. Not needed pre-public-release; runtime already handles graceful drift via each participant's unknown-ID drop-with-warn tolerance. Revisit when there are real player saves to protect.
+- **Save-data migration path for content changes** — a tool that lets a game designer say "I renamed `quest:find-the-cat` to `quest:find-the-kitten`, migrate every live save" (or "I removed the Scene 3 finale quest, wipe its stage progress from any save that had it in flight"). Relies on a shipped-content manifest to know what's live and what needs migrating. Deferred with additive-only enforcement above; for now the strategy is "wipe/manual-migrate the ~3 playtesters when we make breaking changes."
 - Per-Scene achievements / metrics rollup (adjacent to Plan 020 telemetry).
 - Content-side i18n / localization scoping by Scene.
 - Multi-Scene scheduling / calendar UI (Studio surface for authoring "Scene 2 unlocks 2026-09-15") — comes with the wallClock unlock-schedule tension resolution.
