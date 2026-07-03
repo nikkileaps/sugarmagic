@@ -118,6 +118,19 @@ const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
   itemPresences: []
 };
 
+/** Plan 058 §058.2 — inspector row showing where the selected
+ *  entity lives in the Base + Overlay split. */
+function ScopeRow({ label }: { label: string }) {
+  return (
+    <Stack gap={2}>
+      <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+        Scope
+      </Text>
+      <Text size="sm">{label}</Text>
+    </Stack>
+  );
+}
+
 function buildSceneTree(
   region: RegionDocument,
   regionContents: ComposedRegionContents,
@@ -1332,24 +1345,15 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedAsset ? (
           <Stack gap="md">
-            {/* Plan 058 §058.2 — where this asset lives in the
-                Base + Overlay split. Read-only for now; scope
-                conversion ships with Plan 058.3. */}
-            <Stack gap={2}>
-              <Text
-                size="xs"
-                fw={600}
-                tt="uppercase"
-                c="var(--sm-color-subtext)"
-              >
-                Scope
-              </Text>
-              <Text size="sm">
-                {overlayAssetIds.has(selectedAsset.instanceId)
+            {/* Read-only for now; scope conversion ships with
+                Plan 058.3. */}
+            <ScopeRow
+              label={
+                overlayAssetIds.has(selectedAsset.instanceId)
                   ? `🎬 ${activeScene?.displayName ?? "Scene"}`
-                  : "Base — always visible"}
-              </Text>
-            </Stack>
+                  : "Base — always visible"
+              }
+            />
             <TransformInspector
               label="Position"
               value={selectedAsset.transform.position}
@@ -1525,6 +1529,7 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">
+            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
             <TransformInspector
               label="Spawn Position"
               value={selectedPlayerPresence.transform.position}
@@ -1543,6 +1548,7 @@ export function useLayoutWorkspaceView(
             <Text size="sm" fw={600}>
               {selectedNPCDefinition?.displayName ?? "NPC"}
             </Text>
+            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
             <TransformInspector
               label="Spawn Position"
               value={selectedNPCPresence.transform.position}
@@ -1561,6 +1567,7 @@ export function useLayoutWorkspaceView(
             <Text size="sm" fw={600}>
               {selectedItemDefinition?.displayName ?? "Item"}
             </Text>
+            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
             <NumberInput
               label="Quantity"
               size="xs"
