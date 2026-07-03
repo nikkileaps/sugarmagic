@@ -21,6 +21,7 @@ import {
   ActionIcon,
   Box,
   Button,
+  Group,
   Menu,
   Modal,
   NumberInput,
@@ -118,16 +119,26 @@ const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
   itemPresences: []
 };
 
-/** Plan 058 §058.2 — inspector row showing where the selected
- *  entity lives in the Base + Overlay split. */
-function ScopeRow({ label }: { label: string }) {
+/** Plan 058 §058.2 — labeled "field: value" inspector row.
+ *  Used for the identity block at the top of every selection
+ *  (Name / Type / Scope) so the selected entity's kind and
+ *  Base-vs-Scene scope are explicit, not inferred. */
+function FactRow({ label, value }: { label: string; value: string }) {
   return (
-    <Stack gap={2}>
-      <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-        Scope
+    <Group gap="xs" wrap="nowrap" align="baseline">
+      <Text
+        size="xs"
+        fw={600}
+        tt="uppercase"
+        c="var(--sm-color-subtext)"
+        style={{ minWidth: 48 }}
+      >
+        {label}
       </Text>
-      <Text size="sm">{label}</Text>
-    </Stack>
+      <Text size="sm" style={{ overflowWrap: "anywhere" }}>
+        {value}
+      </Text>
+    </Group>
   );
 }
 
@@ -1345,15 +1356,20 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedAsset ? (
           <Stack gap="md">
-            {/* Read-only for now; scope conversion ships with
-                Plan 058.3. */}
-            <ScopeRow
-              label={
-                overlayAssetIds.has(selectedAsset.instanceId)
-                  ? `🎬 ${activeScene?.displayName ?? "Scene"}`
-                  : "Base — always visible"
-              }
-            />
+            {/* Identity block. Scope is read-only for now; scope
+                conversion ships with Plan 058.3. */}
+            <Stack gap={4}>
+              <FactRow label="Name" value={selectedAsset.displayName} />
+              <FactRow label="Type" value="Placed Asset" />
+              <FactRow
+                label="Scope"
+                value={
+                  overlayAssetIds.has(selectedAsset.instanceId)
+                    ? `🎬 ${activeScene?.displayName ?? "Scene"}`
+                    : "Base — always visible"
+                }
+              />
+            </Stack>
             <TransformInspector
               label="Position"
               value={selectedAsset.transform.position}
@@ -1529,7 +1545,17 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">
-            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
+            <Stack gap={4}>
+              <FactRow
+                label="Name"
+                value={playerDefinition?.displayName ?? "Player"}
+              />
+              <FactRow label="Type" value="Player Spawn" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <TransformInspector
               label="Spawn Position"
               value={selectedPlayerPresence.transform.position}
@@ -1545,10 +1571,17 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedNPCPresence ? (
           <Stack gap="md">
-            <Text size="sm" fw={600}>
-              {selectedNPCDefinition?.displayName ?? "NPC"}
-            </Text>
-            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
+            <Stack gap={4}>
+              <FactRow
+                label="Name"
+                value={selectedNPCDefinition?.displayName ?? "NPC"}
+              />
+              <FactRow label="Type" value="NPC" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <TransformInspector
               label="Spawn Position"
               value={selectedNPCPresence.transform.position}
@@ -1564,10 +1597,17 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedItemPresence ? (
           <Stack gap="md">
-            <Text size="sm" fw={600}>
-              {selectedItemDefinition?.displayName ?? "Item"}
-            </Text>
-            <ScopeRow label={`🎬 ${activeScene?.displayName ?? "Scene"}`} />
+            <Stack gap={4}>
+              <FactRow
+                label="Name"
+                value={selectedItemDefinition?.displayName ?? "Item"}
+              />
+              <FactRow label="Type" value="Item" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <NumberInput
               label="Quantity"
               size="xs"
