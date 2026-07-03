@@ -19,6 +19,7 @@
 
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
+  composeRegionContents,
   type CastableInvocation,
   createDefaultAudioMixerSettings,
   createEmptyContentLibrarySnapshot,
@@ -32,6 +33,7 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type RegionItemPresence,
+  type Scene,
   type SpellDefinition,
   type RegionDocument,
   type SoundEventBindingMap
@@ -154,6 +156,13 @@ export interface RuntimeGameplaySessionControllerOptions {
   world: World;
   inputManager: RuntimeInputManager;
   activeRegion: RegionDocument | null;
+  /**
+   * Plan 058 §058.1 — the active narrative Scene whose overlay
+   * composes onto the region base. The assembly reads presences
+   * and inspectable assets from the COMPOSED view (Pattern 1),
+   * never from the region directly. Null composes base-only.
+   */
+  activeScene?: Scene | null;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -397,6 +406,13 @@ export function createRuntimeGameplaySessionController(
       itemDefinitions
     })
   });
+  // Plan 058 §058.1 — compose base + active-Scene overlay ONCE at
+  // assembly setup (the region is fixed for the assembly's
+  // lifetime). Every presence / inspectable read below goes
+  // through this composed view, never region fields directly.
+  const regionContents = activeRegion
+    ? composeRegionContents(activeRegion, options.activeScene ?? null)
+    : null;
 
   const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
@@ -557,7 +573,7 @@ export function createRuntimeGameplaySessionController(
       }
     }
 
-    return activeRegion?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+    return regionContents?.playerPresence?.transform.position ?? [0, 0, 0];
   }
 
   function resolvePlayerEntity(): Entity | null {
@@ -677,7 +693,7 @@ export function createRuntimeGameplaySessionController(
     const [playerX, playerY, playerZ] = resolvePlayerPositionTuple();
     spatialResolverSystem.sync({
       playerPosition: { x: playerX, y: playerY, z: playerZ },
-      npcPositions: region.scene.npcPresences.map((presence) => {
+      npcPositions: (regionContents?.npcPresences ?? []).map((presence) => {
         const runtimeNpcEntity =
           npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
         const runtimePosition =
@@ -999,9 +1015,9 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerNpcInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
 
-    for (const presence of activeRegion.scene.npcPresences) {
+    for (const presence of regionContents.npcPresences) {
       const npcDefinition = npcDefinitions.find(
         (definition) => definition.definitionId === presence.npcDefinitionId
       );
@@ -1063,15 +1079,15 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerItemInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
     // Plan 057 — iterate through the shared filter helper so
     // the ECS spawn path here and the visual mesh spawn path
     // (in target-web's runtimeHost) apply the same filter set.
-    // Any future filter (Plan 058 episode gating, etc.)
+    // Any future filter (Plan 058 Scene gating, etc.)
     // composes into `shouldSkipItemPresence` at the host and
     // both paths pick it up automatically.
     iterateActiveItemPresences(
-      activeRegion.scene.itemPresences,
+      regionContents.itemPresences,
       {
         shouldSkip: (presenceId) =>
           shouldSkipItemPresence?.(presenceId) ?? false
@@ -1081,9 +1097,11 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerInspectableInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
 
-    for (const asset of activeRegion.scene.placedAssets) {
+    // Composed view: inspectables can be base-scope (permanent
+    // statue) or overlay-scope (Scene-specific prop) — both spawn.
+    for (const asset of regionContents.placedAssets) {
       if (!asset.inspectable) continue;
 
       const promptText = asset.inspectable.promptText?.trim() || "Inspect";
@@ -1994,6 +2012,7 @@ export function createRuntimeGameplayAssembly(
     void pluginManager.init({
       blackboard: gameplaySession.blackboard,
       activeRegion: options.activeRegion,
+      activeScene: options.activeScene ?? null,
       playerDefinition: options.playerDefinition,
       spellDefinitions: options.spellDefinitions,
       itemDefinitions: options.itemDefinitions,

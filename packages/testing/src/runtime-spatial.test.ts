@@ -18,13 +18,8 @@ function makeRegion(): RegionDocument {
       gridPosition: { x: 0, y: 0 },
       placementPolicy: "world-grid"
     },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [],
-      itemPresences: []
-    },
+    placedAssets: [],
+    folders: [],
     environmentBinding: {
       defaultEnvironmentId: null
     },

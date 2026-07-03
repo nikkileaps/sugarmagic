@@ -9,7 +9,7 @@ import type {
   MechanicsDefinition,
   PlayerAnimationSlot,
   PlayerDefinition,
-  RegionDocument
+  RegionPlayerPresence
 } from "@sugarmagic/domain";
 import {
   getCharacterAnimationDefinition,
@@ -156,7 +156,10 @@ export interface SpawnRuntimePlayerEntityOptions {
 
 export function spawnRuntimePlayerEntity(
   world: World,
-  region: RegionDocument | null,
+  // Plan 058 §058.1 — the authored spawn point is overlay data
+  // (`Scene.regionOverlays[regionId].playerPresence`), so callers
+  // hand the composed presence directly instead of a region.
+  playerPresence: RegionPlayerPresence | null,
   playerDefinition: PlayerDefinition,
   mechanics: MechanicsDefinition,
   options: SpawnRuntimePlayerEntityOptions = {}
@@ -168,7 +171,7 @@ export function spawnRuntimePlayerEntity(
         options.positionOverride.y,
         options.positionOverride.z
       ]
-    : region?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+    : playerPresence?.transform.position ?? [0, 0, 0];
   world.addComponent(entity, new Position(...position));
   world.addComponent(entity, new Velocity());
   world.addComponent(

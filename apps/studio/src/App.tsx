@@ -620,6 +620,13 @@ async function postPreviewBootMessage(
     {
       type: "PREVIEW_BOOT",
       regions,
+      // Plan 058 §058.1 — Scenes ride the boot payload; the
+      // runtime composes the active Scene's overlays onto the
+      // region base. Preview uses the author's ambient Scene
+      // context implicitly via the scenes array ordering for now
+      // (explicit activeSceneId threading lands with 058.2's
+      // selector).
+      scenes: session.gameProject.scenes,
       activeRegionId: session.activeRegionId,
       activeEnvironmentId: snapshot.activeEnvironmentId,
       installedPluginIds,

@@ -47,7 +47,8 @@ import {
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
-  createSceneFolderId
+  createSceneFolderId,
+  type ComposedRegionContents
 } from "@sugarmagic/domain";
 import {
   PanelSection,
@@ -80,6 +81,13 @@ export interface LayoutWorkspaceViewProps {
   onSelect: (ids: string[]) => void;
   onCommand: (command: SemanticCommand) => void;
   getRegion: () => ReturnType<typeof getActiveRegion>;
+  /**
+   * Plan 058 §058.1 — composed Base + Overlay view of the active
+   * region under the active Scene. All presence / asset / folder
+   * reads in this workspace source from it (the region document
+   * itself only supplies identity / landscape / areas).
+   */
+  getRegionContents: () => ComposedRegionContents | null;
   assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
@@ -95,8 +103,17 @@ export interface LayoutWorkspaceViewProps {
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
+const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
+  folders: [],
+  placedAssets: [],
+  playerPresence: null,
+  npcPresences: [],
+  itemPresences: []
+};
+
 function buildSceneTree(
   region: RegionDocument,
+  regionContents: ComposedRegionContents,
   assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
@@ -111,20 +128,20 @@ function buildSceneTree(
   );
   const foldersByParent = new Map<
     string | null,
-    RegionDocument["scene"]["folders"]
+    ComposedRegionContents["folders"]
   >();
   const assetsByParent = new Map<
     string | null,
-    RegionDocument["scene"]["placedAssets"]
+    ComposedRegionContents["placedAssets"]
   >();
 
-  for (const folder of region.scene.folders) {
+  for (const folder of regionContents.folders) {
     const siblings = foldersByParent.get(folder.parentFolderId) ?? [];
     siblings.push(folder);
     foldersByParent.set(folder.parentFolderId, siblings);
   }
 
-  for (const asset of region.scene.placedAssets) {
+  for (const asset of regionContents.placedAssets) {
     const siblings = assetsByParent.get(asset.parentFolderId) ?? [];
     siblings.push(asset);
     assetsByParent.set(asset.parentFolderId, siblings);
@@ -171,11 +188,11 @@ function buildSceneTree(
     return [...childFolders, ...childAssets];
   };
 
-  const playerNode = region.scene.playerPresence
+  const playerNode = regionContents.playerPresence
     ? [
         {
           type: "entity" as const,
-          instanceId: region.scene.playerPresence.presenceId,
+          instanceId: regionContents.playerPresence.presenceId,
           displayName: playerDefinition?.displayName ?? "Player",
           entityKind: "player" as const,
           assetKind: "player",
@@ -185,7 +202,7 @@ function buildSceneTree(
       ]
     : [];
 
-  const npcNodes = region.scene.npcPresences.map((presence) => ({
+  const npcNodes = regionContents.npcPresences.map((presence) => ({
     type: "entity" as const,
     instanceId: presence.presenceId,
     displayName:
@@ -198,7 +215,7 @@ function buildSceneTree(
     visible: true
   }));
 
-  const itemNodes = region.scene.itemPresences.map((presence) => ({
+  const itemNodes = regionContents.itemPresences.map((presence) => ({
     type: "entity" as const,
     instanceId: presence.presenceId,
     displayName:
@@ -250,6 +267,7 @@ export function useLayoutWorkspaceView(
     onSelect,
     onCommand,
     getRegion,
+    getRegionContents,
     assetDefinitions,
     playerDefinition,
     itemDefinitions,
@@ -296,6 +314,10 @@ export function useLayoutWorkspaceView(
   }, [getViewportElement, onSelect]);
 
   const region = getRegion();
+  // Plan 058 §058.1 — composed Base + Overlay view. Falls back to
+  // empty contents when no region is active so downstream reads
+  // stay unconditional.
+  const regionContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
 
   useEffect(() => {
     if (!isActive) return;
@@ -379,6 +401,7 @@ export function useLayoutWorkspaceView(
       region
         ? buildSceneTree(
             region,
+            regionContents,
             assetDefinitions,
             playerDefinition,
             itemDefinitions,
@@ -392,14 +415,15 @@ export function useLayoutWorkspaceView(
       itemDefinitions,
       npcDefinitions,
       playerDefinition,
-      region
+      region,
+      regionContents
     ]
   );
 
   const selectedAsset = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.placedAssets.find(
+      regionContents.placedAssets.find(
         (asset) => asset.instanceId === selectedIds[0]
       ) ?? null
     );
@@ -407,14 +431,14 @@ export function useLayoutWorkspaceView(
 
   const selectedPlayerPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
-    if (region.scene.playerPresence?.presenceId !== selectedIds[0]) return null;
-    return region.scene.playerPresence;
+    if (regionContents.playerPresence?.presenceId !== selectedIds[0]) return null;
+    return regionContents.playerPresence;
   }, [region, selectedIds]);
 
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.npcPresences.find(
+      regionContents.npcPresences.find(
         (presence) => presence.presenceId === selectedIds[0]
       ) ?? null
     );
@@ -433,7 +457,7 @@ export function useLayoutWorkspaceView(
   const selectedItemPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.itemPresences.find(
+      regionContents.itemPresences.find(
         (presence) => presence.presenceId === selectedIds[0]
       ) ?? null
     );
@@ -486,19 +510,20 @@ export function useLayoutWorkspaceView(
     ) => {
       const currentRegion = getRegion();
       if (!currentRegion) return;
-      const asset = currentRegion.scene.placedAssets.find(
+      const currentContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
+      const asset = currentContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       const playerPresence =
-        currentRegion.scene.playerPresence?.presenceId === instanceId
-          ? currentRegion.scene.playerPresence
+        currentContents.playerPresence?.presenceId === instanceId
+          ? currentContents.playerPresence
           : null;
       const npcPresence =
-        currentRegion.scene.npcPresences.find(
+        currentContents.npcPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const itemPresence =
-        currentRegion.scene.itemPresences.find(
+        currentContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
@@ -585,7 +610,7 @@ export function useLayoutWorkspaceView(
         }
       });
     },
-    [getRegion, onCommand]
+    [getRegion, getRegionContents, onCommand]
   );
 
   const handleCreateFolder = useCallback(
@@ -639,7 +664,7 @@ export function useLayoutWorkspaceView(
   const handleDuplicateAsset = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       if (!asset) return;
@@ -671,19 +696,19 @@ export function useLayoutWorkspaceView(
   const handleDeleteEntityFromScene = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       const playerPresence =
-        region.scene.playerPresence?.presenceId === instanceId
-          ? region.scene.playerPresence
+        regionContents.playerPresence?.presenceId === instanceId
+          ? regionContents.playerPresence
           : null;
       const npcPresence =
-        region.scene.npcPresences.find(
+        regionContents.npcPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const itemPresence =
-        region.scene.itemPresences.find(
+        regionContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
 
@@ -815,7 +840,7 @@ export function useLayoutWorkspaceView(
   const handleEditEntityFromExplorer = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       if (!asset) return;
@@ -859,8 +884,8 @@ export function useLayoutWorkspaceView(
   const handleAddPlayerToScene = useCallback(() => {
     if (!region || !playerDefinition) return;
 
-    if (region.scene.playerPresence) {
-      onSelect([region.scene.playerPresence.presenceId]);
+    if (regionContents.playerPresence) {
+      onSelect([regionContents.playerPresence.presenceId]);
       return;
     }
 
@@ -947,19 +972,19 @@ export function useLayoutWorkspaceView(
   const handleSnapToOrigin = useCallback(() => {
     if (!region || !contextMenu) return;
 
-    const asset = region.scene.placedAssets.find(
+    const asset = regionContents.placedAssets.find(
       (entry) => entry.instanceId === contextMenu.instanceId
     );
     const playerPresence =
-      region.scene.playerPresence?.presenceId === contextMenu.instanceId
-        ? region.scene.playerPresence
+      regionContents.playerPresence?.presenceId === contextMenu.instanceId
+        ? regionContents.playerPresence
         : null;
     const npcPresence =
-      region.scene.npcPresences.find(
+      regionContents.npcPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
     const itemPresence =
-      region.scene.itemPresences.find(
+      regionContents.itemPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
     const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;

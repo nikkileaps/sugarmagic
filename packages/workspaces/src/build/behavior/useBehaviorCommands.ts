@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type {
+  ComposedRegionContents,
   NPCDefinition,
   RegionDocument,
   RegionNPCBehaviorDefinition,
@@ -15,6 +16,9 @@ import {
 
 export function useBehaviorCommands(options: {
   region: RegionDocument | null;
+  /** Plan 058 §058.1 — composed view; NPC presence reads source
+   *  from here. */
+  regionContents: ComposedRegionContents | null;
   npcDefinitions: NPCDefinition[];
   onCommand: (command: SemanticCommand) => void;
   selectedBehavior: RegionNPCBehaviorDefinition | null;
@@ -23,6 +27,7 @@ export function useBehaviorCommands(options: {
 }) {
   const {
     region,
+    regionContents,
     npcDefinitions,
     onCommand,
     selectedBehavior,
@@ -55,10 +60,11 @@ export function useBehaviorCommands(options: {
       return;
     }
     const usedNpcIds = new Set(region.behaviors.map((behavior) => behavior.npcDefinitionId));
+    const presentNpcs = regionContents?.npcPresences ?? [];
     const nextNpc =
-      region.scene.npcPresences.find((presence) => !usedNpcIds.has(presence.npcDefinitionId))
+      presentNpcs.find((presence) => !usedNpcIds.has(presence.npcDefinitionId))
         ?.npcDefinitionId ??
-      region.scene.npcPresences[0]?.npcDefinitionId ??
+      presentNpcs[0]?.npcDefinitionId ??
       npcDefinitions[0]?.definitionId;
     if (!nextNpc) {
       return;
@@ -96,7 +102,7 @@ export function useBehaviorCommands(options: {
     });
     setSelectedBehaviorId(nextBehavior.behaviorId);
     setSelectedTaskId(nextBehavior.tasks[0]?.taskId ?? null);
-  }, [npcDefinitions, onCommand, region, setSelectedBehaviorId, setSelectedTaskId]);
+  }, [npcDefinitions, onCommand, region, regionContents, setSelectedBehaviorId, setSelectedTaskId]);
 
   const deleteBehavior = useCallback((behaviorId: string) => {
     if (!region) {

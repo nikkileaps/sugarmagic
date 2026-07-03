@@ -54,13 +54,11 @@ describe("collectSceneText", () => {
           ...createTestSceneAuthoringContext().region,
           displayName: "",
           lorePageId: null,
-          scene: {
-            ...createTestSceneAuthoringContext().region.scene,
-            npcPresences: [],
-            itemPresences: []
-          },
           areas: []
-        }
+        },
+        // Plan 058 §058.1 — null Scene composes base-only:
+        // no presences, matching the old empty-nest fixture.
+        activeScene: null
       })
     );
 

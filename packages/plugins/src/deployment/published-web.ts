@@ -114,6 +114,11 @@ function buildBootJsonPayload(
       .map((entry) => entry.pluginId),
     pluginConfigurations: gameProject.pluginConfigurations,
     regions: snapshot.regions,
+    // Plan 058 §058.1 — narrative Scenes ship in the bundle
+    // (bake-everything model; the runtime composes only unlocked
+    // Scenes' overlays). Regions above are the shrunk base shape.
+    scenes: gameProject.scenes,
+    scenesUiLabel: gameProject.scenesUiLabel,
     activeRegionId,
     activeEnvironmentId: snapshot.activeEnvironmentId ?? null,
     contentLibrary: snapshot.contentLibrary,

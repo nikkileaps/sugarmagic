@@ -24,10 +24,12 @@ import type {
   ItemDefinition,
   NPCDefinition,
   QuestDefinition,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
 import {
   createDefaultRegionLandscapeState,
+  createDefaultScene,
   createRegionAreaDefinition,
   createRegionItemPresence,
   createRegionNPCPresence
@@ -128,13 +130,10 @@ export function createTestRegion(): RegionDocument {
       gridPosition: { x: 0, y: 0 },
       placementPolicy: "world-grid"
     },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [createRegionNPCPresence({ npcDefinitionId: "npc-orrin" })],
-      itemPresences: [createRegionItemPresence({ itemDefinitionId: "item-ticket" })]
-    },
+    // Plan 058 §058.1 — presences moved to the test Scene overlay
+    // (see createSceneAuthoringContext call below).
+    placedAssets: [],
+    folders: [],
     environmentBinding: {
       defaultEnvironmentId: null
     },
@@ -213,10 +212,37 @@ export function createTestDocumentDefinitions(): DocumentDefinition[] {
   ];
 }
 
+/**
+ * Plan 058 §058.1 — the default test Scene: orrin + the ticket
+ * item placed in the given region's overlay. What the pre-058
+ * `createTestRegion()` fixture used to carry in its scene nest.
+ */
+export function createTestActiveScene(regionId: string): Scene {
+  return createDefaultScene({
+    sceneId: "scene:test",
+    regionOverlays: {
+      [regionId]: {
+        folders: [],
+        placedAssets: [],
+        playerPresence: null,
+        npcPresences: [
+          createRegionNPCPresence({ npcDefinitionId: "npc-orrin" })
+        ],
+        itemPresences: [
+          createRegionItemPresence({ itemDefinitionId: "item-ticket" })
+        ]
+      }
+    }
+  });
+}
+
 export function createTestSceneAuthoringContext(
   overrides: Partial<{
     targetLanguage: string;
     region: RegionDocument;
+    /** Plan 058 §058.1 — pass `null` for a presence-less compile
+     *  (region base only); omit for the default test overlay. */
+    activeScene: Scene | null;
     npcDefinitions: NPCDefinition[];
     dialogueDefinitions: DialogueDefinition[];
     questDefinitions: QuestDefinition[];
@@ -330,6 +356,13 @@ export function createTestSceneAuthoringContext(
 
   return createSceneAuthoringContext({
     region,
+    // Plan 058 §058.1 — presences ride the narrative Scene's
+    // overlay and compose onto the region base. `activeScene:
+    // null` opts a test into a presence-less compile.
+    activeScene:
+      overrides.activeScene !== undefined
+        ? overrides.activeScene
+        : createTestActiveScene(region.identity.id),
     targetLanguage: overrides.targetLanguage ?? "es",
     npcDefinitions,
     dialogueDefinitions,

@@ -21,7 +21,7 @@ function makeRegion(): RegionDocument {
     identity: { id: "region-landscape-parity", schema: "RegionDocument", version: 1 },
     displayName: "Landscape Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: { folders: [], placedAssets: [], playerPresence: null, npcPresences: [], itemPresences: [] },
+    placedAssets: [], folders: [],
     environmentBinding: { defaultEnvironmentId: null },
     areas: [],
     behaviors: [],

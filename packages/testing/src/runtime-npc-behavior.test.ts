@@ -17,25 +17,11 @@ function makeRegion(): RegionDocument {
       gridPosition: { x: 0, y: 0 },
       placementPolicy: "world-grid"
     },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [
-        {
-          presenceId: "presence:rick-roll",
-          npcDefinitionId: "npc:rick-roll",
-          shaderOverride: null,
-          shaderParameterOverrides: [],
-          transform: {
-            position: [0, 0, 0],
-            rotation: [0, 0, 0],
-            scale: [1, 1, 1]
-          }
-        }
-      ],
-      itemPresences: []
-    },
+    // Plan 058 §058.1 — presences live on Scene overlays now; this
+    // test drives the behavior system via explicit `npcEntities`,
+    // so the region fixture only needs the base shape.
+    placedAssets: [],
+    folders: [],
     environmentBinding: {
       defaultEnvironmentId: null
     },

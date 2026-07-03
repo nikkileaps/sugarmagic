@@ -20,6 +20,7 @@ import {
   getAllAssetDefinitions,
   applyCommand,
   getActiveRegion,
+  getActiveRegionContents,
   createDefaultDeploymentSettings,
   createDefaultPlayerDefinition,
   normalizeGameProject,
@@ -61,13 +62,8 @@ function makeRegion(): RegionDocument {
       gridPosition: { x: 0, y: 0 },
       placementPolicy: "world-grid"
     },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [],
-      itemPresences: []
-    },
+    placedAssets: [],
+    folders: [],
     environmentBinding: { defaultEnvironmentId: "wordlark:environment:default" },
     areas: [],
     behaviors: [],
@@ -329,16 +325,15 @@ describe("asset management loop", () => {
 
     session = applyCommand(session, remove);
 
-    const updatedRegion = getActiveRegion(session);
-    expect(updatedRegion?.scene.folders).toHaveLength(1);
-    expect(updatedRegion?.scene.placedAssets).toHaveLength(1);
-    expect(updatedRegion?.scene.placedAssets[0]?.instanceId).toBe(
+    expect(getActiveRegionContents(session)?.folders).toHaveLength(1);
+    expect(getActiveRegionContents(session)?.placedAssets).toHaveLength(1);
+    expect(getActiveRegionContents(session)?.placedAssets[0]?.instanceId).toBe(
       "placed-asset:station-copy"
     );
-    expect(updatedRegion?.scene.placedAssets[0]?.parentFolderId).toBe(
+    expect(getActiveRegionContents(session)?.placedAssets[0]?.parentFolderId).toBe(
       "folder:buildings"
     );
-    expect(updatedRegion?.scene.placedAssets[0]?.assetDefinitionId).toBe(
+    expect(getActiveRegionContents(session)?.placedAssets[0]?.assetDefinitionId).toBe(
       "asset:station-building"
     );
   });

@@ -63,7 +63,8 @@ import type {
   SoundEventBindingMap,
   AudioMixerSettings,
   UITheme,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
@@ -106,6 +107,8 @@ import "@sugarmagic/ui/shell-variables.css";
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
+  /** Plan 058 §058.1 — narrative Scenes for overlay composition. */
+  scenes?: Scene[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   installedPluginIds: string[];
@@ -243,6 +246,7 @@ window.addEventListener("message", (event) => {
       });
       void host.start({
         regions: data.regions,
+        scenes: data.scenes,
         activeRegionId: data.activeRegionId,
         activeEnvironmentId: data.activeEnvironmentId,
         savedGamePromise,

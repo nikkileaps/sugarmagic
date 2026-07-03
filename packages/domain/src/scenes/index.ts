@@ -44,6 +44,8 @@ import {
  */
 export const DEFAULT_SCENE_ID = "scene:default";
 
+export * from "./migrate";
+
 export function createSceneId(): string {
   return createScopedId("scene");
 }

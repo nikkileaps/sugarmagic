@@ -39,6 +39,7 @@ import type {
   PlayerDefinition,
   QuestDefinition,
   RegionDocument,
+  Scene,
   SpellDefinition
 } from "@sugarmagic/domain";
 import { System, type Entity, type World } from "../ecs";
@@ -295,6 +296,10 @@ export interface RuntimePluginContext {
   pluginBootPayloads?: Record<string, unknown>;
   blackboard?: RuntimeBlackboard;
   activeRegion?: RegionDocument | null;
+  /** Plan 058 §058.1 — the active narrative Scene whose overlay
+   *  composes onto the region base. Plugins that compile from
+   *  presences (e.g. sugarlang) read the composed view. */
+  activeScene?: Scene | null;
   playerDefinition?: PlayerDefinition;
   spellDefinitions?: SpellDefinition[];
   itemDefinitions?: ItemDefinition[];

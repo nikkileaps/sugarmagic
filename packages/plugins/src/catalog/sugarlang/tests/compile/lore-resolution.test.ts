@@ -21,6 +21,7 @@ import {
   type SugarlangLoreResolutionClient
 } from "../../runtime/compile/lore-resolution";
 import {
+  createTestActiveScene,
   createTestDocumentDefinitions,
   createTestRegion
 } from "./test-helpers";
@@ -53,6 +54,10 @@ describe("resolveSceneAuthoringContexts", () => {
       [
         {
           region,
+          // Plan 058 §058.1 — npc-orrin's presence rides the
+          // Scene overlay; without it, his lore page isn't
+          // referenced by the compile.
+          activeScene: createTestActiveScene(region.identity.id),
           targetLanguage: "es",
           npcDefinitions: [
             {

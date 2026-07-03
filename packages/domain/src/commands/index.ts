@@ -63,6 +63,15 @@ export type MovePlacedAssetCommand = SemanticCommandBase<
   }
 >;
 
+/**
+ * Plan 058 §058.1 — which store a NEW placed asset / folder lands
+ * in: the region's always-visible base layer, or the active
+ * Scene's overlay (visible only while that Scene is active).
+ * Mutations after creation are scope-agnostic (by-id across both
+ * stores), mirroring UE5 Data Layers.
+ */
+export type PlacementScope = "base" | { sceneId: string };
+
 export type PlaceAssetInstanceCommand = SemanticCommandBase<
   "PlaceAssetInstance",
   {
@@ -73,6 +82,9 @@ export type PlaceAssetInstanceCommand = SemanticCommandBase<
     position: [number, number, number];
     rotation: [number, number, number];
     scale: [number, number, number];
+    /** Omitted = "base" (pre-058 behavior). Studio's Scope
+     *  dropdown (Plan 058.2) starts passing overlay scope. */
+    scope?: PlacementScope;
   }
 >;
 
@@ -106,6 +118,8 @@ export type CreateSceneFolderCommand = SemanticCommandBase<
     folderId: string;
     displayName: string;
     parentFolderId: string | null;
+    /** See `PlacementScope` — omitted = "base". */
+    scope?: PlacementScope;
   }
 >;
 

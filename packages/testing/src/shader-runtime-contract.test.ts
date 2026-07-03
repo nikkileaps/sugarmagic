@@ -30,7 +30,6 @@ import {
   createEmptyContentLibrarySnapshot,
   createInlineSurfaceBinding,
   createPlacedAssetInstance,
-  createRegionPlayerPresence,
   createSurface,
   normalizeContentLibrarySnapshot,
   type ContentLibrarySnapshot,
@@ -110,24 +109,22 @@ function createRegion(): RegionDocument {
     identity: { id: "region:one", schema: "RegionDocument", version: 1 },
     displayName: "Region",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: {
-      folders: [],
-      placedAssets: [
-        createPlacedAssetInstance({
-          instanceId: "placed:tree",
-          assetDefinitionId: "asset:tree",
-          displayName: "Tree",
-          transform: {
-            position: [0, 0, 0],
-            rotation: [0, 0, 0],
-            scale: [1, 1, 1]
-          }
-        })
-      ],
-      playerPresence: createRegionPlayerPresence(),
-      npcPresences: [],
-      itemPresences: []
-    },
+    // Plan 058 §058.1 — placed assets are Base scope at the
+    // region top level; this test only exercises the tree's
+    // shader stack, so no Scene overlay is needed.
+    placedAssets: [
+      createPlacedAssetInstance({
+        instanceId: "placed:tree",
+        assetDefinitionId: "asset:tree",
+        displayName: "Tree",
+        transform: {
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1]
+        }
+      })
+    ],
+    folders: [],
     environmentBinding: { defaultEnvironmentId: "env:default" },
     areas: [],
     behaviors: [],

@@ -80,9 +80,28 @@ import type {
   ShaderParameterOverride,
   ShaderSlotKind
 } from "../shader-graph";
+import {
+  createRegionSceneOverlay,
+  type RegionSceneOverlay,
+  type Scene
+} from "../scenes";
+
+/**
+ * Plan 058 §058.1 — commands execute against the Base + Overlay
+ * pair: the active region (base) and the active Scene (whose
+ * overlay for that region holds the presences + Scene-scoped
+ * assets). The session dispatch supplies both (Ambient Context
+ * pattern — the author's current Scene selection decides which
+ * Scene commands land in).
+ */
+export interface CommandExecutionContext {
+  region: RegionDocument;
+  scene: Scene;
+}
 
 export interface CommandExecutionResult {
   region: RegionDocument;
+  scene: Scene;
   transaction: TransactionBoundary;
 }
 
@@ -92,51 +111,129 @@ function nextTransactionId(): string {
   return `tx-${++txCounter}-${Date.now()}`;
 }
 
-function applyMovePlacedAsset(
-  region: RegionDocument,
-  command: MovePlacedAssetCommand
-): RegionDocument {
+function withOverlay(
+  scene: Scene,
+  regionId: string,
+  mutate: (overlay: RegionSceneOverlay) => RegionSceneOverlay
+): Scene {
+  const current =
+    scene.regionOverlays[regionId] ?? createRegionSceneOverlay();
   return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              transform: {
-                ...asset.transform,
-                position: command.payload.position
-              }
-            }
-          : asset
-      )
-    }
+    ...scene,
+    regionOverlays: { ...scene.regionOverlays, [regionId]: mutate(current) }
   };
 }
 
-function applyTransformPlacedAsset(
-  region: RegionDocument,
-  command: TransformPlacedAssetCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              transform: {
-                position: command.payload.position,
-                rotation: command.payload.rotation,
-                scale: command.payload.scale
-              }
-            }
-          : asset
-      )
-    }
+/**
+ * Placed assets live in TWO stores post-058: the region's base
+ * list and the active Scene's overlay list. Mutation commands
+ * identify assets by instanceId, so by-id map/filter operations
+ * apply to both stores — the store that doesn't contain the id
+ * passes through unchanged. Only CREATE decides scope (mirrors
+ * UE5 Data Layers: you pick an actor's layer at placement).
+ */
+function mapPlacedAssetsEverywhere(
+  context: CommandExecutionContext,
+  transform: (assets: PlacedAssetInstance[]) => PlacedAssetInstance[]
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const region = {
+    ...context.region,
+    placedAssets: transform(context.region.placedAssets)
   };
+  const scene = context.scene.regionOverlays[regionId]
+    ? withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        placedAssets: transform(overlay.placedAssets)
+      }))
+    : context.scene;
+  return { region, scene };
+}
+
+/** Presences are overlay-only; these map the active Scene's
+ *  presence lists for the context's region. */
+function mapOverlayNpcPresences(
+  context: CommandExecutionContext,
+  transform: (presences: RegionNPCPresence[]) => RegionNPCPresence[]
+): Scene {
+  return withOverlay(
+    context.scene,
+    context.region.identity.id,
+    (overlay) => ({ ...overlay, npcPresences: transform(overlay.npcPresences) })
+  );
+}
+
+function mapOverlayItemPresences(
+  context: CommandExecutionContext,
+  transform: (presences: RegionItemPresence[]) => RegionItemPresence[]
+): Scene {
+  return withOverlay(
+    context.scene,
+    context.region.identity.id,
+    (overlay) => ({
+      ...overlay,
+      itemPresences: transform(overlay.itemPresences)
+    })
+  );
+}
+
+/** Folder analog of `mapPlacedAssetsEverywhere` — folder trees
+ *  exist on both the base and the overlay. */
+function mapFoldersEverywhere(
+  context: CommandExecutionContext,
+  transform: (folders: RegionSceneFolder[]) => RegionSceneFolder[]
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const region = {
+    ...context.region,
+    folders: transform(context.region.folders)
+  };
+  const scene = context.scene.regionOverlays[regionId]
+    ? withOverlay(context.scene, regionId, (overlay) => ({
+        ...overlay,
+        folders: transform(overlay.folders)
+      }))
+    : context.scene;
+  return { region, scene };
+}
+
+function applyMovePlacedAsset(
+  context: CommandExecutionContext,
+  command: MovePlacedAssetCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            transform: {
+              ...asset.transform,
+              position: command.payload.position
+            }
+          }
+        : asset
+    )
+  );
+}
+
+function applyTransformPlacedAsset(
+  context: CommandExecutionContext,
+  command: TransformPlacedAssetCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            transform: {
+              position: command.payload.position,
+              rotation: command.payload.rotation,
+              scale: command.payload.scale
+            }
+          }
+        : asset
+    )
+  );
 }
 
 function createPlacedAssetFromCommand(
@@ -159,30 +256,57 @@ function createPlacedAssetFromCommand(
 }
 
 function applyPlaceAssetInstance(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: PlaceAssetInstanceCommand
-): RegionDocument {
+): { region: RegionDocument; scene: Scene } {
+  const created = createPlacedAssetFromCommand(command);
+  const scope = command.payload.scope ?? "base";
+  // Plan 058 §058.1 — scope decides which store the NEW asset
+  // lands in. Omitted scope = base (preserves pre-058 behavior;
+  // Studio starts passing overlay scope with 058.2's Scope
+  // dropdown). An object scope always lands in the ACTIVE Scene
+  // supplied by the dispatch context — a mismatched sceneId is a
+  // dispatch bug, not something the executor can resolve.
+  if (scope === "base") {
+    return {
+      region: {
+        ...context.region,
+        placedAssets: [...context.region.placedAssets, created]
+      },
+      scene: context.scene
+    };
+  }
   return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: [
-        ...region.scene.placedAssets,
-        createPlacedAssetFromCommand(command)
-      ]
-    }
+    region: context.region,
+    scene: withOverlay(
+      context.scene,
+      context.region.identity.id,
+      (overlay) => ({
+        ...overlay,
+        placedAssets: [...overlay.placedAssets, created]
+      })
+    )
   };
 }
 
 function applyDuplicatePlacedAsset(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: DuplicatePlacedAssetCommand
-): RegionDocument {
-  const source = region.scene.placedAssets.find(
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const overlayAssets =
+    context.scene.regionOverlays[regionId]?.placedAssets ?? [];
+  // Scope affinity: the duplicate lands in the same store as its
+  // source (base copy stays base, overlay copy stays overlay).
+  const baseSource = context.region.placedAssets.find(
     (asset) => asset.instanceId === command.payload.sourceInstanceId
   );
+  const overlaySource = overlayAssets.find(
+    (asset) => asset.instanceId === command.payload.sourceInstanceId
+  );
+  const source = baseSource ?? overlaySource;
   if (!source) {
-    return region;
+    return { region: context.region, scene: context.scene };
   }
 
   const duplicated: PlacedAssetInstance = {
@@ -200,48 +324,47 @@ function applyDuplicatePlacedAsset(
     }
   };
 
+  if (baseSource) {
+    return {
+      region: {
+        ...context.region,
+        placedAssets: [...context.region.placedAssets, duplicated]
+      },
+      scene: context.scene
+    };
+  }
   return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: [...region.scene.placedAssets, duplicated]
-    }
+    region: context.region,
+    scene: withOverlay(context.scene, regionId, (overlay) => ({
+      ...overlay,
+      placedAssets: [...overlay.placedAssets, duplicated]
+    }))
   };
 }
 
 function applyRemovePlacedAsset(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RemovePlacedAssetCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.filter(
-        (asset) => asset.instanceId !== command.payload.instanceId
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.filter((asset) => asset.instanceId !== command.payload.instanceId)
+  );
 }
 
 function applyMovePlacedAssetToFolder(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: MovePlacedAssetToFolderCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              parentFolderId: command.payload.parentFolderId
-            }
-          : asset
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            parentFolderId: command.payload.parentFolderId
+          }
+        : asset
+    )
+  );
 }
 
 function createInspectableBehaviorFromCommand(
@@ -257,81 +380,69 @@ function createInspectableBehaviorFromCommand(
 }
 
 function applyAssignPlacedAssetInspectable(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: AssignPlacedAssetInspectableCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              inspectable: createInspectableBehaviorFromCommand(command)
-            }
-          : asset
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            inspectable: createInspectableBehaviorFromCommand(command)
+          }
+        : asset
+    )
+  );
 }
 
 function applyUpdatePlacedAssetInspectable(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: UpdatePlacedAssetInspectableCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) => {
-        if (
-          asset.instanceId !== command.payload.instanceId ||
-          !asset.inspectable
-        ) {
-          return asset;
-        }
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) => {
+      if (
+        asset.instanceId !== command.payload.instanceId ||
+        !asset.inspectable
+      ) {
+        return asset;
+      }
 
-        return {
-          ...asset,
-          inspectable: {
-            ...asset.inspectable,
-            ...(command.payload.documentDefinitionId === undefined
-              ? {}
-              : { documentDefinitionId: command.payload.documentDefinitionId }),
-            ...(command.payload.promptText === undefined
-              ? {}
-              : {
-                  promptText:
-                    command.payload.promptText.trim().length > 0
-                      ? command.payload.promptText
-                      : undefined
-                })
-          }
-        };
-      })
-    }
-  };
+      return {
+        ...asset,
+        inspectable: {
+          ...asset.inspectable,
+          ...(command.payload.documentDefinitionId === undefined
+            ? {}
+            : { documentDefinitionId: command.payload.documentDefinitionId }),
+          ...(command.payload.promptText === undefined
+            ? {}
+            : {
+                promptText:
+                  command.payload.promptText.trim().length > 0
+                    ? command.payload.promptText
+                    : undefined
+              })
+        }
+      };
+    })
+  );
 }
 
 function applyRemovePlacedAssetInspectable(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RemovePlacedAssetInspectableCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              inspectable: null
-            }
-          : asset
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            inspectable: null
+          }
+        : asset
+    )
+  );
 }
 
 function createPlayerPresenceFromCommand(
@@ -348,64 +459,57 @@ function createPlayerPresenceFromCommand(
 }
 
 function applyCreatePlayerPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: CreatePlayerPresenceCommand
-): RegionDocument {
-  if (region.scene.playerPresence) {
-    return region;
+): Scene {
+  const regionId = context.region.identity.id;
+  // Plan 058 §058.1 — singularity is per (Scene, region): one
+  // player spawn per region within each Scene. A different Scene
+  // may place its own spawn in the same region.
+  if (context.scene.regionOverlays[regionId]?.playerPresence) {
+    return context.scene;
   }
-
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      playerPresence: createPlayerPresenceFromCommand(command)
-    }
-  };
+  return withOverlay(context.scene, regionId, (overlay) => ({
+    ...overlay,
+    playerPresence: createPlayerPresenceFromCommand(command)
+  }));
 }
 
 function applyTransformPlayerPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: TransformPlayerPresenceCommand
-): RegionDocument {
-  if (!region.scene.playerPresence) {
-    return region;
+): Scene {
+  const regionId = context.region.identity.id;
+  const existing = context.scene.regionOverlays[regionId]?.playerPresence;
+  if (!existing || existing.presenceId !== command.payload.presenceId) {
+    return context.scene;
   }
-
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      playerPresence:
-        region.scene.playerPresence.presenceId === command.payload.presenceId
-          ? {
-              ...region.scene.playerPresence,
-              transform: {
-                position: command.payload.position,
-                rotation: command.payload.rotation,
-                scale: command.payload.scale
-              }
-            }
-          : region.scene.playerPresence
+  return withOverlay(context.scene, regionId, (overlay) => ({
+    ...overlay,
+    playerPresence: {
+      ...existing,
+      transform: {
+        position: command.payload.position,
+        rotation: command.payload.rotation,
+        scale: command.payload.scale
+      }
     }
-  };
+  }));
 }
 
 function applyRemovePlayerPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RemovePlayerPresenceCommand
-): RegionDocument {
-  if (region.scene.playerPresence?.presenceId !== command.payload.presenceId) {
-    return region;
+): Scene {
+  const regionId = context.region.identity.id;
+  const existing = context.scene.regionOverlays[regionId]?.playerPresence;
+  if (!existing || existing.presenceId !== command.payload.presenceId) {
+    return context.scene;
   }
-
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      playerPresence: null
-    }
-  };
+  return withOverlay(context.scene, regionId, (overlay) => ({
+    ...overlay,
+    playerPresence: null
+  }));
 }
 
 function createNPCPresenceFromCommand(
@@ -471,375 +575,307 @@ function upsertShaderBindingOverride(
 }
 
 function applySetPlacedAssetShaderOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: SetPlacedAssetShaderOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              shaderOverrides: command.payload.shaderDefinitionId
-                ? upsertShaderBindingOverride(asset.shaderOverrides ?? [], {
-                    shaderDefinitionId: command.payload.shaderDefinitionId,
-                    slot: command.payload.slot
-                  })
-                : (asset.shaderOverrides ?? []).filter(
-                    (override) => override.slot !== command.payload.slot
-                  )
-            }
-          : asset
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            shaderOverrides: command.payload.shaderDefinitionId
+              ? upsertShaderBindingOverride(asset.shaderOverrides ?? [], {
+                  shaderDefinitionId: command.payload.shaderDefinitionId,
+                  slot: command.payload.slot
+                })
+              : (asset.shaderOverrides ?? []).filter(
+                  (override) => override.slot !== command.payload.slot
+                )
+          }
+        : asset
+    )
+  );
 }
 
 function applySetPlacedAssetShaderParameterOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: SetPlacedAssetShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              shaderParameterOverrides: upsertShaderParameterOverride(
-                asset.shaderParameterOverrides,
-                {
-                  ...command.payload.override,
-                  slot: command.payload.override.slot ?? command.payload.slot
-                }
-              )
-            }
-          : asset
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            shaderParameterOverrides: upsertShaderParameterOverride(
+              asset.shaderParameterOverrides,
+              {
+                ...command.payload.override,
+                slot: command.payload.override.slot ?? command.payload.slot
+              }
+            )
+          }
+        : asset
+    )
+  );
 }
 
 function applyClearPlacedAssetShaderParameterOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: ClearPlacedAssetShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        asset.instanceId === command.payload.instanceId
-          ? {
-              ...asset,
-              shaderParameterOverrides: asset.shaderParameterOverrides.filter(
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === command.payload.instanceId
+        ? {
+            ...asset,
+            shaderParameterOverrides: asset.shaderParameterOverrides.filter(
+              (override) =>
+                !(
+                  override.parameterId === command.payload.parameterId &&
+                  override.slot === command.payload.slot
+                )
+            )
+          }
+        : asset
+    )
+  );
+}
+
+function applySetNPCPresenceShaderOverride(
+  context: CommandExecutionContext,
+  command: SetNPCPresenceShaderOverrideCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderOverrides: command.payload.shaderDefinitionId
+              ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
+                  shaderDefinitionId: command.payload.shaderDefinitionId,
+                  slot: command.payload.slot
+                })
+              : (presence.shaderOverrides ?? []).filter(
+                  (override) => override.slot !== command.payload.slot
+                )
+          }
+        : presence
+    )
+  );
+}
+
+function applySetNPCPresenceShaderParameterOverride(
+  context: CommandExecutionContext,
+  command: SetNPCPresenceShaderParameterOverrideCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderParameterOverrides: upsertShaderParameterOverride(
+              presence.shaderParameterOverrides,
+              {
+                ...command.payload.override,
+                slot: command.payload.override.slot ?? command.payload.slot
+              }
+            )
+          }
+        : presence
+    )
+  );
+}
+
+function applyClearNPCPresenceShaderParameterOverride(
+  context: CommandExecutionContext,
+  command: ClearNPCPresenceShaderParameterOverrideCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderParameterOverrides:
+              presence.shaderParameterOverrides.filter(
                 (override) =>
                   !(
                     override.parameterId === command.payload.parameterId &&
                     override.slot === command.payload.slot
                   )
               )
-            }
-          : asset
-      )
-    }
-  };
-}
-
-function applySetNPCPresenceShaderOverride(
-  region: RegionDocument,
-  command: SetNPCPresenceShaderOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderOverrides: command.payload.shaderDefinitionId
-                ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
-                    shaderDefinitionId: command.payload.shaderDefinitionId,
-                    slot: command.payload.slot
-                  })
-                : (presence.shaderOverrides ?? []).filter(
-                    (override) => override.slot !== command.payload.slot
-                  )
-            }
-          : presence
-      )
-    }
-  };
-}
-
-function applySetNPCPresenceShaderParameterOverride(
-  region: RegionDocument,
-  command: SetNPCPresenceShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderParameterOverrides: upsertShaderParameterOverride(
-                presence.shaderParameterOverrides,
-                {
-                  ...command.payload.override,
-                  slot: command.payload.override.slot ?? command.payload.slot
-                }
-              )
-            }
-          : presence
-      )
-    }
-  };
-}
-
-function applyClearNPCPresenceShaderParameterOverride(
-  region: RegionDocument,
-  command: ClearNPCPresenceShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderParameterOverrides:
-                presence.shaderParameterOverrides.filter(
-                  (override) =>
-                    !(
-                      override.parameterId === command.payload.parameterId &&
-                      override.slot === command.payload.slot
-                    )
-                )
-            }
-          : presence
-      )
-    }
-  };
+          }
+        : presence
+    )
+  );
 }
 
 function applySetItemPresenceShaderOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: SetItemPresenceShaderOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderOverrides: command.payload.shaderDefinitionId
-                ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
-                    shaderDefinitionId: command.payload.shaderDefinitionId,
-                    slot: command.payload.slot
-                  })
-                : (presence.shaderOverrides ?? []).filter(
-                    (override) => override.slot !== command.payload.slot
-                  )
-            }
-          : presence
-      )
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderOverrides: command.payload.shaderDefinitionId
+              ? upsertShaderBindingOverride(presence.shaderOverrides ?? [], {
+                  shaderDefinitionId: command.payload.shaderDefinitionId,
+                  slot: command.payload.slot
+                })
+              : (presence.shaderOverrides ?? []).filter(
+                  (override) => override.slot !== command.payload.slot
+                )
+          }
+        : presence
+    )
+  );
 }
 
 function applySetItemPresenceShaderParameterOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: SetItemPresenceShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderParameterOverrides: upsertShaderParameterOverride(
-                presence.shaderParameterOverrides,
-                {
-                  ...command.payload.override,
-                  slot: command.payload.override.slot ?? command.payload.slot
-                }
-              )
-            }
-          : presence
-      )
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderParameterOverrides: upsertShaderParameterOverride(
+              presence.shaderParameterOverrides,
+              {
+                ...command.payload.override,
+                slot: command.payload.override.slot ?? command.payload.slot
+              }
+            )
+          }
+        : presence
+    )
+  );
 }
 
 function applyClearItemPresenceShaderParameterOverride(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: ClearItemPresenceShaderParameterOverrideCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              shaderParameterOverrides:
-                presence.shaderParameterOverrides.filter(
-                  (override) =>
-                    !(
-                      override.parameterId === command.payload.parameterId &&
-                      override.slot === command.payload.slot
-                    )
-                )
-            }
-          : presence
-      )
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            shaderParameterOverrides:
+              presence.shaderParameterOverrides.filter(
+                (override) =>
+                  !(
+                    override.parameterId === command.payload.parameterId &&
+                    override.slot === command.payload.slot
+                  )
+              )
+          }
+        : presence
+    )
+  );
 }
 
 function applyCreateNPCPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: CreateNPCPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: [
-        ...region.scene.npcPresences,
-        createNPCPresenceFromCommand(command)
-      ]
-    }
-  };
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) => [
+    ...presences,
+    createNPCPresenceFromCommand(command)
+  ]);
 }
 
 function applyTransformNPCPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: TransformNPCPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              transform: {
-                position: command.payload.position,
-                rotation: command.payload.rotation,
-                scale: command.payload.scale
-              }
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            transform: {
+              position: command.payload.position,
+              rotation: command.payload.rotation,
+              scale: command.payload.scale
             }
-          : presence
-      )
-    }
-  };
+          }
+        : presence
+    )
+  );
 }
 
 function applyRemoveNPCPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RemoveNPCPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      npcPresences: region.scene.npcPresences.filter(
-        (presence) => presence.presenceId !== command.payload.presenceId
-      )
-    }
-  };
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.filter(
+      (presence) => presence.presenceId !== command.payload.presenceId
+    )
+  );
 }
 
 function applyCreateItemPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: CreateItemPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: [
-        ...region.scene.itemPresences,
-        createItemPresenceFromCommand(command)
-      ]
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) => [
+    ...presences,
+    createItemPresenceFromCommand(command)
+  ]);
 }
 
 function applyTransformItemPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: TransformItemPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              transform: {
-                position: command.payload.position,
-                rotation: command.payload.rotation,
-                scale: command.payload.scale
-              }
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            transform: {
+              position: command.payload.position,
+              rotation: command.payload.rotation,
+              scale: command.payload.scale
             }
-          : presence
-      )
-    }
-  };
+          }
+        : presence
+    )
+  );
 }
 
 function applyUpdateItemPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: UpdateItemPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.map((presence) =>
-        presence.presenceId === command.payload.presenceId
-          ? {
-              ...presence,
-              quantity:
-                command.payload.quantity === undefined
-                  ? presence.quantity
-                  : Math.max(1, Math.floor(command.payload.quantity))
-            }
-          : presence
-      )
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? {
+            ...presence,
+            quantity:
+              command.payload.quantity === undefined
+                ? presence.quantity
+                : Math.max(1, Math.floor(command.payload.quantity))
+          }
+        : presence
+    )
+  );
 }
 
 function applyRemoveItemPresence(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RemoveItemPresenceCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      itemPresences: region.scene.itemPresences.filter(
-        (presence) => presence.presenceId !== command.payload.presenceId
-      )
-    }
-  };
+): Scene {
+  return mapOverlayItemPresences(context, (presences) =>
+    presences.filter(
+      (presence) => presence.presenceId !== command.payload.presenceId
+    )
+  );
 }
 
 function createFolderFromCommand(
@@ -853,55 +889,76 @@ function createFolderFromCommand(
 }
 
 function applyCreateSceneFolder(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: CreateSceneFolderCommand
-): RegionDocument {
+): { region: RegionDocument; scene: Scene } {
+  const created = createFolderFromCommand(command);
+  const scope = command.payload.scope ?? "base";
+  if (scope === "base") {
+    return {
+      region: {
+        ...context.region,
+        folders: [...context.region.folders, created]
+      },
+      scene: context.scene
+    };
+  }
   return {
-    ...region,
-    scene: {
-      ...region.scene,
-      folders: [...region.scene.folders, createFolderFromCommand(command)]
-    }
+    region: context.region,
+    scene: withOverlay(
+      context.scene,
+      context.region.identity.id,
+      (overlay) => ({
+        ...overlay,
+        folders: [...overlay.folders, created]
+      })
+    )
   };
 }
 
 function applyRenameSceneFolder(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: RenameSceneFolderCommand
-): RegionDocument {
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      folders: region.scene.folders.map((folder) =>
-        folder.folderId === command.payload.folderId
-          ? {
-              ...folder,
-              displayName: command.payload.displayName
-            }
-          : folder
-      )
-    }
-  };
+): { region: RegionDocument; scene: Scene } {
+  return mapFoldersEverywhere(context, (folders) =>
+    folders.map((folder) =>
+      folder.folderId === command.payload.folderId
+        ? {
+            ...folder,
+            displayName: command.payload.displayName
+          }
+        : folder
+    )
+  );
 }
 
 function applyDeleteSceneFolder(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: DeleteSceneFolderCommand
-): RegionDocument {
-  const folder = region.scene.folders.find(
-    (candidate) => candidate.folderId === command.payload.folderId
-  );
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const overlayFolders =
+    context.scene.regionOverlays[regionId]?.folders ?? [];
+  const folder =
+    context.region.folders.find(
+      (candidate) => candidate.folderId === command.payload.folderId
+    ) ??
+    overlayFolders.find(
+      (candidate) => candidate.folderId === command.payload.folderId
+    );
   if (!folder) {
-    return region;
+    return { region: context.region, scene: context.scene };
   }
 
-  return {
-    ...region,
-    scene: {
-      ...region.scene,
-      folders: region.scene.folders
-        .filter((candidate) => candidate.folderId !== command.payload.folderId)
+  // Reparent children (folders + assets) onto the deleted
+  // folder's parent, in whichever store they live.
+  const withReparentedFolders = mapFoldersEverywhere(
+    context,
+    (folders) =>
+      folders
+        .filter(
+          (candidate) => candidate.folderId !== command.payload.folderId
+        )
         .map((candidate) =>
           candidate.parentFolderId === command.payload.folderId
             ? {
@@ -909,8 +966,12 @@ function applyDeleteSceneFolder(
                 parentFolderId: folder.parentFolderId
               }
             : candidate
-        ),
-      placedAssets: region.scene.placedAssets.map((asset) =>
+        )
+  );
+  return mapPlacedAssetsEverywhere(
+    { region: withReparentedFolders.region, scene: withReparentedFolders.scene },
+    (assets) =>
+      assets.map((asset) =>
         asset.parentFolderId === command.payload.folderId
           ? {
               ...asset,
@@ -918,8 +979,7 @@ function applyDeleteSceneFolder(
             }
           : asset
       )
-    }
-  };
+  );
 }
 
 function applyUpdateRegionMetadata(
@@ -1266,62 +1326,79 @@ function applyDeleteRegionAmbienceZone(
 }
 
 export function executeCommand(
-  region: RegionDocument,
+  context: CommandExecutionContext,
   command: SemanticCommand
 ): CommandExecutionResult {
-  let updatedRegion: RegionDocument;
+  const { region, scene } = context;
+  // Three apply families (Plan 058 §058.1):
+  //   - Base+Overlay pairs (assets / folders — by-id across both
+  //     stores; creates branch on payload.scope)
+  //   - Scene-only (presences — always the active Scene's overlay)
+  //   - Region-only (areas / landscape / audio / behaviors /
+  //     metadata — untouched by the Scene split)
+  let updatedRegion: RegionDocument = region;
+  let updatedScene: Scene = scene;
 
   switch (command.kind) {
     case "MovePlacedAsset":
-      updatedRegion = applyMovePlacedAsset(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyMovePlacedAsset(context, command));
       break;
     case "TransformPlacedAsset":
-      updatedRegion = applyTransformPlacedAsset(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyTransformPlacedAsset(context, command));
       break;
     case "PlaceAssetInstance":
-      updatedRegion = applyPlaceAssetInstance(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyPlaceAssetInstance(context, command));
       break;
     case "DuplicatePlacedAsset":
-      updatedRegion = applyDuplicatePlacedAsset(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyDuplicatePlacedAsset(context, command));
       break;
     case "RemovePlacedAsset":
-      updatedRegion = applyRemovePlacedAsset(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyRemovePlacedAsset(context, command));
       break;
     case "MovePlacedAssetToFolder":
-      updatedRegion = applyMovePlacedAssetToFolder(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyMovePlacedAssetToFolder(context, command));
       break;
     case "AssignPlacedAssetInspectable":
-      updatedRegion = applyAssignPlacedAssetInspectable(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyAssignPlacedAssetInspectable(context, command));
       break;
     case "UpdatePlacedAssetInspectable":
-      updatedRegion = applyUpdatePlacedAssetInspectable(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyUpdatePlacedAssetInspectable(context, command));
       break;
     case "RemovePlacedAssetInspectable":
-      updatedRegion = applyRemovePlacedAssetInspectable(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyRemovePlacedAssetInspectable(context, command));
       break;
     case "SetPlacedAssetShaderOverride":
-      updatedRegion = applySetPlacedAssetShaderOverride(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetPlacedAssetShaderOverride(context, command));
       break;
     case "SetPlacedAssetShaderParameterOverride":
-      updatedRegion = applySetPlacedAssetShaderParameterOverride(
-        region,
-        command
-      );
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetPlacedAssetShaderParameterOverride(context, command));
       break;
     case "ClearPlacedAssetShaderParameterOverride":
-      updatedRegion = applyClearPlacedAssetShaderParameterOverride(
-        region,
-        command
-      );
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyClearPlacedAssetShaderParameterOverride(context, command));
       break;
     case "CreateSceneFolder":
-      updatedRegion = applyCreateSceneFolder(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyCreateSceneFolder(context, command));
       break;
     case "RenameSceneFolder":
-      updatedRegion = applyRenameSceneFolder(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyRenameSceneFolder(context, command));
       break;
     case "DeleteSceneFolder":
-      updatedRegion = applyDeleteSceneFolder(region, command);
+      ({ region: updatedRegion, scene: updatedScene } =
+        applyDeleteSceneFolder(context, command));
       break;
     case "UpdateRegionMetadata":
       updatedRegion = applyUpdateRegionMetadata(region, command);
@@ -1378,64 +1455,64 @@ export function executeCommand(
       updatedRegion = applyDeleteRegionAmbienceZone(region, command);
       break;
     case "CreatePlayerPresence":
-      updatedRegion = applyCreatePlayerPresence(region, command);
+      updatedScene = applyCreatePlayerPresence(context, command);
       break;
     case "TransformPlayerPresence":
-      updatedRegion = applyTransformPlayerPresence(region, command);
+      updatedScene = applyTransformPlayerPresence(context, command);
       break;
     case "RemovePlayerPresence":
-      updatedRegion = applyRemovePlayerPresence(region, command);
+      updatedScene = applyRemovePlayerPresence(context, command);
       break;
     case "CreateNPCPresence":
-      updatedRegion = applyCreateNPCPresence(region, command);
+      updatedScene = applyCreateNPCPresence(context, command);
       break;
     case "TransformNPCPresence":
-      updatedRegion = applyTransformNPCPresence(region, command);
+      updatedScene = applyTransformNPCPresence(context, command);
       break;
     case "SetNPCPresenceShaderOverride":
-      updatedRegion = applySetNPCPresenceShaderOverride(region, command);
+      updatedScene = applySetNPCPresenceShaderOverride(context, command);
       break;
     case "SetNPCPresenceShaderParameterOverride":
-      updatedRegion = applySetNPCPresenceShaderParameterOverride(
-        region,
+      updatedScene = applySetNPCPresenceShaderParameterOverride(
+        context,
         command
       );
       break;
     case "ClearNPCPresenceShaderParameterOverride":
-      updatedRegion = applyClearNPCPresenceShaderParameterOverride(
-        region,
+      updatedScene = applyClearNPCPresenceShaderParameterOverride(
+        context,
         command
       );
       break;
     case "RemoveNPCPresence":
-      updatedRegion = applyRemoveNPCPresence(region, command);
+      updatedScene = applyRemoveNPCPresence(context, command);
       break;
     case "CreateItemPresence":
-      updatedRegion = applyCreateItemPresence(region, command);
+      updatedScene = applyCreateItemPresence(context, command);
       break;
     case "TransformItemPresence":
-      updatedRegion = applyTransformItemPresence(region, command);
+      updatedScene = applyTransformItemPresence(context, command);
       break;
     case "UpdateItemPresence":
-      updatedRegion = applyUpdateItemPresence(region, command);
+      updatedScene = applyUpdateItemPresence(context, command);
       break;
     case "SetItemPresenceShaderOverride":
-      updatedRegion = applySetItemPresenceShaderOverride(region, command);
+      updatedScene = applySetItemPresenceShaderOverride(context, command);
       break;
     case "SetItemPresenceShaderParameterOverride":
-      updatedRegion = applySetItemPresenceShaderParameterOverride(
-        region,
+      updatedScene = applySetItemPresenceShaderParameterOverride(
+        context,
         command
       );
       break;
     case "ClearItemPresenceShaderParameterOverride":
-      updatedRegion = applyClearItemPresenceShaderParameterOverride(
-        region,
+      updatedScene = applyClearItemPresenceShaderParameterOverride(
+        context,
         command
       );
       break;
     case "RemoveItemPresence":
-      updatedRegion = applyRemoveItemPresence(region, command);
+      updatedScene = applyRemoveItemPresence(context, command);
       break;
     default:
       throw new Error(`Unsupported command kind: ${command.kind}`);
@@ -1444,11 +1521,14 @@ export function executeCommand(
   const transaction: TransactionBoundary = {
     transactionId: nextTransactionId(),
     command,
-    affectedAggregateIds: [region.identity.id],
+    affectedAggregateIds:
+      updatedScene === scene
+        ? [region.identity.id]
+        : [region.identity.id, scene.sceneId],
     committedAt: new Date().toISOString() as TimestampIso
   };
 
-  return { region: updatedRegion, transaction };
+  return { region: updatedRegion, scene: updatedScene, transaction };
 }
 
 export function pushTransaction(

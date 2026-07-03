@@ -48,7 +48,10 @@ import {
   type MechanicsDefinition,
   type SoundEventBindingMap,
   type AudioMixerSettings,
-  type UITheme
+  type UITheme,
+  composeRegionContents,
+  migrateToScenes,
+  type Scene
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
@@ -168,6 +171,16 @@ export interface WebRuntimeHostOptions {
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
+  /**
+   * Plan 058 §058.1 — the project's narrative Scenes. The host
+   * picks the active Scene (first by sceneOrder until Plan 058.4
+   * wires `campaign.progression`) and composes its per-region
+   * overlay onto the region base for every spawn read. Optional
+   * for back-compat: a stale pre-058 boot.json carries regions
+   * with legacy `scene` nests instead, which `migrateToScenes`
+   * lifts at start().
+   */
+  scenes?: Scene[];
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   /**
@@ -1524,7 +1537,25 @@ export function createWebRuntimeHost(
       hostPlayerRestore?.currentRegionId ?? state.activeRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
-    const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
+    // Plan 058 §058.1 — belt-and-suspenders migration for stale
+    // pre-058 boot payloads (regions carrying legacy `scene`
+    // nests, no `scenes` array). Idempotent no-op on current
+    // payloads. Then pick the active Scene: first by sceneOrder
+    // until Plan 058.4 restores it from campaign.progression.
+    const migratedContent = migrateToScenes({
+      scenes: state.scenes ?? [],
+      regions: state.regions
+    });
+    const activeScene = migratedContent.scenes[0] ?? null;
+    const activeRegion = getActiveRegion(
+      migratedContent.regions,
+      resolvedActiveRegionId
+    );
+    // Composed Base + Overlay view (Pattern 1) — every presence /
+    // spawn read below sources from this, never region fields.
+    const activeRegionContents = activeRegion
+      ? composeRegionContents(activeRegion, activeScene)
+      : null;
     renderEngineProjector.push(state);
     renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
@@ -1539,7 +1570,8 @@ export function createWebRuntimeHost(
         playerDefinition: state.playerDefinition,
         itemDefinitions: state.itemDefinitions,
         npcDefinitions: state.npcDefinitions,
-        includePlayerPresence: false
+        includePlayerPresence: false,
+        activeScene
       });
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
@@ -1551,7 +1583,7 @@ export function createWebRuntimeHost(
       // and pass through unchanged.
       const activeItemPresenceIds = new Set<string>();
       iterateActiveItemPresences(
-        region.scene.itemPresences,
+        activeRegionContents?.itemPresences ?? [],
         {
           shouldSkip: (presenceId) =>
             worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
@@ -1646,7 +1678,7 @@ export function createWebRuntimeHost(
               // drive it. v1: NPCs default to playing idle forever (no
               // locomotion-driven slot switching like the player).
               if (object.kind === "npc") {
-                const presence = region.scene.npcPresences.find(
+                const presence = activeRegionContents?.npcPresences.find(
                   (p) => p.presenceId === object.instanceId
                 );
                 const npcDefinition = presence
@@ -1844,7 +1876,9 @@ export function createWebRuntimeHost(
     // handles that when positionOverride is null).
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
-      activeRegion,
+      // Plan 058 §058.1 — authored spawn point comes from the
+      // composed Scene overlay, not the region document.
+      activeRegionContents?.playerPresence ?? null,
       state.playerDefinition,
       state.mechanics,
       {
@@ -1881,6 +1915,7 @@ export function createWebRuntimeHost(
       world,
       inputManager,
       activeRegion,
+      activeScene,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,

@@ -18,7 +18,13 @@ import {
 } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { RegionDocument } from "../region-authoring";
-import { normalizeRegionDocumentForLoad } from "../io";
+import { normalizeRegionDocumentForLoad, normalizeScenesForLoad } from "../io";
+import {
+  composeRegionContents,
+  migrateToScenes,
+  type ComposedRegionContents,
+  type Scene
+} from "../scenes";
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
@@ -160,6 +166,7 @@ interface SessionCheckpoint {
   contentLibrary: ContentLibrarySnapshot;
   regions: Map<string, RegionDocument>;
   activeRegionId: string | null;
+  activeSceneId: string | null;
 }
 
 export interface AuthoringSession {
@@ -167,6 +174,14 @@ export interface AuthoringSession {
   contentLibrary: ContentLibrarySnapshot;
   regions: Map<string, RegionDocument>;
   activeRegionId: string | null;
+  /**
+   * Plan 058 §058.1 — the author's current Scene (Ambient
+   * Context pattern). Presence + overlay-scoped commands land in
+   * this Scene; Design workspaces scope their views to it.
+   * Scenes ride inside `gameProject.scenes`; this is just the
+   * selection pointer.
+   */
+  activeSceneId: string | null;
   undoStack: SessionCheckpoint[];
   redoStack: SessionCheckpoint[];
   history: AuthoringHistory;
@@ -190,7 +205,8 @@ function checkpointSession(session: AuthoringSession): SessionCheckpoint {
     gameProject: session.gameProject,
     contentLibrary: session.contentLibrary,
     regions: new Map(session.regions),
-    activeRegionId: session.activeRegionId
+    activeRegionId: session.activeRegionId,
+    activeSceneId: session.activeSceneId
   };
 }
 
@@ -207,6 +223,7 @@ function restoreCheckpoint(
     contentLibrary: checkpoint.contentLibrary,
     regions: new Map(checkpoint.regions),
     activeRegionId: checkpoint.activeRegionId,
+    activeSceneId: checkpoint.activeSceneId,
     undoStack: nextUndoStack,
     redoStack: nextRedoStack,
     history: nextHistory,
@@ -219,6 +236,54 @@ export function getActiveRegion(
 ): RegionDocument | null {
   if (!session.activeRegionId) return null;
   return session.regions.get(session.activeRegionId) ?? null;
+}
+
+/**
+ * Plan 058 §058.1 — resolve the author's active Scene. Falls
+ * back to the first Scene by order when the pointer is unset or
+ * dangling (Scene deleted); a migrated project always has ≥1.
+ */
+export function getActiveScene(session: AuthoringSession): Scene | null {
+  const scenes = session.gameProject.scenes;
+  if (scenes.length === 0) return null;
+  return (
+    scenes.find((scene) => scene.sceneId === session.activeSceneId) ??
+    scenes[0] ??
+    null
+  );
+}
+
+/**
+ * Composed Base + Overlay view of the active region under the
+ * active Scene (Pattern 1). What the pre-058 `region.scene` nest
+ * used to be — workspaces read presences / assets from here.
+ */
+export function getActiveRegionContents(
+  session: AuthoringSession
+): ComposedRegionContents | null {
+  const region = getActiveRegion(session);
+  if (!region) return null;
+  return composeRegionContents(region, getActiveScene(session));
+}
+
+/** Switch the ambient Scene context. Clears undo/redo like
+ *  `switchActiveRegion` does (checkpoint identity across context
+ *  switches is more confusing than helpful). */
+export function switchActiveScene(
+  session: AuthoringSession,
+  sceneId: string
+): AuthoringSession {
+  const exists = session.gameProject.scenes.some(
+    (scene) => scene.sceneId === sceneId
+  );
+  if (!exists || session.activeSceneId === sceneId) return session;
+  return {
+    ...session,
+    activeSceneId: sceneId,
+    undoStack: [],
+    redoStack: [],
+    history: createEmptyHistory()
+  };
 }
 
 export function getAllRegions(session: AuthoringSession): RegionDocument[] {
@@ -360,13 +425,32 @@ export function createAuthoringSession(
     gameProject.identity.id
   )
 ): AuthoringSession {
-  const normalizedProject = normalizeGameProject(gameProject);
+  // Plan 058 §058.1 — lift pre-058 `region.scene` nests into the
+  // project's default Scene BEFORE normalization, so overlay
+  // presences flow through the same contentLibrary-aware
+  // normalization the regions get. Idempotent: an already-
+  // migrated project passes through unchanged.
+  const migrated = migrateToScenes({
+    scenes: gameProject.scenes ?? [],
+    regions
+  });
+  const normalizedProject = normalizeGameProject({
+    ...gameProject,
+    scenes: migrated.scenes
+  });
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
     contentLibrary,
     normalizedProject.identity.id
   );
+  const projectWithScenes: GameProject = {
+    ...normalizedProject,
+    scenes: normalizeScenesForLoad(
+      normalizedProject.scenes,
+      normalizedContentLibrary
+    )
+  };
   const regionMap = new Map<string, RegionDocument>();
-  for (const region of regions) {
+  for (const region of migrated.regions) {
     regionMap.set(
       region.identity.id,
       normalizeRegionDocumentForLoad(region, normalizedContentLibrary)
@@ -374,14 +458,19 @@ export function createAuthoringSession(
   }
 
   return {
-    gameProject: normalizedProject,
+    gameProject: projectWithScenes,
     contentLibrary: normalizedContentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
+    activeSceneId: projectWithScenes.scenes[0]?.sceneId ?? null,
     undoStack: [],
     redoStack: [],
     history: createEmptyHistory(),
-    isDirty: false
+    // Plan 058 §058.1 — a fresh migration leaves the in-memory
+    // shape ahead of disk; flag dirty so Studio's save flow
+    // persists the upgrade instead of re-migrating every load
+    // (re-migration is idempotent, but persisting is cleaner).
+    isDirty: migrated.didMigrate
   };
 }
 
@@ -583,6 +672,27 @@ function applyRenameShaderGraphCommand(
   );
 }
 
+/** Drop every override referencing a deleted shader from an
+ *  entity that carries shader overrides (assets + presences). */
+function stripShaderReferences<
+  T extends {
+    shaderOverrides?: { shaderDefinitionId: string }[];
+    shaderParameterOverrides: unknown[];
+  }
+>(entity: T, shaderDefinitionId: string): T {
+  const hasReference = (entity.shaderOverrides ?? []).some(
+    (override) => override.shaderDefinitionId === shaderDefinitionId
+  );
+  if (!hasReference) return entity;
+  return {
+    ...entity,
+    shaderOverrides: (entity.shaderOverrides ?? []).filter(
+      (override) => override.shaderDefinitionId !== shaderDefinitionId
+    ),
+    shaderParameterOverrides: []
+  };
+}
+
 function applyDeleteShaderGraphCommand(
   session: AuthoringSession,
   command: DeleteShaderGraphCommand
@@ -602,6 +712,41 @@ function applyDeleteShaderGraphCommand(
   ]);
   return {
     ...session,
+    // Plan 058 §058.1 — scrub overlay-side references across
+    // EVERY Scene's overlays (base-side scrub is in `regions`
+    // below).
+    gameProject: {
+      ...session.gameProject,
+      scenes: session.gameProject.scenes.map((scene) => ({
+        ...scene,
+        regionOverlays: Object.fromEntries(
+          Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
+            regionId,
+            {
+              ...overlay,
+              placedAssets: overlay.placedAssets.map((asset) =>
+                stripShaderReferences(
+                  asset,
+                  command.payload.shaderDefinitionId
+                )
+              ),
+              npcPresences: overlay.npcPresences.map((presence) =>
+                stripShaderReferences(
+                  presence,
+                  command.payload.shaderDefinitionId
+                )
+              ),
+              itemPresences: overlay.itemPresences.map((presence) =>
+                stripShaderReferences(
+                  presence,
+                  command.payload.shaderDefinitionId
+                )
+              )
+            }
+          ])
+        )
+      }))
+    },
     contentLibrary: {
       ...session.contentLibrary,
       shaderDefinitions: nextDefinitions,
@@ -649,60 +794,12 @@ function applyDeleteShaderGraphCommand(
         regionId,
         {
           ...region,
-          scene: {
-            ...region.scene,
-            placedAssets: region.scene.placedAssets.map((asset) =>
-              (asset.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...asset,
-                    shaderOverrides: (asset.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : asset
-            ),
-            npcPresences: region.scene.npcPresences.map((presence) =>
-              (presence.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...presence,
-                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : presence
-            ),
-            itemPresences: region.scene.itemPresences.map((presence) =>
-              (presence.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...presence,
-                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : presence
-            )
-          }
+          // Plan 058 §058.1 — base-scope assets scrub here; the
+          // overlay-side scrub happens across gameProject.scenes
+          // below (a shader delete is global, not Scene-scoped).
+          placedAssets: region.placedAssets.map((asset) =>
+            stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          )
         }
       ])
     ),
@@ -2290,8 +2387,16 @@ export function applyCommand(
 
   const activeRegion = getActiveRegion(session);
   if (!activeRegion) return session;
+  // Plan 058 §058.1 — the executor operates on the Base + Overlay
+  // pair. The active Scene is the Ambient Context that decides
+  // which Scene presence / overlay-scoped commands land in.
+  const activeScene = getActiveScene(session);
+  if (!activeScene) return session;
 
-  const result = executeCommand(activeRegion, command);
+  const result = executeCommand(
+    { region: activeRegion, scene: activeScene },
+    command
+  );
   const newHistory = pushTransaction(session.history, result.transaction);
 
   const newRegions = new Map(session.regions);
@@ -2299,6 +2404,15 @@ export function applyCommand(
 
   return {
     ...session,
+    gameProject:
+      result.scene === activeScene
+        ? session.gameProject
+        : {
+            ...session.gameProject,
+            scenes: session.gameProject.scenes.map((scene) =>
+              scene.sceneId === result.scene.sceneId ? result.scene : scene
+            )
+          },
     regions: newRegions,
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -3183,9 +3297,20 @@ export function assetDefinitionHasSceneReferences(
   session: AuthoringSession,
   definitionId: string
 ): boolean {
-  return getAllRegions(session).some((region) =>
-    region.scene.placedAssets.some(
+  // Plan 058 §058.1 — check the base layer of every region AND
+  // every Scene's overlays. A definition placed only in Scene 3's
+  // overlay is still referenced.
+  const inBase = getAllRegions(session).some((region) =>
+    region.placedAssets.some(
       (asset) => asset.assetDefinitionId === definitionId
+    )
+  );
+  if (inBase) return true;
+  return session.gameProject.scenes.some((scene) =>
+    Object.values(scene.regionOverlays).some((overlay) =>
+      overlay.placedAssets.some(
+        (asset) => asset.assetDefinitionId === definitionId
+      )
     )
   );
 }
