@@ -21,6 +21,7 @@ export * from "./publish-artifacts/index";
 export * from "./quest-definition/index";
 export * from "./region-authoring/index";
 export * from "./save/index";
+export * from "./scenes/index";
 export * from "./shader-graph/index";
 export * from "./shared/index";
 export * from "./spell-definition/index";

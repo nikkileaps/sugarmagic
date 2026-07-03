@@ -14,6 +14,12 @@ import {
 import { normalizeNPCDefinition, type NPCDefinition } from "../npc-definition";
 import { type GameSavePayload } from "../save";
 import {
+  createDefaultScene,
+  DEFAULT_SCENE_ID,
+  normalizeScenes,
+  type Scene
+} from "../scenes";
+import {
   normalizeItemDefinition,
   type ItemDefinition
 } from "../item-definition";
@@ -139,6 +145,20 @@ export interface GameProject {
   // display) independent of deployment.
   gameRootPath: string;
   regionRegistry: RegionReference[];
+  /**
+   * Plan 058 §058.1 — narrative partitions (Base + Overlay
+   * pattern). Regions are the shared geographic base; each Scene
+   * carries per-region overlays. Pre-058 projects load with an
+   * empty array; the Studio load-time migration synthesizes the
+   * default Scene from the regions' legacy `region.scene` fields.
+   */
+  scenes: Scene[];
+  /**
+   * Plan 058 — what the game calls its Scenes in player-facing UI
+   * ("Chapter" / "Episode" / "Act"). Engine-side the primitive is
+   * always `Scene`; this label is presentation only.
+   */
+  scenesUiLabel: string;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
@@ -321,6 +341,8 @@ export function normalizeGameProject(
         | "audioMixer"
         | "mechanics"
         | "defaultGameSavePayload"
+        | "scenes"
+        | "scenesUiLabel"
       > & {
         majorVersion?: number | null;
         // Legacy fields accepted on input for back-compat with pre-45.7.5
@@ -346,6 +368,9 @@ export function normalizeGameProject(
         audioMixer?: Partial<AudioMixerSettings> | null;
         mechanics?: Partial<MechanicsDefinition> | null;
         defaultGameSavePayload?: GameSavePayload | null;
+        // Plan 058 §058.1 — pre-058 project files lack these keys.
+        scenes?: unknown;
+        scenesUiLabel?: unknown;
       })
 ): GameProject {
   const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
@@ -425,8 +450,22 @@ export function normalizeGameProject(
     defaultGameSavePayload: normalizeDefaultGameSavePayload(
       (gameProject as { defaultGameSavePayload?: unknown })
         .defaultGameSavePayload
+    ),
+    // Plan 058 §058.1 — pre-058 projects have no `scenes` key;
+    // normalize to empty and let the Studio load-time migration
+    // synthesize the default Scene (it needs the regions' legacy
+    // fields, which this project-level normalizer doesn't see).
+    scenes: normalizeScenes((gameProject as { scenes?: unknown }).scenes),
+    scenesUiLabel: normalizeScenesUiLabel(
+      (gameProject as { scenesUiLabel?: unknown }).scenesUiLabel
     )
   };
+}
+
+function normalizeScenesUiLabel(input: unknown): string {
+  return typeof input === "string" && input.trim().length > 0
+    ? input.trim()
+    : "Scene";
 }
 
 export function createDefaultGameProject(
@@ -454,6 +493,11 @@ export function createDefaultGameProject(
     soundEventBindings: normalizeSoundEventBindings(null),
     audioMixer: createDefaultAudioMixerSettings(),
     mechanics: createDefaultMechanicsDefinition(),
-    defaultGameSavePayload: null
+    defaultGameSavePayload: null,
+    // Plan 058 §058.1 — fresh projects start with the default
+    // Scene already in place so authoring always has an active
+    // Scene context (Ambient Context pattern) from day one.
+    scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })],
+    scenesUiLabel: "Scene"
   };
 }
