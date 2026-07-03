@@ -32,10 +32,10 @@ export const WORLD_PRESENCE_SLICE_SCHEMA_VERSION = 1;
 /**
  * Persisted slice shape. Sets flatten to arrays for JSON.
  *
- * Design decision (revisit under Plan 058 Season/Episode):
- * currently episode-agnostic. If a later episode needs to un-
+ * Design decision (revisit under Plan 058 Parts):
+ * currently Part-agnostic. If a later Part needs to un-
  * collect a presence in a shared region to re-story it, we bump
- * this to `Record<regionId, Record<episodeId, string[]>>` and
+ * this to `Record<regionId, Record<partId, string[]>>` and
  * migrate. See Plan 055 open questions.
  */
 export interface WorldPresenceSlice {
