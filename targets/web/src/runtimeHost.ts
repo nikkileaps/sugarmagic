@@ -1544,7 +1544,7 @@ export function createWebRuntimeHost(
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
-      // filters (Plan 058 Part gating, etc.) compose into
+      // filters (Plan 058 Scene gating, etc.) compose into
       // `worldPresenceTracker.shouldSkip` at the host and both
       // paths see them automatically. Non-item scene objects
       // (NPCs, static assets) don't have a filter surface today

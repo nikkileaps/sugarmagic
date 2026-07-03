@@ -4,7 +4,7 @@ Status: proposed
 Owner: nikki + claude
 Date: 2026-07-02
 
-Related: Runtime paper cut #3 (`docs/backlog/003-runtime-paper-cuts.md`) — the class of bug this closes. Plan 055.6 — the first filter (`world.presence.shouldSkip`) that made the risk concrete. Plan 058 (draft) — future Part gating will add a second filter and would silently break one of the two spawn paths if this isn't unified first.
+Related: Runtime paper cut #3 (`docs/backlog/003-runtime-paper-cuts.md`) — the class of bug this closes. Plan 055.6 — the first filter (`world.presence.shouldSkip`) that made the risk concrete. Plan 058 (draft) — future Scene gating will add a second filter and would silently break one of the two spawn paths if this isn't unified first.
 
 ## Problem
 
@@ -15,7 +15,7 @@ Region items spawn through TWO independent code paths that both iterate `region.
 
 Both loops need to apply the same filters. Currently: one filter (`worldPresenceTracker.shouldSkip` for already-collected items). Applied in both places manually. When Plan 055.6 shipped, the first version added the filter only to path #2, leaving already-collected items still visually spawned (mesh floating with no E prompt). Fixed at the time by adding the same filter to path #1. Two places to remember.
 
-Plan 058's Part-scoped presence gating will add a SECOND filter (per-Part `isPresenceUnlocked`). If we haven't unified by then, we get the same silent-divergence bug twice. This plan pre-empts that.
+Plan 058's Scene-scoped presence gating will add a SECOND filter (per-Part `isPresenceUnlocked`). If we haven't unified by then, we get the same silent-divergence bug twice. This plan pre-empts that.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Both spawn paths call THE SAME predicate to decide whether an item presence is "
 ## Non-goals
 
 - **Not a full callback pipeline.** The paper cut writeup mentioned a "host-owned iteration with renderer + ECS callbacks." That's architecturally purer but structurally larger — the ECS callback would need access to the assembly's `itemInteractableEntities` map for later `collectItemPresence()` lookups, and current construction order (assembly is built AFTER the visual spawn) doesn't naturally accommodate one host-owned iteration. Revisit if we get 3+ filters or if the callback shape becomes obviously right for another reason.
-- **Not NPCs / inspectables.** Only items have a filter surface today (world.presence tracks collected items only). NPCs and inspectables don't get "collected" or Part-gated in the current design. When they do, the same helper pattern extends trivially.
+- **Not NPCs / inspectables.** Only items have a filter surface today (world.presence tracks collected items only). NPCs and inspectables don't get "collected" or Scene-gated in the current design. When they do, the same helper pattern extends trivially.
 
 ## Shape
 
@@ -33,7 +33,7 @@ New helper in `packages/runtime-core/src/scene/`:
 ```ts
 export interface ItemPresenceFilters {
   /** Any predicate returning true means "skip this presence in
-   *  this region right now" (already collected, Part locked,
+   *  this region right now" (already collected, Scene locked,
    *  future proximity culling, etc.). All predicates in the
    *  object are ANDed via short-circuit inside the helper. */
   shouldSkip: (presenceId: string) => boolean;
