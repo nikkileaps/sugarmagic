@@ -1359,7 +1359,6 @@ export function useLayoutWorkspaceView(
             {/* Identity block. Scope is read-only for now; scope
                 conversion ships with Plan 058.3. */}
             <Stack gap={4}>
-              <FactRow label="Name" value={selectedAsset.displayName} />
               <FactRow label="Type" value="Placed Asset" />
               <FactRow
                 label="Scope"
@@ -1546,10 +1545,6 @@ export function useLayoutWorkspaceView(
         ) : selectedPlayerPresence ? (
           <Stack gap="md">
             <Stack gap={4}>
-              <FactRow
-                label="Name"
-                value={playerDefinition?.displayName ?? "Player"}
-              />
               <FactRow label="Type" value="Player Spawn" />
               <FactRow
                 label="Scope"
@@ -1572,10 +1567,6 @@ export function useLayoutWorkspaceView(
         ) : selectedNPCPresence ? (
           <Stack gap="md">
             <Stack gap={4}>
-              <FactRow
-                label="Name"
-                value={selectedNPCDefinition?.displayName ?? "NPC"}
-              />
               <FactRow label="Type" value="NPC" />
               <FactRow
                 label="Scope"
@@ -1598,10 +1589,6 @@ export function useLayoutWorkspaceView(
         ) : selectedItemPresence ? (
           <Stack gap="md">
             <Stack gap={4}>
-              <FactRow
-                label="Name"
-                value={selectedItemDefinition?.displayName ?? "Item"}
-              />
               <FactRow label="Type" value="Item" />
               <FactRow
                 label="Scope"
