@@ -96,6 +96,20 @@ export interface LayoutWorkspaceViewProps {
    * entities; the inspector shows each asset's scope.
    */
   getActiveScene: () => Scene | null;
+  /** Plan 058 §058.3 — full ordered Scene list for cross-Scene
+   *  copy targets. */
+  getAllScenes: () => Scene[];
+  /** Plan 058 §058.3 — move an asset between region base and the
+   *  active Scene's overlay. */
+  onConvertAssetScope: (regionId: string, instanceId: string) => void;
+  /** Plan 058 §058.3 — copy a presence / overlay asset from the
+   *  active Scene into another Scene's overlay. */
+  onCopyEntryToScene: (options: {
+    toSceneId: string;
+    regionId: string;
+    kind: "npc" | "item" | "player" | "asset";
+    id: string;
+  }) => void;
   assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
@@ -306,6 +320,9 @@ export function useLayoutWorkspaceView(
     getRegion,
     getRegionContents,
     getActiveScene,
+    getAllScenes,
+    onConvertAssetScope,
+    onCopyEntryToScene,
     assetDefinitions,
     playerDefinition,
     itemDefinitions,
@@ -1100,6 +1117,55 @@ export function useLayoutWorkspaceView(
     setContextMenu(null);
   }, [contextMenu, onCommand, region]);
 
+  // Plan 058 §058.3 — classify the context-menu target for the
+  // scope-conversion / cross-Scene-copy actions.
+  const contextMenuEntry = useMemo(() => {
+    if (!contextMenu) return null;
+    const id = contextMenu.instanceId;
+    if (regionContents.placedAssets.some((entry) => entry.instanceId === id)) {
+      return {
+        kind: "asset" as const,
+        id,
+        inOverlay: overlayAssetIds.has(id)
+      };
+    }
+    if (regionContents.playerPresence?.presenceId === id) {
+      return { kind: "player" as const, id, inOverlay: true };
+    }
+    if (regionContents.npcPresences.some((entry) => entry.presenceId === id)) {
+      return { kind: "npc" as const, id, inOverlay: true };
+    }
+    if (regionContents.itemPresences.some((entry) => entry.presenceId === id)) {
+      return { kind: "item" as const, id, inOverlay: true };
+    }
+    return null;
+  }, [contextMenu, regionContents, overlayAssetIds]);
+
+  const otherScenes = useMemo(() => {
+    const activeId = activeScene?.sceneId;
+    return getAllScenes().filter((scene) => scene.sceneId !== activeId);
+  }, [getAllScenes, activeScene]);
+
+  const handleConvertScope = useCallback(() => {
+    if (!region || !contextMenuEntry) return;
+    onConvertAssetScope(region.identity.id, contextMenuEntry.id);
+    setContextMenu(null);
+  }, [region, contextMenuEntry, onConvertAssetScope]);
+
+  const handleCopyToScene = useCallback(
+    (toSceneId: string) => {
+      if (!region || !contextMenuEntry) return;
+      onCopyEntryToScene({
+        toSceneId,
+        regionId: region.identity.id,
+        kind: contextMenuEntry.kind,
+        id: contextMenuEntry.id
+      });
+      setContextMenu(null);
+    },
+    [region, contextMenuEntry, onCopyEntryToScene]
+  );
+
   const filteredNPCDefinitions = useMemo(() => {
     const query = npcQuery.trim().toLowerCase();
     if (!query) return npcDefinitions;
@@ -1714,6 +1780,61 @@ export function useLayoutWorkspaceView(
             >
               <Text size="sm">Snap to Origin</Text>
             </UnstyledButton>
+            {/* Plan 058 §058.3 — scope conversion (assets only:
+                presences are inherently Scene-scoped). */}
+            {contextMenuEntry?.kind === "asset" && (
+              <UnstyledButton
+                onClick={handleConvertScope}
+                styles={{
+                  root: {
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "8px 10px",
+                    borderRadius: "var(--sm-radius-sm)",
+                    color: "var(--sm-color-text)",
+                    background: "transparent",
+                    transition: "var(--sm-transition-fast)",
+                    "&:hover": {
+                      background: "var(--sm-active-bg)"
+                    }
+                  }
+                }}
+              >
+                <Text size="sm">
+                  {contextMenuEntry.inOverlay
+                    ? "Promote to Base"
+                    : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`}
+                </Text>
+              </UnstyledButton>
+            )}
+            {/* Plan 058 §058.3 — cross-Scene copy for overlay
+                entries. Hidden with a single Scene, or for base
+                assets (they're already visible everywhere). */}
+            {contextMenuEntry?.inOverlay &&
+              otherScenes.map((scene) => (
+                <UnstyledButton
+                  key={scene.sceneId}
+                  onClick={() => handleCopyToScene(scene.sceneId)}
+                  styles={{
+                    root: {
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "8px 10px",
+                      borderRadius: "var(--sm-radius-sm)",
+                      color: "var(--sm-color-text)",
+                      background: "transparent",
+                      transition: "var(--sm-transition-fast)",
+                      "&:hover": {
+                        background: "var(--sm-active-bg)"
+                      }
+                    }
+                  }}
+                >
+                  <Text size="sm">Copy to 🎬 {scene.displayName}</Text>
+                </UnstyledButton>
+              ))}
           </Box>
         )}
       </>

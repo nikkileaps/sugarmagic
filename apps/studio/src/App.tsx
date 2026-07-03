@@ -25,6 +25,7 @@ import {
   Badge
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
+import { ManageScenesModal } from "./ManageScenesModal";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -43,6 +44,12 @@ import {
   switchActiveRegion,
   switchActiveScene,
   getActiveScene,
+  addSceneToSession,
+  updateSceneInSession,
+  deleteSceneFromSession,
+  reorderSceneInSession,
+  convertAssetScopeInSession,
+  copyOverlayEntryToScene,
   addRegionToSession,
   getActiveRegion,
   getAllRegions,
@@ -515,6 +522,38 @@ function handleSceneSelect(sceneId: string) {
   projectStore.getState().updateSession(switchActiveScene(session, sceneId));
 }
 
+// Plan 058 §058.3 — Manage Scenes handlers (session-level
+// structural mutations, same seam as addRegionToSession).
+function handleAddScene(displayName: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(addSceneToSession(session, { displayName }));
+}
+
+function handleRenameScene(sceneId: string, displayName: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSceneInSession(session, sceneId, { displayName }));
+}
+
+function handleDeleteScene(sceneId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore.getState().updateSession(deleteSceneFromSession(session, sceneId));
+}
+
+function handleReorderScene(sceneId: string, direction: "up" | "down") {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(reorderSceneInSession(session, sceneId, direction));
+}
+
 // --- Preview ---
 
 function handleStartPreview(
@@ -734,6 +773,7 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [manageScenesOpen, setManageScenesOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -1962,6 +2002,29 @@ export function App() {
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
+    // Plan 058 §058.3 — scope conversion + cross-Scene copy.
+    onConvertAssetScope: (regionId, instanceId) => {
+      const { session } = projectStore.getState();
+      if (!session) return;
+      projectStore
+        .getState()
+        .updateSession(
+          convertAssetScopeInSession(session, { regionId, instanceId })
+        );
+    },
+    onCopyEntryToScene: (options) => {
+      const { session } = projectStore.getState();
+      const fromScene = session ? getActiveScene(session) : null;
+      if (!session || !fromScene) return;
+      projectStore
+        .getState()
+        .updateSession(
+          copyOverlayEntryToScene(session, {
+            fromSceneId: fromScene.sceneId,
+            ...options
+          })
+        );
+    },
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
     onSetAssetMaterialSlotBinding: handleSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
@@ -2451,6 +2514,20 @@ export function App() {
           });
         }}
       />
+      {session && (
+        <ManageScenesModal
+          opened={manageScenesOpen}
+          onClose={() => setManageScenesOpen(false)}
+          scenes={session.gameProject.scenes}
+          activeSceneId={session.activeSceneId}
+          scenesUiLabel={session.gameProject.scenesUiLabel}
+          onAddScene={handleAddScene}
+          onRenameScene={handleRenameScene}
+          onDeleteScene={handleDeleteScene}
+          onReorderScene={handleReorderScene}
+          onSelectScene={handleSceneSelect}
+        />
+      )}
       <Modal
         opened={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
@@ -2903,6 +2980,24 @@ export function App() {
                         {scene.displayName}
                       </Menu.Item>
                     ))}
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Item
+                      onClick={() => setManageScenesOpen(true)}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      ⚙ Manage {session.gameProject.scenesUiLabel}s...
+                    </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>
               </Group>
