@@ -681,7 +681,10 @@ export function createRuntimeGameplaySessionController(
       activeSystemCount: world.getSystemCount(),
       activeNpcCount: npcInteractableEntities.size,
       activeQuestCount: questManager.getJournalData().active.length,
-      currentSceneId: activeRegion?.identity.id ?? null,
+      currentRegionId: activeRegion?.identity.id ?? null,
+      // Plan 058 — the narrative Scene, not the visual scene (the
+      // pre-058 field misleadingly reported the region id here).
+      currentSceneName: options.activeScene?.displayName ?? null,
       currentAreaDisplayName: playerArea?.area?.displayName ?? null,
       playerPosition: playerPosition
         ? {

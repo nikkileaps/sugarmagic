@@ -185,7 +185,11 @@ export interface DebugHudGameplaySessionSnapshot {
   activeSystemCount: number;
   activeNpcCount: number;
   activeQuestCount: number;
-  currentSceneId: string | null;
+  /** The active region's id. Pre-058 this field was (confusingly)
+   *  named `currentSceneId` — it always held the region id. */
+  currentRegionId: string | null;
+  /** Plan 058 — the active narrative Scene's display name. */
+  currentSceneName: string | null;
   currentAreaDisplayName: string | null;
   playerPosition: { x: number; y: number; z: number } | null;
   dialogueActive: boolean;

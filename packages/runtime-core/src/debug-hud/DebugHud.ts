@@ -406,6 +406,7 @@ function createWorldCard(documentRef: Document): {
     "NPCs",
     "Quests",
     "Scene",
+    "Region",
     "Area",
     "Player"
   ]) {
@@ -428,7 +429,10 @@ function createWorldCard(documentRef: Document): {
       rows.get("Systems")!.textContent = `${context.gameplaySession.activeSystemCount}`;
       rows.get("NPCs")!.textContent = `${context.gameplaySession.activeNpcCount}`;
       rows.get("Quests")!.textContent = `${context.gameplaySession.activeQuestCount}`;
-      rows.get("Scene")!.textContent = context.gameplaySession.currentSceneId ?? "—";
+      rows.get("Scene")!.textContent =
+        context.gameplaySession.currentSceneName ?? "—";
+      rows.get("Region")!.textContent =
+        context.gameplaySession.currentRegionId ?? "—";
       rows.get("Area")!.textContent =
         context.gameplaySession.currentAreaDisplayName ?? "—";
       rows.get("Player")!.textContent = context.gameplaySession.playerPosition

@@ -2277,7 +2277,8 @@ export function createWebRuntimeHost(
             activeSystemCount: 0,
             activeNpcCount: 0,
             activeQuestCount: 0,
-            currentSceneId: null,
+            currentRegionId: null,
+            currentSceneName: null,
             currentAreaDisplayName: null,
             playerPosition: null,
             dialogueActive: false
