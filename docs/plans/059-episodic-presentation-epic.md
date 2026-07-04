@@ -47,14 +47,24 @@ The deferred trigger from Plan 058 fires here: `Scene.audioOverride` exists with
 - Studio: minimal credits editor (Publish or a project-settings surface — decide at implementation; it's a rarely-touched artifact).
 - Runtime: a credits roll renderer (DOM overlay in the `sceneTransitionCard` family — same non-React rationale), skippable by input, music under it via 059.1.
 
-### 059.3 — End-of-Scene sequence (replaces bare advance-reload)
+### 059.3 — Entry + exit sequences (replaces bare advance-reload)
 
-The `advanceToNextScene` path stops being "card then reload" and becomes the authored sequence:
+**Decision (2026-07-04, nikki, superseding the earlier "semantic flip" idea): the Scene title card stays an ENTRY card, exactly as 058 authored it.** Netflix model: you select the episode (or press Next), the show's title plays, then the episode's title, then content. Credits belong to the exit; titles belong to the entry. No repurposing, no migration of card intent.
 
-1. **End card** — the COMPLETED Scene's `transitionConfig` repurposed as its end card ("End of Scene 1" framing is the author's choice of title text). Note the semantic flip from 058: the card belonged to the *entered* Scene; the genre survey says end cards belong to the *finished* episode. Migration consideration: wordlark's existing authored cards (if any) move intent from "entry" to "exit" — acceptable pre-release, called out in the story.
-2. **Credits** — project-level roll (059.2), skippable, with credits theme (059.1). Skipped entirely when no credits are authored.
-3. **Routing screen** — per decision 3: filling "Next: <title>" countdown button when a next Scene is unlocked (press = advance now; full = auto-advance); "Back to Episodes" otherwise. Both paths keep the force-save + skip-start-menu reload machinery from 058.5 — the sequence happens BEFORE the reload, the reload lands either in the next Scene or on the Episodes menu.
+**Exit sequence** — runs when the Scene completes, BEFORE the reload (over the finished world):
+
+1. Fade out of gameplay.
+2. **Credits** — project-level roll (059.2), skippable, credits theme under it (059.1). Skipped entirely when no credits are authored.
+3. **Routing** — per decision 3: filling "Next: <Scene title>" countdown button when a next Scene is unlocked (press = advance now; full = auto-advance, ~10s); "Back to Episodes" button otherwise. Both paths keep 058.5's force-save + skip-start-menu reload machinery; the reload lands either in the next Scene or on the Episodes menu.
 4. Scene-complete hook point: a single host function marks the Scene completed + (future) captures the end-state snapshot — the sandbox insertion point per the design tension.
+
+**Entry sequence** — runs AFTER the reload, at boot into a freshly-entered Scene (doubles as a loading mask; identical whether entry came from the Next button or the Episodes menu):
+
+1. **Optional intro slot** — reserved for a future authored opening (logo sting / cold-open video); v1 ships without it, the sequence just starts at step 2. Slot documented so adding it later is additive.
+2. **Game title card** — the project's title ("the show's title"). Minimal authored config (project-level; reuse the card renderer).
+3. **Scene title card** — the entered Scene's `transitionConfig` (unchanged 058 semantics), fading into gameplay.
+
+**Resume rule**: plain Continue mid-Scene does NOT replay the entry sequence — titles fire only on fresh Scene entry (Netflix doesn't re-run the title when you resume an episode halfway). Mechanically: the reload handshake carries an "entering Scene fresh" marker; a boot without it (normal Continue, hard refresh) goes straight to gameplay.
 
 ### 059.4 — Episodes menu (start-menu surface + post-credits destination)
 
@@ -65,9 +75,10 @@ The `advanceToNextScene` path stops being "card then reload" and becomes the aut
 
 ### 059.5 — End-to-end verify + wordlark dress rehearsal
 
-- Author in wordlark: credits + credits theme, end cards on both Scenes, default + per-Scene music.
-- Full loop: play Scene 1 → complete final quest → end card → credits w/ music → filling Next button → auto-advance into Scene 2 → play → complete → credits → no next Scene → Back to Episodes → menu shows Scene 1 + 2 completed.
-- Hard-refresh + Continue mid-sequence and post-sequence: campaign state correct in all cases.
+- Author in wordlark: credits + credits theme, game title card, Scene title cards on both Scenes, default + per-Scene music.
+- Full loop: play Scene 1 → complete final quest → fade → credits w/ music → filling Next button → reload → game title → "Scene 2" title card → gameplay in Scene 2 → complete → credits → no next Scene → Back to Episodes → menu shows Scene 1 + 2 completed.
+- Episodes-menu entry into the frontier Scene plays the same entry sequence (game title → Scene title → gameplay).
+- Resume rule: hard-refresh + Continue mid-Scene boots straight to gameplay, NO title replay; campaign state correct in all cases.
 
 ## Defers
 
