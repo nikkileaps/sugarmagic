@@ -1035,6 +1035,12 @@ export function createWebRuntimeHost(
         target.transitionConfig
       );
     }
+    // Same sessionStorage handshake New Game uses: the next boot
+    // skips the start menu and goes straight to playing. The save
+    // was force-written above, so boot restores directly into the
+    // new Scene — the transition feels continuous instead of
+    // detouring through the menu.
+    sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
     ownerWindow.location.reload();
   }
   function hostPauseGame(): void {
