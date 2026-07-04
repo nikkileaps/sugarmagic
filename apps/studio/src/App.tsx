@@ -540,6 +540,19 @@ function handleRenameScene(sceneId: string, displayName: string) {
     .updateSession(updateSceneInSession(session, sceneId, { displayName }));
 }
 
+// Plan 058 §058.6 — Scene properties panel writes (description,
+// notes, unlock condition, overrides, transition card).
+function handleUpdateScene(
+  sceneId: string,
+  patch: Parameters<typeof updateSceneInSession>[2]
+) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSceneInSession(session, sceneId, patch));
+}
+
 function handleDeleteScene(sceneId: string) {
   const { session } = projectStore.getState();
   if (!session) return;
@@ -2522,8 +2535,16 @@ export function App() {
           scenes={session.gameProject.scenes}
           activeSceneId={session.activeSceneId}
           scenesUiLabel={session.gameProject.scenesUiLabel}
+          questDefinitions={session.gameProject.questDefinitions}
+          environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
+            (definition) => ({
+              definitionId: definition.definitionId,
+              displayName: definition.displayName
+            })
+          )}
           onAddScene={handleAddScene}
           onRenameScene={handleRenameScene}
+          onUpdateScene={handleUpdateScene}
           onDeleteScene={handleDeleteScene}
           onReorderScene={handleReorderScene}
           onSelectScene={handleSceneSelect}

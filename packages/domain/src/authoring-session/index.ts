@@ -2533,13 +2533,22 @@ export function addSceneToSession(
   };
 }
 
-/** Patch Scene metadata (rename now; description/notes/unlock
- *  ride the same seam as they get UI). */
+/** Patch Scene metadata + per-Scene overrides (Plan 058 §058.6 —
+ *  the Scene properties panel writes through here). */
 export function updateSceneInSession(
   session: AuthoringSession,
   sceneId: string,
   patch: Partial<
-    Pick<Scene, "displayName" | "description" | "notes" | "unlockCondition">
+    Pick<
+      Scene,
+      | "displayName"
+      | "description"
+      | "notes"
+      | "unlockCondition"
+      | "environmentOverride"
+      | "audioOverride"
+      | "transitionConfig"
+    >
   >
 ): AuthoringSession {
   if (!session.gameProject.scenes.some((scene) => scene.sceneId === sceneId)) {

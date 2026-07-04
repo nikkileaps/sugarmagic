@@ -78,6 +78,41 @@ describe("Scene CRUD", () => {
     expect(session.gameProject.scenes[0]!.displayName).toBe("The Founding");
   });
 
+  it("patches per-Scene properties (Plan 058 §058.6 panel fields)", () => {
+    let session = makeSession();
+    const sceneId = session.gameProject.scenes[0]!.sceneId;
+    session = updateSceneInSession(session, sceneId, {
+      description: "The player arrives at the station.",
+      notes: "TODO: rain",
+      unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" },
+      environmentOverride: { environmentId: "env:twilight" },
+      transitionConfig: {
+        titleText: "SCENE 1",
+        subtitleText: "Arrival",
+        durationMs: 2000,
+        fadeStyle: "cross"
+      }
+    });
+    const scene = session.gameProject.scenes[0]!;
+    expect(scene.description).toBe("The player arrives at the station.");
+    expect(scene.notes).toBe("TODO: rain");
+    expect(scene.unlockCondition).toEqual({
+      kind: "questComplete",
+      questDefinitionId: "q:1"
+    });
+    expect(scene.environmentOverride).toEqual({
+      environmentId: "env:twilight"
+    });
+    expect(scene.transitionConfig?.titleText).toBe("SCENE 1");
+    // Clearing back to defaults round-trips.
+    session = updateSceneInSession(session, sceneId, {
+      environmentOverride: null,
+      transitionConfig: null
+    });
+    expect(session.gameProject.scenes[0]!.environmentOverride).toBeNull();
+    expect(session.gameProject.scenes[0]!.transitionConfig).toBeNull();
+  });
+
   it("refuses to delete the last Scene", () => {
     const session = makeSession();
     const sceneId = session.gameProject.scenes[0]!.sceneId;

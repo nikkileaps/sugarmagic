@@ -20,7 +20,16 @@
 
 import type { SceneTransitionConfig } from "@sugarmagic/domain";
 
-const FADE_BACKGROUNDS: Record<SceneTransitionConfig["fadeStyle"], string> = {
+/**
+ * Plan 058 §058.6 — these styling constants are EXPORTED so
+ * Studio's Scene properties panel renders its static card
+ * preview from the same source; preview and runtime card can't
+ * drift apart.
+ */
+export const SCENE_CARD_FADE_BACKGROUNDS: Record<
+  SceneTransitionConfig["fadeStyle"],
+  string
+> = {
   black: "#000000",
   white: "#ffffff",
   // "cross" fades the card in over the live frame instead of
@@ -28,11 +37,17 @@ const FADE_BACKGROUNDS: Record<SceneTransitionConfig["fadeStyle"], string> = {
   cross: "rgba(0, 0, 0, 0.72)"
 };
 
-const FADE_TEXT_COLORS: Record<SceneTransitionConfig["fadeStyle"], string> = {
+export const SCENE_CARD_FADE_TEXT_COLORS: Record<
+  SceneTransitionConfig["fadeStyle"],
+  string
+> = {
   black: "#f5f0e8",
   white: "#1a1616",
   cross: "#f5f0e8"
 };
+
+export const SCENE_CARD_FONT_FAMILY =
+  "Georgia, 'Times New Roman', serif";
 
 /**
  * Show the title card, resolve after it has fully played
@@ -58,12 +73,12 @@ export function showSceneTransitionCard(
     "align-items: center",
     "justify-content: center",
     "gap: 12px",
-    `background: ${FADE_BACKGROUNDS[config.fadeStyle]}`,
+    `background: ${SCENE_CARD_FADE_BACKGROUNDS[config.fadeStyle]}`,
     "opacity: 0",
     `transition: opacity ${FADE_IN_MS}ms ease-in-out`,
     "pointer-events: all",
     "user-select: none",
-    "font-family: Georgia, 'Times New Roman', serif",
+    `font-family: ${SCENE_CARD_FONT_FAMILY}`,
     "text-align: center",
     "padding: 24px"
   ].join(";");
@@ -71,7 +86,7 @@ export function showSceneTransitionCard(
   const title = ownerDocument.createElement("div");
   title.textContent = config.titleText;
   title.style.cssText = [
-    `color: ${FADE_TEXT_COLORS[config.fadeStyle]}`,
+    `color: ${SCENE_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
     "font-size: clamp(28px, 5vw, 56px)",
     "letter-spacing: 0.12em",
     "text-transform: uppercase"
@@ -82,7 +97,7 @@ export function showSceneTransitionCard(
     const subtitle = ownerDocument.createElement("div");
     subtitle.textContent = config.subtitleText;
     subtitle.style.cssText = [
-      `color: ${FADE_TEXT_COLORS[config.fadeStyle]}`,
+      `color: ${SCENE_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
       "font-size: clamp(14px, 2vw, 22px)",
       "letter-spacing: 0.3em",
       "opacity: 0.75",
