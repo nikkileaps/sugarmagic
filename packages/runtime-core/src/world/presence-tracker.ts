@@ -3,9 +3,16 @@
  *
  * Purpose: `world.presence` tracker + SaveParticipant. Records
  * which item-presence IDs the player has collected, keyed by
- * region. On region load, the scene builder consults the tracker
- * via `shouldSkip(regionId, presenceId)` and skips already-
- * collected presences so they don't respawn.
+ * (region, Scene). On region load, the scene builder consults the
+ * tracker via `shouldSkip(regionId, sceneId, presenceId)` and
+ * skips already-collected presences so they don't respawn.
+ *
+ * Plan 058 §058.5 — v2 keys collections per Scene (Base + Overlay
+ * applied to the save schema): the same region revisited in a
+ * different Scene has its own collected set, so Scene 2 can
+ * re-story a region without Scene 1's pickups bleeding through.
+ * v1 slices (flat per-region arrays) upgrade at deserialize by
+ * wrapping under the default Scene id.
  *
  * Boundary: this tracker is HOST-owned, not assembly-owned. The
  * assembly gets a shouldSkip callback pointer at construction;
@@ -18,27 +25,29 @@
  * `registerItemInteractables` reads shouldSkip). The runtime
  * host runs it in Phase 1 alongside `host.player`.
  *
- * Implements: Plan 055 §055.6
+ * Implements: Plan 055 §055.6, Plan 058 §058.5
  *
  * Status: active
  */
 
-import type { SaveSlice } from "@sugarmagic/domain";
+import { DEFAULT_SCENE_ID, type SaveSlice } from "@sugarmagic/domain";
 import type { SaveParticipant } from "../save/participant";
 
 export const WORLD_PRESENCE_PARTICIPANT_ID = "world.presence";
-export const WORLD_PRESENCE_SLICE_SCHEMA_VERSION = 1;
+export const WORLD_PRESENCE_SLICE_SCHEMA_VERSION = 2;
 
 /**
- * Persisted slice shape. Sets flatten to arrays for JSON.
- *
- * Design decision (revisit under Plan 058 Scenes):
- * currently Scene-agnostic. If a later Scene needs to un-
- * collect a presence in a shared region to re-story it, we bump
- * this to `Record<regionId, Record<sceneId, string[]>>` and
- * migrate. See Plan 055 open questions.
+ * Persisted slice shape, v2. Sets flatten to arrays for JSON.
+ * v1 was `Record<regionId, string[]>` (Scene-agnostic); the
+ * tracker's deserialize upgrades v1 in place by wrapping each
+ * region's array under `DEFAULT_SCENE_ID` — pre-Scenes saves
+ * were implicitly playing the default Scene.
  */
 export interface WorldPresenceSlice {
+  collectedByRegion: Record<string, Record<string, string[]>>;
+}
+
+interface WorldPresenceSliceV1 {
   collectedByRegion: Record<string, string[]>;
 }
 
@@ -49,21 +58,39 @@ export interface WorldPresenceSlice {
  * `shouldSkip` to skip already-collected presences.
  */
 export class WorldPresenceTracker {
-  private readonly collected = new Map<string, Set<string>>();
+  /** regionId -> sceneId -> collected presence ids. */
+  private readonly collected = new Map<string, Map<string, Set<string>>>();
 
-  markCollected(regionId: string | null, presenceId: string): void {
+  markCollected(
+    regionId: string | null,
+    sceneId: string | null,
+    presenceId: string
+  ): void {
     if (!regionId) return;
-    let set = this.collected.get(regionId);
+    const scene = sceneId ?? DEFAULT_SCENE_ID;
+    let byScene = this.collected.get(regionId);
+    if (!byScene) {
+      byScene = new Map();
+      this.collected.set(regionId, byScene);
+    }
+    let set = byScene.get(scene);
     if (!set) {
       set = new Set();
-      this.collected.set(regionId, set);
+      byScene.set(scene, set);
     }
     set.add(presenceId);
   }
 
-  shouldSkip(regionId: string | null, presenceId: string): boolean {
+  shouldSkip(
+    regionId: string | null,
+    sceneId: string | null,
+    presenceId: string
+  ): boolean {
     if (!regionId) return false;
-    return this.collected.get(regionId)?.has(presenceId) ?? false;
+    const scene = sceneId ?? DEFAULT_SCENE_ID;
+    return (
+      this.collected.get(regionId)?.get(scene)?.has(presenceId) ?? false
+    );
   }
 
   /** Wipe every recorded collection. Used by `resetForNewGame`
@@ -73,9 +100,13 @@ export class WorldPresenceTracker {
   }
 
   serializeSaveSlice(): WorldPresenceSlice {
-    const collectedByRegion: Record<string, string[]> = {};
-    for (const [regionId, set] of this.collected) {
-      collectedByRegion[regionId] = Array.from(set);
+    const collectedByRegion: Record<string, Record<string, string[]>> = {};
+    for (const [regionId, byScene] of this.collected) {
+      const scenes: Record<string, string[]> = {};
+      for (const [sceneId, set] of byScene) {
+        scenes[sceneId] = Array.from(set);
+      }
+      collectedByRegion[regionId] = scenes;
     }
     return { collectedByRegion };
   }
@@ -83,10 +114,31 @@ export class WorldPresenceTracker {
   deserializeSaveSlice(slice: SaveSlice<WorldPresenceSlice> | null): void {
     this.collected.clear();
     if (!slice) return;
-    for (const [regionId, ids] of Object.entries(
+    if (slice.schemaVersion < 2) {
+      // v1 -> v2: flat per-region arrays were written before
+      // Scenes existed; those collections happened in what is now
+      // the default Scene.
+      const v1 = slice.data as unknown as WorldPresenceSliceV1;
+      for (const [regionId, ids] of Object.entries(
+        v1.collectedByRegion ?? {}
+      )) {
+        if (!Array.isArray(ids)) continue;
+        this.collected.set(
+          regionId,
+          new Map([[DEFAULT_SCENE_ID, new Set(ids)]])
+        );
+      }
+      return;
+    }
+    for (const [regionId, byScene] of Object.entries(
       slice.data.collectedByRegion ?? {}
     )) {
-      this.collected.set(regionId, new Set(ids));
+      const sceneMap = new Map<string, Set<string>>();
+      for (const [sceneId, ids] of Object.entries(byScene ?? {})) {
+        if (!Array.isArray(ids)) continue;
+        sceneMap.set(sceneId, new Set(ids));
+      }
+      this.collected.set(regionId, sceneMap);
     }
   }
 }

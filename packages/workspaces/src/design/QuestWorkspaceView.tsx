@@ -47,6 +47,7 @@ import type {
   QuestNodeDefinition,
   QuestStageDefinition,
   RegionDocument,
+  Scene,
   SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
@@ -86,6 +87,9 @@ export interface QuestWorkspaceViewProps {
   gameProjectId: string | null;
   questDefinitions: QuestDefinition[];
   regions: RegionDocument[];
+  /** Plan 058 §058.5 — Scene picker source for the
+   *  unlockScene / advanceToNextScene action editors. */
+  scenes: Scene[];
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -425,11 +429,13 @@ function QuestConditionEditor({
 function QuestActionsEditor({
   actions,
   itemDefinitions,
+  scenes,
   onChange,
   label
 }: {
   actions: QuestActionDefinition[];
   itemDefinitions: ItemDefinition[];
+  scenes: Scene[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -451,6 +457,8 @@ function QuestActionsEditor({
               "emitEvent",
               "giveItem",
               "removeItem",
+              "unlockScene",
+              "advanceToNextScene",
               "playSound",
               "spawnVfx",
               "teleportNpc",
@@ -485,6 +493,8 @@ function QuestActionsEditor({
                     "emitEvent",
                     "giveItem",
                     "removeItem",
+                    "unlockScene",
+                    "advanceToNextScene",
                     "playSound",
                     "spawnVfx",
                     "teleportNpc",
@@ -516,6 +526,28 @@ function QuestActionsEditor({
                   data={itemDefinitions.map((item) => ({
                     value: item.definitionId,
                     label: item.displayName
+                  }))}
+                  value={action.targetId ?? null}
+                  onChange={(value) => {
+                    const next = [...actions];
+                    next[index] = { ...action, targetId: value ?? undefined };
+                    onChange(next);
+                  }}
+                />
+              ) : action.type === "unlockScene" ||
+                action.type === "advanceToNextScene" ? (
+                <Select
+                  size="xs"
+                  label="Scene"
+                  clearable
+                  placeholder={
+                    action.type === "advanceToNextScene"
+                      ? "(next by order)"
+                      : "Pick a Scene"
+                  }
+                  data={scenes.map((scene) => ({
+                    value: scene.sceneId,
+                    label: scene.displayName
                   }))}
                   value={action.targetId ?? null}
                   onChange={(value) => {
@@ -559,6 +591,7 @@ export function useQuestWorkspaceView({
   gameProjectId,
   questDefinitions,
   regions,
+  scenes,
   dialogueDefinitions,
   itemDefinitions,
   npcDefinitions,
@@ -1592,12 +1625,14 @@ export function useQuestWorkspaceView({
             label="On Enter"
             actions={selectedNode.onEnterActions}
             itemDefinitions={itemDefinitions}
+            scenes={scenes}
             onChange={(onEnterActions) => updateNode({ ...selectedNode, onEnterActions })}
           />
           <QuestActionsEditor
             label="On Complete"
             actions={selectedNode.onCompleteActions}
             itemDefinitions={itemDefinitions}
+            scenes={scenes}
             onChange={(onCompleteActions) => updateNode({ ...selectedNode, onCompleteActions })}
           />
 

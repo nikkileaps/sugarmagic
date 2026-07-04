@@ -2144,6 +2144,7 @@ export function App() {
     activeDesignKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
+    scenes: session?.gameProject.scenes ?? [],
     playerDefinition,
     spellDefinitions,
     itemDefinitions,

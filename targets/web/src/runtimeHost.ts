@@ -137,6 +137,7 @@ import {
   type ObservableValue,
   type RuntimeActionRegistry,
   QUEST_MANAGER_PARTICIPANT_ID,
+  GAME_SAVE_SCHEMA_VERSION,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -149,6 +150,8 @@ import {
   createCampaignProgressionParticipant,
   type CampaignProgressionSlice
 } from "./save/campaignProgressionParticipant";
+import { showSceneTransitionCard } from "./sceneTransitionCard";
+import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
@@ -941,6 +944,99 @@ export function createWebRuntimeHost(
   function hostContinueGame(): void {
     gameStateStore.setState({ lifecycle: "playing" });
   }
+
+  // Plan 058 §058.5 — quest Scene-progression actions land here
+  // from the assembly's quest action handler. `unlockScene` only
+  // mutates campaign state (persisted on the next autosave tick).
+  // `advanceToNextScene` mutates, force-writes the save, shows
+  // the target Scene's transition card (null config = hard cut),
+  // then reloads: the boot path recomposes the world into the new
+  // Scene the same way Continue does — no separate mid-session
+  // recompose machinery.
+  function hostHandleSceneAction(action: {
+    type: "unlockScene" | "advanceToNextScene";
+    sceneId: string | null;
+  }): void {
+    if (action.type === "unlockScene") {
+      if (!action.sceneId) {
+        console.warn(
+          "[web-runtime] unlockScene action without a sceneId targetId; ignoring."
+        );
+        return;
+      }
+      if (!manuallyUnlockedSceneIds.includes(action.sceneId)) {
+        manuallyUnlockedSceneIds.push(action.sceneId);
+      }
+      return;
+    }
+
+    const ordered = [...bootScenes].sort(
+      (left, right) => left.sceneOrder - right.sceneOrder
+    );
+    const currentIndex = ordered.findIndex(
+      (scene) => scene.sceneId === activeSceneIdForSave
+    );
+    const target = action.sceneId
+      ? ordered.find((scene) => scene.sceneId === action.sceneId) ?? null
+      : ordered[currentIndex + 1] ?? null;
+    if (!target) {
+      console.warn(
+        "[web-runtime] advanceToNextScene: no target Scene " +
+          `(current=${activeSceneIdForSave}, requested=${action.sceneId ?? "next"}).`
+      );
+      return;
+    }
+    if (target.sceneId === activeSceneIdForSave) return;
+
+    if (
+      activeSceneIdForSave &&
+      !completedSceneIds.includes(activeSceneIdForSave)
+    ) {
+      completedSceneIds.push(activeSceneIdForSave);
+    }
+    // Manual unlock so the advance survives condition
+    // re-evaluation on every future boot.
+    if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
+      manuallyUnlockedSceneIds.push(target.sceneId);
+    }
+    activeSceneIdForSave = target.sceneId;
+    void advanceSceneAndReload(target);
+  }
+
+  async function advanceSceneAndReload(target: Scene): Promise<void> {
+    // Force-write the save NOW — the reload can't wait for the
+    // next 5s autosave tick or the advance would be lost.
+    const bindings = activeProvidersStore.getSnapshot();
+    const settledUser = bindings?.identityProvider.currentUser();
+    const payload = getCurrentSavePayload();
+    if (bindings && settledUser && payload) {
+      try {
+        await bindings.saveStore.save(settledUser.userId, {
+          userId: settledUser.userId,
+          lastPlayed: new Date().toISOString(),
+          schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+          writtenByVersion: SUGARMAGIC_VERSION,
+          payload
+        });
+      } catch (error) {
+        console.warn(
+          "[web-runtime] advanceToNextScene: save write failed; reloading anyway (advance may be lost).",
+          error
+        );
+      }
+    } else {
+      console.warn(
+        "[web-runtime] advanceToNextScene: no active store/user; Scene advance will not persist."
+      );
+    }
+    if (target.transitionConfig) {
+      await showSceneTransitionCard(
+        ownerWindow.document,
+        target.transitionConfig
+      );
+    }
+    ownerWindow.location.reload();
+  }
   function hostPauseGame(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
     if (lifecycle !== "playing") {
@@ -1052,6 +1148,9 @@ export function createWebRuntimeHost(
   let manuallyUnlockedSceneIds: string[] = [];
   let completedSceneIds: string[] = [];
   let campaignRestore: CampaignProgressionSlice | null = null;
+  /** The migrated Scene list from the last start() — the advance
+   *  action resolves "next by order" against it. */
+  let bootScenes: Scene[] = [];
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1579,6 +1678,7 @@ export function createWebRuntimeHost(
       scenes: state.scenes ?? [],
       regions: state.regions
     });
+    bootScenes = migratedContent.scenes;
     // Plan 058 §058.4 — Pattern 3 (Filtered Composition at
     // Runtime): evaluate unlock conditions against the restored
     // save, then pick the boot Scene. Precedence: saved
@@ -1660,7 +1760,11 @@ export function createWebRuntimeHost(
         activeRegionContents?.itemPresences ?? [],
         {
           shouldSkip: (presenceId) =>
-            worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
+            worldPresenceTracker.shouldSkip(
+              activeRegionIdForSave,
+              activeSceneIdForSave,
+              presenceId
+            )
         },
         (presence) => {
           activeItemPresenceIds.add(presence.presenceId);
@@ -1990,6 +2094,7 @@ export function createWebRuntimeHost(
       inputManager,
       activeRegion,
       activeScene,
+      onSceneAction: hostHandleSceneAction,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
@@ -2029,6 +2134,10 @@ export function createWebRuntimeHost(
         // actually in.
         worldPresenceTracker.markCollected(
           activeRegionIdForSave,
+          // Plan 058 §058.5 — collections key per (region, Scene)
+          // so revisiting the region in another Scene has its own
+          // collected set.
+          activeSceneIdForSave,
           presenceId
         );
         const entry = sceneObjectEntries.get(presenceId);
@@ -2038,7 +2147,11 @@ export function createWebRuntimeHost(
         sceneObjectEntries.delete(presenceId);
       },
       shouldSkipItemPresence: (presenceId) =>
-        worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
+        worldPresenceTracker.shouldSkip(
+          activeRegionIdForSave,
+          activeSceneIdForSave,
+          presenceId
+        )
     });
     gameplaySession = gameplayAssembly.gameplaySession;
     // Plan 055 §055.4 — Phase 2: register participants whose

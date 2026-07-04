@@ -163,6 +163,16 @@ export interface RuntimeGameplaySessionControllerOptions {
    * never from the region directly. Null composes base-only.
    */
   activeScene?: Scene | null;
+  /**
+   * Plan 058 §058.5 — quest Scene-progression actions
+   * (unlockScene / advanceToNextScene) forward here; the host
+   * owns campaign.progression and the world reload that a Scene
+   * change implies.
+   */
+  onSceneAction?: (action: {
+    type: "unlockScene" | "advanceToNextScene";
+    sceneId: string | null;
+  }) => void;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -1580,6 +1590,19 @@ export function createRuntimeGameplaySessionController(
 
     if (action.type === "removeItem" && action.targetId) {
       inventoryManager.removeItem(action.targetId, count);
+      return;
+    }
+
+    // Plan 058 §058.5 — Scene progression actions belong to the
+    // host (campaign.progression lives there), not the assembly.
+    if (
+      action.type === "unlockScene" ||
+      action.type === "advanceToNextScene"
+    ) {
+      options.onSceneAction?.({
+        type: action.type,
+        sceneId: action.targetId ?? null
+      });
     }
   });
   questManager.setStateChangeHandler(() => {
