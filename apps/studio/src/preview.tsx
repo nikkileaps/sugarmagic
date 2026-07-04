@@ -62,6 +62,7 @@ import type {
   MechanicsDefinition,
   SoundEventBindingMap,
   AudioMixerSettings,
+  MusicBindings,
   UITheme,
   RegionDocument,
   Scene
@@ -131,6 +132,8 @@ interface PreviewBootMessage {
   uiTheme: UITheme;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
+  /** Plan 059 §059.1 — project music slots. */
+  musicBindings?: MusicBindings | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -286,6 +289,7 @@ window.addEventListener("message", (event) => {
         uiTheme: data.uiTheme,
         soundEventBindings: data.soundEventBindings,
         audioMixer: data.audioMixer,
+        musicBindings: data.musicBindings,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,

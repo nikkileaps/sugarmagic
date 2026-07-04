@@ -18,6 +18,7 @@ import {
   createDefaultRegion,
   createDefaultSoundCueDefinition,
   createRegionSoundEmitter,
+  normalizeMusicBindings,
   removeAudioClipDefinitionFromSession,
   setSoundEventBindingInSession
 } from "@sugarmagic/domain";
@@ -280,6 +281,127 @@ describe("sound system", () => {
         })
       ])
     );
+  });
+
+  it("drives the background-music channel through play/stop cue commands (Plan 059 §059.1)", () => {
+    const project = createDefaultGameProject("Audio Test", "audio-test");
+    const clipA = createDefaultAudioClipDefinition({
+      displayName: "Theme A",
+      source: {
+        relativeAssetPath: "assets/audio/theme-a.mp3",
+        fileName: "theme-a.mp3",
+        mimeType: "audio/mpeg"
+      }
+    });
+    const clipB = createDefaultAudioClipDefinition({
+      displayName: "Theme B",
+      source: {
+        relativeAssetPath: "assets/audio/theme-b.mp3",
+        fileName: "theme-b.mp3",
+        mimeType: "audio/mpeg"
+      }
+    });
+    const cueA = createDefaultSoundCueDefinition({
+      displayName: "Theme A Cue",
+      category: "music",
+      clips: [
+        { audioClipDefinitionId: clipA.definitionId, weight: 1, sprite: null }
+      ],
+      playback: { mode: "loop", fadeInMs: 800 }
+    });
+    const cueB = createDefaultSoundCueDefinition({
+      displayName: "Theme B Cue",
+      category: "music",
+      clips: [
+        { audioClipDefinitionId: clipB.definitionId, weight: 1, sprite: null }
+      ],
+      playback: { mode: "loop" }
+    });
+    const session = addSoundCueDefinitionToSession(
+      addSoundCueDefinitionToSession(
+        addAudioClipDefinitionToSession(
+          addAudioClipDefinitionToSession(
+            createAuthoringSession(project, []),
+            clipA
+          ),
+          clipB
+        ),
+        cueA
+      ),
+      cueB
+    );
+    const controller = createRuntimeAudioController({
+      contentLibrary: session.contentLibrary,
+      soundEventBindings: {},
+      mixer: session.gameProject.audioMixer,
+      activeRegion: null
+    });
+    controller.drainCommands();
+
+    // Start track A.
+    controller.setMusicTrack(cueA.definitionId);
+    expect(controller.drainCommands()).toEqual([
+      expect.objectContaining({
+        kind: "play-cue",
+        cueDefinitionId: cueA.definitionId,
+        instanceKey: `music:${cueA.definitionId}`
+      })
+    ]);
+
+    // Same track again = no-op (idempotent Scene-load re-apply).
+    controller.setMusicTrack(cueA.definitionId);
+    expect(controller.drainCommands()).toEqual([]);
+
+    // Switch to B: fade out A (explicit crossfade), start B.
+    controller.setMusicTrack(cueB.definitionId, { fadeOutMs: 300 });
+    expect(controller.drainCommands()).toEqual([
+      expect.objectContaining({
+        kind: "stop-cue",
+        instanceKey: `music:${cueA.definitionId}`,
+        fadeOutMs: 300
+      }),
+      expect.objectContaining({
+        kind: "play-cue",
+        cueDefinitionId: cueB.definitionId,
+        instanceKey: `music:${cueB.definitionId}`
+      })
+    ]);
+
+    // Null stops music entirely (default fade).
+    controller.setMusicTrack(null);
+    const stopCommands = controller.drainCommands();
+    expect(stopCommands).toEqual([
+      expect.objectContaining({
+        kind: "stop-cue",
+        instanceKey: `music:${cueB.definitionId}`
+      })
+    ]);
+
+    // Unknown cue after null: nothing plays.
+    controller.setMusicTrack("cue:does-not-exist");
+    expect(controller.drainCommands()).toEqual([]);
+  });
+
+  it("normalizes music bindings (Plan 059 §059.1)", () => {
+    expect(normalizeMusicBindings(null)).toEqual({
+      defaultBackgroundMusicId: null,
+      creditsThemeMusicId: null
+    });
+    expect(
+      normalizeMusicBindings({
+        defaultBackgroundMusicId: "  cue:town-theme  ",
+        creditsThemeMusicId: ""
+      })
+    ).toEqual({
+      defaultBackgroundMusicId: "cue:town-theme",
+      creditsThemeMusicId: null
+    });
+    // Fresh projects carry the empty bindings.
+    const project = createDefaultGameProject("Audio Test", "audio-test");
+    expect(project.musicBindings).toEqual({
+      defaultBackgroundMusicId: null,
+      creditsThemeMusicId: null
+    });
   });
 
   it("keeps Howler out of runtime-core", () => {

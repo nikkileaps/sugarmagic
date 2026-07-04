@@ -173,6 +173,13 @@ export interface RuntimeGameplaySessionControllerOptions {
     type: "unlockScene" | "advanceToNextScene";
     sceneId: string | null;
   }) => void;
+  /**
+   * Plan 059 §059.1 — the background-music sound cue to start at
+   * assembly boot, already resolved by the host (Scene
+   * `audioOverride.backgroundMusicId` ?? project
+   * `musicBindings.defaultBackgroundMusicId`). Null = silence.
+   */
+  backgroundMusicCueId?: string | null;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -488,6 +495,11 @@ export function createRuntimeGameplaySessionController(
     mixer: audioMixer ?? createDefaultAudioMixerSettings(),
     activeRegion
   });
+  // Plan 059 §059.1 — start the Scene's background music. The
+  // host resolves the cue (Scene audioOverride ?? project
+  // default); null means silence. Idempotent in the channel, so
+  // re-assembly with the same track doesn't restart it.
+  audioController.setMusicTrack(options.backgroundMusicCueId ?? null);
   function flushAudioCommands() {
     const commands = audioController.drainCommands();
     if (commands.length > 0) {

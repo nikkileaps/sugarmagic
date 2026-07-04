@@ -78,6 +78,31 @@ export type SoundEventBindingMap = Partial<
 
 export type AudioMixerSettings = Record<"master" | SoundCategory, number>;
 
+/**
+ * Plan 059 §059.1 — project-level music slots. Sound-cue ids
+ * (cues authored with category "music" + loop mode); null = no
+ * music for that slot. Scene `audioOverride.backgroundMusicId`
+ * shadows `defaultBackgroundMusicId` per Scene.
+ */
+export interface MusicBindings {
+  defaultBackgroundMusicId: string | null;
+  /** Played under the end-of-Scene credits roll (Plan 059 §059.3). */
+  creditsThemeMusicId: string | null;
+}
+
+export function normalizeMusicBindings(
+  input: Partial<MusicBindings> | null | undefined
+): MusicBindings {
+  const coerce = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
+  return {
+    defaultBackgroundMusicId: coerce(input?.defaultBackgroundMusicId),
+    creditsThemeMusicId: coerce(input?.creditsThemeMusicId)
+  };
+}
+
 export function createDefaultAudioMixerSettings(): AudioMixerSettings {
   return {
     master: 1,
@@ -173,6 +198,8 @@ export interface GameProject {
   uiTheme: UITheme;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
+  /** Plan 059 §059.1 — default background music + credits theme. */
+  musicBindings: MusicBindings;
   mechanics: MechanicsDefinition;
   /**
    * Story 47.10.5 — authored "fresh start" record. When the player
@@ -343,6 +370,7 @@ export function normalizeGameProject(
         | "defaultGameSavePayload"
         | "scenes"
         | "scenesUiLabel"
+        | "musicBindings"
       > & {
         majorVersion?: number | null;
         // Legacy fields accepted on input for back-compat with pre-45.7.5
@@ -371,6 +399,8 @@ export function normalizeGameProject(
         // Plan 058 §058.1 — pre-058 project files lack these keys.
         scenes?: unknown;
         scenesUiLabel?: unknown;
+        // Plan 059 §059.1 — pre-059 project files lack this key.
+        musicBindings?: Partial<MusicBindings> | null;
       })
 ): GameProject {
   const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
@@ -458,6 +488,10 @@ export function normalizeGameProject(
     scenes: normalizeScenes((gameProject as { scenes?: unknown }).scenes),
     scenesUiLabel: normalizeScenesUiLabel(
       (gameProject as { scenesUiLabel?: unknown }).scenesUiLabel
+    ),
+    musicBindings: normalizeMusicBindings(
+      (gameProject as { musicBindings?: Partial<MusicBindings> | null })
+        .musicBindings
     )
   };
 }
@@ -498,6 +532,7 @@ export function createDefaultGameProject(
     // Scene already in place so authoring always has an active
     // Scene context (Ambient Context pattern) from day one.
     scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })],
-    scenesUiLabel: "Scene"
+    scenesUiLabel: "Scene",
+    musicBindings: normalizeMusicBindings(null)
   };
 }

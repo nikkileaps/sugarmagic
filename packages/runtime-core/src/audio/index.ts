@@ -71,6 +71,20 @@ export interface RuntimeAudioController {
     position?: [number, number, number] | null;
   }) => void;
   stopInstance: (instanceKey: string, fadeOutMs?: number) => void;
+  /**
+   * Plan 059 §059.1 — the background-music channel. One track at
+   * a time; switching tracks fades the outgoing one over
+   * `fadeOutMs` (default 1200ms) while the incoming starts with
+   * its cue-authored fade-in — an author-tunable crossfade. Null
+   * stops music. Same track = no-op (idempotent re-application
+   * at Scene load). Music cues should be authored with category
+   * "music" + playback mode "loop"; the channel plays whatever
+   * cue it is given and leaves those knobs to the author.
+   */
+  setMusicTrack: (
+    cueDefinitionId: string | null,
+    options?: { fadeOutMs?: number }
+  ) => void;
   setListenerPose: (options: {
     mode: RuntimeListenerMode;
     position: [number, number, number];
@@ -161,6 +175,13 @@ export function createRuntimeAudioController(
     });
   }
 
+  // Plan 059 §059.1 — background-music channel state. One track;
+  // the instanceKey embeds the cue id so a crossfade's outgoing
+  // and incoming instances never collide in the adapter.
+  let currentMusicTrack: { cueDefinitionId: string; instanceKey: string } | null =
+    null;
+  const DEFAULT_MUSIC_FADE_OUT_MS = 1200;
+
   const controller: RuntimeAudioController = {
     emitEvent(eventKey, eventOptions) {
       const cueDefinitionId = options.soundEventBindings[eventKey] ?? null;
@@ -172,6 +193,29 @@ export function createRuntimeAudioController(
     },
     playCue,
     stopInstance,
+    setMusicTrack(cueDefinitionId, musicOptions) {
+      if (
+        (currentMusicTrack?.cueDefinitionId ?? null) ===
+        (cueDefinitionId ?? null)
+      ) {
+        return;
+      }
+      const fadeOutMs =
+        musicOptions?.fadeOutMs ?? DEFAULT_MUSIC_FADE_OUT_MS;
+      if (currentMusicTrack) {
+        stopInstance(currentMusicTrack.instanceKey, fadeOutMs);
+        currentMusicTrack = null;
+      }
+      if (!cueDefinitionId) {
+        return;
+      }
+      if (!cueExists(options.contentLibrary, cueDefinitionId)) {
+        return;
+      }
+      const instanceKey = `music:${cueDefinitionId}`;
+      currentMusicTrack = { cueDefinitionId, instanceKey };
+      playCue({ cueDefinitionId, instanceKey, position: null });
+    },
     setListenerPose(listener) {
       enqueue({
         commandId: nextCommandId(),

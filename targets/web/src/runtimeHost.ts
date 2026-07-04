@@ -53,6 +53,7 @@ import {
   migrateToScenes,
   resolveActiveScene,
   resolveUnlockedSceneIds,
+  type MusicBindings,
   type Scene
 } from "@sugarmagic/domain";
 import {
@@ -201,6 +202,9 @@ export interface WebRuntimeStartState {
   activeSceneId?: string | null;
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  /** Plan 059 §059.1 — project music slots (default background
+   *  music + credits theme). */
+  musicBindings?: MusicBindings | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload
@@ -1722,13 +1726,17 @@ export function createWebRuntimeHost(
     const activeRegionContents = activeRegion
       ? composeRegionContents(activeRegion, activeScene)
       : null;
+    // Plan 059 §059.1 — background music resolution: the Scene's
+    // audioOverride shadows the project default; null = silence.
+    // (Closes Plan 058's audioOverride deferral.)
+    const backgroundMusicCueId =
+      activeScene?.audioOverride?.backgroundMusicId ??
+      state.musicBindings?.defaultBackgroundMusicId ??
+      null;
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls
-    // through untouched. (audioOverride is authored on the Scene
-    // type but NOT applied yet — the runtime has no background-
-    // music system to override; revisit when one exists. See plan
-    // 058 Deferred.)
+    // through untouched.
     renderEngineProjector.push(
       activeScene?.environmentOverride
         ? {
@@ -2101,6 +2109,7 @@ export function createWebRuntimeHost(
       activeRegion,
       activeScene,
       onSceneAction: hostHandleSceneAction,
+      backgroundMusicCueId,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,

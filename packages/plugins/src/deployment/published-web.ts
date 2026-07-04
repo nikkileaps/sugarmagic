@@ -135,6 +135,8 @@ function buildBootJsonPayload(
     uiTheme: gameProject.uiTheme,
     soundEventBindings: gameProject.soundEventBindings,
     audioMixer: gameProject.audioMixer,
+    // Plan 059 §059.1 — project music slots.
+    musicBindings: gameProject.musicBindings,
     assetSources: snapshot.assetSources,
     // Story 47.10.5 — authored fresh-start record. When a returning
     // player loads with no save (or just clicked New Game + reset),

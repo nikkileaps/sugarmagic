@@ -33,6 +33,7 @@ import type {
   ItemDefinition,
   AudioClipDefinition,
   AudioMixerSettings,
+  MusicBindings,
   RuntimeSoundEventKey,
   SoundCueDefinition
 } from "@sugarmagic/domain";
@@ -94,6 +95,7 @@ import {
   removeSoundCueDefinitionFromSession,
   setSoundEventBindingInSession,
   updateAudioMixerInSession,
+  updateMusicBindingsInSession,
   duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
@@ -712,6 +714,8 @@ async function postPreviewBootMessage(
       uiTheme: session.gameProject.uiTheme,
       soundEventBindings: session.gameProject.soundEventBindings,
       audioMixer: session.gameProject.audioMixer,
+      // Plan 059 §059.1 — project music slots.
+      musicBindings: session.gameProject.musicBindings,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"
@@ -1561,6 +1565,18 @@ export function App() {
     []
   );
 
+  // Plan 059 §059.1 — project music slots.
+  const handleUpdateMusicBindings = useCallback(
+    (patch: Partial<MusicBindings>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(updateMusicBindingsInSession(currentSession, patch));
+    },
+    []
+  );
+
   const handleGenerateItemThumbnail = useCallback(
     async (item: ItemDefinition): Promise<string | null> => {
       const { handle, session: currentSession } = projectStore.getState();
@@ -2111,6 +2127,8 @@ export function App() {
     onRemoveSoundCueDefinition: handleRemoveSoundCueDefinition,
     onSetSoundEventBinding: handleSetSoundEventBinding,
     onUpdateAudioMixer: handleUpdateAudioMixer,
+    musicBindings: session?.gameProject.musicBindings ?? null,
+    onUpdateMusicBindings: handleUpdateMusicBindings,
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
@@ -2542,6 +2560,12 @@ export function App() {
               displayName: definition.displayName
             })
           )}
+          soundCueDefinitions={(
+            session.contentLibrary.soundCueDefinitions ?? []
+          ).map((cue) => ({
+            definitionId: cue.definitionId,
+            displayName: cue.displayName
+          }))}
           onAddScene={handleAddScene}
           onRenameScene={handleRenameScene}
           onUpdateScene={handleUpdateScene}

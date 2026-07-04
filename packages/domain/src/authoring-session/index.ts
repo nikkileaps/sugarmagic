@@ -10,10 +10,12 @@
 import type {
   AudioMixerSettings,
   GameProject,
+  MusicBindings,
   RuntimeSoundEventKey
 } from "../game-project";
 import {
   normalizeAudioMixerSettings,
+  normalizeMusicBindings,
   normalizeGameProject
 } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
@@ -3092,6 +3094,25 @@ export function updateAudioMixerInSession(
       ...session.gameProject,
       audioMixer: normalizeAudioMixerSettings({
         ...session.gameProject.audioMixer,
+        ...patch
+      })
+    },
+    isDirty: true
+  };
+}
+
+/** Plan 059 §059.1 — project music slots (default background
+ *  music + credits theme). */
+export function updateMusicBindingsInSession(
+  session: AuthoringSession,
+  patch: Partial<MusicBindings>
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      musicBindings: normalizeMusicBindings({
+        ...session.gameProject.musicBindings,
         ...patch
       })
     },
