@@ -220,18 +220,29 @@ export interface RegionNPCBehaviorDefinition {
   tasks: RegionNPCBehaviorTask[];
 }
 
+/**
+ * Plan 058 §058.1 — the region is the BASE of the Base + Overlay
+ * split. Geography (placement, landscape, areas) plus the
+ * always-visible placed assets and the folders that group them.
+ * Presences (items, NPCs, player) and Scene-scoped decoration
+ * live on `Scene.regionOverlays[regionId]` in the GameProject —
+ * a region document no longer carries narrative content.
+ *
+ * The pre-058 `scene` nest ({folders, placedAssets,
+ * playerPresence, npcPresences, itemPresences}) is gone from the
+ * type; `normalizeRegionDocumentForLoad` + `migrateToScenes`
+ * accept the legacy shape on disk and lift it into this shape +
+ * the project's default Scene.
+ */
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
   lorePageId?: string | null;
   placement: RegionPlacement;
-  scene: {
-    folders: RegionSceneFolder[];
-    placedAssets: PlacedAssetInstance[];
-    playerPresence: RegionPlayerPresence | null;
-    npcPresences: RegionNPCPresence[];
-    itemPresences: RegionItemPresence[];
-  };
+  /** Base-scope placed assets — always visible in every Scene. */
+  placedAssets: PlacedAssetInstance[];
+  /** Folder tree grouping the base-scope placed assets. */
+  folders: RegionSceneFolder[];
   environmentBinding: RegionEnvironmentBinding;
   areas: RegionAreaDefinition[];
   behaviors: RegionNPCBehaviorDefinition[];
@@ -592,13 +603,8 @@ export function createDefaultRegion(options: {
     identity: { id: options.regionId, schema: "RegionDocument", version: 1 },
     displayName: options.displayName,
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [],
-      itemPresences: []
-    },
+    placedAssets: [],
+    folders: [],
     environmentBinding: {
       defaultEnvironmentId: options.defaultEnvironmentId ?? null
     },

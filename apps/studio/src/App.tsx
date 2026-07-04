@@ -25,6 +25,7 @@ import {
   Badge
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
+import { ManageScenesModal } from "./ManageScenesModal";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -41,6 +42,14 @@ import {
   undoSession,
   markSessionClean,
   switchActiveRegion,
+  switchActiveScene,
+  getActiveScene,
+  addSceneToSession,
+  updateSceneInSession,
+  deleteSceneFromSession,
+  reorderSceneInSession,
+  convertAssetScopeInSession,
+  copyOverlayEntryToScene,
   addRegionToSession,
   getActiveRegion,
   getAllRegions,
@@ -504,6 +513,60 @@ function handleRegionSelect(regionId: string) {
   shellStore.getState().setActiveRegionId(regionId);
 }
 
+// Plan 058 §058.2 — Ambient Context switch: the top-bar Scene
+// selector routes here. Every Design workspace + Preview follows
+// the session's activeSceneId.
+function handleSceneSelect(sceneId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore.getState().updateSession(switchActiveScene(session, sceneId));
+}
+
+// Plan 058 §058.3 — Manage Scenes handlers (session-level
+// structural mutations, same seam as addRegionToSession).
+function handleAddScene(displayName: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(addSceneToSession(session, { displayName }));
+}
+
+function handleRenameScene(sceneId: string, displayName: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSceneInSession(session, sceneId, { displayName }));
+}
+
+// Plan 058 §058.6 — Scene properties panel writes (description,
+// notes, unlock condition, overrides, transition card).
+function handleUpdateScene(
+  sceneId: string,
+  patch: Parameters<typeof updateSceneInSession>[2]
+) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateSceneInSession(session, sceneId, patch));
+}
+
+function handleDeleteScene(sceneId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore.getState().updateSession(deleteSceneFromSession(session, sceneId));
+}
+
+function handleReorderScene(sceneId: string, direction: "up" | "down") {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(reorderSceneInSession(session, sceneId, direction));
+}
+
 // --- Preview ---
 
 function handleStartPreview(
@@ -620,6 +683,16 @@ async function postPreviewBootMessage(
     {
       type: "PREVIEW_BOOT",
       regions,
+      // Plan 058 §058.1 — Scenes ride the boot payload; the
+      // runtime composes the active Scene's overlays onto the
+      // region base. Preview uses the author's ambient Scene
+      // context implicitly via the scenes array ordering for now
+      // (explicit activeSceneId threading lands with 058.2's
+      // selector).
+      scenes: session.gameProject.scenes,
+      // Ambient Context: Preview boots whichever Scene is active
+      // in the editor — no separate "preview which Scene?" picker.
+      activeSceneId: session.activeSceneId,
       activeRegionId: session.activeRegionId,
       activeEnvironmentId: snapshot.activeEnvironmentId,
       installedPluginIds,
@@ -713,6 +786,7 @@ export function App() {
 
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [manageScenesOpen, setManageScenesOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -1941,6 +2015,29 @@ export function App() {
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
+    // Plan 058 §058.3 — scope conversion + cross-Scene copy.
+    onConvertAssetScope: (regionId, instanceId) => {
+      const { session } = projectStore.getState();
+      if (!session) return;
+      projectStore
+        .getState()
+        .updateSession(
+          convertAssetScopeInSession(session, { regionId, instanceId })
+        );
+    },
+    onCopyEntryToScene: (options) => {
+      const { session } = projectStore.getState();
+      const fromScene = session ? getActiveScene(session) : null;
+      if (!session || !fromScene) return;
+      projectStore
+        .getState()
+        .updateSession(
+          copyOverlayEntryToScene(session, {
+            fromSceneId: fromScene.sceneId,
+            ...options
+          })
+        );
+    },
     onUpdateAssetDefinition: handleUpdateAssetDefinition,
     onSetAssetMaterialSlotBinding: handleSetAssetMaterialSlotBinding,
     onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
@@ -2060,6 +2157,7 @@ export function App() {
     activeDesignKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
+    scenes: session?.gameProject.scenes ?? [],
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -2430,6 +2528,28 @@ export function App() {
           });
         }}
       />
+      {session && (
+        <ManageScenesModal
+          opened={manageScenesOpen}
+          onClose={() => setManageScenesOpen(false)}
+          scenes={session.gameProject.scenes}
+          activeSceneId={session.activeSceneId}
+          scenesUiLabel={session.gameProject.scenesUiLabel}
+          questDefinitions={session.gameProject.questDefinitions}
+          environmentDefinitions={session.contentLibrary.environmentDefinitions.map(
+            (definition) => ({
+              definitionId: definition.definitionId,
+              displayName: definition.displayName
+            })
+          )}
+          onAddScene={handleAddScene}
+          onRenameScene={handleRenameScene}
+          onUpdateScene={handleUpdateScene}
+          onDeleteScene={handleDeleteScene}
+          onReorderScene={handleReorderScene}
+          onSelectScene={handleSceneSelect}
+        />
+      )}
       <Modal
         opened={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
@@ -2823,6 +2943,85 @@ export function App() {
                 >
                   v{session.gameProject.majorVersion}
                 </Badge>
+                {/* Plan 058 §058.2 — Scene selector (Ambient
+                    Context). Scope narrows left to right:
+                    project > version > Scene > workspaces. */}
+                <Menu position="bottom-start" width={240}>
+                  <Menu.Target>
+                    <UnstyledButton
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        background: "var(--sm-active-bg)",
+                        color: "var(--sm-color-text)",
+                        fontSize: "var(--sm-font-size-sm)",
+                        fontWeight: 600
+                      }}
+                    >
+                      🎬{" "}
+                      {getActiveScene(session)?.displayName ??
+                        session.gameProject.scenesUiLabel}
+                      <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
+                    </UnstyledButton>
+                  </Menu.Target>
+                  <Menu.Dropdown
+                    styles={{
+                      dropdown: {
+                        background: "var(--sm-color-surface1)",
+                        border: "1px solid var(--sm-panel-border)",
+                        padding: "var(--sm-space-xs) 0"
+                      }
+                    }}
+                  >
+                    <Menu.Label>
+                      {session.gameProject.scenesUiLabel}s
+                    </Menu.Label>
+                    {session.gameProject.scenes.map((scene) => (
+                      <Menu.Item
+                        key={scene.sceneId}
+                        onClick={() => handleSceneSelect(scene.sceneId)}
+                        styles={{
+                          item: {
+                            fontSize: "var(--sm-font-size-lg)",
+                            color:
+                              scene.sceneId ===
+                              getActiveScene(session)?.sceneId
+                                ? "var(--sm-accent-blue)"
+                                : "var(--sm-color-text)",
+                            padding: "10px 16px",
+                            "&:hover": { background: "var(--sm-active-bg)" }
+                          }
+                        }}
+                      >
+                        {scene.sceneId === getActiveScene(session)?.sceneId
+                          ? "✓ "
+                          : ""}
+                        {scene.displayName}
+                      </Menu.Item>
+                    ))}
+                    <Menu.Divider
+                      styles={{
+                        divider: { borderColor: "var(--sm-panel-border)" }
+                      }}
+                    />
+                    <Menu.Item
+                      onClick={() => setManageScenesOpen(true)}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      ⚙ Manage {session.gameProject.scenesUiLabel}s...
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
               </Group>
             )}
             <ModeBar

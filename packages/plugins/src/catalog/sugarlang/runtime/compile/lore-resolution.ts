@@ -27,8 +27,10 @@ import type {
   ItemDefinition,
   NPCDefinition,
   QuestDefinition,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
+import { composeRegionContents } from "@sugarmagic/domain";
 import { SUGARLANG_PROXY_BASE_URL_ENV } from "../../config";
 import {
   createSceneAuthoringContext,
@@ -56,6 +58,9 @@ export interface SugarlangLoreResolutionClient {
 
 export interface ResolveSceneAuthoringContextsInput {
   region: RegionDocument;
+  /** Plan 058 §058.1 — active narrative Scene composed onto the
+   *  region. Null composes base-only. */
+  activeScene?: Scene | null;
   targetLanguage: string;
   supportLanguage?: string;
   npcDefinitions: NPCDefinition[];
@@ -119,10 +124,15 @@ function toSceneLorePage(page: SugarlangResolvedLorePage): SceneLorePage {
 
 function collectReferencedWikiLorePageIds(
   region: RegionDocument,
+  activeScene: Scene | null,
   npcDefinitions: NPCDefinition[]
 ): string[] {
+  // Plan 058 §058.1 — present NPCs come from the composed Base +
+  // Overlay view under the active narrative Scene.
   const presentNpcIds = new Set(
-    region.scene.npcPresences.map((presence) => presence.npcDefinitionId)
+    composeRegionContents(region, activeScene).npcPresences.map(
+      (presence) => presence.npcDefinitionId
+    )
   );
   const referenced = new Set<string>();
 
@@ -210,6 +220,7 @@ export async function resolveSceneAuthoringContexts(
   for (const input of inputs) {
     for (const pageId of collectReferencedWikiLorePageIds(
       input.region,
+      input.activeScene ?? null,
       input.npcDefinitions
     )) {
       referencedLorePageIds.add(pageId);
@@ -229,6 +240,7 @@ export async function resolveSceneAuthoringContexts(
         ...input,
         resolvedLorePages: collectReferencedWikiLorePageIds(
           input.region,
+          input.activeScene ?? null,
           input.npcDefinitions
         )
           .map((pageId) => resolvedPagesById.get(pageId) ?? null)

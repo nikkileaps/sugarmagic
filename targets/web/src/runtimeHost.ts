@@ -48,7 +48,12 @@ import {
   type MechanicsDefinition,
   type SoundEventBindingMap,
   type AudioMixerSettings,
-  type UITheme
+  type UITheme,
+  composeRegionContents,
+  migrateToScenes,
+  resolveActiveScene,
+  resolveUnlockedSceneIds,
+  type Scene
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
@@ -131,6 +136,8 @@ import {
   type MutableObservableValue,
   type ObservableValue,
   type RuntimeActionRegistry,
+  QUEST_MANAGER_PARTICIPANT_ID,
+  GAME_SAVE_SCHEMA_VERSION,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -139,6 +146,12 @@ import {
   createHostPlayerParticipant,
   type HostPlayerSlice
 } from "./save/hostPlayerParticipant";
+import {
+  createCampaignProgressionParticipant,
+  type CampaignProgressionSlice
+} from "./save/campaignProgressionParticipant";
+import { showSceneTransitionCard } from "./sceneTransitionCard";
+import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
@@ -168,6 +181,24 @@ export interface WebRuntimeHostOptions {
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
+  /**
+   * Plan 058 §058.1 — the project's narrative Scenes. The host
+   * picks the active Scene (first by sceneOrder until Plan 058.4
+   * wires `campaign.progression`) and composes its per-region
+   * overlay onto the region base for every spawn read. Optional
+   * for back-compat: a stale pre-058 boot.json carries regions
+   * with legacy `scene` nests instead, which `migrateToScenes`
+   * lifts at start().
+   */
+  scenes?: Scene[];
+  /**
+   * Plan 058 §058.2 — which Scene to boot into. Studio Preview
+   * passes the editor's ambient Scene selection; the deployed
+   * game omits it (the player's Scene comes from the
+   * `campaign.progression` save slice in Plan 058.4, falling
+   * through to the first Scene by order until then).
+   */
+  activeSceneId?: string | null;
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
   /**
@@ -913,6 +944,105 @@ export function createWebRuntimeHost(
   function hostContinueGame(): void {
     gameStateStore.setState({ lifecycle: "playing" });
   }
+
+  // Plan 058 §058.5 — quest Scene-progression actions land here
+  // from the assembly's quest action handler. `unlockScene` only
+  // mutates campaign state (persisted on the next autosave tick).
+  // `advanceToNextScene` mutates, force-writes the save, shows
+  // the target Scene's transition card (null config = hard cut),
+  // then reloads: the boot path recomposes the world into the new
+  // Scene the same way Continue does — no separate mid-session
+  // recompose machinery.
+  function hostHandleSceneAction(action: {
+    type: "unlockScene" | "advanceToNextScene";
+    sceneId: string | null;
+  }): void {
+    if (action.type === "unlockScene") {
+      if (!action.sceneId) {
+        console.warn(
+          "[web-runtime] unlockScene action without a sceneId targetId; ignoring."
+        );
+        return;
+      }
+      if (!manuallyUnlockedSceneIds.includes(action.sceneId)) {
+        manuallyUnlockedSceneIds.push(action.sceneId);
+      }
+      return;
+    }
+
+    const ordered = [...bootScenes].sort(
+      (left, right) => left.sceneOrder - right.sceneOrder
+    );
+    const currentIndex = ordered.findIndex(
+      (scene) => scene.sceneId === activeSceneIdForSave
+    );
+    const target = action.sceneId
+      ? ordered.find((scene) => scene.sceneId === action.sceneId) ?? null
+      : ordered[currentIndex + 1] ?? null;
+    if (!target) {
+      console.warn(
+        "[web-runtime] advanceToNextScene: no target Scene " +
+          `(current=${activeSceneIdForSave}, requested=${action.sceneId ?? "next"}).`
+      );
+      return;
+    }
+    if (target.sceneId === activeSceneIdForSave) return;
+
+    if (
+      activeSceneIdForSave &&
+      !completedSceneIds.includes(activeSceneIdForSave)
+    ) {
+      completedSceneIds.push(activeSceneIdForSave);
+    }
+    // Manual unlock so the advance survives condition
+    // re-evaluation on every future boot.
+    if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
+      manuallyUnlockedSceneIds.push(target.sceneId);
+    }
+    activeSceneIdForSave = target.sceneId;
+    void advanceSceneAndReload(target);
+  }
+
+  async function advanceSceneAndReload(target: Scene): Promise<void> {
+    // Force-write the save NOW — the reload can't wait for the
+    // next 5s autosave tick or the advance would be lost.
+    const bindings = activeProvidersStore.getSnapshot();
+    const settledUser = bindings?.identityProvider.currentUser();
+    const payload = getCurrentSavePayload();
+    if (bindings && settledUser && payload) {
+      try {
+        await bindings.saveStore.save(settledUser.userId, {
+          userId: settledUser.userId,
+          lastPlayed: new Date().toISOString(),
+          schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+          writtenByVersion: SUGARMAGIC_VERSION,
+          payload
+        });
+      } catch (error) {
+        console.warn(
+          "[web-runtime] advanceToNextScene: save write failed; reloading anyway (advance may be lost).",
+          error
+        );
+      }
+    } else {
+      console.warn(
+        "[web-runtime] advanceToNextScene: no active store/user; Scene advance will not persist."
+      );
+    }
+    if (target.transitionConfig) {
+      await showSceneTransitionCard(
+        ownerWindow.document,
+        target.transitionConfig
+      );
+    }
+    // Same sessionStorage handshake New Game uses: the next boot
+    // skips the start menu and goes straight to playing. The save
+    // was force-written above, so boot restores directly into the
+    // new Scene — the transition feels continuous instead of
+    // detouring through the menu.
+    sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+    ownerWindow.location.reload();
+  }
   function hostPauseGame(): void {
     const lifecycle = gameStateStore.getState().lifecycle;
     if (lifecycle !== "playing") {
@@ -1012,6 +1142,28 @@ export function createWebRuntimeHost(
       getCurrentRegionId: () => activeRegionIdForSave,
       applyRestoredSlice: (data) => {
         hostPlayerRestore = data;
+      }
+    })
+  );
+  // Plan 058 §058.4 — campaign.progression. Host-owned tier:
+  // `currentSceneId` decides which Scene overlay composes the
+  // world, so it must restore in Phase 1 before spawn (same class
+  // as host.player's currentRegionId). The closures below are the
+  // live state; 058.5's advance/unlock actions mutate them.
+  let activeSceneIdForSave: string | null = null;
+  let manuallyUnlockedSceneIds: string[] = [];
+  let completedSceneIds: string[] = [];
+  let campaignRestore: CampaignProgressionSlice | null = null;
+  /** The migrated Scene list from the last start() — the advance
+   *  action resolves "next by order" against it. */
+  let bootScenes: Scene[] = [];
+  saveParticipantRegistry.register(
+    createCampaignProgressionParticipant({
+      getCurrentSceneId: () => activeSceneIdForSave,
+      getManuallyUnlockedSceneIds: () => manuallyUnlockedSceneIds,
+      getCompletedSceneIds: () => completedSceneIds,
+      applyRestoredSlice: (data) => {
+        campaignRestore = data;
       }
     })
   );
@@ -1524,8 +1676,67 @@ export function createWebRuntimeHost(
       hostPlayerRestore?.currentRegionId ?? state.activeRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
-    const activeRegion = getActiveRegion(state.regions, resolvedActiveRegionId);
-    renderEngineProjector.push(state);
+    // Plan 058 §058.1 — belt-and-suspenders migration for stale
+    // pre-058 boot payloads (regions carrying legacy `scene`
+    // nests, no `scenes` array). Idempotent no-op on current
+    // payloads.
+    const migratedContent = migrateToScenes({
+      scenes: state.scenes ?? [],
+      regions: state.regions
+    });
+    bootScenes = migratedContent.scenes;
+    // Plan 058 §058.4 — Pattern 3 (Filtered Composition at
+    // Runtime): evaluate unlock conditions against the restored
+    // save, then pick the boot Scene. Precedence: saved
+    // currentSceneId > Studio Preview's ambient selection > first
+    // unlocked by order. questComplete conditions read the
+    // quest.manager slice's raw data here because unlock
+    // evaluation happens in Phase 1, before the quest system
+    // exists (Phase 2) — a deliberate cross-slice READ of plain
+    // save data, not a reach into another system.
+    manuallyUnlockedSceneIds = [...(campaignRestore?.unlockedSceneIds ?? [])];
+    completedSceneIds = [...(campaignRestore?.completedSceneIds ?? [])];
+    const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
+      ?.data as { completedQuestIds?: string[] } | undefined;
+    const unlockedSceneIds = resolveUnlockedSceneIds({
+      scenes: migratedContent.scenes,
+      manuallyUnlockedSceneIds,
+      completedQuestIds: questSliceData?.completedQuestIds ?? [],
+      // Runtime read at the seam — never persisted (the
+      // no-wallclock rule applies to slices, not boot evaluation).
+      now: Date.now()
+    });
+    const activeScene = resolveActiveScene({
+      scenes: migratedContent.scenes,
+      unlockedSceneIds,
+      requestedSceneId:
+        campaignRestore?.currentSceneId ?? state.activeSceneId ?? null
+    });
+    activeSceneIdForSave = activeScene?.sceneId ?? null;
+    const activeRegion = getActiveRegion(
+      migratedContent.regions,
+      resolvedActiveRegionId
+    );
+    // Composed Base + Overlay view (Pattern 1) — every presence /
+    // spawn read below sources from this, never region fields.
+    const activeRegionContents = activeRegion
+      ? composeRegionContents(activeRegion, activeScene)
+      : null;
+    // Plan 058 §058.4 — per-Scene environment override: the
+    // projector reads state.activeEnvironmentId, so a Scene with
+    // an override shadows the authored/boot value; null falls
+    // through untouched. (audioOverride is authored on the Scene
+    // type but NOT applied yet — the runtime has no background-
+    // music system to override; revisit when one exists. See plan
+    // 058 Deferred.)
+    renderEngineProjector.push(
+      activeScene?.environmentOverride
+        ? {
+            ...state,
+            activeEnvironmentId: activeScene.environmentOverride.environmentId
+          }
+        : state
+    );
     renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
       state.contentLibrary,
@@ -1539,22 +1750,27 @@ export function createWebRuntimeHost(
         playerDefinition: state.playerDefinition,
         itemDefinitions: state.itemDefinitions,
         npcDefinitions: state.npcDefinitions,
-        includePlayerPresence: false
+        includePlayerPresence: false,
+        activeScene
       });
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
-      // filters (Plan 058 episode gating, etc.) compose into
+      // filters (Plan 058 Scene gating, etc.) compose into
       // `worldPresenceTracker.shouldSkip` at the host and both
       // paths see them automatically. Non-item scene objects
       // (NPCs, static assets) don't have a filter surface today
       // and pass through unchanged.
       const activeItemPresenceIds = new Set<string>();
       iterateActiveItemPresences(
-        region.scene.itemPresences,
+        activeRegionContents?.itemPresences ?? [],
         {
           shouldSkip: (presenceId) =>
-            worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
+            worldPresenceTracker.shouldSkip(
+              activeRegionIdForSave,
+              activeSceneIdForSave,
+              presenceId
+            )
         },
         (presence) => {
           activeItemPresenceIds.add(presence.presenceId);
@@ -1646,7 +1862,7 @@ export function createWebRuntimeHost(
               // drive it. v1: NPCs default to playing idle forever (no
               // locomotion-driven slot switching like the player).
               if (object.kind === "npc") {
-                const presence = region.scene.npcPresences.find(
+                const presence = activeRegionContents?.npcPresences.find(
                   (p) => p.presenceId === object.instanceId
                 );
                 const npcDefinition = presence
@@ -1844,7 +2060,9 @@ export function createWebRuntimeHost(
     // handles that when positionOverride is null).
     const playerSpawn = spawnRuntimePlayerEntity(
       world,
-      activeRegion,
+      // Plan 058 §058.1 — authored spawn point comes from the
+      // composed Scene overlay, not the region document.
+      activeRegionContents?.playerPresence ?? null,
       state.playerDefinition,
       state.mechanics,
       {
@@ -1881,6 +2099,8 @@ export function createWebRuntimeHost(
       world,
       inputManager,
       activeRegion,
+      activeScene,
+      onSceneAction: hostHandleSceneAction,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
@@ -1920,6 +2140,10 @@ export function createWebRuntimeHost(
         // actually in.
         worldPresenceTracker.markCollected(
           activeRegionIdForSave,
+          // Plan 058 §058.5 — collections key per (region, Scene)
+          // so revisiting the region in another Scene has its own
+          // collected set.
+          activeSceneIdForSave,
           presenceId
         );
         const entry = sceneObjectEntries.get(presenceId);
@@ -1929,7 +2153,11 @@ export function createWebRuntimeHost(
         sceneObjectEntries.delete(presenceId);
       },
       shouldSkipItemPresence: (presenceId) =>
-        worldPresenceTracker.shouldSkip(activeRegionIdForSave, presenceId)
+        worldPresenceTracker.shouldSkip(
+          activeRegionIdForSave,
+          activeSceneIdForSave,
+          presenceId
+        )
     });
     gameplaySession = gameplayAssembly.gameplaySession;
     // Plan 055 §055.4 — Phase 2: register participants whose
@@ -2049,7 +2277,8 @@ export function createWebRuntimeHost(
             activeSystemCount: 0,
             activeNpcCount: 0,
             activeQuestCount: 0,
-            currentSceneId: null,
+            currentRegionId: null,
+            currentSceneName: null,
             currentAreaDisplayName: null,
             playerPosition: null,
             dialogueActive: false

@@ -21,14 +21,14 @@ import type { RegionItemPresence } from "@sugarmagic/domain";
 /**
  * The filter surface both spawn paths consult. Single
  * `shouldSkip` predicate today; when a second filter arrives
- * (Plan 058 episode gating), it composes into this predicate at
+ * (Plan 058 Scene gating), it composes into this predicate at
  * a single call site (the filters object the host constructs).
  * Callers stay unchanged.
  */
 export interface ItemPresenceFilters {
   /** Returns true when the caller should skip spawning this
    *  presence in the current region (already collected, future
-   *  episode locked, etc.). */
+   *  Scene locked, etc.). */
   shouldSkip: (presenceId: string) => boolean;
 }
 

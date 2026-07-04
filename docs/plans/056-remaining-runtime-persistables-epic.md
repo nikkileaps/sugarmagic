@@ -4,7 +4,7 @@ Status: proposed
 Owner: nikki + claude
 Date: 2026-07-02
 
-Related: Plan 055 (SaveParticipant model — the mechanism this epic uses). Plan 058 (Season/Episode content model draft — some of these participants intersect with episode gating in obvious ways). ADR 020 (per-plugin per-user state boundary — participants here are runtime-core system state, not plugin data).
+Related: Plan 055 (SaveParticipant model — the mechanism this epic uses). Plan 058 (Scenes content model draft — some of these participants intersect with Scene gating in obvious ways). ADR 020 (per-plugin per-user state boundary — participants here are runtime-core system state, not plugin data).
 
 ## Problem
 
@@ -29,9 +29,9 @@ After this epic, every mutable runtime system whose state is visible to a return
 
 - **Anything that's authored, not runtime-mutable.** (Spell definitions, mechanics rules, item catalog, region layouts — all authored and re-read from `boot.json` on every boot.)
 - **UI ephemeral state** (menu open / cursor position / camera angles). Not a returning-player concern.
-- **Season/Episode progression** — Plan 058's `campaign.progression` participant. Separate epic; different design surface.
+- **Scenes progression** — Plan 058's `campaign.progression` participant. Separate epic; different design surface.
 - **New system implementations.** This epic ONLY adds save participants for existing systems. If a system doesn't exist yet (e.g. runtime spell learning, achievement counters), that's separate.
-- **`campaign.progression` doubling as a mode for participant "reset when episode changes."** Cross-participant reset semantics are Plan 058's problem.
+- **`campaign.progression` doubling as a mode for participant "reset when Scene changes."** Cross-participant reset semantics are Plan 058's problem.
 
 ## Pattern
 

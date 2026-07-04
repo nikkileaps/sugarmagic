@@ -34,6 +34,7 @@ import type {
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument,
+  Scene,
   SpellDefinition,
   UITheme,
   SemanticCommand
@@ -70,6 +71,9 @@ export interface DesignProductModeViewProps {
   activeDesignKind: DesignWorkspaceKind;
   gameProjectId: string | null;
   regions: RegionDocument[];
+  /** Plan 058 §058.5 — Scene picker source for quest Scene
+   *  actions (unlockScene / advanceToNextScene). */
+  scenes: Scene[];
   playerDefinition: PlayerDefinition | null;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -138,6 +142,7 @@ export function useDesignProductModeView(
     activeDesignKind,
     gameProjectId,
     regions,
+    scenes,
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -246,6 +251,7 @@ export function useDesignProductModeView(
     gameProjectId,
     questDefinitions,
     regions,
+    scenes,
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,

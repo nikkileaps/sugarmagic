@@ -1,4 +1,5 @@
 import {
+  composeRegionContents,
   getAssetDefinition,
   getCharacterModelDefinition,
   type AssetKind,
@@ -10,7 +11,8 @@ import {
   type RegionItemPresence,
   type PlacedAssetInstance,
   type RegionNPCPresence,
-  type RegionPlayerPresence
+  type RegionPlayerPresence,
+  type Scene
 } from "@sugarmagic/domain";
 import type {
   EffectiveMaterialSlotBinding,
@@ -92,6 +94,13 @@ export interface SceneResolutionOptions {
   itemDefinitions?: ItemDefinition[];
   npcDefinitions?: NPCDefinition[];
   includePlayerPresence?: boolean;
+  /**
+   * Plan 058 §058.1 — the active narrative Scene whose overlay
+   * composes onto the region base (Pattern 1: Base + Overlay).
+   * Null/omitted composes base-only: placed assets from the
+   * region shell, no presences.
+   */
+  activeScene?: Scene | null;
 }
 
 export function resolveSceneObjects(
@@ -103,20 +112,22 @@ export function resolveSceneObjects(
     playerDefinition = null,
     itemDefinitions = [],
     npcDefinitions = [],
-    includePlayerPresence = true
+    includePlayerPresence = true,
+    activeScene = null
   } = options;
+  const contents = composeRegionContents(region, activeScene);
 
-  const sceneObjects = region.scene.placedAssets.map((asset) =>
+  const sceneObjects = contents.placedAssets.map((asset) =>
     createPlacedAssetSceneObject(asset, contentLibrary)
   );
 
-  if (includePlayerPresence && region.scene.playerPresence) {
+  if (includePlayerPresence && contents.playerPresence) {
     sceneObjects.push(
-      createPlayerSceneObject(region.scene.playerPresence, playerDefinition, contentLibrary)
+      createPlayerSceneObject(contents.playerPresence, playerDefinition, contentLibrary)
     );
   }
 
-  for (const presence of region.scene.npcPresences) {
+  for (const presence of contents.npcPresences) {
     sceneObjects.push(
       createNPCSceneObject(
         presence,
@@ -128,7 +139,7 @@ export function resolveSceneObjects(
     );
   }
 
-  for (const presence of region.scene.itemPresences) {
+  for (const presence of contents.itemPresences) {
     sceneObjects.push(
       createItemSceneObject(
         presence,

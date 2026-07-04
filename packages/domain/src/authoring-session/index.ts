@@ -17,8 +17,22 @@ import {
   normalizeGameProject
 } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
-import type { RegionDocument } from "../region-authoring";
-import { normalizeRegionDocumentForLoad } from "../io";
+import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
+import {
+  createItemPresenceId,
+  createNPCPresenceId,
+  createPlayerPresenceId
+} from "../region-authoring";
+import { normalizeRegionDocumentForLoad, normalizeScenesForLoad } from "../io";
+import {
+  composeRegionContents,
+  createDefaultScene,
+  createRegionSceneOverlay,
+  migrateToScenes,
+  type ComposedRegionContents,
+  type RegionSceneOverlay,
+  type Scene
+} from "../scenes";
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
@@ -160,6 +174,7 @@ interface SessionCheckpoint {
   contentLibrary: ContentLibrarySnapshot;
   regions: Map<string, RegionDocument>;
   activeRegionId: string | null;
+  activeSceneId: string | null;
 }
 
 export interface AuthoringSession {
@@ -167,6 +182,14 @@ export interface AuthoringSession {
   contentLibrary: ContentLibrarySnapshot;
   regions: Map<string, RegionDocument>;
   activeRegionId: string | null;
+  /**
+   * Plan 058 §058.1 — the author's current Scene (Ambient
+   * Context pattern). Presence + overlay-scoped commands land in
+   * this Scene; Design workspaces scope their views to it.
+   * Scenes ride inside `gameProject.scenes`; this is just the
+   * selection pointer.
+   */
+  activeSceneId: string | null;
   undoStack: SessionCheckpoint[];
   redoStack: SessionCheckpoint[];
   history: AuthoringHistory;
@@ -190,7 +213,8 @@ function checkpointSession(session: AuthoringSession): SessionCheckpoint {
     gameProject: session.gameProject,
     contentLibrary: session.contentLibrary,
     regions: new Map(session.regions),
-    activeRegionId: session.activeRegionId
+    activeRegionId: session.activeRegionId,
+    activeSceneId: session.activeSceneId
   };
 }
 
@@ -207,6 +231,7 @@ function restoreCheckpoint(
     contentLibrary: checkpoint.contentLibrary,
     regions: new Map(checkpoint.regions),
     activeRegionId: checkpoint.activeRegionId,
+    activeSceneId: checkpoint.activeSceneId,
     undoStack: nextUndoStack,
     redoStack: nextRedoStack,
     history: nextHistory,
@@ -219,6 +244,54 @@ export function getActiveRegion(
 ): RegionDocument | null {
   if (!session.activeRegionId) return null;
   return session.regions.get(session.activeRegionId) ?? null;
+}
+
+/**
+ * Plan 058 §058.1 — resolve the author's active Scene. Falls
+ * back to the first Scene by order when the pointer is unset or
+ * dangling (Scene deleted); a migrated project always has ≥1.
+ */
+export function getActiveScene(session: AuthoringSession): Scene | null {
+  const scenes = session.gameProject.scenes;
+  if (scenes.length === 0) return null;
+  return (
+    scenes.find((scene) => scene.sceneId === session.activeSceneId) ??
+    scenes[0] ??
+    null
+  );
+}
+
+/**
+ * Composed Base + Overlay view of the active region under the
+ * active Scene (Pattern 1). What the pre-058 `region.scene` nest
+ * used to be — workspaces read presences / assets from here.
+ */
+export function getActiveRegionContents(
+  session: AuthoringSession
+): ComposedRegionContents | null {
+  const region = getActiveRegion(session);
+  if (!region) return null;
+  return composeRegionContents(region, getActiveScene(session));
+}
+
+/** Switch the ambient Scene context. Clears undo/redo like
+ *  `switchActiveRegion` does (checkpoint identity across context
+ *  switches is more confusing than helpful). */
+export function switchActiveScene(
+  session: AuthoringSession,
+  sceneId: string
+): AuthoringSession {
+  const exists = session.gameProject.scenes.some(
+    (scene) => scene.sceneId === sceneId
+  );
+  if (!exists || session.activeSceneId === sceneId) return session;
+  return {
+    ...session,
+    activeSceneId: sceneId,
+    undoStack: [],
+    redoStack: [],
+    history: createEmptyHistory()
+  };
 }
 
 export function getAllRegions(session: AuthoringSession): RegionDocument[] {
@@ -360,13 +433,32 @@ export function createAuthoringSession(
     gameProject.identity.id
   )
 ): AuthoringSession {
-  const normalizedProject = normalizeGameProject(gameProject);
+  // Plan 058 §058.1 — lift pre-058 `region.scene` nests into the
+  // project's default Scene BEFORE normalization, so overlay
+  // presences flow through the same contentLibrary-aware
+  // normalization the regions get. Idempotent: an already-
+  // migrated project passes through unchanged.
+  const migrated = migrateToScenes({
+    scenes: gameProject.scenes ?? [],
+    regions
+  });
+  const normalizedProject = normalizeGameProject({
+    ...gameProject,
+    scenes: migrated.scenes
+  });
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
     contentLibrary,
     normalizedProject.identity.id
   );
+  const projectWithScenes: GameProject = {
+    ...normalizedProject,
+    scenes: normalizeScenesForLoad(
+      normalizedProject.scenes,
+      normalizedContentLibrary
+    )
+  };
   const regionMap = new Map<string, RegionDocument>();
-  for (const region of regions) {
+  for (const region of migrated.regions) {
     regionMap.set(
       region.identity.id,
       normalizeRegionDocumentForLoad(region, normalizedContentLibrary)
@@ -374,14 +466,19 @@ export function createAuthoringSession(
   }
 
   return {
-    gameProject: normalizedProject,
+    gameProject: projectWithScenes,
     contentLibrary: normalizedContentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
+    activeSceneId: projectWithScenes.scenes[0]?.sceneId ?? null,
     undoStack: [],
     redoStack: [],
     history: createEmptyHistory(),
-    isDirty: false
+    // Plan 058 §058.1 — a fresh migration leaves the in-memory
+    // shape ahead of disk; flag dirty so Studio's save flow
+    // persists the upgrade instead of re-migrating every load
+    // (re-migration is idempotent, but persisting is cleaner).
+    isDirty: migrated.didMigrate
   };
 }
 
@@ -583,6 +680,27 @@ function applyRenameShaderGraphCommand(
   );
 }
 
+/** Drop every override referencing a deleted shader from an
+ *  entity that carries shader overrides (assets + presences). */
+function stripShaderReferences<
+  T extends {
+    shaderOverrides?: { shaderDefinitionId: string }[];
+    shaderParameterOverrides: unknown[];
+  }
+>(entity: T, shaderDefinitionId: string): T {
+  const hasReference = (entity.shaderOverrides ?? []).some(
+    (override) => override.shaderDefinitionId === shaderDefinitionId
+  );
+  if (!hasReference) return entity;
+  return {
+    ...entity,
+    shaderOverrides: (entity.shaderOverrides ?? []).filter(
+      (override) => override.shaderDefinitionId !== shaderDefinitionId
+    ),
+    shaderParameterOverrides: []
+  };
+}
+
 function applyDeleteShaderGraphCommand(
   session: AuthoringSession,
   command: DeleteShaderGraphCommand
@@ -602,6 +720,41 @@ function applyDeleteShaderGraphCommand(
   ]);
   return {
     ...session,
+    // Plan 058 §058.1 — scrub overlay-side references across
+    // EVERY Scene's overlays (base-side scrub is in `regions`
+    // below).
+    gameProject: {
+      ...session.gameProject,
+      scenes: session.gameProject.scenes.map((scene) => ({
+        ...scene,
+        regionOverlays: Object.fromEntries(
+          Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
+            regionId,
+            {
+              ...overlay,
+              placedAssets: overlay.placedAssets.map((asset) =>
+                stripShaderReferences(
+                  asset,
+                  command.payload.shaderDefinitionId
+                )
+              ),
+              npcPresences: overlay.npcPresences.map((presence) =>
+                stripShaderReferences(
+                  presence,
+                  command.payload.shaderDefinitionId
+                )
+              ),
+              itemPresences: overlay.itemPresences.map((presence) =>
+                stripShaderReferences(
+                  presence,
+                  command.payload.shaderDefinitionId
+                )
+              )
+            }
+          ])
+        )
+      }))
+    },
     contentLibrary: {
       ...session.contentLibrary,
       shaderDefinitions: nextDefinitions,
@@ -649,60 +802,12 @@ function applyDeleteShaderGraphCommand(
         regionId,
         {
           ...region,
-          scene: {
-            ...region.scene,
-            placedAssets: region.scene.placedAssets.map((asset) =>
-              (asset.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...asset,
-                    shaderOverrides: (asset.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : asset
-            ),
-            npcPresences: region.scene.npcPresences.map((presence) =>
-              (presence.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...presence,
-                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : presence
-            ),
-            itemPresences: region.scene.itemPresences.map((presence) =>
-              (presence.shaderOverrides ?? []).some(
-                (override) =>
-                  override.shaderDefinitionId ===
-                  command.payload.shaderDefinitionId
-              )
-                ? {
-                    ...presence,
-                    shaderOverrides: (presence.shaderOverrides ?? []).filter(
-                      (override) =>
-                        override.shaderDefinitionId !==
-                        command.payload.shaderDefinitionId
-                    ),
-                    shaderParameterOverrides: []
-                  }
-                : presence
-            )
-          }
+          // Plan 058 §058.1 — base-scope assets scrub here; the
+          // overlay-side scrub happens across gameProject.scenes
+          // below (a shader delete is global, not Scene-scoped).
+          placedAssets: region.placedAssets.map((asset) =>
+            stripShaderReferences(asset, command.payload.shaderDefinitionId)
+          )
         }
       ])
     ),
@@ -2290,8 +2395,16 @@ export function applyCommand(
 
   const activeRegion = getActiveRegion(session);
   if (!activeRegion) return session;
+  // Plan 058 §058.1 — the executor operates on the Base + Overlay
+  // pair. The active Scene is the Ambient Context that decides
+  // which Scene presence / overlay-scoped commands land in.
+  const activeScene = getActiveScene(session);
+  if (!activeScene) return session;
 
-  const result = executeCommand(activeRegion, command);
+  const result = executeCommand(
+    { region: activeRegion, scene: activeScene },
+    command
+  );
   const newHistory = pushTransaction(session.history, result.transaction);
 
   const newRegions = new Map(session.regions);
@@ -2299,6 +2412,15 @@ export function applyCommand(
 
   return {
     ...session,
+    gameProject:
+      result.scene === activeScene
+        ? session.gameProject
+        : {
+            ...session.gameProject,
+            scenes: session.gameProject.scenes.map((scene) =>
+              scene.sceneId === result.scene.sceneId ? result.scene : scene
+            )
+          },
     regions: newRegions,
     undoStack: [...session.undoStack, checkpointSession(session)],
     redoStack: [],
@@ -2374,6 +2496,294 @@ export function addRegionToSession(
     history: createEmptyHistory(),
     isDirty: true
   };
+}
+
+// --- Plan 058 §058.3 — Scene management (session-level, like
+// addRegionToSession: structural mutations outside the semantic
+// command/undo stream) ---
+
+function withScenes(
+  session: AuthoringSession,
+  scenes: Scene[]
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: { ...session.gameProject, scenes },
+    isDirty: true
+  };
+}
+
+/** Append a new empty Scene (no overlays anywhere — base assets
+ *  show through automatically) and make it active. */
+export function addSceneToSession(
+  session: AuthoringSession,
+  options: { displayName: string }
+): AuthoringSession {
+  const maxOrder = session.gameProject.scenes.reduce(
+    (max, scene) => Math.max(max, scene.sceneOrder),
+    -1
+  );
+  const scene = createDefaultScene({
+    displayName: options.displayName.trim() || "Untitled Scene",
+    sceneOrder: maxOrder + 1
+  });
+  return {
+    ...withScenes(session, [...session.gameProject.scenes, scene]),
+    activeSceneId: scene.sceneId
+  };
+}
+
+/** Patch Scene metadata + per-Scene overrides (Plan 058 §058.6 —
+ *  the Scene properties panel writes through here). */
+export function updateSceneInSession(
+  session: AuthoringSession,
+  sceneId: string,
+  patch: Partial<
+    Pick<
+      Scene,
+      | "displayName"
+      | "description"
+      | "notes"
+      | "unlockCondition"
+      | "environmentOverride"
+      | "audioOverride"
+      | "transitionConfig"
+    >
+  >
+): AuthoringSession {
+  if (!session.gameProject.scenes.some((scene) => scene.sceneId === sceneId)) {
+    return session;
+  }
+  return withScenes(
+    session,
+    session.gameProject.scenes.map((scene) =>
+      scene.sceneId === sceneId ? { ...scene, ...patch } : scene
+    )
+  );
+}
+
+/** Delete a Scene and its overlays. Refuses to delete the last
+ *  Scene (a project always has >= 1); the active pointer moves to
+ *  the first remaining Scene. Destructive — the caller confirms. */
+export function deleteSceneFromSession(
+  session: AuthoringSession,
+  sceneId: string
+): AuthoringSession {
+  const scenes = session.gameProject.scenes;
+  if (scenes.length <= 1) return session;
+  const remaining = scenes.filter((scene) => scene.sceneId !== sceneId);
+  if (remaining.length === scenes.length) return session;
+  return {
+    ...withScenes(session, remaining),
+    activeSceneId:
+      session.activeSceneId === sceneId
+        ? remaining[0]?.sceneId ?? null
+        : session.activeSceneId
+  };
+}
+
+/** Swap a Scene one step up/down the narrative order. */
+export function reorderSceneInSession(
+  session: AuthoringSession,
+  sceneId: string,
+  direction: "up" | "down"
+): AuthoringSession {
+  const scenes = [...session.gameProject.scenes].sort(
+    (left, right) => left.sceneOrder - right.sceneOrder
+  );
+  const index = scenes.findIndex((scene) => scene.sceneId === sceneId);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= scenes.length) {
+    return session;
+  }
+  const reordered = [...scenes];
+  [reordered[index], reordered[targetIndex]] = [
+    reordered[targetIndex]!,
+    reordered[index]!
+  ];
+  return withScenes(
+    session,
+    reordered.map((scene, order) => ({ ...scene, sceneOrder: order }))
+  );
+}
+
+/**
+ * Move a placed asset between the region base and the ACTIVE
+ * Scene's overlay (Plan 058 §058.3 scope conversion). The asset's
+ * folder assignment is cleared when its folder doesn't exist in
+ * the destination scope — folders don't convert with their
+ * contents.
+ */
+export function convertAssetScopeInSession(
+  session: AuthoringSession,
+  options: { regionId: string; instanceId: string }
+): AuthoringSession {
+  const region = session.regions.get(options.regionId);
+  const activeScene = getActiveScene(session);
+  if (!region || !activeScene) return session;
+
+  const overlay = activeScene.regionOverlays[options.regionId];
+  const inBase = region.placedAssets.find(
+    (asset) => asset.instanceId === options.instanceId
+  );
+  const inOverlay = overlay?.placedAssets.find(
+    (asset) => asset.instanceId === options.instanceId
+  );
+  const source = inBase ?? inOverlay;
+  if (!source) return session;
+
+  const destinationFolders = inBase
+    ? overlay?.folders ?? []
+    : region.folders;
+  const moved: PlacedAssetInstance = {
+    ...source,
+    parentFolderId: destinationFolders.some(
+      (folder) => folder.folderId === source.parentFolderId
+    )
+      ? source.parentFolderId
+      : null
+  };
+
+  const newRegions = new Map(session.regions);
+  newRegions.set(options.regionId, {
+    ...region,
+    placedAssets: inBase
+      ? region.placedAssets.filter(
+          (asset) => asset.instanceId !== options.instanceId
+        )
+      : [...region.placedAssets, moved]
+  });
+
+  const newScenes = session.gameProject.scenes.map((scene) => {
+    if (scene.sceneId !== activeScene.sceneId) return scene;
+    const current =
+      scene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+    return {
+      ...scene,
+      regionOverlays: {
+        ...scene.regionOverlays,
+        [options.regionId]: {
+          ...current,
+          placedAssets: inBase
+            ? [...current.placedAssets, moved]
+            : current.placedAssets.filter(
+                (asset) => asset.instanceId !== options.instanceId
+              )
+        }
+      }
+    };
+  });
+
+  return {
+    ...withScenes(session, newScenes),
+    regions: newRegions
+  };
+}
+
+/**
+ * Copy a presence (or overlay asset) from one Scene's overlay
+ * into another's, same region, same transform. Mints a NEW id so
+ * a later copy back can never collide inside one overlay.
+ */
+export function copyOverlayEntryToScene(
+  session: AuthoringSession,
+  options: {
+    fromSceneId: string;
+    toSceneId: string;
+    regionId: string;
+    kind: "npc" | "item" | "player" | "asset";
+    id: string;
+  }
+): AuthoringSession {
+  if (options.fromSceneId === options.toSceneId) return session;
+  const fromScene = session.gameProject.scenes.find(
+    (scene) => scene.sceneId === options.fromSceneId
+  );
+  const toScene = session.gameProject.scenes.find(
+    (scene) => scene.sceneId === options.toSceneId
+  );
+  const fromOverlay = fromScene?.regionOverlays[options.regionId];
+  if (!fromScene || !toScene || !fromOverlay) return session;
+
+  const target =
+    toScene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
+  let nextTarget: RegionSceneOverlay | null = null;
+
+  if (options.kind === "npc") {
+    const source = fromOverlay.npcPresences.find(
+      (presence) => presence.presenceId === options.id
+    );
+    if (source) {
+      nextTarget = {
+        ...target,
+        npcPresences: [
+          ...target.npcPresences,
+          { ...source, presenceId: createNPCPresenceId() }
+        ]
+      };
+    }
+  } else if (options.kind === "item") {
+    const source = fromOverlay.itemPresences.find(
+      (presence) => presence.presenceId === options.id
+    );
+    if (source) {
+      nextTarget = {
+        ...target,
+        itemPresences: [
+          ...target.itemPresences,
+          { ...source, presenceId: createItemPresenceId() }
+        ]
+      };
+    }
+  } else if (options.kind === "player") {
+    const source =
+      fromOverlay.playerPresence?.presenceId === options.id
+        ? fromOverlay.playerPresence
+        : null;
+    // Per-(Scene, region) singularity: never clobber an existing
+    // player spawn in the destination.
+    if (source && !target.playerPresence) {
+      nextTarget = {
+        ...target,
+        playerPresence: { ...source, presenceId: createPlayerPresenceId() }
+      };
+    }
+  } else {
+    const source = fromOverlay.placedAssets.find(
+      (asset) => asset.instanceId === options.id
+    );
+    if (source) {
+      nextTarget = {
+        ...target,
+        placedAssets: [
+          ...target.placedAssets,
+          {
+            ...source,
+            instanceId: createPlacedAssetInstanceId(source.displayName),
+            // Folders are per-overlay; the destination Scene
+            // doesn't have the source's folder.
+            parentFolderId: null
+          }
+        ]
+      };
+    }
+  }
+
+  if (!nextTarget) return session;
+  return withScenes(
+    session,
+    session.gameProject.scenes.map((scene) =>
+      scene.sceneId === options.toSceneId
+        ? {
+            ...scene,
+            regionOverlays: {
+              ...scene.regionOverlays,
+              [options.regionId]: nextTarget!
+            }
+          }
+        : scene
+    )
+  );
 }
 
 export function addAssetDefinitionToSession(
@@ -3183,9 +3593,20 @@ export function assetDefinitionHasSceneReferences(
   session: AuthoringSession,
   definitionId: string
 ): boolean {
-  return getAllRegions(session).some((region) =>
-    region.scene.placedAssets.some(
+  // Plan 058 §058.1 — check the base layer of every region AND
+  // every Scene's overlays. A definition placed only in Scene 3's
+  // overlay is still referenced.
+  const inBase = getAllRegions(session).some((region) =>
+    region.placedAssets.some(
       (asset) => asset.assetDefinitionId === definitionId
+    )
+  );
+  if (inBase) return true;
+  return session.gameProject.scenes.some((scene) =>
+    Object.values(scene.regionOverlays).some((overlay) =>
+      overlay.placedAssets.some(
+        (asset) => asset.assetDefinitionId === definitionId
+      )
     )
   );
 }

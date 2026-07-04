@@ -35,6 +35,13 @@ export type QuestActionType =
   | "moveNpc"
   | "setNpcState"
   | "emitEvent"
+  // Plan 058 §058.5 — Scene progression. `unlockScene` adds
+  // targetId to campaign.progression's manual unlocks;
+  // `advanceToNextScene` completes the current Scene and moves
+  // the player into targetId (or the next Scene by order when
+  // targetId is omitted).
+  | "unlockScene"
+  | "advanceToNextScene"
   | "custom";
 
 export interface QuestActionDefinition {

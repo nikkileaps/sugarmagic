@@ -39,6 +39,7 @@ import type {
   PlayerDefinition,
   QuestDefinition,
   RegionDocument,
+  Scene,
   SpellDefinition
 } from "@sugarmagic/domain";
 import { System, type Entity, type World } from "../ecs";
@@ -184,7 +185,11 @@ export interface DebugHudGameplaySessionSnapshot {
   activeSystemCount: number;
   activeNpcCount: number;
   activeQuestCount: number;
-  currentSceneId: string | null;
+  /** The active region's id. Pre-058 this field was (confusingly)
+   *  named `currentSceneId` — it always held the region id. */
+  currentRegionId: string | null;
+  /** Plan 058 — the active narrative Scene's display name. */
+  currentSceneName: string | null;
   currentAreaDisplayName: string | null;
   playerPosition: { x: number; y: number; z: number } | null;
   dialogueActive: boolean;
@@ -295,6 +300,10 @@ export interface RuntimePluginContext {
   pluginBootPayloads?: Record<string, unknown>;
   blackboard?: RuntimeBlackboard;
   activeRegion?: RegionDocument | null;
+  /** Plan 058 §058.1 — the active narrative Scene whose overlay
+   *  composes onto the region base. Plugins that compile from
+   *  presences (e.g. sugarlang) read the composed view. */
+  activeScene?: Scene | null;
   playerDefinition?: PlayerDefinition;
   spellDefinitions?: SpellDefinition[];
   itemDefinitions?: ItemDefinition[];

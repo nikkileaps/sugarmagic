@@ -24,6 +24,7 @@ import {
   createRegionPlayerPresence,
   type RegionDocument
 } from "../region-authoring";
+import type { RegionSceneOverlay, Scene } from "../scenes";
 import {
   createSurface,
   type ShaderReference,
@@ -188,6 +189,16 @@ export function normalizeRegionDocumentForLoad(
     }
   ).environmentBinding;
 
+  // Plan 058 §058.1 — regions carry base-scope placedAssets +
+  // folders at top level. Pre-058 files nest them (with the
+  // presences) under `scene`; `migrateToScenes` lifts the
+  // presences into the project's default Scene, and THIS
+  // normalizer only has the region in hand — so it normalizes
+  // whichever assets/folders are visible at top level and leaves
+  // the legacy nest untouched for the migration pass to consume.
+  const baseAssets = region.placedAssets ?? [];
+  const baseFolders = region.folders ?? [];
+
   return {
     ...region,
     lorePageId:
@@ -195,31 +206,14 @@ export function normalizeRegionDocumentForLoad(
       region.lorePageId.trim().length > 0
         ? region.lorePageId.trim()
         : null,
-    scene: {
-      folders: region.scene.folders,
-      placedAssets: region.scene.placedAssets.map((asset) =>
-        createPlacedAssetInstance({
-          ...asset,
-          inspectable: asset.inspectable ?? null,
-          shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
-        })
-      ),
-      playerPresence: region.scene.playerPresence
-        ? createRegionPlayerPresence(region.scene.playerPresence)
-        : null,
-      npcPresences: region.scene.npcPresences.map((presence) =>
-        createRegionNPCPresence({
-          ...presence,
-          shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
-        })
-      ),
-      itemPresences: (region.scene.itemPresences ?? []).map((presence) =>
-        createRegionItemPresence({
-          ...presence,
-          shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
-        })
-      )
-    },
+    placedAssets: baseAssets.map((asset) =>
+      createPlacedAssetInstance({
+        ...asset,
+        inspectable: asset.inspectable ?? null,
+        shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
+      })
+    ),
+    folders: [...baseFolders],
     environmentBinding: {
       defaultEnvironmentId:
         normalizedBinding?.defaultEnvironmentId ??
@@ -343,4 +337,49 @@ export function normalizeRegionDocumentForLoad(
       ).audio
     )
   };
+}
+
+/**
+ * Plan 058 §058.1 — the contentLibrary-aware half of Scene
+ * normalization. `normalizeScenes` (domain/scenes) does shape
+ * coercion; this pass resolves shader-binding overrides on every
+ * overlay member against the content library, exactly as region
+ * placements got before the Base + Overlay split. Runs at load
+ * time after `migrateToScenes`.
+ */
+export function normalizeScenesForLoad(
+  scenes: Scene[],
+  contentLibrary: ContentLibrarySnapshot
+): Scene[] {
+  return scenes.map((scene) => {
+    const regionOverlays: Record<string, RegionSceneOverlay> = {};
+    for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
+      regionOverlays[regionId] = {
+        itemPresences: overlay.itemPresences.map((presence) =>
+          createRegionItemPresence({
+            ...presence,
+            shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
+          })
+        ),
+        npcPresences: overlay.npcPresences.map((presence) =>
+          createRegionNPCPresence({
+            ...presence,
+            shaderOverrides: normalizeShaderOverrides(contentLibrary, presence)
+          })
+        ),
+        playerPresence: overlay.playerPresence
+          ? createRegionPlayerPresence(overlay.playerPresence)
+          : null,
+        placedAssets: overlay.placedAssets.map((asset) =>
+          createPlacedAssetInstance({
+            ...asset,
+            inspectable: asset.inspectable ?? null,
+            shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
+          })
+        ),
+        folders: [...overlay.folders]
+      };
+    }
+    return { ...scene, regionOverlays };
+  });
 }

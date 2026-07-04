@@ -19,6 +19,7 @@
 
 import {
   BUILT_IN_DIALOGUE_SPEAKERS,
+  composeRegionContents,
   type CastableInvocation,
   createDefaultAudioMixerSettings,
   createEmptyContentLibrarySnapshot,
@@ -32,6 +33,7 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type RegionItemPresence,
+  type Scene,
   type SpellDefinition,
   type RegionDocument,
   type SoundEventBindingMap
@@ -154,6 +156,23 @@ export interface RuntimeGameplaySessionControllerOptions {
   world: World;
   inputManager: RuntimeInputManager;
   activeRegion: RegionDocument | null;
+  /**
+   * Plan 058 §058.1 — the active narrative Scene whose overlay
+   * composes onto the region base. The assembly reads presences
+   * and inspectable assets from the COMPOSED view (Pattern 1),
+   * never from the region directly. Null composes base-only.
+   */
+  activeScene?: Scene | null;
+  /**
+   * Plan 058 §058.5 — quest Scene-progression actions
+   * (unlockScene / advanceToNextScene) forward here; the host
+   * owns campaign.progression and the world reload that a Scene
+   * change implies.
+   */
+  onSceneAction?: (action: {
+    type: "unlockScene" | "advanceToNextScene";
+    sceneId: string | null;
+  }) => void;
   playerDefinition: PlayerDefinition;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -397,6 +416,13 @@ export function createRuntimeGameplaySessionController(
       itemDefinitions
     })
   });
+  // Plan 058 §058.1 — compose base + active-Scene overlay ONCE at
+  // assembly setup (the region is fixed for the assembly's
+  // lifetime). Every presence / inspectable read below goes
+  // through this composed view, never region fields directly.
+  const regionContents = activeRegion
+    ? composeRegionContents(activeRegion, options.activeScene ?? null)
+    : null;
 
   const decoratorContributions = (
     pluginManager?.getContributions("dialogue.entryDecorator") ?? []
@@ -557,7 +583,7 @@ export function createRuntimeGameplaySessionController(
       }
     }
 
-    return activeRegion?.scene.playerPresence?.transform.position ?? [0, 0, 0];
+    return regionContents?.playerPresence?.transform.position ?? [0, 0, 0];
   }
 
   function resolvePlayerEntity(): Entity | null {
@@ -655,7 +681,10 @@ export function createRuntimeGameplaySessionController(
       activeSystemCount: world.getSystemCount(),
       activeNpcCount: npcInteractableEntities.size,
       activeQuestCount: questManager.getJournalData().active.length,
-      currentSceneId: activeRegion?.identity.id ?? null,
+      currentRegionId: activeRegion?.identity.id ?? null,
+      // Plan 058 — the narrative Scene, not the visual scene (the
+      // pre-058 field misleadingly reported the region id here).
+      currentSceneName: options.activeScene?.displayName ?? null,
       currentAreaDisplayName: playerArea?.area?.displayName ?? null,
       playerPosition: playerPosition
         ? {
@@ -677,7 +706,7 @@ export function createRuntimeGameplaySessionController(
     const [playerX, playerY, playerZ] = resolvePlayerPositionTuple();
     spatialResolverSystem.sync({
       playerPosition: { x: playerX, y: playerY, z: playerZ },
-      npcPositions: region.scene.npcPresences.map((presence) => {
+      npcPositions: (regionContents?.npcPresences ?? []).map((presence) => {
         const runtimeNpcEntity =
           npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
         const runtimePosition =
@@ -999,9 +1028,9 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerNpcInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
 
-    for (const presence of activeRegion.scene.npcPresences) {
+    for (const presence of regionContents.npcPresences) {
       const npcDefinition = npcDefinitions.find(
         (definition) => definition.definitionId === presence.npcDefinitionId
       );
@@ -1063,15 +1092,15 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerItemInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
     // Plan 057 — iterate through the shared filter helper so
     // the ECS spawn path here and the visual mesh spawn path
     // (in target-web's runtimeHost) apply the same filter set.
-    // Any future filter (Plan 058 episode gating, etc.)
+    // Any future filter (Plan 058 Scene gating, etc.)
     // composes into `shouldSkipItemPresence` at the host and
     // both paths pick it up automatically.
     iterateActiveItemPresences(
-      activeRegion.scene.itemPresences,
+      regionContents.itemPresences,
       {
         shouldSkip: (presenceId) =>
           shouldSkipItemPresence?.(presenceId) ?? false
@@ -1081,9 +1110,11 @@ export function createRuntimeGameplaySessionController(
   }
 
   function registerInspectableInteractables() {
-    if (!activeRegion) return;
+    if (!regionContents) return;
 
-    for (const asset of activeRegion.scene.placedAssets) {
+    // Composed view: inspectables can be base-scope (permanent
+    // statue) or overlay-scope (Scene-specific prop) — both spawn.
+    for (const asset of regionContents.placedAssets) {
       if (!asset.inspectable) continue;
 
       const promptText = asset.inspectable.promptText?.trim() || "Inspect";
@@ -1562,6 +1593,19 @@ export function createRuntimeGameplaySessionController(
 
     if (action.type === "removeItem" && action.targetId) {
       inventoryManager.removeItem(action.targetId, count);
+      return;
+    }
+
+    // Plan 058 §058.5 — Scene progression actions belong to the
+    // host (campaign.progression lives there), not the assembly.
+    if (
+      action.type === "unlockScene" ||
+      action.type === "advanceToNextScene"
+    ) {
+      options.onSceneAction?.({
+        type: action.type,
+        sceneId: action.targetId ?? null
+      });
     }
   });
   questManager.setStateChangeHandler(() => {
@@ -1994,6 +2038,7 @@ export function createRuntimeGameplayAssembly(
     void pluginManager.init({
       blackboard: gameplaySession.blackboard,
       activeRegion: options.activeRegion,
+      activeScene: options.activeScene ?? null,
       playerDefinition: options.playerDefinition,
       spellDefinitions: options.spellDefinitions,
       itemDefinitions: options.itemDefinitions,

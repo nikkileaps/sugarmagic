@@ -18,6 +18,12 @@
  * `resetSaveAndReload`; Plan 054 §054.3 moved it onto
  * `WebRuntimeHost.startNewGame()`, which owns the lifecycle.
  *
+ * Plan 058 §058.5 — the Scene-advance reload sets the same flag:
+ * despite the "fresh start" name, the flag's actual semantic is
+ * "the next boot continues gameplay without the start menu",
+ * which holds for both New Game (save wiped pre-reload) and Scene
+ * advance (save force-written pre-reload).
+ *
  * Status: active
  */
 

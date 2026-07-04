@@ -29,13 +29,8 @@ function makeRegion(environmentId: string): RegionDocument {
     identity: { id: "region:one", schema: "RegionDocument", version: 1 },
     displayName: "Region One",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [],
-      itemPresences: []
-    },
+    placedAssets: [],
+    folders: [],
     environmentBinding: { defaultEnvironmentId: environmentId },
     areas: [],
     behaviors: [],

@@ -20,13 +20,16 @@
  */
 
 import type {
+  ComposedRegionContents,
   DialogueDefinition,
   DocumentDefinition,
   ItemDefinition,
   NPCDefinition,
   QuestDefinition,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
+import { composeRegionContents } from "@sugarmagic/domain";
 import type { SourceLocation } from "../types";
 
 export type TextBlobSourceKind =
@@ -75,6 +78,13 @@ export interface SceneAuthoringContext {
   targetLanguage: string;
   supportLanguage: string;
   region: RegionDocument;
+  /**
+   * Plan 058 §058.1 — composed Base + Overlay view of the region
+   * under the active narrative Scene. Presence reads (which NPCs
+   * / items are actually in the region for this compile) come
+   * from here, not from region fields.
+   */
+  regionContents: ComposedRegionContents;
   npcs: NPCDefinition[];
   dialogues: DialogueDefinition[];
   quests: QuestDefinition[];
@@ -329,8 +339,8 @@ function referencesSceneRegion(
   context: SceneAuthoringContext
 ): boolean {
   const areaIds = new Set(context.region.areas.map((area) => area.areaId));
-  const npcIds = new Set(context.region.scene.npcPresences.map((presence) => presence.npcDefinitionId));
-  const itemIds = new Set(context.region.scene.itemPresences.map((presence) => presence.itemDefinitionId));
+  const npcIds = new Set(context.regionContents.npcPresences.map((presence) => presence.npcDefinitionId));
+  const itemIds = new Set(context.regionContents.itemPresences.map((presence) => presence.itemDefinitionId));
   const dialogueIds = new Set(context.dialogues.map((dialogue) => dialogue.definitionId));
 
   return quest.stageDefinitions.some((stage) =>
@@ -405,6 +415,9 @@ function collectReferencedLorePages(
 
 export interface CreateSceneAuthoringContextInput {
   region: RegionDocument;
+  /** Plan 058 §058.1 — the active narrative Scene whose overlay
+   *  composes onto the region. Null composes base-only. */
+  activeScene?: Scene | null;
   targetLanguage: string;
   supportLanguage?: string;
   npcDefinitions: NPCDefinition[];
@@ -439,11 +452,15 @@ export function sceneLorePageFromDocumentDefinition(
 export function createSceneAuthoringContext(
   input: CreateSceneAuthoringContextInput
 ): SceneAuthoringContext {
+  const regionContents = composeRegionContents(
+    input.region,
+    input.activeScene ?? null
+  );
   const npcIds = new Set(
-    input.region.scene.npcPresences.map((presence) => presence.npcDefinitionId)
+    regionContents.npcPresences.map((presence) => presence.npcDefinitionId)
   );
   const itemIds = new Set(
-    input.region.scene.itemPresences.map((presence) => presence.itemDefinitionId)
+    regionContents.itemPresences.map((presence) => presence.itemDefinitionId)
   );
   const npcs = input.npcDefinitions.filter((npc) => npcIds.has(npc.definitionId));
   const dialogues = input.dialogueDefinitions.filter((dialogue) =>
@@ -459,6 +476,7 @@ export function createSceneAuthoringContext(
     targetLanguage: input.targetLanguage,
     supportLanguage: input.supportLanguage ?? "en",
     region: input.region,
+    regionContents,
     npcs,
     dialogues,
     quests: [],

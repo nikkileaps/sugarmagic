@@ -37,6 +37,8 @@ import type {
 import {
   createEmptyContentLibrarySnapshot,
   getActiveRegion,
+  getActiveRegionContents,
+  getActiveScene,
   type AuthoringSession
 } from "@sugarmagic/domain";
 import {
@@ -108,6 +110,15 @@ export interface BuildProductModeViewProps {
   onConsumeNavigationTarget?: () => void;
   onNavigateToTarget?: (target: WorkspaceNavigationTarget) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
+  /** Plan 058 §058.3 — scope conversion + cross-Scene copy,
+   *  wired by Studio to the session-level Scene functions. */
+  onConvertAssetScope: (regionId: string, instanceId: string) => void;
+  onCopyEntryToScene: (options: {
+    toSceneId: string;
+    regionId: string;
+    kind: "npc" | "item" | "player" | "asset";
+    id: string;
+  }) => void;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
@@ -276,6 +287,12 @@ export function useBuildProductModeView(
     onSelect,
     onCommand,
     getRegion: () => (session ? getActiveRegion(session) : null),
+    getRegionContents: () =>
+      session ? getActiveRegionContents(session) : null,
+    getActiveScene: () => (session ? getActiveScene(session) : null),
+    getAllScenes: () => session?.gameProject.scenes ?? [],
+    onConvertAssetScope: props.onConvertAssetScope,
+    onCopyEntryToScene: props.onCopyEntryToScene,
     assetDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
@@ -451,6 +468,7 @@ export function useBuildProductModeView(
 
   const behaviorView = useBehaviorWorkspaceView({
     region: activeRegion,
+    regionContents: session ? getActiveRegionContents(session) : null,
     npcDefinitions,
     questDefinitions,
     onCommand,

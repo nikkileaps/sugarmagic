@@ -23,7 +23,8 @@ import type {
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "../../../runtime";
 import type { RuntimePluginContext } from "@sugarmagic/runtime-core";
@@ -105,6 +106,9 @@ interface LanguageBundle {
 interface BoundRuntimeContext {
   blackboard: RuntimeBlackboard;
   activeRegion: RegionDocument | null;
+  /** Plan 058 §058.1 — presences compile from the composed
+   *  Scene overlay, not the region document. */
+  activeScene: Scene | null;
   playerDefinition: PlayerDefinition;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -190,6 +194,7 @@ export class SugarlangRuntimeServices {
     this.boundContext = {
       blackboard: context.blackboard,
       activeRegion: context.activeRegion ?? null,
+      activeScene: context.activeScene ?? null,
       playerDefinition: context.playerDefinition,
       itemDefinitions: context.itemDefinitions ?? [],
       documentDefinitions: context.documentDefinitions ?? [],
@@ -370,6 +375,7 @@ export class SugarlangRuntimeServices {
         return createSceneAuthoringContext({
           targetLanguage,
           region: this.boundContext.activeRegion,
+          activeScene: this.boundContext.activeScene,
           npcDefinitions: this.boundContext.npcDefinitions,
           dialogueDefinitions: this.boundContext.dialogueDefinitions,
           questDefinitions: this.boundContext.questDefinitions,

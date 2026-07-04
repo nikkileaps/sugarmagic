@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { RegionDocument } from "@sugarmagic/domain";
+import type { RegionDocument, Scene } from "@sugarmagic/domain";
 import {
   createDefaultEnvironmentDefinition,
   createDefaultDeploymentSettings,
   createDefaultFoliageWindShaderGraph,
   createDefaultNPCDefinition,
   createDefaultPlayerDefinition,
+  createDefaultScene,
   createAuthoringSession,
   applyCommand,
-  getActiveRegion,
+  getActiveRegionContents,
   normalizeGameProject
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
@@ -18,13 +19,8 @@ function makeRegion(): RegionDocument {
     identity: { id: "station", schema: "RegionDocument", version: 1 },
     displayName: "Station",
     placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
-    scene: {
-      folders: [],
-      placedAssets: [],
-      playerPresence: null,
-      npcPresences: [],
-      itemPresences: []
-    },
+    placedAssets: [],
+    folders: [],
     environmentBinding: { defaultEnvironmentId: "project:environment:default" },
     areas: [],
     behaviors: [],
@@ -43,7 +39,7 @@ function makeRegion(): RegionDocument {
 }
 
 describe("layout scene presences", () => {
-  it("enforces one player presence per region", () => {
+  it("enforces one player presence per (scene, region)", () => {
     const session = createAuthoringSession(
       normalizeGameProject({
         identity: { id: "project", schema: "GameProject", version: 1 },
@@ -118,12 +114,11 @@ describe("layout scene presences", () => {
       }
     });
 
-    expect(getActiveRegion(twice)?.scene.playerPresence?.presenceId).toBe(
-      "player-presence-1"
-    );
-    expect(getActiveRegion(twice)?.scene.playerPresence?.transform.position).toEqual([
-      1, 0, 2
-    ]);
+    // Plan 058 §058.1 — presence lands in the active Scene's
+    // overlay; the composed view is where authoring reads it back.
+    const contents = getActiveRegionContents(twice);
+    expect(contents?.playerPresence?.presenceId).toBe("player-presence-1");
+    expect(contents?.playerPresence?.transform.position).toEqual([1, 0, 2]);
   });
 
   it("resolves player and NPC presences into shared scene objects", () => {
@@ -135,40 +130,46 @@ describe("layout scene presences", () => {
       displayName: "Player"
     });
 
-    const region: RegionDocument = {
-      ...makeRegion(),
-      scene: {
-        folders: [],
-        placedAssets: [],
-        playerPresence: {
-          presenceId: "player-presence-1",
-          transform: {
-            position: [0, 0, 0],
-            rotation: [0, 0, 0],
-            scale: [1, 1, 1]
-          }
-        },
-        npcPresences: [
-          {
-            presenceId: "npc-presence-1",
-            npcDefinitionId: npcDefinition.definitionId,
-            shaderOverride: null,
-            shaderParameterOverrides: [],
+    const region = makeRegion();
+    // Plan 058 §058.1 — presences live on the Scene overlay and
+    // compose onto the region base at resolve time.
+    const scene: Scene = createDefaultScene({
+      sceneId: "scene:test",
+      regionOverlays: {
+        [region.identity.id]: {
+          folders: [],
+          placedAssets: [],
+          playerPresence: {
+            presenceId: "player-presence-1",
             transform: {
-              position: [3, 0, -2],
+              position: [0, 0, 0],
               rotation: [0, 0, 0],
               scale: [1, 1, 1]
             }
-          }
-        ],
-        itemPresences: []
+          },
+          npcPresences: [
+            {
+              presenceId: "npc-presence-1",
+              npcDefinitionId: npcDefinition.definitionId,
+              shaderOverride: null,
+              shaderParameterOverrides: [],
+              transform: {
+                position: [3, 0, -2],
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1]
+              }
+            }
+          ],
+          itemPresences: []
+        }
       }
-    };
+    });
 
     const sceneObjects = resolveSceneObjects(region, {
       playerDefinition,
       npcDefinitions: [npcDefinition],
-      includePlayerPresence: true
+      includePlayerPresence: true,
+      activeScene: scene
     });
 
     expect(sceneObjects.map((object) => object.kind)).toEqual(["player", "npc"]);

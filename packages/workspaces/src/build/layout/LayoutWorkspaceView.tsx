@@ -21,6 +21,7 @@ import {
   ActionIcon,
   Box,
   Button,
+  Group,
   Menu,
   Modal,
   NumberInput,
@@ -47,7 +48,9 @@ import {
   createNPCPresenceId,
   createPlacedAssetInstanceId,
   createPlayerPresenceId,
-  createSceneFolderId
+  createSceneFolderId,
+  type ComposedRegionContents,
+  type Scene
 } from "@sugarmagic/domain";
 import {
   PanelSection,
@@ -80,6 +83,33 @@ export interface LayoutWorkspaceViewProps {
   onSelect: (ids: string[]) => void;
   onCommand: (command: SemanticCommand) => void;
   getRegion: () => ReturnType<typeof getActiveRegion>;
+  /**
+   * Plan 058 §058.1 — composed Base + Overlay view of the active
+   * region under the active Scene. All presence / asset / folder
+   * reads in this workspace source from it (the region document
+   * itself only supplies identity / landscape / areas).
+   */
+  getRegionContents: () => ComposedRegionContents | null;
+  /**
+   * Plan 058 §058.2 — the author's ambient Scene. New placements
+   * land in its overlay; the explorer badges overlay-scope
+   * entities; the inspector shows each asset's scope.
+   */
+  getActiveScene: () => Scene | null;
+  /** Plan 058 §058.3 — full ordered Scene list for cross-Scene
+   *  copy targets. */
+  getAllScenes: () => Scene[];
+  /** Plan 058 §058.3 — move an asset between region base and the
+   *  active Scene's overlay. */
+  onConvertAssetScope: (regionId: string, instanceId: string) => void;
+  /** Plan 058 §058.3 — copy a presence / overlay asset from the
+   *  active Scene into another Scene's overlay. */
+  onCopyEntryToScene: (options: {
+    toSceneId: string;
+    regionId: string;
+    kind: "npc" | "item" | "player" | "asset";
+    id: string;
+  }) => void;
   assetDefinitions: AssetDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
@@ -95,8 +125,41 @@ export interface LayoutWorkspaceViewProps {
 
 const SCENE_ROOT_FOLDER_ID = "__scene_root__";
 
+const EMPTY_REGION_CONTENTS: ComposedRegionContents = {
+  folders: [],
+  placedAssets: [],
+  playerPresence: null,
+  npcPresences: [],
+  itemPresences: []
+};
+
+/** Plan 058 §058.2 — labeled "field: value" inspector row.
+ *  Used for the identity block at the top of every selection
+ *  (Name / Type / Scope) so the selected entity's kind and
+ *  Base-vs-Scene scope are explicit, not inferred. */
+function FactRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Group gap="xs" wrap="nowrap" align="baseline">
+      <Text
+        size="xs"
+        fw={600}
+        tt="uppercase"
+        c="var(--sm-color-subtext)"
+        style={{ minWidth: 48 }}
+      >
+        {label}
+      </Text>
+      <Text size="sm" style={{ overflowWrap: "anywhere" }}>
+        {value}
+      </Text>
+    </Group>
+  );
+}
+
 function buildSceneTree(
   region: RegionDocument,
+  regionContents: ComposedRegionContents,
+  overlayAssetIds: Set<string>,
   assetDefinitions: AssetDefinition[],
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
@@ -111,20 +174,20 @@ function buildSceneTree(
   );
   const foldersByParent = new Map<
     string | null,
-    RegionDocument["scene"]["folders"]
+    ComposedRegionContents["folders"]
   >();
   const assetsByParent = new Map<
     string | null,
-    RegionDocument["scene"]["placedAssets"]
+    ComposedRegionContents["placedAssets"]
   >();
 
-  for (const folder of region.scene.folders) {
+  for (const folder of regionContents.folders) {
     const siblings = foldersByParent.get(folder.parentFolderId) ?? [];
     siblings.push(folder);
     foldersByParent.set(folder.parentFolderId, siblings);
   }
 
-  for (const asset of region.scene.placedAssets) {
+  for (const asset of regionContents.placedAssets) {
     const siblings = assetsByParent.get(asset.parentFolderId) ?? [];
     siblings.push(asset);
     assetsByParent.set(asset.parentFolderId, siblings);
@@ -152,13 +215,18 @@ function buildSceneTree(
             ) ?? null)
           : null;
 
+        const baseName =
+          asset.inspectable && documentDefinition
+            ? `${asset.displayName} · ${documentDefinition.displayName}`
+            : asset.displayName;
         return {
           type: "entity" as const,
           instanceId: asset.instanceId,
-          displayName:
-            asset.inspectable && documentDefinition
-              ? `${asset.displayName} · ${documentDefinition.displayName}`
-              : asset.displayName,
+          // Plan 058 §058.2 — overlay-scope assets get a Scene
+          // marker; base assets (always visible) stay unmarked.
+          displayName: overlayAssetIds.has(asset.instanceId)
+            ? `${baseName} · 🎬`
+            : baseName,
           entityKind: "asset" as const,
           assetKind:
             assetKindsByDefinitionId.get(asset.assetDefinitionId) ?? "asset",
@@ -171,11 +239,11 @@ function buildSceneTree(
     return [...childFolders, ...childAssets];
   };
 
-  const playerNode = region.scene.playerPresence
+  const playerNode = regionContents.playerPresence
     ? [
         {
           type: "entity" as const,
-          instanceId: region.scene.playerPresence.presenceId,
+          instanceId: regionContents.playerPresence.presenceId,
           displayName: playerDefinition?.displayName ?? "Player",
           entityKind: "player" as const,
           assetKind: "player",
@@ -185,7 +253,7 @@ function buildSceneTree(
       ]
     : [];
 
-  const npcNodes = region.scene.npcPresences.map((presence) => ({
+  const npcNodes = regionContents.npcPresences.map((presence) => ({
     type: "entity" as const,
     instanceId: presence.presenceId,
     displayName:
@@ -198,7 +266,7 @@ function buildSceneTree(
     visible: true
   }));
 
-  const itemNodes = region.scene.itemPresences.map((presence) => ({
+  const itemNodes = regionContents.itemPresences.map((presence) => ({
     type: "entity" as const,
     instanceId: presence.presenceId,
     displayName:
@@ -250,6 +318,11 @@ export function useLayoutWorkspaceView(
     onSelect,
     onCommand,
     getRegion,
+    getRegionContents,
+    getActiveScene,
+    getAllScenes,
+    onConvertAssetScope,
+    onCopyEntryToScene,
     assetDefinitions,
     playerDefinition,
     itemDefinitions,
@@ -296,6 +369,22 @@ export function useLayoutWorkspaceView(
   }, [getViewportElement, onSelect]);
 
   const region = getRegion();
+  // Plan 058 §058.1 — composed Base + Overlay view. Falls back to
+  // empty contents when no region is active so downstream reads
+  // stay unconditional.
+  const regionContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
+  const activeScene = getActiveScene();
+  // Plan 058 §058.2 — which assets in the composed view came from
+  // the Scene overlay (vs the always-visible region base). Drives
+  // explorer badges + the inspector's Scope row.
+  const overlayAssetIds = useMemo(() => {
+    if (!region || !activeScene) return new Set<string>();
+    return new Set(
+      (
+        activeScene.regionOverlays[region.identity.id]?.placedAssets ?? []
+      ).map((asset) => asset.instanceId)
+    );
+  }, [region, activeScene]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -379,6 +468,8 @@ export function useLayoutWorkspaceView(
       region
         ? buildSceneTree(
             region,
+            regionContents,
+            overlayAssetIds,
             assetDefinitions,
             playerDefinition,
             itemDefinitions,
@@ -391,15 +482,17 @@ export function useLayoutWorkspaceView(
       documentDefinitions,
       itemDefinitions,
       npcDefinitions,
+      overlayAssetIds,
       playerDefinition,
-      region
+      region,
+      regionContents
     ]
   );
 
   const selectedAsset = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.placedAssets.find(
+      regionContents.placedAssets.find(
         (asset) => asset.instanceId === selectedIds[0]
       ) ?? null
     );
@@ -407,14 +500,14 @@ export function useLayoutWorkspaceView(
 
   const selectedPlayerPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
-    if (region.scene.playerPresence?.presenceId !== selectedIds[0]) return null;
-    return region.scene.playerPresence;
+    if (regionContents.playerPresence?.presenceId !== selectedIds[0]) return null;
+    return regionContents.playerPresence;
   }, [region, selectedIds]);
 
   const selectedNPCPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.npcPresences.find(
+      regionContents.npcPresences.find(
         (presence) => presence.presenceId === selectedIds[0]
       ) ?? null
     );
@@ -433,7 +526,7 @@ export function useLayoutWorkspaceView(
   const selectedItemPresence = useMemo(() => {
     if (!region || selectedIds.length !== 1) return null;
     return (
-      region.scene.itemPresences.find(
+      regionContents.itemPresences.find(
         (presence) => presence.presenceId === selectedIds[0]
       ) ?? null
     );
@@ -486,19 +579,20 @@ export function useLayoutWorkspaceView(
     ) => {
       const currentRegion = getRegion();
       if (!currentRegion) return;
-      const asset = currentRegion.scene.placedAssets.find(
+      const currentContents = getRegionContents() ?? EMPTY_REGION_CONTENTS;
+      const asset = currentContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       const playerPresence =
-        currentRegion.scene.playerPresence?.presenceId === instanceId
-          ? currentRegion.scene.playerPresence
+        currentContents.playerPresence?.presenceId === instanceId
+          ? currentContents.playerPresence
           : null;
       const npcPresence =
-        currentRegion.scene.npcPresences.find(
+        currentContents.npcPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const itemPresence =
-        currentRegion.scene.itemPresences.find(
+        currentContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
@@ -585,7 +679,7 @@ export function useLayoutWorkspaceView(
         }
       });
     },
-    [getRegion, onCommand]
+    [getRegion, getRegionContents, onCommand]
   );
 
   const handleCreateFolder = useCallback(
@@ -606,11 +700,14 @@ export function useLayoutWorkspaceView(
         payload: {
           folderId,
           displayName: displayName.trim(),
-          parentFolderId
+          parentFolderId,
+          // Plan 058 §058.2 — folders follow the same ambient
+          // scoping as the assets they'll group.
+          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
         }
       });
     },
-    [getRegion, onCommand]
+    [activeScene, getRegion, onCommand]
   );
 
   const handleCreateFolderAtSelection = useCallback(() => {
@@ -639,7 +736,7 @@ export function useLayoutWorkspaceView(
   const handleDuplicateAsset = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       if (!asset) return;
@@ -671,19 +768,19 @@ export function useLayoutWorkspaceView(
   const handleDeleteEntityFromScene = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       const playerPresence =
-        region.scene.playerPresence?.presenceId === instanceId
-          ? region.scene.playerPresence
+        regionContents.playerPresence?.presenceId === instanceId
+          ? regionContents.playerPresence
           : null;
       const npcPresence =
-        region.scene.npcPresences.find(
+        regionContents.npcPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
       const itemPresence =
-        region.scene.itemPresences.find(
+        regionContents.itemPresences.find(
           (candidate) => candidate.presenceId === instanceId
         ) ?? null;
 
@@ -815,7 +912,7 @@ export function useLayoutWorkspaceView(
   const handleEditEntityFromExplorer = useCallback(
     (instanceId: string) => {
       if (!region) return;
-      const asset = region.scene.placedAssets.find(
+      const asset = regionContents.placedAssets.find(
         (candidate) => candidate.instanceId === instanceId
       );
       if (!asset) return;
@@ -850,17 +947,21 @@ export function useLayoutWorkspaceView(
           selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
         position: [0, 0.5, 0],
         rotation: [0, 0, 0],
-        scale: [1, 1, 1]
+        scale: [1, 1, 1],
+        // Plan 058 §058.2 — Ambient Context: new placements land
+        // in the active Scene's overlay. Promote to Base via the
+        // scope-conversion action (Plan 058.3).
+        scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
       }
     });
     onSelect([instanceId]);
-  }, [onCommand, onImportAsset, onSelect, region, selectedFolderId]);
+  }, [activeScene, onCommand, onImportAsset, onSelect, region, selectedFolderId]);
 
   const handleAddPlayerToScene = useCallback(() => {
     if (!region || !playerDefinition) return;
 
-    if (region.scene.playerPresence) {
-      onSelect([region.scene.playerPresence.presenceId]);
+    if (regionContents.playerPresence) {
+      onSelect([regionContents.playerPresence.presenceId]);
       return;
     }
 
@@ -947,19 +1048,19 @@ export function useLayoutWorkspaceView(
   const handleSnapToOrigin = useCallback(() => {
     if (!region || !contextMenu) return;
 
-    const asset = region.scene.placedAssets.find(
+    const asset = regionContents.placedAssets.find(
       (entry) => entry.instanceId === contextMenu.instanceId
     );
     const playerPresence =
-      region.scene.playerPresence?.presenceId === contextMenu.instanceId
-        ? region.scene.playerPresence
+      regionContents.playerPresence?.presenceId === contextMenu.instanceId
+        ? regionContents.playerPresence
         : null;
     const npcPresence =
-      region.scene.npcPresences.find(
+      regionContents.npcPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
     const itemPresence =
-      region.scene.itemPresences.find(
+      regionContents.itemPresences.find(
         (entry) => entry.presenceId === contextMenu.instanceId
       ) ?? null;
     const source = asset ?? playerPresence ?? npcPresence ?? itemPresence;
@@ -1015,6 +1116,55 @@ export function useLayoutWorkspaceView(
 
     setContextMenu(null);
   }, [contextMenu, onCommand, region]);
+
+  // Plan 058 §058.3 — classify the context-menu target for the
+  // scope-conversion / cross-Scene-copy actions.
+  const contextMenuEntry = useMemo(() => {
+    if (!contextMenu) return null;
+    const id = contextMenu.instanceId;
+    if (regionContents.placedAssets.some((entry) => entry.instanceId === id)) {
+      return {
+        kind: "asset" as const,
+        id,
+        inOverlay: overlayAssetIds.has(id)
+      };
+    }
+    if (regionContents.playerPresence?.presenceId === id) {
+      return { kind: "player" as const, id, inOverlay: true };
+    }
+    if (regionContents.npcPresences.some((entry) => entry.presenceId === id)) {
+      return { kind: "npc" as const, id, inOverlay: true };
+    }
+    if (regionContents.itemPresences.some((entry) => entry.presenceId === id)) {
+      return { kind: "item" as const, id, inOverlay: true };
+    }
+    return null;
+  }, [contextMenu, regionContents, overlayAssetIds]);
+
+  const otherScenes = useMemo(() => {
+    const activeId = activeScene?.sceneId;
+    return getAllScenes().filter((scene) => scene.sceneId !== activeId);
+  }, [getAllScenes, activeScene]);
+
+  const handleConvertScope = useCallback(() => {
+    if (!region || !contextMenuEntry) return;
+    onConvertAssetScope(region.identity.id, contextMenuEntry.id);
+    setContextMenu(null);
+  }, [region, contextMenuEntry, onConvertAssetScope]);
+
+  const handleCopyToScene = useCallback(
+    (toSceneId: string) => {
+      if (!region || !contextMenuEntry) return;
+      onCopyEntryToScene({
+        toSceneId,
+        regionId: region.identity.id,
+        kind: contextMenuEntry.kind,
+        id: contextMenuEntry.id
+      });
+      setContextMenu(null);
+    },
+    [region, contextMenuEntry, onCopyEntryToScene]
+  );
 
   const filteredNPCDefinitions = useMemo(() => {
     const query = npcQuery.trim().toLowerCase();
@@ -1272,6 +1422,19 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedAsset ? (
           <Stack gap="md">
+            {/* Identity block. Scope is read-only for now; scope
+                conversion ships with Plan 058.3. */}
+            <Stack gap={4}>
+              <FactRow label="Type" value="Placed Asset" />
+              <FactRow
+                label="Scope"
+                value={
+                  overlayAssetIds.has(selectedAsset.instanceId)
+                    ? `🎬 ${activeScene?.displayName ?? "Scene"}`
+                    : "Base — always visible"
+                }
+              />
+            </Stack>
             <TransformInspector
               label="Position"
               value={selectedAsset.transform.position}
@@ -1447,6 +1610,13 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedPlayerPresence ? (
           <Stack gap="md">
+            <Stack gap={4}>
+              <FactRow label="Type" value="Player Spawn" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <TransformInspector
               label="Spawn Position"
               value={selectedPlayerPresence.transform.position}
@@ -1462,9 +1632,13 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedNPCPresence ? (
           <Stack gap="md">
-            <Text size="sm" fw={600}>
-              {selectedNPCDefinition?.displayName ?? "NPC"}
-            </Text>
+            <Stack gap={4}>
+              <FactRow label="Type" value="NPC" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <TransformInspector
               label="Spawn Position"
               value={selectedNPCPresence.transform.position}
@@ -1480,9 +1654,13 @@ export function useLayoutWorkspaceView(
           </Stack>
         ) : selectedItemPresence ? (
           <Stack gap="md">
-            <Text size="sm" fw={600}>
-              {selectedItemDefinition?.displayName ?? "Item"}
-            </Text>
+            <Stack gap={4}>
+              <FactRow label="Type" value="Item" />
+              <FactRow
+                label="Scope"
+                value={`🎬 ${activeScene?.displayName ?? "Scene"}`}
+              />
+            </Stack>
             <NumberInput
               label="Quantity"
               size="xs"
@@ -1602,6 +1780,61 @@ export function useLayoutWorkspaceView(
             >
               <Text size="sm">Snap to Origin</Text>
             </UnstyledButton>
+            {/* Plan 058 §058.3 — scope conversion (assets only:
+                presences are inherently Scene-scoped). */}
+            {contextMenuEntry?.kind === "asset" && (
+              <UnstyledButton
+                onClick={handleConvertScope}
+                styles={{
+                  root: {
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "8px 10px",
+                    borderRadius: "var(--sm-radius-sm)",
+                    color: "var(--sm-color-text)",
+                    background: "transparent",
+                    transition: "var(--sm-transition-fast)",
+                    "&:hover": {
+                      background: "var(--sm-active-bg)"
+                    }
+                  }
+                }}
+              >
+                <Text size="sm">
+                  {contextMenuEntry.inOverlay
+                    ? "Promote to Base"
+                    : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`}
+                </Text>
+              </UnstyledButton>
+            )}
+            {/* Plan 058 §058.3 — cross-Scene copy for overlay
+                entries. Hidden with a single Scene, or for base
+                assets (they're already visible everywhere). */}
+            {contextMenuEntry?.inOverlay &&
+              otherScenes.map((scene) => (
+                <UnstyledButton
+                  key={scene.sceneId}
+                  onClick={() => handleCopyToScene(scene.sceneId)}
+                  styles={{
+                    root: {
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "8px 10px",
+                      borderRadius: "var(--sm-radius-sm)",
+                      color: "var(--sm-color-text)",
+                      background: "transparent",
+                      transition: "var(--sm-transition-fast)",
+                      "&:hover": {
+                        background: "var(--sm-active-bg)"
+                      }
+                    }
+                  }}
+                >
+                  <Text size="sm">Copy to 🎬 {scene.displayName}</Text>
+                </UnstyledButton>
+              ))}
           </Box>
         )}
       </>

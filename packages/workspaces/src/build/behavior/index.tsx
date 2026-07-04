@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type {
+  ComposedRegionContents,
   NPCDefinition,
   QuestDefinition,
   RegionDocument,
@@ -21,6 +22,9 @@ import { useBehaviorSelection } from "./useBehaviorSelection";
 
 export interface BehaviorWorkspaceViewProps {
   region: RegionDocument | null;
+  /** Plan 058 §058.1 — composed Base + Overlay view of the
+   *  active region; NPC presence reads source from here. */
+  regionContents: ComposedRegionContents | null;
   npcDefinitions: NPCDefinition[];
   questDefinitions: QuestDefinition[];
   onCommand: (command: SemanticCommand) => void;
@@ -34,6 +38,7 @@ export function useBehaviorWorkspaceView(
 ): WorkspaceViewContribution {
   const {
     region,
+    regionContents,
     npcDefinitions,
     questDefinitions,
     onCommand,
@@ -44,8 +49,13 @@ export function useBehaviorWorkspaceView(
 
   const behaviorRecords = useMemo(() => region?.behaviors ?? [], [region]);
   const presentNpcDefinitionIds = useMemo(
-    () => new Set(region?.scene.npcPresences.map((presence) => presence.npcDefinitionId) ?? []),
-    [region?.scene.npcPresences]
+    () =>
+      new Set(
+        regionContents?.npcPresences.map(
+          (presence) => presence.npcDefinitionId
+        ) ?? []
+      ),
+    [regionContents?.npcPresences]
   );
   const npcOptions = useMemo(
     () =>
@@ -101,6 +111,7 @@ export function useBehaviorWorkspaceView(
     deleteTask
   } = useBehaviorCommands({
     region,
+    regionContents,
     npcDefinitions,
     onCommand,
     selectedBehavior,
