@@ -1,6 +1,6 @@
 # Plan 058 — Scenes content model + progress persistence
 
-Status: proposed
+Status: implemented (058.1-058.6), 2026-07-04
 Owner: nikki + claude
 Date: 2026-07-01, rescoped 2026-07-02 (framing pass 6 — per-Scene environment / audio / transitions + cross-Scene scoping)
 
@@ -261,7 +261,7 @@ Studio inspector's Scope dropdown handles the base-vs-overlay choice. Migration 
 
 ## Defers
 
-- **Applying `audioOverride` at runtime** — the Scene type carries `audioOverride` (backgroundMusicId / ambientSoundId) but the runtime has NO background-music system to override: `RuntimeSoundEventKey` is all SFX/UI events, and region audio is emitters + ambience zones. Authored data is preserved; application is deferred. Revisit trigger: when a background-music/soundtrack system lands in the runtime (code comment at the activeScene resolution in `targets/web/src/runtimeHost.ts` marks the seam).
+- **Applying `audioOverride` at runtime** — the Scene type carries `audioOverride` (backgroundMusicId / ambientSoundId) but the runtime has NO background-music system to override: `RuntimeSoundEventKey` is all SFX/UI events, and region audio is emitters + ambience zones. Authored data is preserved; application is deferred. Revisit trigger fired 2026-07-04: Plan 059 §059.1 builds the music system and applies this override.
 - Cross-project meta-progression (a "Wordlark Hollow completed unlocks something in Rackwick City" concept). Not engine core; plugin territory if it ever ships.
 - Multi-overlay composition (two Scenes stacking on the same region at once). Additive extension.
 - **Scene templates / duplicate-Scene** ("copy Scene 3 as starting point for Scene 4"). UX nicety; add later if authoring the second Scene from scratch feels painful.
