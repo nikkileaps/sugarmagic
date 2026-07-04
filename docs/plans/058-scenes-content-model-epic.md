@@ -203,6 +203,27 @@ Wordlark's current content: all placedAssets stay on Region shell (Base). All pr
 - End-to-end verify in prod: author 2 Scenes in wordlark, advance from Scene 1 to Scene 2 via a quest completion, autosave, hard-refresh, Continue → land in Scene 2 with Scene 2's overlays active.
 - Refresh memory rules if any new anti-pattern surfaces.
 
+### 058.6 — Scene properties panel (metadata + unlock + overrides + transition card editor)
+
+**Pattern applied**: Ambient Context (the panel is the settings surface behind the Scene selector).
+
+Added mid-epic: 058.5 shipped full runtime support for `transitionConfig` with no authoring surface, and 058.2's rescope deferred editors for `description`, `notes`, `unlockCondition`, and `environmentOverride`. All five are the same shape of problem — per-Scene fields with no home — and get one home here.
+
+**Placement decision** (2026-07-04): NOT the Game UI workspace. Game UI edits project-level UI definitions (menus, HUD, theme); transition-card CONTENT is per-Scene data, and splitting `Scene` field ownership across two workspaces muddies the model. If the card's LOOK ever becomes themeable (fonts/colors from `uiTheme`), that style half may land in Game UI later — content stays with the Scene.
+
+**Shape**: grow the Manage Scenes modal into master-detail. Scene list on the left keeps today's behavior (rename inline, reorder, delete with confirm, activate). Selecting a Scene shows a properties pane on the right:
+
+- **Description** + **Notes** — plain multiline text fields (`updateSceneInSession` already accepts both).
+- **Unlock condition** — select over the four kinds: `always` / `manual` ("unlocked by a quest action") / `questComplete` / `wallClock`. Picking `questComplete` shows a quest DROPDOWN (typed picker, not a raw ID field — same treatment as the Scene action pickers). Picking `wallClock` shows a datetime input writing `unlockAtIso`.
+- **Environment override** — environment picker from the content library, clearable; empty = "(region default)".
+- **Transition card** — title text, subtitle text, fade style select (black / white / cross), duration (ms, NumberInput). Empty title = no card = hard cut (matches the domain normalizer, which collapses a titleless config to `null`).
+- **Card preview** — a static in-panel preview rendering the configured card: fade-style background color, title + subtitle in the runtime card's typography. Reuses the styling constants from `targets/web/src/sceneTransitionCard.ts` (extract the background/text-color maps + font stack to a shared spot so the preview can't drift from the runtime rendering). No animation needed — the point is checking text + style without an advance-quest round trip.
+- `updateSceneInSession`'s patch type widens to include `environmentOverride`, `audioOverride`, `transitionConfig` (audioOverride stays UI-less per the Defers entry — runtime can't apply it yet).
+
+**Tests**: session-function patch round-trips for the new fields; normalizer behavior already pinned (titleless config → null).
+
+**Verify**: open Manage Scenes → pick Scene 2 → set title "SCENE 2" + fade black + 2500ms → preview shows the card; run the 058.5 advance flow → the real card renders with the same look; clear the title → advance is a hard cut again.
+
 ## Central design tensions
 
 ### 1. Unlock / release mechanics — bake-everything for v1
