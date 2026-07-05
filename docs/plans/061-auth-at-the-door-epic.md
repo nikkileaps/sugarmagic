@@ -1,6 +1,6 @@
 # Plan 061 — Auth at the door (launch-page sign-in, chrome-free game)
 
-Status: implemented (061.1-061.4); 061.5 prod verification pending
+Status: implemented, verified by nikki in prod 2026-07-05 (full loop incl. exit + quest-restore fix)
 Owner: nikki + claude
 Date: 2026-07-05
 
@@ -47,15 +47,17 @@ Target UX (nikki): sign in on the page that launches the game; Play boots the ga
 
 ### 061.4 — wordlark's Play page (wordlark-web repo)
 
-- Landing page with Play: Supabase sign-in / sign-up / play-as-guest against the SAME Supabase project (config comes from the game's published runtime env — document the wiring).
-- Signed-in state shows "Play" + account bits (email, sign out, upgrade-from-guest per decision 2).
+- Landing page with Play: Supabase sign-in / sign-up against the SAME Supabase project (values committed in `src/config/gameAccount.ts` per that repo's convention). Accounts only per decision 2 — no guest entry; stray anonymous sessions are signed out on sight.
+- Signed-in state shows "Play" + account bits (email, sign out).
 - Play button navigates to game.wordlarkhollow.com; the cookie session does the rest.
+- Shipped as wordlark-web EPIC-002 / STORY-018 (unlinked + noindex until the game goes public).
 
 ### 061.5 — Verify the full loop in prod
 
-- Sign in on wordlarkhollow.com -> Play -> game boots signed in, NO pill, no modal.
-- Guest loop: Play as guest -> game boots anonymous -> back on the site, upgrade to account -> progress intact in-game.
-- Exit from the start menu lands on the Play page with session intact; sign out on the site; revisiting the game direct-URL behaves per 061.2.
+- Sign in on wordlarkhollow.com/play -> Play -> game boots signed in, NO pill, no modal. Verified 2026-07-05.
+- Exit from the start menu lands on the Play page with session intact (guest loop dropped with decision 2); direct game URL with no session shows the required-sign-in fallback. Verified 2026-07-05.
+- Found during verification: quest state restored from a save never fired the QuestManager state-change notification, so NPC talk prompts (and the quest tracker) stayed frozen at empty-quest values after Continue — a latent Plan 055 bug, fixed on this branch (deserializeSaveSlice now notifies; two regression tests).
+- Verification also surfaced the two-repo staleness traps: Studio dev server must be restarted to render new plugin config fields, and the deployed engine follows the Deploy button's auto-synced branch sha (tag-triggered runs build from main).
 
 ## Defers
 
