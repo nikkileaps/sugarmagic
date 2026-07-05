@@ -41,6 +41,10 @@ export {
   type SupabaseIdentityProviderOptions
 } from "../catalog/sugarprofile/runtime/identity";
 export {
+  createCookieSessionStorage,
+  type CookieSessionStorage
+} from "../catalog/sugarprofile/runtime/cookie-session-storage";
+export {
   createSupabaseGameSaveStore,
   type SupabaseGameSaveStoreOptions
 } from "../catalog/sugarprofile/runtime/save-store";
