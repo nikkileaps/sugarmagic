@@ -12,10 +12,16 @@
  * Chunking: a Supabase session JSON (access JWT + refresh token +
  * metadata) can exceed the ~4KB per-cookie limit, so values are
  * split across `${key}.0`, `${key}.1`, ... and reassembled by
- * reading ascending indices until one is missing — the same
- * scheme Supabase's own @supabase/ssr package uses, so a session
- * written by a Play page built on that package is readable here
- * and vice versa.
+ * reading ascending indices until one is missing. The chunk
+ * NAMING mirrors @supabase/ssr, but the VALUE encoding is plain
+ * URI-encoded JSON (ssr base64-prefixes values) — the two are NOT
+ * interchangeable.
+ *
+ * PAIRED FILE: wordlark-web's `src/lib/gameSessionStorage.ts` is
+ * a byte-format twin of this adapter — the Play page writes the
+ * cookies the game reads (and vice versa for in-game guest
+ * sessions). If the format changes here, change it THERE too; a
+ * mismatch silently breaks the site<->game session handoff.
  *
  * The adapter matches auth-js's `SupportedStorage` shape
  * (getItem/setItem/removeItem, sync returns are fine). It is

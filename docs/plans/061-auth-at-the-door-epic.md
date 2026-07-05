@@ -1,6 +1,6 @@
 # Plan 061 — Auth at the door (launch-page sign-in, chrome-free game)
 
-Status: proposed
+Status: implemented (061.1-061.4); 061.5 prod verification pending
 Owner: nikki + claude
 Date: 2026-07-05
 
@@ -20,6 +20,10 @@ Target UX (nikki): sign in on the page that launches the game; Play boots the ga
 2. **Anonymous-first survives.** The door is optional, not a gate: the Play page offers "Play as guest" which boots the game exactly as today (anonymous session on first boot, Plan 047). Because the session cookie is domain-shared, the guest's anonymous session is visible to the SITE too — so "create an account to keep your progress" upgrade (linkAnonymousToCredentials) moves to the site and still migrates progress in place.
 3. **The launch page is per-game site territory; sugarmagic ships the contract.** wordlark's Play page lives in the wordlark-web repo. What sugarmagic owns: the SugarProfile plugin config that makes the handoff work (cookie domain, `playPageUrl`) and the game-side behavior (trust the session, exit redirects). Other games implement their own door against the same contract.
 4. **Quit stays in-game; Exit leaves.** Quit-to-menu keeps its current meaning (back to the start menu, session intact). The start menu gains an "Exit" affordance that redirects to `playPageUrl` — that's the "kicks you back to the Play Game screen" beat.
+5. **(2026-07-05, nikki) The Play page ships public-but-unlinked** (noindex, no nav entry) on the pre-launch site; it gets linked when the game goes public.
+6. **(2026-07-05, nikki) Subscription payment joins sign-up LATER — standing constraint.** Nothing in this epic may collapse "account exists" and "can play" into one inseparable step; an entitlement check must be able to slot between them without rework. Sign-up living on the site (where a checkout can mount) and the game's boot-time session trust being one seam are the two load-bearing choices.
+7. **(2026-07-05, nikki) There is ONE Supabase project and it is the game's auth** — wordlark-web docs that called it a "waitlist" were misframed (the waitlist is Mailchimp). The Play page signs into the same project the game's SugarProfile config points at.
+8. **Implementation decisions:** `playPageUrl` lives in SugarProfile config beside `sessionCookieDomain` (both halves of the door contract in one panel). The site-side cookie adapter is a byte-format TWIN copied into wordlark-web (`src/lib/gameSessionStorage.ts`) — cross-repo import isn't available, so both files carry a paired-file warning; the chunk naming mirrors @supabase/ssr but the value encoding is plain URI-encoded JSON (NOT ssr-compatible). The in-game LoginModal survives required-mode-only; SignedInBadge and the upgrade mode were deleted (upgrade lives on the Play page via `auth.updateUser`).
 
 ## Stories
 
