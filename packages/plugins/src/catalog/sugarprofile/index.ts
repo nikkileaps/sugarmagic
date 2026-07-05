@@ -272,10 +272,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       // session persists in parent-domain cookies (shared with the
       // launch page); otherwise auth-js's default per-origin
       // localStorage. Guard on `document` so non-browser contexts
-      // (tests, any future SSR) fall through to the default.
+      // (tests, any future SSR) fall through to the default — AND
+      // on the hostname actually being under the cookie domain:
+      // browsers silently REJECT cookies whose Domain doesn't
+      // cover the current host, so Studio preview on localhost
+      // would otherwise lose session persistence entirely while
+      // the prod config is set.
+      const cookieDomainCoversHost =
+        typeof document !== "undefined" &&
+        (`.${document.location.hostname}`.endsWith(
+          config.sessionCookieDomain
+        ) ||
+          document.location.hostname ===
+            config.sessionCookieDomain.replace(/^\./, ""));
       const cookieStorage =
-        config.sessionCookieDomain.length > 0 &&
-        typeof document !== "undefined"
+        config.sessionCookieDomain.length > 0 && cookieDomainCoversHost
           ? createCookieSessionStorage(config.sessionCookieDomain)
           : undefined;
       const client = createClient(
