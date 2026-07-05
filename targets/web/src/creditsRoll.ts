@@ -1,21 +1,23 @@
 /**
  * targets/web/src/creditsRoll.ts
  *
- * Purpose: Plan 059 §059.2 — the end-of-Scene credits roll.
- * Sections scroll bottom-to-top over a duration derived from
- * content length; any pointer/key input skips (resolves early).
+ * Purpose: Plan 059 §059.3 + §059.4 — the end-of-Scene exit
+ * overlay: credits scroll bottom-to-top while the Netflix-style
+ * routing control sits in the bottom-right corner OVER them
+ * (nikki, 2026-07-05 — no separate routing screen, no "press any
+ * key" hint; the button IS the interaction):
  *
- * Plain DOM like `sceneTransitionCard` and for the same reason:
- * it renders during the exit sequence while the world is about
- * to be torn down, so it must not depend on the React UI layer.
- * The full-viewport overlay blocks pointer/keyboard interaction
- * with the game underneath.
+ *   - next Scene unlocked -> "Next: <title>" button that advances
+ *     on press and FILLS over a countdown, auto-advancing when
+ *     full (credits cut short exactly like Netflix's binge flow).
+ *   - finale (no next) -> a return button, no countdown; the
+ *     overlay waits for the press.
  *
- * The overlay is removed on resolve — unlike the transition
- * card, the caller (059.3's exit sequence) continues to the
- * routing screen in the SAME document rather than reloading.
+ * Plain DOM (sceneTransitionCard family): renders while the world
+ * is about to be torn down by the reload; the overlay stays up
+ * after resolve to mask the reload flash.
  *
- * Implements: Plan 059 §059.2
+ * Implements: Plan 059 §059.2, §059.3, §059.4
  *
  * Status: active
  */
@@ -29,6 +31,7 @@ import { SCENE_CARD_FONT_FAMILY } from "./sceneTransitionCard";
 const MS_PER_VIEWPORT = 9000;
 const MIN_ROLL_MS = 4000;
 const MAX_ROLL_MS = 90000;
+const DEFAULT_COUNTDOWN_MS = 10000;
 
 /** Plan 059 §059.6 — exported so Studio's live credits preview
  *  paces identically to the runtime roll. */
@@ -45,49 +48,36 @@ export function computeCreditsRollDurationMs(
   );
 }
 
-export interface CreditsRollHandle {
-  /** Resolves when the roll finishes or the player skips. */
-  done: Promise<void>;
-}
-
-export function showCreditsRoll(
+export function showSceneExitOverlay(
   ownerDocument: Document,
-  credits: CreditsDefinition
-): CreditsRollHandle {
-  if (credits.sections.length === 0) {
-    return { done: Promise.resolve() };
+  options: {
+    credits: CreditsDefinition | null;
+    /** Display name of the next unlocked Scene; null after the
+     *  final Scene. */
+    nextSceneTitle: string | null;
+    /** Return-button label for the finale case. */
+    menuLabel: string;
+    countdownMs?: number;
   }
-
+): Promise<"next" | "menu"> {
   const overlay = ownerDocument.createElement("div");
-  overlay.setAttribute("data-credits-roll", "");
+  overlay.setAttribute("data-scene-exit-overlay", "");
   overlay.style.cssText = [
     "position: fixed",
     "inset: 0",
     "z-index: 9999",
     "overflow: hidden",
     "background: #000000",
+    "opacity: 0",
+    "transition: opacity 400ms ease-in-out",
     "pointer-events: all",
     "user-select: none",
     `font-family: ${SCENE_CARD_FONT_FAMILY}`,
     "text-align: center"
   ].join(";");
 
-  const scroller = ownerDocument.createElement("div");
-  scroller.style.cssText = [
-    "position: absolute",
-    "left: 0",
-    "right: 0",
-    "top: 100%",
-    "display: flex",
-    "flex-direction: column",
-    "gap: 28px",
-    "padding: 0 24px"
-  ].join(";");
-
-  // Defensive cleanup: the authoring session preserves text
-  // verbatim (blank lines, whitespace) so the editor round-trips;
-  // the roll renders only substantive content.
-  const sections = credits.sections
+  // --- Credits scroller (skipped when nothing to render) -------
+  const sections = (options.credits?.sections ?? [])
     .map((section) => ({
       heading: section.heading.trim(),
       lines: section.lines
@@ -97,92 +87,128 @@ export function showCreditsRoll(
     .filter(
       (section) => section.heading.length > 0 || section.lines.length > 0
     );
-  if (sections.length === 0) {
-    overlay.remove();
-    return { done: Promise.resolve() };
+
+  let scroller: HTMLDivElement | null = null;
+  if (sections.length > 0) {
+    scroller = ownerDocument.createElement("div");
+    scroller.style.cssText = [
+      "position: absolute",
+      "left: 0",
+      "right: 0",
+      "top: 100%",
+      "display: flex",
+      "flex-direction: column",
+      "gap: 28px",
+      "padding: 0 24px"
+    ].join(";");
+    for (const section of sections) {
+      const block = ownerDocument.createElement("div");
+      if (section.heading) {
+        const heading = ownerDocument.createElement("div");
+        heading.textContent = section.heading;
+        heading.style.cssText = [
+          "color: #8a8378",
+          "font-size: 13px",
+          "letter-spacing: 0.3em",
+          "text-transform: uppercase",
+          "margin-bottom: 8px"
+        ].join(";");
+        block.appendChild(heading);
+      }
+      for (const line of section.lines) {
+        const row = ownerDocument.createElement("div");
+        row.textContent = line;
+        row.style.cssText = [
+          "color: #f5f0e8",
+          "font-size: 22px",
+          "letter-spacing: 0.06em",
+          "line-height: 1.7"
+        ].join(";");
+        block.appendChild(row);
+      }
+      scroller.appendChild(block);
+    }
+    overlay.appendChild(scroller);
   }
 
-  for (const section of sections) {
-    const block = ownerDocument.createElement("div");
-    if (section.heading) {
-      const heading = ownerDocument.createElement("div");
-      heading.textContent = section.heading;
-      heading.style.cssText = [
-        "color: #8a8378",
-        "font-size: 13px",
-        "letter-spacing: 0.3em",
-        "text-transform: uppercase",
-        "margin-bottom: 8px"
-      ].join(";");
-      block.appendChild(heading);
-    }
-    for (const line of section.lines) {
-      const row = ownerDocument.createElement("div");
-      row.textContent = line;
-      row.style.cssText = [
-        "color: #f5f0e8",
-        "font-size: 22px",
-        "letter-spacing: 0.06em",
-        "line-height: 1.7"
-      ].join(";");
-      block.appendChild(row);
-    }
-    scroller.appendChild(block);
-  }
-
-  const skipHint = ownerDocument.createElement("div");
-  skipHint.textContent = "Press any key to skip";
-  skipHint.style.cssText = [
+  // --- Bottom-right routing control -----------------------------
+  const button = ownerDocument.createElement("button");
+  button.type = "button";
+  button.style.cssText = [
     "position: absolute",
-    "bottom: 14px",
-    "right: 18px",
-    "color: #8a8378",
-    "font-size: 11px",
-    "letter-spacing: 0.2em",
-    "text-transform: uppercase",
-    "opacity: 0.7"
+    "bottom: 22px",
+    "right: 24px",
+    "overflow: hidden",
+    "padding: 12px 28px",
+    "font-size: 16px",
+    "letter-spacing: 0.08em",
+    `font-family: ${SCENE_CARD_FONT_FAMILY}`,
+    "color: #f5f0e8",
+    "background: rgba(245, 240, 232, 0.08)",
+    "border: 1px solid rgba(245, 240, 232, 0.45)",
+    "border-radius: 6px",
+    "cursor: pointer"
   ].join(";");
 
-  overlay.appendChild(scroller);
-  overlay.appendChild(skipHint);
-  ownerDocument.body.appendChild(overlay);
-
-  const viewportHeight = Math.max(
-    1,
-    overlay.clientHeight || ownerDocument.documentElement.clientHeight
-  );
-  const contentHeight = scroller.scrollHeight;
-  const travel = viewportHeight + contentHeight;
-  const durationMs = computeCreditsRollDurationMs(travel, viewportHeight);
-
-  let settled = false;
-  let timer = 0;
-  const done = new Promise<void>((resolve) => {
-    const finish = () => {
+  return new Promise((resolve) => {
+    let settled = false;
+    let countdownTimer = 0;
+    const finish = (choice: "next" | "menu") => {
       if (settled) return;
       settled = true;
-      window.clearTimeout(timer);
-      overlay.removeEventListener("pointerdown", finish);
-      ownerDocument.removeEventListener("keydown", onKeyDown, true);
-      overlay.remove();
-      resolve();
+      window.clearTimeout(countdownTimer);
+      // Overlay stays up — the caller reloads and the black
+      // screen masks the flash.
+      resolve(choice);
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Swallow the skip input so the game underneath never
-      // sees it.
-      event.stopPropagation();
-      finish();
-    };
-    overlay.addEventListener("pointerdown", finish);
-    ownerDocument.addEventListener("keydown", onKeyDown, true);
 
-    // Kick the scroll on the next frame so the transition runs.
-    scroller.style.transition = `transform ${durationMs}ms linear`;
+    if (options.nextSceneTitle) {
+      const countdownMs = options.countdownMs ?? DEFAULT_COUNTDOWN_MS;
+      const fill = ownerDocument.createElement("span");
+      fill.style.cssText = [
+        "position: absolute",
+        "inset: 0",
+        "width: 0%",
+        "background: rgba(245, 240, 232, 0.28)",
+        `transition: width ${countdownMs}ms linear`
+      ].join(";");
+      const label = ownerDocument.createElement("span");
+      label.textContent = `Next: ${options.nextSceneTitle}`;
+      label.style.cssText = "position: relative";
+      button.append(fill, label);
+      button.addEventListener("click", () => finish("next"));
+      countdownTimer = window.setTimeout(
+        () => finish("next"),
+        countdownMs
+      );
+      requestAnimationFrame(() => {
+        fill.style.width = "100%";
+      });
+    } else {
+      button.textContent = options.menuLabel;
+      button.addEventListener("click", () => finish("menu"));
+    }
+    overlay.appendChild(button);
+
+    ownerDocument.body.appendChild(overlay);
     requestAnimationFrame(() => {
-      scroller.style.transform = `translateY(-${travel}px)`;
+      overlay.style.opacity = "1";
     });
-    timer = window.setTimeout(finish, durationMs + 400);
-  });
 
-  return { done };
+    // Kick the credits scroll. When the roll finishes with no
+    // routing chosen yet (finale case, or countdown still
+    // filling), the screen simply holds black with the button.
+    if (scroller) {
+      const viewportHeight = Math.max(
+        1,
+        overlay.clientHeight || ownerDocument.documentElement.clientHeight
+      );
+      const travel = viewportHeight + scroller.scrollHeight;
+      const durationMs = computeCreditsRollDurationMs(travel, viewportHeight);
+      scroller.style.transition = `transform ${durationMs}ms linear`;
+      requestAnimationFrame(() => {
+        scroller!.style.transform = `translateY(-${travel}px)`;
+      });
+    }
+  });
 }

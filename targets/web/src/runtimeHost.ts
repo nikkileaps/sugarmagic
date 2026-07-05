@@ -153,8 +153,7 @@ import {
   type CampaignProgressionSlice
 } from "./save/campaignProgressionParticipant";
 import { showEntryTitleSequence } from "./sceneTransitionCard";
-import { showCreditsRoll } from "./creditsRoll";
-import { showSceneRoutingScreen } from "./sceneRoutingScreen";
+import { showSceneExitOverlay } from "./creditsRoll";
 import {
   consumeOpenEpisodesFlag,
   consumeSceneEntryFlag,
@@ -1071,16 +1070,15 @@ export function createWebRuntimeHost(
       );
     }
 
-    // Credits (skipped entirely when none are authored), with the
-    // credits theme under them and silence after.
+    // One overlay: credits scroll with the routing control in the
+    // bottom-right corner over them (Netflix model). The credits
+    // theme plays under everything until the reload cuts it.
     const credits = bootCreditsDefinition;
     if (credits && credits.sections.length > 0) {
       gameplaySession?.setMusicTrack(creditsThemeCueIdForSession);
-      await showCreditsRoll(ownerWindow.document, credits).done;
-      gameplaySession?.setMusicTrack(null);
     }
-
-    const choice = await showSceneRoutingScreen(ownerWindow.document, {
+    const choice = await showSceneExitOverlay(ownerWindow.document, {
+      credits,
       nextSceneTitle: target?.displayName ?? null,
       menuLabel: `Back to ${bootEpisodesViewModel?.scenesUiLabel ?? "Scene"}s`
     });

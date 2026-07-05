@@ -30,10 +30,9 @@ export {
   SCENE_CARD_FADE_TEXT_COLORS,
   SCENE_CARD_FONT_FAMILY
 } from "./sceneTransitionCard";
-// Plan 059 §059.2 — credits roll (consumed by the 059.3 exit
-// sequence) + the pacing formula Studio's live preview shares
-// (Plan 059 §059.6).
+// Plan 059 — the exit overlay (credits + Netflix routing) and
+// the pacing formula Studio's live preview shares (§059.6).
 export {
-  showCreditsRoll,
+  showSceneExitOverlay,
   computeCreditsRollDurationMs
 } from "./creditsRoll";
