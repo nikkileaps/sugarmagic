@@ -62,6 +62,7 @@ import type {
   MechanicsDefinition,
   SoundEventBindingMap,
   AudioMixerSettings,
+  CreditsDefinition,
   MusicBindings,
   UITheme,
   RegionDocument,
@@ -134,6 +135,8 @@ interface PreviewBootMessage {
   audioMixer: AudioMixerSettings;
   /** Plan 059 §059.1 — project music slots. */
   musicBindings?: MusicBindings | null;
+  /** Plan 059 §059.2 — credits roll content. */
+  creditsDefinition?: CreditsDefinition | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -290,6 +293,7 @@ window.addEventListener("message", (event) => {
         soundEventBindings: data.soundEventBindings,
         audioMixer: data.audioMixer,
         musicBindings: data.musicBindings,
+        creditsDefinition: data.creditsDefinition,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,

@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
+import { CreditsModal } from "./CreditsModal";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -96,6 +97,7 @@ import {
   setSoundEventBindingInSession,
   updateAudioMixerInSession,
   updateMusicBindingsInSession,
+  updateCreditsInSession,
   duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
@@ -716,6 +718,8 @@ async function postPreviewBootMessage(
       audioMixer: session.gameProject.audioMixer,
       // Plan 059 §059.1 — project music slots.
       musicBindings: session.gameProject.musicBindings,
+      // Plan 059 §059.2 — credits roll content.
+      creditsDefinition: session.gameProject.creditsDefinition,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"
@@ -791,6 +795,7 @@ export function App() {
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [manageScenesOpen, setManageScenesOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -2547,6 +2552,20 @@ export function App() {
         }}
       />
       {session && (
+        <CreditsModal
+          opened={creditsOpen}
+          onClose={() => setCreditsOpen(false)}
+          credits={session.gameProject.creditsDefinition}
+          onSave={(credits) => {
+            const { session: currentSession } = projectStore.getState();
+            if (!currentSession) return;
+            projectStore
+              .getState()
+              .updateSession(updateCreditsInSession(currentSession, credits));
+          }}
+        />
+      )}
+      {session && (
         <ManageScenesModal
           opened={manageScenesOpen}
           onClose={() => setManageScenesOpen(false)}
@@ -2936,6 +2955,19 @@ export function App() {
                       }}
                     >
                       🧩 Plugins
+                    </Menu.Item>
+                    <Menu.Item
+                      onClick={() => setCreditsOpen(true)}
+                      styles={{
+                        item: {
+                          fontSize: "var(--sm-font-size-lg)",
+                          color: "var(--sm-color-text)",
+                          padding: "10px 16px",
+                          "&:hover": { background: "var(--sm-active-bg)" }
+                        }
+                      }}
+                    >
+                      🎞 Credits
                     </Menu.Item>
                     <Menu.Item
                       onClick={handleReload}

@@ -53,6 +53,7 @@ import {
   migrateToScenes,
   resolveActiveScene,
   resolveUnlockedSceneIds,
+  type CreditsDefinition,
   type MusicBindings,
   type Scene
 } from "@sugarmagic/domain";
@@ -205,6 +206,9 @@ export interface WebRuntimeStartState {
   /** Plan 059 §059.1 — project music slots (default background
    *  music + credits theme). */
   musicBindings?: MusicBindings | null;
+  /** Plan 059 §059.2 — credits roll content; empty sections =
+   *  the exit sequence skips the roll. */
+  creditsDefinition?: CreditsDefinition | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload

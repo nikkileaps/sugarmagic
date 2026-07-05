@@ -18,6 +18,7 @@ import {
   createDefaultRegion,
   createDefaultSoundCueDefinition,
   createRegionSoundEmitter,
+  normalizeCreditsDefinition,
   normalizeMusicBindings,
   removeAudioClipDefinitionFromSession,
   setSoundEventBindingInSession
@@ -406,6 +407,26 @@ describe("sound system", () => {
       defaultBackgroundMusicId: null,
       creditsThemeMusicId: null
     });
+  });
+
+  it("normalizes the credits definition (Plan 059 §059.2)", () => {
+    expect(normalizeCreditsDefinition(null)).toEqual({ sections: [] });
+    expect(
+      normalizeCreditsDefinition({
+        sections: [
+          { heading: "  WRITTEN BY  ", lines: [" Nikki ", "", "Claude"] },
+          { heading: "", lines: [] },
+          { heading: "", lines: ["Thanks for playing"] }
+        ]
+      })
+    ).toEqual({
+      sections: [
+        { heading: "WRITTEN BY", lines: ["Nikki", "Claude"] },
+        { heading: "", lines: ["Thanks for playing"] }
+      ]
+    });
+    const project = createDefaultGameProject("Audio Test", "audio-test");
+    expect(project.creditsDefinition).toEqual({ sections: [] });
   });
 
   it("keeps Howler out of runtime-core", () => {

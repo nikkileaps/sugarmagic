@@ -137,6 +137,8 @@ function buildBootJsonPayload(
     audioMixer: gameProject.audioMixer,
     // Plan 059 §059.1 — project music slots.
     musicBindings: gameProject.musicBindings,
+    // Plan 059 §059.2 — credits roll content.
+    creditsDefinition: gameProject.creditsDefinition,
     assetSources: snapshot.assetSources,
     // Story 47.10.5 — authored fresh-start record. When a returning
     // player loads with no save (or just clicked New Game + reset),

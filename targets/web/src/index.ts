@@ -30,3 +30,6 @@ export {
   SCENE_CARD_FADE_TEXT_COLORS,
   SCENE_CARD_FONT_FAMILY
 } from "./sceneTransitionCard";
+// Plan 059 §059.2 — credits roll (consumed by the 059.3 exit
+// sequence; exported for potential Studio preview reuse).
+export { showCreditsRoll } from "./creditsRoll";

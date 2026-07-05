@@ -111,6 +111,40 @@ export function normalizeMusicBindings(
   };
 }
 
+/**
+ * Plan 059 §059.2 — the project-level credits roll, shown by the
+ * end-of-Scene exit sequence (Plan 059 §059.3). One roll for the
+ * whole game per nikki's 2026-07-04 decision; empty sections =
+ * the game has no credits and the runtime skips the roll.
+ */
+export interface CreditsSection {
+  heading: string;
+  lines: string[];
+}
+
+export interface CreditsDefinition {
+  sections: CreditsSection[];
+}
+
+export function normalizeCreditsDefinition(
+  input: Partial<CreditsDefinition> | null | undefined
+): CreditsDefinition {
+  const sections: CreditsSection[] = [];
+  for (const candidate of input?.sections ?? []) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const heading =
+      typeof candidate.heading === "string" ? candidate.heading.trim() : "";
+    const lines = (Array.isArray(candidate.lines) ? candidate.lines : [])
+      .filter((line): line is string => typeof line === "string")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    // A section needs SOMETHING to render.
+    if (heading.length === 0 && lines.length === 0) continue;
+    sections.push({ heading, lines });
+  }
+  return { sections };
+}
+
 export function createDefaultAudioMixerSettings(): AudioMixerSettings {
   return {
     master: 1,
@@ -208,6 +242,8 @@ export interface GameProject {
   audioMixer: AudioMixerSettings;
   /** Plan 059 §059.1 — default background music + credits theme. */
   musicBindings: MusicBindings;
+  /** Plan 059 §059.2 — project-level credits roll. */
+  creditsDefinition: CreditsDefinition;
   mechanics: MechanicsDefinition;
   /**
    * Story 47.10.5 — authored "fresh start" record. When the player
@@ -379,6 +415,7 @@ export function normalizeGameProject(
         | "scenes"
         | "scenesUiLabel"
         | "musicBindings"
+        | "creditsDefinition"
       > & {
         majorVersion?: number | null;
         // Legacy fields accepted on input for back-compat with pre-45.7.5
@@ -409,6 +446,8 @@ export function normalizeGameProject(
         scenesUiLabel?: unknown;
         // Plan 059 §059.1 — pre-059 project files lack this key.
         musicBindings?: Partial<MusicBindings> | null;
+        // Plan 059 §059.2 — pre-059 project files lack this key.
+        creditsDefinition?: Partial<CreditsDefinition> | null;
       })
 ): GameProject {
   const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
@@ -500,6 +539,13 @@ export function normalizeGameProject(
     musicBindings: normalizeMusicBindings(
       (gameProject as { musicBindings?: Partial<MusicBindings> | null })
         .musicBindings
+    ),
+    creditsDefinition: normalizeCreditsDefinition(
+      (
+        gameProject as {
+          creditsDefinition?: Partial<CreditsDefinition> | null;
+        }
+      ).creditsDefinition
     )
   };
 }
@@ -541,6 +587,7 @@ export function createDefaultGameProject(
     // Scene context (Ambient Context pattern) from day one.
     scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })],
     scenesUiLabel: "Scene",
-    musicBindings: normalizeMusicBindings(null)
+    musicBindings: normalizeMusicBindings(null),
+    creditsDefinition: normalizeCreditsDefinition(null)
   };
 }

@@ -15,9 +15,11 @@ import type {
 } from "../game-project";
 import {
   normalizeAudioMixerSettings,
+  normalizeCreditsDefinition,
   normalizeMusicBindings,
   normalizeGameProject
 } from "../game-project";
+import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
 import {
@@ -3096,6 +3098,21 @@ export function updateAudioMixerInSession(
         ...session.gameProject.audioMixer,
         ...patch
       })
+    },
+    isDirty: true
+  };
+}
+
+/** Plan 059 §059.2 — replace the project credits roll. */
+export function updateCreditsInSession(
+  session: AuthoringSession,
+  credits: Partial<CreditsDefinition>
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      creditsDefinition: normalizeCreditsDefinition(credits)
     },
     isDirty: true
   };
