@@ -1,3 +1,4 @@
+export * from "./asset-paths";
 export * from "./authoring-session/index";
 export * from "./commands/index";
 export * from "./content-library/index";

@@ -29,7 +29,10 @@ import type {
   GameProject,
   RegionDocument
 } from "@sugarmagic/domain";
-import { normalizeCreditsDefinition } from "@sugarmagic/domain";
+import {
+  collectFileBackedAssetPaths,
+  normalizeCreditsDefinition
+} from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
 
 /**
@@ -145,7 +148,25 @@ function buildBootJsonPayload(
     ),
     // Plan 059 §059.3 — entry title sequence's first card.
     gameTitle: gameProject.displayName,
-    assetSources: snapshot.assetSources,
+    // 2026-07-05 fix — the deployed game fetches file-backed
+    // assets (audio clips, models, textures, thumbnails) from the
+    // site itself: the deploy workflow ships the project's
+    // `assets/` directory next to boot.json, and this map points
+    // every known relativeAssetPath at its site-relative URL.
+    // (Previously baked `{}` — Studio's blob-URL map can't
+    // survive a deploy — which silently broke ALL file-backed
+    // assets in prod; deployed music was the first to notice.)
+    // A non-empty snapshot map (tests, future CDN hosting) wins.
+    assetSources:
+      Object.keys(snapshot.assetSources).length > 0
+        ? snapshot.assetSources
+        : Object.fromEntries(
+            collectFileBackedAssetPaths({
+              contentLibrary: snapshot.contentLibrary,
+              itemDefinitions: gameProject.itemDefinitions,
+              documentDefinitions: gameProject.documentDefinitions
+            }).map((path) => [path, `/${path}`])
+          ),
     // Story 47.10.5 — authored fresh-start record. When a returning
     // player loads with no save (or just clicked New Game + reset),
     // the runtime spawns at these values instead of the implicit
