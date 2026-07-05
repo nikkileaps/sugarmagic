@@ -69,7 +69,25 @@ export function showCreditsRoll(
     "padding: 0 24px"
   ].join(";");
 
-  for (const section of credits.sections) {
+  // Defensive cleanup: the authoring session preserves text
+  // verbatim (blank lines, whitespace) so the editor round-trips;
+  // the roll renders only substantive content.
+  const sections = credits.sections
+    .map((section) => ({
+      heading: section.heading.trim(),
+      lines: section.lines
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    }))
+    .filter(
+      (section) => section.heading.length > 0 || section.lines.length > 0
+    );
+  if (sections.length === 0) {
+    overlay.remove();
+    return { done: Promise.resolve() };
+  }
+
+  for (const section of sections) {
     const block = ownerDocument.createElement("div");
     if (section.heading) {
       const heading = ownerDocument.createElement("div");

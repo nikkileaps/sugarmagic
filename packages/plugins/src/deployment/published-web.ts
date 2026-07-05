@@ -29,6 +29,7 @@ import type {
   GameProject,
   RegionDocument
 } from "@sugarmagic/domain";
+import { normalizeCreditsDefinition } from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
 
 /**
@@ -137,8 +138,11 @@ function buildBootJsonPayload(
     audioMixer: gameProject.audioMixer,
     // Plan 059 §059.1 — project music slots.
     musicBindings: gameProject.musicBindings,
-    // Plan 059 §059.2 — credits roll content.
-    creditsDefinition: gameProject.creditsDefinition,
+    // Plan 059 §059.2 — credits roll content, normalized at
+    // publish (the live session preserves editor text verbatim).
+    creditsDefinition: normalizeCreditsDefinition(
+      gameProject.creditsDefinition
+    ),
     // Plan 059 §059.3 — entry title sequence's first card.
     gameTitle: gameProject.displayName,
     assetSources: snapshot.assetSources,

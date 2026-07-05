@@ -408,7 +408,10 @@ export function useGameUIWorkspaceView(
       selectionIcon="🖥️"
     >
       {selection.kind === "credits" ? (
-        <CreditsEditor credits={creditsDefinition} onSave={onUpdateCredits} />
+        <CreditsEditor
+          credits={creditsDefinition}
+          onChange={onUpdateCredits}
+        />
       ) : selection.kind === "theme" ? (
         <Stack gap="sm">
           {Object.entries(uiTheme.tokens).map(([token, value]) =>

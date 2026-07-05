@@ -6,16 +6,17 @@
  * same species as menus; this workspace is where their design
  * grows — styling / layout / preview land here later).
  *
- * Ordered sections (heading + one credit line per text row);
- * drafts locally, commits on Save. Empty = the game has no
- * credits and the end-of-Scene exit sequence skips the roll.
+ * Edits commit to the session ON CHANGE like every other Studio
+ * field; the project save persists them. The session write
+ * preserves text verbatim (see `updateCreditsInSession`), so the
+ * textarea round-trips exactly — blank lines and trailing
+ * whitespace clean up at load/publish, not under the cursor.
  *
  * Implements: Plan 059 §059.2
  *
  * Status: active
  */
 
-import { useState } from "react";
 import {
   ActionIcon,
   Button,
@@ -25,64 +26,43 @@ import {
   Textarea,
   TextInput
 } from "@mantine/core";
-import type { CreditsDefinition, CreditsSection } from "@sugarmagic/domain";
-
-interface SectionDraft {
-  heading: string;
-  /** One credit line per text row. */
-  linesText: string;
-}
-
-function toDrafts(credits: CreditsDefinition): SectionDraft[] {
-  return credits.sections.map((section) => ({
-    heading: section.heading,
-    linesText: section.lines.join("\n")
-  }));
-}
-
-function fromDrafts(drafts: SectionDraft[]): CreditsDefinition {
-  const sections: CreditsSection[] = drafts.map((draft) => ({
-    heading: draft.heading.trim(),
-    lines: draft.linesText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-  }));
-  return { sections };
-}
+import type { CreditsDefinition } from "@sugarmagic/domain";
 
 export function CreditsEditor(props: {
   credits: CreditsDefinition;
-  onSave: (credits: CreditsDefinition) => void;
+  onChange: (credits: CreditsDefinition) => void;
 }) {
-  const [drafts, setDrafts] = useState<SectionDraft[] | null>(null);
-  const working = drafts ?? toDrafts(props.credits);
+  const { credits, onChange } = props;
+  const sections = credits.sections;
 
-  const update = (index: number, patch: Partial<SectionDraft>) => {
-    setDrafts(
-      working.map((draft, candidate) =>
-        candidate === index ? { ...draft, ...patch } : draft
+  const updateSection = (
+    index: number,
+    patch: Partial<CreditsDefinition["sections"][number]>
+  ) => {
+    onChange({
+      sections: sections.map((section, candidate) =>
+        candidate === index ? { ...section, ...patch } : section
       )
-    );
+    });
   };
 
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
-    if (target < 0 || target >= working.length) return;
-    const next = [...working];
+    if (target < 0 || target >= sections.length) return;
+    const next = [...sections];
     [next[index], next[target]] = [next[target]!, next[index]!];
-    setDrafts(next);
+    onChange({ sections: next });
   };
 
   return (
     <Stack gap="md">
-      {working.length === 0 && (
+      {sections.length === 0 && (
         <Text size="sm" c="var(--sm-color-overlay0)">
           No credits yet. An empty credits list means the game skips the
           credits roll entirely.
         </Text>
       )}
-      {working.map((draft, index) => (
+      {sections.map((section, index) => (
         <Stack
           key={index}
           gap="xs"
@@ -97,9 +77,9 @@ export function CreditsEditor(props: {
               size="xs"
               style={{ flex: 1 }}
               placeholder="Section heading (e.g. WRITTEN BY)"
-              value={draft.heading}
+              value={section.heading}
               onChange={(event) =>
-                update(index, { heading: event.currentTarget.value })
+                updateSection(index, { heading: event.currentTarget.value })
               }
             />
             <ActionIcon
@@ -114,7 +94,7 @@ export function CreditsEditor(props: {
             <ActionIcon
               variant="subtle"
               size="sm"
-              disabled={index === working.length - 1}
+              disabled={index === sections.length - 1}
               onClick={() => move(index, 1)}
               title="Move down"
             >
@@ -125,7 +105,11 @@ export function CreditsEditor(props: {
               size="sm"
               color="red"
               onClick={() =>
-                setDrafts(working.filter((_, candidate) => candidate !== index))
+                onChange({
+                  sections: sections.filter(
+                    (_, candidate) => candidate !== index
+                  )
+                })
               }
               title="Remove section"
             >
@@ -137,32 +121,24 @@ export function CreditsEditor(props: {
             autosize
             minRows={2}
             placeholder={"One credit per line\nNikki Leaps"}
-            value={draft.linesText}
+            value={section.lines.join("\n")}
             onChange={(event) =>
-              update(index, { linesText: event.currentTarget.value })
+              updateSection(index, {
+                lines: event.currentTarget.value.split("\n")
+              })
             }
           />
         </Stack>
       ))}
-      <Group justify="space-between">
+      <Group justify="flex-start">
         <Button
           size="compact-sm"
           variant="default"
           onClick={() =>
-            setDrafts([...working, { heading: "", linesText: "" }])
+            onChange({ sections: [...sections, { heading: "", lines: [] }] })
           }
         >
           + Add Section
-        </Button>
-        <Button
-          size="compact-sm"
-          disabled={drafts === null}
-          onClick={() => {
-            props.onSave(fromDrafts(working));
-            setDrafts(null);
-          }}
-        >
-          Save Credits
         </Button>
       </Group>
     </Stack>
