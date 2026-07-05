@@ -26,7 +26,6 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
-import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -795,7 +794,6 @@ export function App() {
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [manageScenesOpen, setManageScenesOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -2132,6 +2130,8 @@ export function App() {
     onRemoveSoundCueDefinition: handleRemoveSoundCueDefinition,
     onSetSoundEventBinding: handleSetSoundEventBinding,
     onUpdateAudioMixer: handleUpdateAudioMixer,
+    musicBindings: session?.gameProject.musicBindings ?? null,
+    onUpdateMusicBindings: handleUpdateMusicBindings,
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
@@ -2179,6 +2179,15 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
     scenes: session?.gameProject.scenes ?? [],
+    creditsDefinition:
+      session?.gameProject.creditsDefinition ?? { sections: [] },
+    onUpdateCredits: (credits) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(updateCreditsInSession(currentSession, credits));
+    },
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -2549,28 +2558,6 @@ export function App() {
           });
         }}
       />
-      {session && (
-        <ProjectSettingsModal
-          opened={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          credits={session.gameProject.creditsDefinition}
-          onSaveCredits={(credits) => {
-            const { session: currentSession } = projectStore.getState();
-            if (!currentSession) return;
-            projectStore
-              .getState()
-              .updateSession(updateCreditsInSession(currentSession, credits));
-          }}
-          musicBindings={session.gameProject.musicBindings}
-          onUpdateMusicBindings={handleUpdateMusicBindings}
-          soundCueDefinitions={(
-            session.contentLibrary.soundCueDefinitions ?? []
-          ).map((cue) => ({
-            definitionId: cue.definitionId,
-            displayName: cue.displayName
-          }))}
-        />
-      )}
       {session && (
         <ManageScenesModal
           opened={manageScenesOpen}
@@ -2961,19 +2948,6 @@ export function App() {
                       }}
                     >
                       🧩 Plugins
-                    </Menu.Item>
-                    <Menu.Item
-                      onClick={() => setSettingsOpen(true)}
-                      styles={{
-                        item: {
-                          fontSize: "var(--sm-font-size-lg)",
-                          color: "var(--sm-color-text)",
-                          padding: "10px 16px",
-                          "&:hover": { background: "var(--sm-active-bg)" }
-                        }
-                      }}
-                    >
-                      ⚙ Settings
                     </Menu.Item>
                     <Menu.Item
                       onClick={handleReload}

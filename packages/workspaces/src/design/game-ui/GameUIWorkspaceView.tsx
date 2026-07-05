@@ -20,6 +20,7 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  CreditsDefinition,
   HUDDefinition,
   MenuDefinition,
   SemanticCommand,
@@ -36,11 +37,15 @@ import {
 } from "@sugarmagic/domain";
 import { CssColorField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
+import { CreditsEditor } from "./CreditsEditor";
 
 type Selection =
   | { kind: "menu"; definitionId: string; nodeId: string | null }
   | { kind: "hud"; nodeId: string | null }
-  | { kind: "theme" };
+  | { kind: "theme" }
+  // Plan 059 §059.2 — credits are a player-facing screen; they
+  // live here with the other Game UI surfaces.
+  | { kind: "credits" };
 
 export interface GameUIWorkspaceViewProps {
   isActive: boolean;
@@ -48,6 +53,9 @@ export interface GameUIWorkspaceViewProps {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  /** Plan 059 §059.2 — the end-of-Scene credits roll content. */
+  creditsDefinition: CreditsDefinition;
+  onUpdateCredits: (credits: CreditsDefinition) => void;
   onCommand: (command: SemanticCommand) => void;
   renderPreview: (options: { initialVisibleMenuKey: string | null }) => React.ReactNode;
 }
@@ -126,6 +134,8 @@ export function useGameUIWorkspaceView(
     menuDefinitions,
     hudDefinition,
     uiTheme,
+    creditsDefinition,
+    onUpdateCredits,
     onCommand,
     renderPreview
   } = props;
@@ -147,7 +157,11 @@ export function useGameUIWorkspaceView(
   const selectedRoot =
     selection.kind === "hud" ? hudDefinition?.root ?? null : selectedMenu?.root ?? null;
   const selectedNode =
-    selection.kind === "theme" ? null : selectedRoot ? findNode(selectedRoot, selection.nodeId) : null;
+    selection.kind === "theme" || selection.kind === "credits"
+      ? null
+      : selectedRoot
+        ? findNode(selectedRoot, selection.nodeId)
+        : null;
 
   function target() {
     return {
@@ -288,6 +302,13 @@ export function useGameUIWorkspaceView(
         >
           HUD
         </Button>
+        <Button
+          variant={selection.kind === "credits" ? "light" : "subtle"}
+          justify="flex-start"
+          onClick={() => setSelection({ kind: "credits" })}
+        >
+          Credits
+        </Button>
         <Text size="xs" fw={700} tt="uppercase" c="var(--sm-color-subtext)" mt="sm">
           Menus
         </Text>
@@ -378,13 +399,17 @@ export function useGameUIWorkspaceView(
       selectionLabel={
         selection.kind === "theme"
           ? "UI Theme"
-          : selectedNode
-            ? `${selection.kind === "hud" ? "HUD" : selectedMenu?.displayName} · ${selectedNode.kind}`
-            : selectedMenu?.displayName ?? "Game UI"
+          : selection.kind === "credits"
+            ? "Credits"
+            : selectedNode
+              ? `${selection.kind === "hud" ? "HUD" : selectedMenu?.displayName} · ${selectedNode.kind}`
+              : selectedMenu?.displayName ?? "Game UI"
       }
       selectionIcon="🖥️"
     >
-      {selection.kind === "theme" ? (
+      {selection.kind === "credits" ? (
+        <CreditsEditor credits={creditsDefinition} onSave={onUpdateCredits} />
+      ) : selection.kind === "theme" ? (
         <Stack gap="sm">
           {Object.entries(uiTheme.tokens).map(([token, value]) =>
             token.startsWith("color.") ? (
