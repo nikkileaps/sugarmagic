@@ -419,6 +419,12 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   // Minor versions follow-up (2026-07-05) — which bump kind the
   // tag modal is driving; same modal + saga for both.
   const [tagBumpKind, setTagBumpKind] = useState<"patch" | "minor">("patch");
+  // Version history: only the LATEST minor line of each major
+  // renders expanded; older minor lines collapse to one row.
+  // Keys are `${major}.${minor}`; presence = user toggled it open.
+  const [expandedMinorLines, setExpandedMinorLines] = useState<
+    Record<string, boolean>
+  >({});
 
   // Story 46.12 — live git tag list driving the version history
   // sub-rows. Plugin state tracks only major-version suffixes (a
@@ -2739,11 +2745,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   // Story 46.12 — patches for this major come from the
                   // live git tag list (versionTagsByMajor). Plugin
                   // state intentionally does NOT mirror patch tags;
-                  // git is the source of truth for `v{N}.0.M`.
+                  // git is the source of truth for `v{N}.{M}.{P}`.
                   const patches =
                     versionTagsByMajor?.find(
                       (group) => group.major === entry.version
                     )?.patches ?? [];
+                  // Group releases into minor lines; only the latest
+                  // line renders expanded (older lines collapse to a
+                  // toggleable summary row).
+                  const minorLines = new Map<number, typeof patches>();
+                  for (const release of patches) {
+                    const line = minorLines.get(release.minor) ?? [];
+                    line.push(release);
+                    minorLines.set(release.minor, line);
+                  }
+                  const sortedMinors = [...minorLines.keys()].sort(
+                    (a, b) => a - b
+                  );
+                  const latestMinor = sortedMinors[sortedMinors.length - 1];
                   return (
                     <Stack key={entry.key} gap={2}>
                       <Group
@@ -2767,20 +2786,65 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                         </Group>
                         <Code>{entry.gcpProjectId}</Code>
                       </Group>
-                      {patches.map((patch) => (
-                        <Group
-                          key={patch.tag}
-                          gap="xs"
-                          wrap="nowrap"
-                          align="center"
-                          pl="lg"
-                        >
-                          <Text size="xs" c="var(--sm-color-subtext)">
-                            +
-                          </Text>
-                          <Code>{patch.tag}</Code>
-                        </Group>
-                      ))}
+                      {sortedMinors.map((minor) => {
+                        const line = minorLines.get(minor) ?? [];
+                        const lineKey = `${entry.version}.${minor}`;
+                        const expanded =
+                          minor === latestMinor ||
+                          expandedMinorLines[lineKey] === true;
+                        if (!expanded) {
+                          return (
+                            <Group
+                              key={lineKey}
+                              gap="xs"
+                              wrap="nowrap"
+                              align="center"
+                              pl="lg"
+                            >
+                              <Text size="xs" c="var(--sm-color-subtext)">
+                                +
+                              </Text>
+                              <Button
+                                size="compact-xs"
+                                variant="subtle"
+                                color="gray"
+                                onClick={() =>
+                                  setExpandedMinorLines((prior) => ({
+                                    ...prior,
+                                    [lineKey]: true
+                                  }))
+                                }
+                              >
+                                <Code>
+                                  v{entry.version}.{minor}.x
+                                </Code>
+                                <Text
+                                  size="xs"
+                                  c="var(--sm-color-subtext)"
+                                  ml={6}
+                                >
+                                  {line.length} release
+                                  {line.length === 1 ? "" : "s"}
+                                </Text>
+                              </Button>
+                            </Group>
+                          );
+                        }
+                        return line.map((release) => (
+                          <Group
+                            key={release.tag}
+                            gap="xs"
+                            wrap="nowrap"
+                            align="center"
+                            pl="lg"
+                          >
+                            <Text size="xs" c="var(--sm-color-subtext)">
+                              +
+                            </Text>
+                            <Code>{release.tag}</Code>
+                          </Group>
+                        ));
+                      })}
                     </Stack>
                   );
                 });
