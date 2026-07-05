@@ -2789,13 +2789,14 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                       {sortedMinors.map((minor) => {
                         const line = minorLines.get(minor) ?? [];
                         const lineKey = `${entry.version}.${minor}`;
-                        const expanded =
-                          minor === latestMinor ||
-                          expandedMinorLines[lineKey] === true;
-                        if (!expanded) {
-                          return (
+                        // The latest minor line renders flat, exactly
+                        // like the pre-minor history. Older lines get
+                        // an accordion header row; clicking toggles
+                        // the patch rows indented underneath.
+                        if (minor === latestMinor) {
+                          return line.map((release) => (
                             <Group
-                              key={lineKey}
+                              key={release.tag}
                               gap="xs"
                               wrap="nowrap"
                               align="center"
@@ -2804,46 +2805,52 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                               <Text size="xs" c="var(--sm-color-subtext)">
                                 +
                               </Text>
+                              <Code>{release.tag}</Code>
+                            </Group>
+                          ));
+                        }
+                        const expanded = expandedMinorLines[lineKey] === true;
+                        return (
+                          <Stack key={lineKey} gap={2}>
+                            <Group gap="xs" wrap="nowrap" align="center" pl="lg">
+                              <Text size="xs" c="var(--sm-color-subtext)">
+                                +
+                              </Text>
                               <Button
                                 size="compact-xs"
                                 variant="subtle"
                                 color="gray"
+                                px={4}
                                 onClick={() =>
                                   setExpandedMinorLines((prior) => ({
                                     ...prior,
-                                    [lineKey]: true
+                                    [lineKey]: !expanded
                                   }))
                                 }
                               >
                                 <Code>
                                   v{entry.version}.{minor}.x
                                 </Code>
-                                <Text
-                                  size="xs"
-                                  c="var(--sm-color-subtext)"
-                                  ml={6}
-                                >
-                                  {line.length} release
-                                  {line.length === 1 ? "" : "s"}
-                                </Text>
                               </Button>
                             </Group>
-                          );
-                        }
-                        return line.map((release) => (
-                          <Group
-                            key={release.tag}
-                            gap="xs"
-                            wrap="nowrap"
-                            align="center"
-                            pl="lg"
-                          >
-                            <Text size="xs" c="var(--sm-color-subtext)">
-                              +
-                            </Text>
-                            <Code>{release.tag}</Code>
-                          </Group>
-                        ));
+                            {expanded
+                              ? line.map((release) => (
+                                  <Group
+                                    key={release.tag}
+                                    gap="xs"
+                                    wrap="nowrap"
+                                    align="center"
+                                    pl="xl"
+                                  >
+                                    <Text size="xs" c="var(--sm-color-subtext)">
+                                      +
+                                    </Text>
+                                    <Code>{release.tag}</Code>
+                                  </Group>
+                                ))
+                              : null}
+                          </Stack>
+                        );
                       })}
                     </Stack>
                   );
