@@ -10,12 +10,16 @@
 import type {
   AudioMixerSettings,
   GameProject,
+  MusicBindings,
   RuntimeSoundEventKey
 } from "../game-project";
 import {
   normalizeAudioMixerSettings,
+  normalizeCreditsDefinition,
+  normalizeMusicBindings,
   normalizeGameProject
 } from "../game-project";
+import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
 import {
@@ -3092,6 +3096,51 @@ export function updateAudioMixerInSession(
       ...session.gameProject,
       audioMixer: normalizeAudioMixerSettings({
         ...session.gameProject.audioMixer,
+        ...patch
+      })
+    },
+    isDirty: true
+  };
+}
+
+/** Plan 059 §059.2 — replace the project credits roll. Shape-
+ *  coerces but preserves text VERBATIM (no trims, no blank-line
+ *  drops): the editor commits per keystroke like every other
+ *  Studio field, and normalizing here would fight the cursor.
+ *  `normalizeCreditsDefinition` cleans up at project load and at
+ *  publish; the runtime roll skips blanks defensively. */
+export function updateCreditsInSession(
+  session: AuthoringSession,
+  credits: Partial<CreditsDefinition>
+): AuthoringSession {
+  const sections = (credits.sections ?? []).map((section) => ({
+    heading: typeof section?.heading === "string" ? section.heading : "",
+    lines: (Array.isArray(section?.lines) ? section.lines : []).filter(
+      (line): line is string => typeof line === "string"
+    )
+  }));
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      creditsDefinition: { sections }
+    },
+    isDirty: true
+  };
+}
+
+/** Plan 059 §059.1 — project music slots (default background
+ *  music + credits theme). */
+export function updateMusicBindingsInSession(
+  session: AuthoringSession,
+  patch: Partial<MusicBindings>
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      musicBindings: normalizeMusicBindings({
+        ...session.gameProject.musicBindings,
         ...patch
       })
     },

@@ -51,6 +51,8 @@ export interface ManageScenesModalProps {
   scenesUiLabel: string;
   questDefinitions: QuestDefinition[];
   environmentDefinitions: { definitionId: string; displayName: string }[];
+  /** Plan 059 §059.1 — options for the background-music override. */
+  soundCueDefinitions: { definitionId: string; displayName: string }[];
   onAddScene: (displayName: string) => void;
   onRenameScene: (sceneId: string, displayName: string) => void;
   onUpdateScene: (
@@ -62,6 +64,7 @@ export interface ManageScenesModalProps {
         | "notes"
         | "unlockCondition"
         | "environmentOverride"
+        | "audioOverride"
         | "transitionConfig"
       >
     >
@@ -102,6 +105,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
     scenesUiLabel,
     questDefinitions,
     environmentDefinitions,
+    soundCueDefinitions,
     onAddScene,
     onRenameScene,
     onUpdateScene,
@@ -476,6 +480,38 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                   environmentOverride: value
                     ? { environmentId: value }
                     : null
+                })
+              }
+              {...fieldLabelProps}
+            />
+            {/* Plan 059 §059.1 — per-Scene background music. */}
+            <Select
+              size="xs"
+              label="Background music override"
+              placeholder="(project default)"
+              clearable
+              data={soundCueDefinitions.map((cue) => ({
+                value: cue.definitionId,
+                label: cue.displayName
+              }))}
+              value={
+                selectedScene.audioOverride?.backgroundMusicId ?? null
+              }
+              onChange={(value) =>
+                onUpdateScene(selectedScene.sceneId, {
+                  audioOverride: value
+                    ? {
+                        backgroundMusicId: value,
+                        ambientSoundId:
+                          selectedScene.audioOverride?.ambientSoundId ?? null
+                      }
+                    : selectedScene.audioOverride?.ambientSoundId
+                      ? {
+                          backgroundMusicId: null,
+                          ambientSoundId:
+                            selectedScene.audioOverride.ambientSoundId
+                        }
+                      : null
                 })
               }
               {...fieldLabelProps}

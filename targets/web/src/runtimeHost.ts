@@ -53,6 +53,8 @@ import {
   migrateToScenes,
   resolveActiveScene,
   resolveUnlockedSceneIds,
+  type CreditsDefinition,
+  type MusicBindings,
   type Scene
 } from "@sugarmagic/domain";
 import {
@@ -150,7 +152,15 @@ import {
   createCampaignProgressionParticipant,
   type CampaignProgressionSlice
 } from "./save/campaignProgressionParticipant";
-import { showSceneTransitionCard } from "./sceneTransitionCard";
+import { showEntryTitleSequence } from "./sceneTransitionCard";
+import { showSceneExitOverlay } from "./creditsRoll";
+import {
+  consumeOpenEpisodesFlag,
+  consumeSceneEntryFlag,
+  markOpenEpisodesForNextBoot,
+  markSceneEntryForNextBoot
+} from "./save/sceneEntry";
+import type { EpisodesViewModel } from "./ui/EpisodesScreen";
 import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
@@ -191,6 +201,9 @@ export interface WebRuntimeStartState {
    * lifts at start().
    */
   scenes?: Scene[];
+  /** Plan 059 §059.4 — player-facing label for Scenes ("Scene" /
+   *  "Chapter" / ...), used by the Episodes screen. */
+  scenesUiLabel?: string | null;
   /**
    * Plan 058 §058.2 — which Scene to boot into. Studio Preview
    * passes the editor's ambient Scene selection; the deployed
@@ -201,6 +214,15 @@ export interface WebRuntimeStartState {
   activeSceneId?: string | null;
   activeRegionId?: string | null;
   activeEnvironmentId?: string | null;
+  /** Plan 059 §059.1 — project music slots (default background
+   *  music + credits theme). */
+  musicBindings?: MusicBindings | null;
+  /** Plan 059 §059.2 — credits roll content; empty sections =
+   *  the exit sequence skips the roll. */
+  creditsDefinition?: CreditsDefinition | null;
+  /** Plan 059 §059.3 — the game's display title, shown as the
+   *  first card of the entry title sequence. */
+  gameTitle?: string | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload
@@ -943,6 +965,9 @@ export function createWebRuntimeHost(
   }
   function hostContinueGame(): void {
     gameStateStore.setState({ lifecycle: "playing" });
+    // Plan 059 §059.1 — crossfade menu theme -> in-game track
+    // (usually silence). Idempotent when resuming from pause.
+    gameplaySession?.setMusicTrack(sceneMusicCueIdForSession);
   }
 
   // Plan 058 §058.5 — quest Scene-progression actions land here
@@ -979,31 +1004,46 @@ export function createWebRuntimeHost(
     const target = action.sceneId
       ? ordered.find((scene) => scene.sceneId === action.sceneId) ?? null
       : ordered[currentIndex + 1] ?? null;
-    if (!target) {
-      console.warn(
-        "[web-runtime] advanceToNextScene: no target Scene " +
-          `(current=${activeSceneIdForSave}, requested=${action.sceneId ?? "next"}).`
-      );
-      return;
-    }
-    if (target.sceneId === activeSceneIdForSave) return;
+    // Plan 059 §059.3 — a null target is the FINAL-Scene case,
+    // not an error: the exit sequence still plays (credits!) and
+    // routes back to the menu.
+    if (target && target.sceneId === activeSceneIdForSave) return;
 
-    if (
-      activeSceneIdForSave &&
-      !completedSceneIds.includes(activeSceneIdForSave)
-    ) {
-      completedSceneIds.push(activeSceneIdForSave);
+    hostMarkSceneCompleted(activeSceneIdForSave);
+    if (target) {
+      // Manual unlock so the advance survives condition
+      // re-evaluation on every future boot.
+      if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
+        manuallyUnlockedSceneIds.push(target.sceneId);
+      }
+      activeSceneIdForSave = target.sceneId;
     }
-    // Manual unlock so the advance survives condition
-    // re-evaluation on every future boot.
-    if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
-      manuallyUnlockedSceneIds.push(target.sceneId);
-    }
-    activeSceneIdForSave = target.sceneId;
-    void advanceSceneAndReload(target);
+    void runExitSequenceAndReload(target);
   }
 
-  async function advanceSceneAndReload(target: Scene): Promise<void> {
+  /**
+   * Plan 059 §059.3 — the single Scene-completion hook. When the
+   * sandbox replay mode lands (Plan 059 central tension), the
+   * per-Scene end-state snapshot capture inserts HERE — one
+   * place, not scattered across advance paths.
+   */
+  function hostMarkSceneCompleted(sceneId: string | null): void {
+    if (!sceneId) return;
+    if (!completedSceneIds.includes(sceneId)) {
+      completedSceneIds.push(sceneId);
+    }
+  }
+
+  /**
+   * Plan 059 §059.3 — the exit sequence: force-save, credits roll
+   * with the credits theme, then Netflix routing (filling Next
+   * button auto-advancing, or a return button after the final
+   * Scene). The reload lands either in the next Scene (entry
+   * title sequence marked) or on the menu.
+   */
+  async function runExitSequenceAndReload(
+    target: Scene | null
+  ): Promise<void> {
     // Force-write the save NOW — the reload can't wait for the
     // next 5s autosave tick or the advance would be lost.
     const bindings = activeProvidersStore.getSnapshot();
@@ -1020,27 +1060,40 @@ export function createWebRuntimeHost(
         });
       } catch (error) {
         console.warn(
-          "[web-runtime] advanceToNextScene: save write failed; reloading anyway (advance may be lost).",
+          "[web-runtime] scene advance: save write failed; continuing anyway (advance may be lost).",
           error
         );
       }
     } else {
       console.warn(
-        "[web-runtime] advanceToNextScene: no active store/user; Scene advance will not persist."
+        "[web-runtime] scene advance: no active store/user; Scene advance will not persist."
       );
     }
-    if (target.transitionConfig) {
-      await showSceneTransitionCard(
-        ownerWindow.document,
-        target.transitionConfig
-      );
+
+    // One overlay: credits scroll with the routing control in the
+    // bottom-right corner over them (Netflix model). The credits
+    // theme plays under everything until the reload cuts it.
+    const credits = bootCreditsDefinition;
+    if (credits && credits.sections.length > 0) {
+      gameplaySession?.setMusicTrack(creditsThemeCueIdForSession);
     }
-    // Same sessionStorage handshake New Game uses: the next boot
-    // skips the start menu and goes straight to playing. The save
-    // was force-written above, so boot restores directly into the
-    // new Scene — the transition feels continuous instead of
-    // detouring through the menu.
-    sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+    const choice = await showSceneExitOverlay(ownerWindow.document, {
+      credits,
+      nextSceneTitle: target?.displayName ?? null,
+      menuLabel: `Back to ${bootEpisodesViewModel?.scenesUiLabel ?? "Scene"}s`
+    });
+
+    if (choice === "next" && target) {
+      // Skip the start menu AND play the entry title sequence on
+      // the next boot (game title -> Scene title). Save was
+      // force-written above, so boot restores into the new Scene.
+      sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+      markSceneEntryForNextBoot();
+    } else {
+      // Plan 059 §059.4 — land on the start menu with the
+      // Episodes screen opened.
+      markOpenEpisodesForNextBoot();
+    }
     ownerWindow.location.reload();
   }
   function hostPauseGame(): void {
@@ -1085,6 +1138,8 @@ export function createWebRuntimeHost(
     // clears "dialogue"; this catches everything else.
     uiStateStore.setState({ activeOverlayMenuKey: null });
     gameStateStore.setState({ lifecycle: "start-menu" });
+    // Plan 059 §059.1 — the menu theme returns on quit-to-menu.
+    gameplaySession?.setMusicTrack(menuMusicCueIdForSession);
   }
 
   let world: World | null = null;
@@ -1157,6 +1212,18 @@ export function createWebRuntimeHost(
   /** The migrated Scene list from the last start() — the advance
    *  action resolves "next by order" against it. */
   let bootScenes: Scene[] = [];
+  // Plan 059 §059.1 — the two music tracks for this session; the
+  // lifecycle handlers below switch the channel between them.
+  let sceneMusicCueIdForSession: string | null = null;
+  let menuMusicCueIdForSession: string | null = null;
+  // Plan 059 §059.3 — exit/entry sequence inputs from the boot
+  // payload.
+  let creditsThemeCueIdForSession: string | null = null;
+  let bootCreditsDefinition: CreditsDefinition | null = null;
+  let bootGameTitle: string | null = null;
+  // Plan 059 §059.4 — the Episodes screen's derived view model,
+  // built once per boot from Scenes + campaign.progression.
+  let bootEpisodesViewModel: EpisodesViewModel | null = null;
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1713,6 +1780,26 @@ export function createWebRuntimeHost(
         campaignRestore?.currentSceneId ?? state.activeSceneId ?? null
     });
     activeSceneIdForSave = activeScene?.sceneId ?? null;
+    // Plan 059 §059.4 — Episodes screen view model. Forward-only
+    // v1: only the frontier ("current") card is enterable.
+    bootEpisodesViewModel = {
+      scenesUiLabel: state.scenesUiLabel ?? "Scene",
+      entries: [...migratedContent.scenes]
+        .sort((left, right) => left.sceneOrder - right.sceneOrder)
+        .map((scene) => ({
+          sceneId: scene.sceneId,
+          displayName: scene.displayName,
+          description: scene.description,
+          status:
+            scene.sceneId === activeSceneIdForSave
+              ? ("current" as const)
+              : completedSceneIds.includes(scene.sceneId)
+                ? ("completed" as const)
+                : unlockedSceneIds.has(scene.sceneId)
+                  ? ("unlocked" as const)
+                  : ("locked" as const)
+        }))
+    };
     const activeRegion = getActiveRegion(
       migratedContent.regions,
       resolvedActiveRegionId
@@ -1722,13 +1809,26 @@ export function createWebRuntimeHost(
     const activeRegionContents = activeRegion
       ? composeRegionContents(activeRegion, activeScene)
       : null;
+    // Plan 059 §059.1 — music resolution. In-game: the Scene's
+    // audioOverride shadows the project default; null = silence
+    // (the intended default — BotW model, sounds cued by
+    // actions). Menu: its own slot, playing over the start menu
+    // and returning on quit-to-menu. (Closes Plan 058's
+    // audioOverride deferral.)
+    sceneMusicCueIdForSession =
+      activeScene?.audioOverride?.backgroundMusicId ??
+      state.musicBindings?.defaultBackgroundMusicId ??
+      null;
+    menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
+    // Plan 059 §059.3 — exit/entry sequence inputs.
+    creditsThemeCueIdForSession =
+      state.musicBindings?.creditsThemeMusicId ?? null;
+    bootCreditsDefinition = state.creditsDefinition ?? null;
+    bootGameTitle = state.gameTitle ?? null;
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls
-    // through untouched. (audioOverride is authored on the Scene
-    // type but NOT applied yet — the runtime has no background-
-    // music system to override; revisit when one exists. See plan
-    // 058 Deferred.)
+    // through untouched.
     renderEngineProjector.push(
       activeScene?.environmentOverride
         ? {
@@ -1985,8 +2085,24 @@ export function createWebRuntimeHost(
     });
     if (bootLifecycle === "start-menu") {
       showStartMenu();
+      // Plan 059 §059.4 — "Back to Episodes" after the finale's
+      // credits: land on the start menu with Episodes opened.
+      if (consumeOpenEpisodesFlag()) {
+        uiStateStore.setState({ episodesOpen: true });
+      }
     } else {
       gameStateStore.setState({ lifecycle: "playing" });
+    }
+    // Plan 059 §059.3 — entry title sequence (game title -> Scene
+    // title) over the fresh boot, ONLY when the reload was a
+    // Scene entry (advance or, later, Episodes-menu play). Plain
+    // Continue / hard refresh boots without the marker and goes
+    // straight to gameplay — titles never replay mid-Scene.
+    if (consumeSceneEntryFlag()) {
+      void showEntryTitleSequence(ownerWindow.document, {
+        gameTitle: bootGameTitle,
+        sceneCard: activeScene?.transitionConfig ?? null
+      });
     }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {
@@ -2101,6 +2217,12 @@ export function createWebRuntimeHost(
       activeRegion,
       activeScene,
       onSceneAction: hostHandleSceneAction,
+      // Initial track by boot lifecycle: menu theme while the
+      // start menu is up, else the in-game track (usually null).
+      backgroundMusicCueId:
+        bootLifecycle === "start-menu"
+          ? menuMusicCueIdForSession
+          : sceneMusicCueIdForSession,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
@@ -2349,6 +2471,15 @@ export function createWebRuntimeHost(
           gameplaySession?.audioController.emitEvent("ui.hover", {
             instanceKey: `ui.hover:${action?.action ?? "passive"}`
           });
+        },
+        // Plan 059 §059.4 — built-in Episodes screen.
+        episodes: bootEpisodesViewModel,
+        onEpisodesContinue: () => {
+          uiStateStore?.setState({ episodesOpen: false });
+          hostContinueGame();
+        },
+        onEpisodesClose: () => {
+          uiStateStore?.setState({ episodesOpen: false });
         }
       })
     );

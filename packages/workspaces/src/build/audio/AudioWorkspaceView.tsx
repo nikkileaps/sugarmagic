@@ -20,6 +20,7 @@ import {
 import {
   type AudioClipDefinition,
   type AudioMixerSettings,
+  type MusicBindings,
   type RuntimeSoundEventKey,
   type SoundCategory,
   type SoundCueDefinition,
@@ -40,6 +41,9 @@ export interface AudioWorkspaceViewProps {
   assetSources: Record<string, string>;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings | null;
+  /** Plan 059 §059.1 — project music slots. */
+  musicBindings: MusicBindings | null;
+  onUpdateMusicBindings: (patch: Partial<MusicBindings>) => void;
   onCreateSoundCueDefinition: () => SoundCueDefinition | null;
   onUpdateSoundCueDefinition: (
     definitionId: string,
@@ -96,6 +100,8 @@ export function useAudioWorkspaceView(
     assetSources,
     soundEventBindings,
     audioMixer,
+    musicBindings,
+    onUpdateMusicBindings,
     onCreateSoundCueDefinition,
     onUpdateSoundCueDefinition,
     onRemoveSoundCueDefinition,
@@ -606,6 +612,56 @@ export function useAudioWorkspaceView(
             </Text>
           </PanelSection>
         )}
+        {/* Plan 059 §059.1 — project-level music slots. Always
+            visible (not cue-scoped): these are game settings. */}
+        <PanelSection title="Music">
+          <Stack gap="xs">
+            <Select
+              size="xs"
+              label="Menu music"
+              placeholder="(none)"
+              clearable
+              data={soundCueDefinitions.map((cue) => ({
+                value: cue.definitionId,
+                label: cue.displayName
+              }))}
+              value={musicBindings?.menuMusicId ?? null}
+              onChange={(value) =>
+                onUpdateMusicBindings({ menuMusicId: value ?? null })
+              }
+            />
+            <Select
+              size="xs"
+              label="In-game music (optional)"
+              placeholder="(silence — recommended)"
+              clearable
+              data={soundCueDefinitions.map((cue) => ({
+                value: cue.definitionId,
+                label: cue.displayName
+              }))}
+              value={musicBindings?.defaultBackgroundMusicId ?? null}
+              onChange={(value) =>
+                onUpdateMusicBindings({
+                  defaultBackgroundMusicId: value ?? null
+                })
+              }
+            />
+            <Select
+              size="xs"
+              label="Credits theme"
+              placeholder="(none)"
+              clearable
+              data={soundCueDefinitions.map((cue) => ({
+                value: cue.definitionId,
+                label: cue.displayName
+              }))}
+              value={musicBindings?.creditsThemeMusicId ?? null}
+              onChange={(value) =>
+                onUpdateMusicBindings({ creditsThemeMusicId: value ?? null })
+              }
+            />
+          </Stack>
+        </PanelSection>
       </Inspector>
     ),
     centerPanel: (

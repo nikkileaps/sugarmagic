@@ -112,4 +112,12 @@ export function registerDefaultUIActions(
   registry.register("open-caster", () => {
     options.onToggleCaster?.();
   });
+
+  // Plan 059 §059.4 — opens the built-in Episodes screen (Scene
+  // cards with completed / current / locked states). Authors put
+  // this on a start-menu button; the screen itself is built-in,
+  // not an authored menu definition.
+  registry.register("open-episodes", () => {
+    options.stateStore.setState({ episodesOpen: true });
+  });
 }

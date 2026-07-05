@@ -1,6 +1,6 @@
 # Plan 059 — Episodic presentation layer (end-of-Scene sequence + Episodes menu)
 
-Status: proposed
+Status: implemented (059.1-059.6), verified by nikki 2026-07-05
 Owner: nikki + claude
 Date: 2026-07-04
 
@@ -36,25 +36,36 @@ Not built in this plan, but these constraints bind NOW:
 
 The deferred trigger from Plan 058 fires here: `Scene.audioOverride` exists with no system to apply it, and the end-of-Scene sequence needs music.
 
-- Runtime music channel: play / crossfade / stop a looping music track, routed through the existing `audioMixer.music` volume. Howler-based like the SFX path, host-owned lifetime (survives assembly rebuilds).
+- Runtime music channel: play / crossfade / stop a looping music track, routed through the existing `audioMixer.music` volume. Howler-based like the SFX path, host-owned lifetime (survives assembly rebuilds). Implemented as a thin `setMusicTrack` method over the existing platform-free audio command model — the adapter already had looping, fades, and the music mixer category.
 - Project-level default background music binding + per-Scene `audioOverride.backgroundMusicId` finally applied at Scene load (falls through per the 058 type contract). Remove the corresponding Defers entry in Plan 058.
+- **Menu music slot** (added 2026-07-04, nikki): `musicBindings.menuMusicId` plays over the start menu, crossfades away at start-menu -> playing, returns on quit-to-menu. The intended IN-GAME default is SILENCE (BotW model — see the conditional-music Defers entry); the in-game slot exists but is recommended empty.
 - End-sequence music: the end-of-Scene sequence (059.3) gets its own track slot (project-level "credits theme", authored with the credits).
-- Studio authoring: project settings surface for default music + credits theme; Scene properties panel's audio override becomes editable (it's currently UI-less by design).
+- Studio authoring: Build > Audio gains a Music section (menu / in-game / credits theme pickers); Scene properties panel's audio override becomes editable.
 
 ### 059.2 — Project-level credits definition + authoring
 
 - Domain: `creditsDefinition` on GameProject — ordered sections (heading + lines), plus `creditsThemeMusicId`. Normalizer + defaults (empty = skip credits entirely in the runtime sequence).
-- Studio: minimal credits editor (Publish or a project-settings surface — decide at implementation; it's a rarely-touched artifact).
-- Runtime: a credits roll renderer (DOM overlay in the `sceneTransitionCard` family — same non-React rationale), skippable by input, music under it via 059.1.
+- Studio: credits editor landed in the **Game UI workspace** (2026-07-05, nikki — credits are a player-facing screen, same species as menus, and that workspace is where richer design + preview grow). Edits commit on change like every other Studio field; the session preserves text verbatim and normalization happens at load/publish so typing never fights the cursor.
+- Runtime: a credits roll renderer (DOM overlay in the `sceneTransitionCard` family — same non-React rationale), music under it via 059.1. The "skippable by any input" idea was superseded 2026-07-05: the routing button rendered OVER the credits (see 059.3) is the only control.
 
-### 059.3 — End-of-Scene sequence (replaces bare advance-reload)
+### 059.3 — Entry + exit sequences (replaces bare advance-reload)
 
-The `advanceToNextScene` path stops being "card then reload" and becomes the authored sequence:
+**Decision (2026-07-04, nikki, superseding the earlier "semantic flip" idea): the Scene title card stays an ENTRY card, exactly as 058 authored it.** Netflix model: you select the episode (or press Next), the show's title plays, then the episode's title, then content. Credits belong to the exit; titles belong to the entry. No repurposing, no migration of card intent.
 
-1. **End card** — the COMPLETED Scene's `transitionConfig` repurposed as its end card ("End of Scene 1" framing is the author's choice of title text). Note the semantic flip from 058: the card belonged to the *entered* Scene; the genre survey says end cards belong to the *finished* episode. Migration consideration: wordlark's existing authored cards (if any) move intent from "entry" to "exit" — acceptable pre-release, called out in the story.
-2. **Credits** — project-level roll (059.2), skippable, with credits theme (059.1). Skipped entirely when no credits are authored.
-3. **Routing screen** — per decision 3: filling "Next: <title>" countdown button when a next Scene is unlocked (press = advance now; full = auto-advance); "Back to Episodes" otherwise. Both paths keep the force-save + skip-start-menu reload machinery from 058.5 — the sequence happens BEFORE the reload, the reload lands either in the next Scene or on the Episodes menu.
-4. Scene-complete hook point: a single host function marks the Scene completed + (future) captures the end-state snapshot — the sandbox insertion point per the design tension.
+**Exit sequence** — runs when the Scene completes, BEFORE the reload (over the finished world). Refined 2026-07-05 (nikki): credits and routing are ONE overlay, not two steps — the routing control sits in the bottom-right corner OVER the rolling credits, exactly like Netflix:
+
+1. Force-save, then the exit overlay fades in (black) with the credits scrolling (skipped when none authored) and the credits theme under everything.
+2. **Routing control, bottom-right over the credits**: filling "Next: <Scene title>" countdown button when a next Scene is unlocked (press = advance now; full = auto-advance ~10s — long credits get cut short mid-roll, Netflix binge behavior); after the finale, a "Back to <label>s" button with no countdown — the credits finish and the screen holds until pressed. No "press any key to skip"; the button is the interaction.
+3. Both paths keep 058.5's force-save + skip-start-menu reload machinery; the reload lands either in the next Scene or on the Episodes screen.
+4. Scene-complete hook point: `hostMarkSceneCompleted` — the single host function that marks completion; the future end-state snapshot capture inserts there (sandbox insertion point per the design tension). A null advance target is the FINALE case, not an error.
+
+**Entry sequence** — runs AFTER the reload, at boot into a freshly-entered Scene (doubles as a loading mask; identical whether entry came from the Next button or the Episodes menu):
+
+1. **Optional intro slot** — reserved for a future authored opening (logo sting / cold-open video); v1 ships without it, the sequence just starts at step 2. Slot documented so adding it later is additive.
+2. **Game title card** — the project's title ("the show's title"). Minimal authored config (project-level; reuse the card renderer).
+3. **Scene title card** — the entered Scene's `transitionConfig` (unchanged 058 semantics), fading into gameplay.
+
+**Resume rule**: plain Continue mid-Scene does NOT replay the entry sequence — titles fire only on fresh Scene entry (Netflix doesn't re-run the title when you resume an episode halfway). Mechanically: the reload handshake carries an "entering Scene fresh" marker; a boot without it (normal Continue, hard refresh) goes straight to gameplay.
 
 ### 059.4 — Episodes menu (start-menu surface + post-credits destination)
 
@@ -65,12 +76,24 @@ The `advanceToNextScene` path stops being "card then reload" and becomes the aut
 
 ### 059.5 — End-to-end verify + wordlark dress rehearsal
 
-- Author in wordlark: credits + credits theme, end cards on both Scenes, default + per-Scene music.
-- Full loop: play Scene 1 → complete final quest → end card → credits w/ music → filling Next button → auto-advance into Scene 2 → play → complete → credits → no next Scene → Back to Episodes → menu shows Scene 1 + 2 completed.
-- Hard-refresh + Continue mid-sequence and post-sequence: campaign state correct in all cases.
+- Author in wordlark: credits + credits theme, game title card, Scene title cards on both Scenes, default + per-Scene music.
+- Full loop: play Scene 1 → complete final quest → credits w/ music + filling Next button bottom-right → reload → game title → "Scene 2" title card → gameplay in Scene 2 → complete → credits → Back to Scenes → start menu with Episodes open, Scene 1 + 2 completed.
+- Episodes-menu Continue on the frontier card RESUMES gameplay (no title replay) — corrected from the original sketch 2026-07-05: the frontier card resumes a Scene in progress, and the resume rule (titles only on fresh Scene entry) governs. Titles play only when the campaign ADVANCES into a Scene.
+- Resume rule: hard-refresh + Continue mid-Scene boots straight to gameplay, NO title replay; campaign state correct in all cases.
+- Verified by nikki 2026-07-05 through the exit-overlay refinement.
+
+### 059.6 — Live credits preview in Game UI (pulled forward from Defers, 2026-07-05)
+
+Executed out of numeric order (before 059.4/059.5) at nikki's call — no reason to wait.
+
+- Selecting Credits in the Game UI workspace renders a LIVE looping roll preview in the center panel (the slot menus preview in), showing exactly what the runtime renders: normalized content (blanks dropped), same typography/colors/pacing as the runtime exit overlay (`showSceneExitOverlay`) — shared constants + a shared duration formula so preview and runtime can't drift.
+- Updates as the author types (session commits per keystroke per 059.2); loops with a short pause between cycles.
+- Styled credits design (fonts / colors / images / timing beyond plain sections) remains future work in Defers below.
 
 ## Defers
 
+- **Styled credits design** (2026-07-05) — styling beyond plain text sections (logos, per-section fonts/colors, timing control). The 059.6 preview makes each future styling decision checkable without an in-game round trip. Revisit trigger: the first time credits content needs more than text (a logo, a styled heading).
+- **Conditional / ambient music system** (2026-07-05, nikki) — the intended in-game music model is BotW / Elder Scrolls: SILENCE as the default gameplay state, with music as punctuation — stingers on timers, condition combinations, actions. 059.1 ships the substrate (the music channel + menu-music slot + optional per-Scene track) with silence as the recommended in-game default; the conditional trigger system (condition evaluation, cooldowns, priorities) is its own future story.
 - **Sandbox replay mode** (the central tension above) — its own epic when we get there; 059 only preserves the insertion points.
 - Per-Scene credits, next-episode teaser reels, Telltale-style choice stats.
 - Episode thumbnails on the Episodes menu (needs a capture/asset story; cards are text-first in v1).

@@ -78,6 +78,73 @@ export type SoundEventBindingMap = Partial<
 
 export type AudioMixerSettings = Record<"master" | SoundCategory, number>;
 
+/**
+ * Plan 059 §059.1 — project-level music slots. Sound-cue ids
+ * (cues authored with category "music" + loop mode); null = no
+ * music for that slot. Scene `audioOverride.backgroundMusicId`
+ * shadows `defaultBackgroundMusicId` per Scene.
+ */
+export interface MusicBindings {
+  /** Plays over the start menu; crossfades away when gameplay
+   *  starts and returns on quit-to-menu. */
+  menuMusicId: string | null;
+  /** OPTIONAL continuous in-game track. The intended default is
+   *  null — silence during gameplay, with sounds cued by actions
+   *  (BotW / Elder Scrolls model; a conditional-music system is
+   *  a future story). Scene `audioOverride` shadows per Scene. */
+  defaultBackgroundMusicId: string | null;
+  /** Played under the end-of-Scene credits roll (Plan 059 §059.3). */
+  creditsThemeMusicId: string | null;
+}
+
+export function normalizeMusicBindings(
+  input: Partial<MusicBindings> | null | undefined
+): MusicBindings {
+  const coerce = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
+  return {
+    menuMusicId: coerce(input?.menuMusicId),
+    defaultBackgroundMusicId: coerce(input?.defaultBackgroundMusicId),
+    creditsThemeMusicId: coerce(input?.creditsThemeMusicId)
+  };
+}
+
+/**
+ * Plan 059 §059.2 — the project-level credits roll, shown by the
+ * end-of-Scene exit sequence (Plan 059 §059.3). One roll for the
+ * whole game per nikki's 2026-07-04 decision; empty sections =
+ * the game has no credits and the runtime skips the roll.
+ */
+export interface CreditsSection {
+  heading: string;
+  lines: string[];
+}
+
+export interface CreditsDefinition {
+  sections: CreditsSection[];
+}
+
+export function normalizeCreditsDefinition(
+  input: Partial<CreditsDefinition> | null | undefined
+): CreditsDefinition {
+  const sections: CreditsSection[] = [];
+  for (const candidate of input?.sections ?? []) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const heading =
+      typeof candidate.heading === "string" ? candidate.heading.trim() : "";
+    const lines = (Array.isArray(candidate.lines) ? candidate.lines : [])
+      .filter((line): line is string => typeof line === "string")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    // A section needs SOMETHING to render.
+    if (heading.length === 0 && lines.length === 0) continue;
+    sections.push({ heading, lines });
+  }
+  return { sections };
+}
+
 export function createDefaultAudioMixerSettings(): AudioMixerSettings {
   return {
     master: 1,
@@ -173,6 +240,10 @@ export interface GameProject {
   uiTheme: UITheme;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
+  /** Plan 059 §059.1 — default background music + credits theme. */
+  musicBindings: MusicBindings;
+  /** Plan 059 §059.2 — project-level credits roll. */
+  creditsDefinition: CreditsDefinition;
   mechanics: MechanicsDefinition;
   /**
    * Story 47.10.5 — authored "fresh start" record. When the player
@@ -343,6 +414,8 @@ export function normalizeGameProject(
         | "defaultGameSavePayload"
         | "scenes"
         | "scenesUiLabel"
+        | "musicBindings"
+        | "creditsDefinition"
       > & {
         majorVersion?: number | null;
         // Legacy fields accepted on input for back-compat with pre-45.7.5
@@ -371,6 +444,10 @@ export function normalizeGameProject(
         // Plan 058 §058.1 — pre-058 project files lack these keys.
         scenes?: unknown;
         scenesUiLabel?: unknown;
+        // Plan 059 §059.1 — pre-059 project files lack this key.
+        musicBindings?: Partial<MusicBindings> | null;
+        // Plan 059 §059.2 — pre-059 project files lack this key.
+        creditsDefinition?: Partial<CreditsDefinition> | null;
       })
 ): GameProject {
   const mechanics = normalizeMechanicsDefinition(gameProject.mechanics);
@@ -458,6 +535,17 @@ export function normalizeGameProject(
     scenes: normalizeScenes((gameProject as { scenes?: unknown }).scenes),
     scenesUiLabel: normalizeScenesUiLabel(
       (gameProject as { scenesUiLabel?: unknown }).scenesUiLabel
+    ),
+    musicBindings: normalizeMusicBindings(
+      (gameProject as { musicBindings?: Partial<MusicBindings> | null })
+        .musicBindings
+    ),
+    creditsDefinition: normalizeCreditsDefinition(
+      (
+        gameProject as {
+          creditsDefinition?: Partial<CreditsDefinition> | null;
+        }
+      ).creditsDefinition
     )
   };
 }
@@ -498,6 +586,8 @@ export function createDefaultGameProject(
     // Scene already in place so authoring always has an active
     // Scene context (Ambient Context pattern) from day one.
     scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })],
-    scenesUiLabel: "Scene"
+    scenesUiLabel: "Scene",
+    musicBindings: normalizeMusicBindings(null),
+    creditsDefinition: normalizeCreditsDefinition(null)
   };
 }

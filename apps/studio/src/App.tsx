@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
+import { CreditsPreview } from "./CreditsPreview";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -33,6 +34,7 @@ import type {
   ItemDefinition,
   AudioClipDefinition,
   AudioMixerSettings,
+  MusicBindings,
   RuntimeSoundEventKey,
   SoundCueDefinition
 } from "@sugarmagic/domain";
@@ -94,6 +96,8 @@ import {
   removeSoundCueDefinitionFromSession,
   setSoundEventBindingInSession,
   updateAudioMixerInSession,
+  updateMusicBindingsInSession,
+  updateCreditsInSession,
   duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
@@ -690,6 +694,8 @@ async function postPreviewBootMessage(
       // (explicit activeSceneId threading lands with 058.2's
       // selector).
       scenes: session.gameProject.scenes,
+      // Plan 059 §059.4 — Episodes screen label.
+      scenesUiLabel: session.gameProject.scenesUiLabel,
       // Ambient Context: Preview boots whichever Scene is active
       // in the editor — no separate "preview which Scene?" picker.
       activeSceneId: session.activeSceneId,
@@ -712,6 +718,12 @@ async function postPreviewBootMessage(
       uiTheme: session.gameProject.uiTheme,
       soundEventBindings: session.gameProject.soundEventBindings,
       audioMixer: session.gameProject.audioMixer,
+      // Plan 059 §059.1 — project music slots.
+      musicBindings: session.gameProject.musicBindings,
+      // Plan 059 §059.2 — credits roll content.
+      creditsDefinition: session.gameProject.creditsDefinition,
+      // Plan 059 §059.3 — entry title sequence's first card.
+      gameTitle: session.gameProject.displayName,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"
@@ -1561,6 +1573,18 @@ export function App() {
     []
   );
 
+  // Plan 059 §059.1 — project music slots.
+  const handleUpdateMusicBindings = useCallback(
+    (patch: Partial<MusicBindings>) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(updateMusicBindingsInSession(currentSession, patch));
+    },
+    []
+  );
+
   const handleGenerateItemThumbnail = useCallback(
     async (item: ItemDefinition): Promise<string | null> => {
       const { handle, session: currentSession } = projectStore.getState();
@@ -2111,6 +2135,8 @@ export function App() {
     onRemoveSoundCueDefinition: handleRemoveSoundCueDefinition,
     onSetSoundEventBinding: handleSetSoundEventBinding,
     onUpdateAudioMixer: handleUpdateAudioMixer,
+    musicBindings: session?.gameProject.musicBindings ?? null,
+    onUpdateMusicBindings: handleUpdateMusicBindings,
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
@@ -2158,6 +2184,20 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
     scenes: session?.gameProject.scenes ?? [],
+    creditsDefinition:
+      session?.gameProject.creditsDefinition ?? { sections: [] },
+    onUpdateCredits: (credits) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(updateCreditsInSession(currentSession, credits));
+    },
+    renderCreditsPreview: () => (
+      <CreditsPreview
+        credits={session?.gameProject.creditsDefinition ?? { sections: [] }}
+      />
+    ),
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -2542,6 +2582,12 @@ export function App() {
               displayName: definition.displayName
             })
           )}
+          soundCueDefinitions={(
+            session.contentLibrary.soundCueDefinitions ?? []
+          ).map((cue) => ({
+            definitionId: cue.definitionId,
+            displayName: cue.displayName
+          }))}
           onAddScene={handleAddScene}
           onRenameScene={handleRenameScene}
           onUpdateScene={handleUpdateScene}

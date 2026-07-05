@@ -2870,7 +2870,9 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
       activeOverlayMenuKey: "start-menu",
       savePresent: true,
       // Story 50.1 — added to RuntimeUIState; defaults false.
-      loginModalOpen: false
+      loginModalOpen: false,
+      // Plan 059 §059.4 — added to RuntimeUIState; defaults false.
+      episodesOpen: false
     });
   });
 

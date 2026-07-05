@@ -44,6 +44,13 @@ export interface RuntimeUIState {
    * doesn't simultaneously toggle the inventory.
    */
   loginModalOpen: boolean;
+  /**
+   * Plan 059 §059.4 — true while the built-in Episodes screen is
+   * shown (over the start menu or, later, in-game). Toggled by
+   * the "open-episodes" UI action and the screen's own close /
+   * continue buttons.
+   */
+  episodesOpen: boolean;
 }
 
 export interface RuntimeStore<TState> {
@@ -100,6 +107,7 @@ export function createUIStateStore(
   return createRuntimeStore<RuntimeUIState>({
     activeOverlayMenuKey: initialState.activeOverlayMenuKey ?? null,
     savePresent: initialState.savePresent ?? false,
-    loginModalOpen: initialState.loginModalOpen ?? false
+    loginModalOpen: initialState.loginModalOpen ?? false,
+    episodesOpen: initialState.episodesOpen ?? false
   });
 }

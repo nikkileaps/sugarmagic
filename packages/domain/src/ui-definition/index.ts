@@ -309,6 +309,18 @@ export function createDefaultStartMenu(projectId: string): MenuDefinition {
           onClick: { action: "start-new-game" }
         }
       }),
+      // Plan 059 §059.4 — opens the built-in Episodes screen.
+      createUINode("button", {
+        nodeId: `${projectId}:ui:start-menu:episodes`,
+        styleId: "button-primary",
+        layout: createDefaultUILayoutProps({ padding: 14, width: "fill" }),
+        props: {
+          text: literalUIValue("Episodes")
+        },
+        events: {
+          onClick: { action: "open-episodes" }
+        }
+      }),
       createUINode("button", {
         nodeId: `${projectId}:ui:start-menu:settings`,
         styleId: "button-primary",

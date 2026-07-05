@@ -20,6 +20,7 @@ function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
     activeOverlayMenuKey: null,
     savePresent: false,
     loginModalOpen: false,
+    episodesOpen: false,
     ...patch
   };
 }

@@ -32,6 +32,7 @@ import { UIImage } from "./ui/UIImage";
 import { UIProgressBar } from "./ui/UIProgressBar";
 import { UISpacer } from "./ui/UISpacer";
 import { UIRuntimeBridgeProvider } from "./ui/UIContextProvider";
+import { EpisodesScreen, type EpisodesViewModel } from "./ui/EpisodesScreen";
 
 export interface GameUILayerProps {
   hudDefinition: HUDDefinition | null;
@@ -46,6 +47,11 @@ export interface GameUILayerProps {
   gameStateStore: GameStateStore;
   onAction: (action: UIActionExpression) => void;
   onHover: (action: UIActionExpression | null) => void;
+  /** Plan 059 §059.4 — data + handlers for the built-in Episodes
+   *  screen, rendered while `uiState.episodesOpen`. */
+  episodes: EpisodesViewModel | null;
+  onEpisodesContinue: () => void;
+  onEpisodesClose: () => void;
 }
 
 /**
@@ -217,6 +223,15 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
               savePresent: state.savePresent
             })}
           </div>
+        ) : null}
+        {/* Plan 059 §059.4 — built-in Episodes screen, above the
+            lifecycle menus. */}
+        {state.episodesOpen && props.episodes ? (
+          <EpisodesScreen
+            episodes={props.episodes}
+            onContinue={props.onEpisodesContinue}
+            onClose={props.onEpisodesClose}
+          />
         ) : null}
       </div>
     </UIRuntimeBridgeProvider>

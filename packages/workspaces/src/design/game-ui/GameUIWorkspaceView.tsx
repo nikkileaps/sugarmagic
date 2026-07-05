@@ -20,6 +20,7 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  CreditsDefinition,
   HUDDefinition,
   MenuDefinition,
   SemanticCommand,
@@ -36,11 +37,15 @@ import {
 } from "@sugarmagic/domain";
 import { CssColorField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
+import { CreditsEditor } from "./CreditsEditor";
 
 type Selection =
   | { kind: "menu"; definitionId: string; nodeId: string | null }
   | { kind: "hud"; nodeId: string | null }
-  | { kind: "theme" };
+  | { kind: "theme" }
+  // Plan 059 §059.2 — credits are a player-facing screen; they
+  // live here with the other Game UI surfaces.
+  | { kind: "credits" };
 
 export interface GameUIWorkspaceViewProps {
   isActive: boolean;
@@ -48,9 +53,32 @@ export interface GameUIWorkspaceViewProps {
   menuDefinitions: MenuDefinition[];
   hudDefinition: HUDDefinition | null;
   uiTheme: UITheme;
+  /** Plan 059 §059.2 — the end-of-Scene credits roll content. */
+  creditsDefinition: CreditsDefinition;
+  onUpdateCredits: (credits: CreditsDefinition) => void;
   onCommand: (command: SemanticCommand) => void;
   renderPreview: (options: { initialVisibleMenuKey: string | null }) => React.ReactNode;
+  /** Plan 059 §059.6 — live credits roll preview for the center
+   *  panel while editing credits. */
+  renderCreditsPreview: () => React.ReactNode;
 }
+
+/** The runtime's registered UI action keys (see runtime-core
+ *  ui-actions/registerDefaultUIActions). Kept as a typed list so
+ *  authored buttons pick real actions instead of free text. */
+const UI_ACTION_OPTIONS = [
+  "start-new-game",
+  "continue-game",
+  "pause-game",
+  "resume-game",
+  "quit-to-menu",
+  "load-region",
+  "save-game",
+  "load-game",
+  "open-inventory",
+  "open-caster",
+  "open-episodes"
+].map((value) => ({ value, label: value }));
 
 const nodeKindOptions: Array<{ value: UINodeKind; label: string }> = [
   { value: "container", label: "Container" },
@@ -126,8 +154,11 @@ export function useGameUIWorkspaceView(
     menuDefinitions,
     hudDefinition,
     uiTheme,
+    creditsDefinition,
+    onUpdateCredits,
     onCommand,
-    renderPreview
+    renderPreview,
+    renderCreditsPreview
   } = props;
   const [selection, setSelection] = useState<Selection>(() => ({
     kind: "menu",
@@ -147,7 +178,11 @@ export function useGameUIWorkspaceView(
   const selectedRoot =
     selection.kind === "hud" ? hudDefinition?.root ?? null : selectedMenu?.root ?? null;
   const selectedNode =
-    selection.kind === "theme" ? null : selectedRoot ? findNode(selectedRoot, selection.nodeId) : null;
+    selection.kind === "theme" || selection.kind === "credits"
+      ? null
+      : selectedRoot
+        ? findNode(selectedRoot, selection.nodeId)
+        : null;
 
   function target() {
     return {
@@ -288,6 +323,13 @@ export function useGameUIWorkspaceView(
         >
           HUD
         </Button>
+        <Button
+          variant={selection.kind === "credits" ? "light" : "subtle"}
+          justify="flex-start"
+          onClick={() => setSelection({ kind: "credits" })}
+        >
+          Credits
+        </Button>
         <Text size="xs" fw={700} tt="uppercase" c="var(--sm-color-subtext)" mt="sm">
           Menus
         </Text>
@@ -356,6 +398,8 @@ export function useGameUIWorkspaceView(
   const previewInitialMenuKey =
     selection.kind === "menu" ? selectedMenu?.menuKey ?? null : null;
 
+  // Plan 059 §059.6 — editing credits shows the live roll
+  // preview; everything else shows the menu/HUD preview session.
   const centerPanel = (
     <Box h="100%" p="md" style={{ minHeight: 0 }}>
       <Box
@@ -368,7 +412,9 @@ export function useGameUIWorkspaceView(
             "radial-gradient(circle at top, rgba(93, 117, 162, 0.28), rgba(10, 10, 18, 0.98))"
         }}
       >
-        {renderPreview({ initialVisibleMenuKey: previewInitialMenuKey })}
+        {selection.kind === "credits"
+          ? renderCreditsPreview()
+          : renderPreview({ initialVisibleMenuKey: previewInitialMenuKey })}
       </Box>
     </Box>
   );
@@ -378,13 +424,20 @@ export function useGameUIWorkspaceView(
       selectionLabel={
         selection.kind === "theme"
           ? "UI Theme"
-          : selectedNode
-            ? `${selection.kind === "hud" ? "HUD" : selectedMenu?.displayName} · ${selectedNode.kind}`
-            : selectedMenu?.displayName ?? "Game UI"
+          : selection.kind === "credits"
+            ? "Credits"
+            : selectedNode
+              ? `${selection.kind === "hud" ? "HUD" : selectedMenu?.displayName} · ${selectedNode.kind}`
+              : selectedMenu?.displayName ?? "Game UI"
       }
       selectionIcon="🖥️"
     >
-      {selection.kind === "theme" ? (
+      {selection.kind === "credits" ? (
+        <CreditsEditor
+          credits={creditsDefinition}
+          onChange={onUpdateCredits}
+        />
+      ) : selection.kind === "theme" ? (
         <Stack gap="sm">
           {Object.entries(uiTheme.tokens).map(([token, value]) =>
             token.startsWith("color.") ? (
@@ -546,17 +599,21 @@ export function useGameUIWorkspaceView(
             </Stack>
           ) : null}
           {selectedNode.kind === "button" ? (
-            <TextInput
+            <Select
               label="On Click Action"
-              value={selectedNode.events.onClick?.action ?? ""}
-              onChange={(event) =>
+              searchable
+              data={UI_ACTION_OPTIONS}
+              value={selectedNode.events.onClick?.action ?? null}
+              onChange={(value) => {
+                if (!value) return;
                 updateSelectedNode({
                   events: {
                     ...selectedNode.events,
-                    onClick: { action: event.currentTarget.value }
+                    // Preserve args (load-region carries regionId).
+                    onClick: { ...selectedNode.events.onClick, action: value }
                   }
-                })
-              }
+                });
+              }}
             />
           ) : null}
           <Select

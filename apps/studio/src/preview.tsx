@@ -62,6 +62,8 @@ import type {
   MechanicsDefinition,
   SoundEventBindingMap,
   AudioMixerSettings,
+  CreditsDefinition,
+  MusicBindings,
   UITheme,
   RegionDocument,
   Scene
@@ -109,6 +111,8 @@ interface PreviewBootMessage {
   regions: RegionDocument[];
   /** Plan 058 §058.1 — narrative Scenes for overlay composition. */
   scenes?: Scene[];
+  /** Plan 059 §059.4 — Episodes screen label. */
+  scenesUiLabel?: string | null;
   /** Plan 058 §058.2 — the editor's active Scene (Ambient
    *  Context); Preview boots into it. */
   activeSceneId?: string | null;
@@ -131,6 +135,12 @@ interface PreviewBootMessage {
   uiTheme: UITheme;
   soundEventBindings: SoundEventBindingMap;
   audioMixer: AudioMixerSettings;
+  /** Plan 059 §059.1 — project music slots. */
+  musicBindings?: MusicBindings | null;
+  /** Plan 059 §059.2 — credits roll content. */
+  creditsDefinition?: CreditsDefinition | null;
+  /** Plan 059 §059.3 — entry title sequence's first card. */
+  gameTitle?: string | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -250,6 +260,7 @@ window.addEventListener("message", (event) => {
       void host.start({
         regions: data.regions,
         scenes: data.scenes,
+        scenesUiLabel: data.scenesUiLabel,
         activeSceneId: data.activeSceneId,
         activeRegionId: data.activeRegionId,
         activeEnvironmentId: data.activeEnvironmentId,
@@ -286,6 +297,9 @@ window.addEventListener("message", (event) => {
         uiTheme: data.uiTheme,
         soundEventBindings: data.soundEventBindings,
         audioMixer: data.audioMixer,
+        musicBindings: data.musicBindings,
+        creditsDefinition: data.creditsDefinition,
+        gameTitle: data.gameTitle,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,

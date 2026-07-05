@@ -10,6 +10,7 @@
  */
 
 import { createStore } from "zustand/vanilla";
+import { collectFileBackedAssetPaths } from "@sugarmagic/domain";
 import { readBlobFile } from "@sugarmagic/io";
 import type { ProjectStore } from "../project";
 
@@ -24,41 +25,13 @@ function collectRelativeAssetPaths(projectStore: ProjectStore): string[] {
   if (!session) {
     return [];
   }
-
-  const sources = [
-    ...(session.contentLibrary.assetDefinitions ?? []).map(
-      (definition) => definition.source
-    ),
-    ...(session.contentLibrary.audioClipDefinitions ?? []).map(
-      (definition) => definition.source
-    ),
-    ...(session.contentLibrary.characterModelDefinitions ?? []).map(
-      (definition) => definition.source
-    ),
-    ...(session.contentLibrary.characterAnimationDefinitions ?? []).map(
-      (definition) => definition.source
-    ),
-    ...(session.contentLibrary.textureDefinitions ?? []).map(
-      (definition) => definition.source
-    ),
-    ...(session.contentLibrary.maskTextureDefinitions ?? []).map(
-      (definition) => definition.source
-    )
-  ];
-
-  const paths = sources.map((source) => source.relativeAssetPath);
-  for (const itemDefinition of session.gameProject?.itemDefinitions ?? []) {
-    if (itemDefinition.presentation.thumbnailAssetPath) {
-      paths.push(itemDefinition.presentation.thumbnailAssetPath);
-    }
-  }
-  for (const documentDefinition of session.gameProject?.documentDefinitions ??
-    []) {
-    for (const pagePath of documentDefinition.imagePages) {
-      paths.push(pagePath);
-    }
-  }
-  return paths.sort();
+  // Single source of truth shared with the published-web boot
+  // payload (see domain/asset-paths.ts header).
+  return collectFileBackedAssetPaths({
+    contentLibrary: session.contentLibrary,
+    itemDefinitions: session.gameProject?.itemDefinitions,
+    documentDefinitions: session.gameProject?.documentDefinitions
+  });
 }
 
 async function createAssetSourceMap(
