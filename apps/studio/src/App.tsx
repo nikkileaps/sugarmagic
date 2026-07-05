@@ -26,7 +26,7 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
-import { CreditsModal } from "./CreditsModal";
+import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -795,7 +795,7 @@ export function App() {
   const [createRegionOpen, setCreateRegionOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [manageScenesOpen, setManageScenesOpen] = useState(false);
-  const [creditsOpen, setCreditsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [workspaceNavigationTarget, setWorkspaceNavigationTarget] =
     useState<WorkspaceNavigationTarget | null>(null);
 
@@ -2132,8 +2132,6 @@ export function App() {
     onRemoveSoundCueDefinition: handleRemoveSoundCueDefinition,
     onSetSoundEventBinding: handleSetSoundEventBinding,
     onUpdateAudioMixer: handleUpdateAudioMixer,
-    musicBindings: session?.gameProject.musicBindings ?? null,
-    onUpdateMusicBindings: handleUpdateMusicBindings,
     selectedSurfaceDefinitionId: editedSurfaceDefinitionId,
     onSelectSurfaceDefinition: (definitionId) =>
       surfaceEditingStore.getState().setEditedSurfaceDefinitionId(definitionId),
@@ -2552,17 +2550,25 @@ export function App() {
         }}
       />
       {session && (
-        <CreditsModal
-          opened={creditsOpen}
-          onClose={() => setCreditsOpen(false)}
+        <ProjectSettingsModal
+          opened={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
           credits={session.gameProject.creditsDefinition}
-          onSave={(credits) => {
+          onSaveCredits={(credits) => {
             const { session: currentSession } = projectStore.getState();
             if (!currentSession) return;
             projectStore
               .getState()
               .updateSession(updateCreditsInSession(currentSession, credits));
           }}
+          musicBindings={session.gameProject.musicBindings}
+          onUpdateMusicBindings={handleUpdateMusicBindings}
+          soundCueDefinitions={(
+            session.contentLibrary.soundCueDefinitions ?? []
+          ).map((cue) => ({
+            definitionId: cue.definitionId,
+            displayName: cue.displayName
+          }))}
         />
       )}
       {session && (
@@ -2957,7 +2963,7 @@ export function App() {
                       🧩 Plugins
                     </Menu.Item>
                     <Menu.Item
-                      onClick={() => setCreditsOpen(true)}
+                      onClick={() => setSettingsOpen(true)}
                       styles={{
                         item: {
                           fontSize: "var(--sm-font-size-lg)",
@@ -2967,7 +2973,7 @@ export function App() {
                         }
                       }}
                     >
-                      🎞 Credits
+                      ⚙ Settings
                     </Menu.Item>
                     <Menu.Item
                       onClick={handleReload}

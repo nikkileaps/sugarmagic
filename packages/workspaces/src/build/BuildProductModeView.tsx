@@ -39,8 +39,7 @@ import {
   getActiveRegion,
   getActiveRegionContents,
   getActiveScene,
-  type AuthoringSession,
-  type MusicBindings
+  type AuthoringSession
 } from "@sugarmagic/domain";
 import {
   BuildSubNav,
@@ -170,8 +169,6 @@ export interface BuildProductModeViewProps {
     soundCueDefinitionId: string | null
   ) => void;
   onUpdateAudioMixer: (patch: Partial<AudioMixerSettings>) => void;
-  musicBindings: MusicBindings | null;
-  onUpdateMusicBindings: (patch: Partial<MusicBindings>) => void;
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string | null) => void;
   activeMaskPaintTarget: PaintedMaskTargetAddress | null;
@@ -252,8 +249,6 @@ export function useBuildProductModeView(
     onRemoveSoundCueDefinition,
     onSetSoundEventBinding,
     onUpdateAudioMixer,
-    musicBindings,
-    onUpdateMusicBindings,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     activeMaskPaintTarget,
@@ -493,8 +488,6 @@ export function useBuildProductModeView(
     onRemoveSoundCueDefinition,
     onSetSoundEventBinding,
     onUpdateAudioMixer,
-    musicBindings,
-    onUpdateMusicBindings
   });
 
   const assetsView = useAssetsWorkspaceView({
