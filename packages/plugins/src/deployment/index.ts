@@ -298,10 +298,12 @@ export function getCloudRunServiceNamesForPlan(plan: DeploymentPlan): string[] {
   );
 }
 export {
+  computeNextMinorTag,
   computeNextPatchTag,
   groupVersionTags,
   parseVersionTag,
   type ComputeNextPatchTagResult,
+  type ComputeNextTagResult,
   type GroupedVersionMajor,
   type ParsedVersionTag
 } from "./version-tags";

@@ -34,6 +34,7 @@ import {
   getCloudRunServiceNamesForPlan,
   planGameDeployment,
   resolveSecretManagerName,
+  computeNextMinorTag,
   computeNextPatchTag,
   groupVersionTags
 } from "../../../deployment/index";
@@ -2969,7 +2970,7 @@ function createRerunFailedJobsPlugin(): VitePlugin {
   };
 }
 
-// Story 46.12 — list every `v{N}.0.{M}` tag in the working
+// Story 46.12 — list every `v{N}.{M}.{P}` tag in the working
 // directory, grouped by major with patches sorted ascending.
 // Source of truth for the Release workspace version history.
 // Read-only; safe to call on every workspace open.
@@ -3020,7 +3021,7 @@ function createListVersionTagsPlugin(): VitePlugin {
             }
             const listResult = await runHostCommand({
               command: "git",
-              args: ["tag", "--list", "v*.0.*"],
+              args: ["tag", "--list", "v*.*.*"],
               cwd: workingDirectory
             });
             if (listResult.exitCode !== 0) {
@@ -3069,10 +3070,16 @@ function createTagPatchVersionPlugin(): VitePlugin {
               workingDirectory?: unknown;
               major?: unknown;
               dryRun?: unknown;
+              bump?: unknown;
             };
             const workingDirectory = readWorkingDirectory(body.workingDirectory);
             const major = readPositiveInteger(body.major);
             const dryRun = body.dryRun === true;
+            // Minor versions follow-up (2026-07-05) — same endpoint
+            // and pre-flight for both bump kinds; only the
+            // next-tag computation differs.
+            const bump: "patch" | "minor" =
+              body.bump === "minor" ? "minor" : "patch";
             if (workingDirectory.length === 0) {
               sendJson(res, 400, {
                 ok: false,
@@ -3127,7 +3134,7 @@ function createTagPatchVersionPlugin(): VitePlugin {
               sendJson(res, 200, {
                 ok: false,
                 reason:
-                  "Working tree is not clean. Commit or stash uncommitted changes before tagging a patch version."
+                  `Working tree is not clean. Commit or stash uncommitted changes before tagging a ${bump} version.`
               });
               return;
             }
@@ -3153,7 +3160,7 @@ function createTagPatchVersionPlugin(): VitePlugin {
               sendJson(res, 200, {
                 ok: false,
                 reason:
-                  `${baseTag} is not reachable from HEAD. Check out a commit on the v${major} line before tagging a patch.`
+                  `${baseTag} is not reachable from HEAD. Check out a commit on the v${major} line before tagging a ${bump}.`
               });
               return;
             }
@@ -3189,13 +3196,13 @@ function createTagPatchVersionPlugin(): VitePlugin {
                 reason:
                   `HEAD is already tagged (${existingHeadTags.join(", ")}). ` +
                   `Tagging another version at the same commit would make git describe tie-break unpredictably. ` +
-                  `Make one or more commits past this tag before Tag Patch Version.`
+                  `Make one or more commits past this tag before tagging a version.`
               });
               return;
             }
             const listResult = await runHostCommand({
               command: "git",
-              args: ["tag", "--list", "v*.0.*"],
+              args: ["tag", "--list", "v*.*.*"],
               cwd: workingDirectory
             });
             if (listResult.exitCode !== 0) {
@@ -3209,11 +3216,14 @@ function createTagPatchVersionPlugin(): VitePlugin {
               .split("\n")
               .map((line) => line.trim())
               .filter((line) => line.length > 0);
-            const next = computeNextPatchTag(tags, major);
+            const next =
+              bump === "minor"
+                ? computeNextMinorTag(tags, major)
+                : computeNextPatchTag(tags, major);
             if (!next.ok || !next.nextTag) {
               sendJson(res, 200, {
                 ok: false,
-                reason: next.reason ?? "Could not compute next patch tag."
+                reason: next.reason ?? `Could not compute next ${bump} tag.`
               });
               return;
             }

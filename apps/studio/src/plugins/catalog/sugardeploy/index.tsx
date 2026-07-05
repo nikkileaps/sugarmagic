@@ -416,6 +416,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     | { phase: "failed"; reason: string };
   const [tagPatchModalState, setTagPatchModalState] =
     useState<TagPatchModalState>(null);
+  // Minor versions follow-up (2026-07-05) — which bump kind the
+  // tag modal is driving; same modal + saga for both.
+  const [tagBumpKind, setTagBumpKind] = useState<"patch" | "minor">("patch");
 
   // Story 46.12 — live git tag list driving the version history
   // sub-rows. Plugin state tracks only major-version suffixes (a
@@ -1745,17 +1748,18 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   // pre-flight check (git on PATH, clean tree, base tag reachable
   // from HEAD) and returns the next patch tag without creating it.
   // No side effects in this phase.
-  async function openTagPatchModalAndPrepare() {
+  async function openTagPatchModalAndPrepare(bump: "patch" | "minor" = "patch") {
     if (!gameProject) return;
     const major = gameProject.majorVersion;
     const workingDirectory =
       getDeploymentSettings(gameProject).workingDirectory ?? "";
+    setTagBumpKind(bump);
     setTagPatchModalState({ phase: "checking" });
     try {
       const response = await fetch("/__sugardeploy/tag-patch-version", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workingDirectory, major, dryRun: true })
+        body: JSON.stringify({ workingDirectory, major, dryRun: true, bump })
       });
       const payload = (await response.json()) as {
         ok: boolean;
@@ -1795,7 +1799,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       const response = await fetch("/__sugardeploy/tag-patch-version", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workingDirectory, major })
+        body: JSON.stringify({ workingDirectory, major, bump: tagBumpKind })
       });
       const payload = (await response.json()) as {
         ok: boolean;
@@ -2669,9 +2673,16 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               <Button
                 size="xs"
                 variant="default"
-                onClick={() => void openTagPatchModalAndPrepare()}
+                onClick={() => void openTagPatchModalAndPrepare("patch")}
               >
                 Tag Patch Version
+              </Button>
+              <Button
+                size="xs"
+                variant="default"
+                onClick={() => void openTagPatchModalAndPrepare("minor")}
+              >
+                Tag Minor Version
               </Button>
               <Button
                 size="xs"
@@ -3831,7 +3842,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           if (tagPatchModalBusy) return;
           setTagPatchModalState(null);
         }}
-        title="Tag Patch Version"
+        title={tagBumpKind === "minor" ? "Tag Minor Version" : "Tag Patch Version"}
         centered
         size="lg"
         closeOnClickOutside={!tagPatchModalBusy}
@@ -3866,10 +3877,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         {tagPatchModalState?.phase === "ready" ? (
           <Stack>
             <Text size="sm">
-              A patch tag anchors a new commit to an existing major
-              version's deployment slot. No <Code>majorVersion</Code>{" "}
-              bump, no GCP project change, no commit — just{" "}
-              <Code>git tag</Code> at HEAD.
+              {tagBumpKind === "minor" ? (
+                <>
+                  A minor tag starts a new <Code>v{"{major}"}.x.0</Code>{" "}
+                  line on the existing major; subsequent patch tags
+                  increment within it. No <Code>majorVersion</Code> bump,
+                  no GCP project change, no commit — just{" "}
+                  <Code>git tag</Code> at HEAD.
+                </>
+              ) : (
+                <>
+                  A patch tag anchors a new commit to an existing major
+                  version's deployment slot. No <Code>majorVersion</Code>{" "}
+                  bump, no GCP project change, no commit — just{" "}
+                  <Code>git tag</Code> at HEAD.
+                </>
+              )}
             </Text>
             <Box
               p="sm"
