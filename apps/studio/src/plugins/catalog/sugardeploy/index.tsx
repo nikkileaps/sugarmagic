@@ -416,6 +416,15 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
     | { phase: "failed"; reason: string };
   const [tagPatchModalState, setTagPatchModalState] =
     useState<TagPatchModalState>(null);
+  // Minor versions follow-up (2026-07-05) — which bump kind the
+  // tag modal is driving; same modal + saga for both.
+  const [tagBumpKind, setTagBumpKind] = useState<"patch" | "minor">("patch");
+  // Version history: only the LATEST minor line of each major
+  // renders expanded; older minor lines collapse to one row.
+  // Keys are `${major}.${minor}`; presence = user toggled it open.
+  const [expandedMinorLines, setExpandedMinorLines] = useState<
+    Record<string, boolean>
+  >({});
 
   // Story 46.12 — live git tag list driving the version history
   // sub-rows. Plugin state tracks only major-version suffixes (a
@@ -1745,17 +1754,18 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
   // pre-flight check (git on PATH, clean tree, base tag reachable
   // from HEAD) and returns the next patch tag without creating it.
   // No side effects in this phase.
-  async function openTagPatchModalAndPrepare() {
+  async function openTagPatchModalAndPrepare(bump: "patch" | "minor" = "patch") {
     if (!gameProject) return;
     const major = gameProject.majorVersion;
     const workingDirectory =
       getDeploymentSettings(gameProject).workingDirectory ?? "";
+    setTagBumpKind(bump);
     setTagPatchModalState({ phase: "checking" });
     try {
       const response = await fetch("/__sugardeploy/tag-patch-version", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workingDirectory, major, dryRun: true })
+        body: JSON.stringify({ workingDirectory, major, dryRun: true, bump })
       });
       const payload = (await response.json()) as {
         ok: boolean;
@@ -1795,7 +1805,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
       const response = await fetch("/__sugardeploy/tag-patch-version", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workingDirectory, major })
+        body: JSON.stringify({ workingDirectory, major, bump: tagBumpKind })
       });
       const payload = (await response.json()) as {
         ok: boolean;
@@ -2669,9 +2679,16 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               <Button
                 size="xs"
                 variant="default"
-                onClick={() => void openTagPatchModalAndPrepare()}
+                onClick={() => void openTagPatchModalAndPrepare("patch")}
               >
                 Tag Patch Version
+              </Button>
+              <Button
+                size="xs"
+                variant="default"
+                onClick={() => void openTagPatchModalAndPrepare("minor")}
+              >
+                Tag Minor Version
               </Button>
               <Button
                 size="xs"
@@ -2728,11 +2745,24 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                   // Story 46.12 — patches for this major come from the
                   // live git tag list (versionTagsByMajor). Plugin
                   // state intentionally does NOT mirror patch tags;
-                  // git is the source of truth for `v{N}.0.M`.
+                  // git is the source of truth for `v{N}.{M}.{P}`.
                   const patches =
                     versionTagsByMajor?.find(
                       (group) => group.major === entry.version
                     )?.patches ?? [];
+                  // Group releases into minor lines; only the latest
+                  // line renders expanded (older lines collapse to a
+                  // toggleable summary row).
+                  const minorLines = new Map<number, typeof patches>();
+                  for (const release of patches) {
+                    const line = minorLines.get(release.minor) ?? [];
+                    line.push(release);
+                    minorLines.set(release.minor, line);
+                  }
+                  const sortedMinors = [...minorLines.keys()].sort(
+                    (a, b) => a - b
+                  );
+                  const latestMinor = sortedMinors[sortedMinors.length - 1];
                   return (
                     <Stack key={entry.key} gap={2}>
                       <Group
@@ -2756,20 +2786,72 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                         </Group>
                         <Code>{entry.gcpProjectId}</Code>
                       </Group>
-                      {patches.map((patch) => (
-                        <Group
-                          key={patch.tag}
-                          gap="xs"
-                          wrap="nowrap"
-                          align="center"
-                          pl="lg"
-                        >
-                          <Text size="xs" c="var(--sm-color-subtext)">
-                            +
-                          </Text>
-                          <Code>{patch.tag}</Code>
-                        </Group>
-                      ))}
+                      {sortedMinors.map((minor) => {
+                        const line = minorLines.get(minor) ?? [];
+                        const lineKey = `${entry.version}.${minor}`;
+                        // The latest minor line renders flat, exactly
+                        // like the pre-minor history. Older lines get
+                        // an accordion header row; clicking toggles
+                        // the patch rows indented underneath.
+                        if (minor === latestMinor) {
+                          return line.map((release) => (
+                            <Group
+                              key={release.tag}
+                              gap="xs"
+                              wrap="nowrap"
+                              align="center"
+                              pl="lg"
+                            >
+                              <Text size="xs" c="var(--sm-color-subtext)">
+                                +
+                              </Text>
+                              <Code>{release.tag}</Code>
+                            </Group>
+                          ));
+                        }
+                        const expanded = expandedMinorLines[lineKey] === true;
+                        return (
+                          <Stack key={lineKey} gap={2}>
+                            <Group gap="xs" wrap="nowrap" align="center" pl="lg">
+                              <Text size="xs" c="var(--sm-color-subtext)">
+                                +
+                              </Text>
+                              <Button
+                                size="compact-xs"
+                                variant="subtle"
+                                color="gray"
+                                px={4}
+                                onClick={() =>
+                                  setExpandedMinorLines((prior) => ({
+                                    ...prior,
+                                    [lineKey]: !expanded
+                                  }))
+                                }
+                              >
+                                <Code>
+                                  v{entry.version}.{minor}.x
+                                </Code>
+                              </Button>
+                            </Group>
+                            {expanded
+                              ? line.map((release) => (
+                                  <Group
+                                    key={release.tag}
+                                    gap="xs"
+                                    wrap="nowrap"
+                                    align="center"
+                                    pl="xl"
+                                  >
+                                    <Text size="xs" c="var(--sm-color-subtext)">
+                                      +
+                                    </Text>
+                                    <Code>{release.tag}</Code>
+                                  </Group>
+                                ))
+                              : null}
+                          </Stack>
+                        );
+                      })}
                     </Stack>
                   );
                 });
@@ -3831,7 +3913,7 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
           if (tagPatchModalBusy) return;
           setTagPatchModalState(null);
         }}
-        title="Tag Patch Version"
+        title={tagBumpKind === "minor" ? "Tag Minor Version" : "Tag Patch Version"}
         centered
         size="lg"
         closeOnClickOutside={!tagPatchModalBusy}
@@ -3866,10 +3948,22 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
         {tagPatchModalState?.phase === "ready" ? (
           <Stack>
             <Text size="sm">
-              A patch tag anchors a new commit to an existing major
-              version's deployment slot. No <Code>majorVersion</Code>{" "}
-              bump, no GCP project change, no commit — just{" "}
-              <Code>git tag</Code> at HEAD.
+              {tagBumpKind === "minor" ? (
+                <>
+                  A minor tag starts a new <Code>v{"{major}"}.x.0</Code>{" "}
+                  line on the existing major; subsequent patch tags
+                  increment within it. No <Code>majorVersion</Code> bump,
+                  no GCP project change, no commit — just{" "}
+                  <Code>git tag</Code> at HEAD.
+                </>
+              ) : (
+                <>
+                  A patch tag anchors a new commit to an existing major
+                  version's deployment slot. No <Code>majorVersion</Code>{" "}
+                  bump, no GCP project change, no commit — just{" "}
+                  <Code>git tag</Code> at HEAD.
+                </>
+              )}
             </Text>
             <Box
               p="sm"

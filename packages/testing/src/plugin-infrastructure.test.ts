@@ -42,6 +42,7 @@ import {
   getDeployHistory,
   type DeployHistoryEntry,
   collectSecretEnvBindings,
+  computeNextMinorTag,
   computeNextPatchTag,
   createDefaultPublishTargetSettings,
   groupVersionTags,
@@ -3777,17 +3778,18 @@ describe("plugin infrastructure", () => {
     ).toBe(true);
   });
 
-  // Story 46.12 — patch-tag auto-increment + version-history grouping.
-  // The `v{major}.0.{patch}` scheme is the source of truth for which
-  // commit deploys to which Cloud Run + Netlify slot. Patches always
-  // anchor to an existing major (you can't patch a major that hasn't
-  // been cut), and gaps in the patch sequence never get reused.
+  // Story 46.12 (+ minor versions follow-up 2026-07-05) — tag
+  // auto-increment + version-history grouping. The
+  // `v{major}.{minor}.{patch}` scheme is the source of truth for
+  // which commit deploys to which Cloud Run + Netlify slot.
+  // Releases always anchor to an existing major (you can't tag a
+  // major that hasn't been cut), and gaps never get reused.
   it("parses well-formed version tags and rejects malformed ones", () => {
-    expect(parseVersionTag("v1.0.0")).toEqual({ major: 1, patch: 0, tag: "v1.0.0" });
-    expect(parseVersionTag("v2.0.7")).toEqual({ major: 2, patch: 7, tag: "v2.0.7" });
-    expect(parseVersionTag("  v3.0.1  ")).toEqual({ major: 3, patch: 1, tag: "v3.0.1" });
-    // Wrong shape — semver minor (the middle component must be `0`).
-    expect(parseVersionTag("v1.2.3")).toBeNull();
+    expect(parseVersionTag("v1.0.0")).toEqual({ major: 1, minor: 0, patch: 0, tag: "v1.0.0" });
+    expect(parseVersionTag("v2.0.7")).toEqual({ major: 2, minor: 0, patch: 7, tag: "v2.0.7" });
+    expect(parseVersionTag("  v3.0.1  ")).toEqual({ major: 3, minor: 0, patch: 1, tag: "v3.0.1" });
+    // Full semver with a minor component.
+    expect(parseVersionTag("v1.2.3")).toEqual({ major: 1, minor: 2, patch: 3, tag: "v1.2.3" });
     // Missing leading `v`.
     expect(parseVersionTag("1.0.0")).toBeNull();
     // Pre-release suffix not supported.
@@ -3796,22 +3798,38 @@ describe("plugin infrastructure", () => {
     expect(parseVersionTag("v0.0.1")).toBeNull();
   });
 
-  it("auto-increments to the next patch tag from the highest existing patch", () => {
+  it("auto-increments to the next patch tag from the highest existing release", () => {
     expect(computeNextPatchTag(["v1.0.0"], 1)).toEqual({
       ok: true,
       nextTag: "v1.0.1",
-      highestExistingPatch: 0
+      highestExistingTag: "v1.0.0"
     });
     expect(computeNextPatchTag(["v1.0.0", "v1.0.1"], 1)).toEqual({
       ok: true,
       nextTag: "v1.0.2",
-      highestExistingPatch: 1
+      highestExistingTag: "v1.0.1"
     });
-    expect(computeNextPatchTag(["v1.0.0", "v1.0.1", "v1.0.2"], 1)).toEqual({
+    // Patches increment WITHIN the highest minor.
+    expect(computeNextPatchTag(["v1.0.0", "v1.0.3", "v1.1.0"], 1)).toEqual({
       ok: true,
-      nextTag: "v1.0.3",
-      highestExistingPatch: 2
+      nextTag: "v1.1.1",
+      highestExistingTag: "v1.1.0"
     });
+  });
+
+  it("auto-increments to the next minor tag, resetting patch", () => {
+    expect(computeNextMinorTag(["v1.0.0"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.1.0",
+      highestExistingTag: "v1.0.0"
+    });
+    expect(computeNextMinorTag(["v1.0.0", "v1.1.0", "v1.1.4"], 1)).toEqual({
+      ok: true,
+      nextTag: "v1.2.0",
+      highestExistingTag: "v1.1.4"
+    });
+    // Requires the cut-major base like patches do.
+    expect(computeNextMinorTag(["v1.0.0"], 2).ok).toBe(false);
   });
 
   it("is gap-tolerant: never reuses a freed patch number", () => {
@@ -3821,21 +3839,26 @@ describe("plugin infrastructure", () => {
     expect(computeNextPatchTag(["v1.0.0", "v1.0.1", "v1.0.3"], 1)).toEqual({
       ok: true,
       nextTag: "v1.0.4",
-      highestExistingPatch: 3
+      highestExistingTag: "v1.0.3"
     });
   });
 
-  it("ignores patches of other majors when computing next patch", () => {
-    // v2's patches must not influence v1's next patch.
+  it("ignores releases of other majors when computing next tags", () => {
+    // v2's releases must not influence v1's next patch.
     expect(computeNextPatchTag(["v1.0.0", "v2.0.0", "v2.0.5"], 1)).toEqual({
       ok: true,
       nextTag: "v1.0.1",
-      highestExistingPatch: 0
+      highestExistingTag: "v1.0.0"
     });
     expect(computeNextPatchTag(["v1.0.0", "v2.0.0", "v2.0.5"], 2)).toEqual({
       ok: true,
       nextTag: "v2.0.6",
-      highestExistingPatch: 5
+      highestExistingTag: "v2.0.5"
+    });
+    expect(computeNextMinorTag(["v1.0.0", "v2.0.0", "v2.3.1"], 2)).toEqual({
+      ok: true,
+      nextTag: "v2.4.0",
+      highestExistingTag: "v2.3.1"
     });
   });
 
@@ -3866,14 +3889,16 @@ describe("plugin infrastructure", () => {
       {
         major: 2,
         baseTag: "v2.0.0",
-        patches: [{ major: 2, patch: 1, tag: "v2.0.1" }]
+        patches: [{ major: 2, minor: 0, patch: 1, tag: "v2.0.1" }]
       },
       {
         major: 1,
         baseTag: "v1.0.0",
         patches: [
-          { major: 1, patch: 1, tag: "v1.0.1" },
-          { major: 1, patch: 2, tag: "v1.0.2" }
+          { major: 1, minor: 0, patch: 1, tag: "v1.0.1" },
+          { major: 1, minor: 0, patch: 2, tag: "v1.0.2" },
+          // Minor releases interleave in true (minor, patch) order.
+          { major: 1, minor: 2, patch: 3, tag: "v1.2.3" }
         ]
       }
     ]);
