@@ -328,6 +328,20 @@ export function createDefaultStartMenu(projectId: string): MenuDefinition {
         props: {
           text: literalUIValue("Settings")
         }
+      }),
+      // Plan 061 §061.3 — back to the site's Play page. The web
+      // runtime hides this button entirely when no Play page URL
+      // is configured, so it's safe in every default menu.
+      createUINode("button", {
+        nodeId: `${projectId}:ui:start-menu:exit`,
+        styleId: "button-primary",
+        layout: createDefaultUILayoutProps({ padding: 14, width: "fill" }),
+        props: {
+          text: literalUIValue("Exit")
+        },
+        events: {
+          onClick: { action: "exit-to-site" }
+        }
       })
     ]
   });

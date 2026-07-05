@@ -77,7 +77,8 @@ const UI_ACTION_OPTIONS = [
   "load-game",
   "open-inventory",
   "open-caster",
-  "open-episodes"
+  "open-episodes",
+  "exit-to-site"
 ].map((value) => ({ value, label: value }));
 
 const nodeKindOptions: Array<{ value: UINodeKind; label: string }> = [

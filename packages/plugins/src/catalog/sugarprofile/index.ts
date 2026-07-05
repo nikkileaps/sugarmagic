@@ -62,6 +62,10 @@ export interface SugarProfilePluginConfig {
    *  (default) = per-origin localStorage, exactly the pre-061
    *  behavior. Only consulted when `enableLogin` is true. */
   sessionCookieDomain: string;
+  /** Plan 061 §061.3 — the game's launch page ("Play" screen on
+   *  the site). Start-menu `exit-to-site` buttons navigate here;
+   *  they hide entirely when this is empty. */
+  playPageUrl: string;
 }
 
 export function normalizeSugarProfilePluginConfig(
@@ -81,7 +85,9 @@ export function normalizeSugarProfilePluginConfig(
     sessionCookieDomain:
       typeof config?.sessionCookieDomain === "string"
         ? config.sessionCookieDomain.trim()
-        : ""
+        : "",
+    playPageUrl:
+      typeof config?.playPageUrl === "string" ? config.playPageUrl.trim() : ""
   };
 }
 
@@ -184,6 +190,16 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       description:
         "Parent domain the auth session cookie is scoped to (e.g. `.wordlarkhollow.com`) so a launch page and the deployed game share one session across subdomains. Leave empty to keep the session in per-origin browser storage.",
       placeholder: ".example.com",
+      showWhen: { configKey: "enableLogin", equals: true }
+    },
+    {
+      configKey: "playPageUrl",
+      label: "Play Page URL",
+      type: "text",
+      group: "Supabase Project",
+      description:
+        "The game's launch page on the site (where sign-in lives). Start-menu Exit buttons navigate here; they stay hidden while this is empty.",
+      placeholder: "https://example.com/play",
       showWhen: { configKey: "enableLogin", equals: true }
     }
   ],

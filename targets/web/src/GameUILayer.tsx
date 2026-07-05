@@ -59,6 +59,9 @@ export interface GameUILayerProps {
    *  now; in-game the identity is a whisper, not a pill). Null =
    *  no identity plugin active; render nothing. */
   userStore: ObservableValue<User | null> | null;
+  /** Plan 061 §061.3 — true when a Play page URL is configured;
+   *  gates authored `exit-to-site` buttons. */
+  exitToSiteAvailable: boolean;
 }
 
 /**
@@ -76,6 +79,21 @@ function isNodeVisible(node: UINode, savePresent: boolean): boolean {
   return true;
 }
 
+/** Plan 061 §061.3 — a button wired to `exit-to-site` is only
+ *  meaningful when the game has a configured Play page to exit TO.
+ *  Hide it (whole subtree) when unconfigured so authored menus stay
+ *  portable across games with and without a site. */
+function isExitButtonWithoutTarget(
+  node: UINode,
+  exitToSiteAvailable: boolean
+): boolean {
+  return (
+    !exitToSiteAvailable &&
+    node.kind === "button" &&
+    node.events.onClick?.action === "exit-to-site"
+  );
+}
+
 function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
   return {
     ...compileLayout(node.layout, node.anchor),
@@ -87,16 +105,20 @@ function renderNode(input: {
   node: UINode;
   theme: UITheme;
   savePresent: boolean;
+  exitToSiteAvailable: boolean;
 }): JSX.Element | null {
-  const { node, theme, savePresent } = input;
+  const { node, theme, savePresent, exitToSiteAvailable } = input;
   // Story 47.10.5 — skip the whole subtree when the visibility
   // rule fails. Returning null keeps the parent container layout
   // intact (gap-based flex collapses cleanly around omitted
   // children).
   if (!isNodeVisible(node, savePresent)) return null;
+  if (isExitButtonWithoutTarget(node, exitToSiteAvailable)) return null;
   const style = nodeStyle(node, theme);
   const children = node.children
-    .map((child) => renderNode({ node: child, theme, savePresent }))
+    .map((child) =>
+      renderNode({ node: child, theme, savePresent, exitToSiteAvailable })
+    )
     .filter((child): child is JSX.Element => child !== null);
 
   if (node.kind === "text") {
@@ -215,7 +237,8 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
           ? renderNode({
               node: props.hudDefinition.root,
               theme: props.theme,
-              savePresent: state.savePresent
+              savePresent: state.savePresent,
+              exitToSiteAvailable: props.exitToSiteAvailable
             })
           : null}
         {visibleMenu ? (
@@ -234,7 +257,8 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
             {renderNode({
               node: visibleMenu.root,
               theme: props.theme,
-              savePresent: state.savePresent
+              savePresent: state.savePresent,
+              exitToSiteAvailable: props.exitToSiteAvailable
             })}
             {/* Plan 061 §061.2 — quiet identity line, start menu
                 only. The launch page owns account management; this

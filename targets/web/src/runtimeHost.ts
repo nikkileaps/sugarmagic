@@ -59,7 +59,9 @@ import {
 } from "@sugarmagic/domain";
 import {
   type RuntimePluginEnvironment,
-  createResolvedRuntimePluginManager
+  SUGARPROFILE_PLUGIN_ID,
+  createResolvedRuntimePluginManager,
+  normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
   createCapsuleFallback,
@@ -1224,6 +1226,9 @@ export function createWebRuntimeHost(
   // Plan 059 §059.4 — the Episodes screen's derived view model,
   // built once per boot from Scenes + campaign.progression.
   let bootEpisodesViewModel: EpisodesViewModel | null = null;
+  // Plan 061 §061.3 — the site's Play page, read from SugarProfile
+  // config at boot. Empty = no Exit affordance anywhere.
+  let bootPlayPageUrl = "";
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1606,6 +1611,19 @@ export function createWebRuntimeHost(
       state.pluginRuntimeEnvironment ?? {},
       state.pluginBootPayloads ?? {}
     );
+    // Plan 061 §061.3 — the Exit affordance's target. Only
+    // meaningful when SugarProfile is enabled (the Play page is
+    // where its auth lives), so reading it from that plugin's
+    // config is deliberate.
+    const sugarProfileConfiguration = state.pluginConfigurations.find(
+      (configuration) =>
+        configuration.pluginId === SUGARPROFILE_PLUGIN_ID &&
+        configuration.enabled
+    );
+    bootPlayPageUrl = sugarProfileConfiguration
+      ? normalizeSugarProfilePluginConfig(sugarProfileConfiguration.config)
+          .playPageUrl
+      : "";
     if (state.fallbackIdentityProvider && state.fallbackSaveStore) {
       const resolvedIdentity = resolveActiveIdentityProvider(
         pluginManager,
@@ -2121,7 +2139,35 @@ export function createWebRuntimeHost(
       // gameplaySession is assigned later in this same start() call; the
       // closures capture the live binding so dispatch (post-boot) sees it.
       onToggleInventory: () => gameplaySession?.toggleInventory(),
-      onToggleCaster: () => gameplaySession?.toggleCaster()
+      onToggleCaster: () => gameplaySession?.toggleCaster(),
+      // Plan 061 §061.3 — force-save first (same respect for
+      // progress as the Scene-advance exit), then leave for the
+      // site. No reload dance: navigation replaces the document.
+      onExitToSite: () => {
+        if (bootPlayPageUrl.length === 0) return;
+        void (async () => {
+          try {
+            const exitBindings = activeProvidersStore.getSnapshot();
+            const exitUser = exitBindings?.identityProvider.currentUser();
+            const exitPayload = getCurrentSavePayload();
+            if (exitBindings && exitUser && exitPayload) {
+              await exitBindings.saveStore.save(exitUser.userId, {
+                userId: exitUser.userId,
+                lastPlayed: new Date().toISOString(),
+                schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+                writtenByVersion: SUGARMAGIC_VERSION,
+                payload: exitPayload
+              });
+            }
+          } catch (error) {
+            console.warn(
+              "[web-runtime] exit-to-site force-save failed; leaving anyway.",
+              error
+            );
+          }
+          ownerWindow.location.href = bootPlayPageUrl;
+        })();
+      }
     });
     world.addSystem(
       new UIContextSystem({
@@ -2482,7 +2528,10 @@ export function createWebRuntimeHost(
           uiStateStore?.setState({ episodesOpen: false });
         },
         // Plan 061 §061.2 — quiet start-menu identity line.
-        userStore
+        userStore,
+        // Plan 061 §061.3 — authored exit buttons render only
+        // when there's a Play page to exit to.
+        exitToSiteAvailable: bootPlayPageUrl.length > 0
       })
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay
