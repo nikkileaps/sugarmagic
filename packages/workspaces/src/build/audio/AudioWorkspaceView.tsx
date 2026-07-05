@@ -660,12 +660,6 @@ export function useAudioWorkspaceView(
                 onUpdateMusicBindings({ creditsThemeMusicId: value ?? null })
               }
             />
-            <Text size="xs" c="var(--sm-color-overlay0)">
-              Music cues loop best with playback mode Loop and category
-              Music. Menu music fades to the in-game track (or silence)
-              when play starts. Scenes can override the in-game track in
-              Manage Scenes.
-            </Text>
           </Stack>
         </PanelSection>
       </Inspector>
