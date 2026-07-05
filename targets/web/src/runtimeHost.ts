@@ -947,6 +947,9 @@ export function createWebRuntimeHost(
   }
   function hostContinueGame(): void {
     gameStateStore.setState({ lifecycle: "playing" });
+    // Plan 059 §059.1 — crossfade menu theme -> in-game track
+    // (usually silence). Idempotent when resuming from pause.
+    gameplaySession?.setMusicTrack(sceneMusicCueIdForSession);
   }
 
   // Plan 058 §058.5 — quest Scene-progression actions land here
@@ -1089,6 +1092,8 @@ export function createWebRuntimeHost(
     // clears "dialogue"; this catches everything else.
     uiStateStore.setState({ activeOverlayMenuKey: null });
     gameStateStore.setState({ lifecycle: "start-menu" });
+    // Plan 059 §059.1 — the menu theme returns on quit-to-menu.
+    gameplaySession?.setMusicTrack(menuMusicCueIdForSession);
   }
 
   let world: World | null = null;
@@ -1161,6 +1166,10 @@ export function createWebRuntimeHost(
   /** The migrated Scene list from the last start() — the advance
    *  action resolves "next by order" against it. */
   let bootScenes: Scene[] = [];
+  // Plan 059 §059.1 — the two music tracks for this session; the
+  // lifecycle handlers below switch the channel between them.
+  let sceneMusicCueIdForSession: string | null = null;
+  let menuMusicCueIdForSession: string | null = null;
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1726,13 +1735,17 @@ export function createWebRuntimeHost(
     const activeRegionContents = activeRegion
       ? composeRegionContents(activeRegion, activeScene)
       : null;
-    // Plan 059 §059.1 — background music resolution: the Scene's
-    // audioOverride shadows the project default; null = silence.
-    // (Closes Plan 058's audioOverride deferral.)
-    const backgroundMusicCueId =
+    // Plan 059 §059.1 — music resolution. In-game: the Scene's
+    // audioOverride shadows the project default; null = silence
+    // (the intended default — BotW model, sounds cued by
+    // actions). Menu: its own slot, playing over the start menu
+    // and returning on quit-to-menu. (Closes Plan 058's
+    // audioOverride deferral.)
+    sceneMusicCueIdForSession =
       activeScene?.audioOverride?.backgroundMusicId ??
       state.musicBindings?.defaultBackgroundMusicId ??
       null;
+    menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls
@@ -2109,7 +2122,12 @@ export function createWebRuntimeHost(
       activeRegion,
       activeScene,
       onSceneAction: hostHandleSceneAction,
-      backgroundMusicCueId,
+      // Initial track by boot lifecycle: menu theme while the
+      // start menu is up, else the in-game track (usually null).
+      backgroundMusicCueId:
+        bootLifecycle === "start-menu"
+          ? menuMusicCueIdForSession
+          : sceneMusicCueIdForSession,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,

@@ -85,6 +85,13 @@ export type AudioMixerSettings = Record<"master" | SoundCategory, number>;
  * shadows `defaultBackgroundMusicId` per Scene.
  */
 export interface MusicBindings {
+  /** Plays over the start menu; crossfades away when gameplay
+   *  starts and returns on quit-to-menu. */
+  menuMusicId: string | null;
+  /** OPTIONAL continuous in-game track. The intended default is
+   *  null — silence during gameplay, with sounds cued by actions
+   *  (BotW / Elder Scrolls model; a conditional-music system is
+   *  a future story). Scene `audioOverride` shadows per Scene. */
   defaultBackgroundMusicId: string | null;
   /** Played under the end-of-Scene credits roll (Plan 059 §059.3). */
   creditsThemeMusicId: string | null;
@@ -98,6 +105,7 @@ export function normalizeMusicBindings(
       ? value.trim()
       : null;
   return {
+    menuMusicId: coerce(input?.menuMusicId),
     defaultBackgroundMusicId: coerce(input?.defaultBackgroundMusicId),
     creditsThemeMusicId: coerce(input?.creditsThemeMusicId)
   };

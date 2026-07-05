@@ -273,6 +273,12 @@ export interface RuntimeGameplaySessionController {
   setDebugBillboardsEnabled: (enabled: boolean) => void;
   getDebugHudCardContributions: () => DebugHudCardContribution[];
   getDebugHudSnapshot: () => DebugHudGameplaySessionSnapshot;
+  /** Plan 059 §059.1 — the host switches the music channel at
+   *  lifecycle transitions (menu theme vs in-game track). */
+  setMusicTrack: (
+    cueDefinitionId: string | null,
+    options?: { fadeOutMs?: number }
+  ) => void;
   toggleInventory: () => void;
   toggleCaster: () => void;
   dispose: () => void;
@@ -1994,6 +2000,10 @@ export function createRuntimeGameplaySessionController(
       return debugHudCardContributions;
     },
     getDebugHudSnapshot,
+    setMusicTrack(cueDefinitionId, musicOptions) {
+      audioController.setMusicTrack(cueDefinitionId, musicOptions);
+      flushAudioCommands();
+    },
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
     dispose() {

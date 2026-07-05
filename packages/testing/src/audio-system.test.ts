@@ -384,21 +384,25 @@ describe("sound system", () => {
 
   it("normalizes music bindings (Plan 059 §059.1)", () => {
     expect(normalizeMusicBindings(null)).toEqual({
+      menuMusicId: null,
       defaultBackgroundMusicId: null,
       creditsThemeMusicId: null
     });
     expect(
       normalizeMusicBindings({
+        menuMusicId: "cue:title-theme",
         defaultBackgroundMusicId: "  cue:town-theme  ",
         creditsThemeMusicId: ""
       })
     ).toEqual({
+      menuMusicId: "cue:title-theme",
       defaultBackgroundMusicId: "cue:town-theme",
       creditsThemeMusicId: null
     });
     // Fresh projects carry the empty bindings.
     const project = createDefaultGameProject("Audio Test", "audio-test");
     expect(project.musicBindings).toEqual({
+      menuMusicId: null,
       defaultBackgroundMusicId: null,
       creditsThemeMusicId: null
     });

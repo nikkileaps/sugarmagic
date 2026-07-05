@@ -618,8 +618,22 @@ export function useAudioWorkspaceView(
           <Stack gap="xs">
             <Select
               size="xs"
-              label="Default background music"
+              label="Menu music"
               placeholder="(none)"
+              clearable
+              data={soundCueDefinitions.map((cue) => ({
+                value: cue.definitionId,
+                label: cue.displayName
+              }))}
+              value={musicBindings?.menuMusicId ?? null}
+              onChange={(value) =>
+                onUpdateMusicBindings({ menuMusicId: value ?? null })
+              }
+            />
+            <Select
+              size="xs"
+              label="In-game music (optional)"
+              placeholder="(silence — recommended)"
               clearable
               data={soundCueDefinitions.map((cue) => ({
                 value: cue.definitionId,
@@ -648,8 +662,9 @@ export function useAudioWorkspaceView(
             />
             <Text size="xs" c="var(--sm-color-overlay0)">
               Music cues loop best with playback mode Loop and category
-              Music. Scenes can override the background track in Manage
-              Scenes.
+              Music. Menu music fades to the in-game track (or silence)
+              when play starts. Scenes can override the in-game track in
+              Manage Scenes.
             </Text>
           </Stack>
         </PanelSection>
