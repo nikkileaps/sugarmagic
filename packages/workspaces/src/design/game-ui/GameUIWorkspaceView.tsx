@@ -377,6 +377,10 @@ export function useGameUIWorkspaceView(
   const previewInitialMenuKey =
     selection.kind === "menu" ? selectedMenu?.menuKey ?? null : null;
 
+  // Plan 059 Defers ("Credits preview + styled credits design"):
+  // when credits outgrow plain text, a live roll preview renders
+  // HERE for selection.kind === "credits" — same slot the menu
+  // preview uses, reusing target-web's showCreditsRoll.
   const centerPanel = (
     <Box h="100%" p="md" style={{ minHeight: 0 }}>
       <Box

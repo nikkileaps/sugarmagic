@@ -82,6 +82,7 @@ The deferred trigger from Plan 058 fires here: `Scene.audioOverride` exists with
 
 ## Defers
 
+- **Credits preview + styled credits design** (2026-07-05) — the credits editor lives in the Game UI workspace precisely so it can grow into a designed screen: a live roll preview in the workspace's center panel (the same slot menus preview in, reusing `showCreditsRoll` from target-web), then styling (fonts / colors / images / timing) beyond plain sections. v1 ships text-section editing only. Revisit trigger: the first time credits content outgrows plain text (a logo, a styled heading, a timing complaint), build the preview first — it makes every subsequent styling decision checkable without an in-game round trip. Code comment at the revisit point in `packages/workspaces/src/design/game-ui/GameUIWorkspaceView.tsx` (centerPanel).
 - **Conditional / ambient music system** (2026-07-05, nikki) — the intended in-game music model is BotW / Elder Scrolls: SILENCE as the default gameplay state, with music as punctuation — stingers on timers, condition combinations, actions. 059.1 ships the substrate (the music channel + menu-music slot + optional per-Scene track) with silence as the recommended in-game default; the conditional trigger system (condition evaluation, cooldowns, priorities) is its own future story.
 - **Sandbox replay mode** (the central tension above) — its own epic when we get there; 059 only preserves the insertion points.
 - Per-Scene credits, next-episode teaser reels, Telltale-style choice stats.
