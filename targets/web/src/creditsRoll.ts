@@ -30,6 +30,21 @@ const MS_PER_VIEWPORT = 9000;
 const MIN_ROLL_MS = 4000;
 const MAX_ROLL_MS = 90000;
 
+/** Plan 059 §059.6 — exported so Studio's live credits preview
+ *  paces identically to the runtime roll. */
+export function computeCreditsRollDurationMs(
+  travelPx: number,
+  viewportPx: number
+): number {
+  return Math.max(
+    MIN_ROLL_MS,
+    Math.min(
+      MAX_ROLL_MS,
+      (travelPx / Math.max(1, viewportPx)) * MS_PER_VIEWPORT
+    )
+  );
+}
+
 export interface CreditsRollHandle {
   /** Resolves when the roll finishes or the player skips. */
   done: Promise<void>;
@@ -138,10 +153,7 @@ export function showCreditsRoll(
   );
   const contentHeight = scroller.scrollHeight;
   const travel = viewportHeight + contentHeight;
-  const durationMs = Math.max(
-    MIN_ROLL_MS,
-    Math.min(MAX_ROLL_MS, (travel / viewportHeight) * MS_PER_VIEWPORT)
-  );
+  const durationMs = computeCreditsRollDurationMs(travel, viewportHeight);
 
   let settled = false;
   let timer = 0;

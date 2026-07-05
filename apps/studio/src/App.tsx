@@ -26,6 +26,7 @@ import {
 } from "@mantine/core";
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
+import { CreditsPreview } from "./CreditsPreview";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -2190,6 +2191,11 @@ export function App() {
         .getState()
         .updateSession(updateCreditsInSession(currentSession, credits));
     },
+    renderCreditsPreview: () => (
+      <CreditsPreview
+        credits={session?.gameProject.creditsDefinition ?? { sections: [] }}
+      />
+    ),
     playerDefinition,
     spellDefinitions,
     itemDefinitions,

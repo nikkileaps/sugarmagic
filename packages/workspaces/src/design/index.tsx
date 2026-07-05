@@ -88,6 +88,8 @@ export interface DesignProductModeViewProps {
   /** Plan 059 §059.2 — credits editor lives in Game UI. */
   creditsDefinition: CreditsDefinition;
   onUpdateCredits: (credits: CreditsDefinition) => void;
+  /** Plan 059 §059.6 — live credits roll preview. */
+  renderCreditsPreview: () => ReactNode;
   mechanics: MechanicsDefinition;
   extraWorkspaceItems: Array<{
     workspaceKind: string;
@@ -159,6 +161,7 @@ export function useDesignProductModeView(
     uiTheme,
     creditsDefinition,
     onUpdateCredits,
+    renderCreditsPreview,
     mechanics,
     extraWorkspaceItems,
     npcInteractionOptions,
@@ -278,7 +281,8 @@ export function useDesignProductModeView(
     creditsDefinition,
     onUpdateCredits,
     onCommand,
-    renderPreview: renderGameUIPreview
+    renderPreview: renderGameUIPreview,
+    renderCreditsPreview
   });
 
   const mechanicsView = useMechanicsWorkspaceView({

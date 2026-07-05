@@ -58,6 +58,9 @@ export interface GameUIWorkspaceViewProps {
   onUpdateCredits: (credits: CreditsDefinition) => void;
   onCommand: (command: SemanticCommand) => void;
   renderPreview: (options: { initialVisibleMenuKey: string | null }) => React.ReactNode;
+  /** Plan 059 §059.6 — live credits roll preview for the center
+   *  panel while editing credits. */
+  renderCreditsPreview: () => React.ReactNode;
 }
 
 const nodeKindOptions: Array<{ value: UINodeKind; label: string }> = [
@@ -137,7 +140,8 @@ export function useGameUIWorkspaceView(
     creditsDefinition,
     onUpdateCredits,
     onCommand,
-    renderPreview
+    renderPreview,
+    renderCreditsPreview
   } = props;
   const [selection, setSelection] = useState<Selection>(() => ({
     kind: "menu",
@@ -377,10 +381,8 @@ export function useGameUIWorkspaceView(
   const previewInitialMenuKey =
     selection.kind === "menu" ? selectedMenu?.menuKey ?? null : null;
 
-  // Plan 059 Defers ("Credits preview + styled credits design"):
-  // when credits outgrow plain text, a live roll preview renders
-  // HERE for selection.kind === "credits" — same slot the menu
-  // preview uses, reusing target-web's showCreditsRoll.
+  // Plan 059 §059.6 — editing credits shows the live roll
+  // preview; everything else shows the menu/HUD preview session.
   const centerPanel = (
     <Box h="100%" p="md" style={{ minHeight: 0 }}>
       <Box
@@ -393,7 +395,9 @@ export function useGameUIWorkspaceView(
             "radial-gradient(circle at top, rgba(93, 117, 162, 0.28), rgba(10, 10, 18, 0.98))"
         }}
       >
-        {renderPreview({ initialVisibleMenuKey: previewInitialMenuKey })}
+        {selection.kind === "credits"
+          ? renderCreditsPreview()
+          : renderPreview({ initialVisibleMenuKey: previewInitialMenuKey })}
       </Box>
     </Box>
   );
