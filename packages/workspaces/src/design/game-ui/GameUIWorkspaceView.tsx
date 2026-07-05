@@ -63,6 +63,23 @@ export interface GameUIWorkspaceViewProps {
   renderCreditsPreview: () => React.ReactNode;
 }
 
+/** The runtime's registered UI action keys (see runtime-core
+ *  ui-actions/registerDefaultUIActions). Kept as a typed list so
+ *  authored buttons pick real actions instead of free text. */
+const UI_ACTION_OPTIONS = [
+  "start-new-game",
+  "continue-game",
+  "pause-game",
+  "resume-game",
+  "quit-to-menu",
+  "load-region",
+  "save-game",
+  "load-game",
+  "open-inventory",
+  "open-caster",
+  "open-episodes"
+].map((value) => ({ value, label: value }));
+
 const nodeKindOptions: Array<{ value: UINodeKind; label: string }> = [
   { value: "container", label: "Container" },
   { value: "text", label: "Text" },
@@ -582,17 +599,21 @@ export function useGameUIWorkspaceView(
             </Stack>
           ) : null}
           {selectedNode.kind === "button" ? (
-            <TextInput
+            <Select
               label="On Click Action"
-              value={selectedNode.events.onClick?.action ?? ""}
-              onChange={(event) =>
+              searchable
+              data={UI_ACTION_OPTIONS}
+              value={selectedNode.events.onClick?.action ?? null}
+              onChange={(value) => {
+                if (!value) return;
                 updateSelectedNode({
                   events: {
                     ...selectedNode.events,
-                    onClick: { action: event.currentTarget.value }
+                    // Preserve args (load-region carries regionId).
+                    onClick: { ...selectedNode.events.onClick, action: value }
                   }
-                })
-              }
+                });
+              }}
             />
           ) : null}
           <Select

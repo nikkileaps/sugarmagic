@@ -156,9 +156,12 @@ import { showEntryTitleSequence } from "./sceneTransitionCard";
 import { showCreditsRoll } from "./creditsRoll";
 import { showSceneRoutingScreen } from "./sceneRoutingScreen";
 import {
+  consumeOpenEpisodesFlag,
   consumeSceneEntryFlag,
+  markOpenEpisodesForNextBoot,
   markSceneEntryForNextBoot
 } from "./save/sceneEntry";
+import type { EpisodesViewModel } from "./ui/EpisodesScreen";
 import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
@@ -199,6 +202,9 @@ export interface WebRuntimeStartState {
    * lifts at start().
    */
   scenes?: Scene[];
+  /** Plan 059 §059.4 — player-facing label for Scenes ("Scene" /
+   *  "Chapter" / ...), used by the Episodes screen. */
+  scenesUiLabel?: string | null;
   /**
    * Plan 058 §058.2 — which Scene to boot into. Studio Preview
    * passes the editor's ambient Scene selection; the deployed
@@ -1076,9 +1082,7 @@ export function createWebRuntimeHost(
 
     const choice = await showSceneRoutingScreen(ownerWindow.document, {
       nextSceneTitle: target?.displayName ?? null,
-      // Becomes "Back to Episodes" when the Episodes menu lands
-      // (Plan 059 §059.4).
-      menuLabel: "Back to Menu"
+      menuLabel: `Back to ${bootEpisodesViewModel?.scenesUiLabel ?? "Scene"}s`
     });
 
     if (choice === "next" && target) {
@@ -1087,9 +1091,11 @@ export function createWebRuntimeHost(
       // force-written above, so boot restores into the new Scene.
       sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
       markSceneEntryForNextBoot();
+    } else {
+      // Plan 059 §059.4 — land on the start menu with the
+      // Episodes screen opened.
+      markOpenEpisodesForNextBoot();
     }
-    // "menu" reloads plain: the start menu shows and menu music
-    // resumes through the normal boot path.
     ownerWindow.location.reload();
   }
   function hostPauseGame(): void {
@@ -1217,6 +1223,9 @@ export function createWebRuntimeHost(
   let creditsThemeCueIdForSession: string | null = null;
   let bootCreditsDefinition: CreditsDefinition | null = null;
   let bootGameTitle: string | null = null;
+  // Plan 059 §059.4 — the Episodes screen's derived view model,
+  // built once per boot from Scenes + campaign.progression.
+  let bootEpisodesViewModel: EpisodesViewModel | null = null;
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1773,6 +1782,26 @@ export function createWebRuntimeHost(
         campaignRestore?.currentSceneId ?? state.activeSceneId ?? null
     });
     activeSceneIdForSave = activeScene?.sceneId ?? null;
+    // Plan 059 §059.4 — Episodes screen view model. Forward-only
+    // v1: only the frontier ("current") card is enterable.
+    bootEpisodesViewModel = {
+      scenesUiLabel: state.scenesUiLabel ?? "Scene",
+      entries: [...migratedContent.scenes]
+        .sort((left, right) => left.sceneOrder - right.sceneOrder)
+        .map((scene) => ({
+          sceneId: scene.sceneId,
+          displayName: scene.displayName,
+          description: scene.description,
+          status:
+            scene.sceneId === activeSceneIdForSave
+              ? ("current" as const)
+              : completedSceneIds.includes(scene.sceneId)
+                ? ("completed" as const)
+                : unlockedSceneIds.has(scene.sceneId)
+                  ? ("unlocked" as const)
+                  : ("locked" as const)
+        }))
+    };
     const activeRegion = getActiveRegion(
       migratedContent.regions,
       resolvedActiveRegionId
@@ -2058,6 +2087,11 @@ export function createWebRuntimeHost(
     });
     if (bootLifecycle === "start-menu") {
       showStartMenu();
+      // Plan 059 §059.4 — "Back to Episodes" after the finale's
+      // credits: land on the start menu with Episodes opened.
+      if (consumeOpenEpisodesFlag()) {
+        uiStateStore.setState({ episodesOpen: true });
+      }
     } else {
       gameStateStore.setState({ lifecycle: "playing" });
     }
@@ -2439,6 +2473,15 @@ export function createWebRuntimeHost(
           gameplaySession?.audioController.emitEvent("ui.hover", {
             instanceKey: `ui.hover:${action?.action ?? "passive"}`
           });
+        },
+        // Plan 059 §059.4 — built-in Episodes screen.
+        episodes: bootEpisodesViewModel,
+        onEpisodesContinue: () => {
+          uiStateStore?.setState({ episodesOpen: false });
+          hostContinueGame();
+        },
+        onEpisodesClose: () => {
+          uiStateStore?.setState({ episodesOpen: false });
         }
       })
     );

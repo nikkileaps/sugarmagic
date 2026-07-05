@@ -694,6 +694,8 @@ async function postPreviewBootMessage(
       // (explicit activeSceneId threading lands with 058.2's
       // selector).
       scenes: session.gameProject.scenes,
+      // Plan 059 §059.4 — Episodes screen label.
+      scenesUiLabel: session.gameProject.scenesUiLabel,
       // Ambient Context: Preview boots whichever Scene is active
       // in the editor — no separate "preview which Scene?" picker.
       activeSceneId: session.activeSceneId,

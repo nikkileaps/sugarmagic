@@ -109,7 +109,13 @@ export function bootPreviewSession(
         uiStateStore: stateStore,
         gameStateStore,
         onAction: (action) => actionRegistry.dispatch(action, null),
-        onHover: () => {}
+        onHover: () => {},
+        // Plan 059 §059.4 — the UI-preview session has no
+        // campaign state; the Episodes screen only renders in the
+        // real runtime host.
+        episodes: null,
+        onEpisodesContinue: () => {},
+        onEpisodesClose: () => {}
       })
     );
   }

@@ -111,6 +111,8 @@ interface PreviewBootMessage {
   regions: RegionDocument[];
   /** Plan 058 §058.1 — narrative Scenes for overlay composition. */
   scenes?: Scene[];
+  /** Plan 059 §059.4 — Episodes screen label. */
+  scenesUiLabel?: string | null;
   /** Plan 058 §058.2 — the editor's active Scene (Ambient
    *  Context); Preview boots into it. */
   activeSceneId?: string | null;
@@ -258,6 +260,7 @@ window.addEventListener("message", (event) => {
       void host.start({
         regions: data.regions,
         scenes: data.scenes,
+        scenesUiLabel: data.scenesUiLabel,
         activeSceneId: data.activeSceneId,
         activeRegionId: data.activeRegionId,
         activeEnvironmentId: data.activeEnvironmentId,

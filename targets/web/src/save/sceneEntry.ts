@@ -29,3 +29,23 @@ export function consumeSceneEntryFlag(): boolean {
   if (present) sessionStorage.removeItem(SCENE_ENTRY_SESSION_STORAGE_KEY);
   return present;
 }
+
+/**
+ * Plan 059 §059.4 — "Back to Episodes" after the final Scene's
+ * credits: the reload lands on the start menu with the Episodes
+ * screen auto-opened.
+ */
+export const OPEN_EPISODES_SESSION_STORAGE_KEY = "sugarmagic.open-episodes";
+
+export function markOpenEpisodesForNextBoot(): void {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.setItem(OPEN_EPISODES_SESSION_STORAGE_KEY, "1");
+}
+
+export function consumeOpenEpisodesFlag(): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  const present =
+    sessionStorage.getItem(OPEN_EPISODES_SESSION_STORAGE_KEY) === "1";
+  if (present) sessionStorage.removeItem(OPEN_EPISODES_SESSION_STORAGE_KEY);
+  return present;
+}
