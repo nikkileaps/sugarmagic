@@ -152,7 +152,13 @@ import {
   createCampaignProgressionParticipant,
   type CampaignProgressionSlice
 } from "./save/campaignProgressionParticipant";
-import { showSceneTransitionCard } from "./sceneTransitionCard";
+import { showEntryTitleSequence } from "./sceneTransitionCard";
+import { showCreditsRoll } from "./creditsRoll";
+import { showSceneRoutingScreen } from "./sceneRoutingScreen";
+import {
+  consumeSceneEntryFlag,
+  markSceneEntryForNextBoot
+} from "./save/sceneEntry";
 import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
@@ -209,6 +215,9 @@ export interface WebRuntimeStartState {
   /** Plan 059 §059.2 — credits roll content; empty sections =
    *  the exit sequence skips the roll. */
   creditsDefinition?: CreditsDefinition | null;
+  /** Plan 059 §059.3 — the game's display title, shown as the
+   *  first card of the entry title sequence. */
+  gameTitle?: string | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload
@@ -990,31 +999,46 @@ export function createWebRuntimeHost(
     const target = action.sceneId
       ? ordered.find((scene) => scene.sceneId === action.sceneId) ?? null
       : ordered[currentIndex + 1] ?? null;
-    if (!target) {
-      console.warn(
-        "[web-runtime] advanceToNextScene: no target Scene " +
-          `(current=${activeSceneIdForSave}, requested=${action.sceneId ?? "next"}).`
-      );
-      return;
-    }
-    if (target.sceneId === activeSceneIdForSave) return;
+    // Plan 059 §059.3 — a null target is the FINAL-Scene case,
+    // not an error: the exit sequence still plays (credits!) and
+    // routes back to the menu.
+    if (target && target.sceneId === activeSceneIdForSave) return;
 
-    if (
-      activeSceneIdForSave &&
-      !completedSceneIds.includes(activeSceneIdForSave)
-    ) {
-      completedSceneIds.push(activeSceneIdForSave);
+    hostMarkSceneCompleted(activeSceneIdForSave);
+    if (target) {
+      // Manual unlock so the advance survives condition
+      // re-evaluation on every future boot.
+      if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
+        manuallyUnlockedSceneIds.push(target.sceneId);
+      }
+      activeSceneIdForSave = target.sceneId;
     }
-    // Manual unlock so the advance survives condition
-    // re-evaluation on every future boot.
-    if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
-      manuallyUnlockedSceneIds.push(target.sceneId);
-    }
-    activeSceneIdForSave = target.sceneId;
-    void advanceSceneAndReload(target);
+    void runExitSequenceAndReload(target);
   }
 
-  async function advanceSceneAndReload(target: Scene): Promise<void> {
+  /**
+   * Plan 059 §059.3 — the single Scene-completion hook. When the
+   * sandbox replay mode lands (Plan 059 central tension), the
+   * per-Scene end-state snapshot capture inserts HERE — one
+   * place, not scattered across advance paths.
+   */
+  function hostMarkSceneCompleted(sceneId: string | null): void {
+    if (!sceneId) return;
+    if (!completedSceneIds.includes(sceneId)) {
+      completedSceneIds.push(sceneId);
+    }
+  }
+
+  /**
+   * Plan 059 §059.3 — the exit sequence: force-save, credits roll
+   * with the credits theme, then Netflix routing (filling Next
+   * button auto-advancing, or a return button after the final
+   * Scene). The reload lands either in the next Scene (entry
+   * title sequence marked) or on the menu.
+   */
+  async function runExitSequenceAndReload(
+    target: Scene | null
+  ): Promise<void> {
     // Force-write the save NOW — the reload can't wait for the
     // next 5s autosave tick or the advance would be lost.
     const bindings = activeProvidersStore.getSnapshot();
@@ -1031,27 +1055,41 @@ export function createWebRuntimeHost(
         });
       } catch (error) {
         console.warn(
-          "[web-runtime] advanceToNextScene: save write failed; reloading anyway (advance may be lost).",
+          "[web-runtime] scene advance: save write failed; continuing anyway (advance may be lost).",
           error
         );
       }
     } else {
       console.warn(
-        "[web-runtime] advanceToNextScene: no active store/user; Scene advance will not persist."
+        "[web-runtime] scene advance: no active store/user; Scene advance will not persist."
       );
     }
-    if (target.transitionConfig) {
-      await showSceneTransitionCard(
-        ownerWindow.document,
-        target.transitionConfig
-      );
+
+    // Credits (skipped entirely when none are authored), with the
+    // credits theme under them and silence after.
+    const credits = bootCreditsDefinition;
+    if (credits && credits.sections.length > 0) {
+      gameplaySession?.setMusicTrack(creditsThemeCueIdForSession);
+      await showCreditsRoll(ownerWindow.document, credits).done;
+      gameplaySession?.setMusicTrack(null);
     }
-    // Same sessionStorage handshake New Game uses: the next boot
-    // skips the start menu and goes straight to playing. The save
-    // was force-written above, so boot restores directly into the
-    // new Scene — the transition feels continuous instead of
-    // detouring through the menu.
-    sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+
+    const choice = await showSceneRoutingScreen(ownerWindow.document, {
+      nextSceneTitle: target?.displayName ?? null,
+      // Becomes "Back to Episodes" when the Episodes menu lands
+      // (Plan 059 §059.4).
+      menuLabel: "Back to Menu"
+    });
+
+    if (choice === "next" && target) {
+      // Skip the start menu AND play the entry title sequence on
+      // the next boot (game title -> Scene title). Save was
+      // force-written above, so boot restores into the new Scene.
+      sessionStorage.setItem(FRESH_START_SESSION_STORAGE_KEY, "1");
+      markSceneEntryForNextBoot();
+    }
+    // "menu" reloads plain: the start menu shows and menu music
+    // resumes through the normal boot path.
     ownerWindow.location.reload();
   }
   function hostPauseGame(): void {
@@ -1174,6 +1212,11 @@ export function createWebRuntimeHost(
   // lifecycle handlers below switch the channel between them.
   let sceneMusicCueIdForSession: string | null = null;
   let menuMusicCueIdForSession: string | null = null;
+  // Plan 059 §059.3 — exit/entry sequence inputs from the boot
+  // payload.
+  let creditsThemeCueIdForSession: string | null = null;
+  let bootCreditsDefinition: CreditsDefinition | null = null;
+  let bootGameTitle: string | null = null;
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1750,6 +1793,11 @@ export function createWebRuntimeHost(
       state.musicBindings?.defaultBackgroundMusicId ??
       null;
     menuMusicCueIdForSession = state.musicBindings?.menuMusicId ?? null;
+    // Plan 059 §059.3 — exit/entry sequence inputs.
+    creditsThemeCueIdForSession =
+      state.musicBindings?.creditsThemeMusicId ?? null;
+    bootCreditsDefinition = state.creditsDefinition ?? null;
+    bootGameTitle = state.gameTitle ?? null;
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls
@@ -2012,6 +2060,17 @@ export function createWebRuntimeHost(
       showStartMenu();
     } else {
       gameStateStore.setState({ lifecycle: "playing" });
+    }
+    // Plan 059 §059.3 — entry title sequence (game title -> Scene
+    // title) over the fresh boot, ONLY when the reload was a
+    // Scene entry (advance or, later, Episodes-menu play). Plain
+    // Continue / hard refresh boots without the marker and goes
+    // straight to gameplay — titles never replay mid-Scene.
+    if (consumeSceneEntryFlag()) {
+      void showEntryTitleSequence(ownerWindow.document, {
+        gameTitle: bootGameTitle,
+        sceneCard: activeScene?.transitionConfig ?? null
+      });
     }
     uiActionRegistry = createUIActionRegistry();
     registerDefaultUIActions(uiActionRegistry, {

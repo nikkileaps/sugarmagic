@@ -139,6 +139,8 @@ function buildBootJsonPayload(
     musicBindings: gameProject.musicBindings,
     // Plan 059 §059.2 — credits roll content.
     creditsDefinition: gameProject.creditsDefinition,
+    // Plan 059 §059.3 — entry title sequence's first card.
+    gameTitle: gameProject.displayName,
     assetSources: snapshot.assetSources,
     // Story 47.10.5 — authored fresh-start record. When a returning
     // player loads with no save (or just clicked New Game + reset),

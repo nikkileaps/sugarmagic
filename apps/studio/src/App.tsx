@@ -719,6 +719,8 @@ async function postPreviewBootMessage(
       musicBindings: session.gameProject.musicBindings,
       // Plan 059 §059.2 — credits roll content.
       creditsDefinition: session.gameProject.creditsDefinition,
+      // Plan 059 §059.3 — entry title sequence's first card.
+      gameTitle: session.gameProject.displayName,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"

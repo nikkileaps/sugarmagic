@@ -57,11 +57,60 @@ export const SCENE_CARD_FONT_FAMILY =
  * replaces the document, and leaving the card up masks the
  * reload flash.
  */
-export function showSceneTransitionCard(
+/**
+ * Plan 059 §059.3 — the ENTRY title sequence, played over a
+ * freshly booted Scene (doubles as a loading mask): game title
+ * card, then the Scene's own title card, each fading in, holding,
+ * fading out. Unlike `showSceneTransitionCard` the overlays are
+ * REMOVED on completion — gameplay continues underneath in the
+ * same document. Resolves when the sequence has fully cleared.
+ */
+export async function showEntryTitleSequence(
+  ownerDocument: Document,
+  options: {
+    gameTitle: string | null;
+    sceneCard: SceneTransitionConfig | null;
+  }
+): Promise<void> {
+  if (options.gameTitle) {
+    await playRemovableCard(ownerDocument, {
+      titleText: options.gameTitle,
+      subtitleText: null,
+      durationMs: 2200,
+      fadeStyle: "black"
+    });
+  }
+  if (options.sceneCard) {
+    await playRemovableCard(ownerDocument, options.sceneCard);
+  }
+}
+
+const CARD_FADE_MS = 400;
+
+function playRemovableCard(
   ownerDocument: Document,
   config: SceneTransitionConfig
 ): Promise<void> {
-  const FADE_IN_MS = 400;
+  const overlay = buildCardOverlay(ownerDocument, config);
+  ownerDocument.body.appendChild(overlay);
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+    });
+    window.setTimeout(() => {
+      overlay.style.opacity = "0";
+      window.setTimeout(() => {
+        overlay.remove();
+        resolve();
+      }, CARD_FADE_MS);
+    }, CARD_FADE_MS + config.durationMs);
+  });
+}
+
+function buildCardOverlay(
+  ownerDocument: Document,
+  config: SceneTransitionConfig
+): HTMLDivElement {
   const overlay = ownerDocument.createElement("div");
   overlay.setAttribute("data-scene-transition-card", "");
   overlay.style.cssText = [
@@ -75,7 +124,7 @@ export function showSceneTransitionCard(
     "gap: 12px",
     `background: ${SCENE_CARD_FADE_BACKGROUNDS[config.fadeStyle]}`,
     "opacity: 0",
-    `transition: opacity ${FADE_IN_MS}ms ease-in-out`,
+    `transition: opacity ${CARD_FADE_MS}ms ease-in-out`,
     "pointer-events: all",
     "user-select: none",
     `font-family: ${SCENE_CARD_FONT_FAMILY}`,
@@ -106,15 +155,23 @@ export function showSceneTransitionCard(
     overlay.appendChild(subtitle);
   }
 
-  ownerDocument.body.appendChild(overlay);
   // Swallow input while the card is up.
   overlay.addEventListener("keydown", (event) => event.stopPropagation(), true);
+  return overlay;
+}
+
+export function showSceneTransitionCard(
+  ownerDocument: Document,
+  config: SceneTransitionConfig
+): Promise<void> {
+  const overlay = buildCardOverlay(ownerDocument, config);
+  ownerDocument.body.appendChild(overlay);
 
   return new Promise((resolve) => {
     // Next frame so the opacity transition actually animates.
     requestAnimationFrame(() => {
       overlay.style.opacity = "1";
     });
-    window.setTimeout(resolve, FADE_IN_MS + config.durationMs);
+    window.setTimeout(resolve, CARD_FADE_MS + config.durationMs);
   });
 }

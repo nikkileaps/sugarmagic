@@ -137,6 +137,8 @@ interface PreviewBootMessage {
   musicBindings?: MusicBindings | null;
   /** Plan 059 §059.2 — credits roll content. */
   creditsDefinition?: CreditsDefinition | null;
+  /** Plan 059 §059.3 — entry title sequence's first card. */
+  gameTitle?: string | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -294,6 +296,7 @@ window.addEventListener("message", (event) => {
         audioMixer: data.audioMixer,
         musicBindings: data.musicBindings,
         creditsDefinition: data.creditsDefinition,
+        gameTitle: data.gameTitle,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
