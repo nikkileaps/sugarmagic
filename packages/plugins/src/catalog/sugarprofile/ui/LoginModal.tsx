@@ -1,15 +1,20 @@
 /**
  * packages/plugins/src/catalog/sugarprofile/ui/LoginModal.tsx
  *
- * Purpose: SugarProfile-contributed login modal for the published-
- * web bundle. Mantine-styled Sign In + Sign Up tabs, email/password
- * fields, inline error display. When mounted in "upgrade" mode for
- * an anonymous user, the Sign In tab calls
- * `linkAnonymousToCredentials` instead of `signIn` so the
- * underlying userId is preserved through the upgrade — per-user
- * state keyed on userId survives.
+ * Purpose: SugarProfile's REQUIRED-sign-in fallback modal.
+ * Mantine-styled Sign In + Sign Up tabs, email/password fields,
+ * inline error display. Blocks until a session exists — no close
+ * affordance.
  *
- * Implements: Plan 047 §Story 47.7.5
+ * Plan 061 §061.2 trimmed this from the Plan 047 original: the
+ * "upgrade" mode (anonymous -> credentialed via
+ * linkAnonymousToCredentials), the Sign In pill, and the
+ * SignedInBadge are GONE from the game surface. Auth chrome lives
+ * on the launch page now (the Palia model); this modal mounts only
+ * when anonymous-first is OFF and a visitor arrives with no
+ * session (direct URL to a game that requires accounts).
+ *
+ * Implements: Plan 047 §Story 47.7.5; Plan 061 §061.2
  *
  * Status: active
  */
@@ -28,21 +33,17 @@ import {
 } from "@mantine/core";
 import type { UserIdentityProvider } from "@sugarmagic/runtime-core";
 
-export type LoginModalMode =
-  | "required"  // no user; modal blocks until sign-in / sign-up
-  | "upgrade"; // anonymous user; signIn becomes linkAnonymousToCredentials
+/** Plan 061 §061.2 — only the required mode survives; kept as a
+ *  type so call sites read explicitly. */
+export type LoginModalMode = "required";
 
 export interface LoginModalProps {
   provider: UserIdentityProvider;
   mode: LoginModalMode;
-  /** Called when the user dismisses the modal in upgrade mode. In
-   *  required mode, the close affordance is hidden — pass `undefined`
-   *  to suppress the X button entirely. */
-  onClose?: () => void;
 }
 
 export function LoginModal(props: LoginModalProps) {
-  const { provider, mode, onClose } = props;
+  const { provider } = props;
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,15 +92,8 @@ export function LoginModal(props: LoginModalProps) {
     setBusy(true);
     setError(null);
     try {
-      if (mode === "upgrade") {
-        // The current user is anonymous; merge in the credentials so
-        // userId is preserved across the upgrade.
-        await provider.linkAnonymousToCredentials({ email, password });
-      } else {
-        await provider.signIn({ email, password });
-      }
+      await provider.signIn({ email, password });
       resetForm();
-      onClose?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -117,7 +111,6 @@ export function LoginModal(props: LoginModalProps) {
     try {
       await provider.signUp({ email, password });
       resetForm();
-      onClose?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -128,21 +121,15 @@ export function LoginModal(props: LoginModalProps) {
   return (
     <Modal
       opened
-      onClose={onClose ?? (() => undefined)}
-      title={mode === "upgrade" ? "Upgrade Account" : "Sign In to Play"}
+      onClose={() => undefined}
+      title="Sign In to Play"
       centered
-      withCloseButton={mode === "upgrade" && Boolean(onClose)}
-      closeOnClickOutside={mode === "upgrade"}
-      closeOnEscape={mode === "upgrade"}
+      withCloseButton={false}
+      closeOnClickOutside={false}
+      closeOnEscape={false}
       size="sm"
     >
       <Stack gap="md">
-        {mode === "upgrade" ? (
-          <Text size="sm" c="dimmed">
-            Add an email + password to your anonymous account. Your
-            progress will carry over.
-          </Text>
-        ) : null}
         <Tabs
           value={tab}
           onChange={(value) => {
@@ -201,18 +188,13 @@ export function LoginModal(props: LoginModalProps) {
         ) : null}
 
         <Group justify="flex-end">
-          {mode === "upgrade" && onClose ? (
-            <Button variant="subtle" onClick={onClose} disabled={busy}>
-              Cancel
-            </Button>
-          ) : null}
           {tab === "signin" ? (
             <Button
               onClick={() => void handleSignIn()}
               loading={busy}
               disabled={!email || !password}
             >
-              {mode === "upgrade" ? "Upgrade" : "Sign In"}
+              Sign In
             </Button>
           ) : (
             <Button

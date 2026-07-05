@@ -2480,7 +2480,9 @@ export function createWebRuntimeHost(
         },
         onEpisodesClose: () => {
           uiStateStore?.setState({ episodesOpen: false });
-        }
+        },
+        // Plan 061 §061.2 — quiet start-menu identity line.
+        userStore
       })
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay

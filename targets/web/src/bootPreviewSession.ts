@@ -115,7 +115,9 @@ export function bootPreviewSession(
         // real runtime host.
         episodes: null,
         onEpisodesContinue: () => {},
-        onEpisodesClose: () => {}
+        onEpisodesClose: () => {},
+        // Plan 061 §061.2 — no identity in the UI-preview session.
+        userStore: null
       })
     );
   }

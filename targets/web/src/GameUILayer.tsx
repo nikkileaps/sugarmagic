@@ -16,8 +16,10 @@ import type {
 } from "@sugarmagic/domain";
 import type {
   GameStateStore,
+  ObservableValue,
   UIContextStore,
-  UIStateStore
+  UIStateStore,
+  User
 } from "@sugarmagic/runtime-core";
 import { compileLayout } from "./ui/layout";
 import {
@@ -52,6 +54,11 @@ export interface GameUILayerProps {
   episodes: EpisodesViewModel | null;
   onEpisodesContinue: () => void;
   onEpisodesClose: () => void;
+  /** Plan 061 §061.2 — the signed-in user, shown as a quiet line
+   *  on the START MENU only (auth chrome lives on the launch page
+   *  now; in-game the identity is a whisper, not a pill). Null =
+   *  no identity plugin active; render nothing. */
+  userStore: ObservableValue<User | null> | null;
 }
 
 /**
@@ -158,6 +165,13 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
     props.gameStateStore.getState,
     props.gameStateStore.getState
   );
+  // Plan 061 §061.2 — hooks can't be conditional, so absent stores
+  // get inert stand-ins.
+  const user = useSyncExternalStore(
+    props.userStore?.subscribe ?? (() => () => {}),
+    props.userStore?.getSnapshot ?? (() => null),
+    props.userStore?.getSnapshot ?? (() => null)
+  );
   // Plan 054 §054.4 Pass C — derive the menu key to render
   // from lifecycle first (start-menu / paused render their
   // canonical menu definitions), then fall through to the
@@ -222,6 +236,29 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
               theme: props.theme,
               savePresent: state.savePresent
             })}
+            {/* Plan 061 §061.2 — quiet identity line, start menu
+                only. The launch page owns account management; this
+                is the whole in-game account surface. */}
+            {visibleMenu.menuKey === "start-menu" && user ? (
+              <div
+                data-sugarmagic-identity-line
+                style={{
+                  position: "absolute",
+                  bottom: 14,
+                  left: 0,
+                  right: 0,
+                  textAlign: "center",
+                  fontSize: 12,
+                  letterSpacing: "0.08em",
+                  opacity: 0.5,
+                  pointerEvents: "none"
+                }}
+              >
+                {user.isAnonymous
+                  ? "Playing as guest"
+                  : `Playing as ${user.displayName ?? user.email ?? "player"}`}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {/* Plan 059 §059.4 — built-in Episodes screen, above the
