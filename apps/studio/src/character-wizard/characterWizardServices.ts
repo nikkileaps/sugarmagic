@@ -137,7 +137,11 @@ export function createCharacterWizardServices(
       const skeleton: GeneratedSkeleton = generateStandardSkeleton(
         landmarks as RigLandmarks
       );
-      const segments = computeBoneSegments(skeleton);
+      let meshTopY = -Infinity;
+      for (let i = 1; i < extracted.positions.length; i += 3) {
+        if (extracted.positions[i]! > meshTopY) meshTopY = extracted.positions[i]!;
+      }
+      const segments = computeBoneSegments(skeleton, { meshTopY });
       const weights = await solveWeightsInWorker(
         extracted.positions,
         extracted.indices,

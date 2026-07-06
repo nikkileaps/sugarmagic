@@ -227,7 +227,14 @@ export interface BoneSegment {
 }
 
 export function computeBoneSegments(
-  skeleton: GeneratedSkeleton
+  skeleton: GeneratedSkeleton,
+  options: {
+    /** Top of the character mesh. When provided, the HEAD leaf
+     *  segment extends to the crown so big stylized heads weight
+     *  rigidly to the head bone instead of mixing with neck/chest
+     *  (the 2026-07-06 squashed-head fix). */
+    meshTopY?: number;
+  } = {}
 ): BoneSegment[] {
   const childrenOf = new Map<string, GeneratedBone[]>();
   for (const bone of skeleton.bones) {
@@ -248,6 +255,17 @@ export function computeBoneSegments(
         boneName: bone.name,
         start: bone.headPosition,
         end: children[0]!.headPosition
+      });
+    } else if (
+      bone.name === "DEF-head" &&
+      options.meshTopY !== undefined &&
+      options.meshTopY > bone.headPosition[1]
+    ) {
+      // The head owns everything from skull base to crown.
+      segments.push({
+        boneName: bone.name,
+        start: bone.headPosition,
+        end: [bone.headPosition[0], options.meshTopY, bone.headPosition[2]]
       });
     } else {
       // Leaf: extrapolate a short tip along the parent->head

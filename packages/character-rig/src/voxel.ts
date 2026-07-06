@@ -120,6 +120,41 @@ export function voxelizeMesh(mesh: MeshData, resolution: number): VoxelGrid {
     }
   }
 
+  // Voxel closing (Dionne & de Lasa): dilate the surface so
+  // near-touching shells (a jacket 1-2 cells off the body, a
+  // sleeve around an arm) merge into ONE connected solid —
+  // geodesic distances then flow directly between layers instead
+  // of detouring through wherever the shells happen to touch.
+  const dilated = new Uint8Array(grid.cells.length);
+  for (let z = 0; z < dims[2]; z += 1) {
+    for (let y = 0; y < dims[1]; y += 1) {
+      for (let x = 0; x < dims[0]; x += 1) {
+        if (grid.cells[voxelIndex(grid, x, y, z)] !== VOXEL_SURFACE) continue;
+        for (let dz = -1; dz <= 1; dz += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            for (let dx = -1; dx <= 1; dx += 1) {
+              const nx = x + dx;
+              const ny = y + dy;
+              const nz = z + dz;
+              if (
+                nx < 0 || ny < 0 || nz < 0 ||
+                nx >= dims[0] || ny >= dims[1] || nz >= dims[2]
+              ) {
+                continue;
+              }
+              dilated[voxelIndex(grid, nx, ny, nz)] = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  for (let index = 0; index < grid.cells.length; index += 1) {
+    if (dilated[index] && grid.cells[index] === VOXEL_EMPTY) {
+      grid.cells[index] = VOXEL_SURFACE;
+    }
+  }
+
   // Exterior flood fill from the padded boundary; unreached empty
   // cells are interior.
   const exterior = new Uint8Array(grid.cells.length);
