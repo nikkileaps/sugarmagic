@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Box, Group, Stack, Text, TextInput } from "@mantine/core";
+import { Box, Group, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
@@ -104,6 +104,9 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [error, setError] = useState<string | null>(null);
   const [previewSlot, setPreviewSlot] = useState<string | null>("idle");
   const [previewPlaying, setPreviewPlaying] = useState(true);
+  // Mirroring defaults ON — symmetric characters are the design
+  // center, so one drag places both sides (nikki, 2026-07-06).
+  const [mirroring, setMirroring] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Blob URLs created for preview; revoked on teardown.
   const blobUrlsRef = useRef<string[]>([]);
@@ -322,15 +325,26 @@ export function CharacterWizard(props: CharacterWizardProps) {
 
         {step === "joints" && sourceUrl && landmarks ? (
           <Stack gap="xs" style={{ flex: 1 }}>
-            <Text size="xs" c="var(--sm-color-subtext)">
-              Drag any marker that missed its joint. Right-drag to
-              orbit, scroll to zoom.
-            </Text>
+            <Group justify="space-between" align="center">
+              <Text size="xs" c="var(--sm-color-subtext)">
+                Drag any marker that missed its joint — hover names
+                it. Right-drag to orbit, scroll to zoom.
+              </Text>
+              <Switch
+                size="xs"
+                label="Mirror left/right"
+                checked={mirroring}
+                onChange={(event) =>
+                  setMirroring(event.currentTarget.checked)
+                }
+              />
+            </Group>
             <Box style={{ height: 380 }}>
               <MarkerViewport
                 modelUrl={sourceUrl}
                 landmarks={landmarks}
                 onChange={setLandmarks}
+                mirroring={mirroring}
               />
             </Box>
           </Stack>

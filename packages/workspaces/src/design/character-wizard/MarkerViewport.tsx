@@ -23,6 +23,37 @@ export interface MarkerViewportProps {
   modelUrl: string;
   landmarks: Record<string, [number, number, number]>;
   onChange: (landmarks: Record<string, [number, number, number]>) => void;
+  /** Plan 062 UX (nikki 2026-07-06): drag one side, the paired
+   *  marker mirrors across the symmetry plane; center markers
+   *  clamp onto it. */
+  mirroring: boolean;
+}
+
+/** Friendly labels shown while hovering/dragging a marker. */
+const LANDMARK_LABELS: Record<string, string> = {
+  pelvis: "Pelvis",
+  chest: "Chest",
+  neck: "Neck",
+  head: "Head",
+  shoulderLeft: "Left Shoulder",
+  elbowLeft: "Left Elbow",
+  wristLeft: "Left Wrist",
+  shoulderRight: "Right Shoulder",
+  elbowRight: "Right Elbow",
+  wristRight: "Right Wrist",
+  hipLeft: "Left Hip",
+  kneeLeft: "Left Knee",
+  ankleLeft: "Left Ankle",
+  hipRight: "Right Hip",
+  kneeRight: "Right Knee",
+  ankleRight: "Right Ankle"
+};
+
+/** Counterpart landmark across the symmetry plane, or null. */
+function mirrorPartner(name: string): string | null {
+  if (name.endsWith("Left")) return `${name.slice(0, -4)}Right`;
+  if (name.endsWith("Right")) return `${name.slice(0, -5)}Left`;
+  return null;
 }
 
 const MARKER_COLOR = 0x7aa2f7;
@@ -30,10 +61,13 @@ const MARKER_ACTIVE_COLOR = 0xf7768e;
 
 export function MarkerViewport(props: MarkerViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const labelRef = useRef<HTMLDivElement | null>(null);
   const landmarksRef = useRef(props.landmarks);
   landmarksRef.current = props.landmarks;
   const onChangeRef = useRef(props.onChange);
   onChangeRef.current = props.onChange;
+  const mirroringRef = useRef(props.mirroring);
+  mirroringRef.current = props.mirroring;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -125,6 +159,33 @@ export function MarkerViewport(props: MarkerViewportProps) {
       marker.scale.setScalar(markerScale);
     }
 
+    // Symmetry plane x: the average midpoint of all L/R pairs at
+    // mount (models are usually centered, but not always at 0).
+    let mirrorX = 0;
+    {
+      let sum = 0;
+      let pairs = 0;
+      for (const [name, position] of Object.entries(landmarksRef.current)) {
+        if (!name.endsWith("Left")) continue;
+        const partner = landmarksRef.current[mirrorPartner(name)!];
+        if (!partner) continue;
+        sum += (position[0] + partner[0]) / 2;
+        pairs += 1;
+      }
+      mirrorX = pairs > 0 ? sum / pairs : 0;
+    }
+
+    function setLabel(name: string | null) {
+      const label = labelRef.current;
+      if (!label) return;
+      if (name) {
+        label.textContent = LANDMARK_LABELS[name] ?? name;
+        label.style.opacity = "1";
+      } else {
+        label.style.opacity = "0";
+      }
+    }
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let dragging: THREE.Mesh | null = null;
@@ -153,6 +214,7 @@ export function MarkerViewport(props: MarkerViewportProps) {
       const hit = hits[0];
       if (hit) {
         dragging = hit.object as THREE.Mesh;
+        setLabel(dragging.userData.landmarkName as string);
         (dragging.material as THREE.MeshBasicMaterial).color.setHex(
           MARKER_ACTIVE_COLOR
         );
@@ -176,12 +238,39 @@ export function MarkerViewport(props: MarkerViewportProps) {
         applyCamera();
         return;
       }
-      if (!dragging) return;
+      if (!dragging) {
+        // Hover: name the marker under the cursor.
+        pointerToNdc(event);
+        raycaster.setFromCamera(pointer, camera);
+        const hover = raycaster.intersectObjects([...markerByName.values()])[0];
+        setLabel(
+          hover ? (hover.object.userData.landmarkName as string) : null
+        );
+        renderer.domElement.style.cursor = hover ? "grab" : "default";
+        return;
+      }
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
       const point = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(dragPlane, point)) {
-        dragging.position.copy(point);
+        const name = dragging.userData.landmarkName as string;
+        if (mirroringRef.current) {
+          const partnerName = mirrorPartner(name);
+          if (partnerName) {
+            dragging.position.copy(point);
+            const partner = markerByName.get(partnerName);
+            partner?.position.set(
+              2 * mirrorX - point.x,
+              point.y,
+              point.z
+            );
+          } else {
+            // Center-line marker: ride the symmetry plane.
+            dragging.position.set(mirrorX, point.y, point.z);
+          }
+        } else {
+          dragging.position.copy(point);
+        }
       }
     }
 
@@ -197,7 +286,19 @@ export function MarkerViewport(props: MarkerViewportProps) {
         dragging.position.y,
         dragging.position.z
       ];
+      if (mirroringRef.current) {
+        const partnerName = mirrorPartner(name);
+        const partner = partnerName ? markerByName.get(partnerName) : null;
+        if (partnerName && partner) {
+          next[partnerName] = [
+            partner.position.x,
+            partner.position.y,
+            partner.position.z
+          ];
+        }
+      }
       dragging = null;
+      setLabel(null);
       onChangeRef.current(next);
     }
 
@@ -255,8 +356,33 @@ export function MarkerViewport(props: MarkerViewportProps) {
 
   return (
     <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", borderRadius: 8, overflow: "hidden" }}
-    />
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        borderRadius: 8,
+        overflow: "hidden"
+      }}
+    >
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      <div
+        ref={labelRef}
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          padding: "4px 10px",
+          borderRadius: 6,
+          background: "rgba(20, 20, 31, 0.85)",
+          border: "1px solid var(--sm-panel-border, #333)",
+          color: "var(--sm-color-text, #e6e6f0)",
+          fontSize: 12,
+          fontWeight: 600,
+          pointerEvents: "none",
+          opacity: 0,
+          transition: "opacity 120ms ease"
+        }}
+      />
+    </div>
   );
 }
