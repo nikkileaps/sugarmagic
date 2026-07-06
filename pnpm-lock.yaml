@@ -127,6 +127,12 @@ importers:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)
 
+  packages/character-rig:
+    dependencies:
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../domain
+
   packages/domain: {}
 
   packages/io:
@@ -215,6 +221,9 @@ importers:
 
   packages/testing:
     dependencies:
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
