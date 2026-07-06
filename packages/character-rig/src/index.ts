@@ -61,3 +61,4 @@ export {
   type WeightSolveOptions,
   type SkinWeights
 } from "./weights";
+export { detectRigLandmarks } from "./detection";
