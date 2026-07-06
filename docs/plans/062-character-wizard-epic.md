@@ -1,6 +1,6 @@
 # Plan 062 — Character Wizard (rig, bind, animate — minutes not hours)
 
-Status: proposed (epic framing only; stories not yet written)
+Status: proposed
 Owner: nikki + claude
 Date: 2026-07-06
 
@@ -52,6 +52,52 @@ Layering (one-way deps, one source of truth, single enforcer):
 - **Clip storage duplication.** Copying clips per-project duplicates bytes across games in exchange for self-contained game roots (the invariant Plans 046/059 rely on). Acceptable; a shared-cache optimization would be an io concern invisible to everything else.
 - **Tails (phase 2)** ride the same seams: extra bone chain appended under the versioned rig contract's optional-extension rules, secondary motion generated procedurally per decision 4.
 
+## UX + component mapping (2026-07-06, nikki — grounded in code)
+
+The wizard lives in the EXISTING Player and NPC workspaces; no new workspace.
+
+- **Entry point**: a rig-icon button in the character preview's HUD overlay, next to the animation-slot selector and play/pause control. In code: the absolute top-left `Group` in `packages/workspaces/src/design/CharacterPreview.tsx` — the preview component SHARED by `PlayerWorkspaceView` and `NPCWorkspaceView`, so one button serves both. Same `Tooltip` + `ActionIcon` pattern as play/pause.
+- **The wizard is a modal stepper**: import -> joint markers -> generate/bind (worker, progress) -> preview -> finish. On finish it dismisses, and the workspace's animation slots are populated — the user immediately previews idle/walk/run with the existing selector.
+- **"Slots populate on close" uses only existing wiring**: the wizard's finish step commits definitions through the io import/commit family and updates `presentation.animationAssetBindings` via the existing `UpdatePlayerDefinition` command (NPC mirror likewise); `previewSlots` derivation + `designPreviewStore.setAnimationSlot` already drive the selector from those bindings.
+- **Component reuse (checked against `packages/ui/src/components/`)**: no wizard/stepper dialog exists (`CreateRegionDialog` / `ProjectManagerDialog` are one-off Modals) — so the stepper frame ships as a NEW REUSABLE `WizardDialog` in packages/ui (steps rail, content slot, back/next/finish, busy state), wizard-agnostic. Steps reuse `LabeledSlider`, `PanelSection`, theme tokens. `CharacterPreview` itself is reused AS the wizard's preview step (self-contained three scene taking model + slots + assetSources). The joint-marker step is the one new viewport, mirroring CharacterPreview's self-contained-scene architecture with the mask-paint raycaster pattern for dragging.
+
+## Stories
+
+### 062.1 — Standard rig contract + vendored clip library (domain + data)
+
+- `StandardRigDefinition` in domain: bone hierarchy, names, orientations, rest pose, `rigSchemaVersion` — Quaternius-universal-rig-compatible per decision 3. Types + normalizers only; the contract is the single source of truth.
+- Vendor the curated CC0 clips (idle/walk/run first; pin the Quaternius revision) as Studio-shipped data with the attribution file. Verify each vendored clip's tracks resolve against the rig contract (a test, not a hope).
+
+### 062.2 — character-rig package: weight solver + skeleton generation
+
+- New pure package `packages/character-rig` (depends on domain only; THREE-free, worker-safe): plain typed-array mesh structs; edge adapters three.js BufferGeometry <-> structs; skeleton generation from confirmed landmarks onto the rig contract; solid voxelization + geodesic-voxel weight solve behind the `WeightSolver` Strategy interface (falloff, 4-influence cap, smoothing passes).
+- Tests on synthetic meshes: cylinder-limb weight sanity, the two-legs-no-leak case, non-watertight tolerance.
+
+### 062.3 — Joint detection heuristics
+
+- A/T-pose landmark estimation (16 joints per the proposal) via symmetry + extremity analysis in character-rig. Only has to be decent — the wizard's markers are the correction loop (decision 5).
+- Tests against a small fixture set of stylized humanoid meshes, asserting landmarks land within tolerance.
+
+### 062.4 — Skinned-GLB writer + wizard commit (io)
+
+- GLB writer in `packages/io` (inverse of `readGlbChunks`): assemble the skinned model GLB — mesh + materials passthrough from the imported source, generated skeleton, weights. Vendored clips need no writer (already standard-rig GLBs; they are COPIED per decision 4).
+- Wizard commit function following the import-family shape: write model GLB into `assets/character-models/`, copy selected clips + attribution into `assets/character-animations/`, return `CharacterModelDefinition` + `CharacterAnimationDefinition`s for the session to commit through the normal command path.
+
+### 062.5 — `WizardDialog` reusable (ui)
+
+- Generic stepper-modal component in `packages/ui/src/components`: steps rail, per-step content slot, back/next/finish, busy/progress state, cancel-with-confirm. Wizard-agnostic; the character wizard is its first consumer.
+
+### 062.6 — The Character Wizard (workspaces + studio)
+
+- Rig button in the CharacterPreview HUD (both workspaces inherit).
+- Steps: import (reuse GLB file-picker machinery) -> joint markers (new self-contained marker viewport; drag to correct) -> generate (bind runs in a worker with progress, mirroring the asset-preload progress UX; weight-heatmap debug toggle) -> preview (reuse `CharacterPreview`) -> finish (commit via 062.4 + bind animation slots via the existing update commands).
+- Wizard state is wizard-local View state; nothing persists before finish; cancel leaves the project untouched.
+
+### 062.7 — Verify end-to-end
+
+- nikki's own Blender character through the whole path: import static GLB -> adjust a few markers -> generate -> preview idle/walk/run in the wizard -> finish -> slots populated in the workspace -> preview in Studio -> deploy -> character animates in prod (assets pipeline carries it with zero target work).
+- Regression: existing manually-imported character models + animations unaffected.
+
 ## Not in this epic
 
-Facial rigs, hand poses, IK targets, animation editing/blending tools, arbitrary body plans, ML-based detection. Stories for v1 will be written next, once this framing is agreed.
+Facial rigs, hand poses, IK targets, animation editing/blending tools, arbitrary body plans, ML-based detection. Tail support and procedural gait/personality sliders are phase 2 of this feature but OUT of this epic's stories — they ride the seams named above (rig-contract extension rules, `WeightSolver`/overlay seams, clip-vs-procedural layering).
