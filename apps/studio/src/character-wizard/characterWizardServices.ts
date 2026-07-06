@@ -1,0 +1,204 @@
+/**
+ * apps/studio/src/character-wizard/characterWizardServices.ts
+ *
+ * Plan 062 §062.6 — the Studio-side implementation of
+ * `CharacterWizardServices`: everything the wizard UI must not
+ * own itself (io, the solver worker, the vendored clip assets,
+ * session registration). The workspaces package sees only the
+ * interface.
+ *
+ * Vendored clips are bundled Vite assets straight out of
+ * vendor/quaternius-ual/ — the same files the standard-rig
+ * contract was generated from, fetched on demand and copied into
+ * the game project at commit (hips-scaled per character).
+ */
+
+import {
+  computeBoneSegments,
+  detectRigLandmarks,
+  generateStandardSkeleton,
+  getStandardRigHipHeight,
+  type GeneratedSkeleton,
+  type RigLandmarks,
+  type SkinWeights
+} from "@sugarmagic/character-rig";
+import {
+  buildSkinnedCharacterGlb,
+  commitCharacterWizardResult,
+  extractMeshFromGlb,
+  scaleClipHipsTranslation,
+  type GameRootDescriptor
+} from "@sugarmagic/io";
+import type {
+  CharacterAnimationDefinition,
+  CharacterModelDefinition
+} from "@sugarmagic/domain";
+import type {
+  CharacterWizardServices,
+  WizardGenerated,
+  WizardLandmarks
+} from "@sugarmagic/workspaces";
+import type { WeightSolveResponse } from "./weight-solver.worker";
+import idleClipUrl from "../../../../vendor/quaternius-ual/clips/Idle_Loop.glb?url";
+import walkClipUrl from "../../../../vendor/quaternius-ual/clips/Walk_Loop.glb?url";
+import runClipUrl from "../../../../vendor/quaternius-ual/clips/Jog_Fwd_Loop.glb?url";
+import attributionText from "../../../../vendor/quaternius-ual/ATTRIBUTION.md?raw";
+
+const SLOT_CLIPS: Array<{
+  slot: "idle" | "walk" | "run";
+  clipName: string;
+  url: string;
+}> = [
+  { slot: "idle", clipName: "Idle_Loop", url: idleClipUrl },
+  { slot: "walk", clipName: "Walk_Loop", url: walkClipUrl },
+  { slot: "run", clipName: "Jog_Fwd_Loop", url: runClipUrl }
+];
+
+export interface CharacterWizardServiceDeps {
+  getProjectContext: () => {
+    projectHandle: FileSystemDirectoryHandle;
+    descriptor: GameRootDescriptor;
+    projectId: string;
+  } | null;
+  /** Register the committed definitions on the authoring session. */
+  registerDefinitions: (
+    model: CharacterModelDefinition,
+    animations: CharacterAnimationDefinition[]
+  ) => void;
+}
+
+function solveWeightsInWorker(
+  positions: Float32Array,
+  indices: Uint32Array,
+  segments: ReturnType<typeof computeBoneSegments>,
+  onProgress: (fraction: number) => void
+): Promise<SkinWeights> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL("./weight-solver.worker.ts", import.meta.url),
+      { type: "module" }
+    );
+    worker.onmessage = (event: MessageEvent<WeightSolveResponse>) => {
+      const message = event.data;
+      if (message.type === "progress") {
+        onProgress(message.fraction);
+        return;
+      }
+      worker.terminate();
+      if (message.type === "done") {
+        resolve({
+          boneOrder: message.boneOrder,
+          joints: message.joints,
+          weights: message.weights
+        });
+      } else {
+        reject(new Error(message.message));
+      }
+    };
+    worker.onerror = (event) => {
+      worker.terminate();
+      reject(new Error(event.message || "weight solver worker failed"));
+    };
+    // Copy (not transfer) the mesh buffers: the caller reuses them.
+    worker.postMessage({ positions, indices, segments });
+  });
+}
+
+function meshHeight(positions: Float32Array): number {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 1; i < positions.length; i += 3) {
+    const y = positions[i]!;
+    if (y < min) min = y;
+    if (y > max) max = y;
+  }
+  return Math.max(0.1, max - min);
+}
+
+export function createCharacterWizardServices(
+  deps: CharacterWizardServiceDeps
+): CharacterWizardServices {
+  return {
+    async analyzeModel(bytes: ArrayBuffer) {
+      const extracted = extractMeshFromGlb(bytes);
+      const landmarks = detectRigLandmarks({
+        positions: extracted.positions,
+        indices: extracted.indices
+      });
+      return { landmarks: landmarks as WizardLandmarks };
+    },
+
+    async generate(
+      bytes: ArrayBuffer,
+      landmarks: WizardLandmarks,
+      onProgress: (fraction: number) => void
+    ): Promise<WizardGenerated> {
+      const extracted = extractMeshFromGlb(bytes);
+      const skeleton: GeneratedSkeleton = generateStandardSkeleton(
+        landmarks as RigLandmarks
+      );
+      const segments = computeBoneSegments(skeleton);
+      const weights = await solveWeightsInWorker(
+        extracted.positions,
+        extracted.indices,
+        segments,
+        (fraction) => onProgress(fraction * 0.85)
+      );
+      const modelGlb = buildSkinnedCharacterGlb({
+        sourceGlb: bytes,
+        skeleton,
+        weights,
+        ranges: extracted.ranges
+      });
+      onProgress(0.9);
+      const hipScale = skeleton.hipHeight / getStandardRigHipHeight();
+      const clips: WizardGenerated["clips"] = [];
+      for (const entry of SLOT_CLIPS) {
+        const clipBytes = await (await fetch(entry.url)).arrayBuffer();
+        clips.push({
+          slot: entry.slot,
+          clipName: entry.clipName,
+          bytes: scaleClipHipsTranslation(clipBytes, hipScale)
+        });
+      }
+      onProgress(1);
+      return {
+        modelGlb,
+        clips,
+        characterHeight: meshHeight(extracted.positions)
+      };
+    },
+
+    async commit(request) {
+      const context = deps.getProjectContext();
+      if (!context) {
+        throw new Error("No open project to commit the character into.");
+      }
+      const result = await commitCharacterWizardResult({
+        projectHandle: context.projectHandle,
+        descriptor: context.descriptor,
+        projectId: context.projectId,
+        characterName: request.characterName,
+        modelGlb: request.generated.modelGlb,
+        clips: request.generated.clips.map((clip) => ({
+          clipName: clip.clipName,
+          bytes: clip.bytes
+        })),
+        attributionText
+      });
+      // Slot mapping: commit preserved clip order == SLOT_CLIPS order.
+      const bySlot = request.generated.clips.map((clip, index) => ({
+        slot: clip.slot,
+        definition: result.characterAnimationDefinitions[index]!
+      }));
+      deps.registerDefinitions(
+        result.characterModelDefinition,
+        result.characterAnimationDefinitions
+      );
+      return {
+        characterModelDefinition: result.characterModelDefinition,
+        characterAnimationDefinitions: bySlot
+      };
+    }
+  };
+}

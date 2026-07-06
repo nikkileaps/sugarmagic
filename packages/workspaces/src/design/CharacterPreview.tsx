@@ -57,6 +57,9 @@ export interface CharacterPreviewProps {
   onChangePlaying: (playing: boolean) => void;
   /** path → blob URL map for resolving the .glb sources. */
   assetSources: Record<string, string>;
+  /** Plan 062 §062.6 — when provided, the HUD shows the rig-wizard
+   *  launcher next to the animation controls. */
+  onLaunchRigWizard?: () => void;
 }
 
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number): void {
@@ -92,7 +95,8 @@ export function CharacterPreview({
   onChangeActiveSlot,
   isPlaying,
   onChangePlaying,
-  assetSources
+  assetSources,
+  onLaunchRigWizard
 }: CharacterPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -413,6 +417,18 @@ export function CharacterPreview({
             {isPlaying ? "❚❚" : "▶"}
           </ActionIcon>
         </Tooltip>
+        {onLaunchRigWizard ? (
+          <Tooltip label="Character Wizard — rig + animate this model">
+            <ActionIcon
+              variant="subtle"
+              color="grape"
+              onClick={onLaunchRigWizard}
+              aria-label="Open the Character Wizard"
+            >
+              🦴
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
       </Group>
       <Box
         ref={containerRef}

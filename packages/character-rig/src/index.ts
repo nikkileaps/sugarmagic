@@ -62,3 +62,4 @@ export {
   type SkinWeights
 } from "./weights";
 export { detectRigLandmarks } from "./detection";
+export { getStandardRigHipHeight } from "./skeleton";

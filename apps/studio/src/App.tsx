@@ -27,6 +27,7 @@ import {
 import { productModes } from "@sugarmagic/productmodes";
 import { ManageScenesModal } from "./ManageScenesModal";
 import { CreditsPreview } from "./CreditsPreview";
+import { createCharacterWizardServices } from "./character-wizard/characterWizardServices";
 import type {
   SemanticCommand,
   RegionDocument,
@@ -1437,6 +1438,46 @@ export function App() {
     }
   }, []);
 
+  // Plan 062 §062.6 — Studio-side Character Wizard services: io +
+  // the solver worker + the vendored CC0 clips, behind the
+  // workspaces-facing interface. Definitions register on the
+  // session here (same shape as the import handlers above); the
+  // workspace binds slots via its own update command.
+  const characterWizardServices = useMemo(
+    () =>
+      createCharacterWizardServices({
+        getProjectContext: () => {
+          const {
+            handle,
+            descriptor,
+            session: currentSession
+          } = projectStore.getState();
+          if (!handle || !descriptor || !currentSession) return null;
+          return {
+            projectHandle: handle,
+            descriptor,
+            projectId: currentSession.gameProject.identity.id
+          };
+        },
+        registerDefinitions: (model, animations) => {
+          const { session: currentSession } = projectStore.getState();
+          if (!currentSession) return;
+          let nextSession = addCharacterModelDefinitionToSession(
+            currentSession,
+            model
+          );
+          for (const animation of animations) {
+            nextSession = addCharacterAnimationDefinitionToSession(
+              nextSession,
+              animation
+            );
+          }
+          projectStore.getState().updateSession(nextSession);
+        }
+      }),
+    []
+  );
+
   const handleImportAudioClipDefinition = useCallback(async () => {
     const {
       handle,
@@ -2226,6 +2267,7 @@ export function App() {
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition:
       handleImportCharacterAnimationDefinition,
+    characterWizardServices,
     onImportAsset: handleImportAsset,
     onGenerateItemThumbnail: handleGenerateItemThumbnail,
     onAppendDocumentPage: handleAppendDocumentPage,

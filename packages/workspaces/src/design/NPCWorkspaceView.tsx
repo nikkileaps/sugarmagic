@@ -49,6 +49,10 @@ import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
 import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
+import {
+  CharacterWizard,
+  type CharacterWizardServices
+} from "./character-wizard/CharacterWizard";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -81,6 +85,9 @@ export interface NPCWorkspaceViewProps {
    * Resolves to `null` when the user cancels.
    */
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  /** Plan 062 §062.6 — Studio-side wizard services; null hides
+   *  the rig-wizard launcher. */
+  characterWizardServices: CharacterWizardServices | null;
   renderInspectorSections?: (context: {
     selectedNPC: NPCDefinition | null;
     updateNPC: (definition: NPCDefinition) => void;
@@ -108,6 +115,7 @@ export function useNPCWorkspaceView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    characterWizardServices,
     renderInspectorSections
   } = props;
 
@@ -120,6 +128,7 @@ export function useNPCWorkspaceView(
     y: number;
     definitionId: string;
   } | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const activeAnimationSlot = useVanillaStoreSelector(
     designPreviewStore,
     (state: DesignPreviewState) =>
@@ -278,22 +287,54 @@ export function useNPCWorkspaceView(
   }
 
   const centerPanel = (
-    <CharacterPreview
-      model={boundCharacterModel}
-      targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
-      slots={previewSlots}
-      activeSlot={activeAnimationSlot}
-      onChangeActiveSlot={(slot) =>
-        designPreviewStore
-          .getState()
-          .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
-      }
-      isPlaying={isAnimationPlaying}
-      onChangePlaying={(playing) =>
-        designPreviewStore.getState().setAnimationPlaying(playing)
-      }
-      assetSources={assetSources}
-    />
+    <>
+      <CharacterPreview
+        model={boundCharacterModel}
+        targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
+        slots={previewSlots}
+        activeSlot={activeAnimationSlot}
+        onChangeActiveSlot={(slot) =>
+          designPreviewStore
+            .getState()
+            .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
+        }
+        isPlaying={isAnimationPlaying}
+        onChangePlaying={(playing) =>
+          designPreviewStore.getState().setAnimationPlaying(playing)
+        }
+        assetSources={assetSources}
+        onLaunchRigWizard={
+          characterWizardServices && selectedNPC
+            ? () => setWizardOpen(true)
+            : undefined
+        }
+      />
+      {characterWizardServices && selectedNPC ? (
+        <CharacterWizard
+          opened={wizardOpen}
+          defaultCharacterName={selectedNPC.displayName}
+          services={characterWizardServices}
+          onClose={() => setWizardOpen(false)}
+          onCommitted={(result) => {
+            const bindings = {
+              ...selectedNPC.presentation.animationAssetBindings
+            };
+            for (const entry of result.characterAnimationDefinitions) {
+              bindings[entry.slot] = entry.definition.definitionId;
+            }
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                modelAssetDefinitionId:
+                  result.characterModelDefinition.definitionId,
+                animationAssetBindings: bindings
+              }
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 
   const leftPanel = (

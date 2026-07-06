@@ -52,6 +52,7 @@ import { useItemWorkspaceView } from "./ItemWorkspaceView";
 import { useMechanicsWorkspaceView } from "./MechanicsWorkspaceView";
 import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
+import type { CharacterWizardServices } from "./character-wizard/CharacterWizard";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
 import { useSpellWorkspaceView } from "./SpellWorkspaceView";
 import { useGameUIWorkspaceView } from "./game-ui";
@@ -110,6 +111,9 @@ export interface DesignProductModeViewProps {
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  /** Plan 062 §062.6 — Studio-side Character Wizard services;
+   *  omitted/null hides the rig-wizard launcher. */
+  characterWizardServices?: CharacterWizardServices | null;
   onImportAsset: () => Promise<AssetDefinition | null>;
   onGenerateItemThumbnail: (item: ItemDefinition) => Promise<string | null>;
   onAppendDocumentPage: (
@@ -174,6 +178,7 @@ export function useDesignProductModeView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    characterWizardServices,
     onImportAsset,
     onGenerateItemThumbnail,
     onAppendDocumentPage,
@@ -195,7 +200,8 @@ export function useDesignProductModeView(
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition
+    onImportCharacterAnimationDefinition,
+    characterWizardServices: characterWizardServices ?? null
   });
 
   const npcView = useNPCWorkspaceView({
@@ -210,6 +216,7 @@ export function useDesignProductModeView(
     onCommand,
     onImportCharacterModelDefinition,
     onImportCharacterAnimationDefinition,
+    characterWizardServices: characterWizardServices ?? null,
     renderInspectorSections: renderNPCInspectorSections
   });
 
@@ -397,3 +404,10 @@ export {
   createItemCameraController,
   type ItemCameraController
 } from "./item-camera-controller";
+export {
+  CharacterWizard,
+  type CharacterWizardServices,
+  type CharacterWizardProps,
+  type WizardGenerated,
+  type WizardLandmarks
+} from "./character-wizard/CharacterWizard";

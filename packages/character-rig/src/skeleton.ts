@@ -262,3 +262,15 @@ export function computeBoneSegments(
   }
   return segments;
 }
+
+/**
+ * World-space rest height of the library rig's hips — the
+ * denominator of the clip hips-translation scale (character
+ * hipHeight / rig hipHeight). Computed through the contract walk
+ * because the source rig carries a Z-up -> Y-up root rotation;
+ * reading restPosition fields naively gives the wrong axis.
+ */
+export function getStandardRigHipHeight(): number {
+  const contract = computeContractWorld();
+  return contract.get("DEF-hips")!.worldRestPosition[1];
+}
