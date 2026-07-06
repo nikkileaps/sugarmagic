@@ -1,6 +1,6 @@
 # Plan 060 — Asset preloading + delivery (don't start the game before its files)
 
-Status: proposed
+Status: implemented, verified by nikki in prod 2026-07-05
 Owner: nikki + claude
 Date: 2026-07-05
 
@@ -38,9 +38,9 @@ The intent (nikki, 2026-07-05): the game should not start until its assets are l
 
 ### 060.3 — Verify in prod + measure
 
-- Deploy to wordlark: cold-load → loading screen shows asset progress → menu appears with music ready to start on first gesture (no multi-second lag).
-- Second visit: assets served from cache; loading phase near-instant.
-- Regression pass: Studio preview boot time unchanged; Scene advance reload (which re-boots) benefits from the HTTP cache and stays fast.
+- Deploy to wordlark: cold-load → loading screen shows asset progress → menu appears with music ready to start on first gesture (no multi-second lag). Verified 2026-07-05.
+- Second visit: assets served from cache (immutable + stamped URLs); loading phase near-instant. Verified 2026-07-05.
+- Regression pass: Studio preview boot unregressed (blob URLs make the preload phase near-instant there). Verified 2026-07-05.
 
 ## Defers
 

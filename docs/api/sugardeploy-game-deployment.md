@@ -37,7 +37,17 @@ sugarmagic project, it provisions and updates four things:
    slug (e.g. `wordlark-v1-1dqlc-sugarmagic-gateway`).
 2. **A Netlify-served frontend** — the static engine bundle
    (`@sugarmagic/target-web`) + the per-game `boot.json` data
-   payload. One Netlify site per game, e.g. `wordlark-prod`.
+   payload + the project's `assets/` directory (audio, models,
+   textures). One Netlify site per game, e.g. `wordlark-prod`.
+   Asset delivery is cache-correct by construction: the deploy
+   stamps every asset URL in boot.json with the deployed sha and
+   serves `/assets/*` immutable (`_headers`, generated alongside
+   boot.json — see `packages/plugins/src/deployment/published-web.ts`),
+   so a new deploy reaches every browser with no manual cache
+   busting, and repeat visits load from local cache. At boot the
+   runtime preloads all assets behind the loading screen
+   (`targets/web/src/assetPreload.ts`) so gameplay starts with
+   its files already local.
 3. **A GitHub Actions workflow** in the game's repo
    (`.github/workflows/sugardeploy-deploy.yml`) — orchestrates
    the actual rollouts (backend image build + Cloud Run deploy,
