@@ -18,7 +18,7 @@
  */
 
 import { buildVertexAdjacency, type MeshData } from "./mesh";
-import { vec3Distance, vec3Lerp, type Vec3 } from "./math";
+import { vec3Distance, vec3Lerp, vec3Sub, type Vec3 } from "./math";
 import type { BoneSegment } from "./skeleton";
 import {
   VOXEL_EMPTY,
@@ -207,6 +207,75 @@ function geodesicDistances(grid: VoxelGrid, seeds: number[]): Float64Array {
   return distances;
 }
 
+/** Euclidean distance from a point to a bone segment. */
+function pointSegmentDistance(point: Vec3, start: Vec3, end: Vec3): number {
+  const direction = vec3Sub(end, start);
+  const lengthSq =
+    direction[0] * direction[0] +
+    direction[1] * direction[1] +
+    direction[2] * direction[2];
+  if (lengthSq < 1e-12) return vec3Distance(point, start);
+  const toPoint = vec3Sub(point, start);
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      (toPoint[0] * direction[0] +
+        toPoint[1] * direction[1] +
+        toPoint[2] * direction[2]) /
+        lengthSq
+    )
+  );
+  return vec3Distance(point, [
+    start[0] + direction[0] * t,
+    start[1] + direction[1] * t,
+    start[2] + direction[2] * t
+  ]);
+}
+
+/** Nearest traversable voxel to (x,y,z), expanding-cube search. */
+function snapToTraversable(
+  grid: VoxelGrid,
+  x: number,
+  y: number,
+  z: number,
+  maxRadius: number
+): number {
+  for (let radius = 0; radius <= maxRadius; radius += 1) {
+    let best = -1;
+    let bestDistance = Infinity;
+    for (let dz = -radius; dz <= radius; dz += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (
+            Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)) !== radius
+          ) {
+            continue; // shell only — inner radii already searched
+          }
+          const nx = x + dx;
+          const ny = y + dy;
+          const nz = z + dz;
+          if (
+            nx < 0 || ny < 0 || nz < 0 ||
+            nx >= grid.dims[0] || ny >= grid.dims[1] || nz >= grid.dims[2]
+          ) {
+            continue;
+          }
+          const index = voxelIndex(grid, nx, ny, nz);
+          if (grid.cells[index] === VOXEL_EMPTY) continue;
+          const distance = dx * dx + dy * dy + dz * dz;
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = index;
+          }
+        }
+      }
+    }
+    if (best !== -1) return best;
+  }
+  return -1;
+}
+
 export class GeodesicVoxelWeightSolver implements WeightSolver {
   solve(
     mesh: MeshData,
@@ -236,6 +305,7 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
     const vertexCount = mesh.positions.length / 3;
     const raw = new Float32Array(vertexCount * boneOrder.length);
     const epsilon = grid.cellSize * 0.5;
+    let euclideanFallbacks = 0;
     for (let vertex = 0; vertex < vertexCount; vertex += 1) {
       const position: Vec3 = [
         mesh.positions[vertex * 3]!,
@@ -243,13 +313,47 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
         mesh.positions[vertex * 3 + 2]!
       ];
       const [x, y, z] = worldToVoxel(grid, position);
-      const index = voxelIndex(grid, x, y, z);
-      for (let bone = 0; bone < fields.length; bone += 1) {
-        const distance = fields[bone]![index]!;
-        raw[vertex * boneOrder.length + bone] = Number.isFinite(distance)
-          ? 1 / ((distance * grid.cellSize + epsilon) ** 2)
-          : 0;
+      // The vertex's own cell can be EMPTY (thin features below
+      // voxel size) — snap to the nearest traversable cell first.
+      let index = voxelIndex(grid, x, y, z);
+      if (grid.cells[index] === VOXEL_EMPTY) {
+        index = snapToTraversable(grid, x, y, z, 4);
       }
+      let anyFinite = false;
+      if (index !== -1) {
+        for (let bone = 0; bone < fields.length; bone += 1) {
+          const distance = fields[bone]![index]!;
+          if (Number.isFinite(distance)) {
+            anyFinite = true;
+            raw[vertex * boneOrder.length + bone] =
+              1 / ((distance * grid.cellSize + epsilon) ** 2);
+          }
+        }
+      }
+      if (!anyFinite) {
+        // Disconnected shell (jackets, eyes, hair — separate mesh
+        // pieces with no voxel path to the body): geodesic
+        // distances are infinite for EVERY bone. Fall back to
+        // straight-line distance to the bone segments so the
+        // piece follows its nearest limb instead of collapsing
+        // onto whichever bone sat first in the list (the
+        // 2026-07-06 crumple).
+        euclideanFallbacks += 1;
+        for (let bone = 0; bone < segments.length; bone += 1) {
+          const distance = pointSegmentDistance(
+            position,
+            segments[bone]!.start,
+            segments[bone]!.end
+          );
+          raw[vertex * boneOrder.length + bone] =
+            1 / ((distance + epsilon) ** 2);
+        }
+      }
+    }
+    if (euclideanFallbacks > 0) {
+      console.info(
+        `[character-rig] ${euclideanFallbacks}/${vertexCount} vertices used the euclidean fallback (disconnected mesh pieces).`
+      );
     }
 
     // Laplacian smoothing over mesh adjacency, then top-4 +

@@ -229,6 +229,40 @@ describe("GeodesicVoxelWeightSolver (Plan 062)", () => {
     }
   });
 
+  it("binds disconnected shells (jacket over body) to nearby bones, not the first bone", () => {
+    // 2026-07-06 regression — layered stylized characters ship
+    // clothes/eyes as separate mesh pieces with no voxel path to
+    // the body. Those vertices used to collapse onto boneOrder[0]
+    // (hips) and crumple under animation.
+    const body = buildTube(0, 0, 0.09, 0, 1);
+    // "Sleeve" shell floating around the upper half, clearly
+    // disconnected (radial gap > voxel size at res 32).
+    const sleeve = buildTube(0.5, 0, 0.05, 0.55, 0.95, { openEnds: true });
+    const mesh = mergeMeshes([body, sleeve]);
+    const segments: BoneSegment[] = [
+      { boneName: "lower", start: [0, 0, 0], end: [0, 0.5, 0] },
+      { boneName: "upper", start: [0, 0.5, 0], end: [0, 1, 0] },
+      { boneName: "arm", start: [0.3, 0.9, 0], end: [0.55, 0.6, 0] }
+    ];
+    const result = solver.solve(mesh, segments, { resolution: 32 });
+    const bodyVertexCount = body.positions.length / 3;
+    const vertexCount = mesh.positions.length / 3;
+    let checked = 0;
+    for (let vertex = bodyVertexCount; vertex < vertexCount; vertex += 1) {
+      // Sleeve vertices follow the ARM (their nearest segment),
+      // and never the lower-body bone.
+      expect(boneWeightAt(result, vertex, "arm")).toBeGreaterThan(0.5);
+      expect(boneWeightAt(result, vertex, "lower")).toBeLessThan(0.1);
+      let sum = 0;
+      for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+        sum += result.weights[vertex * MAX_INFLUENCES + slot]!;
+      }
+      expect(sum).toBeCloseTo(1, 5);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
   it("voxelizes a closed tube with interior cells", () => {
     const grid = voxelizeMesh(buildTube(0, 0, 0.2, 0, 1), 32);
     let interior = 0;
