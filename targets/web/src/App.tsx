@@ -57,10 +57,7 @@ import {
   type User,
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
-import {
-  LoginModal,
-  SignedInBadge
-} from "@sugarmagic/plugins";
+import { LoginModal } from "@sugarmagic/plugins";
 import { readBuildConfigFromViteEnv } from "./buildConfig";
 import {
   createWebRuntimeHost,
@@ -124,7 +121,6 @@ export function App() {
 
   const [active, setActive] = useState<ProviderBindings | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -384,7 +380,7 @@ export function App() {
   const requireSignIn =
     pluginIdentityActive && active && user === null && phase.kind === "running";
 
-  const showLoginModal = loginModalOpen || requireSignIn;
+  const showLoginModal = requireSignIn;
 
   // Story 50.6 — mirror the modal-open boolean into the host's
   // `UIStateStore.loginModalOpen` so the runtime mode resolver
@@ -401,41 +397,16 @@ export function App() {
     <main className="target-shell">
       <div ref={rootRef} className="target-runtime-root" />
       {overlay}
-      {pluginIdentityActive && active && user?.isAnonymous ? (
-        <button
-          type="button"
-          className="target-sign-in-pill"
-          onClick={() => setLoginModalOpen(true)}
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            zIndex: 18,
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid rgba(236, 72, 153, 0.4)",
-            background: "rgba(236, 72, 153, 0.18)",
-            color: "#fff",
-            cursor: "pointer",
-            fontSize: 13
-          }}
-        >
-          Sign In
-        </button>
-      ) : null}
-      {pluginIdentityActive && active && user && !user.isAnonymous ? (
-        <SignedInBadge
-          user={user}
-          provider={active.identityProvider}
-        />
-      ) : null}
+      {/* Plan 061 §061.2 — no account chrome over the game. Sign-in,
+          sign-out, and guest upgrade live on the launch page (the
+          Palia model: auth at the door). The LoginModal survives
+          ONLY as the required-sign-in fallback: anonymous-first off
+          + no session cookie (a direct-URL visitor to a game that
+          requires accounts). */}
       {showLoginModal && pluginIdentityActive && active ? (
         <LoginModal
           provider={active.identityProvider}
-          mode={user?.isAnonymous ? "upgrade" : "required"}
-          onClose={
-            user?.isAnonymous ? () => setLoginModalOpen(false) : undefined
-          }
+          mode="required"
         />
       ) : null}
       {/* Build version chip — dimmed footer in the bottom-left.

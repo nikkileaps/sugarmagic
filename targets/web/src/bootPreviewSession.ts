@@ -115,7 +115,13 @@ export function bootPreviewSession(
         // real runtime host.
         episodes: null,
         onEpisodesContinue: () => {},
-        onEpisodesClose: () => {}
+        onEpisodesClose: () => {},
+        // Plan 061 §061.2 — no identity in the UI-preview session.
+        userStore: null,
+        // Plan 061 §061.3 — show authored exit buttons in the UI
+        // preview so authors can see + position them regardless of
+        // plugin config (dispatch is a no-op here anyway).
+        exitToSiteAvailable: true
       })
     );
   }

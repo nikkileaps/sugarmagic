@@ -3,17 +3,20 @@
  *
  * Story 47.7.5+ — originally a vanilla TS script that only mounted
  * the runtime canvas. Now also mounts a React overlay so the
- * SugarProfile-contributed LoginModal + SignedInBadge render in
- * the Studio Preview iframe the same way they render in the
- * published-web bundle. Keeps the iteration loop tight: enable
- * SugarProfile in wordlark's plugin config, open Preview, see the
- * LoginModal in the iframe with Vite HMR — no Build Frontend /
- * deploy round-trip needed to iterate on auth UI.
+ * SugarProfile-contributed LoginModal renders in the Studio
+ * Preview iframe the same way it renders in the published-web
+ * bundle. Keeps the iteration loop tight: enable SugarProfile in
+ * wordlark's plugin config, open Preview, see the LoginModal in
+ * the iframe with Vite HMR — no Build Frontend / deploy
+ * round-trip needed to iterate on auth UI. (Plan 061 §061.2
+ * removed the SignedInBadge + Sign In pill — auth chrome lives on
+ * the launch page now; only the required-sign-in fallback modal
+ * remains.)
  *
  * Two roots live in preview.html:
  *   - `#preview-root` — runtime canvas + three.js scene
  *   - `#preview-overlay-root` — React tree (MantineProvider +
- *     LoginModal / SignedInBadge / SignIn pill)
+ *     required-sign-in LoginModal fallback)
  *
  * ## Runtime host scope: MODULE-scoped here. (ADR 021)
  *
@@ -101,7 +104,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { MantineProvider } from "@mantine/core";
 import { sugarmagicTheme } from "@sugarmagic/ui";
-import { LoginModal, SignedInBadge } from "@sugarmagic/plugins";
+import { LoginModal } from "@sugarmagic/plugins";
 
 import "@mantine/core/styles.css";
 import "@sugarmagic/ui/shell-variables.css";
@@ -398,7 +401,6 @@ function PreviewOverlay() {
     host.state.activeProviders.getSnapshot
   );
   const [user, setUser] = useState<User | null>(null);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
   // Same snapshot+subscribe shape for the boot phase. One store,
   // {phase, reason}; reading via destructure below.
   const bootStatus = useSyncExternalStore(
@@ -537,7 +539,7 @@ function PreviewOverlay() {
   // useEffect tells the host the modal isn't open.
   const requireSignIn =
     pluginIdentityActive && active != null && user === null && phase !== "loading";
-  const showLoginModal = loginModalOpen || requireSignIn;
+  const showLoginModal = requireSignIn;
 
   // Story 50.6 — mirror the modal-open boolean into the host's
   // `UIStateStore.loginModalOpen` so the runtime mode resolver
@@ -555,38 +557,13 @@ function PreviewOverlay() {
   return (
     <>
       {bootOverlay}
-      {user?.isAnonymous ? (
-        <button
-          type="button"
-          onClick={() => setLoginModalOpen(true)}
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            zIndex: 18,
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: "1px solid rgba(236, 72, 153, 0.4)",
-            background: "rgba(236, 72, 153, 0.18)",
-            color: "#fff",
-            cursor: "pointer",
-            fontSize: 13
-          }}
-        >
-          Sign In
-        </button>
-      ) : null}
-      {user && !user.isAnonymous ? (
-        <SignedInBadge user={user} provider={active.identityProvider} />
-      ) : null}
+      {/* Plan 061 §061.2 — preview matches the deployed game: no
+          account chrome (pill/badge deleted); the LoginModal only
+          mounts as the required-sign-in fallback. Author-facing
+          identity visibility lives in the Session debug HUD's User
+          row. */}
       {showLoginModal ? (
-        <LoginModal
-          provider={active.identityProvider}
-          mode={user?.isAnonymous ? "upgrade" : "required"}
-          onClose={
-            user?.isAnonymous ? () => setLoginModalOpen(false) : undefined
-          }
-        />
+        <LoginModal provider={active.identityProvider} mode="required" />
       ) : null}
     </>
   );

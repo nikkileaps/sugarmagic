@@ -26,6 +26,7 @@ import {
 } from "@sugarmagic/domain";
 import { createClient } from "@supabase/supabase-js";
 import type { DiscoveredPluginDefinition } from "../../sdk";
+import { createCookieSessionStorage } from "./runtime/cookie-session-storage";
 import { createSupabaseIdentityProvider } from "./runtime/identity";
 import { createSupabaseGameSaveStore } from "./runtime/save-store";
 import { createSupabaseProfileStore } from "./runtime/profile-store";
@@ -55,6 +56,16 @@ export interface SugarProfilePluginConfig {
    *  session without explicit sign-in. Only consulted when
    *  `enableLogin` is true. */
   allowAnonymous: boolean;
+  /** Plan 061 §061.1 — parent-domain cookie the Supabase session
+   *  persists into (e.g. `.wordlarkhollow.com`) so a launch page
+   *  and the game share one auth session across subdomains. Empty
+   *  (default) = per-origin localStorage, exactly the pre-061
+   *  behavior. Only consulted when `enableLogin` is true. */
+  sessionCookieDomain: string;
+  /** Plan 061 §061.3 — the game's launch page ("Play" screen on
+   *  the site). Start-menu `exit-to-site` buttons navigate here;
+   *  they hide entirely when this is empty. */
+  playPageUrl: string;
 }
 
 export function normalizeSugarProfilePluginConfig(
@@ -70,7 +81,13 @@ export function normalizeSugarProfilePluginConfig(
       typeof config?.supabaseAnonKey === "string"
         ? config.supabaseAnonKey.trim()
         : "",
-    allowAnonymous: config?.allowAnonymous !== false
+    allowAnonymous: config?.allowAnonymous !== false,
+    sessionCookieDomain:
+      typeof config?.sessionCookieDomain === "string"
+        ? config.sessionCookieDomain.trim()
+        : "",
+    playPageUrl:
+      typeof config?.playPageUrl === "string" ? config.playPageUrl.trim() : ""
   };
 }
 
@@ -164,6 +181,26 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         "When on, new players are signed in anonymously on first boot. Their progress can be migrated up to a credentialed account later via the Sign In affordance.",
       default: true,
       showWhen: { configKey: "enableLogin", equals: true }
+    },
+    {
+      configKey: "sessionCookieDomain",
+      label: "Session Cookie Domain",
+      type: "text",
+      group: "Supabase Project",
+      description:
+        "Parent domain the auth session cookie is scoped to (e.g. `.wordlarkhollow.com`) so a launch page and the deployed game share one session across subdomains. Leave empty to keep the session in per-origin browser storage.",
+      placeholder: ".example.com",
+      showWhen: { configKey: "enableLogin", equals: true }
+    },
+    {
+      configKey: "playPageUrl",
+      label: "Play Page URL",
+      type: "text",
+      group: "Supabase Project",
+      description:
+        "The game's launch page on the site (where sign-in lives). Start-menu Exit buttons navigate here; they stay hidden while this is empty.",
+      placeholder: "https://example.com/play",
+      showWhen: { configKey: "enableLogin", equals: true }
     }
   ],
   // Story 47.6 — non-secret per-game runtime config the gateway
@@ -231,6 +268,27 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       // automatically through every contribution. Constructing
       // three separate clients would mean separate auth state +
       // separate token refresh loops.
+      // Plan 061 §061.1 — with a configured cookie domain the
+      // session persists in parent-domain cookies (shared with the
+      // launch page); otherwise auth-js's default per-origin
+      // localStorage. Guard on `document` so non-browser contexts
+      // (tests, any future SSR) fall through to the default — AND
+      // on the hostname actually being under the cookie domain:
+      // browsers silently REJECT cookies whose Domain doesn't
+      // cover the current host, so Studio preview on localhost
+      // would otherwise lose session persistence entirely while
+      // the prod config is set.
+      const cookieDomainCoversHost =
+        typeof document !== "undefined" &&
+        (`.${document.location.hostname}`.endsWith(
+          config.sessionCookieDomain
+        ) ||
+          document.location.hostname ===
+            config.sessionCookieDomain.replace(/^\./, ""));
+      const cookieStorage =
+        config.sessionCookieDomain.length > 0 && cookieDomainCoversHost
+          ? createCookieSessionStorage(config.sessionCookieDomain)
+          : undefined;
       const client = createClient(
         config.supabaseUrl,
         config.supabaseAnonKey,
@@ -238,7 +296,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
-            detectSessionInUrl: false
+            detectSessionInUrl: false,
+            ...(cookieStorage ? { storage: cookieStorage } : {})
           }
         }
       );

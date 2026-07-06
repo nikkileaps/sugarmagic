@@ -55,6 +55,12 @@ export interface DefaultUIActionOptions {
   onLoadGame?: () => void;
   onToggleInventory?: () => void;
   onToggleCaster?: () => void;
+  /** Plan 061 §061.3 — navigate to the game's Play page (the
+   *  site-side launch screen). Host-owned because navigation is a
+   *  platform concern; absent = the action warns and no-ops (the
+   *  render layer already hides exit buttons when no Play page is
+   *  configured, so this only fires on misconfiguration). */
+  onExitToSite?: () => void;
 }
 
 export function registerDefaultUIActions(
@@ -119,5 +125,16 @@ export function registerDefaultUIActions(
   // not an authored menu definition.
   registry.register("open-episodes", () => {
     options.stateStore.setState({ episodesOpen: true });
+  });
+
+  // Plan 061 §061.3 — leave the game for the site's Play page.
+  registry.register("exit-to-site", () => {
+    if (options.onExitToSite) {
+      options.onExitToSite();
+    } else {
+      console.warn(
+        "[ui-actions] exit-to-site fired with no Play page configured; ignoring."
+      );
+    }
   });
 }

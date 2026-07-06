@@ -123,6 +123,81 @@ describe("QuestManager save slice", () => {
         runtimeFlags: {}
       });
     });
+
+    // 2026-07-05 regression — restored quest state must resync
+    // every derived consumer (NPC interactable availability, quest
+    // tracker, blackboard facts). deserializeSaveSlice used to
+    // mutate silently; consumers registered before the restore
+    // (NPC interactables spawn pre-deserialize) stayed frozen at
+    // empty-quest-state values, killing the talk prompt after
+    // Continue.
+    it("deserialize fires the state-change handler exactly like live mutation does", () => {
+      const source = new QuestManager();
+      const quest = buildSingleStageQuest("quest:notify", "Notify");
+      source.registerDefinitions([quest]);
+      source.startQuest("quest:notify");
+
+      const restored = new QuestManager();
+      restored.registerDefinitions([quest]);
+      let stateChanges = 0;
+      restored.setStateChangeHandler(() => {
+        stateChanges += 1;
+      });
+      restored.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: source.serializeSaveSlice()
+      });
+      expect(stateChanges).toBe(1);
+      // null slice = fresh player = nothing changed = no ping.
+      const fresh = new QuestManager();
+      fresh.setStateChangeHandler(() => {
+        throw new Error("state-change must not fire for a null slice");
+      });
+      fresh.deserializeSaveSlice(null);
+    });
+
+    it("talk-objective dialogue override survives the round-trip (the E-prompt source)", () => {
+      const talkNode = {
+        ...createDefaultQuestNodeDefinition({
+          displayName: "Talk to Testy",
+          objectiveSubtype: "talk"
+        }),
+        targetId: "npc:testy",
+        dialogueDefinitionId: "dlg:testy-quest"
+      };
+      const stage = createDefaultQuestStageDefinition({
+        nodeDefinitions: [talkNode]
+      });
+      const base = createDefaultQuestDefinition({
+        definitionId: "quest:talk",
+        displayName: "Talk"
+      });
+      const quest = {
+        ...base,
+        startStageId: stage.stageId,
+        stageDefinitions: [stage]
+      };
+
+      const source = new QuestManager();
+      source.registerDefinitions([quest]);
+      source.startQuest("quest:talk");
+      expect(source.getDialogueOverrideForNpc("npc:testy")).toBe(
+        "dlg:testy-quest"
+      );
+
+      const restored = new QuestManager();
+      restored.registerDefinitions([quest]);
+      restored.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: source.serializeSaveSlice()
+      });
+      // startInitialQuests short-circuits on the restored quest...
+      expect(restored.startQuest("quest:talk")).toBe(false);
+      // ...and the override (what lights the E prompt) is intact.
+      expect(restored.getDialogueOverrideForNpc("npc:testy")).toBe(
+        "dlg:testy-quest"
+      );
+    });
   });
 
   describe("legacy shape", () => {

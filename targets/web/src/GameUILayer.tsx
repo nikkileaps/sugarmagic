@@ -16,8 +16,10 @@ import type {
 } from "@sugarmagic/domain";
 import type {
   GameStateStore,
+  ObservableValue,
   UIContextStore,
-  UIStateStore
+  UIStateStore,
+  User
 } from "@sugarmagic/runtime-core";
 import { compileLayout } from "./ui/layout";
 import {
@@ -52,6 +54,14 @@ export interface GameUILayerProps {
   episodes: EpisodesViewModel | null;
   onEpisodesContinue: () => void;
   onEpisodesClose: () => void;
+  /** Plan 061 §061.2 — the signed-in user, shown as a quiet line
+   *  on the START MENU only (auth chrome lives on the launch page
+   *  now; in-game the identity is a whisper, not a pill). Null =
+   *  no identity plugin active; render nothing. */
+  userStore: ObservableValue<User | null> | null;
+  /** Plan 061 §061.3 — true when a Play page URL is configured;
+   *  gates authored `exit-to-site` buttons. */
+  exitToSiteAvailable: boolean;
 }
 
 /**
@@ -69,6 +79,21 @@ function isNodeVisible(node: UINode, savePresent: boolean): boolean {
   return true;
 }
 
+/** Plan 061 §061.3 — a button wired to `exit-to-site` is only
+ *  meaningful when the game has a configured Play page to exit TO.
+ *  Hide it (whole subtree) when unconfigured so authored menus stay
+ *  portable across games with and without a site. */
+function isExitButtonWithoutTarget(
+  node: UINode,
+  exitToSiteAvailable: boolean
+): boolean {
+  return (
+    !exitToSiteAvailable &&
+    node.kind === "button" &&
+    node.events.onClick?.action === "exit-to-site"
+  );
+}
+
 function nodeStyle(node: UINode, theme: UITheme): CSSProperties {
   return {
     ...compileLayout(node.layout, node.anchor),
@@ -80,16 +105,20 @@ function renderNode(input: {
   node: UINode;
   theme: UITheme;
   savePresent: boolean;
+  exitToSiteAvailable: boolean;
 }): JSX.Element | null {
-  const { node, theme, savePresent } = input;
+  const { node, theme, savePresent, exitToSiteAvailable } = input;
   // Story 47.10.5 — skip the whole subtree when the visibility
   // rule fails. Returning null keeps the parent container layout
   // intact (gap-based flex collapses cleanly around omitted
   // children).
   if (!isNodeVisible(node, savePresent)) return null;
+  if (isExitButtonWithoutTarget(node, exitToSiteAvailable)) return null;
   const style = nodeStyle(node, theme);
   const children = node.children
-    .map((child) => renderNode({ node: child, theme, savePresent }))
+    .map((child) =>
+      renderNode({ node: child, theme, savePresent, exitToSiteAvailable })
+    )
     .filter((child): child is JSX.Element => child !== null);
 
   if (node.kind === "text") {
@@ -158,6 +187,13 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
     props.gameStateStore.getState,
     props.gameStateStore.getState
   );
+  // Plan 061 §061.2 — hooks can't be conditional, so absent stores
+  // get inert stand-ins.
+  const user = useSyncExternalStore(
+    props.userStore?.subscribe ?? (() => () => {}),
+    props.userStore?.getSnapshot ?? (() => null),
+    props.userStore?.getSnapshot ?? (() => null)
+  );
   // Plan 054 §054.4 Pass C — derive the menu key to render
   // from lifecycle first (start-menu / paused render their
   // canonical menu definitions), then fall through to the
@@ -201,7 +237,8 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
           ? renderNode({
               node: props.hudDefinition.root,
               theme: props.theme,
-              savePresent: state.savePresent
+              savePresent: state.savePresent,
+              exitToSiteAvailable: props.exitToSiteAvailable
             })
           : null}
         {visibleMenu ? (
@@ -220,8 +257,32 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
             {renderNode({
               node: visibleMenu.root,
               theme: props.theme,
-              savePresent: state.savePresent
+              savePresent: state.savePresent,
+              exitToSiteAvailable: props.exitToSiteAvailable
             })}
+            {/* Plan 061 §061.2 — quiet identity line, start menu
+                only. The launch page owns account management; this
+                is the whole in-game account surface. */}
+            {visibleMenu.menuKey === "start-menu" && user ? (
+              <div
+                data-sugarmagic-identity-line
+                style={{
+                  position: "absolute",
+                  bottom: 14,
+                  left: 0,
+                  right: 0,
+                  textAlign: "center",
+                  fontSize: 12,
+                  letterSpacing: "0.08em",
+                  opacity: 0.5,
+                  pointerEvents: "none"
+                }}
+              >
+                {user.isAnonymous
+                  ? "Playing as guest"
+                  : `Playing as ${user.displayName ?? user.email ?? "player"}`}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {/* Plan 059 §059.4 — built-in Episodes screen, above the

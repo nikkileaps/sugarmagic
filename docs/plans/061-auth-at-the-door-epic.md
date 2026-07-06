@@ -1,6 +1,6 @@
 # Plan 061 — Auth at the door (launch-page sign-in, chrome-free game)
 
-Status: proposed
+Status: implemented, verified by nikki in prod 2026-07-05 (full loop incl. exit + quest-restore fix)
 Owner: nikki + claude
 Date: 2026-07-05
 
@@ -17,9 +17,13 @@ Target UX (nikki): sign in on the page that launches the game; Play boots the ga
 ## Decisions
 
 1. **Session handoff: cookie-domain Supabase session.** `wordlarkhollow.com` and `game.wordlarkhollow.com` are different ORIGINS, so Supabase's default per-origin localStorage session does not travel. Chosen fix: switch the Supabase client to cookie-based session storage scoped to the parent domain (`.wordlarkhollow.com`) so the Play page and the game share the session natively — the same shape as Palia's `*.palia.com` properties. Rejected: URL-fragment token handoff (more moving parts, token hygiene concerns); same-origin proxy via Netlify rewrites (couples the site and game deploys).
-2. **Anonymous-first survives.** The door is optional, not a gate: the Play page offers "Play as guest" which boots the game exactly as today (anonymous session on first boot, Plan 047). Because the session cookie is domain-shared, the guest's anonymous session is visible to the SITE too — so "create an account to keep your progress" upgrade (linkAnonymousToCredentials) moves to the site and still migrates progress in place.
+2. **Anonymous-first survives ENGINE-SIDE only — wordlark runs accounts-only.** SugarProfile keeps `allowAnonymous` as a per-game setting, but nikki's call (2026-07-05): there is NO anonymous/guest play in Wordlark Hollow. The Play page has no guest entry (and signs out stray anonymous sessions), and wordlark's config sets Allow Anonymous Sign-In OFF — a session-less visit to the game URL gets the required-sign-in fallback modal. The earlier guest-upgrade flow was removed with it.
 3. **The launch page is per-game site territory; sugarmagic ships the contract.** wordlark's Play page lives in the wordlark-web repo. What sugarmagic owns: the SugarProfile plugin config that makes the handoff work (cookie domain, `playPageUrl`) and the game-side behavior (trust the session, exit redirects). Other games implement their own door against the same contract.
 4. **Quit stays in-game; Exit leaves.** Quit-to-menu keeps its current meaning (back to the start menu, session intact). The start menu gains an "Exit" affordance that redirects to `playPageUrl` — that's the "kicks you back to the Play Game screen" beat.
+5. **(2026-07-05, nikki) The Play page ships public-but-unlinked** (noindex, no nav entry) on the pre-launch site; it gets linked when the game goes public.
+6. **(2026-07-05, nikki) Subscription payment joins sign-up LATER — standing constraint.** Nothing in this epic may collapse "account exists" and "can play" into one inseparable step; an entitlement check must be able to slot between them without rework. Sign-up living on the site (where a checkout can mount) and the game's boot-time session trust being one seam are the two load-bearing choices.
+7. **(2026-07-05, nikki) There is ONE Supabase project and it is the game's auth** — wordlark-web docs that called it a "waitlist" were misframed (the waitlist is Mailchimp). The Play page signs into the same project the game's SugarProfile config points at.
+8. **Implementation decisions:** `playPageUrl` lives in SugarProfile config beside `sessionCookieDomain` (both halves of the door contract in one panel). The site-side cookie adapter is a byte-format TWIN copied into wordlark-web (`src/lib/gameSessionStorage.ts`) — cross-repo import isn't available, so both files carry a paired-file warning; the chunk naming mirrors @supabase/ssr but the value encoding is plain URI-encoded JSON (NOT ssr-compatible). The in-game LoginModal survives required-mode-only; SignedInBadge and the upgrade mode were deleted (upgrade lives on the Play page via `auth.updateUser`).
 
 ## Stories
 
@@ -43,15 +47,17 @@ Target UX (nikki): sign in on the page that launches the game; Play boots the ga
 
 ### 061.4 — wordlark's Play page (wordlark-web repo)
 
-- Landing page with Play: Supabase sign-in / sign-up / play-as-guest against the SAME Supabase project (config comes from the game's published runtime env — document the wiring).
-- Signed-in state shows "Play" + account bits (email, sign out, upgrade-from-guest per decision 2).
+- Landing page with Play: Supabase sign-in / sign-up against the SAME Supabase project (values committed in `src/config/gameAccount.ts` per that repo's convention). Accounts only per decision 2 — no guest entry; stray anonymous sessions are signed out on sight.
+- Signed-in state shows "Play" + account bits (email, sign out).
 - Play button navigates to game.wordlarkhollow.com; the cookie session does the rest.
+- Shipped as wordlark-web EPIC-002 / STORY-018 (unlinked + noindex until the game goes public).
 
 ### 061.5 — Verify the full loop in prod
 
-- Sign in on wordlarkhollow.com -> Play -> game boots signed in, NO pill, no modal.
-- Guest loop: Play as guest -> game boots anonymous -> back on the site, upgrade to account -> progress intact in-game.
-- Exit from the start menu lands on the Play page with session intact; sign out on the site; revisiting the game direct-URL behaves per 061.2.
+- Sign in on wordlarkhollow.com/play -> Play -> game boots signed in, NO pill, no modal. Verified 2026-07-05.
+- Exit from the start menu lands on the Play page with session intact (guest loop dropped with decision 2); direct game URL with no session shows the required-sign-in fallback. Verified 2026-07-05.
+- Found during verification: quest state restored from a save never fired the QuestManager state-change notification, so NPC talk prompts (and the quest tracker) stayed frozen at empty-quest values after Continue — a latent Plan 055 bug, fixed on this branch (deserializeSaveSlice now notifies; two regression tests).
+- Verification also surfaced the two-repo staleness traps: Studio dev server must be restarted to render new plugin config fields, and the deployed engine follows the Deploy button's auto-synced branch sha (tag-triggered runs build from main).
 
 ## Defers
 

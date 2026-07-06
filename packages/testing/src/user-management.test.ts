@@ -37,7 +37,9 @@ import {
 import {
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayEmbeddingsClient,
-  SugarAgentGatewayVectorStoreClient
+  SugarAgentGatewayVectorStoreClient,
+  createCookieSessionStorage,
+  normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
   gameSavePayloadsEqual,
@@ -2887,5 +2889,100 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
     unsubscribe();
     store.setState({ activeOverlayMenuKey: null });
     expect(listener).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Plan 061 §061.1 — cookie-domain session storage. The adapter
+// persists the Supabase session in parent-domain cookies so the
+// launch page + game share one session. Chunking survives the
+// ~4KB per-cookie ceiling (same scheme as @supabase/ssr).
+describe("cookie session storage (Plan 061)", () => {
+  function installCookieJar(): () => void {
+    // Minimal document.cookie semantics: assignment upserts one
+    // cookie; Max-Age=0 deletes; reads return "k=v; k2=v2".
+    const jar = new Map<string, string>();
+    const fakeDocument = {
+      get cookie(): string {
+        return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+      },
+      set cookie(assignment: string) {
+        const [pair, ...attributes] = assignment.split("; ");
+        const eq = pair.indexOf("=");
+        const name = pair.slice(0, eq);
+        const value = pair.slice(eq + 1);
+        const maxAge = attributes
+          .map((attr) => /^Max-Age=(-?\d+)$/.exec(attr))
+          .find(Boolean);
+        if (maxAge && Number(maxAge[1]) <= 0) {
+          jar.delete(name);
+        } else {
+          jar.set(name, value);
+        }
+      }
+    };
+    const prior = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = fakeDocument;
+    return () => {
+      (globalThis as { document?: unknown }).document = prior;
+    };
+  }
+
+  it("round-trips small values through a single cookie", () => {
+    const restore = installCookieJar();
+    try {
+      const storage = createCookieSessionStorage(".example.com");
+      storage.setItem("sb-test-auth-token", '{"access_token":"abc"}');
+      expect(storage.getItem("sb-test-auth-token")).toBe(
+        '{"access_token":"abc"}'
+      );
+      storage.removeItem("sb-test-auth-token");
+      expect(storage.getItem("sb-test-auth-token")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it("chunks values past the cookie ceiling and reassembles them", () => {
+    const restore = installCookieJar();
+    try {
+      const storage = createCookieSessionStorage(".example.com");
+      // ~12KB payload — forces 4+ chunks.
+      const large = JSON.stringify({ token: "x".repeat(12000) });
+      storage.setItem("sb-test-auth-token", large);
+      // The whole-key cookie must NOT exist (it would be over-limit).
+      expect(document.cookie).not.toContain("sb-test-auth-token={");
+      expect(storage.getItem("sb-test-auth-token")).toBe(large);
+      storage.removeItem("sb-test-auth-token");
+      expect(storage.getItem("sb-test-auth-token")).toBeNull();
+      expect(document.cookie).toBe("");
+    } finally {
+      restore();
+    }
+  });
+
+  it("re-setting a shrunk value clears stale chunks first", () => {
+    const restore = installCookieJar();
+    try {
+      const storage = createCookieSessionStorage(".example.com");
+      storage.setItem("k", "y".repeat(9000));
+      storage.setItem("k", "small");
+      expect(storage.getItem("k")).toBe("small");
+      // No orphaned chunk cookies left behind.
+      expect(document.cookie).toBe(`k=${encodeURIComponent("small")}`);
+    } finally {
+      restore();
+    }
+  });
+
+  it("normalizes sessionCookieDomain from plugin config", () => {
+    expect(
+      normalizeSugarProfilePluginConfig({
+        enableLogin: true,
+        sessionCookieDomain: "  .wordlarkhollow.com  "
+      }).sessionCookieDomain
+    ).toBe(".wordlarkhollow.com");
+    expect(
+      normalizeSugarProfilePluginConfig({}).sessionCookieDomain
+    ).toBe("");
   });
 });

@@ -885,6 +885,19 @@ export class QuestManager {
       this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
     }
     this.runtimeFlags = new Map(Object.entries(data.runtimeFlags ?? {}));
+
+    // Restore IS a state change — fire the same notification
+    // `startQuest`/`completeNode` do so every derived consumer
+    // (NPC interactable availability, quest tracker, blackboard
+    // quest facts, interaction prompt) resyncs against the
+    // restored state. Without this, a restored save whose quests
+    // short-circuit `startInitialQuests` leaves those consumers
+    // frozen at their pre-deserialize (empty-quest-state) values —
+    // the "NPC talk prompt gone after Continue" bug (2026-07-05).
+    // Deliberately NOT emitEvent: notifications ("Quest started")
+    // must not re-toast on load; onStateChange is the silent sync
+    // channel.
+    this.onStateChange?.();
   }
 }
 
