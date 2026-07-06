@@ -33,8 +33,8 @@ The intent (nikki, 2026-07-05): the game should not start until its assets are l
 ### 060.2 — Cache headers for deployed assets
 
 - Netlify currently serves `/assets/*` with `max-age=0, must-revalidate` (observed 2026-07-05) — every visit re-downloads everything.
-- Ship a `_headers` file in the published-web managed files: long-lived caching for `/assets/*` (authored assets change rarely and a deploy that changes them changes content; accept brief staleness pre-launch, or fingerprint later — decide at implementation, lean simple `max-age=86400` + revisit).
-- boot.json stays `max-age=0` (it must update on every deploy).
+- Ship a `_headers` file in the published-web managed files with immutable caching for `/assets/*`, made safe by **deploy-time URL stamping** (decided at implementation, 2026-07-05, prompted by nikki's cache-busting question): the workflow rewrites the dist boot.json's `assetSources` values to `path?v=<deployed sha>`. New deploy = new URLs = browsers fetch fresh with zero manual busting, for nikki and players alike; the sha in DevTools also identifies which publish a request came from. Stamp is per-deploy (all assets re-download once per deploy) — per-file hashing is the deferred upgrade.
+- boot.json stays `max-age=0, must-revalidate` (it must update on every deploy — it is the URL source).
 
 ### 060.3 — Verify in prod + measure
 
@@ -45,5 +45,5 @@ The intent (nikki, 2026-07-05): the game should not start until its assets are l
 ## Defers
 
 - **Scene-scoped preload priority** (the tension above) — gate on current-Scene assets only, background-warm the rest. Revisit trigger: a game whose full asset payload makes the all-assets gate noticeably slow (multi-MB GLB libraries).
-- **Asset fingerprinting / immutable caching** — content-hashed asset filenames for `max-age=31536000, immutable`. Revisit with the load-per-Scene distribution model deferred in Plan 058.
+- **Per-file content hashing** — the per-deploy `?v=<sha>` stamp re-downloads ALL assets on every deploy; content-hashed per-file versions would re-download only changed files. Revisit trigger: asset payloads large enough that a routine deploy's full re-download is noticeable (multi-MB GLB libraries / the Plan 058 load-per-Scene defer). Immutable caching itself shipped in 060.2.
 - **Streaming-priority hints** (preload critical, lazy-load distant regions) — needs the spatial model; far future.

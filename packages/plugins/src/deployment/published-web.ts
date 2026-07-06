@@ -187,23 +187,22 @@ export function buildPublishedWebManagedFiles(
       buildBootJsonPayload(gameProject, snapshot)
     )
   );
-  // Plan 060 §060.2 — Netlify `_headers`: authored assets get a
-  // day of caching (Netlify's default is max-age=0, so every
-  // visit re-downloaded every mp3/GLB). One day, not immutable:
-  // authored asset paths are NOT content-hashed, so a redeploy
-  // that changes a file's bytes under the same path must be able
-  // to reach returning players within a day. Revisit trigger:
-  // content-hashed asset filenames (Plan 058's load-per-Scene
-  // distribution defer) unlock max-age=31536000,immutable here.
-  // boot.json is listed explicitly to pin its must-revalidate
-  // behavior even if broader rules join this file later.
+  // Plan 060 §060.2 — Netlify `_headers`: authored assets cache
+  // immutably. Safe because the deploy workflow stamps every
+  // assetSources URL with the deployed sha (`?v=<sha>`), so a
+  // URL's bytes can never change — new deploys hand browsers new
+  // URLs via boot.json, which always revalidates (pinned below).
+  // The stamp is per-DEPLOY, so every deploy re-downloads all
+  // assets once; per-file content hashing (only changed files
+  // re-download) is the deferred upgrade when asset payloads get
+  // big (see Plan 060 Defers).
   files.push(
     asTextFile(
       `${PUBLISHED_WEB_DIRECTORY}/_headers`,
       [
         `# ${PUBLISHED_WEB_HEADER}`,
         "/assets/*",
-        "  Cache-Control: public, max-age=86400",
+        "  Cache-Control: public, max-age=31536000, immutable",
         "/boot.json",
         "  Cache-Control: public, max-age=0, must-revalidate",
         ""
@@ -227,7 +226,8 @@ export function buildPublishedWebManagedFiles(
           BOOT_JSON_SCHEMA_VERSION +
           "). Regenerated every time you save the project.",
         "- `_headers` — Netlify cache rules for the deployed site",
-        "  (authored assets cache for a day; boot.json always",
+        "  (authored assets cache immutably — their URLs are",
+        "  version-stamped per deploy; boot.json always",
         "  revalidates). Copied into `dist/` at deploy time.",
         "- `README.md` — this file.",
         "",
