@@ -236,6 +236,40 @@ click Deploy → live.
 
 ---
 
+## Player auth: the door model
+
+The identities above are DEVELOPER-side. The PLAYER's account
+works on the door model — auth on the site, not in the game
+([ADR 022](/docs/adr/022-player-auth-at-the-door.md)):
+
+- **The site owns the account surface.** A game's launch page
+  (wordlark: `wordlarkhollow.com/play`, in the game's site repo)
+  handles sign-in / sign-up / sign-out against the game's
+  Supabase project. The deployed game renders ZERO account
+  chrome; identity is a quiet line on the start menu.
+- **The session travels by cookie.** SugarProfile's
+  `sessionCookieDomain` setting (e.g. `.wordlarkhollow.com`)
+  switches the Supabase client to chunked parent-domain cookie
+  storage
+  (`packages/plugins/src/catalog/sugarprofile/runtime/cookie-session-storage.ts`),
+  so the site and the game subdomain share one session. The site
+  runs a byte-format twin of that adapter — the formats must
+  move together (both files carry the pairing warning).
+- **`playPageUrl`** (SugarProfile setting) is where the start
+  menu's Exit button (the `exit-to-site` UI action,
+  `packages/runtime-core/src/ui-actions/`) returns players after
+  a force-save. Authored exit buttons hide themselves in builds
+  with no Play page configured.
+- **The fallback**: with `allowAnonymous` off and no session, a
+  direct visit to the game URL gets a blocking sign-in modal —
+  playable, but the door is the intended path. With
+  `allowAnonymous` on, session-less visits boot as guests
+  (per-game choice).
+- **Entitlement stays separable.** "Account exists" and "can
+  play" are distinct beats by design, so a payment/entitlement
+  step can slot between them later — see the constraint in
+  [ADR 022](/docs/adr/022-player-auth-at-the-door.md).
+
 ## The auth model in one paragraph
 
 Three identities are at play. **You** (a Google account) own
@@ -273,6 +307,7 @@ For deeper architectural rationale:
 - [Plan 045: SugarDeploy Cloud Run Plugin-Owned Infrastructure](/docs/plans/045-sugardeploy-cloud-run-plugin-owned-infrastructure-epic.md)
 - [Plan 046: SugarDeploy Web Publish Target Epic](/docs/plans/046-sugardeploy-web-publish-target-epic.md)
 - [Plan 047: SugarProfile User Management Plugin Epic](/docs/plans/047-sugarprofile-user-management-plugin-epic.md)
+- [ADR 022: Player Auth at the Door](/docs/adr/022-player-auth-at-the-door.md)
 - [Plan 049: Persistent gcloud Developer SA](/docs/plans/049-persistent-gcloud-developer-service-account-epic.md)
 - [Plan 053: Deploy-Time Engine Build](/docs/plans/053-deploy-time-engine-build.md)
 
