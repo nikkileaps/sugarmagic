@@ -36,3 +36,9 @@ export {
   showSceneExitOverlay,
   computeCreditsRollDurationMs
 } from "./creditsRoll";
+// Plan 060 §060.1 — boot asset preload phase.
+export {
+  preloadAssetSources,
+  type AssetPreloadProgress,
+  type PreloadAssetSourcesOptions
+} from "./assetPreload";

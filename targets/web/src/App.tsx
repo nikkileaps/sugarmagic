@@ -121,6 +121,13 @@ export function App() {
 
   const [active, setActive] = useState<ProviderBindings | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  // Plan 060 §060.1 — mirrored from host.state.assetPreload so the
+  // loading overlay can show real progress while the boot preload
+  // phase fetches file-backed assets into the HTTP cache.
+  const [assetPreload, setAssetPreload] = useState<{
+    loaded: number;
+    total: number;
+  } | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -145,6 +152,9 @@ export function App() {
       }
     });
     hostRef.current = host;
+    const unsubscribePreload = host.state.assetPreload.subscribe(() => {
+      setAssetPreload(host.state.assetPreload.getSnapshot());
+    });
 
     // Story 47.10.5 — `__freshStartFlag` is captured at module load
     // (see top of file). Using a module-level constant here so the
@@ -228,6 +238,7 @@ export function App() {
 
     return () => {
       cancelled = true;
+      unsubscribePreload();
       host.dispose();
       hostRef.current = null;
     };
@@ -353,7 +364,11 @@ export function App() {
       <div className="target-overlay">
         <div className="target-overlay-card">
           <p className="eyebrow">Sugarmagic</p>
-          <p>Loading game data...</p>
+          <p>
+            {assetPreload && assetPreload.total > 0
+              ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+              : "Loading game data..."}
+          </p>
         </div>
       </div>
     ) : phase.kind === "failed" ? (

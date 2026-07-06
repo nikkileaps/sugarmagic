@@ -169,6 +169,10 @@ import { BillboardRenderer } from "./billboard/BillboardRenderer";
 import { TextBillboardRenderer } from "./billboard/TextBillboardRenderer";
 import { createRuntimeRenderEngineProjector } from "./RenderEngineProjector";
 import { GameUILayer } from "./GameUILayer";
+import {
+  preloadAssetSources,
+  type AssetPreloadProgress
+} from "./assetPreload";
 import { WebAudioAdapter } from "./audio";
 import { FRESH_START_SESSION_STORAGE_KEY } from "./save/freshStart";
 
@@ -389,6 +393,14 @@ export interface WebRuntimeHostState {
    * closure.
    */
   latestAutosave: ObservableValue<SessionHudSavedGameSnapshot | null>;
+  /**
+   * Plan 060 §060.1 — boot asset-preload progress. Non-null only
+   * while the preload phase is fetching file-backed assets into
+   * the HTTP cache (between save resolution and world assembly);
+   * the boot overlays render "Loading assets N/M" from it. Null
+   * before, and null again once the phase completes.
+   */
+  assetPreload: ObservableValue<AssetPreloadProgress | null>;
   /**
    * Plan 054 §054.3 — the canonical Model layer for game
    * lifecycle. `lifecycle: "booting" | "start-menu" | "playing"
@@ -920,6 +932,9 @@ export function createWebRuntimeHost(
   // calls `set()`; Session HUD getter reads via `getSnapshot()`.
   const latestAutosaveStore: MutableObservableValue<SessionHudSavedGameSnapshot | null> =
     createObservableValue<SessionHudSavedGameSnapshot | null>(null);
+  // Plan 060 §060.1 — boot asset-preload progress store.
+  const assetPreloadStore: MutableObservableValue<AssetPreloadProgress | null> =
+    createObservableValue<AssetPreloadProgress | null>(null);
 
   // Plan 054 §054.3 — game-lifecycle + UI-presentation stores
   // constructed at host construction time (not inside start()).
@@ -1672,6 +1687,19 @@ export function createWebRuntimeHost(
     const resolvedSavedGame: GameSave | null =
       state.savedGame ??
       (state.savedGamePromise ? await state.savedGamePromise : null);
+
+    // Plan 060 §060.1 — preload every file-backed asset into the
+    // HTTP cache BEFORE world assembly, so the loading screen
+    // gates on a genuinely ready game (music plays on first
+    // gesture, meshes don't pop in). Per-asset failures warn and
+    // continue; the phase never blocks boot indefinitely. In
+    // Studio preview the sources are local blob URLs, so this is
+    // near-instant there.
+    assetPreloadStore.set({ loaded: 0, total: 0 });
+    await preloadAssetSources(state.assetSources, {
+      onProgress: (progress) => assetPreloadStore.set(progress)
+    });
+    assetPreloadStore.set(null);
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -2640,6 +2668,7 @@ export function createWebRuntimeHost(
     activeProviders: activeProvidersStore,
     user: userStore,
     latestAutosave: latestAutosaveStore,
+    assetPreload: assetPreloadStore,
     gameState: gameStateStore,
     uiState: uiStateStore
   };
