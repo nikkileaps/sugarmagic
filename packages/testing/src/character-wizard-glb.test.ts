@@ -29,7 +29,9 @@ const CLIPS_DIR = resolve(
 );
 
 /** Minimal single-triangle source GLB, built via our own packer. */
-function buildTriangleGlb(): ArrayBuffer {
+function buildTriangleGlb(
+  nodeTransform: { translation?: number[]; rotation?: number[] } = {}
+): ArrayBuffer {
   const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
   const indices = new Uint16Array([0, 1, 2, 0]); // padded to 4 bytes
   const bin = new Uint8Array(positions.byteLength + indices.byteLength);
@@ -39,7 +41,7 @@ function buildTriangleGlb(): ArrayBuffer {
     asset: { version: "2.0" },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ name: "Character", mesh: 0 }],
+    nodes: [{ name: "Character", mesh: 0, ...nodeTransform }],
     meshes: [
       {
         primitives: [
@@ -95,7 +97,13 @@ describe("GLB container I/O (Plan 062)", () => {
     expect(extracted.positions.length).toBe(9);
     expect([...extracted.indices]).toEqual([0, 1, 2]);
     expect(extracted.ranges).toEqual([
-      { meshIndex: 0, primitiveIndex: 0, vertexStart: 0, vertexCount: 3 }
+      {
+        meshIndex: 0,
+        primitiveIndex: 0,
+        vertexStart: 0,
+        vertexCount: 3,
+        nodeWorldMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+      }
     ]);
   });
 
@@ -137,6 +145,68 @@ describe("GLB container I/O (Plan 062)", () => {
     const boneNames = document.nodes!.map((node) => node.name);
     expect(boneNames).toContain("DEF-hips");
     expect(boneNames).toContain("DEF-f_index.01.L");
+  });
+
+  it("bakes mesh-node transforms into extraction and folds them into the skin", () => {
+    // 2026-07-06 regression — Blender exports carry up-axis fixes
+    // as NODE transforms; raw accessor data is local space. The
+    // markers floated off the mesh until extraction baked this.
+    const lifted = buildTriangleGlb({ translation: [0, 1, 0] });
+    const extracted = extractMeshFromGlb(lifted);
+    // Positions shifted by the node translation.
+    expect(extracted.positions[1]).toBeCloseTo(1, 5);
+    expect(extracted.positions[4]).toBeCloseTo(1, 5);
+    expect(extracted.ranges[0]!.nodeWorldMatrix[13]).toBeCloseTo(1, 5);
+
+    const skeleton = generateStandardSkeleton(sampleLandmarks());
+    const segments = computeBoneSegments(skeleton);
+    const weights = new GeodesicVoxelWeightSolver().solve(
+      { positions: extracted.positions, indices: extracted.indices },
+      segments,
+      { resolution: 16, smoothingIterations: 0 }
+    );
+    const skinned = buildSkinnedCharacterGlb({
+      sourceGlb: lifted,
+      skeleton,
+      weights,
+      ranges: extracted.ranges
+    });
+    const chunks = readGlb(skinned)!;
+    // The IBMs must differ from an identity-node build by the
+    // folded node matrix: compare against the same character
+    // built from an unlifted source.
+    const flat = buildTriangleGlb();
+    const flatExtracted = extractMeshFromGlb(flat);
+    const flatSkinned = buildSkinnedCharacterGlb({
+      sourceGlb: flat,
+      skeleton,
+      weights,
+      ranges: flatExtracted.ranges
+    });
+    const readIbm = (glb: ArrayBuffer): Float32Array => {
+      const c = readGlb(glb)!;
+      const accessor = c.document.accessors![c.document.skins![0]!.inverseBindMatrices!]!;
+      const view = c.document.bufferViews![accessor.bufferView!]!;
+      const start = view.byteOffset ?? 0;
+      return new Float32Array(
+        c.binaryChunk!.buffer.slice(
+          c.binaryChunk!.byteOffset + start,
+          c.binaryChunk!.byteOffset + start + accessor.count * 64
+        )
+      );
+    };
+    const liftedIbm = readIbm(skinned);
+    const flatIbm = readIbm(flatSkinned);
+    // Rotation columns identical; translation column differs by
+    // R^T applied to the node translation — just assert they are
+    // NOT equal and both finite.
+    let differs = false;
+    for (let i = 0; i < liftedIbm.length; i += 1) {
+      expect(Number.isFinite(liftedIbm[i]!)).toBe(true);
+      if (Math.abs(liftedIbm[i]! - flatIbm[i]!) > 1e-6) differs = true;
+    }
+    expect(differs).toBe(true);
+    expect(chunks.document.skins![0]!.joints.length).toBe(53);
   });
 
   it("scales ONLY the hips translation tracks of a real vendored clip", () => {

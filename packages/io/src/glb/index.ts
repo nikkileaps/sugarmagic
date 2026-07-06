@@ -151,6 +151,89 @@ export function packGlb(document: GltfJson, bin: Uint8Array): ArrayBuffer {
   return out;
 }
 
+// ---- Node world transforms -------------------------------------------
+
+type Mat4 = number[]; // column-major, length 16
+
+const MAT4_IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+function mat4Multiply(a: Mat4, b: Mat4): Mat4 {
+  const out = new Array<number>(16).fill(0);
+  for (let col = 0; col < 4; col += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      let sum = 0;
+      for (let k = 0; k < 4; k += 1) {
+        sum += a[k * 4 + row]! * b[col * 4 + k]!;
+      }
+      out[col * 4 + row] = sum;
+    }
+  }
+  return out;
+}
+
+function mat4FromTrs(
+  translation: number[] = [0, 0, 0],
+  rotation: number[] = [0, 0, 0, 1],
+  scale: number[] = [1, 1, 1]
+): Mat4 {
+  const [x, y, z, w] = rotation as [number, number, number, number];
+  const [sx, sy, sz] = scale as [number, number, number];
+  return [
+    (1 - 2 * (y * y + z * z)) * sx,
+    (2 * (x * y + w * z)) * sx,
+    (2 * (x * z - w * y)) * sx,
+    0,
+    (2 * (x * y - w * z)) * sy,
+    (1 - 2 * (x * x + z * z)) * sy,
+    (2 * (y * z + w * x)) * sy,
+    0,
+    (2 * (x * z + w * y)) * sz,
+    (2 * (y * z - w * x)) * sz,
+    (1 - 2 * (x * x + y * y)) * sz,
+    0,
+    translation[0]!,
+    translation[1]!,
+    translation[2]!,
+    1
+  ];
+}
+
+function mat4ApplyToPoint(m: Mat4, x: number, y: number, z: number): [number, number, number] {
+  return [
+    m[0]! * x + m[4]! * y + m[8]! * z + m[12]!,
+    m[1]! * x + m[5]! * y + m[9]! * z + m[13]!,
+    m[2]! * x + m[6]! * y + m[10]! * z + m[14]!
+  ];
+}
+
+function mat4NearlyEqual(a: Mat4, b: Mat4): boolean {
+  for (let i = 0; i < 16; i += 1) {
+    if (Math.abs(a[i]! - b[i]!) > 1e-5) return false;
+  }
+  return true;
+}
+
+/**
+ * World matrix per node index (scene-graph walk). glTF nodes may
+ * carry either a `matrix` or TRS; both are honored.
+ */
+function computeNodeWorldMatrices(document: GltfJson): Map<number, Mat4> {
+  const world = new Map<number, Mat4>();
+  const visit = (nodeIndex: number, parent: Mat4) => {
+    const node = document.nodes?.[nodeIndex];
+    if (!node) return;
+    const local = Array.isArray(node.matrix)
+      ? (node.matrix as Mat4)
+      : mat4FromTrs(node.translation, node.rotation, node.scale);
+    const matrix = mat4Multiply(parent, local);
+    world.set(nodeIndex, matrix);
+    for (const child of node.children ?? []) visit(child, matrix);
+  };
+  const scene = document.scenes?.[document.scene ?? 0];
+  for (const root of scene?.nodes ?? []) visit(root, MAT4_IDENTITY);
+  return world;
+}
+
 // ---- Mesh extraction -------------------------------------------------
 
 export interface ExtractedPrimitiveRange {
@@ -159,6 +242,10 @@ export interface ExtractedPrimitiveRange {
   /** First vertex of this primitive in the flattened arrays. */
   vertexStart: number;
   vertexCount: number;
+  /** World matrix of the node that references this mesh (baked
+   *  into the extracted positions; folded into the skin's IBMs
+   *  at assembly — glTF loaders ignore skinned-node transforms). */
+  nodeWorldMatrix: number[];
 }
 
 export interface ExtractedMesh {
@@ -235,6 +322,18 @@ export function extractMeshFromGlb(buffer: ArrayBuffer): ExtractedMesh {
     throw new Error("Not a valid GLB (missing JSON or BIN chunk).");
   }
   const { document, binaryChunk } = chunks;
+  // Node transforms are BAKED into the extracted positions so
+  // detection, markers, and the weight solve all run in the same
+  // space the viewer renders (the 2026-07-06 marker-offset bug —
+  // Blender exports often carry the up-axis fix as a node
+  // rotation, leaving accessor data in Z-up local space).
+  const nodeWorld = computeNodeWorldMatrices(document);
+  const worldForMesh = new Map<number, Mat4>();
+  (document.nodes ?? []).forEach((node, nodeIndex) => {
+    if (node.mesh !== undefined && !worldForMesh.has(node.mesh)) {
+      worldForMesh.set(node.mesh, nodeWorld.get(nodeIndex) ?? MAT4_IDENTITY);
+    }
+  });
   const positionsParts: Float32Array[] = [];
   const indexParts: Uint32Array[] = [];
   const ranges: ExtractedPrimitiveRange[] = [];
@@ -244,6 +343,18 @@ export function extractMeshFromGlb(buffer: ArrayBuffer): ExtractedMesh {
       const positionAccessor = primitive.attributes?.POSITION;
       if (positionAccessor === undefined) return;
       const positions = decodePositions(document, binaryChunk, positionAccessor);
+      const meshWorld = worldForMesh.get(meshIndex) ?? MAT4_IDENTITY;
+      for (let i = 0; i < positions.length; i += 3) {
+        const [px, py, pz] = mat4ApplyToPoint(
+          meshWorld,
+          positions[i]!,
+          positions[i + 1]!,
+          positions[i + 2]!
+        );
+        positions[i] = px;
+        positions[i + 1] = py;
+        positions[i + 2] = pz;
+      }
       const vertexCount = positions.length / 3;
       let indices: Uint32Array;
       if (primitive.indices !== undefined) {
@@ -258,7 +369,13 @@ export function extractMeshFromGlb(buffer: ArrayBuffer): ExtractedMesh {
       }
       positionsParts.push(positions);
       indexParts.push(shifted);
-      ranges.push({ meshIndex, primitiveIndex, vertexStart: vertexBase, vertexCount });
+      ranges.push({
+        meshIndex,
+        primitiveIndex,
+        vertexStart: vertexBase,
+        vertexCount,
+        nodeWorldMatrix: worldForMesh.get(meshIndex) ?? MAT4_IDENTITY
+      });
       vertexBase += vertexCount;
     });
   });
@@ -392,7 +509,23 @@ export function buildSkinnedCharacterGlb(
 
   // 2. Inverse bind matrices from the character's world rest pose
   // (world rotation composed down the chain; world position = the
-  // generated head).
+  // generated head). The mesh node's world transform is FOLDED in
+  // (IBM' = IBM * M): glTF loaders ignore a skinned node's own
+  // transform, but the vertices still live in node-local space —
+  // folding M makes joint deformation land where the extraction
+  // (which baked M) said the mesh is. v1 supports one shared mesh
+  // transform; distinct per-primitive transforms are rejected
+  // with a clear error.
+  const meshWorldMatrix = request.ranges[0]?.nodeWorldMatrix ?? [
+    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+  ];
+  for (const range of request.ranges) {
+    if (!mat4NearlyEqual(range.nodeWorldMatrix, meshWorldMatrix)) {
+      throw new Error(
+        "Character Wizard v1 requires all mesh primitives to share one node transform."
+      );
+    }
+  }
   const worldRotation = new Map<string, [number, number, number, number]>();
   const ibm = new Float32Array(request.skeleton.bones.length * 16);
   request.skeleton.bones.forEach((bone, index) => {
@@ -403,7 +536,11 @@ export function buildSkinnedCharacterGlb(
       number, number, number, number
     ];
     worldRotation.set(bone.name, rotation);
-    ibm.set(inverseBindMatrix(rotation, bone.headPosition), index * 16);
+    const folded = mat4Multiply(
+      inverseBindMatrix(rotation, bone.headPosition),
+      meshWorldMatrix
+    );
+    ibm.set(folded, index * 16);
   });
   const ibmAccessor = appendToBin(
     appender,
