@@ -16,7 +16,7 @@
  * old viewport did.
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -104,6 +104,7 @@ export function CharacterPreview({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const modelRootRef = useRef<THREE.Object3D | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const [modelReadyTick, setModelReadyTick] = useState(0);
   const currentActionRef = useRef<THREE.AnimationAction | null>(null);
   const clipCacheRef = useRef<Map<string, THREE.AnimationClip>>(new Map());
   const lastTimeRef = useRef<number>(0);
@@ -275,6 +276,13 @@ export function CharacterPreview({
       scene.add(renderable);
       modelRootRef.current = renderable;
       mixerRef.current = new THREE.AnimationMixer(renderable);
+      // Signal the clip-load effect: the mixer exists now. Without
+      // this, a preview whose model AND slot bindings arrive
+      // together (the Character Wizard preview step; a workspace
+      // opened with bindings already set) ran the clip effect once
+      // against a null mixer and the model stayed in T-pose
+      // forever with no errors (2026-07-06).
+      setModelReadyTick((tick) => tick + 1);
     });
   }, [model, targetHeight, assetSources]);
 
@@ -345,6 +353,7 @@ export function CharacterPreview({
     // slot-change effect below handles slot swaps within the cache.
   }, [
     model?.definitionId,
+    modelReadyTick,
     slots
       .map((s) => `${s.value}:${s.animation?.definitionId ?? ""}`)
       .join("|"),
