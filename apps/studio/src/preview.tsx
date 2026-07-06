@@ -409,6 +409,12 @@ function PreviewOverlay() {
   );
   const phase = bootStatus.phase;
   const failureReason = bootStatus.reason;
+  // Plan 060 §060.1 — asset-preload progress (near-instant in
+  // preview: blob URLs), same store the deployed overlay reads.
+  const assetPreload = useSyncExternalStore(
+    host.state.assetPreload.subscribe,
+    host.state.assetPreload.getSnapshot
+  );
 
   useEffect(() => {
     if (!active) return;
@@ -511,7 +517,14 @@ function PreviewOverlay() {
   // Studio Preview and the deployed bundle.
   const bootOverlay =
     phase === "loading" ? (
-      <BootOverlay title="Sugarmagic" body="Syncing..." />
+      <BootOverlay
+        title="Sugarmagic"
+        body={
+          assetPreload && assetPreload.total > 0
+            ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+            : "Syncing..."
+        }
+      />
     ) : phase === "failed" ? (
       <BootOverlay
         title="Failed to load"

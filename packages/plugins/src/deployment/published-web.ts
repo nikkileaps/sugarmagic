@@ -187,6 +187,28 @@ export function buildPublishedWebManagedFiles(
       buildBootJsonPayload(gameProject, snapshot)
     )
   );
+  // Plan 060 §060.2 — Netlify `_headers`: authored assets cache
+  // immutably. Safe because the deploy workflow stamps every
+  // assetSources URL with the deployed sha (`?v=<sha>`), so a
+  // URL's bytes can never change — new deploys hand browsers new
+  // URLs via boot.json, which always revalidates (pinned below).
+  // The stamp is per-DEPLOY, so every deploy re-downloads all
+  // assets once; per-file content hashing (only changed files
+  // re-download) is the deferred upgrade when asset payloads get
+  // big (see Plan 060 Defers).
+  files.push(
+    asTextFile(
+      `${PUBLISHED_WEB_DIRECTORY}/_headers`,
+      [
+        `# ${PUBLISHED_WEB_HEADER}`,
+        "/assets/*",
+        "  Cache-Control: public, max-age=31536000, immutable",
+        "/boot.json",
+        "  Cache-Control: public, max-age=0, must-revalidate",
+        ""
+      ].join("\n")
+    )
+  );
   files.push(
     asTextFile(
       PUBLISHED_WEB_README,
@@ -203,6 +225,10 @@ export function buildPublishedWebManagedFiles(
         "- `boot.json` — per-game runtime payload (schemaVersion " +
           BOOT_JSON_SCHEMA_VERSION +
           "). Regenerated every time you save the project.",
+        "- `_headers` — Netlify cache rules for the deployed site",
+        "  (authored assets cache immutably — their URLs are",
+        "  version-stamped per deploy; boot.json always",
+        "  revalidates). Copied into `dist/` at deploy time.",
         "- `README.md` — this file.",
         "",
         "## Generated at deploy time (gitignored)",
