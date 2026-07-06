@@ -137,6 +137,9 @@ importers:
 
   packages/io:
     dependencies:
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain

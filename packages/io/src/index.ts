@@ -10,3 +10,5 @@ export * from "./project-lifecycle";
 export * from "./publish";
 export * from "./schemas";
 export * from "./thumbnails";
+export * from "./glb";
+export * from "./character-wizard";
