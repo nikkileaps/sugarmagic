@@ -120,41 +120,6 @@ export function voxelizeMesh(mesh: MeshData, resolution: number): VoxelGrid {
     }
   }
 
-  // Voxel closing (Dionne & de Lasa): dilate the surface so
-  // near-touching shells (a jacket 1-2 cells off the body, a
-  // sleeve around an arm) merge into ONE connected solid —
-  // geodesic distances then flow directly between layers instead
-  // of detouring through wherever the shells happen to touch.
-  const dilated = new Uint8Array(grid.cells.length);
-  for (let z = 0; z < dims[2]; z += 1) {
-    for (let y = 0; y < dims[1]; y += 1) {
-      for (let x = 0; x < dims[0]; x += 1) {
-        if (grid.cells[voxelIndex(grid, x, y, z)] !== VOXEL_SURFACE) continue;
-        for (let dz = -1; dz <= 1; dz += 1) {
-          for (let dy = -1; dy <= 1; dy += 1) {
-            for (let dx = -1; dx <= 1; dx += 1) {
-              const nx = x + dx;
-              const ny = y + dy;
-              const nz = z + dz;
-              if (
-                nx < 0 || ny < 0 || nz < 0 ||
-                nx >= dims[0] || ny >= dims[1] || nz >= dims[2]
-              ) {
-                continue;
-              }
-              dilated[voxelIndex(grid, nx, ny, nz)] = 1;
-            }
-          }
-        }
-      }
-    }
-  }
-  for (let index = 0; index < grid.cells.length; index += 1) {
-    if (dilated[index] && grid.cells[index] === VOXEL_EMPTY) {
-      grid.cells[index] = VOXEL_SURFACE;
-    }
-  }
-
   // Exterior flood fill from the padded boundary; unreached empty
   // cells are interior.
   const exterior = new Uint8Array(grid.cells.length);
@@ -191,6 +156,104 @@ export function voxelizeMesh(mesh: MeshData, resolution: number): VoxelGrid {
   for (let index = 0; index < grid.cells.length; index += 1) {
     if (grid.cells[index] === VOXEL_EMPTY && !exterior[index]) {
       grid.cells[index] = VOXEL_INTERIOR;
+    }
+  }
+
+  // Component-aware closing (2026-07-06, replacing an earlier
+  // UNCONDITIONAL dilation that welded a chibi's adjacent legs
+  // into one solid and destroyed the no-leak property): label
+  // connected components of the traversable set; the largest is
+  // the body. Only SATELLITE components (separate-shell eyes,
+  // hair, floating accessories) get dilated — up to 3 iterations
+  // — so they bridge onto the body without the body ever being
+  // fattened against itself. Same-component layered clothing is
+  // NOT bridged; its refinement is the weight brush's job.
+  const componentOf = new Int32Array(grid.cells.length).fill(-1);
+  const componentSizes: number[] = [];
+  {
+    const stack: number[] = [];
+    for (let start = 0; start < grid.cells.length; start += 1) {
+      if (grid.cells[start] === VOXEL_EMPTY || componentOf[start] !== -1) {
+        continue;
+      }
+      const component = componentSizes.length;
+      let size = 0;
+      stack.push(start);
+      componentOf[start] = component;
+      while (stack.length > 0) {
+        const index = stack.pop()!;
+        size += 1;
+        const x = index % dims[0];
+        const y = Math.floor(index / dims[0]) % dims[1];
+        const z = Math.floor(index / (dims[0] * dims[1]));
+        for (let dz = -1; dz <= 1; dz += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            for (let dx = -1; dx <= 1; dx += 1) {
+              if (dx === 0 && dy === 0 && dz === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              const nz = z + dz;
+              if (
+                nx < 0 || ny < 0 || nz < 0 ||
+                nx >= dims[0] || ny >= dims[1] || nz >= dims[2]
+              ) {
+                continue;
+              }
+              const neighbor = voxelIndex(grid, nx, ny, nz);
+              if (
+                grid.cells[neighbor] !== VOXEL_EMPTY &&
+                componentOf[neighbor] === -1
+              ) {
+                componentOf[neighbor] = component;
+                stack.push(neighbor);
+              }
+            }
+          }
+        }
+      }
+      componentSizes.push(size);
+    }
+  }
+  if (componentSizes.length > 1) {
+    let bodyComponent = 0;
+    componentSizes.forEach((size, component) => {
+      if (size > componentSizes[bodyComponent]!) bodyComponent = component;
+    });
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const additions: number[] = [];
+      for (let index = 0; index < grid.cells.length; index += 1) {
+        if (grid.cells[index] === VOXEL_EMPTY) continue;
+        if (componentOf[index] === bodyComponent) continue;
+        const x = index % dims[0];
+        const y = Math.floor(index / dims[0]) % dims[1];
+        const z = Math.floor(index / (dims[0] * dims[1]));
+        for (let dz = -1; dz <= 1; dz += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            for (let dx = -1; dx <= 1; dx += 1) {
+              const nx = x + dx;
+              const ny = y + dy;
+              const nz = z + dz;
+              if (
+                nx < 0 || ny < 0 || nz < 0 ||
+                nx >= dims[0] || ny >= dims[1] || nz >= dims[2]
+              ) {
+                continue;
+              }
+              const neighbor = voxelIndex(grid, nx, ny, nz);
+              if (grid.cells[neighbor] === VOXEL_EMPTY) {
+                additions.push(neighbor);
+              }
+            }
+          }
+        }
+      }
+      if (additions.length === 0) break;
+      for (const index of additions) {
+        if (grid.cells[index] === VOXEL_EMPTY) {
+          grid.cells[index] = VOXEL_SURFACE;
+          componentOf[index] = -2; // bridge cells: not body-labeled
+        }
+      }
     }
   }
   return grid;

@@ -93,6 +93,14 @@ The wizard lives in the EXISTING Player and NPC workspaces; no new workspace.
 - Steps: import (reuse GLB file-picker machinery) -> joint markers (new self-contained marker viewport; drag to correct) -> generate (bind runs in a worker with progress, mirroring the asset-preload progress UX; weight-heatmap debug toggle) -> preview (reuse `CharacterPreview`) -> finish (commit via 062.4 + bind animation slots via the existing update commands).
 - Wizard state is wizard-local View state; nothing persists before finish; cancel leaves the project untouched.
 
+### 062.8 — Weight paint touch-up (promoted from Defers, 2026-07-06)
+
+Real-character verification (nikki's layered chibi squirrel) found the honest ceiling of automatic weighting: head/tail/body solve well after the giant-head and stranded-shell fixes, but layered clothing (jacket/sleeves over the body) cannot be disambiguated from adjacent body parts by geometry alone — unconditional voxel closing that fixed the sleeves welded the chibi's adjacent legs together (regression, reverted to component-aware closing). Every DCC lands here; the answer is the same as theirs: a weight brush.
+
+- A "Weights" step in the wizard (between generate and preview, skippable): bone picker (the 53 contract bones, searchable), viewport heatmap of the selected bone's influence, brush to add/subtract/smooth influence with live renormalization (4-influence cap preserved), animated preview toggle so edits are judged in motion.
+- Rides the designed seams: painting edits the `SkinWeights` arrays; finish re-runs `buildSkinnedCharacterGlb`; nothing downstream changes.
+- The heatmap doubles as the weight-debug view the plan always wanted.
+
 ### 062.7 — Verify end-to-end
 
 - nikki's own Blender character through the whole path: import static GLB -> adjust a few markers -> generate -> preview idle/walk/run in the wizard -> finish -> slots populated in the workspace -> preview in Studio -> deploy -> character animates in prod (assets pipeline carries it with zero target work).
