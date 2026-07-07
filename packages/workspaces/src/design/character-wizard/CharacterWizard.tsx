@@ -475,13 +475,22 @@ export function CharacterWizard(props: CharacterWizardProps) {
     );
   }, [generated]);
   const handlePaint = useCallback(
-    (point: [number, number, number]): number[] => {
+    (faceVertices: [number, number, number]): number[] => {
       if (!generated) return [];
+      // Brush center = the clicked face's REST-space centroid, so
+      // strokes land correctly even while the preview animates.
+      const positions = generated.mesh.positions;
+      const center: [number, number, number] = [0, 0, 0];
+      for (const vertex of faceVertices) {
+        center[0] += positions[vertex * 3]! / 3;
+        center[1] += positions[vertex * 3 + 1]! / 3;
+        center[2] += positions[vertex * 3 + 2]! / 3;
+      }
       const affected = applyBrushStroke(
         generated.mesh,
         generated.weights,
         {
-          center: point,
+          center,
           radius: brushRadius,
           boneColumn: paintBoneColumn,
           strength: brushStrength * 0.25,

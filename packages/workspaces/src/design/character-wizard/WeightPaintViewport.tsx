@@ -46,9 +46,11 @@ export interface WeightPaintViewportProps {
   /** World-space brush radius. */
   brushRadius: number;
   animating: boolean;
-  /** Paint callback: world-space point; the caller applies the
-   *  pure brush op and returns affected flattened vertex indices. */
-  onPaint: (point: [number, number, number]) => number[];
+  /** Paint callback: the clicked face's FLATTENED vertex indices
+   *  (rest-space identity — valid even while the mesh is posed by
+   *  the Animate toggle). The caller centers the brush on their
+   *  rest positions and returns affected vertex indices. */
+  onPaint: (faceVertices: [number, number, number]) => number[];
 }
 
 const HEAT_LOW = new THREE.Color(0x1a2340);
@@ -321,12 +323,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         paintTargets.map((target) => target.mesh)
       );
       const hit = hits[0];
-      if (!hit) return;
+      if (!hit || !hit.face) return;
       placeCursor(hit);
+      // Face indices reference the BASE geometry — rest space —
+      // which is what makes painting correct while animating
+      // (the 2026-07-06 paint-misses-everything bug: brushing in
+      // world space against a posed mesh).
+      const target = paintTargets.find((candidate) => candidate.mesh === hit.object);
+      if (!target) return;
       const affected = propsRef.current.onPaint([
-        hit.point.x,
-        hit.point.y,
-        hit.point.z
+        target.vertexStart + hit.face.a,
+        target.vertexStart + hit.face.b,
+        target.vertexStart + hit.face.c
       ]);
       if (affected.length > 0) {
         refreshHeatmap(affected);
