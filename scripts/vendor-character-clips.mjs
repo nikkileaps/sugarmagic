@@ -306,8 +306,64 @@ function packGlb(document, bin) {
   return out;
 }
 
+/**
+ * Relaxed base pose (Plan 063): per-bone mean rotation of the
+ * library's Idle_Loop expressed as an OFFSET from contract rest
+ * (rest ^ -1 * mean). Procedural generators layer motion on top
+ * of this so characters hang their arms instead of holding the
+ * contract T-pose.
+ */
+function computeRelaxedPose(document, bin) {
+  const animation = document.animations.find((a) => a.name === "Idle_Loop");
+  const offsets = {};
+  if (!animation) return offsets;
+  const qConj = (q) => [-q[0], -q[1], -q[2], q[3]];
+  const qMul = (a, b) => [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+  ];
+  for (const channel of animation.channels) {
+    if (channel.target.path !== "rotation") continue;
+    const node = document.nodes[channel.target.node];
+    if (!node || !CORE_BONE_NAMES.has(node.name)) continue;
+    const sampler = animation.samplers[channel.sampler];
+    const accessor = document.accessors[sampler.output];
+    const view = document.bufferViews[accessor.bufferView];
+    const base = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    // Mean with sign alignment against the first key.
+    const first = [
+      bin.readFloatLE(base),
+      bin.readFloatLE(base + 4),
+      bin.readFloatLE(base + 8),
+      bin.readFloatLE(base + 12)
+    ];
+    const sum = [0, 0, 0, 0];
+    for (let key = 0; key < accessor.count; key += 1) {
+      const q = [
+        bin.readFloatLE(base + key * 16),
+        bin.readFloatLE(base + key * 16 + 4),
+        bin.readFloatLE(base + key * 16 + 8),
+        bin.readFloatLE(base + key * 16 + 12)
+      ];
+      const sign =
+        q[0] * first[0] + q[1] * first[1] + q[2] * first[2] + q[3] * first[3] >= 0
+          ? 1
+          : -1;
+      for (let c = 0; c < 4; c += 1) sum[c] += q[c] * sign;
+    }
+    const norm = Math.hypot(...sum) || 1;
+    const mean = sum.map((component) => component / norm);
+    const rest = node.rotation ?? [0, 0, 0, 1];
+    const offset = qMul(qConj(rest), mean);
+    offsets[node.name] = offset.map((component) => Number(component.toFixed(6)));
+  }
+  return offsets;
+}
+
 /** Generate the domain rig-contract data module from the skin. */
-function generateRigData(document) {
+function generateRigData(document, bin) {
   const joints = document.skins[0].joints;
   const parentOf = new Map();
   document.nodes.forEach((node, index) => {
@@ -342,6 +398,15 @@ function generateRigData(document) {
     "",
     'import type { StandardRigBone } from "./index";',
     "",
+    "/** Per-bone mean Idle_Loop rotation as an offset from rest —",
+    " *  the relaxed base pose procedural generators layer under",
+    " *  their motion (arms hang instead of T-posing). */",
+    "export const STANDARD_RIG_RELAXED_POSE_DATA: Readonly<",
+    "  Record<string, readonly [number, number, number, number]>",
+    "> = " +
+      JSON.stringify(computeRelaxedPose(document, bin), null, 2) +
+      ";",
+    "",
     "export const STANDARD_RIG_BONES: readonly StandardRigBone[] = " +
       JSON.stringify(bones, null, 2) + ";",
     ""
@@ -360,6 +425,6 @@ for (const clipName of CURATED_CLIPS) {
 
 writeFileSync(
   resolve(REPO_ROOT, "packages/domain/src/standard-rig/rig-data.ts"),
-  generateRigData(document)
+  generateRigData(document, bin)
 );
 console.log("wrote rig-data.ts");

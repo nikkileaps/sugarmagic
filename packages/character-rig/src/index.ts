@@ -72,3 +72,4 @@ export {
   type BrushMode,
   type BrushStroke
 } from "./paint";
+export * from "./motion";

@@ -25,7 +25,7 @@
  * Status: active
  */
 
-import { STANDARD_RIG_BONES } from "./rig-data";
+import { STANDARD_RIG_BONES, STANDARD_RIG_RELAXED_POSE_DATA } from "./rig-data";
 
 export const STANDARD_RIG_SCHEMA_VERSION = 1;
 
@@ -134,3 +134,11 @@ export function isStandardRigBoneName(name: string): boolean {
 }
 
 export { STANDARD_RIG_BONES } from "./rig-data";
+
+/**
+ * Per-bone mean Idle_Loop rotation as an offset from contract
+ * rest — the relaxed base pose (Plan 063): procedural generators
+ * layer their motion on top of the ARM subset so characters hang
+ * their arms instead of holding the contract T-pose.
+ */
+export const STANDARD_RIG_RELAXED_POSE = STANDARD_RIG_RELAXED_POSE_DATA;

@@ -11,6 +11,152 @@
 
 import type { StandardRigBone } from "./index";
 
+/** Per-bone mean Idle_Loop rotation as an offset from rest —
+ *  the relaxed base pose procedural generators layer under
+ *  their motion (arms hang instead of T-posing). */
+export const STANDARD_RIG_RELAXED_POSE_DATA: Readonly<
+  Record<string, readonly [number, number, number, number]>
+> = {
+  "root": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "DEF-hips": [
+    -0.040803,
+    -0.113435,
+    0.024327,
+    0.992409
+  ],
+  "DEF-spine.001": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "DEF-spine.002": [
+    0.04634,
+    0.000104,
+    0.000134,
+    0.998926
+  ],
+  "DEF-spine.003": [
+    0.138623,
+    0.000312,
+    0.0004,
+    0.990345
+  ],
+  "DEF-neck": [
+    -0.092581,
+    -0.000262,
+    -0.000215,
+    0.995705
+  ],
+  "DEF-head": [
+    0.06139,
+    0.095831,
+    0.006383,
+    0.993482
+  ],
+  "DEF-shoulder.L": [
+    -0.03365,
+    -0.005033,
+    -0.054814,
+    0.997917
+  ],
+  "DEF-upper_arm.L": [
+    -0.037039,
+    0,
+    -0.568503,
+    0.821847
+  ],
+  "DEF-forearm.L": [
+    0.248644,
+    0.020634,
+    0.001392,
+    0.968374
+  ],
+  "DEF-hand.L": [
+    0.114573,
+    0.006597,
+    -0.025618,
+    0.993063
+  ],
+  "DEF-shoulder.R": [
+    -0.03326,
+    0.006053,
+    -0.04927,
+    0.998213
+  ],
+  "DEF-upper_arm.R": [
+    -0.07661,
+    0,
+    0.563358,
+    0.822654
+  ],
+  "DEF-forearm.R": [
+    0.352038,
+    -0.143774,
+    0.06058,
+    0.922891
+  ],
+  "DEF-hand.R": [
+    0.125257,
+    0.00253,
+    0.044802,
+    0.991109
+  ],
+  "DEF-thigh.L": [
+    -0.139745,
+    0,
+    -0.116527,
+    0.983307
+  ],
+  "DEF-shin.L": [
+    0.172461,
+    -0.109313,
+    0.027623,
+    0.978542
+  ],
+  "DEF-foot.L": [
+    0.025779,
+    -0.030884,
+    0.091552,
+    0.994987
+  ],
+  "DEF-toe.L": [
+    0,
+    0,
+    0,
+    1
+  ],
+  "DEF-thigh.R": [
+    0.089868,
+    0,
+    0.127584,
+    0.987748
+  ],
+  "DEF-shin.R": [
+    0.11839,
+    0.351388,
+    -0.071311,
+    0.925973
+  ],
+  "DEF-foot.R": [
+    -0.089151,
+    0.041262,
+    -0.165463,
+    0.981311
+  ],
+  "DEF-toe.R": [
+    0,
+    0,
+    0,
+    1
+  ]
+};
+
 export const STANDARD_RIG_BONES: readonly StandardRigBone[] = [
   {
     "name": "root",

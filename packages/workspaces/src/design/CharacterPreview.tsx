@@ -60,6 +60,9 @@ export interface CharacterPreviewProps {
   /** Plan 062 §062.6 — when provided, the HUD shows the rig-wizard
    *  launcher next to the animation controls. */
   onLaunchRigWizard?: () => void;
+  /** Plan 063 §063.4 — opens the animation panel (rigId-gated by
+   *  the caller, like the wizard's Edit affordance). */
+  onLaunchAnimationPanel?: () => void;
 }
 
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number): void {
@@ -96,7 +99,8 @@ export function CharacterPreview({
   isPlaying,
   onChangePlaying,
   assetSources,
-  onLaunchRigWizard
+  onLaunchRigWizard,
+  onLaunchAnimationPanel
 }: CharacterPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -493,6 +497,18 @@ export function CharacterPreview({
               aria-label="Open the Character Wizard"
             >
               🦴
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+        {onLaunchAnimationPanel ? (
+          <Tooltip label="Animations — generate + tune idle/walk/run">
+            <ActionIcon
+              variant="subtle"
+              color="cyan"
+              onClick={onLaunchAnimationPanel}
+              aria-label="Open the animation panel"
+            >
+              ✨
             </ActionIcon>
           </Tooltip>
         ) : null}

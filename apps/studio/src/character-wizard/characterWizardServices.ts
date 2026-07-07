@@ -14,27 +14,40 @@
  */
 
 import {
+  RELAXED_ARM_POSE,
+  composeBasePose,
   computeBoneSegments,
+  evaluateCurve,
   detectRigLandmarks,
+  generateIdleChannels,
+  generateRunChannels,
   generateStandardSkeleton,
+  generateWalkChannels,
   getStandardRigHipHeight,
+  sampleMotion,
   type GeneratedSkeleton,
   type RigLandmarks,
   type SkinWeights
 } from "@sugarmagic/character-rig";
 import {
+  buildClipGlb,
   buildSkinnedCharacterGlb,
+  commitCharacterAnimationClips,
   commitCharacterWizardResult,
   extractMeshFromGlb,
   readBlobFile,
+  readClipRecipe,
   readSkinWeightsFromGlb,
   readWizardRecipe,
   scaleClipHipsTranslation,
   type GameRootDescriptor
 } from "@sugarmagic/io";
-import type {
-  CharacterAnimationDefinition,
-  CharacterModelDefinition
+import {
+  STANDARD_RIG_CORE,
+  isMotionRecipe,
+  type CharacterAnimationDefinition,
+  type CharacterModelDefinition,
+  type MotionRecipe
 } from "@sugarmagic/domain";
 import type {
   CharacterWizardServices,
@@ -71,7 +84,7 @@ export interface CharacterWizardServiceDeps {
   } | null;
   /** Register the committed definitions on the authoring session. */
   registerDefinitions: (
-    model: CharacterModelDefinition,
+    model: CharacterModelDefinition | null,
     animations: CharacterAnimationDefinition[]
   ) => void;
   /** Refresh blob URLs after edit-in-place overwrote asset files. */
@@ -113,6 +126,40 @@ function solveWeightsInWorker(
     // Copy (not transfer) the mesh buffers: the caller reuses them.
     worker.postMessage({ positions, indices, segments });
   });
+}
+
+function generateClipFromRecipe(
+  recipe: MotionRecipe,
+  hipScale: number
+): { clipName: string; bytes: ArrayBuffer } {
+  const generators = {
+    idle: generateIdleChannels,
+    walk: generateWalkChannels,
+    run: generateRunChannels
+  } as const;
+  const composed = generators[recipe.generatorId]({
+    ...recipe.personality,
+    seed: recipe.seed
+  });
+  const motion = sampleMotion(composed, {
+    basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides),
+    channelOverrides: recipe.curveOverrides
+  });
+  const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
+  const glb = buildClipGlb({
+    clipName,
+    duration: motion.duration,
+    boneTracks: motion.boneTracks,
+    hipsTranslation: motion.hipsTranslation,
+    bones: STANDARD_RIG_CORE.bones.map((bone) => ({
+      name: bone.name,
+      parentName: bone.parentName,
+      restPosition: bone.restPosition,
+      restRotation: bone.restRotation
+    })),
+    recipe
+  });
+  return { clipName, bytes: scaleClipHipsTranslation(glb, hipScale) };
 }
 
 async function prepareClips(
@@ -284,10 +331,28 @@ export function createCharacterWizardServices(
         modelGlb: request.generated.modelGlb,
         sourceGlb: request.sourceBytes,
         landmarks: request.landmarks,
-        clips: request.generated.clips.map((clip) => ({
-          clipName: clip.clipName,
-          bytes: clip.bytes
-        })),
+        // Weights-only edit: don't rewrite clips (and below, don't
+        // re-register or rebind them) — generated slots survive.
+        // Marker-level edit: slots whose CURRENT clip carries a
+        // motion recipe REGENERATE at the new skeleton's hip scale
+        // (personality + pose survive); library slots re-copy.
+        clips: request.skipAnimations
+          ? []
+          : request.generated.clips.map((clip) => {
+              const boundBytes = request.boundClips?.[clip.slot];
+              const recipe = boundBytes ? readClipRecipe(boundBytes) : null;
+              if (recipe && isMotionRecipe(recipe)) {
+                const hipScale =
+                  request.generated.skeleton.hipHeight /
+                  getStandardRigHipHeight();
+                const regenerated = generateClipFromRecipe(recipe, hipScale);
+                return {
+                  clipName: regenerated.clipName,
+                  bytes: regenerated.bytes
+                };
+              }
+              return { clipName: clip.clipName, bytes: clip.bytes };
+            }),
         attributionText
       });
       // Registration UPSERTS by definitionId: unchanged clip names
@@ -318,13 +383,94 @@ export function createCharacterWizardServices(
       ]);
       return {
         characterModelDefinition: result.characterModelDefinition,
-        characterAnimationDefinitions: request.generated.clips.map(
-          (clip, index) => ({
-            slot: clip.slot,
-            definition: result.characterAnimationDefinitions[index]!
-          })
-        )
+        characterAnimationDefinitions: request.skipAnimations
+          ? []
+          : request.generated.clips.map((clip, index) => ({
+              slot: clip.slot,
+              definition: result.characterAnimationDefinitions[index]!
+            }))
       };
+    },
+
+    // ---- Plan 063: animation panel services --------------------
+
+    async prepareAnimationPanel(riggedBytes) {
+      const recipe = readWizardRecipe(riggedBytes);
+      if (!recipe) {
+        throw new Error("This model was not generated by the Character Wizard.");
+      }
+      const skeleton = generateStandardSkeleton(
+        recipe.landmarks as RigLandmarks
+      );
+      return {
+        hipScale: skeleton.hipHeight / getStandardRigHipHeight(),
+        relaxedPose: RELAXED_ARM_POSE
+      };
+    },
+
+    generateClip(recipe, hipScale) {
+      return generateClipFromRecipe(recipe, hipScale);
+    },
+
+    async getLibraryClip(slot, hipScale) {
+      const entry = SLOT_CLIPS.find((candidate) => candidate.slot === slot)!;
+      const bytes = await (await fetch(entry.url)).arrayBuffer();
+      return {
+        clipName: entry.clipName,
+        bytes: scaleClipHipsTranslation(bytes, hipScale)
+      };
+    },
+
+    sampleChannel(recipe, channel, count) {
+      const generators = {
+        idle: generateIdleChannels,
+        walk: generateWalkChannels,
+        run: generateRunChannels
+      } as const;
+      const composed = generators[recipe.generatorId]({
+        ...recipe.personality,
+        seed: recipe.seed
+      });
+      const stack =
+        channel === "bounce"
+          ? composed.bounce
+          : (composed.channels[
+              channel as keyof typeof composed.channels
+            ] ?? []);
+      return Array.from({ length: count }, (_, index) => {
+        const x = index / count;
+        let y = 0;
+        for (const curve of stack) y += evaluateCurve(curve, x);
+        return { x, y };
+      });
+    },
+
+    readSlotRecipe(clipBytes) {
+      const recipe = readClipRecipe(clipBytes);
+      return isMotionRecipe(recipe) ? recipe : null;
+    },
+
+    async commitAnimationSlots(request) {
+      const context = deps.getProjectContext();
+      if (!context) throw new Error("No open project.");
+      const definitions = await commitCharacterAnimationClips({
+        projectHandle: context.projectHandle,
+        descriptor: context.descriptor,
+        projectId: context.projectId,
+        characterName: request.characterName,
+        clips: request.clips.map((clip) => ({
+          clipName: clip.clipName,
+          bytes: clip.bytes
+        }))
+      });
+      deps.registerDefinitions(null, definitions);
+      await deps.refreshAssetPaths(
+        definitions.map((definition) => definition.source.relativeAssetPath)
+      );
+      return request.clips.map((clip, index) => ({
+        slot: clip.slot,
+        definition: definitions[index]!
+      }));
     },
 
     async commit(request) {

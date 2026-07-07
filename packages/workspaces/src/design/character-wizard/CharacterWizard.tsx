@@ -34,7 +34,8 @@ import {
 import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
-  CharacterModelDefinition
+  CharacterModelDefinition,
+  MotionRecipe
 } from "@sugarmagic/domain";
 import {
   applyBrushStroke,
@@ -99,12 +100,21 @@ export interface CharacterWizardServices {
   }>;
   /** Overwrite an existing character's assets in place (§062.9).
    *  Returns the (upserted) definitions — a renamed clip needs
-   *  rebinding just like a fresh commit. */
+   *  rebinding just like a fresh commit. With `skipAnimations`
+   *  (weights-only edits: markers untouched, so hip scale and
+   *  clips are unchanged) ONLY the model is written — animation
+   *  files, definitions, and bindings stay exactly as configured,
+   *  including Plan 063 generated slots. */
   commitEdit(request: {
     characterName: string;
     sourceBytes: ArrayBuffer;
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
+    skipAnimations: boolean;
+    /** Currently bound clip bytes per slot — recipe-carrying
+     *  (generated) slots regenerate at the new skeleton instead
+     *  of being stomped back to library clips. */
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   }): Promise<{
     characterModelDefinition: CharacterModelDefinition;
     characterAnimationDefinitions: Array<{
@@ -112,6 +122,47 @@ export interface CharacterWizardServices {
       definition: CharacterAnimationDefinition;
     }>;
   }>;
+  // ---- Plan 063: animation panel services (same DI object; the
+  // panel is character tooling like the wizard) ----------------
+  /** Hip scale for clip copies (from the model's recipe) + the
+   *  relaxed base pose the pose-adjust viewport starts from. */
+  prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{
+    hipScale: number;
+    relaxedPose: Readonly<Record<string, readonly number[]>>;
+  }>;
+  /** Generate a clip from a recipe, hips-scaled for the character. */
+  generateClip(
+    recipe: MotionRecipe,
+    hipScale: number
+  ): { clipName: string; bytes: ArrayBuffer };
+  /** The vendored library clip for a slot, hips-scaled. */
+  getLibraryClip(
+    slot: "idle" | "walk" | "run",
+    hipScale: number
+  ): Promise<{ clipName: string; bytes: ArrayBuffer }>;
+  /** Recipe stamped in a generated clip, or null. */
+  readSlotRecipe(clipBytes: ArrayBuffer): MotionRecipe | null;
+  /** §063.6 — sample a generator channel's current signal (the
+   *  curve editor's starting shape when no override exists). */
+  sampleChannel(
+    recipe: MotionRecipe,
+    channel: string,
+    count: number
+  ): Array<{ x: number; y: number }>;
+  /** Write + register slot clips; returns slot-mapped definitions. */
+  commitAnimationSlots(request: {
+    characterName: string;
+    clips: Array<{
+      slot: "idle" | "walk" | "run";
+      clipName: string;
+      bytes: ArrayBuffer;
+    }>;
+  }): Promise<
+    Array<{
+      slot: "idle" | "walk" | "run";
+      definition: CharacterAnimationDefinition;
+    }>
+  >;
   /** Write assets + return definitions (io commit, §062.4). */
   commit(request: {
     characterName: string;
@@ -138,6 +189,9 @@ export interface CharacterWizardProps {
   editSession?: {
     characterName: string;
     riggedBytes: ArrayBuffer;
+    /** Bound animation clip bytes per slot (for recipe-preserving
+     *  regeneration on marker-level edits). */
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null;
   /** Fired after commit; the workspace binds model + slots. */
   onCommitted: (result: {
@@ -396,7 +450,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
           characterName,
           sourceBytes,
           landmarks,
-          generated
+          generated,
+          // Markers untouched = skeleton unchanged = clips still
+          // valid; leave animation bindings (incl. generated
+          // slots) alone.
+          skipAnimations: !landmarksDirtyRef.current,
+          boundClips: editSession?.boundClips
         });
         onCommitted(result);
       } else {

@@ -1462,10 +1462,9 @@ export function App() {
         registerDefinitions: (model, animations) => {
           const { session: currentSession } = projectStore.getState();
           if (!currentSession) return;
-          let nextSession = addCharacterModelDefinitionToSession(
-            currentSession,
-            model
-          );
+          let nextSession = model
+            ? addCharacterModelDefinitionToSession(currentSession, model)
+            : currentSession;
           for (const animation of animations) {
             nextSession = addCharacterAnimationDefinitionToSession(
               nextSession,

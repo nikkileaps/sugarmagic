@@ -655,6 +655,174 @@ export function buildSkinnedCharacterGlb(
   return packGlb(document, bin);
 }
 
+// ---- Generated clip writer (Plan 063 §063.3) ---------------------------
+
+export interface ClipBoneTrack {
+  boneName: string;
+  times: Float32Array;
+  /** xyzw quaternion per key. */
+  rotations: Float32Array;
+}
+
+export interface BuildClipGlbRequest {
+  /** Animation name — becomes the clip's name (binds the slot). */
+  clipName: string;
+  duration: number;
+  boneTracks: ClipBoneTrack[];
+  /** Optional hips translation keys (contract-local). */
+  hipsTranslation: { times: Float32Array; values: Float32Array } | null;
+  /** Bone hierarchy to emit as nodes: contract rest pose. */
+  bones: Array<{
+    name: string;
+    parentName: string | null;
+    restPosition: readonly number[];
+    restRotation: readonly number[];
+  }>;
+  /** Recipe stamped into asset.extras.sugarmagicAnimation. */
+  recipe?: unknown;
+}
+
+/**
+ * Assemble a standalone animation GLB: the contract bone hierarchy
+ * (no mesh) plus ONE animation — the same shape as the vendored
+ * library clips, so everything downstream (hips scaling at copy,
+ * name-based binding at playback, the standard-rig contract tests)
+ * treats generated clips identically.
+ */
+export function buildClipGlb(request: BuildClipGlbRequest): ArrayBuffer {
+  const binParts: Uint8Array[] = [];
+  let binLength = 0;
+  const bufferViews: Array<{ buffer: 0; byteOffset: number; byteLength: number }> = [];
+  const accessors: Array<Record<string, unknown>> = [];
+
+  const appendAccessor = (
+    data: Float32Array,
+    type: "SCALAR" | "VEC3" | "VEC4",
+    minMax?: { min: number[]; max: number[] }
+  ): number => {
+    const bytes = new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+    const padded = (4 - (binLength % 4)) % 4;
+    if (padded) {
+      binParts.push(new Uint8Array(padded));
+      binLength += padded;
+    }
+    bufferViews.push({ buffer: 0, byteOffset: binLength, byteLength: bytes.byteLength });
+    binParts.push(bytes);
+    binLength += bytes.byteLength;
+    const components = type === "SCALAR" ? 1 : type === "VEC3" ? 3 : 4;
+    accessors.push({
+      bufferView: bufferViews.length - 1,
+      componentType: 5126,
+      count: data.length / components,
+      type,
+      ...(minMax ?? {})
+    });
+    return accessors.length - 1;
+  };
+
+  // Bone nodes: contract hierarchy, rest TRS.
+  const nodeIndexByName = new Map<string, number>();
+  const nodes: Array<Record<string, unknown>> = request.bones.map((bone, index) => {
+    nodeIndexByName.set(bone.name, index);
+    return {
+      name: bone.name,
+      translation: [...bone.restPosition],
+      rotation: [...bone.restRotation]
+    };
+  });
+  const rootIndices: number[] = [];
+  request.bones.forEach((bone, index) => {
+    if (bone.parentName === null) {
+      rootIndices.push(index);
+      return;
+    }
+    const parent = nodes[nodeIndexByName.get(bone.parentName)!]!;
+    ((parent.children as number[] | undefined) ?? (parent.children = [])).push(index);
+  });
+
+  // One shared time accessor per distinct times array length is
+  // overkill here — every track shares the sampler grid, so write
+  // the first track's times once.
+  const channels: Array<Record<string, unknown>> = [];
+  const samplers: Array<Record<string, unknown>> = [];
+  let timeAccessor: number | null = null;
+  const timesFor = (times: Float32Array): number => {
+    if (timeAccessor === null) {
+      timeAccessor = appendAccessor(times, "SCALAR", {
+        min: [0],
+        max: [request.duration]
+      });
+    }
+    return timeAccessor;
+  };
+
+  for (const track of request.boneTracks) {
+    const nodeIndex = nodeIndexByName.get(track.boneName);
+    if (nodeIndex === undefined) continue;
+    const output = appendAccessor(track.rotations, "VEC4");
+    samplers.push({
+      input: timesFor(track.times),
+      output,
+      interpolation: "LINEAR"
+    });
+    channels.push({
+      sampler: samplers.length - 1,
+      target: { node: nodeIndex, path: "rotation" }
+    });
+  }
+  if (request.hipsTranslation) {
+    const hipsIndex = nodeIndexByName.get("DEF-hips");
+    if (hipsIndex !== undefined) {
+      const output = appendAccessor(request.hipsTranslation.values, "VEC3");
+      samplers.push({
+        input: timesFor(request.hipsTranslation.times),
+        output,
+        interpolation: "LINEAR"
+      });
+      channels.push({
+        sampler: samplers.length - 1,
+        target: { node: hipsIndex, path: "translation" }
+      });
+    }
+  }
+
+  const bin = new Uint8Array(binLength);
+  let offset = 0;
+  for (const part of binParts) {
+    bin.set(part, offset);
+    offset += part.byteLength;
+  }
+
+  const document: GltfJson = {
+    asset: {
+      version: "2.0",
+      generator: "sugarmagic",
+      ...(request.recipe !== undefined
+        ? { extras: { sugarmagicAnimation: request.recipe } }
+        : {})
+    },
+    scene: 0,
+    scenes: [{ nodes: rootIndices }],
+    nodes: nodes as GltfJson["nodes"],
+    animations: [
+      { name: request.clipName, channels, samplers }
+    ] as unknown as GltfJson["animations"],
+    accessors: accessors as GltfJson["accessors"],
+    bufferViews,
+    buffers: [{ byteLength: bin.byteLength }]
+  };
+  return packGlb(document, bin);
+}
+
+/** Read a generated clip's recipe, or null if absent. */
+export function readClipRecipe(clipGlb: ArrayBuffer): unknown | null {
+  const chunks = readGlb(clipGlb);
+  const extras = chunks?.document.asset?.extras as
+    | { sugarmagicAnimation?: unknown }
+    | undefined;
+  return extras?.sugarmagicAnimation ?? null;
+}
+
 // ---- Wizard reopen (§062.9) -------------------------------------------
 
 export interface WizardRecipe {

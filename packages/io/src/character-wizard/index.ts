@@ -133,7 +133,43 @@ export async function commitCharacterWizardResult(
     }
   );
 
-  const characterAnimationDefinitions: CharacterAnimationDefinition[] = [];
+  const characterAnimationDefinitions = await commitCharacterAnimationClips({
+    projectHandle: request.projectHandle,
+    descriptor: request.descriptor,
+    projectId: request.projectId,
+    characterName: request.characterName,
+    clips: request.clips
+  });
+
+  await writeBlobFile(
+    request.projectHandle,
+    [assetsPath, "character-animations", "QUATERNIUS-ATTRIBUTION.md"],
+    new Blob([request.attributionText], { type: "text/markdown" })
+  );
+
+  return { characterModelDefinition, characterAnimationDefinitions };
+}
+
+export interface CommitCharacterAnimationClipsRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  projectId: string;
+  characterName: string;
+  clips: WizardClipInput[];
+}
+
+/**
+ * Write animation clip GLBs for a character and return their
+ * definitions. Deterministic ids (name + clip name) so re-saving
+ * the same clip UPSERTS instead of orphaning — the Plan 063
+ * animation panel re-commits slots through this path.
+ */
+export async function commitCharacterAnimationClips(
+  request: CommitCharacterAnimationClipsRequest
+): Promise<CharacterAnimationDefinition[]> {
+  const safeName = sanitizeSegment(request.characterName);
+  const assetsPath = request.descriptor.authoredAssetsPath;
+  const definitions: CharacterAnimationDefinition[] = [];
   for (const clip of request.clips) {
     const clipFileName = `${safeName}-${sanitizeSegment(clip.clipName)}.glb`;
     await writeBlobFile(
@@ -141,7 +177,7 @@ export async function commitCharacterWizardResult(
       [assetsPath, "character-animations", clipFileName],
       new Blob([clip.bytes], { type: "model/gltf-binary" })
     );
-    characterAnimationDefinitions.push(
+    definitions.push(
       createDefaultCharacterAnimationDefinition(request.projectId, {
         definitionId: `${request.projectId}:character-animation:${safeName}-${sanitizeSegment(clip.clipName)}`,
         displayName: `${request.characterName} ${clip.clipName}`,
@@ -154,12 +190,5 @@ export async function commitCharacterWizardResult(
       })
     );
   }
-
-  await writeBlobFile(
-    request.projectHandle,
-    [assetsPath, "character-animations", "QUATERNIUS-ATTRIBUTION.md"],
-    new Blob([request.attributionText], { type: "text/markdown" })
-  );
-
-  return { characterModelDefinition, characterAnimationDefinitions };
+  return definitions;
 }

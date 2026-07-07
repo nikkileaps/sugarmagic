@@ -53,6 +53,7 @@ import {
   CharacterWizard,
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
+import { AnimationPanel } from "./animation-panel/AnimationPanel";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -129,9 +130,11 @@ export function useNPCWorkspaceView(
     definitionId: string;
   } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null>(null);
 
   // §062.9 — edit wizard-generated models, create otherwise.
@@ -142,9 +145,27 @@ export function useNPCWorkspaceView(
       const url = assetSources[model.source.relativeAssetPath];
       if (url) {
         const riggedBytes = await (await fetch(url)).arrayBuffer();
+        // Bound clip bytes per slot: marker-level edits regenerate
+        // recipe-carrying (generated) slots instead of stomping
+        // them back to library clips.
+        const boundClips: Partial<
+          Record<"idle" | "walk" | "run", ArrayBuffer>
+        > = {};
+        for (const slot of ["idle", "walk", "run"] as const) {
+          const bound = previewSlots.find(
+            (candidate) => candidate.value === slot
+          )?.animation;
+          const clipUrl = bound
+            ? assetSources[bound.source.relativeAssetPath]
+            : undefined;
+          if (clipUrl) {
+            boundClips[slot] = await (await fetch(clipUrl)).arrayBuffer();
+          }
+        }
         setWizardEditSession({
           characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
-          riggedBytes
+          riggedBytes,
+          boundClips
         });
         setWizardOpen(true);
         return;
@@ -332,7 +353,46 @@ export function useNPCWorkspaceView(
             ? () => void launchWizard(boundCharacterModel)
             : undefined
         }
+        onLaunchAnimationPanel={
+          characterWizardServices && selectedNPC && boundCharacterModel?.rigId
+            ? () => setAnimationPanelOpen(true)
+            : undefined
+        }
       />
+      {characterWizardServices && selectedNPC && boundCharacterModel?.rigId ? (
+        <AnimationPanel
+          opened={animationPanelOpen}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          model={boundCharacterModel}
+          boundAnimations={{
+            idle: previewSlots.find((s) => s.value === "idle")?.animation ?? undefined,
+            walk: previewSlots.find((s) => s.value === "walk")?.animation ?? undefined,
+            run: previewSlots.find((s) => s.value === "run")?.animation ?? undefined
+          }}
+          assetSources={assetSources}
+          targetHeight={selectedNPC.presentation.modelHeight ?? 1.7}
+          services={characterWizardServices}
+          onCommitted={(bindings) => {
+            const next = {
+              ...selectedNPC.presentation.animationAssetBindings
+            };
+            for (const entry of bindings) {
+              next[entry.slot] = entry.definition.definitionId;
+            }
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: next
+              }
+            });
+          }}
+          onClose={() => setAnimationPanelOpen(false)}
+        />
+      ) : null}
       {characterWizardServices && selectedNPC ? (
         <CharacterWizard
           opened={wizardOpen}
