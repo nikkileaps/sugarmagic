@@ -169,8 +169,22 @@ export function createCharacterWizardServices(
       return {
         modelGlb,
         clips,
-        characterHeight: meshHeight(extracted.positions)
+        characterHeight: meshHeight(extracted.positions),
+        // §062.8 — solver artifacts for the weight-paint step.
+        skeleton,
+        weights,
+        ranges: extracted.ranges,
+        mesh: { positions: extracted.positions, indices: extracted.indices }
       };
+    },
+
+    async reassemble(sourceBytes, generated) {
+      return buildSkinnedCharacterGlb({
+        sourceGlb: sourceBytes,
+        skeleton: generated.skeleton,
+        weights: generated.weights,
+        ranges: generated.ranges
+      });
     },
 
     async commit(request) {

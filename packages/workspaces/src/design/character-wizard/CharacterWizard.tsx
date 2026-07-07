@@ -20,14 +20,36 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Box, Group, Stack, Switch, Text, TextInput } from "@mantine/core";
-import { WizardDialog } from "@sugarmagic/ui";
+import {
+  Box,
+  Button,
+  Group,
+  SegmentedControl,
+  Select,
+  Stack,
+  Switch,
+  Text,
+  TextInput
+} from "@mantine/core";
+import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
   CharacterModelDefinition
 } from "@sugarmagic/domain";
+import {
+  applyBrushStroke,
+  buildVertexAdjacency,
+  type BrushMode,
+  type GeneratedSkeleton,
+  type MeshData,
+  type SkinWeights
+} from "@sugarmagic/character-rig";
 import { CharacterPreview } from "../CharacterPreview";
 import { MarkerViewport } from "./MarkerViewport";
+import {
+  WeightPaintViewport,
+  type WeightPaintRange
+} from "./WeightPaintViewport";
 
 /** The wizard's 16 landmarks: name -> world position. */
 export type WizardLandmarks = Record<string, [number, number, number]>;
@@ -39,6 +61,12 @@ export interface WizardGenerated {
   clips: Array<{ slot: "idle" | "walk" | "run"; clipName: string; bytes: ArrayBuffer }>;
   /** Mesh height in meters — the preview's scale reference. */
   characterHeight: number;
+  /** Solver artifacts (Plan 062 §062.8): the weight-paint step
+   *  edits `weights` in place and `reassemble` rebuilds the GLB. */
+  skeleton: GeneratedSkeleton;
+  weights: SkinWeights;
+  ranges: Array<WeightPaintRange & { nodeWorldMatrix: number[] }>;
+  mesh: MeshData;
 }
 
 export interface CharacterWizardServices {
@@ -54,6 +82,11 @@ export interface CharacterWizardServices {
     landmarks: WizardLandmarks,
     onProgress: (fraction: number) => void
   ): Promise<WizardGenerated>;
+  /** Rebuild the skinned GLB after weight painting (§062.8). */
+  reassemble(
+    sourceBytes: ArrayBuffer,
+    generated: WizardGenerated
+  ): Promise<ArrayBuffer>;
   /** Write assets + return definitions (io commit, §062.4). */
   commit(request: {
     characterName: string;
@@ -82,13 +115,35 @@ export interface CharacterWizardProps {
   onClose: () => void;
 }
 
-type WizardStep = "import" | "joints" | "preview";
+type WizardStep = "import" | "joints" | "weights" | "preview";
 
 const STEPS = [
   { id: "import", label: "Import", description: "Pick a GLB" },
   { id: "joints", label: "Joints", description: "Confirm markers" },
+  { id: "weights", label: "Weights", description: "Touch up (optional)" },
   { id: "preview", label: "Preview", description: "Watch it move" }
 ];
+
+/** "DEF-upper_arm.L" -> "Left Upper Arm" for the bone picker. */
+function friendlyBoneName(boneName: string): string {
+  let name = boneName.replace(/^DEF-/, "");
+  let side = "";
+  if (name.endsWith(".L")) {
+    side = "Left ";
+    name = name.slice(0, -2);
+  } else if (name.endsWith(".R")) {
+    side = "Right ";
+    name = name.slice(0, -2);
+  }
+  name = name.replace(/[._]/g, " ").trim();
+  return (
+    side +
+    name
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
+}
 
 export function CharacterWizard(props: CharacterWizardProps) {
   const { opened, defaultCharacterName, services, onCommitted, onClose } = props;
@@ -107,6 +162,18 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Mirroring defaults ON — symmetric characters are the design
   // center, so one drag places both sides (nikki, 2026-07-06).
   const [mirroring, setMirroring] = useState(true);
+  // Weight-paint step state (§062.8).
+  const [paintBoneColumn, setPaintBoneColumn] = useState(0);
+  const [brushRadius, setBrushRadius] = useState(0.08);
+  const [brushStrength, setBrushStrength] = useState(0.5);
+  const [brushMode, setBrushMode] = useState<BrushMode>("add");
+  const [paintAnimating, setPaintAnimating] = useState(false);
+  const paintDirtyRef = useRef(false);
+  const adjacencyRef = useRef<Array<Set<number>> | null>(null);
+  const pristineWeightsRef = useRef<{
+    joints: Uint16Array;
+    weights: Float32Array;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Blob URLs created for preview; revoked on teardown.
   const blobUrlsRef = useRef<string[]>([]);
@@ -168,6 +235,31 @@ export function CharacterWizard(props: CharacterWizardProps) {
       setStep("joints");
       return;
     }
+    if (step === "weights") {
+      if (!generated || !sourceBytes) return;
+      if (!paintDirtyRef.current) {
+        setStep("preview");
+        return;
+      }
+      setBusy(true);
+      setBusyLabel("Rebuilding model with painted weights...");
+      setBusyProgress(undefined);
+      try {
+        const modelGlb = await services.reassemble(sourceBytes, generated);
+        setGenerated({ ...generated, modelGlb });
+        paintDirtyRef.current = false;
+        setStep("preview");
+      } catch (reassembleError) {
+        setError(
+          reassembleError instanceof Error
+            ? reassembleError.message
+            : String(reassembleError)
+        );
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (step === "joints") {
       if (!sourceBytes || !landmarks) return;
       setBusy(true);
@@ -177,8 +269,15 @@ export function CharacterWizard(props: CharacterWizardProps) {
         const result = await services.generate(sourceBytes, landmarks, (f) =>
           setBusyProgress(f)
         );
+        pristineWeightsRef.current = {
+          joints: result.weights.joints.slice(),
+          weights: result.weights.weights.slice()
+        };
+        adjacencyRef.current = buildVertexAdjacency(result.mesh);
+        paintDirtyRef.current = false;
+        setBrushRadius(result.characterHeight * 0.06);
         setGenerated(result);
-        setStep("preview");
+        setStep("weights");
       } catch (generateError) {
         setError(
           generateError instanceof Error
@@ -258,6 +357,53 @@ export function CharacterWizard(props: CharacterWizardProps) {
         ? landmarks !== null
         : generated !== null);
 
+  // Paint-step derived data.
+  const paintModelUrl = useMemo(
+    () => (step === "weights" && generated ? trackBlobUrl(generated.modelGlb) : null),
+    [step, generated, trackBlobUrl]
+  );
+  const paintIdleUrl = useMemo(() => {
+    if (step !== "weights" || !generated) return null;
+    const idle = generated.clips.find((clip) => clip.slot === "idle");
+    return idle ? trackBlobUrl(idle.bytes) : null;
+  }, [step, generated, trackBlobUrl]);
+  const boneOptions = useMemo(
+    () =>
+      generated
+        ? generated.weights.boneOrder.map((boneName, column) => ({
+            value: String(column),
+            label: friendlyBoneName(boneName)
+          }))
+        : [],
+    [generated]
+  );
+  const columnToJointSlot = useMemo(() => {
+    if (!generated) return [];
+    return generated.weights.boneOrder.map((boneName) =>
+      generated.skeleton.bones.findIndex((bone) => bone.name === boneName)
+    );
+  }, [generated]);
+  const handlePaint = useCallback(
+    (point: [number, number, number]): number[] => {
+      if (!generated) return [];
+      const affected = applyBrushStroke(
+        generated.mesh,
+        generated.weights,
+        {
+          center: point,
+          radius: brushRadius,
+          boneColumn: paintBoneColumn,
+          strength: brushStrength * 0.25,
+          mode: brushMode
+        },
+        adjacencyRef.current ?? undefined
+      );
+      if (affected.length > 0) paintDirtyRef.current = true;
+      return affected;
+    },
+    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode]
+  );
+
   return (
     <WizardDialog
       opened={opened}
@@ -272,7 +418,13 @@ export function CharacterWizard(props: CharacterWizardProps) {
       finishLabel="Add to project"
       onBack={() => {
         setError(null);
-        setStep(step === "preview" ? "joints" : "import");
+        setStep(
+          step === "preview"
+            ? "weights"
+            : step === "weights"
+              ? "joints"
+              : "import"
+        );
       }}
       onNext={() => void handleNext()}
       onFinish={() => void handleFinish()}
@@ -345,6 +497,96 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 landmarks={landmarks}
                 onChange={setLandmarks}
                 mirroring={mirroring}
+              />
+            </Box>
+          </Stack>
+        ) : null}
+
+        {step === "weights" && generated && paintModelUrl ? (
+          <Stack gap="xs" style={{ flex: 1 }}>
+            <Group gap="sm" align="flex-end" wrap="wrap">
+              <Select
+                label="Bone"
+                size="xs"
+                w={180}
+                searchable
+                data={boneOptions}
+                value={String(paintBoneColumn)}
+                onChange={(value) => {
+                  if (value !== null) setPaintBoneColumn(Number(value));
+                }}
+              />
+              <SegmentedControl
+                size="xs"
+                data={[
+                  { value: "add", label: "Add" },
+                  { value: "subtract", label: "Subtract" },
+                  { value: "smooth", label: "Smooth" }
+                ]}
+                value={brushMode}
+                onChange={(value) => setBrushMode(value as BrushMode)}
+              />
+              <Box w={140}>
+                <LabeledSlider
+                  label="Radius"
+                  min={0.01}
+                  max={0.4}
+                  step={0.005}
+                  value={brushRadius}
+                  onChange={setBrushRadius}
+                />
+              </Box>
+              <Box w={140}>
+                <LabeledSlider
+                  label="Strength"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={brushStrength}
+                  onChange={setBrushStrength}
+                />
+              </Box>
+              <Switch
+                size="xs"
+                label="Animate"
+                checked={paintAnimating}
+                onChange={(event) =>
+                  setPaintAnimating(event.currentTarget.checked)
+                }
+              />
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                color="gray"
+                onClick={() => {
+                  const pristine = pristineWeightsRef.current;
+                  if (!pristine || !generated) return;
+                  generated.weights.joints.set(pristine.joints);
+                  generated.weights.weights.set(pristine.weights);
+                  paintDirtyRef.current = true;
+                  // New object identity re-triggers the heatmap.
+                  setGenerated({ ...generated });
+                }}
+              >
+                Reset to auto
+              </Button>
+            </Group>
+            <Text size="xs" c="var(--sm-color-subtext)">
+              Heatmap shows the selected bone's influence. Left-drag
+              paints, right-drag orbits, scroll zooms. Skip with Next
+              if the automatic result is good enough.
+            </Text>
+            <Box style={{ height: 360 }}>
+              <WeightPaintViewport
+                modelUrl={paintModelUrl}
+                idleClipUrl={paintIdleUrl}
+                weights={generated.weights}
+                ranges={generated.ranges}
+                selectedBoneColumn={paintBoneColumn}
+                columnToJointSlot={columnToJointSlot}
+                brushRadius={brushRadius}
+                animating={paintAnimating}
+                onPaint={handlePaint}
               />
             </Box>
           </Stack>

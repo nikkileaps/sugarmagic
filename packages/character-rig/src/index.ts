@@ -63,3 +63,10 @@ export {
 } from "./weights";
 export { detectRigLandmarks } from "./detection";
 export { getStandardRigHipHeight } from "./skeleton";
+export {
+  applyBrushStroke,
+  boneWeightOfVertex,
+  setBoneWeightAtVertex,
+  type BrushMode,
+  type BrushStroke
+} from "./paint";
