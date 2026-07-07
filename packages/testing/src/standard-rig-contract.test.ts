@@ -94,6 +94,18 @@ describe("standard rig contract (Plan 062)", () => {
       // by clip name.
       expect(`${animation.name}.glb`).toBe(file);
       expect(animation.channels.length).toBeGreaterThan(0);
+      // Rotation-only retargeting (2026-07-06): translation/scale
+      // tracks on non-hips bones would override each character's
+      // proportions with the library rig's.
+      for (const channel of animation.channels) {
+        if (channel.target.path === "translation") {
+          const nodeName =
+            document.nodes?.[channel.target.node!]?.name ?? "";
+          expect(nodeName, `${file} translation track`).toBe("DEF-hips");
+        } else {
+          expect(channel.target.path, file).toBe("rotation");
+        }
+      }
       for (const channel of animation.channels) {
         const nodeIndex = channel.target.node;
         expect(nodeIndex).toBeDefined();

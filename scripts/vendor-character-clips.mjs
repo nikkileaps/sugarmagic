@@ -169,11 +169,21 @@ function extractClipGlb(document, bin, clipName) {
 
   const rootNodes = [...keep].filter((index) => !parentOf.has(index));
 
-  // Core-bone channels only; samplers reindexed to the kept set.
+  // Core-bone channels only — and ROTATION-ONLY retargeting
+  // (2026-07-06): the library bakes translation + scale tracks
+  // for EVERY bone, which would force each character's bone
+  // lengths back to the library rig's proportions during
+  // playback (the "idle stretches my character" bug). Keep
+  // rotations for all core bones; keep translation ONLY on the
+  // hips (root-motion bob, hip-height-scaled at copy time); drop
+  // scale tracks entirely.
   const keptChannels = animation.channels.filter((channel) => {
     if (!keep.has(channel.target.node)) return false;
     const nodeName = document.nodes[channel.target.node].name;
-    return CORE_BONE_NAMES.has(nodeName);
+    if (!CORE_BONE_NAMES.has(nodeName)) return false;
+    if (channel.target.path === "rotation") return true;
+    if (channel.target.path === "translation") return nodeName === "DEF-hips";
+    return false;
   });
   const keptSamplerOldToNew = new Map();
   const keptSamplers = [];

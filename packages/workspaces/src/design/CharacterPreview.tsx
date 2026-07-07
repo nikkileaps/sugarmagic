@@ -256,15 +256,18 @@ export function CharacterPreview({
       return;
     }
 
-    const requestedId = model.definitionId;
-    requestedModelIdRef.current = requestedId;
+    // Monotonic token, NOT definitionId: two concurrent loads of
+    // the SAME model (assetSources refresh re-running this effect
+    // mid-load) both passed a definitionId guard and both added to
+    // the scene — the ghost-double-character bug (2026-07-06).
+    const requestToken = `${model.definitionId}:${Date.now()}:${Math.random()}`;
+    requestedModelIdRef.current = requestToken;
     const sourceUrl = assetSources[model.source.relativeAssetPath];
     if (!sourceUrl) return;
 
     void gltfLoader.loadAsync(sourceUrl).then((gltf) => {
-      // Discard stale loads if the user has selected a different model
-      // since the request started.
-      if (requestedModelIdRef.current !== requestedId) return;
+      // Discard stale loads: only the LATEST request may mount.
+      if (requestedModelIdRef.current !== requestToken) return;
       const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
       renderable.updateMatrixWorld(true);
       normalizeModelScale(renderable, targetHeight);
