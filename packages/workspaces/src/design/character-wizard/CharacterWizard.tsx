@@ -259,6 +259,34 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Mirroring defaults ON — symmetric characters are the design
   // center, so one drag places both sides (nikki, 2026-07-06).
   const [mirroring, setMirroring] = useState(true);
+  // Plan 064 — optional tail: three extra sagittal markers.
+  const hasTail = Boolean(landmarks?.tailBase);
+  const toggleTail = useCallback(
+    (enabled: boolean) => {
+      landmarksDirtyRef.current = true;
+      setLandmarks((current) => {
+        if (!current) return current;
+        if (!enabled) {
+          const next = { ...current };
+          delete next.tailBase;
+          delete next.tailMid;
+          delete next.tailTip;
+          return next;
+        }
+        // Seed the chain behind the pelvis, scaled by hip height —
+        // rough on purpose; the markers are the correction loop.
+        const pelvis = current.pelvis;
+        const scale = pelvis[1];
+        return {
+          ...current,
+          tailBase: [pelvis[0], pelvis[1] - 0.08 * scale, pelvis[2] - 0.15 * scale],
+          tailMid: [pelvis[0], pelvis[1] + 0.05 * scale, pelvis[2] - 0.32 * scale],
+          tailTip: [pelvis[0], pelvis[1] + 0.3 * scale, pelvis[2] - 0.42 * scale]
+        };
+      });
+    },
+    []
+  );
   // Weight-paint step state (§062.8).
   const [paintBoneColumn, setPaintBoneColumn] = useState(0);
   const [brushRadius, setBrushRadius] = useState(0.08);
@@ -708,17 +736,28 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 Drag any marker that missed its joint — hover names
                 it. Right-drag to orbit, scroll to zoom.
               </Text>
-              <Switch
-                size="xs"
-                label="Mirror left/right"
-                checked={mirroring}
-                onChange={(event) =>
-                  setMirroring(event.currentTarget.checked)
-                }
-              />
+              <Group gap="sm">
+                <Switch
+                  size="xs"
+                  label="Has tail"
+                  checked={hasTail}
+                  onChange={(event) =>
+                    toggleTail(event.currentTarget.checked)
+                  }
+                />
+                <Switch
+                  size="xs"
+                  label="Mirror left/right"
+                  checked={mirroring}
+                  onChange={(event) =>
+                    setMirroring(event.currentTarget.checked)
+                  }
+                />
+              </Group>
             </Group>
             <Box style={{ height: 380 }}>
               <MarkerViewport
+                key={hasTail ? "with-tail" : "no-tail"}
                 modelUrl={sourceUrl}
                 landmarks={landmarks}
                 onChange={(next) => {
