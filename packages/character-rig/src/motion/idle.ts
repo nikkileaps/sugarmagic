@@ -17,6 +17,7 @@
 
 import type { MotionComponent } from "./components";
 import { composeComponents, type ComposedMotion } from "./components";
+import { tailWag } from "./tail";
 
 /** The four personality controls, each 0..1. */
 export interface PersonalityParams {
@@ -153,7 +154,8 @@ export const IDLE_COMPONENTS: Array<MotionComponent<IdleRecipeParams>> = [
   breathing,
   weightShift,
   headMotion,
-  armDrift
+  armDrift,
+  tailWag
 ];
 
 /** Compose the idle from personality params. */

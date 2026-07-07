@@ -129,11 +129,15 @@ export interface CharacterWizardServices {
   prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{
     hipScale: number;
     relaxedPose: Readonly<Record<string, readonly number[]>>;
+    /** Plan 064 — whether this character's skeleton has the tail
+     *  chain (gates tail tracks in generated clips). */
+    hasTail: boolean;
   }>;
   /** Generate a clip from a recipe, hips-scaled for the character. */
   generateClip(
     recipe: MotionRecipe,
-    hipScale: number
+    hipScale: number,
+    hasTail: boolean
   ): { clipName: string; bytes: ArrayBuffer };
   /** The vendored library clip for a slot, hips-scaled. */
   getLibraryClip(

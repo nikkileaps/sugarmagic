@@ -138,6 +138,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [activeSlot, setActiveSlot] = useState<Slot>("idle");
   const [hipScale, setHipScale] = useState(1);
+  const [hasTail, setHasTail] = useState(false);
   const [slots, setSlots] = useState<Record<Slot, SlotState> | null>(null);
   const loadedRef = useRef(false);
 
@@ -174,6 +175,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
         const riggedBytes = await (await fetch(modelUrl)).arrayBuffer();
         const prepared = await services.prepareAnimationPanel(riggedBytes);
         setHipScale(prepared.hipScale);
+        setHasTail(prepared.hasTail);
         setRelaxedPose(prepared.relaxedPose);
         setModelBlobUrl(trackBlobUrl(riggedBytes));
         const next = {} as Record<Slot, SlotState>;
@@ -214,7 +216,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
       if (regenerateTimer.current) clearTimeout(regenerateTimer.current);
       const run = () => {
         try {
-          const pending = services.generateClip(state.recipe, hipScale);
+          const pending = services.generateClip(state.recipe, hipScale, hasTail);
           setSlots((current) =>
             current
               ? {
@@ -234,7 +236,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
       if (immediate) run();
       else regenerateTimer.current = setTimeout(run, 180);
     },
-    [services, hipScale]
+    [services, hipScale, hasTail]
   );
 
   const updateRecipe = useCallback(
@@ -284,6 +286,15 @@ export function AnimationPanel(props: AnimationPanelProps) {
     },
     [regenerate]
   );
+
+  const editableChannels = useMemo(() => {
+    if (!active) return EDITABLE_CHANNELS.idle!;
+    const base =
+      EDITABLE_CHANNELS[active.recipe.generatorId] ?? EDITABLE_CHANNELS.idle!;
+    return hasTail
+      ? [...base, { value: "tailSway1", label: "Tail" }]
+      : base;
+  }, [active, hasTail]);
 
   // §063.6 — current points for the edited channel: the override
   // if present, else a sampled snapshot of the generated signal.
@@ -560,10 +571,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
                   <Select
                     label="Curve"
                     size="xs"
-                    data={
-                      EDITABLE_CHANNELS[active.recipe.generatorId] ??
-                      EDITABLE_CHANNELS.idle!
-                    }
+                    data={editableChannels}
                     value={curveChannel}
                     onChange={(value) => {
                       if (value) setCurveChannel(value);

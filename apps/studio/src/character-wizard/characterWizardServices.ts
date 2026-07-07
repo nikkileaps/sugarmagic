@@ -44,6 +44,7 @@ import {
 } from "@sugarmagic/io";
 import {
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
   isMotionRecipe,
   type CharacterAnimationDefinition,
   type CharacterModelDefinition,
@@ -130,7 +131,8 @@ function solveWeightsInWorker(
 
 function generateClipFromRecipe(
   recipe: MotionRecipe,
-  hipScale: number
+  hipScale: number,
+  hasTail: boolean
 ): { clipName: string; bytes: ArrayBuffer } {
   const generators = {
     idle: generateIdleChannels,
@@ -146,12 +148,17 @@ function generateClipFromRecipe(
     channelOverrides: recipe.curveOverrides
   });
   const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
+  // Tail-less characters get the 23-bone clip: tail tracks are
+  // dropped by the writer when their nodes are absent.
+  const clipBones = hasTail
+    ? STANDARD_RIG_CORE_WITH_TAIL.bones
+    : STANDARD_RIG_CORE.bones;
   const glb = buildClipGlb({
     clipName,
     duration: motion.duration,
     boneTracks: motion.boneTracks,
     hipsTranslation: motion.hipsTranslation,
-    bones: STANDARD_RIG_CORE.bones.map((bone) => ({
+    bones: clipBones.map((bone) => ({
       name: bone.name,
       parentName: bone.parentName,
       restPosition: bone.restPosition,
@@ -345,7 +352,13 @@ export function createCharacterWizardServices(
                 const hipScale =
                   request.generated.skeleton.hipHeight /
                   getStandardRigHipHeight();
-                const regenerated = generateClipFromRecipe(recipe, hipScale);
+                const regenerated = generateClipFromRecipe(
+                  recipe,
+                  hipScale,
+                  request.generated.skeleton.bones.some((bone) =>
+                    bone.name.startsWith("DEF-tail.")
+                  )
+                );
                 return {
                   clipName: regenerated.clipName,
                   bytes: regenerated.bytes
@@ -404,12 +417,15 @@ export function createCharacterWizardServices(
       );
       return {
         hipScale: skeleton.hipHeight / getStandardRigHipHeight(),
-        relaxedPose: RELAXED_ARM_POSE
+        relaxedPose: RELAXED_ARM_POSE,
+        hasTail: skeleton.bones.some((bone) =>
+          bone.name.startsWith("DEF-tail.")
+        )
       };
     },
 
-    generateClip(recipe, hipScale) {
-      return generateClipFromRecipe(recipe, hipScale);
+    generateClip(recipe, hipScale, hasTail) {
+      return generateClipFromRecipe(recipe, hipScale, hasTail);
     },
 
     async getLibraryClip(slot, hipScale) {

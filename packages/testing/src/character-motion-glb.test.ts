@@ -13,9 +13,11 @@ import {
 } from "@sugarmagic/character-rig";
 import {
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
   createDefaultMotionRecipe,
   isMotionRecipe,
-  isStandardRigCoreBoneName
+  isStandardRigCoreBoneName,
+  isStandardRigTailBoneName
 } from "@sugarmagic/domain";
 import {
   buildClipGlb,
@@ -106,6 +108,34 @@ describe("generated clip GLBs (Plan 063)", () => {
     const recipe = readClipRecipe(buildIdleClip());
     expect(isMotionRecipe(recipe)).toBe(true);
     expect((recipe as { generatorId: string }).generatorId).toBe("idle");
+  });
+
+  it("tail tracks ride tailed clips and drop from tail-less ones (Plan 064)", () => {
+    const motion = sampleMotion(generateIdleChannels(IDLE_DEFAULTS));
+    const build = (bones: typeof STANDARD_RIG_CORE.bones) =>
+      buildClipGlb({
+        clipName: "Idle",
+        duration: motion.duration,
+        boneTracks: motion.boneTracks,
+        hipsTranslation: motion.hipsTranslation,
+        bones: bones.map((bone) => ({
+          name: bone.name,
+          parentName: bone.parentName,
+          restPosition: bone.restPosition,
+          restRotation: bone.restRotation
+        }))
+      });
+    const targets = (glb: ArrayBuffer) => {
+      const chunks = readGlb(glb)!;
+      return chunks.document.animations![0]!.channels.map(
+        (channel) => chunks.document.nodes![channel.target.node!]!.name!
+      );
+    };
+    const tailless = targets(build(STANDARD_RIG_CORE.bones));
+    expect(tailless.some((name) => isStandardRigTailBoneName(name))).toBe(false);
+    const tailed = targets(build(STANDARD_RIG_CORE_WITH_TAIL.bones));
+    expect(tailed).toContain("DEF-tail.001");
+    expect(tailed).toContain("DEF-tail.003");
   });
 
   it("hips scaling applies to generated clips unchanged", () => {

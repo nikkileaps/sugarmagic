@@ -24,6 +24,7 @@
 import type { MotionComponent } from "./components";
 import { composeComponents, type ComposedMotion } from "./components";
 import type { PersonalityParams } from "./idle";
+import { tailWag } from "./tail";
 
 /** Gait scaling — WALK vs RUN parameterizations of one stack. */
 export interface GaitConfig {
@@ -192,7 +193,7 @@ const headStabilization: MotionComponent<LocomotionRecipeParams> = {
 
 export const LOCOMOTION_COMPONENTS: Array<
   MotionComponent<LocomotionRecipeParams>
-> = [legCycle, hipMotion, armSwing, bodyBounce, headStabilization];
+> = [legCycle, hipMotion, armSwing, bodyBounce, headStabilization, tailWag];
 
 function generateLocomotion(
   params: Omit<LocomotionRecipeParams, "gait">,
