@@ -84,6 +84,9 @@ importers:
       '@mantine/hooks':
         specifier: ^9.0.0
         version: 9.0.0(react@19.2.4)
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../../packages/character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -127,10 +130,19 @@ importers:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)
 
+  packages/character-rig:
+    dependencies:
+      '@sugarmagic/domain':
+        specifier: workspace:*
+        version: link:../domain
+
   packages/domain: {}
 
   packages/io:
     dependencies:
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
@@ -215,6 +227,9 @@ importers:
 
   packages/testing:
     dependencies:
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
@@ -276,6 +291,9 @@ importers:
       '@mantine/core':
         specifier: ^9.0.0
         version: 9.0.0(@mantine/hooks@9.0.0(react@19.2.4))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@sugarmagic/character-rig':
+        specifier: workspace:*
+        version: link:../character-rig
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain

@@ -62,3 +62,4 @@ export {
   type ViewportToolbarProps
 } from "./ViewportToolbar";
 export { WorkspaceHeader, type WorkspaceHeaderProps } from "./WorkspaceHeader";
+export * from "./WizardDialog";

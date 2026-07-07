@@ -16,7 +16,7 @@
  * old viewport did.
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -57,6 +57,9 @@ export interface CharacterPreviewProps {
   onChangePlaying: (playing: boolean) => void;
   /** path → blob URL map for resolving the .glb sources. */
   assetSources: Record<string, string>;
+  /** Plan 062 §062.6 — when provided, the HUD shows the rig-wizard
+   *  launcher next to the animation controls. */
+  onLaunchRigWizard?: () => void;
 }
 
 function normalizeModelScale(root: THREE.Object3D, targetHeight: number): void {
@@ -92,7 +95,8 @@ export function CharacterPreview({
   onChangeActiveSlot,
   isPlaying,
   onChangePlaying,
-  assetSources
+  assetSources,
+  onLaunchRigWizard
 }: CharacterPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -100,6 +104,7 @@ export function CharacterPreview({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const modelRootRef = useRef<THREE.Object3D | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const [modelReadyTick, setModelReadyTick] = useState(0);
   const currentActionRef = useRef<THREE.AnimationAction | null>(null);
   const clipCacheRef = useRef<Map<string, THREE.AnimationClip>>(new Map());
   const lastTimeRef = useRef<number>(0);
@@ -166,9 +171,60 @@ export function CharacterPreview({
     scene.add(stage);
 
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    camera.position.set(2.4, 1.6, 3.6);
-    camera.lookAt(0, 0.9, 0);
     cameraRef.current = camera;
+
+    // Orbit camera: drag rotates, wheel zooms (nikki, 2026-07-07).
+    const orbit = {
+      yaw: Math.atan2(2.4, 3.6),
+      pitch: Math.asin(1.6 / Math.hypot(2.4, 1.6, 3.6)),
+      radius: Math.hypot(2.4, 1.6, 3.6),
+      targetY: 0.9
+    };
+    const applyCamera = () => {
+      camera.position.set(
+        Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius,
+        orbit.targetY + Math.sin(orbit.pitch) * orbit.radius,
+        Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius
+      );
+      camera.lookAt(0, orbit.targetY, 0);
+    };
+    applyCamera();
+    let dragging = false;
+    let lastPointer: [number, number] = [0, 0];
+    const onPointerDown = (event: PointerEvent) => {
+      renderer.domElement.setPointerCapture(event.pointerId);
+      dragging = true;
+      lastPointer = [event.clientX, event.clientY];
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging) return;
+      const dx = event.clientX - lastPointer[0];
+      const dy = event.clientY - lastPointer[1];
+      lastPointer = [event.clientX, event.clientY];
+      orbit.yaw -= dx * 0.008;
+      orbit.pitch = Math.min(
+        1.35,
+        Math.max(-0.35, orbit.pitch + dy * 0.006)
+      );
+      applyCamera();
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      renderer.domElement.releasePointerCapture(event.pointerId);
+      dragging = false;
+    };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      orbit.radius = Math.min(
+        14,
+        Math.max(1, orbit.radius * (1 + event.deltaY * 0.001))
+      );
+      applyCamera();
+    };
+    renderer.domElement.style.touchAction = "none";
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
     const tick = () => {
       animationIdRef.current = requestAnimationFrame(tick);
@@ -202,6 +258,10 @@ export function CharacterPreview({
 
     return () => {
       observer?.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
       if (animationIdRef.current !== null) {
         cancelAnimationFrame(animationIdRef.current);
       }
@@ -251,15 +311,18 @@ export function CharacterPreview({
       return;
     }
 
-    const requestedId = model.definitionId;
-    requestedModelIdRef.current = requestedId;
+    // Monotonic token, NOT definitionId: two concurrent loads of
+    // the SAME model (assetSources refresh re-running this effect
+    // mid-load) both passed a definitionId guard and both added to
+    // the scene — the ghost-double-character bug (2026-07-06).
+    const requestToken = `${model.definitionId}:${Date.now()}:${Math.random()}`;
+    requestedModelIdRef.current = requestToken;
     const sourceUrl = assetSources[model.source.relativeAssetPath];
     if (!sourceUrl) return;
 
     void gltfLoader.loadAsync(sourceUrl).then((gltf) => {
-      // Discard stale loads if the user has selected a different model
-      // since the request started.
-      if (requestedModelIdRef.current !== requestedId) return;
+      // Discard stale loads: only the LATEST request may mount.
+      if (requestedModelIdRef.current !== requestToken) return;
       const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
       renderable.updateMatrixWorld(true);
       normalizeModelScale(renderable, targetHeight);
@@ -271,6 +334,13 @@ export function CharacterPreview({
       scene.add(renderable);
       modelRootRef.current = renderable;
       mixerRef.current = new THREE.AnimationMixer(renderable);
+      // Signal the clip-load effect: the mixer exists now. Without
+      // this, a preview whose model AND slot bindings arrive
+      // together (the Character Wizard preview step; a workspace
+      // opened with bindings already set) ran the clip effect once
+      // against a null mixer and the model stayed in T-pose
+      // forever with no errors (2026-07-06).
+      setModelReadyTick((tick) => tick + 1);
     });
   }, [model, targetHeight, assetSources]);
 
@@ -341,6 +411,7 @@ export function CharacterPreview({
     // slot-change effect below handles slot swaps within the cache.
   }, [
     model?.definitionId,
+    modelReadyTick,
     slots
       .map((s) => `${s.value}:${s.animation?.definitionId ?? ""}`)
       .join("|"),
@@ -413,6 +484,18 @@ export function CharacterPreview({
             {isPlaying ? "❚❚" : "▶"}
           </ActionIcon>
         </Tooltip>
+        {onLaunchRigWizard ? (
+          <Tooltip label="Character Wizard — rig + animate this model">
+            <ActionIcon
+              variant="subtle"
+              color="grape"
+              onClick={onLaunchRigWizard}
+              aria-label="Open the Character Wizard"
+            >
+              🦴
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
       </Group>
       <Box
         ref={containerRef}

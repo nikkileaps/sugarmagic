@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Group,
@@ -22,6 +22,10 @@ import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
 import { CharacterPreview, type CharacterPreviewSlot } from "./CharacterPreview";
+import {
+  CharacterWizard,
+  type CharacterWizardServices
+} from "./character-wizard/CharacterWizard";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
@@ -49,6 +53,9 @@ export interface PlayerWorkspaceViewProps {
    * when the user cancels the picker.
    */
   onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
+  /** Plan 062 §062.6 — Studio-side wizard services; null hides the
+   *  rig-wizard launcher (e.g. UI preview contexts). */
+  characterWizardServices: CharacterWizardServices | null;
 }
 
 function parseTagList(value: string): string[] {
@@ -77,8 +84,35 @@ export function usePlayerWorkspaceView(
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition
+    onImportCharacterAnimationDefinition,
+    characterWizardServices
   } = props;
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEditSession, setWizardEditSession] = useState<{
+    characterName: string;
+    riggedBytes: ArrayBuffer;
+  } | null>(null);
+
+  // §062.9 — the rig button EDITS a wizard-generated model
+  // (recipe reopens; bindings untouched) and CREATES otherwise.
+  async function launchWizard(
+    model: { rigId?: string | null; source: { relativeAssetPath: string; fileName: string } } | null
+  ) {
+    if (model?.rigId) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const riggedBytes = await (await fetch(url)).arrayBuffer();
+        setWizardEditSession({
+          characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
+          riggedBytes
+        });
+        setWizardOpen(true);
+        return;
+      }
+    }
+    setWizardEditSession(null);
+    setWizardOpen(true);
+  }
 
   const activeAnimationSlot = useVanillaStoreSelector(
     designPreviewStore,
@@ -152,24 +186,63 @@ export function usePlayerWorkspaceView(
   }
 
   const centerPanel = (
-    <CharacterPreview
-      model={boundCharacterModel}
-      targetHeight={
-        playerDefinition?.physicalProfile.height ?? 1.8
-      }
-      slots={previewSlots}
-      activeSlot={activeAnimationSlot}
-      onChangeActiveSlot={(slot) =>
-        designPreviewStore
-          .getState()
-          .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
-      }
-      isPlaying={isAnimationPlaying}
-      onChangePlaying={(playing) =>
-        designPreviewStore.getState().setAnimationPlaying(playing)
-      }
-      assetSources={assetSources}
-    />
+    <>
+      <CharacterPreview
+        model={boundCharacterModel}
+        targetHeight={
+          playerDefinition?.physicalProfile.height ?? 1.8
+        }
+        slots={previewSlots}
+        activeSlot={activeAnimationSlot}
+        onChangeActiveSlot={(slot) =>
+          designPreviewStore
+            .getState()
+            .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
+        }
+        isPlaying={isAnimationPlaying}
+        onChangePlaying={(playing) =>
+          designPreviewStore.getState().setAnimationPlaying(playing)
+        }
+        assetSources={assetSources}
+        onLaunchRigWizard={
+          characterWizardServices
+            ? () => void launchWizard(boundCharacterModel)
+            : undefined
+        }
+      />
+      {characterWizardServices ? (
+        <CharacterWizard
+          opened={wizardOpen}
+          defaultCharacterName={playerDefinition?.displayName ?? "Player"}
+          services={characterWizardServices}
+          editSession={wizardEditSession}
+          onClose={() => {
+            setWizardOpen(false);
+            setWizardEditSession(null);
+          }}
+          onCommitted={(result) => {
+            // Bind the generated model + all three slots in one
+            // definition update through the normal command path.
+            if (!playerDefinition) return;
+            const bindings = {
+              ...playerDefinition.presentation.animationAssetBindings
+            };
+            for (const entry of result.characterAnimationDefinitions) {
+              bindings[entry.slot] = entry.definition.definitionId;
+            }
+            updatePlayerDefinition({
+              ...playerDefinition,
+              presentation: {
+                ...playerDefinition.presentation,
+                modelAssetDefinitionId:
+                  result.characterModelDefinition.definitionId,
+                animationAssetBindings: bindings
+              }
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 
   return {
