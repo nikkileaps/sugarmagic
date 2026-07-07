@@ -361,7 +361,16 @@ export function AnimationPanel(props: AnimationPanelProps) {
         }
         // Library: fetch async, mark dirty.
         void services
-          .getLibraryClip(activeSlot, hipScale)
+          .getLibraryClip(
+            activeSlot,
+            hipScale,
+            hasTail
+              ? {
+                  personality: state.recipe.personality,
+                  seed: state.recipe.seed
+                }
+              : null
+          )
           .then((pending) =>
             setSlots((latest) =>
               latest
@@ -387,7 +396,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
         return { ...current, [activeSlot]: { ...state, source } };
       });
     },
-    [activeSlot, services, hipScale, regenerate]
+    [activeSlot, services, hipScale, hasTail, regenerate]
   );
 
   // Preview: real definitions everywhere, blob stubs for slots

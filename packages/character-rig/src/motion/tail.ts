@@ -55,3 +55,18 @@ export const tailWag: MotionComponent<TailWagParams> = {
     };
   }
 };
+
+import { composeComponents } from "./components";
+import { sampleMotion, type SampledMotion } from "./tracks";
+
+/**
+ * Sample ONLY the tail wag at a given loop duration — used to bake
+ * tail motion into per-character copies of library clips (their
+ * durations are the host's, not a generator's).
+ */
+export function sampleTailWag(
+  params: TailWagParams,
+  duration: number
+): SampledMotion {
+  return sampleMotion(composeComponents([tailWag], params, duration));
+}

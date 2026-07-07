@@ -139,10 +139,15 @@ export interface CharacterWizardServices {
     hipScale: number,
     hasTail: boolean
   ): { clipName: string; bytes: ArrayBuffer };
-  /** The vendored library clip for a slot, hips-scaled. */
+  /** The vendored library clip for a slot, hips-scaled; tailed
+   *  characters get the wag baked into the copy (Plan 064). */
   getLibraryClip(
     slot: "idle" | "walk" | "run",
-    hipScale: number
+    hipScale: number,
+    tail?: {
+      personality: MotionRecipe["personality"];
+      seed: number;
+    } | null
   ): Promise<{ clipName: string; bytes: ArrayBuffer }>;
   /** Recipe stamped in a generated clip, or null. */
   readSlotRecipe(clipBytes: ArrayBuffer): MotionRecipe | null;
