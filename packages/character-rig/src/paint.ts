@@ -136,12 +136,50 @@ export function applyBrushStroke(
         current + stroke.strength * falloff
       );
     } else if (stroke.mode === "subtract") {
-      setBoneWeightAtVertex(
-        weights,
-        vertex,
-        stroke.boneColumn,
-        current - stroke.strength * falloff
-      );
+      const target = current - stroke.strength * falloff;
+      // Sole-influence escape hatch (2026-07-06, the third time
+      // this trap bit): a vertex owned 100% by the subtracted
+      // bone has nowhere to put the remainder and renormalizes
+      // straight back — subtract visibly does nothing. Borrow the
+      // receiving bone from the NEIGHBORHOOD: the strongest
+      // non-subtracted influence among adjacent vertices (stray
+      // tail-painted vertices on the head bleed back to Head).
+      if (current > 0.999 && target < current) {
+        const neighbors = adjacency?.[vertex];
+        let fallback = -1;
+        let fallbackWeight = 0;
+        if (neighbors) {
+          const totals = new Map<number, number>();
+          for (const neighbor of neighbors) {
+            for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+              const column = weights.joints[neighbor * MAX_INFLUENCES + slot]!;
+              const weight = weights.weights[neighbor * MAX_INFLUENCES + slot]!;
+              if (column === stroke.boneColumn || weight <= 0) continue;
+              const total = (totals.get(column) ?? 0) + weight;
+              totals.set(column, total);
+              if (total > fallbackWeight) {
+                fallbackWeight = total;
+                fallback = column;
+              }
+            }
+          }
+        }
+        if (fallback !== -1) {
+          const kept = Math.max(0, Math.min(1, target));
+          weights.joints[vertex * MAX_INFLUENCES] = stroke.boneColumn;
+          weights.weights[vertex * MAX_INFLUENCES] = kept;
+          weights.joints[vertex * MAX_INFLUENCES + 1] = fallback;
+          weights.weights[vertex * MAX_INFLUENCES + 1] = 1 - kept;
+          for (let slot = 2; slot < MAX_INFLUENCES; slot += 1) {
+            weights.joints[vertex * MAX_INFLUENCES + slot] = 0;
+            weights.weights[vertex * MAX_INFLUENCES + slot] = 0;
+          }
+        }
+        // No neighbor fallback (isolated island fully owned by the
+        // bone): nothing sane to transfer to; leave it.
+      } else {
+        setBoneWeightAtVertex(weights, vertex, stroke.boneColumn, target);
+      }
     } else {
       // Smooth: move toward the neighborhood average of this
       // bone's weight.

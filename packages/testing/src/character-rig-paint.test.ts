@@ -95,6 +95,36 @@ describe("weight painting ops (Plan 062)", () => {
     expect(weightSum(w, 1)).toBeCloseTo(1, 5);
   });
 
+  it("subtract on a sole-influence vertex borrows the receiving bone from neighbors", () => {
+    // Three vertices in a line; middle is 100% bone 1 (a stray
+    // from a fill sweep), neighbors are 100% bone 0. Subtracting
+    // bone 1 at the middle must bleed weight to bone 0 instead of
+    // renormalizing back to 1.
+    const mesh: MeshData = {
+      positions: new Float32Array([0, 0, 0, 0.1, 0, 0, 0.2, 0, 0]),
+      indices: new Uint32Array([0, 1, 2])
+    };
+    const w = makeWeights(3, ["a", "b"]);
+    w.joints[1 * MAX_INFLUENCES] = 1;
+    w.weights[1 * MAX_INFLUENCES] = 1;
+    const adjacency = buildVertexAdjacency(mesh);
+    applyBrushStroke(
+      mesh,
+      w,
+      {
+        center: [0.1, 0, 0],
+        radius: 0.05,
+        boneColumn: 1,
+        strength: 0.5,
+        mode: "subtract"
+      },
+      adjacency
+    );
+    expect(boneWeightOfVertex(w, 1, 1)).toBeLessThan(1);
+    expect(boneWeightOfVertex(w, 1, 0)).toBeGreaterThan(0);
+    expect(weightSum(w, 1)).toBeCloseTo(1, 5);
+  });
+
   it("a sole-influence vertex stays fully bound (normalization has nowhere else to go)", () => {
     // DCC-standard: reducing the only influence renormalizes back
     // to 1 — matches Blender's auto-normalize behavior.
