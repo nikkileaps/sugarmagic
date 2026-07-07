@@ -204,6 +204,9 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [paintAnimating, setPaintAnimating] = useState(false);
   // Piece isolation: -1 = all pieces; otherwise index into ranges.
   const [paintPiece, setPaintPiece] = useState(-1);
+  // Bumped on out-of-band weight edits (Fill piece / Reset) so the
+  // viewport fully resyncs heatmap + live skin.
+  const [weightsVersion, setWeightsVersion] = useState(0);
   const paintDirtyRef = useRef(false);
   const adjacencyRef = useRef<Array<Set<number>> | null>(null);
   const pristineWeightsRef = useRef<{
@@ -537,7 +540,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
     if (!generated || !paintWindow) return;
     fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
     paintDirtyRef.current = true;
-    setGenerated({ ...generated });
+    setWeightsVersion((version) => version + 1);
   }, [generated, paintWindow, paintBoneColumn]);
 
   return (
@@ -723,8 +726,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   generated.weights.joints.set(pristine.joints);
                   generated.weights.weights.set(pristine.weights);
                   paintDirtyRef.current = true;
-                  // New object identity re-triggers the heatmap.
-                  setGenerated({ ...generated });
+                  setWeightsVersion((version) => version + 1);
                 }}
               >
                 Reset to auto
@@ -746,6 +748,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 brushRadius={brushRadius}
                 animating={paintAnimating}
                 isolatedPiece={paintPiece}
+                weightsVersion={weightsVersion}
                 onPaint={handlePaint}
               />
             </Box>

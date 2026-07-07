@@ -50,6 +50,9 @@ export interface WeightPaintViewportProps {
    *  other pieces ghost out and stop catching brush raycasts, so
    *  layered shells (tail behind the torso) are paintable. */
   isolatedPiece: number;
+  /** Bumped by out-of-band weight edits (Fill piece, Reset) so
+   *  the heatmap AND the live skin attributes fully resync. */
+  weightsVersion: number;
   /** Paint callback: the clicked face's FLATTENED vertex indices
    *  (rest-space identity — valid even while the mesh is posed by
    *  the Animate toggle). The caller centers the brush on their
@@ -76,6 +79,10 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   useEffect(() => {
     isolationRef.current();
   }, [props.isolatedPiece]);
+  const fullSyncRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    fullSyncRef.current();
+  }, [props.weightsVersion]);
   useEffect(() => {
     mixerControlRef.current(props.animating);
   }, [props.animating]);
@@ -240,7 +247,11 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       refreshHeatmap();
       applyIsolation();
 
-      // Idle playback (optional).
+      // Idle playback (optional). NOT started until the Animate
+      // toggle asks: a paused-at-frame-0 action is a slightly
+      // POSED model, and painting against it shears partially-
+      // painted regions (2026-07-06 sleeve-spike bug) — Animate
+      // off must mean TRUE rest pose.
       if (propsRef.current.idleClipUrl) {
         loader.load(propsRef.current.idleClipUrl, (clipGltf) => {
           if (disposed) return;
@@ -248,8 +259,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
           if (!clip) return;
           mixer = new THREE.AnimationMixer(gltf.scene);
           idleAction = mixer.clipAction(clip);
-          idleAction.play();
-          idleAction.paused = !propsRef.current.animating;
+          if (propsRef.current.animating) idleAction.play();
         });
       }
     });
@@ -332,7 +342,23 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     }
 
     mixerControlRef.current = (playing: boolean) => {
-      if (idleAction) idleAction.paused = !playing;
+      if (!idleAction) return;
+      if (playing) {
+        idleAction.reset().play();
+      } else {
+        // stop() unbinds the action — nodes return to their rest
+        // TRS, i.e. the actual bind pose.
+        idleAction.stop();
+      }
+    };
+
+    fullSyncRef.current = () => {
+      refreshHeatmap();
+      const weights = propsRef.current.weights;
+      const total = weights.joints.length / MAX_INFLUENCES;
+      const all: number[] = new Array(total);
+      for (let i = 0; i < total; i += 1) all[i] = i;
+      syncSkinAttributes(all);
     };
 
     const raycaster = new THREE.Raycaster();
