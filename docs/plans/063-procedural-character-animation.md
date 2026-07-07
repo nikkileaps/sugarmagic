@@ -1,6 +1,6 @@
 # Plan 063 — Procedural character animation
 
-Status: proposed
+Status: shipped (2026-07-07)
 Owner: nikki + claude
 Date: 2026-07-07
 
@@ -139,10 +139,39 @@ Build-vs-buy, surveyed before 063.3:
   the byte-level control the merge/stamp semantics need, and a clip GLB
   is a small fixed shape. Revisit trigger: io/glb growing
   general-purpose transform features.
-- **`bezier-js`** (tiny, MIT): PLANNED for §063.5 curve math instead of
-  hand-rolling Bezier evaluation. Theatre.js rejected as the curve UI
-  (full studio environment, own state model — fights the MVVM store
-  rules); `CurveEditor` is bespoke Mantine.
+- **`bezier-js`** (tiny, MIT): planned for curve math, ultimately NOT
+  used — the requirement turned out to be PERIODIC interpolation
+  (wrap-around loop seam), which bezier-js does not model; periodic
+  Catmull-Rom through control points is ~30 dependency-free lines
+  (`override-curve.ts`). Theatre.js rejected as the curve UI (full
+  studio environment, own state model — fights the MVVM store rules);
+  `CurveEditor` is bespoke SVG in packages/ui.
+
+## Decisions from implementation (2026-07-07, settled on the real chibi)
+
+Settled architecture promoted to ADR 024 (ordinary contract clips,
+component composition, determinism, recipe-in-clip, relaxed base
+pose, override semantics, per-slot coexistence). Epic-level notes:
+
+- **The relaxed base pose is EXTRACTED, not authored**: the vendor
+  script computes each bone's mean Idle_Loop rotation as an offset
+  from rest. Fixed the T-pose-arms bug (generators emitted offsets
+  around the contract rest, which IS a T-pose); arm-chain subset only,
+  so legs/spine stay neutral-upright — deliberately cuter than the
+  library's combat stance.
+- **Pose adjust (063.5) was added mid-epic** at nikki's request and
+  proved the higher-leverage editor: single-joint puppet handles beat
+  curve editing for stance work. GLTFLoader NAME SANITIZATION (dots
+  stripped) bit the pose viewport — bone lookups must map through
+  `THREE.PropertyBinding.sanitizeNodeName`.
+- **Wizard/panel coherence**: weights-only wizard edits skip the
+  animation side entirely; marker-level edits regenerate
+  recipe-carrying slots at the new hip scale (shared
+  `generateClipFromRecipe`). No path stomps a generated slot back to
+  library.
+- **MotionComponent earned its keep immediately**: breathing owning
+  both the chest curve and the breath-synced bob, and run being walk's
+  stack re-parameterized, both fell out of the abstraction.
 
 ## Stories
 
@@ -205,13 +234,30 @@ is the same mechanism a future pose library stands on.
   changes that invalidate an override drop it with a visible notice,
   never silently).
 
-### 063.7 — Verify end-to-end
+### 063.7 — Verify end-to-end (nikki, in progress at wrap)
 
 - Mim gets the Animal Crossing treatment: generated cozy idle replaces
   the combat stance; walk/run either generated or kept from the
   library, her call. Preview -> save -> gameplay -> (next deploy) prod.
 - Regression: wizard edit-in-place, library-clip characters, and
   manually imported animations all unaffected.
+
+## Defers (with revisit triggers)
+
+- **Tail bone chain + wag component (plan 064 candidate).** Rig
+  contract extension (optional bones degrade gracefully both ways via
+  name-based binding), wizard tail markers, wag `MotionComponent`,
+  and tail tracks baked into copied library clips. Trigger: already
+  requested in spirit ("cute tail wag"); write plan 064 when desired.
+- **Additional generators** (sit, wave, carry, celebrate, sleep...):
+  one component-stack story each. Trigger: first game need for a
+  non-locomotion state.
+- **Runtime velocity-synced playback rate.** Trigger: visible foot
+  sliding complaints in real gameplay.
+- **Panel recovery for unbound generated clips**: if bindings ever
+  point away from a generated clip, its recipe still exists in the
+  file but the panel starts fresh. Trigger: first user report; code
+  anchor at the panel bootstrap in `AnimationPanel.tsx`.
 
 ## Future (named so the seams stay honest, OUT of this epic)
 
