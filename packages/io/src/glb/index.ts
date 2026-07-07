@@ -246,6 +246,9 @@ export interface ExtractedPrimitiveRange {
    *  into the extracted positions; folded into the skin's IBMs
    *  at assembly — glTF loaders ignore skinned-node transforms). */
   nodeWorldMatrix: number[];
+  /** The primitive's material name — authoring-facing piece label
+   *  ("Jacket", "Tail") for the weight-paint piece filter. */
+  materialName: string | null;
 }
 
 export interface ExtractedMesh {
@@ -369,12 +372,20 @@ export function extractMeshFromGlb(buffer: ArrayBuffer): ExtractedMesh {
       }
       positionsParts.push(positions);
       indexParts.push(shifted);
+      const materialIndex = (primitive as { material?: number }).material;
+      const materialName =
+        materialIndex !== undefined
+          ? ((document as { materials?: Array<{ name?: string }> }).materials?.[
+              materialIndex
+            ]?.name ?? null)
+          : null;
       ranges.push({
         meshIndex,
         primitiveIndex,
         vertexStart: vertexBase,
         vertexCount,
-        nodeWorldMatrix: worldForMesh.get(meshIndex) ?? MAT4_IDENTITY
+        nodeWorldMatrix: worldForMesh.get(meshIndex) ?? MAT4_IDENTITY,
+        materialName
       });
       vertexBase += vertexCount;
     });

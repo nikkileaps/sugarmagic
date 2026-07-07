@@ -46,6 +46,10 @@ export interface WeightPaintViewportProps {
   /** World-space brush radius. */
   brushRadius: number;
   animating: boolean;
+  /** Piece isolation: -1 = all; otherwise index into `ranges` —
+   *  other pieces ghost out and stop catching brush raycasts, so
+   *  layered shells (tail behind the torso) are paintable. */
+  isolatedPiece: number;
   /** Paint callback: the clicked face's FLATTENED vertex indices
    *  (rest-space identity — valid even while the mesh is posed by
    *  the Animate toggle). The caller centers the brush on their
@@ -68,6 +72,10 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   useEffect(() => {
     refreshHeatmapRef.current();
   }, [props.selectedBoneColumn, props.weights]);
+  const isolationRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    isolationRef.current();
+  }, [props.isolatedPiece]);
   useEffect(() => {
     mixerControlRef.current(props.animating);
   }, [props.animating]);
@@ -160,7 +168,29 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       mesh: THREE.Mesh;
       vertexStart: number;
       vertexCount: number;
+      rangeIndex: number;
     }> = [];
+
+    function applyIsolation() {
+      const isolated = propsRef.current.isolatedPiece;
+      for (const target of paintTargets) {
+        const material = target.mesh.material as THREE.MeshStandardMaterial;
+        const ghosted = isolated >= 0 && target.rangeIndex !== isolated;
+        material.transparent = ghosted;
+        material.opacity = ghosted ? 0.12 : 1;
+        material.depthWrite = !ghosted;
+      }
+    }
+    isolationRef.current = applyIsolation;
+
+    function raycastTargets(): THREE.Mesh[] {
+      const isolated = propsRef.current.isolatedPiece;
+      return paintTargets
+        .filter(
+          (target) => isolated < 0 || target.rangeIndex === isolated
+        )
+        .map((target) => target.mesh);
+    }
 
     const loader = new GLTFLoader();
     loader.load(propsRef.current.modelUrl, (gltf) => {
@@ -182,12 +212,13 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         if (!mesh.isMesh) return;
         const association = associations.get(mesh);
         if (!association || association.meshes === undefined) return;
-        const range = propsRef.current.ranges.find(
+        const rangeIndex = propsRef.current.ranges.findIndex(
           (candidate) =>
             candidate.meshIndex === association.meshes &&
             candidate.primitiveIndex === (association.primitives ?? 0)
         );
-        if (!range) return;
+        if (rangeIndex === -1) return;
+        const range = propsRef.current.ranges[rangeIndex]!;
         // Heatmap vertex colors + a material that shows them.
         const geometry = mesh.geometry as THREE.BufferGeometry;
         const colors = new Float32Array(range.vertexCount * 3);
@@ -202,10 +233,12 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         paintTargets.push({
           mesh,
           vertexStart: range.vertexStart,
-          vertexCount: range.vertexCount
+          vertexCount: range.vertexCount,
+          rangeIndex
         });
       });
       refreshHeatmap();
+      applyIsolation();
 
       // Idle playback (optional).
       if (propsRef.current.idleClipUrl) {
@@ -319,9 +352,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     function paintAt(event: PointerEvent) {
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(
-        paintTargets.map((target) => target.mesh)
-      );
+      const hits = raycaster.intersectObjects(raycastTargets());
       const hit = hits[0];
       if (!hit || !hit.face) return;
       placeCursor(hit);
@@ -370,9 +401,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       // Hover: show the brush ring.
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(
-        paintTargets.map((target) => target.mesh)
-      )[0];
+      const hit = raycaster.intersectObjects(raycastTargets())[0];
       if (hit) {
         placeCursor(hit);
       } else {

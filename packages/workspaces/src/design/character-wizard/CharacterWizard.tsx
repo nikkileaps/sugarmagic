@@ -39,6 +39,7 @@ import type {
 import {
   applyBrushStroke,
   buildVertexAdjacency,
+  fillVerticesWithBone,
   type BrushMode,
   type GeneratedSkeleton,
   type MeshData,
@@ -65,7 +66,9 @@ export interface WizardGenerated {
    *  edits `weights` in place and `reassemble` rebuilds the GLB. */
   skeleton: GeneratedSkeleton;
   weights: SkinWeights;
-  ranges: Array<WeightPaintRange & { nodeWorldMatrix: number[] }>;
+  ranges: Array<
+    WeightPaintRange & { nodeWorldMatrix: number[]; materialName: string | null }
+  >;
   mesh: MeshData;
 }
 
@@ -199,6 +202,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [brushStrength, setBrushStrength] = useState(0.5);
   const [brushMode, setBrushMode] = useState<BrushMode>("add");
   const [paintAnimating, setPaintAnimating] = useState(false);
+  // Piece isolation: -1 = all pieces; otherwise index into ranges.
+  const [paintPiece, setPaintPiece] = useState(-1);
   const paintDirtyRef = useRef(false);
   const adjacencyRef = useRef<Array<Set<number>> | null>(null);
   const pristineWeightsRef = useRef<{
@@ -474,6 +479,26 @@ export function CharacterWizard(props: CharacterWizardProps) {
       generated.skeleton.bones.findIndex((bone) => bone.name === boneName)
     );
   }, [generated]);
+  const pieceOptions = useMemo(() => {
+    if (!generated) return [];
+    return [
+      { value: "-1", label: "All pieces" },
+      ...generated.ranges.map((range, index) => ({
+        value: String(index),
+        label: range.materialName ?? `Piece ${index + 1}`
+      }))
+    ];
+  }, [generated]);
+  const paintWindow = useMemo(() => {
+    if (!generated || paintPiece < 0) return undefined;
+    const range = generated.ranges[paintPiece];
+    if (!range) return undefined;
+    return {
+      start: range.vertexStart,
+      end: range.vertexStart + range.vertexCount
+    };
+  }, [generated, paintPiece]);
+
   const handlePaint = useCallback(
     (faceVertices: [number, number, number]): number[] => {
       if (!generated) return [];
@@ -494,15 +519,26 @@ export function CharacterWizard(props: CharacterWizardProps) {
           radius: brushRadius,
           boneColumn: paintBoneColumn,
           strength: brushStrength * 0.25,
-          mode: brushMode
+          mode: brushMode,
+          vertexWindow: paintWindow
         },
         adjacencyRef.current ?? undefined
       );
       if (affected.length > 0) paintDirtyRef.current = true;
       return affected;
     },
-    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode]
+    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode, paintWindow]
   );
+
+  // One-click rigid assignment of the isolated piece to the
+  // selected bone — the intended fix for boneless shells (tail,
+  // eyes) where brushwork is the wrong tool.
+  const handleFillPiece = useCallback(() => {
+    if (!generated || !paintWindow) return;
+    fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
+    paintDirtyRef.current = true;
+    setGenerated({ ...generated });
+  }, [generated, paintWindow, paintBoneColumn]);
 
   return (
     <WizardDialog
@@ -650,6 +686,24 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   onChange={setBrushStrength}
                 />
               </Box>
+              <Select
+                label="Piece"
+                size="xs"
+                w={150}
+                data={pieceOptions}
+                value={String(paintPiece)}
+                onChange={(value) => {
+                  if (value !== null) setPaintPiece(Number(value));
+                }}
+              />
+              <Button
+                size="compact-xs"
+                variant="light"
+                disabled={paintPiece < 0}
+                onClick={handleFillPiece}
+              >
+                Fill piece with bone
+              </Button>
               <Switch
                 size="xs"
                 label="Animate"
@@ -690,6 +744,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 columnToJointSlot={columnToJointSlot}
                 brushRadius={brushRadius}
                 animating={paintAnimating}
+                isolatedPiece={paintPiece}
                 onPaint={handlePaint}
               />
             </Box>

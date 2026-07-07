@@ -102,7 +102,8 @@ describe("GLB container I/O (Plan 062)", () => {
         primitiveIndex: 0,
         vertexStart: 0,
         vertexCount: 3,
-        nodeWorldMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+        nodeWorldMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        materialName: null
       }
     ]);
   });

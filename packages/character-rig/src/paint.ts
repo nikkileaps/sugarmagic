@@ -30,6 +30,11 @@ export interface BrushStroke {
   /** Peak strength at the brush center, 0..1 per stroke step. */
   strength: number;
   mode: BrushMode;
+  /** Restrict the stroke to one mesh piece (flattened vertex
+   *  window) — layered characters (jacket over shirt over body,
+   *  tail behind torso) need isolation or the 3D brush paints
+   *  through everything (nikki, 2026-07-06). */
+  vertexWindow?: { start: number; end: number };
 }
 
 /** Weight of a bone column at a vertex (0 when uninfluenced). */
@@ -108,7 +113,9 @@ export function applyBrushStroke(
   const affected: number[] = [];
   const vertexCount = mesh.positions.length / 3;
   const radiusSq = stroke.radius * stroke.radius;
-  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+  const first = stroke.vertexWindow?.start ?? 0;
+  const last = Math.min(stroke.vertexWindow?.end ?? vertexCount, vertexCount);
+  for (let vertex = first; vertex < last; vertex += 1) {
     const dx = mesh.positions[vertex * 3]! - stroke.center[0];
     const dy = mesh.positions[vertex * 3 + 1]! - stroke.center[1];
     const dz = mesh.positions[vertex * 3 + 2]! - stroke.center[2];
@@ -148,6 +155,24 @@ export function applyBrushStroke(
         current + (average - current) * stroke.strength * falloff
       );
     }
+    affected.push(vertex);
+  }
+  return affected;
+}
+
+/**
+ * Assign an entire vertex window rigidly to one bone — the
+ * one-click answer for separate-shell pieces (a tail with no tail
+ * bones, eyes, accessories) where brushwork is the wrong tool.
+ */
+export function fillVerticesWithBone(
+  weights: SkinWeights,
+  window: { start: number; end: number },
+  boneColumn: number
+): number[] {
+  const affected: number[] = [];
+  for (let vertex = window.start; vertex < window.end; vertex += 1) {
+    setBoneWeightAtVertex(weights, vertex, boneColumn, 1);
     affected.push(vertex);
   }
   return affected;

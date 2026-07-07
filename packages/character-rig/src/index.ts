@@ -66,6 +66,7 @@ export { getStandardRigHipHeight } from "./skeleton";
 export {
   applyBrushStroke,
   boneWeightOfVertex,
+  fillVerticesWithBone,
   setBoneWeightAtVertex,
   type BrushMode,
   type BrushStroke
