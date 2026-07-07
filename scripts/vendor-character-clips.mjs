@@ -37,7 +37,13 @@ const SOURCE_BASE = `https://raw.githubusercontent.com/${SOURCE_REPO}/${SOURCE_C
 
 // The curated v1 set. Slot mapping lives with the wizard; this
 // script only cares which clips ship.
-const CURATED_CLIPS = ["Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop"];
+const CURATED_CLIPS = [
+  "Idle_Loop",
+  "Idle_Talking_Loop",
+  "Walk_Loop",
+  "Jog_Fwd_Loop",
+  "Sprint_Loop"
+];
 
 // Core deform set (mirror of domain STANDARD_RIG_CORE_BONE_NAMES,
 // 2026-07-06): wizard skeletons carry no finger bones, so finger

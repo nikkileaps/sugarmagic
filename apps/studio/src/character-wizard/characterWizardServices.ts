@@ -42,7 +42,11 @@ import type {
   WizardLandmarks
 } from "@sugarmagic/workspaces";
 import type { WeightSolveResponse } from "./weight-solver.worker";
-import idleClipUrl from "../../../../vendor/quaternius-ual/clips/Idle_Loop.glb?url";
+// Idle_Talking_Loop over Idle_Loop (nikki, 2026-07-07): the base
+// idle is a combat-ready stance (staggered feet, neck forward);
+// talking idle reads friendlier on stylized characters. Plan 063
+// (animation tweaks) will make the idle style selectable.
+import idleClipUrl from "../../../../vendor/quaternius-ual/clips/Idle_Talking_Loop.glb?url";
 import walkClipUrl from "../../../../vendor/quaternius-ual/clips/Walk_Loop.glb?url";
 import runClipUrl from "../../../../vendor/quaternius-ual/clips/Jog_Fwd_Loop.glb?url";
 import attributionText from "../../../../vendor/quaternius-ual/ATTRIBUTION.md?raw";
@@ -52,7 +56,7 @@ const SLOT_CLIPS: Array<{
   clipName: string;
   url: string;
 }> = [
-  { slot: "idle", clipName: "Idle_Loop", url: idleClipUrl },
+  { slot: "idle", clipName: "Idle_Talking_Loop", url: idleClipUrl },
   { slot: "walk", clipName: "Walk_Loop", url: walkClipUrl },
   { slot: "run", clipName: "Jog_Fwd_Loop", url: runClipUrl }
 ];
