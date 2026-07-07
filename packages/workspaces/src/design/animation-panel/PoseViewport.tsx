@@ -149,9 +149,21 @@ export function PoseViewport(props: PoseViewportProps) {
     loader.load(propsRef.current.modelUrl, (gltf) => {
       if (disposed) return;
       scene.add(gltf.scene);
+      // GLTFLoader SANITIZES node names ("DEF-hand.L" loses its
+      // dot) — map sanitized scene names back to canonical
+      // contract names or every bone lookup silently misses (the
+      // handles-at-origin bug, 2026-07-07).
+      const canonicalBySanitized = new Map(
+        STANDARD_RIG_CORE.bones.map((bone) => [
+          THREE.PropertyBinding.sanitizeNodeName(bone.name),
+          bone.name
+        ])
+      );
       gltf.scene.traverse((child) => {
         if ((child as THREE.Bone).isBone) {
-          bonesByName.set(child.name, child as THREE.Bone);
+          const canonical =
+            canonicalBySanitized.get(child.name) ?? child.name;
+          bonesByName.set(canonical, child as THREE.Bone);
         }
         const mesh = child as THREE.SkinnedMesh;
         if (mesh.isSkinnedMesh) mesh.frustumCulled = false;
