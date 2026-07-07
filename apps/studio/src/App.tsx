@@ -1473,7 +1473,11 @@ export function App() {
             );
           }
           projectStore.getState().updateSession(nextSession);
-        }
+        },
+        // §062.9 — edit-in-place rewrote asset files under the same
+        // paths; refresh their blob URLs so previews reload.
+        refreshAssetPaths: (relativeAssetPaths) =>
+          assetSourceStore.getState().refreshPaths(relativeAssetPaths)
       }),
     []
   );

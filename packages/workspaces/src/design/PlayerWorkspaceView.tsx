@@ -88,6 +88,41 @@ export function usePlayerWorkspaceView(
     characterWizardServices
   } = props;
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEditSession, setWizardEditSession] = useState<{
+    characterName: string;
+    riggedBytes: ArrayBuffer;
+    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>;
+  } | null>(null);
+
+  // §062.9 — the rig button EDITS a wizard-generated model
+  // (recipe reopens; bindings untouched) and CREATES otherwise.
+  async function launchWizard(
+    model: { rigId?: string | null; source: { relativeAssetPath: string; fileName: string } } | null
+  ) {
+    if (model?.rigId) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const riggedBytes = await (await fetch(url)).arrayBuffer();
+        setWizardEditSession({
+          characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
+          riggedBytes,
+          fetchAsset: async (relativeAssetPath: string) => {
+            const assetUrl = assetSources[relativeAssetPath];
+            if (!assetUrl) {
+              throw new Error(
+                `Missing source asset for edit: ${relativeAssetPath}`
+              );
+            }
+            return (await fetch(assetUrl)).arrayBuffer();
+          }
+        });
+        setWizardOpen(true);
+        return;
+      }
+    }
+    setWizardEditSession(null);
+    setWizardOpen(true);
+  }
 
   const activeAnimationSlot = useVanillaStoreSelector(
     designPreviewStore,
@@ -180,7 +215,9 @@ export function usePlayerWorkspaceView(
         }
         assetSources={assetSources}
         onLaunchRigWizard={
-          characterWizardServices ? () => setWizardOpen(true) : undefined
+          characterWizardServices
+            ? () => void launchWizard(boundCharacterModel)
+            : undefined
         }
       />
       {characterWizardServices ? (
@@ -188,7 +225,11 @@ export function usePlayerWorkspaceView(
           opened={wizardOpen}
           defaultCharacterName={playerDefinition?.displayName ?? "Player"}
           services={characterWizardServices}
-          onClose={() => setWizardOpen(false)}
+          editSession={wizardEditSession}
+          onClose={() => {
+            setWizardOpen(false);
+            setWizardEditSession(null);
+          }}
           onCommitted={(result) => {
             // Bind the generated model + all three slots in one
             // definition update through the normal command path.

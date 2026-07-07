@@ -129,6 +129,40 @@ export function useNPCWorkspaceView(
     definitionId: string;
   } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEditSession, setWizardEditSession] = useState<{
+    characterName: string;
+    riggedBytes: ArrayBuffer;
+    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>;
+  } | null>(null);
+
+  // §062.9 — edit wizard-generated models, create otherwise.
+  async function launchWizard(
+    model: { rigId?: string | null; source: { relativeAssetPath: string; fileName: string } } | null
+  ) {
+    if (model?.rigId) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const riggedBytes = await (await fetch(url)).arrayBuffer();
+        setWizardEditSession({
+          characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
+          riggedBytes,
+          fetchAsset: async (relativeAssetPath: string) => {
+            const assetUrl = assetSources[relativeAssetPath];
+            if (!assetUrl) {
+              throw new Error(
+                `Missing source asset for edit: ${relativeAssetPath}`
+              );
+            }
+            return (await fetch(assetUrl)).arrayBuffer();
+          }
+        });
+        setWizardOpen(true);
+        return;
+      }
+    }
+    setWizardEditSession(null);
+    setWizardOpen(true);
+  }
   const activeAnimationSlot = useVanillaStoreSelector(
     designPreviewStore,
     (state: DesignPreviewState) =>
@@ -305,7 +339,7 @@ export function useNPCWorkspaceView(
         assetSources={assetSources}
         onLaunchRigWizard={
           characterWizardServices && selectedNPC
-            ? () => setWizardOpen(true)
+            ? () => void launchWizard(boundCharacterModel)
             : undefined
         }
       />
@@ -314,7 +348,11 @@ export function useNPCWorkspaceView(
           opened={wizardOpen}
           defaultCharacterName={selectedNPC.displayName}
           services={characterWizardServices}
-          onClose={() => setWizardOpen(false)}
+          editSession={wizardEditSession}
+          onClose={() => {
+            setWizardOpen(false);
+            setWizardEditSession(null);
+          }}
           onCommitted={(result) => {
             const bindings = {
               ...selectedNPC.presentation.animationAssetBindings

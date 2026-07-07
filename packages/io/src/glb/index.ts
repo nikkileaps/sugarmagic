@@ -460,6 +460,15 @@ export interface BuildSkinnedGlbRequest {
   skeleton: GeneratedSkeleton;
   weights: SkinWeights;
   ranges: ExtractedPrimitiveRange[];
+  /** Plan 062 §062.9 — the wizard recipe, stamped into the output
+   *  GLB's asset.extras so Edit can reopen this character with
+   *  its markers intact. */
+  recipe?: {
+    landmarks: Record<string, [number, number, number]>;
+    /** Project-relative path of the untouched source GLB kept
+     *  alongside the rigged output. */
+    sourceAssetPath: string;
+  };
 }
 
 /**
@@ -480,6 +489,20 @@ export function buildSkinnedCharacterGlb(
   document.accessors = document.accessors ?? [];
   document.bufferViews = document.bufferViews ?? [];
   document.skins = document.skins ?? [];
+  if (request.recipe) {
+    document.asset = {
+      ...(document.asset ?? { version: "2.0" }),
+      extras: {
+        ...((document.asset?.extras as Record<string, unknown>) ?? {}),
+        sugarmagicRig: {
+          rigId: request.skeleton.rigId,
+          rigSchemaVersion: request.skeleton.rigSchemaVersion,
+          landmarks: request.recipe.landmarks,
+          sourceAssetPath: request.recipe.sourceAssetPath
+        }
+      }
+    };
+  }
 
   const appender: BinAppender = {
     parts: [chunks.binaryChunk],
@@ -619,6 +642,87 @@ export function buildSkinnedCharacterGlb(
   }
   document.buffers = [{ ...(document.buffers?.[0] ?? {}), byteLength: totalBin }];
   return packGlb(document, bin);
+}
+
+// ---- Wizard reopen (§062.9) -------------------------------------------
+
+export interface WizardRecipe {
+  rigId: string;
+  rigSchemaVersion: number;
+  landmarks: Record<string, [number, number, number]>;
+  sourceAssetPath: string;
+}
+
+/** Read the wizard recipe stamped by `buildSkinnedCharacterGlb`. */
+export function readWizardRecipe(riggedGlb: ArrayBuffer): WizardRecipe | null {
+  const chunks = readGlb(riggedGlb);
+  const extras = chunks?.document.asset?.extras as
+    | { sugarmagicRig?: WizardRecipe }
+    | undefined;
+  return extras?.sugarmagicRig ?? null;
+}
+
+/**
+ * Decode the (possibly hand-painted) skin weights back out of a
+ * rigged GLB into flattened per-vertex (jointSlot, weight) pairs,
+ * in extraction order. The caller converts joint slots to solver
+ * bone columns via the reconstructed skeleton.
+ */
+export function readSkinWeightsFromGlb(riggedGlb: ArrayBuffer): {
+  joints: Uint16Array;
+  weights: Float32Array;
+} | null {
+  const chunks = readGlb(riggedGlb);
+  if (!chunks?.binaryChunk) return null;
+  const { document, binaryChunk } = chunks;
+  const jointsParts: Uint16Array[] = [];
+  const weightsParts: Float32Array[] = [];
+  for (const mesh of document.meshes ?? []) {
+    for (const primitive of mesh.primitives ?? []) {
+      const jointsAccessor = primitive.attributes?.JOINTS_0;
+      const weightsAccessor = primitive.attributes?.WEIGHTS_0;
+      const positionAccessor = primitive.attributes?.POSITION;
+      if (
+        jointsAccessor === undefined ||
+        weightsAccessor === undefined ||
+        positionAccessor === undefined
+      ) {
+        continue;
+      }
+      const jointsDef = document.accessors![jointsAccessor]!;
+      const weightsDef = document.accessors![weightsAccessor]!;
+      const jointsView = document.bufferViews![jointsDef.bufferView!]!;
+      const weightsView = document.bufferViews![weightsDef.bufferView!]!;
+      const view = new DataView(binaryChunk.buffer, binaryChunk.byteOffset);
+      const j = new Uint16Array(jointsDef.count * 4);
+      const jBase = (jointsView.byteOffset ?? 0) + (jointsDef.byteOffset ?? 0);
+      for (let i = 0; i < j.length; i += 1) {
+        j[i] =
+          jointsDef.componentType === 5121
+            ? view.getUint8(jBase + i)
+            : view.getUint16(jBase + i * 2, true);
+      }
+      const w = new Float32Array(weightsDef.count * 4);
+      const wBase =
+        (weightsView.byteOffset ?? 0) + (weightsDef.byteOffset ?? 0);
+      for (let i = 0; i < w.length; i += 1) {
+        w[i] = view.getFloat32(wBase + i * 4, true);
+      }
+      jointsParts.push(j);
+      weightsParts.push(w);
+    }
+  }
+  if (jointsParts.length === 0) return null;
+  const totalJ = jointsParts.reduce((sum, part) => sum + part.length, 0);
+  const joints = new Uint16Array(totalJ);
+  const weights = new Float32Array(totalJ);
+  let offset = 0;
+  for (let i = 0; i < jointsParts.length; i += 1) {
+    joints.set(jointsParts[i]!, offset);
+    weights.set(weightsParts[i]!, offset);
+    offset += jointsParts[i]!.length;
+  }
+  return { joints, weights };
 }
 
 // ---- Clip hips scaling -----------------------------------------------

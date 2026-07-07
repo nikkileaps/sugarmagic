@@ -138,6 +138,12 @@ export interface CharacterModelDefinition {
     fileName: string;
     mimeType: string | null;
   };
+  /** Plan 062 §062.9 — set when the Character Wizard generated
+   *  this model (the standard rig id). Gates the Edit affordance:
+   *  the wizard can reopen its own output (recipe stamped in the
+   *  GLB's extras + the source file kept alongside). Null for
+   *  hand-imported models. */
+  rigId?: string | null;
 }
 
 /**
@@ -617,7 +623,8 @@ function normalizeCharacterModelDefinitions(
       relativeAssetPath: definition.source.relativeAssetPath,
       fileName: definition.source.fileName,
       mimeType: definition.source.mimeType
-    }
+    },
+    rigId: definition.rigId ?? null
   }));
 }
 
@@ -1626,6 +1633,7 @@ export function createDefaultCharacterModelDefinition(
     definitionId?: string;
     displayName?: string;
     source: CharacterModelDefinition["source"];
+    rigId?: string | null;
   }
 ): CharacterModelDefinition {
   return {
@@ -1638,7 +1646,8 @@ export function createDefaultCharacterModelDefinition(
       relativeAssetPath: options.source.relativeAssetPath,
       fileName: options.source.fileName,
       mimeType: options.source.mimeType
-    }
+    },
+    rigId: options.rigId ?? null
   };
 }
 

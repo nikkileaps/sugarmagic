@@ -19,7 +19,7 @@
  * Status: active
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -87,9 +87,27 @@ export interface CharacterWizardServices {
     sourceBytes: ArrayBuffer,
     generated: WizardGenerated
   ): Promise<ArrayBuffer>;
+  /** Reopen a wizard-generated character for editing (§062.9). */
+  prepareEdit(
+    riggedBytes: ArrayBuffer,
+    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>
+  ): Promise<{
+    sourceBytes: ArrayBuffer;
+    landmarks: WizardLandmarks;
+    generated: WizardGenerated;
+  }>;
+  /** Overwrite an existing character's assets in place (§062.9). */
+  commitEdit(request: {
+    characterName: string;
+    sourceBytes: ArrayBuffer;
+    landmarks: WizardLandmarks;
+    generated: WizardGenerated;
+  }): Promise<void>;
   /** Write assets + return definitions (io commit, §062.4). */
   commit(request: {
     characterName: string;
+    sourceBytes: ArrayBuffer;
+    landmarks: WizardLandmarks;
     generated: WizardGenerated;
   }): Promise<{
     characterModelDefinition: CharacterModelDefinition;
@@ -104,6 +122,16 @@ export interface CharacterWizardProps {
   opened: boolean;
   defaultCharacterName: string;
   services: CharacterWizardServices;
+  /** Plan 062 §062.9 — when set, the wizard reopens an existing
+   *  wizard-generated character: markers + painted weights load
+   *  from the stamped recipe, the name is locked, and Finish
+   *  overwrites the same asset files (bindings untouched). */
+  editSession?: {
+    characterName: string;
+    riggedBytes: ArrayBuffer;
+    /** assetSources lookup for the stored source GLB. */
+    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>;
+  } | null;
   /** Fired after commit; the workspace binds model + slots. */
   onCommitted: (result: {
     characterModelDefinition: CharacterModelDefinition;
@@ -146,7 +174,15 @@ function friendlyBoneName(boneName: string): string {
 }
 
 export function CharacterWizard(props: CharacterWizardProps) {
-  const { opened, defaultCharacterName, services, onCommitted, onClose } = props;
+  const {
+    opened,
+    defaultCharacterName,
+    services,
+    editSession,
+    onCommitted,
+    onClose
+  } = props;
+  const isEditMode = Boolean(editSession);
   const [step, setStep] = useState<WizardStep>("import");
   const [characterName, setCharacterName] = useState(defaultCharacterName);
   const [sourceBytes, setSourceBytes] = useState<ArrayBuffer | null>(null);
@@ -203,6 +239,46 @@ export function CharacterWizard(props: CharacterWizardProps) {
     reset();
     onClose();
   }, [reset, onClose]);
+
+  const landmarksDirtyRef = useRef(false);
+  const editLoadedRef = useRef(false);
+  // §062.9 — edit bootstrap: load recipe + painted weights, land
+  // on the joints step with everything prefilled.
+  useEffect(() => {
+    if (!opened) {
+      editLoadedRef.current = false;
+      return;
+    }
+    if (!editSession || editLoadedRef.current) return;
+    editLoadedRef.current = true;
+    setBusy(true);
+    setBusyLabel("Loading character...");
+    void services
+      .prepareEdit(editSession.riggedBytes, editSession.fetchAsset)
+      .then((loaded) => {
+        setCharacterName(editSession.characterName);
+        setSourceBytes(loaded.sourceBytes);
+        setSourceUrl(trackBlobUrl(loaded.sourceBytes));
+        setLandmarks(loaded.landmarks);
+        pristineWeightsRef.current = {
+          joints: loaded.generated.weights.joints.slice(),
+          weights: loaded.generated.weights.weights.slice()
+        };
+        adjacencyRef.current = buildVertexAdjacency(loaded.generated.mesh);
+        paintDirtyRef.current = false;
+        landmarksDirtyRef.current = false;
+        setBrushRadius(loaded.generated.characterHeight * 0.06);
+        setGenerated(loaded.generated);
+        setStep("joints");
+      })
+      .catch((editError) => {
+        setError(
+          editError instanceof Error ? editError.message : String(editError)
+        );
+      })
+      .finally(() => setBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened, editSession]);
 
   async function handleFilePicked(file: File) {
     setError(null);
@@ -262,6 +338,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
     }
     if (step === "joints") {
       if (!sourceBytes || !landmarks) return;
+      if (isEditMode && !landmarksDirtyRef.current && generated) {
+        // Markers untouched: keep the loaded (possibly painted)
+        // weights instead of re-solving over them.
+        setStep("weights");
+        return;
+      }
       setBusy(true);
       setBusyLabel("Generating rig + binding weights...");
       setBusyProgress(0);
@@ -292,13 +374,27 @@ export function CharacterWizard(props: CharacterWizardProps) {
   }
 
   async function handleFinish() {
-    if (!generated) return;
+    if (!generated || !sourceBytes || !landmarks) return;
     setBusy(true);
     setBusyLabel("Writing character assets...");
     setBusyProgress(undefined);
     try {
-      const result = await services.commit({ characterName, generated });
-      onCommitted(result);
+      if (isEditMode) {
+        await services.commitEdit({
+          characterName,
+          sourceBytes,
+          landmarks,
+          generated
+        });
+      } else {
+        const result = await services.commit({
+          characterName,
+          sourceBytes,
+          landmarks,
+          generated
+        });
+        onCommitted(result);
+      }
       reset();
       onClose();
     } catch (commitError) {
@@ -411,11 +507,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
       steps={STEPS}
       activeStepId={step}
       canAdvance={canAdvance}
-      canGoBack={!busy && step !== "import"}
+      canGoBack={!busy && step !== "import" && !(isEditMode && step === "joints")}
       busy={busy}
       busyLabel={busyLabel}
       busyProgress={busyProgress}
-      finishLabel="Add to project"
+      finishLabel={isEditMode ? "Save changes" : "Add to project"}
       onBack={() => {
         setError(null);
         setStep(
@@ -444,6 +540,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
               label="Character name"
               size="xs"
               value={characterName}
+              disabled={isEditMode}
               onChange={(event) => setCharacterName(event.currentTarget.value)}
             />
             <Group>
@@ -495,7 +592,10 @@ export function CharacterWizard(props: CharacterWizardProps) {
               <MarkerViewport
                 modelUrl={sourceUrl}
                 landmarks={landmarks}
-                onChange={setLandmarks}
+                onChange={(next) => {
+                  landmarksDirtyRef.current = true;
+                  setLandmarks(next);
+                }}
                 mirroring={mirroring}
               />
             </Box>
