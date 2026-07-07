@@ -661,7 +661,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 data={[
                   { value: "add", label: "Add" },
                   { value: "subtract", label: "Subtract" },
-                  { value: "smooth", label: "Smooth" }
+                  { value: "smooth", label: "Smooth" },
+                  { value: "fill", label: "Fill" }
                 ]}
                 value={brushMode}
                 onChange={(value) => setBrushMode(value as BrushMode)}

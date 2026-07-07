@@ -18,7 +18,7 @@
 import { MAX_INFLUENCES, type SkinWeights } from "./weights";
 import { buildVertexAdjacency, type MeshData } from "./mesh";
 
-export type BrushMode = "add" | "subtract" | "smooth";
+export type BrushMode = "add" | "subtract" | "smooth" | "fill";
 
 export interface BrushStroke {
   /** World-space brush center. */
@@ -124,7 +124,11 @@ export function applyBrushStroke(
     const falloff =
       0.5 * (1 + Math.cos((Math.sqrt(distanceSq) / stroke.radius) * Math.PI));
     const current = boneWeightOfVertex(weights, vertex, stroke.boneColumn);
-    if (stroke.mode === "add") {
+    if (stroke.mode === "fill") {
+      // Hard assignment, no falloff — sweep a region (a tail baked
+      // into the body piece) to rigid single-bone ownership.
+      setBoneWeightAtVertex(weights, vertex, stroke.boneColumn, 1);
+    } else if (stroke.mode === "add") {
       setBoneWeightAtVertex(
         weights,
         vertex,
