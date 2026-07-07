@@ -231,9 +231,23 @@ export function generateStandardSkeleton(
     // Character world rotation: aim +Y at the primary child; bones
     // without a directional child keep the contract's LOCAL
     // rotation under their (aligned) parent.
+    //
+    // DEF-head is special-cased to WORLD-UP (2026-07-06): as a
+    // leaf it would inherit the neck's alignment arc, baking any
+    // neck->head marker lean into the bind — during playback the
+    // library's (near-vertical) head orientation then pitches the
+    // face down by exactly that lean. Aligning to up matches the
+    // weights' head-to-crown segment and makes face pitch immune
+    // to marker placement.
     const primaryChild = childrenOf.get(bone.name)?.[0];
     let charWorld: Quat;
-    if (primaryChild && bone.name !== "root") {
+    if (bone.name === "DEF-head") {
+      const contractDirection = quatRotateVec3(contractWorld, [0, 1, 0]);
+      charWorld = quatMultiply(
+        quatFromUnitVectors(contractDirection, [0, 1, 0]),
+        contractWorld
+      );
+    } else if (primaryChild && bone.name !== "root") {
       const childHead = heads.get(primaryChild)!;
       const length = vec3Distance(childHead, head);
       if (length > 1e-6) {
