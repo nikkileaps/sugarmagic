@@ -103,6 +103,47 @@ The vision draft this plan derives from (nikki + external discussion,
   clips and rebinds slots via the exact 062 commit/rebind path
   (upsert-safe, blob refresh included).
 
+## Patterns and build-vs-buy (recorded 2026-07-07)
+
+Design patterns in play — all continuations of the 062 seams:
+
+- **Pipeline of pure stages**: generate channels -> project -> sample ->
+  write GLB -> commit; each stage a pure, separately-tested function.
+- **Strategy, twice**: `MotionComponent` (one conceptual piece of
+  motion — breathing, weight shift, leg cycle — contributing curves to
+  semantic channels; generators are component STACKS composed by
+  `composeComponents`) and the generator seam itself (idle/walk/run all
+  emit `ComposedMotion` into one sampler).
+- **Data-driven single source of truth**: `CHANNEL_PROJECTION` is the
+  only place semantic channels meet bone names.
+- **Memento**: the `sugarmagicAnimation` recipe in clip extras restores
+  editor state on reopen — the 062.9 recipe pattern, same lineage as
+  Plan 055's SaveParticipant.
+- **Curves are plain data** (harmonics + seeded periodic noise, no
+  closures): serializable into recipes, ready for §063.5 overrides.
+- Layering unchanged: domain (types) <- character-rig (pure, THREE-free,
+  zero new deps) <- io <- workspaces/studio (services DI). Runtime and
+  publish targets untouched.
+
+Build-vs-buy, surveyed before 063.3:
+
+- **Gait/idle synthesis**: no JS/TS OSS exists; the ecosystem's
+  "procedural animation" is runtime IK (THREE.IK et al), a different
+  problem. Hand-rolled core (~350 lines) also carries a hard
+  requirement no general library gives: deterministic byte-identical
+  output.
+- **`simplex-noise`**: rejected — our periodic value noise is ~30
+  dependency-free lines and character-rig stays zero-dep/worker-safe.
+- **`@gltf-transform/core`**: evaluated for the 063.3 clip writer,
+  rejected — io already has tested chunk-level GLB code from 062 with
+  the byte-level control the merge/stamp semantics need, and a clip GLB
+  is a small fixed shape. Revisit trigger: io/glb growing
+  general-purpose transform features.
+- **`bezier-js`** (tiny, MIT): PLANNED for §063.5 curve math instead of
+  hand-rolling Bezier evaluation. Theatre.js rejected as the curve UI
+  (full studio environment, own state model — fights the MVVM store
+  rules); `CurveEditor` is bespoke Mantine.
+
 ## Stories
 
 ### 063.1 — Motion core: curves, components, idle generator

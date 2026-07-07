@@ -19,13 +19,19 @@ export {
   type SemanticChannel
 } from "./projection";
 export {
+  composeComponents,
+  type ComposedMotion,
+  type MotionComponent,
+  type MotionContribution
+} from "./components";
+export {
   MOTION_SAMPLE_FPS,
   sampleMotion,
-  type MotionChannels,
   type SampledBoneTrack,
   type SampledMotion
 } from "./tracks";
 export {
+  IDLE_COMPONENTS,
   IDLE_DEFAULTS,
   generateIdleChannels,
   type IdleRecipeParams,

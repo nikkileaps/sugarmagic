@@ -7,6 +7,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CHANNEL_PROJECTION,
+  IDLE_COMPONENTS,
+  composeComponents,
   IDLE_DEFAULTS,
   evaluateCurve,
   generateIdleChannels,
@@ -127,6 +129,30 @@ describe("motion core (Plan 063)", () => {
     );
   });
 
+  it("the idle is a component stack and contributions to a channel sum", () => {
+    expect(IDLE_COMPONENTS.map((component) => component.componentId)).toEqual([
+      "breathing",
+      "weight-shift",
+      "head-motion",
+      "arm-drift"
+    ]);
+    // Breathing owns the bob: it contributes bounce, others do not.
+    const composed = generateIdleChannels(IDLE_DEFAULTS);
+    expect(composed.bounce.length).toBe(1);
+    // Stacked curves sum: composing breathing TWICE doubles the
+    // composed channel's curve count and (roughly) its amplitude.
+    const single = composeComponents([IDLE_COMPONENTS[0]!], IDLE_DEFAULTS, 4);
+    const doubled = composeComponents(
+      [IDLE_COMPONENTS[0]!, IDLE_COMPONENTS[0]!],
+      IDLE_DEFAULTS,
+      4
+    );
+    expect(doubled.channels.breathing!.length).toBe(2);
+    const singleSpine = trackAmplitude(sampleMotion(single), "DEF-spine.002");
+    const doubledSpine = trackAmplitude(sampleMotion(doubled), "DEF-spine.002");
+    expect(doubledSpine).toBeGreaterThan(singleSpine * 1.5);
+  });
+
   it("curves are periodic including noise", () => {
     const curve = {
       harmonics: [{ cycles: 2, amplitude: 1, phase: 0.3 }],
@@ -140,8 +166,9 @@ describe("motion core (Plan 063)", () => {
     const motion = sampleMotion({
       duration: 2,
       channels: {
-        breathing: { harmonics: [{ cycles: 1, amplitude: 0, phase: 0 }] }
-      }
+        breathing: [{ harmonics: [{ cycles: 1, amplitude: 0, phase: 0 }] }]
+      },
+      bounce: []
     });
     const spine = motion.boneTracks.find((t) => t.boneName === "DEF-spine.002")!;
     const rest = STANDARD_RIG_CORE.bones.find(

@@ -15,16 +15,13 @@
 import { STANDARD_RIG_CORE } from "@sugarmagic/domain";
 import { quatMultiply, type Quat, type Vec3 } from "../math";
 import { evaluateCurve, type PeriodicCurve } from "./curves";
+import type { ComposedMotion } from "./components";
 import { CHANNEL_PROJECTION, type SemanticChannel } from "./projection";
 
-/** A generator's output before sampling: curves per channel plus
- *  an optional vertical bounce (meters, contract scale). */
-export interface MotionChannels {
-  /** Loop duration in seconds. */
-  duration: number;
-  channels: Partial<Record<SemanticChannel, PeriodicCurve>>;
-  /** Vertical hips offset curve (contract-local up), meters. */
-  bounce?: PeriodicCurve;
+function evaluateStack(curves: PeriodicCurve[], phase: number): number {
+  let value = 0;
+  for (const curve of curves) value += evaluateCurve(curve, phase);
+  return value;
 }
 
 export interface SampledBoneTrack {
@@ -62,7 +59,7 @@ export const MOTION_SAMPLE_FPS = 24;
  * channel touches are omitted entirely (smaller clips; untouched
  * bones hold their rest pose at playback).
  */
-export function sampleMotion(motion: MotionChannels): SampledMotion {
+export function sampleMotion(motion: ComposedMotion): SampledMotion {
   const frameCount = Math.max(2, Math.round(motion.duration * MOTION_SAMPLE_FPS));
   const keyCount = frameCount + 1; // final key repeats phase 0 at t=duration
 
@@ -78,12 +75,12 @@ export function sampleMotion(motion: MotionChannels): SampledMotion {
   };
   const AXIS_INDEX = { x: 0, y: 1, z: 2 } as const;
 
-  for (const [channelName, curve] of Object.entries(motion.channels)) {
-    if (!curve) continue;
+  for (const [channelName, curves] of Object.entries(motion.channels)) {
+    if (!curves || curves.length === 0) continue;
     const projection = CHANNEL_PROJECTION[channelName as SemanticChannel];
     for (let key = 0; key < keyCount; key += 1) {
       const phase = (key % frameCount) / frameCount;
-      const value = evaluateCurve(curve, phase);
+      const value = evaluateStack(curves, phase);
       for (const target of projection) {
         touch(target.boneName)[key * 3 + AXIS_INDEX[target.axis]] +=
           value * target.gain;
@@ -136,12 +133,12 @@ export function sampleMotion(motion: MotionChannels): SampledMotion {
   }
 
   let hipsTranslation: SampledMotion["hipsTranslation"] = null;
-  if (motion.bounce) {
+  if (motion.bounce.length > 0) {
     const hipsRest = restByName.get("DEF-hips")!.position;
     const values = new Float32Array(keyCount * 3);
     for (let key = 0; key < keyCount; key += 1) {
       const phase = (key % frameCount) / frameCount;
-      const lift = evaluateCurve(motion.bounce, phase);
+      const lift = evaluateStack(motion.bounce, phase);
       // Contract-local: root carries the Z-up fix, so local +Z is
       // world up (hips rest z ~= standing hip height).
       values[key * 3] = hipsRest[0];
