@@ -25,6 +25,7 @@
 
 import {
   STANDARD_RIG,
+  STANDARD_RIG_CORE,
   STANDARD_RIG_LANDMARK_BONES,
   type StandardRigBone
 } from "@sugarmagic/domain";
@@ -158,11 +159,11 @@ function deriveWorldHeads(landmarks: RigLandmarks): Map<string, Vec3> {
     heads.set(`DEF-upper_arm.${side}`, shoulder);
   }
 
-  // Everything not yet placed (fingers, thumbs, toes, anything a
+  // Everything not yet placed (toes, spine helpers, anything a
   // future contract revision adds): position by transplanting the
   // bone's contract offset FROM ITS PARENT, scaled to character
   // proportions. Walk in contract order so parents resolve first.
-  for (const bone of STANDARD_RIG.bones) {
+  for (const bone of STANDARD_RIG_CORE.bones) {
     if (heads.has(bone.name)) continue;
     const parentName = bone.parentName;
     const parentHead = parentName ? heads.get(parentName) : null;
@@ -189,7 +190,9 @@ export function generateStandardSkeleton(
 
   // World rest rotations are the CONTRACT's (local rotations are
   // copied verbatim, so the composed world rotations match too).
-  const bones: GeneratedBone[] = STANDARD_RIG.bones.map((bone) => {
+  // CORE bones only (2026-07-06): no finger bones on wizard
+  // skeletons — see STANDARD_RIG_CORE in domain.
+  const bones: GeneratedBone[] = STANDARD_RIG_CORE.bones.map((bone) => {
     const head = heads.get(bone.name)!;
     const parentHead = bone.parentName ? heads.get(bone.parentName)! : null;
     const parentWorldRotation = bone.parentName

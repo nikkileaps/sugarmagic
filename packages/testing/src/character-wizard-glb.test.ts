@@ -127,11 +127,11 @@ describe("GLB container I/O (Plan 062)", () => {
     const document = chunks.document;
     // Skin with all 53 joints + IBMs.
     expect(document.skins?.length).toBe(1);
-    expect(document.skins![0]!.joints.length).toBe(53);
+    expect(document.skins![0]!.joints.length).toBe(23);
     const ibmAccessor =
       document.accessors![document.skins![0]!.inverseBindMatrices!]!;
     expect(ibmAccessor.type).toBe("MAT4");
-    expect(ibmAccessor.count).toBe(53);
+    expect(ibmAccessor.count).toBe(23);
     // The mesh node got the skin; primitives got skinning attributes.
     const meshNode = document.nodes!.find((node) => node.mesh !== undefined)!;
     expect(meshNode.skin).toBe(0);
@@ -144,7 +144,7 @@ describe("GLB container I/O (Plan 062)", () => {
     // Bone nodes present and named per contract.
     const boneNames = document.nodes!.map((node) => node.name);
     expect(boneNames).toContain("DEF-hips");
-    expect(boneNames).toContain("DEF-f_index.01.L");
+    expect(boneNames).not.toContain("DEF-f_index.01.L");
   });
 
   it("bakes mesh-node transforms into extraction and folds them into the skin", () => {
@@ -206,7 +206,7 @@ describe("GLB container I/O (Plan 062)", () => {
       if (Math.abs(liftedIbm[i]! - flatIbm[i]!) > 1e-6) differs = true;
     }
     expect(differs).toBe(true);
-    expect(chunks.document.skins![0]!.joints.length).toBe(53);
+    expect(chunks.document.skins![0]!.joints.length).toBe(23);
   });
 
   it("scales ONLY the hips translation tracks of a real vendored clip", () => {

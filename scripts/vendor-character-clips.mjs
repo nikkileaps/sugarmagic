@@ -39,6 +39,36 @@ const SOURCE_BASE = `https://raw.githubusercontent.com/${SOURCE_REPO}/${SOURCE_C
 // script only cares which clips ship.
 const CURATED_CLIPS = ["Idle_Loop", "Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop"];
 
+// Core deform set (mirror of domain STANDARD_RIG_CORE_BONE_NAMES,
+// 2026-07-06): wizard skeletons carry no finger bones, so finger
+// tracks are STRIPPED from vendored clips — smaller files, no
+// missing-node binding warnings, no dead channels.
+const CORE_BONE_NAMES = new Set([
+  "root",
+  "DEF-hips",
+  "DEF-spine.001",
+  "DEF-spine.002",
+  "DEF-spine.003",
+  "DEF-neck",
+  "DEF-head",
+  "DEF-shoulder.L",
+  "DEF-upper_arm.L",
+  "DEF-forearm.L",
+  "DEF-hand.L",
+  "DEF-shoulder.R",
+  "DEF-upper_arm.R",
+  "DEF-forearm.R",
+  "DEF-hand.R",
+  "DEF-thigh.L",
+  "DEF-shin.L",
+  "DEF-foot.L",
+  "DEF-toe.L",
+  "DEF-thigh.R",
+  "DEF-shin.R",
+  "DEF-foot.R",
+  "DEF-toe.R"
+]);
+
 async function fetchSource() {
   const [gltfResponse, binResponse] = await Promise.all([
     fetch(`${SOURCE_BASE}.gltf`),
@@ -139,9 +169,24 @@ function extractClipGlb(document, bin, clipName) {
 
   const rootNodes = [...keep].filter((index) => !parentOf.has(index));
 
-  // Accessors used by this animation's samplers, deduped.
+  // Core-bone channels only; samplers reindexed to the kept set.
+  const keptChannels = animation.channels.filter((channel) => {
+    if (!keep.has(channel.target.node)) return false;
+    const nodeName = document.nodes[channel.target.node].name;
+    return CORE_BONE_NAMES.has(nodeName);
+  });
+  const keptSamplerOldToNew = new Map();
+  const keptSamplers = [];
+  for (const channel of keptChannels) {
+    if (!keptSamplerOldToNew.has(channel.sampler)) {
+      keptSamplerOldToNew.set(channel.sampler, keptSamplers.length);
+      keptSamplers.push(animation.samplers[channel.sampler]);
+    }
+  }
+
+  // Accessors used by the KEPT samplers, deduped.
   const usedAccessors = new Set();
-  for (const sampler of animation.samplers) {
+  for (const sampler of keptSamplers) {
     usedAccessors.add(sampler.input);
     usedAccessors.add(sampler.output);
   }
@@ -182,20 +227,18 @@ function extractClipGlb(document, bin, clipName) {
 
   const newAnimation = {
     name: animation.name,
-    samplers: animation.samplers.map((sampler) => ({
+    samplers: keptSamplers.map((sampler) => ({
       input: accessorOldToNew.get(sampler.input),
       output: accessorOldToNew.get(sampler.output),
       interpolation: sampler.interpolation ?? "LINEAR"
     })),
-    channels: animation.channels
-      .filter((channel) => keep.has(channel.target.node))
-      .map((channel) => ({
-        sampler: channel.sampler,
-        target: {
-          node: oldToNew.get(channel.target.node),
-          path: channel.target.path
-        }
-      }))
+    channels: keptChannels.map((channel) => ({
+      sampler: keptSamplerOldToNew.get(channel.sampler),
+      target: {
+        node: oldToNew.get(channel.target.node),
+        path: channel.target.path
+      }
+    }))
   };
 
   const outDocument = {

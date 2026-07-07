@@ -11,9 +11,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   STANDARD_RIG,
+  STANDARD_RIG_CORE,
   STANDARD_RIG_LANDMARK_BONES,
   STANDARD_RIG_SCHEMA_VERSION,
-  isStandardRigBoneName
+  isStandardRigBoneName,
+  isStandardRigCoreBoneName
 } from "@sugarmagic/domain";
 
 const CLIPS_DIR = resolve(
@@ -65,7 +67,21 @@ describe("standard rig contract (Plan 062)", () => {
     }
   });
 
-  it("every vendored clip's animation tracks target only contract bones", () => {
+  it("the core set is a valid 23-bone subset with intact parent chains", () => {
+    expect(STANDARD_RIG_CORE.bones.length).toBe(23);
+    const coreNames = new Set(STANDARD_RIG_CORE.bones.map((b) => b.name));
+    for (const bone of STANDARD_RIG_CORE.bones) {
+      if (bone.parentName !== null) {
+        expect(coreNames.has(bone.parentName), bone.name).toBe(true);
+      }
+    }
+    // Landmarks all map into the core.
+    for (const boneName of Object.values(STANDARD_RIG_LANDMARK_BONES)) {
+      expect(isStandardRigCoreBoneName(boneName)).toBe(true);
+    }
+  });
+
+  it("every vendored clip's animation tracks target only CORE bones (fingers stripped)", () => {
     const clipFiles = readdirSync(CLIPS_DIR).filter((file) =>
       file.endsWith(".glb")
     );
@@ -84,7 +100,7 @@ describe("standard rig contract (Plan 062)", () => {
         const nodeName = document.nodes?.[nodeIndex!]?.name;
         expect(nodeName).toBeDefined();
         expect(
-          isStandardRigBoneName(nodeName!) || nodeName === "root"
+          isStandardRigCoreBoneName(nodeName!) || nodeName === "root"
         ).toBe(true);
       }
     }

@@ -156,7 +156,7 @@ describe("detectRigLandmarks (Plan 062)", () => {
     const skeleton = generateStandardSkeleton(
       detectRigLandmarks(buildHumanoid("t"))
     );
-    expect(skeleton.bones.length).toBe(53);
+    expect(skeleton.bones.length).toBe(23);
     expect(skeleton.hipHeight).toBeGreaterThan(0.6);
     expect(skeleton.hipHeight).toBeLessThan(1.0);
   });

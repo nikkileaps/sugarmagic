@@ -78,6 +78,55 @@ export const STANDARD_RIG: StandardRigDefinition = {
   bones: STANDARD_RIG_BONES
 };
 
+/**
+ * The CORE deform set the wizard actually generates (2026-07-06,
+ * nikki): the full contract carries the source rig's 30 finger
+ * bones, but stylized mitten-handed characters neither need nor
+ * want them — they pollute weights around the hands and bloat
+ * the future weight-paint bone list. Hands are ONE bone each;
+ * feet are foot + toe. Vendored clips have their finger tracks
+ * stripped at extraction, so core skeletons play them cleanly.
+ * The full 53-bone contract remains recorded for a future
+ * "detailed hands" tier.
+ */
+export const STANDARD_RIG_CORE_BONE_NAMES: readonly string[] = [
+  "root",
+  "DEF-hips",
+  "DEF-spine.001",
+  "DEF-spine.002",
+  "DEF-spine.003",
+  "DEF-neck",
+  "DEF-head",
+  "DEF-shoulder.L",
+  "DEF-upper_arm.L",
+  "DEF-forearm.L",
+  "DEF-hand.L",
+  "DEF-shoulder.R",
+  "DEF-upper_arm.R",
+  "DEF-forearm.R",
+  "DEF-hand.R",
+  "DEF-thigh.L",
+  "DEF-shin.L",
+  "DEF-foot.L",
+  "DEF-toe.L",
+  "DEF-thigh.R",
+  "DEF-shin.R",
+  "DEF-foot.R",
+  "DEF-toe.R"
+];
+
+const coreNameSet = new Set(STANDARD_RIG_CORE_BONE_NAMES);
+
+export const STANDARD_RIG_CORE: StandardRigDefinition = {
+  rigId: STANDARD_RIG_ID,
+  rigSchemaVersion: STANDARD_RIG_SCHEMA_VERSION,
+  bones: STANDARD_RIG_BONES.filter((bone) => coreNameSet.has(bone.name))
+};
+
+export function isStandardRigCoreBoneName(name: string): boolean {
+  return coreNameSet.has(name);
+}
+
 const boneNameSet = new Set(STANDARD_RIG_BONES.map((bone) => bone.name));
 
 export function isStandardRigBoneName(name: string): boolean {

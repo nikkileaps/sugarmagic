@@ -7,7 +7,7 @@
  * non-watertight tolerance.
  */
 import { describe, expect, it } from "vitest";
-import { STANDARD_RIG } from "@sugarmagic/domain";
+import { STANDARD_RIG_CORE } from "@sugarmagic/domain";
 import {
   GeodesicVoxelWeightSolver,
   MAX_INFLUENCES,
@@ -128,16 +128,18 @@ function sampleLandmarks(): RigLandmarks {
 describe("generateStandardSkeleton (Plan 062)", () => {
   it("produces every contract bone with resolving parents and contract rotations", () => {
     const skeleton = generateStandardSkeleton(sampleLandmarks());
-    expect(skeleton.bones.length).toBe(STANDARD_RIG.bones.length);
+    // Core set only (2026-07-06): no finger bones on wizard rigs.
+    expect(skeleton.bones.length).toBe(STANDARD_RIG_CORE.bones.length);
+    expect(skeleton.bones.length).toBe(23);
     const byName = new Map(skeleton.bones.map((bone) => [bone.name, bone]));
-    for (const contractBone of STANDARD_RIG.bones) {
+    for (const contractBone of STANDARD_RIG_CORE.bones) {
       const generated = byName.get(contractBone.name);
       expect(generated).toBeDefined();
       expect(generated!.parentName).toBe(contractBone.parentName);
       expect(generated!.localRestRotation).toEqual(contractBone.restRotation);
     }
     expect(skeleton.hipHeight).toBeCloseTo(0.8, 5);
-    expect(skeleton.rigId).toBe(STANDARD_RIG.rigId);
+    expect(skeleton.rigId).toBe(STANDARD_RIG_CORE.rigId);
   });
 
   it("places landmark-driven bones at their landmarks and derives fingers near hands", () => {
@@ -148,15 +150,11 @@ describe("generateStandardSkeleton (Plan 062)", () => {
     expect(byName.get("DEF-foot.L")!.headPosition).toEqual(
       landmarks.ankleLeft
     );
-    // Derived finger bones land within arm's reach of the wrist.
-    const wrist = landmarks.wristLeft;
-    const indexFinger = byName.get("DEF-f_index.01.L")!.headPosition;
-    const distance = Math.hypot(
-      indexFinger[0] - wrist[0],
-      indexFinger[1] - wrist[1],
-      indexFinger[2] - wrist[2]
-    );
-    expect(distance).toBeLessThan(0.4);
+    // No finger bones on wizard skeletons (core set).
+    expect(byName.has("DEF-f_index.01.L")).toBe(false);
+    // Toes derive below-and-forward of the ankles.
+    const toe = byName.get("DEF-toe.L")!.headPosition;
+    expect(toe[1]).toBeLessThan(landmarks.ankleLeft[1] + 0.1);
   });
 });
 
