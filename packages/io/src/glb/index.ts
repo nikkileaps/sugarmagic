@@ -658,7 +658,13 @@ export function buildSkinnedCharacterGlb(
  */
 export function retargetClipRotations(
   clipGlb: ArrayBuffer,
-  offsets: Record<string, [number, number, number, number]>
+  offsets: Record<
+    string,
+    {
+      pre: [number, number, number, number];
+      post: [number, number, number, number];
+    }
+  >
 ): ArrayBuffer {
   const chunks = readGlb(clipGlb);
   if (!chunks?.binaryChunk) throw new Error("Not a valid clip GLB.");
@@ -674,16 +680,15 @@ export function retargetClipRotations(
           : undefined;
       const offset = nodeName ? offsets[nodeName] : undefined;
       if (!offset) continue;
-      const [ox, oy, oz, ow] = offset;
-      // Identity offsets skip the rewrite.
-      if (
-        Math.abs(ox) < 1e-7 &&
-        Math.abs(oy) < 1e-7 &&
-        Math.abs(oz) < 1e-7 &&
-        Math.abs(ow - 1) < 1e-7
-      ) {
-        continue;
-      }
+      const [px, py, pz, pw] = offset.pre;
+      const [ox, oy, oz, ow] = offset.post;
+      const preIdentity =
+        Math.abs(px) < 1e-7 && Math.abs(py) < 1e-7 &&
+        Math.abs(pz) < 1e-7 && Math.abs(pw - 1) < 1e-7;
+      const postIdentity =
+        Math.abs(ox) < 1e-7 && Math.abs(oy) < 1e-7 &&
+        Math.abs(oz) < 1e-7 && Math.abs(ow - 1) < 1e-7;
+      if (preIdentity && postIdentity) continue;
       const sampler = animation.samplers[channel.sampler]!;
       const accessor = document.accessors?.[sampler.output];
       if (!accessor || accessor.componentType !== 5126) continue;
@@ -692,11 +697,18 @@ export function retargetClipRotations(
       const base = (viewDef.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
       for (let key = 0; key < accessor.count; key += 1) {
         const at = base + key * 16;
-        const qx = view.getFloat32(at, true);
-        const qy = view.getFloat32(at + 4, true);
-        const qz = view.getFloat32(at + 8, true);
-        const qw = view.getFloat32(at + 12, true);
-        // q' = q * offset (Hamilton product).
+        let qx = view.getFloat32(at, true);
+        let qy = view.getFloat32(at + 4, true);
+        let qz = view.getFloat32(at + 8, true);
+        let qw = view.getFloat32(at + 12, true);
+        // q' = pre * q * post (Hamilton products).
+        if (!preIdentity) {
+          const nx = pw * qx + px * qw + py * qz - pz * qy;
+          const ny = pw * qy - px * qz + py * qw + pz * qx;
+          const nz = pw * qz + px * qy - py * qx + pz * qw;
+          const nw = pw * qw - px * qx - py * qy - pz * qz;
+          qx = nx; qy = ny; qz = nz; qw = nw;
+        }
         view.setFloat32(at, qw * ox + qx * ow + qy * oz - qz * oy, true);
         view.setFloat32(at + 4, qw * oy - qx * oz + qy * ow + qz * ox, true);
         view.setFloat32(at + 8, qw * oz + qx * oy - qy * ox + qz * ow, true);

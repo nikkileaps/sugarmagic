@@ -117,11 +117,18 @@ async function prepareClips(
   // Per-bone rest deltas baked into every keyframe (see
   // retargetClipRotations) so poses land relative to THIS
   // character's rest pose.
-  const offsets: Record<string, [number, number, number, number]> = {};
+  const offsets: Record<
+    string,
+    {
+      pre: [number, number, number, number];
+      post: [number, number, number, number];
+    }
+  > = {};
   for (const bone of skeleton.bones) {
-    offsets[bone.name] = bone.clipRotationOffset as [
-      number, number, number, number
-    ];
+    offsets[bone.name] = {
+      pre: bone.clipPreRotation as [number, number, number, number],
+      post: bone.clipPostRotation as [number, number, number, number]
+    };
   }
   const clips: WizardGenerated["clips"] = [];
   for (const entry of SLOT_CLIPS) {

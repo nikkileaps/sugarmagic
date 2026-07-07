@@ -177,10 +177,31 @@ describe("generateStandardSkeleton (Plan 062)", () => {
       (upperArmY[1]! * armDir[1]!) / armLen +
       (upperArmY[2]! * armDir[2]!) / armLen;
     expect(dot).toBeGreaterThan(0.999);
-    // Clip offsets exist and are unit quaternions.
+    // Clip retarget factors: unit quaternions, and at the library
+    // rest frame the composition pre * contractRest * post must
+    // land EXACTLY on the character's rest rotation — the rest-
+    // maps-to-rest invariant the whole retarget hangs on.
+    const contractByName = new Map(
+      STANDARD_RIG_CORE.bones.map((b) => [b.name, b.restRotation])
+    );
     for (const bone of skeleton.bones) {
-      const [x, y, z, w] = bone.clipRotationOffset;
-      expect(Math.hypot(x, y, z, w)).toBeCloseTo(1, 4);
+      for (const q of [bone.clipPreRotation, bone.clipPostRotation]) {
+        expect(Math.hypot(q[0], q[1], q[2], q[3])).toBeCloseTo(1, 4);
+      }
+      const rest = contractByName.get(bone.name)! as [number, number, number, number];
+      const step = mulQuat(
+        mulQuat(
+          bone.clipPreRotation as [number, number, number, number],
+          rest
+        ),
+        bone.clipPostRotation as [number, number, number, number]
+      );
+      const local = bone.localRestRotation;
+      // Quaternion double-cover: q and -q are the same rotation.
+      const dotSign = step[3] * local[3] >= 0 ? 1 : -1;
+      for (let i = 0; i < 4; i += 1) {
+        expect(step[i]).toBeCloseTo(dotSign * local[i]!, 4);
+      }
     }
     expect(skeleton.hipHeight).toBeCloseTo(0.8, 5);
     expect(skeleton.rigId).toBe(STANDARD_RIG_CORE.rigId);
