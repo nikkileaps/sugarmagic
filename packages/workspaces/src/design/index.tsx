@@ -411,3 +411,7 @@ export {
   type WizardGenerated,
   type WizardLandmarks
 } from "./character-wizard/CharacterWizard";
+export {
+  AnimationPanel,
+  type AnimationPanelProps
+} from "./animation-panel/AnimationPanel";

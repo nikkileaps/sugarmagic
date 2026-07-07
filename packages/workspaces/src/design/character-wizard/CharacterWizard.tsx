@@ -34,7 +34,8 @@ import {
 import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
-  CharacterModelDefinition
+  CharacterModelDefinition,
+  MotionRecipe
 } from "@sugarmagic/domain";
 import {
   applyBrushStroke,
@@ -112,6 +113,36 @@ export interface CharacterWizardServices {
       definition: CharacterAnimationDefinition;
     }>;
   }>;
+  // ---- Plan 063: animation panel services (same DI object; the
+  // panel is character tooling like the wizard) ----------------
+  /** Hip scale for clip copies, derived from the model's recipe. */
+  prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{ hipScale: number }>;
+  /** Generate a clip from a recipe, hips-scaled for the character. */
+  generateClip(
+    recipe: MotionRecipe,
+    hipScale: number
+  ): { clipName: string; bytes: ArrayBuffer };
+  /** The vendored library clip for a slot, hips-scaled. */
+  getLibraryClip(
+    slot: "idle" | "walk" | "run",
+    hipScale: number
+  ): Promise<{ clipName: string; bytes: ArrayBuffer }>;
+  /** Recipe stamped in a generated clip, or null. */
+  readSlotRecipe(clipBytes: ArrayBuffer): MotionRecipe | null;
+  /** Write + register slot clips; returns slot-mapped definitions. */
+  commitAnimationSlots(request: {
+    characterName: string;
+    clips: Array<{
+      slot: "idle" | "walk" | "run";
+      clipName: string;
+      bytes: ArrayBuffer;
+    }>;
+  }): Promise<
+    Array<{
+      slot: "idle" | "walk" | "run";
+      definition: CharacterAnimationDefinition;
+    }>
+  >;
   /** Write assets + return definitions (io commit, §062.4). */
   commit(request: {
     characterName: string;

@@ -53,6 +53,7 @@ import {
   CharacterWizard,
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
+import { AnimationPanel } from "./animation-panel/AnimationPanel";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -129,6 +130,7 @@ export function useNPCWorkspaceView(
     definitionId: string;
   } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
@@ -332,7 +334,46 @@ export function useNPCWorkspaceView(
             ? () => void launchWizard(boundCharacterModel)
             : undefined
         }
+        onLaunchAnimationPanel={
+          characterWizardServices && selectedNPC && boundCharacterModel?.rigId
+            ? () => setAnimationPanelOpen(true)
+            : undefined
+        }
       />
+      {characterWizardServices && selectedNPC && boundCharacterModel?.rigId ? (
+        <AnimationPanel
+          opened={animationPanelOpen}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          model={boundCharacterModel}
+          boundAnimations={{
+            idle: previewSlots.find((s) => s.value === "idle")?.animation ?? undefined,
+            walk: previewSlots.find((s) => s.value === "walk")?.animation ?? undefined,
+            run: previewSlots.find((s) => s.value === "run")?.animation ?? undefined
+          }}
+          assetSources={assetSources}
+          targetHeight={selectedNPC.presentation.modelHeight ?? 1.7}
+          services={characterWizardServices}
+          onCommitted={(bindings) => {
+            const next = {
+              ...selectedNPC.presentation.animationAssetBindings
+            };
+            for (const entry of bindings) {
+              next[entry.slot] = entry.definition.definitionId;
+            }
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: next
+              }
+            });
+          }}
+          onClose={() => setAnimationPanelOpen(false)}
+        />
+      ) : null}
       {characterWizardServices && selectedNPC ? (
         <CharacterWizard
           opened={wizardOpen}

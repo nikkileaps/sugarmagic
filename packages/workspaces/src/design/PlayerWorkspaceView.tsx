@@ -26,6 +26,7 @@ import {
   CharacterWizard,
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
+import { AnimationPanel } from "./animation-panel/AnimationPanel";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
@@ -88,6 +89,7 @@ export function usePlayerWorkspaceView(
     characterWizardServices
   } = props;
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
@@ -209,7 +211,46 @@ export function usePlayerWorkspaceView(
             ? () => void launchWizard(boundCharacterModel)
             : undefined
         }
+        onLaunchAnimationPanel={
+          characterWizardServices && boundCharacterModel?.rigId
+            ? () => setAnimationPanelOpen(true)
+            : undefined
+        }
       />
+      {characterWizardServices && boundCharacterModel?.rigId && playerDefinition ? (
+        <AnimationPanel
+          opened={animationPanelOpen}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          model={boundCharacterModel}
+          boundAnimations={{
+            idle: previewSlots.find((s) => s.value === "idle")?.animation ?? undefined,
+            walk: previewSlots.find((s) => s.value === "walk")?.animation ?? undefined,
+            run: previewSlots.find((s) => s.value === "run")?.animation ?? undefined
+          }}
+          assetSources={assetSources}
+          targetHeight={playerDefinition.physicalProfile.height ?? 1.8}
+          services={characterWizardServices}
+          onCommitted={(bindings) => {
+            const next = {
+              ...playerDefinition.presentation.animationAssetBindings
+            };
+            for (const entry of bindings) {
+              next[entry.slot] = entry.definition.definitionId;
+            }
+            updatePlayerDefinition({
+              ...playerDefinition,
+              presentation: {
+                ...playerDefinition.presentation,
+                animationAssetBindings: next
+              }
+            });
+          }}
+          onClose={() => setAnimationPanelOpen(false)}
+        />
+      ) : null}
       {characterWizardServices ? (
         <CharacterWizard
           opened={wizardOpen}
