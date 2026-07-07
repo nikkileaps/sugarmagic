@@ -37,3 +37,12 @@ export {
   type IdleRecipeParams,
   type PersonalityParams
 } from "./idle";
+export {
+  LOCOMOTION_COMPONENTS,
+  RUN_GAIT,
+  WALK_GAIT,
+  generateRunChannels,
+  generateWalkChannels,
+  type GaitConfig,
+  type LocomotionRecipeParams
+} from "./locomotion";

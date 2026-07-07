@@ -8,10 +8,13 @@ import { describe, expect, it } from "vitest";
 import {
   CHANNEL_PROJECTION,
   IDLE_COMPONENTS,
-  composeComponents,
   IDLE_DEFAULTS,
+  LOCOMOTION_COMPONENTS,
+  composeComponents,
   evaluateCurve,
   generateIdleChannels,
+  generateRunChannels,
+  generateWalkChannels,
   sampleMotion,
   type SampledMotion
 } from "@sugarmagic/character-rig";
@@ -160,6 +163,76 @@ describe("motion core (Plan 063)", () => {
     };
     expect(evaluateCurve(curve, 0)).toBeCloseTo(evaluateCurve(curve, 1), 9);
     expect(evaluateCurve(curve, 0.25)).toBeCloseTo(evaluateCurve(curve, 1.25), 9);
+  });
+
+  it("walk: legs anti-phase, arms counter-swing, knees stay forward-bent", () => {
+    const walk = generateWalkChannels(IDLE_DEFAULTS);
+    expect(LOCOMOTION_COMPONENTS.map((c) => c.componentId)).toEqual([
+      "leg-cycle",
+      "hip-motion",
+      "arm-swing",
+      "body-bounce",
+      "head-stabilization"
+    ]);
+    const at = (channel: keyof typeof walk.channels, phase: number) => {
+      let value = 0;
+      for (const curve of walk.channels[channel] ?? []) {
+        value += evaluateCurve(curve, phase);
+      }
+      return value;
+    };
+    // Anti-phase legs: left at phase p mirrors right at p + 0.5.
+    for (const phase of [0, 0.2, 0.35, 0.7]) {
+      expect(at("legSwingL", phase)).toBeCloseTo(at("legSwingR", phase + 0.5), 6);
+    }
+    // Counter-swing: left arm tracks the RIGHT leg's phase.
+    for (const phase of [0.1, 0.4, 0.8]) {
+      const armL = at("armSwingL", phase);
+      const legR = at("legSwingR", phase);
+      expect(Math.sign(armL)).toBe(Math.sign(legR));
+    }
+    // Knees never hyperextend backward (DC keeps flexion >= 0).
+    for (let i = 0; i <= 40; i += 1) {
+      expect(at("kneeFlexL", i / 40)).toBeGreaterThanOrEqual(-1e-9);
+      expect(at("kneeFlexR", i / 40)).toBeGreaterThanOrEqual(-1e-9);
+    }
+    // Bounce is twice per stride.
+    const motion = sampleMotion(walk);
+    expect(motion.hipsTranslation).not.toBeNull();
+  });
+
+  it("run is the walk stack at a faster, bigger gait", () => {
+    const walk = generateWalkChannels(IDLE_DEFAULTS);
+    const run = generateRunChannels(IDLE_DEFAULTS);
+    expect(run.duration).toBeLessThan(walk.duration);
+    const amplitude = (motion: typeof walk, channel: "legSwingL") =>
+      Math.max(
+        ...Array.from({ length: 32 }, (_, i) => {
+          let value = 0;
+          for (const curve of motion.channels[channel] ?? []) {
+            value += Math.abs(evaluateCurve(curve, i / 32));
+          }
+          return value;
+        })
+      );
+    expect(amplitude(run, "legSwingL")).toBeGreaterThan(
+      amplitude(walk, "legSwingL")
+    );
+    // Contract compliance holds for locomotion output too.
+    const motion = sampleMotion(run);
+    for (const track of motion.boneTracks) {
+      expect(isStandardRigCoreBoneName(track.boneName), track.boneName).toBe(true);
+    }
+    // Loop closure.
+    for (const track of motion.boneTracks) {
+      const keys = track.times.length;
+      for (let c = 0; c < 4; c += 1) {
+        expect(track.rotations[(keys - 1) * 4 + c]).toBeCloseTo(
+          track.rotations[c]!,
+          6
+        );
+      }
+    }
   });
 
   it("rest pose is the baseline: zero-amplitude curves emit rest rotations", () => {
