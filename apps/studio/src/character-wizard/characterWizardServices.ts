@@ -274,7 +274,7 @@ export function createCharacterWizardServices(
       if (!context) {
         throw new Error("No open project to save the character into.");
       }
-      await commitCharacterWizardResult({
+      const result = await commitCharacterWizardResult({
         projectHandle: context.projectHandle,
         descriptor: context.descriptor,
         projectId: context.projectId,
@@ -288,6 +288,13 @@ export function createCharacterWizardServices(
         })),
         attributionText
       });
+      // Registration UPSERTS by definitionId: unchanged clip names
+      // replace in place; a renamed clip (idle style swap) gets a
+      // fresh definition the caller rebinds via onCommitted.
+      deps.registerDefinitions(
+        result.characterModelDefinition,
+        result.characterAnimationDefinitions
+      );
       // Same paths, new bytes — refresh the blob URLs so previews
       // pick up the edited character without a reload.
       const safe = request.characterName
@@ -304,6 +311,15 @@ export function createCharacterWizardServices(
             `${assets}/character-animations/${safe}-${clip.clipName.replace(/[^a-zA-Z0-9-_]+/g, "-")}.glb`
         )
       ]);
+      return {
+        characterModelDefinition: result.characterModelDefinition,
+        characterAnimationDefinitions: request.generated.clips.map(
+          (clip, index) => ({
+            slot: clip.slot,
+            definition: result.characterAnimationDefinitions[index]!
+          })
+        )
+      };
     },
 
     async commit(request) {

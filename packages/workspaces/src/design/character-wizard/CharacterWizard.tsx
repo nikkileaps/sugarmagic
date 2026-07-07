@@ -97,13 +97,21 @@ export interface CharacterWizardServices {
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
   }>;
-  /** Overwrite an existing character's assets in place (§062.9). */
+  /** Overwrite an existing character's assets in place (§062.9).
+   *  Returns the (upserted) definitions — a renamed clip needs
+   *  rebinding just like a fresh commit. */
   commitEdit(request: {
     characterName: string;
     sourceBytes: ArrayBuffer;
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
-  }): Promise<void>;
+  }): Promise<{
+    characterModelDefinition: CharacterModelDefinition;
+    characterAnimationDefinitions: Array<{
+      slot: "idle" | "walk" | "run";
+      definition: CharacterAnimationDefinition;
+    }>;
+  }>;
   /** Write assets + return definitions (io commit, §062.4). */
   commit(request: {
     characterName: string;
@@ -384,12 +392,13 @@ export function CharacterWizard(props: CharacterWizardProps) {
     setBusyProgress(undefined);
     try {
       if (isEditMode) {
-        await services.commitEdit({
+        const result = await services.commitEdit({
           characterName,
           sourceBytes,
           landmarks,
           generated
         });
+        onCommitted(result);
       } else {
         const result = await services.commit({
           characterName,
