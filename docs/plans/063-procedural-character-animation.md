@@ -179,7 +179,24 @@ Build-vs-buy, surveyed before 063.3:
 - Save commits generated clip GLBs + rebinds slots through the 062
   edit-commit path. Reopening a generated slot restores its recipe.
 
-### 063.5 — Semantic curve editing (late, additive)
+### 063.5 — Pose adjust: puppet handles on the base pose (added 2026-07-07, nikki)
+
+Generated motion layers on a relaxed base pose (extracted from the
+library idle's mean; arms-down fix). The pose itself must be
+tweakable without keyframes: "pull her arms further from the body"
+is a POSE note, not an animation note. An "Adjust pose" mode in the
+animation panel freezes the preview at the base pose and shows
+draggable handles at the wrists (and elbows if free): dragging a
+wrist pivots the arm at the SHOULDER via shortest-arc rotation
+(single-joint, not chain IK), mirrored by default like the wizard's
+markers. Release regenerates the clip live. The per-bone pose
+overrides persist in the MotionRecipe (`basePoseOverrides`) and
+compose onto the relaxed base at generation, so they survive reopen
+and ride the clip like everything else. Scope guard: no spine
+bending, no foot planting, no chain IK — that is DCC territory; this
+is the same mechanism a future pose library stands on.
+
+### 063.6 — Semantic curve editing (late, additive)
 
 - `CurveEditor` in packages/ui (reusable Bezier curve surface).
 - Per-semantic-curve overrides (Breathing, Weight Shift, Head Motion,
@@ -188,7 +205,7 @@ Build-vs-buy, surveyed before 063.3:
   changes that invalidate an override drop it with a visible notice,
   never silently).
 
-### 063.6 — Verify end-to-end
+### 063.7 — Verify end-to-end
 
 - Mim gets the Animal Crossing treatment: generated cozy idle replaces
   the combat stance; walk/run either generated or kept from the
