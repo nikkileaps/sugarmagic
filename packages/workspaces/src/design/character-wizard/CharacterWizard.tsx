@@ -100,12 +100,17 @@ export interface CharacterWizardServices {
   }>;
   /** Overwrite an existing character's assets in place (§062.9).
    *  Returns the (upserted) definitions — a renamed clip needs
-   *  rebinding just like a fresh commit. */
+   *  rebinding just like a fresh commit. With `skipAnimations`
+   *  (weights-only edits: markers untouched, so hip scale and
+   *  clips are unchanged) ONLY the model is written — animation
+   *  files, definitions, and bindings stay exactly as configured,
+   *  including Plan 063 generated slots. */
   commitEdit(request: {
     characterName: string;
     sourceBytes: ArrayBuffer;
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
+    skipAnimations: boolean;
   }): Promise<{
     characterModelDefinition: CharacterModelDefinition;
     characterAnimationDefinitions: Array<{
@@ -431,7 +436,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
           characterName,
           sourceBytes,
           landmarks,
-          generated
+          generated,
+          // Markers untouched = skeleton unchanged = clips still
+          // valid; leave animation bindings (incl. generated
+          // slots) alone.
+          skipAnimations: !landmarksDirtyRef.current
         });
         onCommitted(result);
       } else {

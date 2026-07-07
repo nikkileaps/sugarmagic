@@ -296,10 +296,14 @@ export function createCharacterWizardServices(
         modelGlb: request.generated.modelGlb,
         sourceGlb: request.sourceBytes,
         landmarks: request.landmarks,
-        clips: request.generated.clips.map((clip) => ({
-          clipName: clip.clipName,
-          bytes: clip.bytes
-        })),
+        // Weights-only edit: don't rewrite clips (and below, don't
+        // re-register or rebind them) — generated slots survive.
+        clips: request.skipAnimations
+          ? []
+          : request.generated.clips.map((clip) => ({
+              clipName: clip.clipName,
+              bytes: clip.bytes
+            })),
         attributionText
       });
       // Registration UPSERTS by definitionId: unchanged clip names
@@ -330,12 +334,12 @@ export function createCharacterWizardServices(
       ]);
       return {
         characterModelDefinition: result.characterModelDefinition,
-        characterAnimationDefinitions: request.generated.clips.map(
-          (clip, index) => ({
-            slot: clip.slot,
-            definition: result.characterAnimationDefinitions[index]!
-          })
-        )
+        characterAnimationDefinitions: request.skipAnimations
+          ? []
+          : request.generated.clips.map((clip, index) => ({
+              slot: clip.slot,
+              definition: result.characterAnimationDefinitions[index]!
+            }))
       };
     },
 
