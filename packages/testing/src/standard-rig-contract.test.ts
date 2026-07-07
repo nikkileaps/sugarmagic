@@ -12,10 +12,14 @@ import { describe, expect, it } from "vitest";
 import {
   STANDARD_RIG,
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
   STANDARD_RIG_LANDMARK_BONES,
   STANDARD_RIG_SCHEMA_VERSION,
+  STANDARD_RIG_TAIL_BONES,
+  STANDARD_RIG_TAIL_LANDMARK_BONES,
   isStandardRigBoneName,
-  isStandardRigCoreBoneName
+  isStandardRigCoreBoneName,
+  isStandardRigTailBoneName
 } from "@sugarmagic/domain";
 
 const CLIPS_DIR = resolve(
@@ -64,6 +68,69 @@ describe("standard rig contract (Plan 062)", () => {
     expect(landmarkEntries.length).toBe(16);
     for (const [, boneName] of landmarkEntries) {
       expect(isStandardRigBoneName(boneName)).toBe(true);
+    }
+  });
+
+  it("the tail extension chains off hips and leaves the core untouched (Plan 064)", () => {
+    expect(STANDARD_RIG_SCHEMA_VERSION).toBe(2);
+    expect(STANDARD_RIG_TAIL_BONES.length).toBe(3);
+    expect(STANDARD_RIG_TAIL_BONES[0]!.parentName).toBe("DEF-hips");
+    expect(STANDARD_RIG_TAIL_BONES[1]!.parentName).toBe("DEF-tail.001");
+    expect(STANDARD_RIG_TAIL_BONES[2]!.parentName).toBe("DEF-tail.002");
+    // Tail bones are NOT core (tail-less wizard output unchanged)
+    // and not part of the vendored contract either.
+    for (const bone of STANDARD_RIG_TAIL_BONES) {
+      expect(isStandardRigTailBoneName(bone.name)).toBe(true);
+      expect(isStandardRigCoreBoneName(bone.name)).toBe(false);
+      expect(isStandardRigBoneName(bone.name)).toBe(false);
+      // Unit rest rotations.
+      const [x, y, z, w] = bone.restRotation;
+      expect(Math.hypot(x, y, z, w)).toBeCloseTo(1, 4);
+    }
+    // Composed set = core + tail, in order.
+    expect(STANDARD_RIG_CORE_WITH_TAIL.bones.length).toBe(26);
+    expect(STANDARD_RIG_CORE_WITH_TAIL.bones.slice(0, 23)).toEqual(
+      STANDARD_RIG_CORE.bones
+    );
+    // Landmarks map onto extension bones.
+    for (const boneName of Object.values(STANDARD_RIG_TAIL_LANDMARK_BONES)) {
+      expect(isStandardRigTailBoneName(boneName)).toBe(true);
+    }
+    // Authored rest arc sanity: composed world +Y of each tail
+    // bone points BACK (-z) and increasingly UP (+y).
+    const worldRot = new Map<string, [number, number, number, number]>();
+    const mul = (
+      a: [number, number, number, number],
+      b: [number, number, number, number]
+    ): [number, number, number, number] => [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+    ];
+    for (const bone of STANDARD_RIG.bones) {
+      const parent = bone.parentName
+        ? worldRot.get(bone.parentName)!
+        : ([0, 0, 0, 1] as [number, number, number, number]);
+      worldRot.set(
+        bone.name,
+        mul(parent, bone.restRotation as [number, number, number, number])
+      );
+    }
+    let previousUp = -1;
+    for (const bone of STANDARD_RIG_TAIL_BONES) {
+      const parent = worldRot.get(bone.parentName!)!;
+      const world = mul(
+        parent,
+        bone.restRotation as [number, number, number, number]
+      );
+      worldRot.set(bone.name, world);
+      const [x, y, z, w] = world;
+      const upY = 2 * (x * y - w * z) * 0 + (1 - 2 * (x * x + z * z));
+      const backZ = 2 * (y * z + w * x);
+      expect(backZ).toBeLessThan(0); // points backward
+      expect(upY).toBeGreaterThan(previousUp); // curls upward
+      previousUp = upY;
     }
   });
 
