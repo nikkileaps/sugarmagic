@@ -59,18 +59,14 @@ export interface GeneratedBone {
   localRestRotation: Quat;
   /** Local rest translation in the parent's rest frame. */
   localRestTranslation: Vec3;
-  /** Per-bone clip retarget factors, baked into every rotation
-   *  keyframe at copy time as q' = pre * q * post. Derived so the
-   *  character's bones track the library's WORLD-space rotation
-   *  deltas: pre = (contractWorldRest_parent^-1 *
-   *  charWorldRest_parent)^-1 and post = contractWorldRest^-1 *
-   *  charWorldRest. A right-side-only local offset (the first
-   *  attempt) twists deltas out of plane wherever a bone's
-   *  alignment differs from its parent's — the arms-behind-the-
-   *  back bug (2026-07-06). At the library's rest frame this
-   *  composition lands exactly on the character's rest. */
-  clipPreRotation: Quat;
-  clipPostRotation: Quat;
+  // NOTE (2026-07-06): clips need NO per-bone rotation rewriting.
+  // With rest-aligned bones the verbatim library locals reproduce
+  // the library's world pose at this character's proportions —
+  // two keyframe-rewrite attempts (one-sided local offset, then
+  // two-sided world-delta factors) both mis-rotated limbs and
+  // were deleted. If a rewrite is ever reintroduced, derive the
+  // target as "mesh direction = library world bone direction",
+  // not "character rest + library delta".
 }
 
 export interface GeneratedSkeleton {
@@ -266,22 +262,12 @@ export function generateStandardSkeleton(
     const localRestTranslation = parentHead
       ? quatRotateVec3(quatConjugate(parentCharWorld), vec3Sub(head, parentHead))
       : head;
-    const parentContractWorld = bone.parentName
-      ? contract.get(bone.parentName)!.worldRestRotation
-      : QUAT_IDENTITY;
-    // A_parent = contractWorld_parent^-1 * charWorld_parent
-    const parentAlignment = quatMultiply(
-      quatConjugate(parentContractWorld),
-      parentCharWorld
-    );
     return {
       name: bone.name,
       parentName: bone.parentName,
       headPosition: head,
       localRestRotation,
-      localRestTranslation,
-      clipPreRotation: quatConjugate(parentAlignment),
-      clipPostRotation: quatMultiply(quatConjugate(contractWorld), charWorld)
+      localRestTranslation
     };
   });
 

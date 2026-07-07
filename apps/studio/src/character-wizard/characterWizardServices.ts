@@ -29,7 +29,6 @@ import {
   readBlobFile,
   readSkinWeightsFromGlb,
   readWizardRecipe,
-  retargetClipRotations,
   scaleClipHipsTranslation,
   type GameRootDescriptor
 } from "@sugarmagic/io";
@@ -114,32 +113,20 @@ async function prepareClips(
   skeleton: GeneratedSkeleton
 ): Promise<WizardGenerated["clips"]> {
   const hipScale = skeleton.hipHeight / getStandardRigHipHeight();
-  // Per-bone rest deltas baked into every keyframe (see
-  // retargetClipRotations) so poses land relative to THIS
-  // character's rest pose.
-  const offsets: Record<
-    string,
-    {
-      pre: [number, number, number, number];
-      post: [number, number, number, number];
-    }
-  > = {};
-  for (const bone of skeleton.bones) {
-    offsets[bone.name] = {
-      pre: bone.clipPreRotation as [number, number, number, number],
-      post: bone.clipPostRotation as [number, number, number, number]
-    };
-  }
+  // Rotations play VERBATIM. With the rest-ALIGNED skeleton (mesh
+  // along bone axes), verbatim locals reproduce the library's
+  // world orientations at the character's own bone lengths —
+  // which IS correct retargeting. Two attempts at baking
+  // rest-delta corrections into keyframes both over/under-rotated
+  // limbs (2026-07-06: arms behind the back, then through the
+  // torso); the bind-side alignment was the whole answer.
   const clips: WizardGenerated["clips"] = [];
   for (const entry of SLOT_CLIPS) {
     const clipBytes = await (await fetch(entry.url)).arrayBuffer();
     clips.push({
       slot: entry.slot,
       clipName: entry.clipName,
-      bytes: retargetClipRotations(
-        scaleClipHipsTranslation(clipBytes, hipScale),
-        offsets
-      )
+      bytes: scaleClipHipsTranslation(clipBytes, hipScale)
     });
   }
   return clips;
