@@ -26,6 +26,7 @@ They are architecture-facing developer API documents that explain how the system
 - [System and Package API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
 - [Domain, Runtime, and Lifecycle API](/Users/nikki/projects/sugarmagic/docs/api/domain-runtime-and-lifecycle-api.md)
 - [SugarDeploy Game Deployment](/Users/nikki/projects/sugarmagic/docs/api/sugardeploy-game-deployment.md) — onboarding a new game (Provision / Release / Deploy lifecycle, developer + player auth models, where the moving pieces live)
+- [Character Wizard](/Users/nikki/projects/sugarmagic/docs/api/character-wizard.md) — static GLB to rigged, animated character in Studio (wizard steps, weight painting, edit-in-place, integration seams)
 
 ## Relationship to Proposals and ADRs
 

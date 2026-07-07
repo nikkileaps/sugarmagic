@@ -292,7 +292,10 @@ export function createCharacterWizardServices(
       });
       // Registration UPSERTS by definitionId: unchanged clip names
       // replace in place; a renamed clip (idle style swap) gets a
-      // fresh definition the caller rebinds via onCommitted.
+      // fresh definition the caller rebinds via onCommitted. The
+      // OLD clip's definition + file are left behind (harmless
+      // orphans) — revisit when content-library cleanup tooling
+      // exists.
       deps.registerDefinitions(
         result.characterModelDefinition,
         result.characterAnimationDefinitions

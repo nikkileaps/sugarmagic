@@ -1,6 +1,6 @@
 # Plan 062 — Character Wizard (rig, bind, animate — minutes not hours)
 
-Status: proposed
+Status: shipped (2026-07-07)
 Owner: nikki + claude
 Date: 2026-07-06
 
@@ -44,6 +44,18 @@ Layering (one-way deps, one source of truth, single enforcer):
 - **io (`packages/io`)** — extends the existing import module family with the GLB writer (the inverse of `readGlbChunks`, same pure chunk-level code) and the wizard's commit function following the established shape: write files into `assets/character-models/` + `assets/character-animations/`, return definitions; the authoring session commits them through the normal command/transaction path. Bundled CC0 clips + attribution file are Studio-shipped data that this step copies into the project.
 - **Presentation (`packages/workspaces` + `apps/studio`)** — the wizard UI: a stepper surface (import -> markers -> preview -> generate) launched from the Player/NPC workspace, with the draggable-marker viewport overlay following the mask-paint pattern and preview via a plain three.js AnimationMixer scene. All state is wizard-local *View* state (MVVM seam per the store-separation rule); nothing persists until the final commit. The heavy solve runs in a worker with progress, mirroring the asset-preload progress UX.
 - **Runtime + publish targets — untouched.** No runtime-core changes, no target-web changes, no deployment changes. This is the load-bearing separation guarantee: the wizard is authoring-side tooling whose output is content the existing engine/target seams already carry. A future non-web target that plays skinned GLBs plays wizard characters for free.
+
+## Decisions from implementation (2026-07-06/07, verified on a real chibi character)
+
+Settled rules were promoted to ADR 023 (standard rig contract, core
+bone set, rotation-only clips, rest-aligned bind + verbatim playback,
+recipe stamping). Epic-level notes beyond the ADR:
+
+- **23-bone core** (no fingers; hands one bone each, feet foot+toe) replaced the full 53-bone skeleton for wizard output after finger stubs polluted paw weights. Full contract retained in domain for a future detailed-hands tier.
+- **Two clip-retarget keyframe rewrites were built and DELETED** (arms behind back, then arms through torso). Rest-pose-aligned bind + verbatim clips is the whole answer; the deletion rationale is commented at `packages/character-rig/src/skeleton.ts`.
+- **The weight-paint step grew beyond the 062.8 sketch**, each addition forced by real use: piece isolation by material name + fill-piece (layered clothing, tail baked into the body piece), a Fill brush mode, subtract that borrows a receiving bone from neighboring/territorial weights (the sole-influence dead-end bit three times), sagittal-plane weight mirroring, true-rest-pose display when the animate toggle is off (painting against a paused-at-frame-0 pose sheared partially-painted regions).
+- **Idle stays `Idle_Loop`**: the library's talking idle reads twitchy on chibis; there is no neutral-cute standing idle upstream. De-combat-ifying idle parametrically is plan 063 material (see Defers).
+- **Concurrent-load guard in `CharacterPreview`** switched from definitionId to a per-request token (same-model concurrent loads both mounted: ghost double character). Preview camera gained drag-orbit + wheel zoom.
 
 ## Deliberate tensions + future-proofing
 
@@ -97,7 +109,7 @@ The wizard lives in the EXISTING Player and NPC workspaces; no new workspace.
 
 Real-character verification (nikki's layered chibi squirrel) found the honest ceiling of automatic weighting: head/tail/body solve well after the giant-head and stranded-shell fixes, but layered clothing (jacket/sleeves over the body) cannot be disambiguated from adjacent body parts by geometry alone — unconditional voxel closing that fixed the sleeves welded the chibi's adjacent legs together (regression, reverted to component-aware closing). Every DCC lands here; the answer is the same as theirs: a weight brush.
 
-- A "Weights" step in the wizard (between generate and preview, skippable): bone picker (the 53 contract bones, searchable), viewport heatmap of the selected bone's influence, brush to add/subtract/smooth influence with live renormalization (4-influence cap preserved), animated preview toggle so edits are judged in motion.
+- A "Weights" step in the wizard (between generate and preview, skippable): bone picker (core bones, searchable), viewport heatmap of the selected bone's influence, brush to add/subtract/smooth influence with live renormalization (4-influence cap preserved), animated preview toggle so edits are judged in motion.
 - Rides the designed seams: painting edits the `SkinWeights` arrays; finish re-runs `buildSkinnedCharacterGlb`; nothing downstream changes.
 - The heatmap doubles as the weight-debug view the plan always wanted.
 
@@ -109,6 +121,16 @@ One-shot wizards force re-placing every marker to change anything. Instead, wiza
 
 - nikki's own Blender character through the whole path: import static GLB -> adjust a few markers -> generate -> preview idle/walk/run in the wizard -> finish -> slots populated in the workspace -> preview in Studio -> deploy -> character animates in prod (assets pipeline carries it with zero target work).
 - Regression: existing manually-imported character models + animations unaffected.
+- DONE 2026-07-07 through Studio preview (a full day of iteration on the real squirrel drove every fix above); prod leg happens at her next deploy — the asset pipeline path is unchanged from Plans 059/060.
+
+## Defers (with revisit triggers)
+
+- **Plan 063 — parametric animation tweaks.** Calm (rotation amplitude toward rest), stance (legs toward symmetric), posture (spine/neck/head bias), bounce (hips bob), speed — applied at clip-copy time, live-previewed, no keyframe UX. Trigger: already requested (the combat-stance idle); write the plan when 062 merges. Code anchor: comment at the idle slot in `apps/studio/src/character-wizard/characterWizardServices.ts`.
+- **Idle style selection.** 46 clips are vendorable from the pinned library; the wizard hard-maps three. Trigger: plan 063, or the first ask for a per-character idle/emote. Talking idle is already vendored for future NPC dialogue states.
+- **Tail bone chain (phase 2).** Rides the rig contract's versioned extension rules + procedural secondary motion. Trigger: a character whose tail rigid-to-spine visibly fails (current answer: paint-step Fill, which reads fine on chunky characters).
+- **Detailed-hands tier.** Full 53-bone contract retained in domain (`STANDARD_RIG` vs `STANDARD_RIG_CORE`, rationale in its docblock). Trigger: a game that needs finger poses (held items, gestures).
+- **Orphaned definitions on clip rename.** Edit-commit upserts by id; a renamed clip leaves the old definition + file behind (harmless). Trigger: content-library cleanup tooling, or the first user confusion report.
+- **Weight-brush polish.** Front-face-only masking, brush falloff curves, undo stack (current escape: Reset to auto). Trigger: painting sessions on more characters; collect the friction list first.
 
 ## Not in this epic
 

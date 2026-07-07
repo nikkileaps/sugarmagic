@@ -26,3 +26,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 020: SugarProfile User Management Architecture](/Users/nikki/projects/sugarmagic/docs/adr/020-sugarprofile-user-management-architecture.md)
 - [ADR 021: Runtime Host Lifetime — Component-Scope vs Module-Scope](/Users/nikki/projects/sugarmagic/docs/adr/021-runtime-host-lifetime-scope.md)
 - [ADR 022: Player Auth at the Door](/Users/nikki/projects/sugarmagic/docs/adr/022-player-auth-at-the-door.md)
+- [ADR 023: Standard Rig Contract and Character Wizard](/Users/nikki/projects/sugarmagic/docs/adr/023-standard-rig-and-character-wizard.md)
