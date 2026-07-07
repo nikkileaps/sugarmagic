@@ -111,6 +111,10 @@ export interface CharacterWizardServices {
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
     skipAnimations: boolean;
+    /** Currently bound clip bytes per slot — recipe-carrying
+     *  (generated) slots regenerate at the new skeleton instead
+     *  of being stomped back to library clips. */
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   }): Promise<{
     characterModelDefinition: CharacterModelDefinition;
     characterAnimationDefinitions: Array<{
@@ -178,6 +182,9 @@ export interface CharacterWizardProps {
   editSession?: {
     characterName: string;
     riggedBytes: ArrayBuffer;
+    /** Bound animation clip bytes per slot (for recipe-preserving
+     *  regeneration on marker-level edits). */
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null;
   /** Fired after commit; the workspace binds model + slots. */
   onCommitted: (result: {
@@ -440,7 +447,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
           // Markers untouched = skeleton unchanged = clips still
           // valid; leave animation bindings (incl. generated
           // slots) alone.
-          skipAnimations: !landmarksDirtyRef.current
+          skipAnimations: !landmarksDirtyRef.current,
+          boundClips: editSession?.boundClips
         });
         onCommitted(result);
       } else {

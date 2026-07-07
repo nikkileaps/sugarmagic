@@ -127,6 +127,39 @@ function solveWeightsInWorker(
   });
 }
 
+function generateClipFromRecipe(
+  recipe: MotionRecipe,
+  hipScale: number
+): { clipName: string; bytes: ArrayBuffer } {
+  const generators = {
+    idle: generateIdleChannels,
+    walk: generateWalkChannels,
+    run: generateRunChannels
+  } as const;
+  const composed = generators[recipe.generatorId]({
+    ...recipe.personality,
+    seed: recipe.seed
+  });
+  const motion = sampleMotion(composed, {
+    basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides)
+  });
+  const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
+  const glb = buildClipGlb({
+    clipName,
+    duration: motion.duration,
+    boneTracks: motion.boneTracks,
+    hipsTranslation: motion.hipsTranslation,
+    bones: STANDARD_RIG_CORE.bones.map((bone) => ({
+      name: bone.name,
+      parentName: bone.parentName,
+      restPosition: bone.restPosition,
+      restRotation: bone.restRotation
+    })),
+    recipe
+  });
+  return { clipName, bytes: scaleClipHipsTranslation(glb, hipScale) };
+}
+
 async function prepareClips(
   skeleton: GeneratedSkeleton
 ): Promise<WizardGenerated["clips"]> {
@@ -298,12 +331,26 @@ export function createCharacterWizardServices(
         landmarks: request.landmarks,
         // Weights-only edit: don't rewrite clips (and below, don't
         // re-register or rebind them) — generated slots survive.
+        // Marker-level edit: slots whose CURRENT clip carries a
+        // motion recipe REGENERATE at the new skeleton's hip scale
+        // (personality + pose survive); library slots re-copy.
         clips: request.skipAnimations
           ? []
-          : request.generated.clips.map((clip) => ({
-              clipName: clip.clipName,
-              bytes: clip.bytes
-            })),
+          : request.generated.clips.map((clip) => {
+              const boundBytes = request.boundClips?.[clip.slot];
+              const recipe = boundBytes ? readClipRecipe(boundBytes) : null;
+              if (recipe && isMotionRecipe(recipe)) {
+                const hipScale =
+                  request.generated.skeleton.hipHeight /
+                  getStandardRigHipHeight();
+                const regenerated = generateClipFromRecipe(recipe, hipScale);
+                return {
+                  clipName: regenerated.clipName,
+                  bytes: regenerated.bytes
+                };
+              }
+              return { clipName: clip.clipName, bytes: clip.bytes };
+            }),
         attributionText
       });
       // Registration UPSERTS by definitionId: unchanged clip names
@@ -360,33 +407,7 @@ export function createCharacterWizardServices(
     },
 
     generateClip(recipe, hipScale) {
-      const generators = {
-        idle: generateIdleChannels,
-        walk: generateWalkChannels,
-        run: generateRunChannels
-      } as const;
-      const composed = generators[recipe.generatorId]({
-        ...recipe.personality,
-        seed: recipe.seed
-      });
-      const motion = sampleMotion(composed, {
-        basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides)
-      });
-      const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
-      const glb = buildClipGlb({
-        clipName,
-        duration: motion.duration,
-        boneTracks: motion.boneTracks,
-        hipsTranslation: motion.hipsTranslation,
-        bones: STANDARD_RIG_CORE.bones.map((bone) => ({
-          name: bone.name,
-          parentName: bone.parentName,
-          restPosition: bone.restPosition,
-          restRotation: bone.restRotation
-        })),
-        recipe
-      });
-      return { clipName, bytes: scaleClipHipsTranslation(glb, hipScale) };
+      return generateClipFromRecipe(recipe, hipScale);
     },
 
     async getLibraryClip(slot, hipScale) {

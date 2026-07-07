@@ -134,6 +134,7 @@ export function useNPCWorkspaceView(
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
+    boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null>(null);
 
   // §062.9 — edit wizard-generated models, create otherwise.
@@ -144,9 +145,27 @@ export function useNPCWorkspaceView(
       const url = assetSources[model.source.relativeAssetPath];
       if (url) {
         const riggedBytes = await (await fetch(url)).arrayBuffer();
+        // Bound clip bytes per slot: marker-level edits regenerate
+        // recipe-carrying (generated) slots instead of stomping
+        // them back to library clips.
+        const boundClips: Partial<
+          Record<"idle" | "walk" | "run", ArrayBuffer>
+        > = {};
+        for (const slot of ["idle", "walk", "run"] as const) {
+          const bound = previewSlots.find(
+            (candidate) => candidate.value === slot
+          )?.animation;
+          const clipUrl = bound
+            ? assetSources[bound.source.relativeAssetPath]
+            : undefined;
+          if (clipUrl) {
+            boundClips[slot] = await (await fetch(clipUrl)).arrayBuffer();
+          }
+        }
         setWizardEditSession({
           characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
-          riggedBytes
+          riggedBytes,
+          boundClips
         });
         setWizardOpen(true);
         return;
