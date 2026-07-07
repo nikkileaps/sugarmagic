@@ -91,7 +91,6 @@ export function usePlayerWorkspaceView(
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
-    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>;
   } | null>(null);
 
   // §062.9 — the rig button EDITS a wizard-generated model
@@ -105,16 +104,7 @@ export function usePlayerWorkspaceView(
         const riggedBytes = await (await fetch(url)).arrayBuffer();
         setWizardEditSession({
           characterName: model.source.fileName.replace(/-rigged\.glb$/i, ""),
-          riggedBytes,
-          fetchAsset: async (relativeAssetPath: string) => {
-            const assetUrl = assetSources[relativeAssetPath];
-            if (!assetUrl) {
-              throw new Error(
-                `Missing source asset for edit: ${relativeAssetPath}`
-              );
-            }
-            return (await fetch(assetUrl)).arrayBuffer();
-          }
+          riggedBytes
         });
         setWizardOpen(true);
         return;

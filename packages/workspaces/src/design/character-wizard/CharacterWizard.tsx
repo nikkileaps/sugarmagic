@@ -88,10 +88,7 @@ export interface CharacterWizardServices {
     generated: WizardGenerated
   ): Promise<ArrayBuffer>;
   /** Reopen a wizard-generated character for editing (§062.9). */
-  prepareEdit(
-    riggedBytes: ArrayBuffer,
-    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>
-  ): Promise<{
+  prepareEdit(riggedBytes: ArrayBuffer): Promise<{
     sourceBytes: ArrayBuffer;
     landmarks: WizardLandmarks;
     generated: WizardGenerated;
@@ -129,8 +126,6 @@ export interface CharacterWizardProps {
   editSession?: {
     characterName: string;
     riggedBytes: ArrayBuffer;
-    /** assetSources lookup for the stored source GLB. */
-    fetchAsset: (relativeAssetPath: string) => Promise<ArrayBuffer>;
   } | null;
   /** Fired after commit; the workspace binds model + slots. */
   onCommitted: (result: {
@@ -254,7 +249,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
     setBusy(true);
     setBusyLabel("Loading character...");
     void services
-      .prepareEdit(editSession.riggedBytes, editSession.fetchAsset)
+      .prepareEdit(editSession.riggedBytes)
       .then((loaded) => {
         setCharacterName(editSession.characterName);
         setSourceBytes(loaded.sourceBytes);

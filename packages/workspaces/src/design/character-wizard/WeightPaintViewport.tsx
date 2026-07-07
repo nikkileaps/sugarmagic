@@ -100,20 +100,55 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       camera.lookAt(0, orbit.targetY, 0);
     }
 
-    // Brush cursor ring.
-    const cursor = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 24, 16),
-      new THREE.MeshBasicMaterial({
+    // Brush cursor: a Blender-style circle that lies ON the
+    // surface — positioned at the hit point and oriented to the
+    // surface normal, with a center dot for precision.
+    const ringPoints: THREE.Vector3[] = [];
+    for (let i = 0; i <= 64; i += 1) {
+      const angle = (i / 64) * Math.PI * 2;
+      ringPoints.push(
+        new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0)
+      );
+    }
+    const cursor = new THREE.Group();
+    const ring = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(ringPoints),
+      new THREE.LineBasicMaterial({
         color: 0xffffff,
-        wireframe: true,
         transparent: true,
-        opacity: 0.25,
+        opacity: 0.9,
         depthTest: false
       })
     );
+    ring.renderOrder = 20;
+    cursor.add(ring);
+    const centerDot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false })
+    );
+    centerDot.renderOrder = 20;
+    cursor.add(centerDot);
     cursor.visible = false;
-    cursor.renderOrder = 20;
     scene.add(cursor);
+    const surfaceNormal = new THREE.Vector3();
+    const zAxis = new THREE.Vector3(0, 0, 1);
+    function placeCursor(hit: THREE.Intersection) {
+      // World-space surface normal from the hit face.
+      if (hit.face) {
+        surfaceNormal
+          .copy(hit.face.normal)
+          .transformDirection(hit.object.matrixWorld)
+          .normalize();
+      } else {
+        camera.getWorldDirection(surfaceNormal).negate();
+      }
+      cursor.position
+        .copy(hit.point)
+        .addScaledVector(surfaceNormal, 0.002);
+      cursor.quaternion.setFromUnitVectors(zAxis, surfaceNormal);
+      cursor.scale.setScalar(propsRef.current.brushRadius);
+      cursor.visible = true;
+    }
 
     let disposed = false;
     let mixer: THREE.AnimationMixer | null = null;
@@ -287,9 +322,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       );
       const hit = hits[0];
       if (!hit) return;
-      cursor.position.copy(hit.point);
-      cursor.scale.setScalar(propsRef.current.brushRadius);
-      cursor.visible = true;
+      placeCursor(hit);
       const affected = propsRef.current.onPaint([
         hit.point.x,
         hit.point.y,
@@ -333,9 +366,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         paintTargets.map((target) => target.mesh)
       )[0];
       if (hit) {
-        cursor.position.copy(hit.point);
-        cursor.scale.setScalar(propsRef.current.brushRadius);
-        cursor.visible = true;
+        placeCursor(hit);
       } else {
         cursor.visible = false;
       }
