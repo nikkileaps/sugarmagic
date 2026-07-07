@@ -18,6 +18,7 @@ export {
   type BoneAxisGain,
   type SemanticChannel
 } from "./projection";
+export { RELAXED_ARM_POSE } from "./base-pose";
 export {
   composeComponents,
   type ComposedMotion,

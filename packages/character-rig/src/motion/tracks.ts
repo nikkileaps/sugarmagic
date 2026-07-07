@@ -54,12 +54,24 @@ function quatFromEuler(x: number, y: number, z: number): Quat {
 
 export const MOTION_SAMPLE_FPS = 24;
 
+export interface SampleMotionOptions {
+  /** Constant per-bone rotation offsets layered UNDER the channel
+   *  motion (q = rest * base * channelOffset) — the relaxed base
+   *  pose that keeps generated clips out of the contract T-pose.
+   *  Bones listed here always get a track, channels or not. */
+  basePose?: Readonly<Record<string, readonly number[]>>;
+}
+
 /**
  * Sample channel curves into per-bone quaternion tracks. Bones no
- * channel touches are omitted entirely (smaller clips; untouched
- * bones hold their rest pose at playback).
+ * channel (and no base pose) touches are omitted entirely
+ * (smaller clips; untouched bones hold their rest pose at
+ * playback).
  */
-export function sampleMotion(motion: ComposedMotion): SampledMotion {
+export function sampleMotion(
+  motion: ComposedMotion,
+  options: SampleMotionOptions = {}
+): SampledMotion {
   const frameCount = Math.max(2, Math.round(motion.duration * MOTION_SAMPLE_FPS));
   const keyCount = frameCount + 1; // final key repeats phase 0 at t=duration
 
@@ -74,6 +86,11 @@ export function sampleMotion(motion: ComposedMotion): SampledMotion {
     return eulers;
   };
   const AXIS_INDEX = { x: 0, y: 1, z: 2 } as const;
+
+  // Base-pose bones always emit a track, even without channels.
+  for (const boneName of Object.keys(options.basePose ?? {})) {
+    touch(boneName);
+  }
 
   for (const [channelName, curves] of Object.entries(motion.channels)) {
     if (!curves || curves.length === 0) continue;
@@ -116,6 +133,11 @@ export function sampleMotion(motion: ComposedMotion): SampledMotion {
   for (const [boneName, eulers] of boneEulers) {
     const rest = restByName.get(boneName);
     if (!rest) continue; // non-core target in the table = data bug; skip
+    const baseRaw = options.basePose?.[boneName];
+    const base: Quat | null = baseRaw
+      ? [baseRaw[0]!, baseRaw[1]!, baseRaw[2]!, baseRaw[3]!]
+      : null;
+    const restWithBase = base ? quatMultiply(rest.rotation, base) : rest.rotation;
     const rotations = new Float32Array(keyCount * 4);
     for (let key = 0; key < keyCount; key += 1) {
       const offset = quatFromEuler(
@@ -123,7 +145,7 @@ export function sampleMotion(motion: ComposedMotion): SampledMotion {
         eulers[key * 3 + 1]!,
         eulers[key * 3 + 2]!
       );
-      const q = quatMultiply(rest.rotation, offset);
+      const q = quatMultiply(restWithBase, offset);
       rotations[key * 4] = q[0];
       rotations[key * 4 + 1] = q[1];
       rotations[key * 4 + 2] = q[2];

@@ -14,6 +14,7 @@
  */
 
 import {
+  RELAXED_ARM_POSE,
   computeBoneSegments,
   detectRigLandmarks,
   generateIdleChannels,
@@ -360,7 +361,7 @@ export function createCharacterWizardServices(
         ...recipe.personality,
         seed: recipe.seed
       });
-      const motion = sampleMotion(composed);
+      const motion = sampleMotion(composed, { basePose: RELAXED_ARM_POSE });
       const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
       const glb = buildClipGlb({
         clipName,

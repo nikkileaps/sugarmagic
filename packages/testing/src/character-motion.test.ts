@@ -10,6 +10,7 @@ import {
   IDLE_COMPONENTS,
   IDLE_DEFAULTS,
   LOCOMOTION_COMPONENTS,
+  RELAXED_ARM_POSE,
   composeComponents,
   evaluateCurve,
   generateIdleChannels,
@@ -233,6 +234,38 @@ describe("motion core (Plan 063)", () => {
         );
       }
     }
+  });
+
+  it("the relaxed base pose hangs the arms (no contract T-pose)", () => {
+    // Arm chain present with substantial offsets from rest.
+    expect(Object.keys(RELAXED_ARM_POSE)).toContain("DEF-upper_arm.L");
+    const motion = sampleMotion(generateIdleChannels(IDLE_DEFAULTS), {
+      basePose: RELAXED_ARM_POSE
+    });
+    const upperArm = motion.boneTracks.find(
+      (track) => track.boneName === "DEF-upper_arm.L"
+    )!;
+    const rest = STANDARD_RIG_CORE.bones.find(
+      (bone) => bone.name === "DEF-upper_arm.L"
+    )!.restRotation;
+    let dot = 0;
+    for (let c = 0; c < 4; c += 1) dot += upperArm.rotations[c]! * rest[c]!;
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(dot)));
+    // Arms swing well away from the T-pose (library mean ~70 deg).
+    expect(angle).toBeGreaterThan(Math.PI / 6);
+    // Loop closure still holds with a base pose.
+    const keys = upperArm.times.length;
+    for (let c = 0; c < 4; c += 1) {
+      expect(upperArm.rotations[(keys - 1) * 4 + c]).toBeCloseTo(
+        upperArm.rotations[c]!,
+        6
+      );
+    }
+    // Hand gets a track purely from the base pose (no channel
+    // touches it).
+    expect(
+      motion.boneTracks.some((track) => track.boneName === "DEF-hand.L")
+    ).toBe(true);
   });
 
   it("rest pose is the baseline: zero-amplitude curves emit rest rotations", () => {
