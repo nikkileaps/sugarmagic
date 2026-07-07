@@ -11,6 +11,7 @@ import {
   IDLE_DEFAULTS,
   LOCOMOTION_COMPONENTS,
   RELAXED_ARM_POSE,
+  composeBasePose,
   composeComponents,
   evaluateCurve,
   generateIdleChannels,
@@ -266,6 +267,44 @@ describe("motion core (Plan 063)", () => {
     expect(
       motion.boneTracks.some((track) => track.boneName === "DEF-hand.L")
     ).toBe(true);
+  });
+
+  it("pose overrides compose onto the relaxed base (063.5)", () => {
+    // 90-degree z twist override on the left upper arm.
+    const override: Record<string, readonly number[]> = {
+      "DEF-upper_arm.L": [0, 0, Math.SQRT1_2, Math.SQRT1_2]
+    };
+    const composed = composeBasePose(RELAXED_ARM_POSE, override);
+    // Differs from the relaxed pose for that bone, identical
+    // elsewhere.
+    expect(composed["DEF-upper_arm.L"]).not.toEqual(
+      RELAXED_ARM_POSE["DEF-upper_arm.L"]
+    );
+    expect(composed["DEF-forearm.L"]).toEqual(
+      RELAXED_ARM_POSE["DEF-forearm.L"]
+    );
+    // Override on a bone the relaxed pose does not cover passes
+    // through verbatim.
+    const withNew = composeBasePose(RELAXED_ARM_POSE, {
+      "DEF-head": [0, 0, 0, 1]
+    });
+    expect(withNew["DEF-head"]).toEqual([0, 0, 0, 1]);
+    // Undefined overrides are a no-op identity.
+    expect(composeBasePose(RELAXED_ARM_POSE, undefined)).toBe(RELAXED_ARM_POSE);
+    // And the sampled motion reflects the override.
+    const plain = sampleMotion(generateIdleChannels(IDLE_DEFAULTS), {
+      basePose: RELAXED_ARM_POSE
+    });
+    const posed = sampleMotion(generateIdleChannels(IDLE_DEFAULTS), {
+      basePose: composed
+    });
+    const plainArm = plain.boneTracks.find(
+      (track) => track.boneName === "DEF-upper_arm.L"
+    )!;
+    const posedArm = posed.boneTracks.find(
+      (track) => track.boneName === "DEF-upper_arm.L"
+    )!;
+    expect([...posedArm.rotations]).not.toEqual([...plainArm.rotations]);
   });
 
   it("rest pose is the baseline: zero-amplitude curves emit rest rotations", () => {

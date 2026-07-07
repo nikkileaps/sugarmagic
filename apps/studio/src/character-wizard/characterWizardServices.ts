@@ -15,6 +15,7 @@
 
 import {
   RELAXED_ARM_POSE,
+  composeBasePose,
   computeBoneSegments,
   detectRigLandmarks,
   generateIdleChannels,
@@ -348,7 +349,10 @@ export function createCharacterWizardServices(
       const skeleton = generateStandardSkeleton(
         recipe.landmarks as RigLandmarks
       );
-      return { hipScale: skeleton.hipHeight / getStandardRigHipHeight() };
+      return {
+        hipScale: skeleton.hipHeight / getStandardRigHipHeight(),
+        relaxedPose: RELAXED_ARM_POSE
+      };
     },
 
     generateClip(recipe, hipScale) {
@@ -361,7 +365,9 @@ export function createCharacterWizardServices(
         ...recipe.personality,
         seed: recipe.seed
       });
-      const motion = sampleMotion(composed, { basePose: RELAXED_ARM_POSE });
+      const motion = sampleMotion(composed, {
+        basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides)
+      });
       const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
       const glb = buildClipGlb({
         clipName,

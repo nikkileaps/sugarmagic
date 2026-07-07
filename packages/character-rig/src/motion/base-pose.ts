@@ -34,3 +34,33 @@ export const RELAXED_ARM_POSE: Readonly<
     STANDARD_RIG_RELAXED_POSE[name]!
   ])
 );
+
+/**
+ * Compose the user's pose-adjust overrides (Plan 063 §063.5,
+ * `MotionRecipe.basePoseOverrides`) onto the relaxed base:
+ * base' = relaxed * override per bone. Bones only present in the
+ * overrides get the override alone.
+ */
+export function composeBasePose(
+  relaxed: Readonly<Record<string, readonly number[]>>,
+  overrides: Readonly<Record<string, readonly number[]>> | undefined
+): Readonly<Record<string, readonly number[]>> {
+  if (!overrides) return relaxed;
+  const merged: Record<string, readonly number[]> = { ...relaxed };
+  for (const [boneName, override] of Object.entries(overrides)) {
+    const base = merged[boneName];
+    if (!base) {
+      merged[boneName] = override;
+      continue;
+    }
+    const [ax, ay, az, aw] = base as [number, number, number, number];
+    const [bx, by, bz, bw] = override as [number, number, number, number];
+    merged[boneName] = [
+      aw * bx + ax * bw + ay * bz - az * by,
+      aw * by - ax * bz + ay * bw + az * bx,
+      aw * bz + ax * by - ay * bx + az * bw,
+      aw * bw - ax * bx - ay * by - az * bz
+    ];
+  }
+  return merged;
+}

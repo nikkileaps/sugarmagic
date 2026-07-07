@@ -27,6 +27,7 @@ import {
   Modal,
   SegmentedControl,
   Stack,
+  Switch,
   Text
 } from "@mantine/core";
 import { LabeledSlider } from "@sugarmagic/ui";
@@ -37,6 +38,7 @@ import {
   type MotionRecipe
 } from "@sugarmagic/domain";
 import { CharacterPreview, type CharacterPreviewSlot } from "../CharacterPreview";
+import { PoseViewport } from "./PoseViewport";
 import type { CharacterWizardServices } from "../character-wizard/CharacterWizard";
 
 type Slot = "idle" | "walk" | "run";
@@ -92,6 +94,13 @@ export function AnimationPanel(props: AnimationPanelProps) {
     onClose
   } = props;
   const [previewPlaying, setPreviewPlaying] = useState(true);
+  // §063.5 pose adjust mode.
+  const [poseMode, setPoseMode] = useState(false);
+  const [poseMirroring, setPoseMirroring] = useState(true);
+  const [relaxedPose, setRelaxedPose] = useState<Readonly<
+    Record<string, readonly number[]>
+  > | null>(null);
+  const [modelBlobUrl, setModelBlobUrl] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
@@ -134,6 +143,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
         const riggedBytes = await (await fetch(modelUrl)).arrayBuffer();
         const prepared = await services.prepareAnimationPanel(riggedBytes);
         setHipScale(prepared.hipScale);
+        setRelaxedPose(prepared.relaxedPose);
+        setModelBlobUrl(trackBlobUrl(riggedBytes));
         const next = {} as Record<Slot, SlotState>;
         for (const slot of SLOTS) {
           let recipe = createDefaultMotionRecipe(slot);
@@ -216,6 +227,31 @@ export function AnimationPanel(props: AnimationPanelProps) {
       });
     },
     [activeSlot, regenerate]
+  );
+
+  // §063.5 — a pose edit applies to every slot's recipe (the pose
+  // is a property of the character's stance, not of one clip) and
+  // regenerates whatever is currently generated.
+  const handlePoseChange = useCallback(
+    (overrides: Record<string, [number, number, number, number]>) => {
+      setSlots((current) => {
+        if (!current) return current;
+        const next = { ...current };
+        for (const slot of SLOTS) {
+          const state = next[slot];
+          const recipe: MotionRecipe = {
+            ...state.recipe,
+            basePoseOverrides: overrides
+          };
+          next[slot] = { ...state, recipe };
+          if (state.source === "generated") {
+            regenerate(slot, next[slot], true);
+          }
+        }
+        return next;
+      });
+    },
+    [regenerate]
   );
 
   const chooseSource = useCallback(
@@ -385,6 +421,22 @@ export function AnimationPanel(props: AnimationPanelProps) {
                   Reroll variation
                 </Button>
               ) : null}
+              <Switch
+                size="xs"
+                label="Adjust pose"
+                checked={poseMode}
+                onChange={(event) => setPoseMode(event.currentTarget.checked)}
+              />
+              {poseMode ? (
+                <Switch
+                  size="xs"
+                  label="Mirror"
+                  checked={poseMirroring}
+                  onChange={(event) =>
+                    setPoseMirroring(event.currentTarget.checked)
+                  }
+                />
+              ) : null}
             </Group>
 
             {active?.source === "generated" ? (
@@ -412,7 +464,28 @@ export function AnimationPanel(props: AnimationPanelProps) {
               </Text>
             )}
 
-            {preview ? (
+            {poseMode && modelBlobUrl && relaxedPose ? (
+              <>
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Drag a wrist to swing the whole arm at the shoulder.
+                  The pose applies to all generated slots.
+                </Text>
+                <Box style={{ height: 380 }}>
+                  <PoseViewport
+                    modelUrl={modelBlobUrl}
+                    relaxedPose={relaxedPose}
+                    overrides={
+                      (slots[activeSlot].recipe.basePoseOverrides ?? {}) as Record<
+                        string,
+                        [number, number, number, number]
+                      >
+                    }
+                    mirroring={poseMirroring}
+                    onChange={handlePoseChange}
+                  />
+                </Box>
+              </>
+            ) : preview ? (
               <Box style={{ height: 380 }}>
                 <CharacterPreview
                   model={model}

@@ -33,7 +33,11 @@ export interface MotionRecipe {
   personality: MotionPersonality;
   /** Variation seed — same recipe = byte-identical clip. */
   seed: number;
-  /** §063.5 semantic-curve overrides; reserved (empty in v1). */
+  /** §063.5 pose adjust — per-bone quaternion offsets composed
+   *  onto the relaxed base pose at generation (puppet handles).
+   *  Keyed by bone name, xyzw. */
+  basePoseOverrides?: Record<string, [number, number, number, number]>;
+  /** §063.6 semantic-curve overrides; reserved (empty in v1). */
   curveOverrides?: Record<string, unknown>;
 }
 

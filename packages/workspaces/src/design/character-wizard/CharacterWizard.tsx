@@ -115,8 +115,12 @@ export interface CharacterWizardServices {
   }>;
   // ---- Plan 063: animation panel services (same DI object; the
   // panel is character tooling like the wizard) ----------------
-  /** Hip scale for clip copies, derived from the model's recipe. */
-  prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{ hipScale: number }>;
+  /** Hip scale for clip copies (from the model's recipe) + the
+   *  relaxed base pose the pose-adjust viewport starts from. */
+  prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{
+    hipScale: number;
+    relaxedPose: Readonly<Record<string, readonly number[]>>;
+  }>;
   /** Generate a clip from a recipe, hips-scaled for the character. */
   generateClip(
     recipe: MotionRecipe,
