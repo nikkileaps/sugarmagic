@@ -30,3 +30,4 @@ export * from "./surface/index";
 export * from "./transactions/index";
 export * from "./ui-definition/index";
 export * from "./standard-rig/index";
+export * from "./motion-recipe/index";
