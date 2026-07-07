@@ -101,6 +101,10 @@ Real-character verification (nikki's layered chibi squirrel) found the honest ce
 - Rides the designed seams: painting edits the `SkinWeights` arrays; finish re-runs `buildSkinnedCharacterGlb`; nothing downstream changes.
 - The heatmap doubles as the weight-debug view the plan always wanted.
 
+### 062.9 — Edit wizard characters in place (added 2026-07-06, nikki)
+
+One-shot wizards force re-placing every marker to change anything. Instead, wizard output is REOPENABLE: the rigged GLB carries its recipe (`asset.extras.sugarmagicRig`: rig id + schema version + landmarks + source path), the untouched source GLB is kept alongside (`<name>-source.glb`), and `CharacterModelDefinition.rigId` marks provenance. The preview's rig button becomes Edit for wizard-made models: reopens at the Joints step with markers prefilled and PAINTED weights decoded back out of the GLB's skin attributes. Markers untouched = weights survive (no re-solve); markers moved = fresh solve (paint is meaningless against a different skeleton). Finish overwrites the same asset files — definitions and bindings untouched — and refreshes the asset-source blob URLs so previews update live. Name is locked in edit mode (paths derive from it).
+
 ### 062.7 — Verify end-to-end
 
 - nikki's own Blender character through the whole path: import static GLB -> adjust a few markers -> generate -> preview idle/walk/run in the wizard -> finish -> slots populated in the workspace -> preview in Studio -> deploy -> character animates in prod (assets pipeline carries it with zero target work).
