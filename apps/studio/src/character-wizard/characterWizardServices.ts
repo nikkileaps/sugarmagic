@@ -29,6 +29,7 @@ import {
   readBlobFile,
   readSkinWeightsFromGlb,
   readWizardRecipe,
+  retargetClipRotations,
   scaleClipHipsTranslation,
   type GameRootDescriptor
 } from "@sugarmagic/io";
@@ -110,15 +111,28 @@ function solveWeightsInWorker(
 }
 
 async function prepareClips(
-  hipScale: number
+  skeleton: GeneratedSkeleton
 ): Promise<WizardGenerated["clips"]> {
+  const hipScale = skeleton.hipHeight / getStandardRigHipHeight();
+  // Per-bone rest deltas baked into every keyframe (see
+  // retargetClipRotations) so poses land relative to THIS
+  // character's rest pose.
+  const offsets: Record<string, [number, number, number, number]> = {};
+  for (const bone of skeleton.bones) {
+    offsets[bone.name] = bone.clipRotationOffset as [
+      number, number, number, number
+    ];
+  }
   const clips: WizardGenerated["clips"] = [];
   for (const entry of SLOT_CLIPS) {
     const clipBytes = await (await fetch(entry.url)).arrayBuffer();
     clips.push({
       slot: entry.slot,
       clipName: entry.clipName,
-      bytes: scaleClipHipsTranslation(clipBytes, hipScale)
+      bytes: retargetClipRotations(
+        scaleClipHipsTranslation(clipBytes, hipScale),
+        offsets
+      )
     });
   }
   return clips;
@@ -175,9 +189,7 @@ export function createCharacterWizardServices(
         ranges: extracted.ranges
       });
       onProgress(0.9);
-      const clips = await prepareClips(
-        skeleton.hipHeight / getStandardRigHipHeight()
-      );
+      const clips = await prepareClips(skeleton);
       onProgress(1);
       return {
         modelGlb,
@@ -240,9 +252,7 @@ export function createCharacterWizardServices(
       for (let i = 0; i < decoded.joints.length; i += 1) {
         joints[i] = slotToColumn.get(decoded.joints[i]!) ?? 0;
       }
-      const clips = await prepareClips(
-        skeleton.hipHeight / getStandardRigHipHeight()
-      );
+      const clips = await prepareClips(skeleton);
       return {
         sourceBytes,
         landmarks: recipe.landmarks as WizardLandmarks,

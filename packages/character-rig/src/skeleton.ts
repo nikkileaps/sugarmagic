@@ -32,9 +32,11 @@ import {
 import {
   QUAT_IDENTITY,
   quatConjugate,
+  quatFromUnitVectors,
   quatMultiply,
   quatRotateVec3,
   vec3Add,
+  vec3Distance,
   vec3Lerp,
   vec3Scale,
   vec3Sub,
@@ -51,10 +53,21 @@ export interface GeneratedBone {
   parentName: string | null;
   /** World-space head position for THIS character. */
   headPosition: Vec3;
-  /** Local rest rotation — copied from the contract. */
+  /** Local rest rotation — the contract's, minimally re-aimed so
+   *  the bone's +Y axis runs along THIS character's actual limb
+   *  direction (rest-pose alignment; see generate docs). */
   localRestRotation: Quat;
   /** Local rest translation in the parent's rest frame. */
   localRestTranslation: Vec3;
+  /** Per-bone clip retarget offset: contractLocalRest^-1 *
+   *  characterLocalRest. Baked into every rotation keyframe when
+   *  clips are copied for this character (q' = q * offset), so
+   *  library poses land relative to the CHARACTER's rest instead
+   *  of the library rig's — without this, an A-posed character's
+   *  arms swing the library's rest-delta too far and tuck into
+   *  the body (2026-07-06). Identity when the directions already
+   *  match. */
+  clipRotationOffset: Quat;
 }
 
 export interface GeneratedSkeleton {
@@ -188,25 +201,78 @@ export function generateStandardSkeleton(
   const contract = computeContractWorld();
   const heads = deriveWorldHeads(landmarks);
 
-  // World rest rotations are the CONTRACT's (local rotations are
-  // copied verbatim, so the composed world rotations match too).
-  // CORE bones only (2026-07-06): no finger bones on wizard
-  // skeletons — see STANDARD_RIG_CORE in domain.
-  const bones: GeneratedBone[] = STANDARD_RIG_CORE.bones.map((bone) => {
+  // Rest-pose ALIGNMENT (2026-07-06): each bone's world rest
+  // rotation starts from the contract's and is minimally re-aimed
+  // (shortest arc) so its +Y axis — the along-the-bone axis in
+  // this rig — points at the character's actual child joint. The
+  // character's own A-pose IS its rest pose; clip keyframes get
+  // the per-bone rest delta baked in at copy time
+  // (clipRotationOffset), which is what keeps library poses from
+  // over-rotating limbs that start at a different angle than the
+  // library rig's. CORE bones only — no fingers.
+  const coreBones = STANDARD_RIG_CORE.bones;
+  const childrenOf = new Map<string, string[]>();
+  for (const bone of coreBones) {
+    if (!bone.parentName) continue;
+    const list = childrenOf.get(bone.parentName) ?? [];
+    list.push(bone.name);
+    childrenOf.set(bone.parentName, list);
+  }
+
+  const charWorldRotation = new Map<string, Quat>();
+  const bones: GeneratedBone[] = coreBones.map((bone) => {
     const head = heads.get(bone.name)!;
     const parentHead = bone.parentName ? heads.get(bone.parentName)! : null;
-    const parentWorldRotation = bone.parentName
-      ? contract.get(bone.parentName)!.worldRestRotation
+    const contractWorld = contract.get(bone.name)!.worldRestRotation;
+    const contractLocal = asQuat(bone.restRotation);
+    const parentCharWorld = bone.parentName
+      ? charWorldRotation.get(bone.parentName)!
       : QUAT_IDENTITY;
+
+    // Character world rotation: aim +Y at the primary child; bones
+    // without a directional child keep the contract's LOCAL
+    // rotation under their (aligned) parent.
+    const primaryChild = childrenOf.get(bone.name)?.[0];
+    let charWorld: Quat;
+    if (primaryChild && bone.name !== "root") {
+      const childHead = heads.get(primaryChild)!;
+      const length = vec3Distance(childHead, head);
+      if (length > 1e-6) {
+        const targetDirection: Vec3 = [
+          (childHead[0] - head[0]) / length,
+          (childHead[1] - head[1]) / length,
+          (childHead[2] - head[2]) / length
+        ];
+        const contractDirection = quatRotateVec3(contractWorld, [0, 1, 0]);
+        charWorld = quatMultiply(
+          quatFromUnitVectors(contractDirection, targetDirection),
+          contractWorld
+        );
+      } else {
+        charWorld = quatMultiply(parentCharWorld, contractLocal);
+      }
+    } else {
+      charWorld = quatMultiply(parentCharWorld, contractLocal);
+    }
+    charWorldRotation.set(bone.name, charWorld);
+
+    const localRestRotation = quatMultiply(
+      quatConjugate(parentCharWorld),
+      charWorld
+    );
     const localRestTranslation = parentHead
-      ? quatRotateVec3(quatConjugate(parentWorldRotation), vec3Sub(head, parentHead))
+      ? quatRotateVec3(quatConjugate(parentCharWorld), vec3Sub(head, parentHead))
       : head;
     return {
       name: bone.name,
       parentName: bone.parentName,
       headPosition: head,
-      localRestRotation: asQuat(bone.restRotation),
-      localRestTranslation
+      localRestRotation,
+      localRestTranslation,
+      clipRotationOffset: quatMultiply(
+        quatConjugate(contractLocal),
+        localRestRotation
+      )
     };
   });
 

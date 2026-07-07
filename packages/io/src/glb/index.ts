@@ -644,6 +644,72 @@ export function buildSkinnedCharacterGlb(
   return packGlb(document, bin);
 }
 
+// ---- Clip rotation retargeting ----------------------------------------
+
+/**
+ * Bake per-bone rest-pose offsets into a clip's rotation
+ * keyframes: q' = q * offset (local space). The offset is
+ * contractLocalRest^-1 * characterLocalRest per bone — the
+ * rest-delta between the library rig and THIS character — so
+ * library poses land relative to the character's own rest pose
+ * (2026-07-06: A-posed characters' arms tucked into the body
+ * because the library's rest-to-idle arm delta over-rotated
+ * limbs that started lower).
+ */
+export function retargetClipRotations(
+  clipGlb: ArrayBuffer,
+  offsets: Record<string, [number, number, number, number]>
+): ArrayBuffer {
+  const chunks = readGlb(clipGlb);
+  if (!chunks?.binaryChunk) throw new Error("Not a valid clip GLB.");
+  const { document } = chunks;
+  const bin = new Uint8Array(chunks.binaryChunk);
+  const view = new DataView(bin.buffer, bin.byteOffset);
+  for (const animation of document.animations ?? []) {
+    for (const channel of animation.channels) {
+      if (channel.target.path !== "rotation") continue;
+      const nodeName =
+        channel.target.node !== undefined
+          ? document.nodes?.[channel.target.node]?.name
+          : undefined;
+      const offset = nodeName ? offsets[nodeName] : undefined;
+      if (!offset) continue;
+      const [ox, oy, oz, ow] = offset;
+      // Identity offsets skip the rewrite.
+      if (
+        Math.abs(ox) < 1e-7 &&
+        Math.abs(oy) < 1e-7 &&
+        Math.abs(oz) < 1e-7 &&
+        Math.abs(ow - 1) < 1e-7
+      ) {
+        continue;
+      }
+      const sampler = animation.samplers[channel.sampler]!;
+      const accessor = document.accessors?.[sampler.output];
+      if (!accessor || accessor.componentType !== 5126) continue;
+      const viewDef = document.bufferViews?.[accessor.bufferView ?? -1];
+      if (!viewDef) continue;
+      const base = (viewDef.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+      for (let key = 0; key < accessor.count; key += 1) {
+        const at = base + key * 16;
+        const qx = view.getFloat32(at, true);
+        const qy = view.getFloat32(at + 4, true);
+        const qz = view.getFloat32(at + 8, true);
+        const qw = view.getFloat32(at + 12, true);
+        // q' = q * offset (Hamilton product).
+        view.setFloat32(at, qw * ox + qx * ow + qy * oz - qz * oy, true);
+        view.setFloat32(at + 4, qw * oy - qx * oz + qy * ow + qz * ox, true);
+        view.setFloat32(at + 8, qw * oz + qx * oy - qy * ox + qz * ow, true);
+        view.setFloat32(at + 12, qw * ow - qx * ox - qy * oy - qz * oz, true);
+      }
+      // min/max annotations no longer valid for rewritten values.
+      delete accessor.min;
+      delete accessor.max;
+    }
+  }
+  return packGlb(document, bin);
+}
+
 // ---- Wizard reopen (§062.9) -------------------------------------------
 
 export interface WizardRecipe {

@@ -126,7 +126,7 @@ function sampleLandmarks(): RigLandmarks {
 }
 
 describe("generateStandardSkeleton (Plan 062)", () => {
-  it("produces every contract bone with resolving parents and contract rotations", () => {
+  it("produces every contract bone, rest-aligned to the character's limb directions", () => {
     const skeleton = generateStandardSkeleton(sampleLandmarks());
     // Core set only (2026-07-06): no finger bones on wizard rigs.
     expect(skeleton.bones.length).toBe(STANDARD_RIG_CORE.bones.length);
@@ -136,7 +136,51 @@ describe("generateStandardSkeleton (Plan 062)", () => {
       const generated = byName.get(contractBone.name);
       expect(generated).toBeDefined();
       expect(generated!.parentName).toBe(contractBone.parentName);
-      expect(generated!.localRestRotation).toEqual(contractBone.restRotation);
+    }
+    // Rest-pose ALIGNMENT invariant (2026-07-06): each bone's
+    // composed world +Y points at its primary child — the
+    // character's actual limb direction, not the library rig's.
+    const world = new Map<string, [number, number, number, number]>();
+    const mulQuat = (
+      a: [number, number, number, number],
+      b: [number, number, number, number]
+    ): [number, number, number, number] => [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+    ];
+    const rotateY = (q: [number, number, number, number]) => {
+      const [x, y, z, w] = q;
+      return [
+        2 * (x * y - w * z),
+        1 - 2 * (x * x + z * z),
+        2 * (y * z + w * x)
+      ];
+    };
+    for (const bone of skeleton.bones) {
+      const parent = bone.parentName ? world.get(bone.parentName)! : ([0, 0, 0, 1] as [number, number, number, number]);
+      world.set(bone.name, mulQuat(parent, bone.localRestRotation as [number, number, number, number]));
+    }
+    // Check the left arm chain: upper arm +Y aims from shoulder
+    // landmark toward the elbow landmark.
+    const landmarks = sampleLandmarks();
+    const upperArmY = rotateY(world.get("DEF-upper_arm.L")!);
+    const armDir = [
+      landmarks.elbowLeft[0] - landmarks.shoulderLeft[0],
+      landmarks.elbowLeft[1] - landmarks.shoulderLeft[1],
+      landmarks.elbowLeft[2] - landmarks.shoulderLeft[2]
+    ];
+    const armLen = Math.hypot(armDir[0]!, armDir[1]!, armDir[2]!);
+    const dot =
+      (upperArmY[0]! * armDir[0]!) / armLen +
+      (upperArmY[1]! * armDir[1]!) / armLen +
+      (upperArmY[2]! * armDir[2]!) / armLen;
+    expect(dot).toBeGreaterThan(0.999);
+    // Clip offsets exist and are unit quaternions.
+    for (const bone of skeleton.bones) {
+      const [x, y, z, w] = bone.clipRotationOffset;
+      expect(Math.hypot(x, y, z, w)).toBeCloseTo(1, 4);
     }
     expect(skeleton.hipHeight).toBeCloseTo(0.8, 5);
     expect(skeleton.rigId).toBe(STANDARD_RIG_CORE.rigId);
