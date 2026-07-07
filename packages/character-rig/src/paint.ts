@@ -103,6 +103,60 @@ export function setBoneWeightAtVertex(
  * center to radius. Returns the affected vertex indices (for
  * heatmap refresh).
  */
+/**
+ * Strongest non-`boneColumn` influence at a vertex, or -1.
+ */
+function otherInfluenceAt(
+  weights: SkinWeights,
+  vertex: number,
+  boneColumn: number
+): number {
+  let best = -1;
+  let bestWeight = 0;
+  for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+    const column = weights.joints[vertex * MAX_INFLUENCES + slot]!;
+    const weight = weights.weights[vertex * MAX_INFLUENCES + slot]!;
+    if (column !== boneColumn && weight > bestWeight) {
+      bestWeight = weight;
+      best = column;
+    }
+  }
+  return best;
+}
+
+/**
+ * BFS through mesh adjacency for the nearest vertex carrying an
+ * influence other than `boneColumn`; returns that bone, or -1.
+ * Bounded so a stroke can't stall on a fully-filled shell.
+ */
+function findTerritorialFallback(
+  weights: SkinWeights,
+  adjacency: Array<Set<number>>,
+  start: number,
+  boneColumn: number
+): number {
+  const visited = new Set<number>([start]);
+  let frontier = [start];
+  let budget = 6000;
+  while (frontier.length > 0 && budget > 0) {
+    const next: number[] = [];
+    for (const vertex of frontier) {
+      const neighbors = adjacency[vertex];
+      if (!neighbors) continue;
+      for (const neighbor of neighbors) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        budget -= 1;
+        const other = otherInfluenceAt(weights, neighbor, boneColumn);
+        if (other !== -1) return other;
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
+  return -1;
+}
+
 export function applyBrushStroke(
   mesh: MeshData,
   weights: SkinWeights,
@@ -111,6 +165,12 @@ export function applyBrushStroke(
   adjacency?: Array<Set<number>>
 ): number[] {
   const affected: number[] = [];
+  // Deep inside a Fill-swept region every neighbor is also 100%
+  // the subtracted bone — resolve ONE territorial fallback per
+  // stroke (BFS to the nearest differently-owned territory) and
+  // reuse it for every sole-influence vertex this stroke touches
+  // (2026-07-06: "can't subtract after fill").
+  let strokeFallback: number | null = null;
   const vertexCount = mesh.positions.length / 3;
   const radiusSq = stroke.radius * stroke.radius;
   const first = stroke.vertexWindow?.start ?? 0;
@@ -163,6 +223,17 @@ export function applyBrushStroke(
               }
             }
           }
+        }
+        if (fallback === -1 && adjacency) {
+          if (strokeFallback === null) {
+            strokeFallback = findTerritorialFallback(
+              weights,
+              adjacency,
+              vertex,
+              stroke.boneColumn
+            );
+          }
+          fallback = strokeFallback;
         }
         if (fallback !== -1) {
           const kept = Math.max(0, Math.min(1, target));

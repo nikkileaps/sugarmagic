@@ -125,6 +125,40 @@ describe("weight painting ops (Plan 062)", () => {
     expect(weightSum(w, 1)).toBeCloseTo(1, 5);
   });
 
+  it("subtract works deep inside a filled region via territorial BFS", () => {
+    // A strip of 6 vertices, chained by triangles. Vertices 1-5
+    // are 100% bone 1 (a Fill sweep); only vertex 0 carries bone
+    // 0. Subtracting at vertex 3 (no immediate neighbor with
+    // another influence) must find bone 0 by walking the mesh.
+    const positions = new Float32Array(18);
+    for (let i = 0; i < 6; i += 1) positions[i * 3] = i * 0.1;
+    const indices = new Uint32Array([
+      0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5
+    ]);
+    const mesh: MeshData = { positions, indices };
+    const w = makeWeights(6, ["a", "b"]);
+    for (let v = 1; v < 6; v += 1) {
+      w.joints[v * MAX_INFLUENCES] = 1;
+      w.weights[v * MAX_INFLUENCES] = 1;
+    }
+    const adjacency = buildVertexAdjacency(mesh);
+    applyBrushStroke(
+      mesh,
+      w,
+      {
+        center: [0.3, 0, 0],
+        radius: 0.05,
+        boneColumn: 1,
+        strength: 0.5,
+        mode: "subtract"
+      },
+      adjacency
+    );
+    expect(boneWeightOfVertex(w, 3, 1)).toBeLessThan(1);
+    expect(boneWeightOfVertex(w, 3, 0)).toBeGreaterThan(0);
+    expect(weightSum(w, 3)).toBeCloseTo(1, 5);
+  });
+
   it("a sole-influence vertex stays fully bound (normalization has nowhere else to go)", () => {
     // DCC-standard: reducing the only influence renormalizes back
     // to 1 — matches Blender's auto-normalize behavior.
