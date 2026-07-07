@@ -40,6 +40,7 @@ import {
   applyBrushStroke,
   buildVertexAdjacency,
   fillVerticesWithBone,
+  mirrorWeights,
   type BrushMode,
   type GeneratedSkeleton,
   type MeshData,
@@ -536,6 +537,23 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // One-click rigid assignment of the isolated piece to the
   // selected bone — the intended fix for boneless shells (tail,
   // eyes) where brushwork is the wrong tool.
+  // Mirror painted weights across the sagittal plane — respects
+  // piece isolation (mirrors within the selected piece only).
+  const handleMirror = useCallback(
+    (direction: "leftToRight" | "rightToLeft") => {
+      if (!generated) return;
+      const affected = mirrorWeights(generated.mesh, generated.weights, {
+        direction,
+        vertexWindow: paintWindow
+      });
+      if (affected.length > 0) {
+        paintDirtyRef.current = true;
+        setWeightsVersion((version) => version + 1);
+      }
+    },
+    [generated, paintWindow]
+  );
+
   const handleFillPiece = useCallback(() => {
     if (!generated || !paintWindow) return;
     fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
@@ -716,6 +734,20 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   setPaintAnimating(event.currentTarget.checked)
                 }
               />
+              <Button
+                size="compact-xs"
+                variant="light"
+                onClick={() => handleMirror("leftToRight")}
+              >
+                {"Mirror L > R"}
+              </Button>
+              <Button
+                size="compact-xs"
+                variant="light"
+                onClick={() => handleMirror("rightToLeft")}
+              >
+                {"Mirror R > L"}
+              </Button>
               <Button
                 size="compact-xs"
                 variant="subtle"

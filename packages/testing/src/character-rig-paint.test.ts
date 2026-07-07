@@ -7,6 +7,7 @@ import {
   applyBrushStroke,
   boneWeightOfVertex,
   buildVertexAdjacency,
+  mirrorWeights,
   setBoneWeightAtVertex,
   MAX_INFLUENCES,
   type MeshData,
@@ -165,5 +166,43 @@ describe("weight painting ops (Plan 062)", () => {
     const w = makeWeights(1, ["a", "b"]);
     setBoneWeightAtVertex(w, 0, 0, 0.3);
     expect(boneWeightOfVertex(w, 0, 0)).toBeCloseTo(1, 5);
+  });
+});
+
+describe("mirrorWeights (Plan 062)", () => {
+  it("copies left weights onto mirrored right vertices with L/R bones swapped", () => {
+    // Two mirrored pairs across x=0 plus a center vertex.
+    const mesh: MeshData = {
+      positions: new Float32Array([
+        0.5, 1, 0, -0.5, 1, 0, 0.3, 0.2, 0.1, -0.3, 0.2, 0.1, 0, 0.5, 0
+      ]),
+      indices: new Uint32Array([0, 1, 2, 2, 3, 4])
+    };
+    const w = makeWeights(5, ["DEF-upper_arm.L", "DEF-upper_arm.R", "DEF-hips"]);
+    // Paint the LEFT side: v0 arm.L 0.7 / hips 0.3, v2 arm.L 1.
+    setBoneWeightAtVertex(w, 0, 2, 0.3);
+    setBoneWeightAtVertex(w, 2, 0, 1);
+    // Right side starts all bone 0 (arm.L — wrong on purpose).
+    const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
+    expect(affected.sort()).toEqual([1, 3]);
+    // v1 mirrors v0: arm.R 0.7, hips 0.3.
+    expect(boneWeightOfVertex(w, 1, 1)).toBeCloseTo(0.7, 5);
+    expect(boneWeightOfVertex(w, 1, 2)).toBeCloseTo(0.3, 5);
+    // v3 mirrors v2: arm.R 1.
+    expect(boneWeightOfVertex(w, 3, 1)).toBeCloseTo(1, 5);
+    // Center vertex untouched.
+    expect(boneWeightOfVertex(w, 4, 0)).toBeCloseTo(1, 5);
+  });
+
+  it("leaves right-side vertices without a mirror twin untouched", () => {
+    const mesh: MeshData = {
+      positions: new Float32Array([0.5, 1, 0, -0.5, 3, 0]),
+      indices: new Uint32Array([0, 1, 0])
+    };
+    const w = makeWeights(2, ["a", "b"]);
+    setBoneWeightAtVertex(w, 0, 1, 1);
+    const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
+    expect(affected).toEqual([]);
+    expect(boneWeightOfVertex(w, 1, 0)).toBeCloseTo(1, 5);
   });
 });

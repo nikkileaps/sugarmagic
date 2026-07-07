@@ -67,6 +67,7 @@ export {
   applyBrushStroke,
   boneWeightOfVertex,
   fillVerticesWithBone,
+  mirrorWeights,
   setBoneWeightAtVertex,
   type BrushMode,
   type BrushStroke

@@ -291,4 +291,121 @@ export function fillVerticesWithBone(
   return affected;
 }
 
+/** Swap a bone name's .L/.R suffix ("DEF-hand.L" -> "DEF-hand.R"). */
+function mirrorBoneName(name: string): string {
+  if (name.endsWith(".L")) return `${name.slice(0, -2)}.R`;
+  if (name.endsWith(".R")) return `${name.slice(0, -2)}.L`;
+  return name;
+}
+
+/**
+ * Mirror weights across the character's sagittal plane (x = 0):
+ * every vertex on the TARGET side receives the weights of its
+ * nearest mirror-twin on the source side, with .L/.R bone columns
+ * swapped. Twins are matched by position via a spatial hash;
+ * vertices with no twin within tolerance (asymmetric details) are
+ * left untouched. Returns the affected vertex indices.
+ */
+export function mirrorWeights(
+  mesh: MeshData,
+  weights: SkinWeights,
+  options: {
+    /** "leftToRight" copies +x onto -x (left is +x). */
+    direction: "leftToRight" | "rightToLeft";
+    /** Restrict to one piece (flattened vertex window). */
+    vertexWindow?: { start: number; end: number };
+    /** Match tolerance; defaults to 0.5% of the bounding-box
+     *  diagonal. */
+    tolerance?: number;
+  }
+): number[] {
+  const vertexCount = mesh.positions.length / 3;
+  const first = options.vertexWindow?.start ?? 0;
+  const last = Math.min(options.vertexWindow?.end ?? vertexCount, vertexCount);
+
+  // Bounding box for the default tolerance.
+  let min = [Infinity, Infinity, Infinity];
+  let max = [-Infinity, -Infinity, -Infinity];
+  for (let v = first; v < last; v += 1) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = mesh.positions[v * 3 + axis]!;
+      if (value < min[axis]!) min[axis] = value;
+      if (value > max[axis]!) max[axis] = value;
+    }
+  }
+  const diagonal = Math.hypot(
+    max[0]! - min[0]!,
+    max[1]! - min[1]!,
+    max[2]! - min[2]!
+  );
+  const tolerance = options.tolerance ?? diagonal * 0.005;
+  if (!(tolerance > 0)) return [];
+
+  // Column -> mirrored column via bone-name suffix swap.
+  const columnMirror = weights.boneOrder.map((name) => {
+    const mirrored = weights.boneOrder.indexOf(mirrorBoneName(name));
+    return mirrored === -1 ? weights.boneOrder.indexOf(name) : mirrored;
+  });
+
+  const sourceIsLeft = options.direction === "leftToRight";
+  // Spatial hash of SOURCE-side vertices.
+  const cell = tolerance * 2;
+  const hash = new Map<string, number[]>();
+  const keyOf = (x: number, y: number, z: number) =>
+    `${Math.floor(x / cell)}:${Math.floor(y / cell)}:${Math.floor(z / cell)}`;
+  for (let v = first; v < last; v += 1) {
+    const x = mesh.positions[v * 3]!;
+    if (sourceIsLeft ? x < 0 : x > 0) continue;
+    const key = keyOf(x, mesh.positions[v * 3 + 1]!, mesh.positions[v * 3 + 2]!);
+    const bucket = hash.get(key);
+    if (bucket) bucket.push(v);
+    else hash.set(key, [v]);
+  }
+
+  const affected: number[] = [];
+  const toleranceSq = tolerance * tolerance;
+  for (let v = first; v < last; v += 1) {
+    const x = mesh.positions[v * 3]!;
+    // Target side only (strictly past the plane; the seam row
+    // belongs to both and is left as painted).
+    if (sourceIsLeft ? x >= 0 : x <= 0) continue;
+    const mx = -x;
+    const my = mesh.positions[v * 3 + 1]!;
+    const mz = mesh.positions[v * 3 + 2]!;
+    let best = -1;
+    let bestSq = toleranceSq;
+    const cx = Math.floor(mx / cell);
+    const cy = Math.floor(my / cell);
+    const cz = Math.floor(mz / cell);
+    for (let ox = -1; ox <= 1; ox += 1) {
+      for (let oy = -1; oy <= 1; oy += 1) {
+        for (let oz = -1; oz <= 1; oz += 1) {
+          const bucket = hash.get(`${cx + ox}:${cy + oy}:${cz + oz}`);
+          if (!bucket) continue;
+          for (const candidate of bucket) {
+            const dx = mesh.positions[candidate * 3]! - mx;
+            const dy = mesh.positions[candidate * 3 + 1]! - my;
+            const dz = mesh.positions[candidate * 3 + 2]! - mz;
+            const distanceSq = dx * dx + dy * dy + dz * dz;
+            if (distanceSq < bestSq) {
+              bestSq = distanceSq;
+              best = candidate;
+            }
+          }
+        }
+      }
+    }
+    if (best === -1) continue;
+    for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+      const sourceColumn = weights.joints[best * MAX_INFLUENCES + slot]!;
+      weights.joints[v * MAX_INFLUENCES + slot] =
+        columnMirror[sourceColumn] ?? sourceColumn;
+      weights.weights[v * MAX_INFLUENCES + slot] =
+        weights.weights[best * MAX_INFLUENCES + slot]!;
+    }
+    affected.push(v);
+  }
+  return affected;
+}
+
 export { buildVertexAdjacency };
