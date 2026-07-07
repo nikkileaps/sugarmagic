@@ -17,6 +17,7 @@ import {
   RELAXED_ARM_POSE,
   composeBasePose,
   computeBoneSegments,
+  evaluateCurve,
   detectRigLandmarks,
   generateIdleChannels,
   generateRunChannels,
@@ -141,7 +142,8 @@ function generateClipFromRecipe(
     seed: recipe.seed
   });
   const motion = sampleMotion(composed, {
-    basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides)
+    basePose: composeBasePose(RELAXED_ARM_POSE, recipe.basePoseOverrides),
+    channelOverrides: recipe.curveOverrides
   });
   const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
   const glb = buildClipGlb({
@@ -417,6 +419,30 @@ export function createCharacterWizardServices(
         clipName: entry.clipName,
         bytes: scaleClipHipsTranslation(bytes, hipScale)
       };
+    },
+
+    sampleChannel(recipe, channel, count) {
+      const generators = {
+        idle: generateIdleChannels,
+        walk: generateWalkChannels,
+        run: generateRunChannels
+      } as const;
+      const composed = generators[recipe.generatorId]({
+        ...recipe.personality,
+        seed: recipe.seed
+      });
+      const stack =
+        channel === "bounce"
+          ? composed.bounce
+          : (composed.channels[
+              channel as keyof typeof composed.channels
+            ] ?? []);
+      return Array.from({ length: count }, (_, index) => {
+        const x = index / count;
+        let y = 0;
+        for (const curve of stack) y += evaluateCurve(curve, x);
+        return { x, y };
+      });
     },
 
     readSlotRecipe(clipBytes) {

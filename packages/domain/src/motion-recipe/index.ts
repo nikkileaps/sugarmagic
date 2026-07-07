@@ -37,8 +37,10 @@ export interface MotionRecipe {
    *  onto the relaxed base pose at generation (puppet handles).
    *  Keyed by bone name, xyzw. */
   basePoseOverrides?: Record<string, [number, number, number, number]>;
-  /** §063.6 semantic-curve overrides; reserved (empty in v1). */
-  curveOverrides?: Record<string, unknown>;
+  /** §063.6 semantic-curve overrides — a channel key present here
+   *  replaces its generated signal with the periodic point curve
+   *  ("bounce" overrides the hips bob). */
+  curveOverrides?: Record<string, Array<{ x: number; y: number }>>;
 }
 
 export function createDefaultMotionRecipe(

@@ -142,6 +142,13 @@ export interface CharacterWizardServices {
   ): Promise<{ clipName: string; bytes: ArrayBuffer }>;
   /** Recipe stamped in a generated clip, or null. */
   readSlotRecipe(clipBytes: ArrayBuffer): MotionRecipe | null;
+  /** §063.6 — sample a generator channel's current signal (the
+   *  curve editor's starting shape when no override exists). */
+  sampleChannel(
+    recipe: MotionRecipe,
+    channel: string,
+    count: number
+  ): Array<{ x: number; y: number }>;
   /** Write + register slot clips; returns slot-mapped definitions. */
   commitAnimationSlots(request: {
     characterName: string;

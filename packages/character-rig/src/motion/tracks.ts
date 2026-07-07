@@ -17,6 +17,7 @@ import { quatMultiply, type Quat, type Vec3 } from "../math";
 import { evaluateCurve, type PeriodicCurve } from "./curves";
 import type { ComposedMotion } from "./components";
 import { CHANNEL_PROJECTION, type SemanticChannel } from "./projection";
+import { evaluateOverrideCurve, type CurvePoint } from "./override-curve";
 
 function evaluateStack(curves: PeriodicCurve[], phase: number): number {
   let value = 0;
@@ -60,6 +61,10 @@ export interface SampleMotionOptions {
    *  pose that keeps generated clips out of the contract T-pose.
    *  Bones listed here always get a track, channels or not. */
   basePose?: Readonly<Record<string, readonly number[]>>;
+  /** §063.6 — user curve overrides: a channel listed here REPLACES
+   *  its generated signal with the periodic point curve. The key
+   *  "bounce" overrides the hips bob. */
+  channelOverrides?: Readonly<Record<string, readonly CurvePoint[]>>;
 }
 
 /**
@@ -95,9 +100,12 @@ export function sampleMotion(
   for (const [channelName, curves] of Object.entries(motion.channels)) {
     if (!curves || curves.length === 0) continue;
     const projection = CHANNEL_PROJECTION[channelName as SemanticChannel];
+    const override = options.channelOverrides?.[channelName];
     for (let key = 0; key < keyCount; key += 1) {
       const phase = (key % frameCount) / frameCount;
-      const value = evaluateStack(curves, phase);
+      const value = override
+        ? evaluateOverrideCurve(override, phase)
+        : evaluateStack(curves, phase);
       for (const target of projection) {
         touch(target.boneName)[key * 3 + AXIS_INDEX[target.axis]] +=
           value * target.gain;
@@ -155,12 +163,15 @@ export function sampleMotion(
   }
 
   let hipsTranslation: SampledMotion["hipsTranslation"] = null;
-  if (motion.bounce.length > 0) {
+  const bounceOverride = options.channelOverrides?.["bounce"];
+  if (motion.bounce.length > 0 || bounceOverride) {
     const hipsRest = restByName.get("DEF-hips")!.position;
     const values = new Float32Array(keyCount * 3);
     for (let key = 0; key < keyCount; key += 1) {
       const phase = (key % frameCount) / frameCount;
-      const lift = evaluateStack(motion.bounce, phase);
+      const lift = bounceOverride
+        ? evaluateOverrideCurve(bounceOverride, phase)
+        : evaluateStack(motion.bounce, phase);
       // Contract-local: root carries the Z-up fix, so local +Z is
       // world up (hips rest z ~= standing hip height).
       values[key * 3] = hipsRest[0];

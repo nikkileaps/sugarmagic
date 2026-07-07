@@ -30,6 +30,7 @@ import {
   Switch,
   Text
 } from "@mantine/core";
+import { CurveEditor } from "@sugarmagic/ui";
 import { LabeledSlider } from "@sugarmagic/ui";
 import {
   createDefaultMotionRecipe,
@@ -37,6 +38,8 @@ import {
   type CharacterModelDefinition,
   type MotionRecipe
 } from "@sugarmagic/domain";
+import { evaluateOverrideCurve } from "@sugarmagic/character-rig";
+import { Select } from "@mantine/core";
 import { CharacterPreview, type CharacterPreviewSlot } from "../CharacterPreview";
 import { PoseViewport } from "./PoseViewport";
 import type { CharacterWizardServices } from "../character-wizard/CharacterWizard";
@@ -70,6 +73,31 @@ export interface AnimationPanelProps {
   onClose: () => void;
 }
 
+/** §063.6 — editable semantic curves per generator. L/R-paired
+ *  locomotion channels are deliberately absent (editing one side
+ *  breaks gait symmetry; that is DCC territory). */
+const EDITABLE_CHANNELS: Record<string, Array<{ value: string; label: string }>> = {
+  idle: [
+    { value: "breathing", label: "Breathing" },
+    { value: "weightShift", label: "Weight Shift" },
+    { value: "headTurn", label: "Head Motion" },
+    { value: "armDrift", label: "Arm Drift" },
+    { value: "bounce", label: "Bounce" }
+  ],
+  walk: [
+    { value: "weightShift", label: "Weight Shift" },
+    { value: "hipTwist", label: "Hip Twist" },
+    { value: "torsoLean", label: "Torso Lean" },
+    { value: "bounce", label: "Bounce" }
+  ],
+  run: [
+    { value: "weightShift", label: "Weight Shift" },
+    { value: "hipTwist", label: "Hip Twist" },
+    { value: "torsoLean", label: "Torso Lean" },
+    { value: "bounce", label: "Bounce" }
+  ]
+};
+
 const PERSONALITY_LABELS: Array<{
   key: keyof MotionRecipe["personality"];
   label: string;
@@ -96,6 +124,9 @@ export function AnimationPanel(props: AnimationPanelProps) {
   const [previewPlaying, setPreviewPlaying] = useState(true);
   // §063.5 pose adjust mode.
   const [poseMode, setPoseMode] = useState(false);
+  // §063.6 curve editing.
+  const [curveMode, setCurveMode] = useState(false);
+  const [curveChannel, setCurveChannel] = useState("breathing");
   const [poseMirroring, setPoseMirroring] = useState(true);
   const [relaxedPose, setRelaxedPose] = useState<Readonly<
     Record<string, readonly number[]>
@@ -253,6 +284,55 @@ export function AnimationPanel(props: AnimationPanelProps) {
     },
     [regenerate]
   );
+
+  // §063.6 — current points for the edited channel: the override
+  // if present, else a sampled snapshot of the generated signal.
+  const curvePoints = useMemo(() => {
+    if (!active || active.source !== "generated") return null;
+    const override = active.recipe.curveOverrides?.[curveChannel];
+    if (override && override.length >= 2) return override;
+    return services.sampleChannel(active.recipe, curveChannel, 8);
+  }, [active, curveChannel, services]);
+  const curveRange = useMemo(() => {
+    if (!curvePoints) return { min: -0.1, max: 0.1 };
+    let magnitude = 0.02;
+    for (const point of curvePoints) {
+      magnitude = Math.max(magnitude, Math.abs(point.y) * 1.6);
+    }
+    return { min: -magnitude, max: magnitude };
+  }, [curvePoints]);
+
+  const handleCurveChange = useCallback(
+    (points: Array<{ x: number; y: number }>) => {
+      setSlots((current) => {
+        if (!current) return current;
+        const state = current[activeSlot];
+        const recipe: MotionRecipe = {
+          ...state.recipe,
+          curveOverrides: {
+            ...state.recipe.curveOverrides,
+            [curveChannel]: points
+          }
+        };
+        const next = { ...current, [activeSlot]: { ...state, recipe } };
+        regenerate(activeSlot, next[activeSlot], false);
+        return next;
+      });
+    },
+    [activeSlot, curveChannel, regenerate]
+  );
+  const handleCurveReset = useCallback(() => {
+    setSlots((current) => {
+      if (!current) return current;
+      const state = current[activeSlot];
+      const overrides = { ...state.recipe.curveOverrides };
+      delete overrides[curveChannel];
+      const recipe: MotionRecipe = { ...state.recipe, curveOverrides: overrides };
+      const next = { ...current, [activeSlot]: { ...state, recipe } };
+      regenerate(activeSlot, next[activeSlot], true);
+      return next;
+    });
+  }, [activeSlot, curveChannel, regenerate]);
 
   const chooseSource = useCallback(
     (source: SlotState["source"]) => {
@@ -427,6 +507,16 @@ export function AnimationPanel(props: AnimationPanelProps) {
                 checked={poseMode}
                 onChange={(event) => setPoseMode(event.currentTarget.checked)}
               />
+              {active?.source === "generated" && !poseMode ? (
+                <Switch
+                  size="xs"
+                  label="Edit curves"
+                  checked={curveMode}
+                  onChange={(event) =>
+                    setCurveMode(event.currentTarget.checked)
+                  }
+                />
+              ) : null}
               {poseMode ? (
                 <Switch
                   size="xs"
@@ -463,6 +553,42 @@ export function AnimationPanel(props: AnimationPanelProps) {
                 Generated for personality sliders.
               </Text>
             )}
+
+            {curveMode && !poseMode && active?.source === "generated" && curvePoints ? (
+              <Group gap="sm" align="flex-start" wrap="nowrap">
+                <Stack gap={4} w={170}>
+                  <Select
+                    label="Curve"
+                    size="xs"
+                    data={
+                      EDITABLE_CHANNELS[active.recipe.generatorId] ??
+                      EDITABLE_CHANNELS.idle!
+                    }
+                    value={curveChannel}
+                    onChange={(value) => {
+                      if (value) setCurveChannel(value);
+                    }}
+                  />
+                  <Button size="compact-xs" variant="subtle" color="gray" onClick={handleCurveReset}>
+                    Reset curve
+                  </Button>
+                  <Text size="xs" c="var(--sm-color-subtext)">
+                    Drag points; double-click to add, double-click a
+                    point to remove. One loop, left to right; the
+                    ends wrap.
+                  </Text>
+                </Stack>
+                <Box style={{ flex: 1 }}>
+                  <CurveEditor
+                    points={[...curvePoints]}
+                    yMin={curveRange.min}
+                    yMax={curveRange.max}
+                    onChange={handleCurveChange}
+                    evaluate={(pts, phase) => evaluateOverrideCurve(pts, phase)}
+                  />
+                </Box>
+              </Group>
+            ) : null}
 
             {poseMode && modelBlobUrl && relaxedPose ? (
               <>

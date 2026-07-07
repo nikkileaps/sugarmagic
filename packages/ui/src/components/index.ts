@@ -14,6 +14,7 @@ export {
   type CssColorFieldProps
 } from "./ColorField";
 export { KindTabs, type KindTabsOption, type KindTabsProps } from "./KindTabs";
+export { CurveEditor, type CurveEditorPoint, type CurveEditorProps } from "./CurveEditor";
 export { LabeledSlider, type LabeledSliderProps } from "./LabeledSlider";
 export { MaskPreview, type MaskPreviewProps } from "./MaskPreview";
 export {

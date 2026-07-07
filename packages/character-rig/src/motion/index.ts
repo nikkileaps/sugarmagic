@@ -20,6 +20,11 @@ export {
 } from "./projection";
 export { RELAXED_ARM_POSE, composeBasePose } from "./base-pose";
 export {
+  evaluateOverrideCurve,
+  normalizeOverridePoints,
+  type CurvePoint
+} from "./override-curve";
+export {
   composeComponents,
   type ComposedMotion,
   type MotionComponent,

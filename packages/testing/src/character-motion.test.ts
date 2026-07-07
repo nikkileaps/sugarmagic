@@ -12,6 +12,8 @@ import {
   LOCOMOTION_COMPONENTS,
   RELAXED_ARM_POSE,
   composeBasePose,
+  evaluateOverrideCurve,
+  normalizeOverridePoints,
   composeComponents,
   evaluateCurve,
   generateIdleChannels,
@@ -305,6 +307,67 @@ describe("motion core (Plan 063)", () => {
       (track) => track.boneName === "DEF-upper_arm.L"
     )!;
     expect([...posedArm.rotations]).not.toEqual([...plainArm.rotations]);
+  });
+
+  it("override curves are periodic, hit their control points, and replace channels (063.6)", () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 0.25, y: 1 },
+      { x: 0.5, y: 0 },
+      { x: 0.75, y: -1 }
+    ];
+    // Control points are interpolated exactly.
+    expect(evaluateOverrideCurve(points, 0.25)).toBeCloseTo(1, 6);
+    expect(evaluateOverrideCurve(points, 0.75)).toBeCloseTo(-1, 6);
+    // Periodic wrap: phase 1.25 == phase 0.25; seam continuity.
+    expect(evaluateOverrideCurve(points, 1.25)).toBeCloseTo(
+      evaluateOverrideCurve(points, 0.25),
+      9
+    );
+    expect(evaluateOverrideCurve(points, 0.999)).toBeCloseTo(
+      evaluateOverrideCurve(points, -0.001),
+      2
+    );
+    // Normalization sorts, clamps, dedupes.
+    const normalized = normalizeOverridePoints([
+      { x: 0.5, y: 1 },
+      { x: 0.505, y: 2 },
+      { x: 1.4, y: 3 },
+      { x: -0.2, y: 4 }
+    ]);
+    expect(normalized[0]!.x).toBe(0);
+    expect(normalized.length).toBe(3);
+    // A flat-zero override silences a channel in the sampled clip.
+    const plain = sampleMotion(generateIdleChannels(IDLE_DEFAULTS));
+    const silenced = sampleMotion(generateIdleChannels(IDLE_DEFAULTS), {
+      channelOverrides: {
+        breathing: [
+          { x: 0, y: 0 },
+          { x: 0.5, y: 0 }
+        ]
+      }
+    });
+    const spineOf = (motion: SampledMotion) =>
+      trackAmplitude(motion, "DEF-spine.002");
+    expect(spineOf(silenced)).toBeLessThan(spineOf(plain) * 0.2);
+    // Bounce override drives the hips bob.
+    const bounced = sampleMotion(generateIdleChannels(IDLE_DEFAULTS), {
+      channelOverrides: {
+        bounce: [
+          { x: 0, y: 0 },
+          { x: 0.5, y: 0.05 }
+        ]
+      }
+    });
+    const values = bounced.hipsTranslation!.values;
+    let range = 0;
+    let min = Infinity, max = -Infinity;
+    for (let key = 0; key < values.length / 3; key += 1) {
+      min = Math.min(min, values[key * 3 + 2]!);
+      max = Math.max(max, values[key * 3 + 2]!);
+    }
+    range = max - min;
+    expect(range).toBeGreaterThan(0.04);
   });
 
   it("rest pose is the baseline: zero-amplitude curves emit rest rotations", () => {
