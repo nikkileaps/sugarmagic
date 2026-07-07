@@ -171,9 +171,60 @@ export function CharacterPreview({
     scene.add(stage);
 
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    camera.position.set(2.4, 1.6, 3.6);
-    camera.lookAt(0, 0.9, 0);
     cameraRef.current = camera;
+
+    // Orbit camera: drag rotates, wheel zooms (nikki, 2026-07-07).
+    const orbit = {
+      yaw: Math.atan2(2.4, 3.6),
+      pitch: Math.asin(1.6 / Math.hypot(2.4, 1.6, 3.6)),
+      radius: Math.hypot(2.4, 1.6, 3.6),
+      targetY: 0.9
+    };
+    const applyCamera = () => {
+      camera.position.set(
+        Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius,
+        orbit.targetY + Math.sin(orbit.pitch) * orbit.radius,
+        Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * orbit.radius
+      );
+      camera.lookAt(0, orbit.targetY, 0);
+    };
+    applyCamera();
+    let dragging = false;
+    let lastPointer: [number, number] = [0, 0];
+    const onPointerDown = (event: PointerEvent) => {
+      renderer.domElement.setPointerCapture(event.pointerId);
+      dragging = true;
+      lastPointer = [event.clientX, event.clientY];
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging) return;
+      const dx = event.clientX - lastPointer[0];
+      const dy = event.clientY - lastPointer[1];
+      lastPointer = [event.clientX, event.clientY];
+      orbit.yaw -= dx * 0.008;
+      orbit.pitch = Math.min(
+        1.35,
+        Math.max(-0.35, orbit.pitch + dy * 0.006)
+      );
+      applyCamera();
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      renderer.domElement.releasePointerCapture(event.pointerId);
+      dragging = false;
+    };
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      orbit.radius = Math.min(
+        14,
+        Math.max(1, orbit.radius * (1 + event.deltaY * 0.001))
+      );
+      applyCamera();
+    };
+    renderer.domElement.style.touchAction = "none";
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
     const tick = () => {
       animationIdRef.current = requestAnimationFrame(tick);
@@ -207,6 +258,10 @@ export function CharacterPreview({
 
     return () => {
       observer?.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
       if (animationIdRef.current !== null) {
         cancelAnimationFrame(animationIdRef.current);
       }
