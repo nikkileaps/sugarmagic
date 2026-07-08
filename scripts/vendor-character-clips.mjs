@@ -359,6 +359,27 @@ function computeRelaxedPose(document, bin) {
     const offset = qMul(qConj(rest), mean);
     offsets[node.name] = offset.map((component) => Number(component.toFixed(6)));
   }
+  // SYMMETRIZE L/R pairs (2026-07-08): the library idle is a
+  // combat stance and holds the right arm further back; its raw
+  // per-side means bake that asymmetry into every generated clip
+  // (invisible until weights made sleeves follow arms). Mirror-
+  // average each pair so the relaxed hang is symmetric.
+  const qMirror = (q) => [q[0], -q[1], -q[2], q[3]];
+  for (const name of Object.keys(offsets)) {
+    if (!name.endsWith(".L")) continue;
+    const twin = `${name.slice(0, -2)}.R`;
+    if (!offsets[twin]) continue;
+    const left = offsets[name];
+    const mirroredRight = qMirror(offsets[twin]);
+    const sign =
+      left[0] * mirroredRight[0] + left[1] * mirroredRight[1] +
+      left[2] * mirroredRight[2] + left[3] * mirroredRight[3] >= 0 ? 1 : -1;
+    const sum = left.map((c, i) => c + mirroredRight[i] * sign);
+    const norm = Math.hypot(...sum) || 1;
+    const averaged = sum.map((c) => Number((c / norm).toFixed(6)));
+    offsets[name] = averaged;
+    offsets[twin] = qMirror(averaged).map((c) => Number(c.toFixed(6)));
+  }
   return offsets;
 }
 
