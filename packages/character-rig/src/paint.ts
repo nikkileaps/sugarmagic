@@ -408,4 +408,129 @@ export function mirrorWeights(
   return affected;
 }
 
+/**
+ * Copy weights onto every vertex of a TARGET piece from the
+ * nearest vertex of a SOURCE piece — the DCC "transfer weights
+ * from nearest surface" workflow for layered clothing (Plan 064,
+ * the armpit problem): the body's solver weights are right, so
+ * clothing takes them wholesale and moves identically to the skin
+ * underneath. Spatial-hash nearest match; returns affected
+ * vertices.
+ */
+export function transferWeights(
+  mesh: MeshData,
+  weights: SkinWeights,
+  target: { start: number; end: number },
+  source: { start: number; end: number }
+): number[] {
+  // Hash the source vertices.
+  let minD = [Infinity, Infinity, Infinity];
+  let maxD = [-Infinity, -Infinity, -Infinity];
+  for (let vertex = source.start; vertex < source.end; vertex += 1) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = mesh.positions[vertex * 3 + axis]!;
+      if (value < minD[axis]!) minD[axis] = value;
+      if (value > maxD[axis]!) maxD[axis] = value;
+    }
+  }
+  const diagonal = Math.hypot(
+    maxD[0]! - minD[0]!,
+    maxD[1]! - minD[1]!,
+    maxD[2]! - minD[2]!
+  );
+  if (!(diagonal > 0)) return [];
+  const cell = Math.max(diagonal / 32, 1e-6);
+  const keyOf = (x: number, y: number, z: number) =>
+    `${Math.floor(x / cell)}:${Math.floor(y / cell)}:${Math.floor(z / cell)}`;
+  const hash = new Map<string, number[]>();
+  for (let vertex = source.start; vertex < source.end; vertex += 1) {
+    const key = keyOf(
+      mesh.positions[vertex * 3]!,
+      mesh.positions[vertex * 3 + 1]!,
+      mesh.positions[vertex * 3 + 2]!
+    );
+    const bucket = hash.get(key);
+    if (bucket) bucket.push(vertex);
+    else hash.set(key, [vertex]);
+  }
+
+  const affected: number[] = [];
+  for (let vertex = target.start; vertex < target.end; vertex += 1) {
+    const x = mesh.positions[vertex * 3]!;
+    const y = mesh.positions[vertex * 3 + 1]!;
+    const z = mesh.positions[vertex * 3 + 2]!;
+    // Expanding ring search around the vertex's cell.
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    const cz = Math.floor(z / cell);
+    let best = -1;
+    let bestSq = Infinity;
+    for (let ring = 0; ring < 33 && best === -1; ring += 1) {
+      for (let ox = -ring; ox <= ring; ox += 1) {
+        for (let oy = -ring; oy <= ring; oy += 1) {
+          for (let oz = -ring; oz <= ring; oz += 1) {
+            if (
+              Math.max(Math.abs(ox), Math.abs(oy), Math.abs(oz)) !== ring
+            ) {
+              continue;
+            }
+            const bucket = hash.get(`${cx + ox}:${cy + oy}:${cz + oz}`);
+            if (!bucket) continue;
+            for (const candidate of bucket) {
+              const dx = mesh.positions[candidate * 3]! - x;
+              const dy = mesh.positions[candidate * 3 + 1]! - y;
+              const dz = mesh.positions[candidate * 3 + 2]! - z;
+              const distanceSq = dx * dx + dy * dy + dz * dz;
+              if (distanceSq < bestSq) {
+                bestSq = distanceSq;
+                best = candidate;
+              }
+            }
+          }
+        }
+      }
+      // One extra ring after the first hit (grid-boundary safety).
+      if (best !== -1 && ring < 32) {
+        const bucketRing = ring + 1;
+        for (let ox = -bucketRing; ox <= bucketRing; ox += 1) {
+          for (let oy = -bucketRing; oy <= bucketRing; oy += 1) {
+            for (let oz = -bucketRing; oz <= bucketRing; oz += 1) {
+              if (
+                Math.max(Math.abs(ox), Math.abs(oy), Math.abs(oz)) !==
+                bucketRing
+              ) {
+                continue;
+              }
+              const bucket = hash.get(
+                `${cx + ox}:${cy + oy}:${cz + oz}`
+              );
+              if (!bucket) continue;
+              for (const candidate of bucket) {
+                const dx = mesh.positions[candidate * 3]! - x;
+                const dy = mesh.positions[candidate * 3 + 1]! - y;
+                const dz = mesh.positions[candidate * 3 + 2]! - z;
+                const distanceSq = dx * dx + dy * dy + dz * dz;
+                if (distanceSq < bestSq) {
+                  bestSq = distanceSq;
+                  best = candidate;
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (best === -1) continue;
+    for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+      weights.joints[vertex * MAX_INFLUENCES + slot] =
+        weights.joints[best * MAX_INFLUENCES + slot]!;
+      weights.weights[vertex * MAX_INFLUENCES + slot] =
+        weights.weights[best * MAX_INFLUENCES + slot]!;
+    }
+    affected.push(vertex);
+  }
+  return affected;
+}
+
 export { buildVertexAdjacency };
