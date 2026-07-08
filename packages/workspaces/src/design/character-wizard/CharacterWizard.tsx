@@ -726,7 +726,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
   );
 
   // Region re-solve (Plan 064): the solver, scoped to one limb's
-  // bones — the systematic sleeve fix.
+  // bones — the systematic sleeve fix. When a box SELECTION exists
+  // it defines the target set instead of the region partition:
+  // the partition is derived from the pristine solve and inherits
+  // its armpit leaks (the bunched-sleeve bug, 2026-07-08), while a
+  // T-pose box catches every vertex, hidden twins and leaks
+  // included. The region scope still names the bone chain.
   const [resolving, setResolving] = useState(false);
   const handleResolveRegion = useCallback(() => {
     if (!generated || !regionSet || !paintScope.startsWith("region:")) return;
@@ -735,11 +740,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
     setTimeout(() => {
       try {
         const segments = computeBoneSegments(generated.skeleton);
+        const targetSet = selection.size > 0 ? selection : regionSet;
         const affected = resolveRegionWeights(
           generated.mesh,
           generated.weights,
           segments,
-          regionSet,
+          targetSet,
           paintScope.slice(7) as BodyRegionId
         );
         if (affected.length > 0) {
@@ -754,7 +760,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
         setResolving(false);
       }
     }, 30);
-  }, [generated, regionSet, paintScope]);
+  }, [generated, regionSet, paintScope, selection]);
 
   const handleFillPiece = useCallback(() => {
     if (!generated) return;
@@ -935,7 +941,9 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   >
                     {resolving
                       ? "Re-solving..."
-                      : "Re-solve region weights (auto)"}
+                      : selection.size > 0
+                        ? `Re-solve ${selection.size} selected (auto)`
+                        : "Re-solve region weights (auto)"}
                   </Menu.Item>
                   <Menu.Item onClick={() => handleMirror("leftToRight")}>
                     {"Mirror weights L > R"}
