@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { STANDARD_RIG_CORE } from "@sugarmagic/domain";
+import { STANDARD_RIG_CORE_WITH_TAIL } from "@sugarmagic/domain";
 
 type Quad = [number, number, number, number];
 
@@ -42,7 +42,8 @@ const HANDLES: Array<{
   pivotBone: string;
   /** The joint the rotation pivots around (pivotBone's head). */
   label: string;
-  mirror: { handleBone: string; pivotBone: string };
+  /** Sagittal handles (tail) have no mirror twin. */
+  mirror?: { handleBone: string; pivotBone: string };
 }> = [
   {
     handleBone: "DEF-hand.L",
@@ -55,6 +56,19 @@ const HANDLES: Array<{
     pivotBone: "DEF-upper_arm.R",
     label: "Right wrist",
     mirror: { handleBone: "DEF-hand.L", pivotBone: "DEF-upper_arm.L" }
+  },
+  // Plan 064 — tail stance: mid swings the whole tail at the base,
+  // tip curls the top half. Handles only appear when the bones
+  // exist (tail-less rigs simply have no such nodes).
+  {
+    handleBone: "DEF-tail.002",
+    pivotBone: "DEF-tail.001",
+    label: "Tail (swing)"
+  },
+  {
+    handleBone: "DEF-tail.003",
+    pivotBone: "DEF-tail.002",
+    label: "Tail (curl)"
   }
 ];
 
@@ -106,7 +120,10 @@ export function PoseViewport(props: PoseViewportProps) {
     };
 
     const restByName = new Map(
-      STANDARD_RIG_CORE.bones.map((bone) => [bone.name, bone.restRotation])
+      STANDARD_RIG_CORE_WITH_TAIL.bones.map((bone) => [
+        bone.name,
+        bone.restRotation
+      ])
     );
 
     let disposed = false;
@@ -140,7 +157,12 @@ export function PoseViewport(props: PoseViewportProps) {
       scene.updateMatrixWorld(true);
       for (const handle of handleMeshes) {
         const bone = bonesByName.get(handle.config.handleBone);
-        if (bone) bone.getWorldPosition(handle.mesh.position);
+        if (bone) {
+          bone.getWorldPosition(handle.mesh.position);
+          handle.mesh.visible = true;
+        } else {
+          handle.mesh.visible = false;
+        }
       }
     }
     applyPoseRef.current = applyPose;
@@ -154,7 +176,7 @@ export function PoseViewport(props: PoseViewportProps) {
       // contract names or every bone lookup silently misses (the
       // handles-at-origin bug, 2026-07-07).
       const canonicalBySanitized = new Map(
-        STANDARD_RIG_CORE.bones.map((bone) => [
+        STANDARD_RIG_CORE_WITH_TAIL.bones.map((bone) => [
           THREE.PropertyBinding.sanitizeNodeName(bone.name),
           bone.name
         ])
@@ -269,7 +291,7 @@ export function PoseViewport(props: PoseViewportProps) {
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObjects(
-        handleMeshes.map((handle) => handle.mesh)
+        handleMeshes.filter((h) => h.mesh.visible).map((handle) => handle.mesh)
       )[0];
       if (!hit) return;
       dragging = handleMeshes.find((handle) => handle.mesh === hit.object) ?? null;
@@ -301,7 +323,7 @@ export function PoseViewport(props: PoseViewportProps) {
         dragPoint,
         overrides
       );
-      if (propsRef.current.mirroring) {
+      if (propsRef.current.mirroring && dragging.config.mirror) {
         // Mirror the PRIMARY side's resulting override onto the twin
         // (sagittal reflection of the local rotation).
         const primary = overrides[dragging.config.pivotBone];

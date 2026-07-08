@@ -5,8 +5,9 @@
  * rig: three bones chained off DEF-hips. HAND-AUTHORED, not
  * generated: the vendored library rig has no tail, so this
  * extension is ours — the rest pose is a back-and-up arc
- * (character faces +Z; tail exits at -Z and curls toward
- * vertical, squirrel-style), derived numerically against the
+ * (character faces +Z; tail exits at -Z low and curls steeply
+ * toward vertical — squirrel-upright is the design-center default;
+ * per-character stance lives in pose-adjust overrides), derived numerically against the
  * contract's hips frame (see the plan's 064.1 derivation) and
  * verified by the contract tests.
  *
@@ -26,21 +27,21 @@ export const STANDARD_RIG_TAIL_BONES: readonly StandardRigBone[] = [
     name: "DEF-tail.001",
     parentName: "DEF-hips",
     restPosition: [0, -0.073384, -0.084349],
-    restRotation: [-0.707145, 0, 0, 0.707069],
+    restRotation: [-0.581317, 0, 0, 0.813677],
     restScale: [1, 1, 1]
   },
   {
     name: "DEF-tail.002",
     parentName: "DEF-tail.001",
     restPosition: [0, 0.16, 0],
-    restRotation: [0.260009, 0, 0, 0.965606],
+    restRotation: [0.300146, 0, 0, 0.953893],
     restScale: [1, 1, 1]
   },
   {
     name: "DEF-tail.003",
     parentName: "DEF-tail.002",
     restPosition: [0, 0.16, 0],
-    restRotation: [0.251615, 0, 0, 0.967828],
+    restRotation: [0.168508, 0, 0, 0.9857],
     restScale: [1, 1, 1]
   }
 ];
