@@ -189,8 +189,9 @@ describe("mirrorWeights (Plan 062)", () => {
     setBoneWeightAtVertex(w, 0, 2, 0.3);
     setBoneWeightAtVertex(w, 2, 0, 1);
     // Right side starts all bone 0 (arm.L — wrong on purpose).
-    const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
-    expect(affected.sort()).toEqual([1, 3]);
+    const result = mirrorWeights(mesh, w, { direction: "leftToRight" });
+    expect(result.affected.sort()).toEqual([1, 3]);
+    expect(result.unmatched).toBe(0);
     // v1 mirrors v0: arm.R 0.7, hips 0.3.
     expect(boneWeightOfVertex(w, 1, 1)).toBeCloseTo(0.7, 5);
     expect(boneWeightOfVertex(w, 1, 2)).toBeCloseTo(0.3, 5);
@@ -207,8 +208,9 @@ describe("mirrorWeights (Plan 062)", () => {
     };
     const w = makeWeights(2, ["a", "b"]);
     setBoneWeightAtVertex(w, 0, 1, 1);
-    const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
-    expect(affected).toEqual([]);
+    const result = mirrorWeights(mesh, w, { direction: "leftToRight" });
+    expect(result.affected).toEqual([]);
+    expect(result.unmatched).toBe(1);
     expect(boneWeightOfVertex(w, 1, 0)).toBeCloseTo(1, 5);
   });
 });

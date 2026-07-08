@@ -322,7 +322,7 @@ export function mirrorWeights(
      *  diagonal. */
     tolerance?: number;
   }
-): number[] {
+): { affected: number[]; unmatched: number } {
   const vertexCount = mesh.positions.length / 3;
   const first = options.vertexWindow?.start ?? 0;
   const last = Math.min(options.vertexWindow?.end ?? vertexCount, vertexCount);
@@ -343,7 +343,7 @@ export function mirrorWeights(
     max[2]! - min[2]!
   );
   const tolerance = options.tolerance ?? diagonal * 0.005;
-  if (!(tolerance > 0)) return [];
+  if (!(tolerance > 0)) return { affected: [], unmatched: 0 };
 
   // Column -> mirrored column via bone-name suffix swap.
   const columnMirror = weights.boneOrder.map((name) => {
@@ -367,6 +367,7 @@ export function mirrorWeights(
   }
 
   const affected: number[] = [];
+  let unmatched = 0;
   const toleranceSq = tolerance * tolerance;
   for (let v = first; v < last; v += 1) {
     const x = mesh.positions[v * 3]!;
@@ -399,7 +400,13 @@ export function mirrorWeights(
         }
       }
     }
-    if (best === -1) continue;
+    if (best === -1) {
+      // Asymmetric geometry: no twin. Counted and REPORTED — a
+      // silent 73% miss on an asymmetric jacket produced garbage
+      // that read as "mirroring is broken" (nikki, 2026-07-08).
+      unmatched += 1;
+      continue;
+    }
     for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
       const sourceColumn = weights.joints[best * MAX_INFLUENCES + slot]!;
       weights.joints[v * MAX_INFLUENCES + slot] =
@@ -409,7 +416,7 @@ export function mirrorWeights(
     }
     affected.push(v);
   }
-  return affected;
+  return { affected, unmatched };
 }
 
 /**

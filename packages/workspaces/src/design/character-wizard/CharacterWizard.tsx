@@ -715,11 +715,18 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const handleMirror = useCallback(
     (direction: "leftToRight" | "rightToLeft") => {
       if (!generated) return;
-      const affected = mirrorWeights(generated.mesh, generated.weights, {
+      const result = mirrorWeights(generated.mesh, generated.weights, {
         direction,
         vertexWindow: paintWindow
       });
-      if (affected.length > 0) {
+      const total = result.affected.length + result.unmatched;
+      setShrinkInfo(
+        `mirrored ${result.affected.length} of ${total}` +
+          (result.unmatched > 0
+            ? ` — ${result.unmatched} had NO mirror twin (asymmetric mesh); use Shrinkwrap for those`
+            : "")
+      );
+      if (result.affected.length > 0) {
         paintDirtyRef.current = true;
         setWeightsVersion((version) => version + 1);
       }
