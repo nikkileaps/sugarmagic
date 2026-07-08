@@ -186,15 +186,41 @@ export function AnimationPanel(props: AnimationPanelProps) {
           const boundUrl = bound
             ? assetSources[bound.source.relativeAssetPath]
             : undefined;
+          let pending: SlotState["pending"] = null;
+          let dirty = false;
           if (boundUrl) {
             const clipBytes = await (await fetch(boundUrl)).arrayBuffer();
             const stamped = services.readSlotRecipe(clipBytes);
             if (stamped) {
               recipe = stamped;
               source = "generated";
+              // Regenerate through the CURRENT engine and compare:
+              // generator/base-pose improvements land automatically
+              // as a dirty slot instead of being trapped in stale
+              // files (the six-hour-old-idle bug, 2026-07-08).
+              const fresh = services.generateClip(
+                recipe,
+                prepared.hipScale,
+                prepared.hasTail
+              );
+              const freshBytes = new Uint8Array(fresh.bytes);
+              const boundBytes = new Uint8Array(clipBytes);
+              let differs = freshBytes.length !== boundBytes.length;
+              if (!differs) {
+                for (let i = 0; i < freshBytes.length; i += 1) {
+                  if (freshBytes[i] !== boundBytes[i]) {
+                    differs = true;
+                    break;
+                  }
+                }
+              }
+              if (differs) {
+                pending = fresh;
+                dirty = true;
+              }
             }
           }
-          next[slot] = { source, recipe, pending: null, dirty: false };
+          next[slot] = { source, recipe, pending, dirty };
         }
         setSlots(next);
       } catch (bootError) {
