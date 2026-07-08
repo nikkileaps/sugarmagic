@@ -44,6 +44,8 @@ import type {
 import {
   BODY_REGION_LABELS,
   applyBrushStroke,
+  computeBoneSegments,
+  resolveRegionWeights,
   assignVerticesToBone,
   buildVertexAdjacency,
   computeBodyRegions,
@@ -723,6 +725,37 @@ export function CharacterWizard(props: CharacterWizardProps) {
     [generated, paintWindow]
   );
 
+  // Region re-solve (Plan 064): the solver, scoped to one limb's
+  // bones — the systematic sleeve fix.
+  const [resolving, setResolving] = useState(false);
+  const handleResolveRegion = useCallback(() => {
+    if (!generated || !regionSet || !paintScope.startsWith("region:")) return;
+    setResolving(true);
+    // Yield a frame so the busy state paints before the solve.
+    setTimeout(() => {
+      try {
+        const segments = computeBoneSegments(generated.skeleton);
+        const affected = resolveRegionWeights(
+          generated.mesh,
+          generated.weights,
+          segments,
+          regionSet,
+          paintScope.slice(7) as BodyRegionId
+        );
+        if (affected.length > 0) {
+          paintDirtyRef.current = true;
+          setWeightsVersion((version) => version + 1);
+        }
+      } catch (solveError) {
+        setError(
+          solveError instanceof Error ? solveError.message : String(solveError)
+        );
+      } finally {
+        setResolving(false);
+      }
+    }, 30);
+  }, [generated, regionSet, paintScope]);
+
   const handleFillPiece = useCallback(() => {
     if (!generated) return;
     if (regionSet) {
@@ -895,6 +928,14 @@ export function CharacterWizard(props: CharacterWizardProps) {
                     disabled={paintPiece < 0 && !regionSet}
                   >
                     Fill piece/region with bone
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={handleResolveRegion}
+                    disabled={!regionSet || resolving}
+                  >
+                    {resolving
+                      ? "Re-solving..."
+                      : "Re-solve region weights (auto)"}
                   </Menu.Item>
                   <Menu.Item onClick={() => handleMirror("leftToRight")}>
                     {"Mirror weights L > R"}

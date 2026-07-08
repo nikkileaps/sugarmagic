@@ -79,3 +79,4 @@ export {
   computeBodyRegions,
   type BodyRegionId
 } from "./segmentation";
+export { bonesOfRegion, resolveRegionWeights } from "./region-solve";

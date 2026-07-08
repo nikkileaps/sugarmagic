@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   BODY_REGION_LABELS,
   applyBrushStroke,
+  bonesOfRegion,
+  resolveRegionWeights,
   assignVerticesToBone,
   boneWeightOfVertex,
   computeBodyRegions,
@@ -275,5 +277,95 @@ describe("computeBodyRegions (Plan 064)", () => {
     const torso = regions.get("torso") ?? new Set();
     expect(tail.size === 2 || torso.size === 2).toBe(true);
     expect(tail.size === 1 || torso.size === 1).toBe(false);
+  });
+});
+
+describe("resolveRegionWeights (Plan 064)", () => {
+  it("maps region ids to their bone chains", () => {
+    const boneOrder = [
+      "DEF-hips",
+      "DEF-spine.002",
+      "DEF-shoulder.L",
+      "DEF-upper_arm.L",
+      "DEF-forearm.L",
+      "DEF-hand.L",
+      "DEF-thigh.L",
+      "DEF-tail.001"
+    ];
+    expect(bonesOfRegion(boneOrder, "leftArm")).toEqual(
+      new Set(["DEF-shoulder.L", "DEF-upper_arm.L", "DEF-forearm.L", "DEF-hand.L"])
+    );
+    expect(bonesOfRegion(boneOrder, "leftLeg")).toEqual(new Set(["DEF-thigh.L"]));
+    expect(bonesOfRegion(boneOrder, "tail")).toEqual(new Set(["DEF-tail.001"]));
+    expect(bonesOfRegion(boneOrder, "torso")).toEqual(
+      new Set(["DEF-hips", "DEF-spine.002"])
+    );
+  });
+
+  it("re-solves a limb tube: graduated along the chain, feathered at the edge", () => {
+    // A horizontal tube (the "sleeve") from x=0 to x=1, made of
+    // rings so it has real volume for the voxel solve.
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const RINGS = 21, SIDES = 8, R = 0.08;
+    for (let ring = 0; ring < RINGS; ring += 1) {
+      const x = ring / (RINGS - 1);
+      for (let side = 0; side < SIDES; side += 1) {
+        const angle = (side / SIDES) * Math.PI * 2;
+        positions.push(x, Math.cos(angle) * R, Math.sin(angle) * R);
+      }
+    }
+    for (let ring = 0; ring < RINGS - 1; ring += 1) {
+      for (let side = 0; side < SIDES; side += 1) {
+        const a = ring * SIDES + side;
+        const b = ring * SIDES + ((side + 1) % SIDES);
+        const c = (ring + 1) * SIDES + side;
+        const d = (ring + 1) * SIDES + ((side + 1) % SIDES);
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const mesh: MeshData = {
+      positions: new Float32Array(positions),
+      indices: new Uint32Array(indices)
+    };
+    const vertexCount = positions.length / 3;
+    const boneOrder = ["DEF-spine.002", "DEF-upper_arm.L", "DEF-forearm.L"];
+    const w = makeWeights(vertexCount, boneOrder); // all 100% spine (col 0)
+    // Region: everything past x=0.2 is "arm".
+    const regionSet = new Set<number>();
+    for (let v = 0; v < vertexCount; v += 1) {
+      if (mesh.positions[v * 3]! > 0.2) regionSet.add(v);
+    }
+    const segments = [
+      { boneName: "DEF-upper_arm.L", start: [0.2, 0, 0] as const, end: [0.6, 0, 0] as const },
+      { boneName: "DEF-forearm.L", start: [0.6, 0, 0] as const, end: [1, 0, 0] as const },
+      { boneName: "DEF-spine.002", start: [0, 0, 0] as const, end: [0.2, 0, 0] as const }
+    ];
+    const affected = resolveRegionWeights(
+      mesh, w, segments as never, regionSet, "leftArm", { resolution: 32 }
+    );
+    expect(affected.length).toBe(regionSet.size);
+    // Deep in the forearm zone: forearm dominates.
+    const tip = vertexCount - 1;
+    expect(boneWeightOfVertex(w, tip, 2)).toBeGreaterThan(0.6);
+    // Mid upper-arm zone: upper arm dominates.
+    let mid = -1;
+    for (let v = 0; v < vertexCount; v += 1) {
+      if (Math.abs(mesh.positions[v * 3]! - 0.4) < 0.03) { mid = v; break; }
+    }
+    expect(boneWeightOfVertex(w, mid, 1)).toBeGreaterThan(0.5);
+    // Boundary feather: a vertex just inside the region edge keeps
+    // meaningful spine weight (blend, not a hard cut).
+    let edge = -1;
+    for (const v of regionSet) {
+      if (Math.abs(mesh.positions[v * 3]! - 0.25) < 0.03) { edge = v; break; }
+    }
+    expect(boneWeightOfVertex(w, edge, 0)).toBeGreaterThan(0.15);
+    // Outside the region untouched: still 100% spine.
+    let outside = -1;
+    for (let v = 0; v < vertexCount; v += 1) {
+      if (!regionSet.has(v)) { outside = v; break; }
+    }
+    expect(boneWeightOfVertex(w, outside, 0)).toBeCloseTo(1, 5);
   });
 });
