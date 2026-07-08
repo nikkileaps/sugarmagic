@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyBrushStroke,
+  assignVerticesToBone,
   boneWeightOfVertex,
   buildVertexAdjacency,
   mirrorWeights,
@@ -204,5 +205,16 @@ describe("mirrorWeights (Plan 062)", () => {
     const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
     expect(affected).toEqual([]);
     expect(boneWeightOfVertex(w, 1, 0)).toBeCloseTo(1, 5);
+  });
+});
+
+describe("assignVerticesToBone (Plan 064)", () => {
+  it("rigidly assigns an explicit selection, leaving others alone", () => {
+    const w = makeWeights(4, ["a", "b"]);
+    assignVerticesToBone(w, [1, 3], 1);
+    expect(boneWeightOfVertex(w, 0, 0)).toBeCloseTo(1, 5);
+    expect(boneWeightOfVertex(w, 1, 1)).toBeCloseTo(1, 5);
+    expect(boneWeightOfVertex(w, 2, 0)).toBeCloseTo(1, 5);
+    expect(boneWeightOfVertex(w, 3, 1)).toBeCloseTo(1, 5);
   });
 });

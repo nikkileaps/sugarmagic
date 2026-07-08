@@ -53,6 +53,16 @@ export interface WeightPaintViewportProps {
   /** Bumped by out-of-band weight edits (Fill piece, Reset) so
    *  the heatmap AND the live skin attributes fully resync. */
   weightsVersion: number;
+  /** Box-select mode (Plan 064): left-drag draws a screen-space
+   *  box; verts inside it (piece-filtered; back-facing verts
+   *  excluded unless x-ray) become the selection. Shift-drag adds
+   *  to it. */
+  selectMode: boolean;
+  xray: boolean;
+  /** Current selection (flattened vertex indices) — tinted in the
+   *  heatmap. */
+  selection: ReadonlySet<number>;
+  onSelect: (vertices: number[], additive: boolean) => void;
   /** Paint callback: the clicked face's FLATTENED vertex indices
    *  (rest-space identity — valid even while the mesh is posed by
    *  the Animate toggle). The caller centers the brush on their
@@ -62,6 +72,7 @@ export interface WeightPaintViewportProps {
 
 const HEAT_LOW = new THREE.Color(0x1a2340);
 const HEAT_HIGH = new THREE.Color(0xff4d6d);
+const SELECT_TINT = new THREE.Color(0xf7d774);
 
 export function WeightPaintViewport(props: WeightPaintViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -83,6 +94,9 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   useEffect(() => {
     fullSyncRef.current();
   }, [props.weightsVersion]);
+  useEffect(() => {
+    refreshHeatmapRef.current();
+  }, [props.selection]);
   useEffect(() => {
     mixerControlRef.current(props.animating);
   }, [props.animating]);
@@ -275,6 +289,9 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
           const flat = target.vertexStart + local;
           const weight = boneWeightOfVertex(weights, flat, column);
           const color = HEAT_LOW.clone().lerp(HEAT_HIGH, weight);
+          if (propsRef.current.selection.has(flat)) {
+            color.lerp(SELECT_TINT, 0.65);
+          }
           colorAttribute.setXYZ(local, color.r, color.g, color.b);
         };
         if (vertices) {
@@ -367,6 +384,65 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     let orbiting = false;
     let lastPointer: [number, number] = [0, 0];
 
+    // Box-select state (Plan 064).
+    let boxing = false;
+    let boxAdditive = false;
+    let boxStart: [number, number] = [0, 0];
+    const boxDiv = document.createElement("div");
+    boxDiv.style.position = "absolute";
+    boxDiv.style.border = "1px dashed #f7d774";
+    boxDiv.style.background = "rgba(247, 215, 116, 0.08)";
+    boxDiv.style.pointerEvents = "none";
+    boxDiv.style.display = "none";
+    container.style.position = "relative";
+    container.appendChild(boxDiv);
+
+    function finishBox(endX: number, endY: number) {
+      boxDiv.style.display = "none";
+      const rect = renderer.domElement.getBoundingClientRect();
+      const minX = Math.min(boxStart[0], endX);
+      const maxX = Math.max(boxStart[0], endX);
+      const minY = Math.min(boxStart[1], endY);
+      const maxY = Math.max(boxStart[1], endY);
+      if (maxX - minX < 3 && maxY - minY < 3) return;
+      const isolated = propsRef.current.isolatedPiece;
+      const cameraPosition = camera.getWorldPosition(new THREE.Vector3());
+      const selected: number[] = [];
+      const world = new THREE.Vector3();
+      const normal = new THREE.Vector3();
+      const toCamera = new THREE.Vector3();
+      const projected = new THREE.Vector3();
+      for (const target of paintTargets) {
+        if (isolated >= 0 && target.rangeIndex !== isolated) continue;
+        const geometry = target.mesh.geometry as THREE.BufferGeometry;
+        const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
+        const normals = geometry.getAttribute("normal") as THREE.BufferAttribute | null;
+        target.mesh.updateWorldMatrix(true, false);
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(
+          target.mesh.matrixWorld
+        );
+        for (let local = 0; local < positions.count; local += 1) {
+          world.fromBufferAttribute(positions, local);
+          target.mesh.localToWorld(world);
+          // Backface cull unless x-ray: keep verts whose normal
+          // faces the camera.
+          if (!propsRef.current.xray && normals) {
+            normal.fromBufferAttribute(normals, local).applyMatrix3(normalMatrix);
+            toCamera.copy(cameraPosition).sub(world);
+            if (normal.dot(toCamera) <= 0) continue;
+          }
+          projected.copy(world).project(camera);
+          if (projected.z > 1) continue;
+          const sx = ((projected.x + 1) / 2) * rect.width;
+          const sy = ((1 - projected.y) / 2) * rect.height;
+          if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) {
+            selected.push(target.vertexStart + local);
+          }
+        }
+      }
+      propsRef.current.onSelect(selected, boxAdditive);
+    }
+
     function pointerToNdc(event: PointerEvent) {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set(
@@ -406,6 +482,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         lastPointer = [event.clientX, event.clientY];
         return;
       }
+      if (propsRef.current.selectMode) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        boxing = true;
+        boxAdditive = event.shiftKey;
+        boxStart = [event.clientX - rect.left, event.clientY - rect.top];
+        boxDiv.style.display = "block";
+        boxDiv.style.left = `${boxStart[0]}px`;
+        boxDiv.style.top = `${boxStart[1]}px`;
+        boxDiv.style.width = "0px";
+        boxDiv.style.height = "0px";
+        return;
+      }
       painting = true;
       paintAt(event);
     }
@@ -418,6 +506,16 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         orbit.yaw -= dx * 0.008;
         orbit.pitch = Math.min(1.3, Math.max(-0.4, orbit.pitch + dy * 0.006));
         applyCamera();
+        return;
+      }
+      if (boxing) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        boxDiv.style.left = `${Math.min(boxStart[0], x)}px`;
+        boxDiv.style.top = `${Math.min(boxStart[1], y)}px`;
+        boxDiv.style.width = `${Math.abs(x - boxStart[0])}px`;
+        boxDiv.style.height = `${Math.abs(y - boxStart[1])}px`;
         return;
       }
       if (painting) {
@@ -437,6 +535,11 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
 
     function handlePointerUp(event: PointerEvent) {
       renderer.domElement.releasePointerCapture(event.pointerId);
+      if (boxing) {
+        boxing = false;
+        const rect = renderer.domElement.getBoundingClientRect();
+        finishBox(event.clientX - rect.left, event.clientY - rect.top);
+      }
       painting = false;
       orbiting = false;
     }
@@ -489,6 +592,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       renderer.domElement.removeEventListener("wheel", handleWheel);
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
       renderer.dispose();
+      container.removeChild(boxDiv);
       container.removeChild(renderer.domElement);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -39,6 +39,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   applyBrushStroke,
+  assignVerticesToBone,
   buildVertexAdjacency,
   fillVerticesWithBone,
   mirrorWeights,
@@ -307,6 +308,27 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Bumped on out-of-band weight edits (Fill piece / Reset) so the
   // viewport fully resyncs heatmap + live skin.
   const [weightsVersion, setWeightsVersion] = useState(0);
+  // Box selection (Plan 064): select precisely, then operate.
+  const [selectMode, setSelectMode] = useState(false);
+  const [xray, setXray] = useState(true);
+  const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
+  const handleSelect = useCallback(
+    (vertices: number[], additive: boolean) => {
+      setSelection((current) => {
+        if (!additive) return new Set(vertices);
+        const next = new Set(current);
+        for (const vertex of vertices) next.add(vertex);
+        return next;
+      });
+    },
+    []
+  );
+  const handleAssignSelection = useCallback(() => {
+    if (!generated || selection.size === 0) return;
+    assignVerticesToBone(generated.weights, [...selection], paintBoneColumn);
+    paintDirtyRef.current = true;
+    setWeightsVersion((version) => version + 1);
+  }, [generated, selection, paintBoneColumn]);
   const paintDirtyRef = useRef(false);
   const adjacencyRef = useRef<Array<Set<number>> | null>(null);
   const pristineWeightsRef = useRef<{
@@ -844,6 +866,41 @@ export function CharacterWizard(props: CharacterWizardProps) {
               </Button>
               <Switch
                 size="xs"
+                label="Box select"
+                checked={selectMode}
+                onChange={(event) =>
+                  setSelectMode(event.currentTarget.checked)
+                }
+              />
+              {selectMode ? (
+                <>
+                  <Switch
+                    size="xs"
+                    label="X-ray"
+                    checked={xray}
+                    onChange={(event) => setXray(event.currentTarget.checked)}
+                  />
+                  <Button
+                    size="compact-xs"
+                    variant="light"
+                    disabled={selection.size === 0}
+                    onClick={handleAssignSelection}
+                  >
+                    {`Assign ${selection.size || ""} to bone`}
+                  </Button>
+                  <Button
+                    size="compact-xs"
+                    variant="subtle"
+                    color="gray"
+                    disabled={selection.size === 0}
+                    onClick={() => setSelection(new Set())}
+                  >
+                    Clear
+                  </Button>
+                </>
+              ) : null}
+              <Switch
+                size="xs"
                 label="Animate"
                 checked={paintAnimating}
                 onChange={(event) =>
@@ -897,6 +954,10 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 animating={paintAnimating}
                 isolatedPiece={paintPiece}
                 weightsVersion={weightsVersion}
+                selectMode={selectMode}
+                xray={xray}
+                selection={selection}
+                onSelect={handleSelect}
                 onPaint={handlePaint}
               />
             </Box>

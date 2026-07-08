@@ -65,6 +65,7 @@ export { detectRigLandmarks } from "./detection";
 export { getStandardRigHipHeight } from "./skeleton";
 export {
   applyBrushStroke,
+  assignVerticesToBone,
   boneWeightOfVertex,
   fillVerticesWithBone,
   mirrorWeights,

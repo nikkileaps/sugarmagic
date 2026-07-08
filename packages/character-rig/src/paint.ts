@@ -408,4 +408,20 @@ export function mirrorWeights(
   return affected;
 }
 
+/**
+ * Rigidly assign an explicit vertex list to one bone — the
+ * operation behind box-selection assignment (Plan 064): select
+ * precisely (x-ray box), then set ownership in one step.
+ */
+export function assignVerticesToBone(
+  weights: SkinWeights,
+  vertices: readonly number[],
+  boneColumn: number
+): number[] {
+  for (const vertex of vertices) {
+    setBoneWeightAtVertex(weights, vertex, boneColumn, 1);
+  }
+  return [...vertices];
+}
+
 export { buildVertexAdjacency };
