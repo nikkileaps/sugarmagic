@@ -26,6 +26,7 @@ import {
   Button,
   Group,
   Menu,
+  MultiSelect,
   Paper,
   SegmentedControl,
   Select,
@@ -766,12 +767,18 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Shrinkwrap weights (Plan 064, nikki's ask): robust transfer
   // (Abdrashitov et al. 2023) from a source piece onto the current
   // scope — confident surface matches + inpainting.
-  const [shrinkSource, setShrinkSource] = useState(-1);
+  const [shrinkSources, setShrinkSources] = useState<string[]>([]);
   const [shrinkInfo, setShrinkInfo] = useState<string | null>(null);
   const handleShrinkwrap = useCallback(() => {
-    if (!generated || shrinkSource < 0) return;
-    const source = generated.ranges[shrinkSource];
-    if (!source) return;
+    if (!generated || shrinkSources.length === 0) return;
+    const sourceWindows = shrinkSources
+      .map((value) => generated.ranges[Number(value)])
+      .filter((range): range is NonNullable<typeof range> => Boolean(range))
+      .map((range) => ({
+        start: range.vertexStart,
+        end: range.vertexStart + range.vertexCount
+      }));
+    if (sourceWindows.length === 0) return;
     const targetScope: ReadonlySet<number> | { start: number; end: number } | null =
       selection.size > 0
         ? selection
@@ -785,10 +792,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
           generated.mesh,
           generated.weights,
           targetScope,
-          {
-            start: source.vertexStart,
-            end: source.vertexStart + source.vertexCount
-          }
+          sourceWindows
         );
         setShrinkInfo(
           `matched ${result.matched}, inpainted ${result.inpainted}` +
@@ -806,7 +810,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
         setResolving(false);
       }
     }, 30);
-  }, [generated, shrinkSource, selection, regionSet, paintWindow]);
+  }, [generated, shrinkSources, selection, regionSet, paintWindow]);
 
   // Scoped reset: restore the PRISTINE auto-solve weights for the
   // current scope only (selection > region > piece) — healing one
@@ -995,11 +999,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   setPaintAnimating(event.currentTarget.checked)
                 }
               />
-              <Select
+              <MultiSelect
                 label="Shrinkwrap from"
                 size="xs"
-                w={150}
-                placeholder="source piece"
+                w={210}
+                placeholder="source piece(s)"
                 disabled={paintPiece < 0 && !regionSet && selection.size === 0}
                 data={
                   generated
@@ -1011,22 +1015,24 @@ export function CharacterWizard(props: CharacterWizardProps) {
                         .filter((option) => Number(option.value) !== paintPiece)
                     : []
                 }
-                value={shrinkSource >= 0 ? String(shrinkSource) : null}
-                onChange={(value) => {
-                  if (value !== null) setShrinkSource(Number(value));
-                }}
+                value={shrinkSources}
+                onChange={setShrinkSources}
               />
               <Button
                 size="compact-xs"
                 variant="light"
                 loading={resolving}
                 disabled={
-                  shrinkSource < 0 ||
+                  shrinkSources.length === 0 ||
                   (paintPiece < 0 && !regionSet && selection.size === 0)
                 }
                 onClick={handleShrinkwrap}
               >
-                Shrinkwrap
+                {selection.size > 0
+                  ? `Shrinkwrap ${selection.size} selected`
+                  : regionSet
+                    ? "Shrinkwrap region"
+                    : "Shrinkwrap piece"}
               </Button>
               {shrinkInfo ? (
                 <Text size="xs" c="var(--sm-color-subtext)">

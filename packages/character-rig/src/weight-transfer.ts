@@ -143,9 +143,15 @@ export function shrinkwrapWeights(
   mesh: MeshData,
   weights: SkinWeights,
   target: ReadonlySet<number> | { start: number; end: number },
-  source: { start: number; end: number },
+  /** One or several source pieces. Layered outfits cascade: wrap
+   *  the innermost garment from the body, then each outer layer
+   *  from EVERYTHING beneath it — an open jacket's front panels
+   *  match the shirt they hang over, not the body two layers
+   *  down (the arm-flooded-front bug, 2026-07-08). */
+  source: { start: number; end: number } | Array<{ start: number; end: number }>,
   options: ShrinkwrapOptions = {}
 ): ShrinkwrapResult {
+  const sources = Array.isArray(source) ? source : [source];
   const targetVerts: number[] =
     target instanceof Set || (typeof (target as Set<number>).has === "function")
       ? [...(target as ReadonlySet<number>)]
@@ -161,20 +167,20 @@ export function shrinkwrapWeights(
   const sourceTris: number[] = [];
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  const inAnySource = (vertex: number) =>
+    sources.some((window) => vertex >= window.start && vertex < window.end);
   for (let t = 0; t < mesh.indices.length; t += 3) {
     const a = mesh.indices[t]!, b = mesh.indices[t + 1]!, c = mesh.indices[t + 2]!;
-    if (
-      a >= source.start && a < source.end &&
-      b >= source.start && b < source.end &&
-      c >= source.start && c < source.end
-    ) {
+    if (inAnySource(a) && inAnySource(b) && inAnySource(c)) {
       sourceTris.push(t);
     }
   }
-  for (let v = source.start; v < source.end; v += 1) {
-    minX = Math.min(minX, p[v * 3]!); maxX = Math.max(maxX, p[v * 3]!);
-    minY = Math.min(minY, p[v * 3 + 1]!); maxY = Math.max(maxY, p[v * 3 + 1]!);
-    minZ = Math.min(minZ, p[v * 3 + 2]!); maxZ = Math.max(maxZ, p[v * 3 + 2]!);
+  for (const window of sources) {
+    for (let v = window.start; v < window.end; v += 1) {
+      minX = Math.min(minX, p[v * 3]!); maxX = Math.max(maxX, p[v * 3]!);
+      minY = Math.min(minY, p[v * 3 + 1]!); maxY = Math.max(maxY, p[v * 3 + 1]!);
+      minZ = Math.min(minZ, p[v * 3 + 2]!); maxZ = Math.max(maxZ, p[v * 3 + 2]!);
+    }
   }
   const diagonal = Math.hypot(maxX - minX, maxY - minY, maxZ - minZ);
   const dMax = options.distanceThreshold ?? diagonal * 0.04;
