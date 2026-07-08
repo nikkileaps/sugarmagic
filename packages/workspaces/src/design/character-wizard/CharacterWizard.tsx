@@ -46,6 +46,7 @@ import {
   applyBrushStroke,
   computeBoneSegments,
   resolveRegionWeights,
+  shrinkwrapWeights,
   assignVerticesToBone,
   buildVertexAdjacency,
   computeBodyRegions,
@@ -762,6 +763,78 @@ export function CharacterWizard(props: CharacterWizardProps) {
     }, 30);
   }, [generated, regionSet, paintScope, selection]);
 
+  // Shrinkwrap weights (Plan 064, nikki's ask): robust transfer
+  // (Abdrashitov et al. 2023) from a source piece onto the current
+  // scope — confident surface matches + inpainting.
+  const [shrinkSource, setShrinkSource] = useState(-1);
+  const [shrinkInfo, setShrinkInfo] = useState<string | null>(null);
+  const handleShrinkwrap = useCallback(() => {
+    if (!generated || shrinkSource < 0) return;
+    const source = generated.ranges[shrinkSource];
+    if (!source) return;
+    const targetScope: ReadonlySet<number> | { start: number; end: number } | null =
+      selection.size > 0
+        ? selection
+        : regionSet ?? paintWindow ?? null;
+    if (!targetScope) return;
+    setResolving(true);
+    setShrinkInfo(null);
+    setTimeout(() => {
+      try {
+        const result = shrinkwrapWeights(
+          generated.mesh,
+          generated.weights,
+          targetScope,
+          {
+            start: source.vertexStart,
+            end: source.vertexStart + source.vertexCount
+          }
+        );
+        setShrinkInfo(
+          `matched ${result.matched}, inpainted ${result.inpainted}` +
+            (result.untouched > 0 ? `, untouched ${result.untouched}` : "")
+        );
+        if (result.affected.length > 0) {
+          paintDirtyRef.current = true;
+          setWeightsVersion((version) => version + 1);
+        }
+      } catch (wrapError) {
+        setError(
+          wrapError instanceof Error ? wrapError.message : String(wrapError)
+        );
+      } finally {
+        setResolving(false);
+      }
+    }, 30);
+  }, [generated, shrinkSource, selection, regionSet, paintWindow]);
+
+  // Scoped reset: restore the PRISTINE auto-solve weights for the
+  // current scope only (selection > region > piece) — healing one
+  // piece without losing work elsewhere.
+  const handleResetScope = useCallback(() => {
+    const pristine = pristineWeightsRef.current;
+    if (!generated || !pristine) return;
+    let vertices: Iterable<number>;
+    if (selection.size > 0) vertices = selection;
+    else if (regionSet) vertices = regionSet;
+    else if (paintWindow) {
+      vertices = Array.from(
+        { length: paintWindow.end - paintWindow.start },
+        (_, i) => paintWindow.start + i
+      );
+    } else return;
+    for (const vertex of vertices) {
+      for (let slot = 0; slot < 4; slot += 1) {
+        generated.weights.joints[vertex * 4 + slot] =
+          pristine.joints[vertex * 4 + slot]!;
+        generated.weights.weights[vertex * 4 + slot] =
+          pristine.weights[vertex * 4 + slot]!;
+      }
+    }
+    paintDirtyRef.current = true;
+    setWeightsVersion((version) => version + 1);
+  }, [generated, selection, regionSet, paintWindow]);
+
   const handleFillPiece = useCallback(() => {
     if (!generated) return;
     if (regionSet) {
@@ -922,6 +995,44 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   setPaintAnimating(event.currentTarget.checked)
                 }
               />
+              <Select
+                label="Shrinkwrap from"
+                size="xs"
+                w={150}
+                placeholder="source piece"
+                disabled={paintPiece < 0 && !regionSet && selection.size === 0}
+                data={
+                  generated
+                    ? generated.ranges
+                        .map((range, index) => ({
+                          value: String(index),
+                          label: range.materialName ?? `Piece ${index + 1}`
+                        }))
+                        .filter((option) => Number(option.value) !== paintPiece)
+                    : []
+                }
+                value={shrinkSource >= 0 ? String(shrinkSource) : null}
+                onChange={(value) => {
+                  if (value !== null) setShrinkSource(Number(value));
+                }}
+              />
+              <Button
+                size="compact-xs"
+                variant="light"
+                loading={resolving}
+                disabled={
+                  shrinkSource < 0 ||
+                  (paintPiece < 0 && !regionSet && selection.size === 0)
+                }
+                onClick={handleShrinkwrap}
+              >
+                Shrinkwrap
+              </Button>
+              {shrinkInfo ? (
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  {shrinkInfo}
+                </Text>
+              ) : null}
               <Menu position="bottom-start" withinPortal>
                 <Menu.Target>
                   <Button size="compact-xs" variant="light">
@@ -950,6 +1061,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   </Menu.Item>
                   <Menu.Item onClick={() => handleMirror("rightToLeft")}>
                     {"Mirror weights R > L"}
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={handleResetScope}
+                    disabled={paintPiece < 0 && !regionSet && selection.size === 0}
+                  >
+                    Reset scope to auto (piece/region/selection)
                   </Menu.Item>
                   <Menu.Divider />
                   <Menu.Item

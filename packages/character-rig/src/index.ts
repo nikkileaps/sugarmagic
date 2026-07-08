@@ -80,3 +80,8 @@ export {
   type BodyRegionId
 } from "./segmentation";
 export { bonesOfRegion, resolveRegionWeights } from "./region-solve";
+export {
+  shrinkwrapWeights,
+  type ShrinkwrapOptions,
+  type ShrinkwrapResult
+} from "./weight-transfer";

@@ -8,6 +8,7 @@ import {
   applyBrushStroke,
   bonesOfRegion,
   resolveRegionWeights,
+  shrinkwrapWeights,
   assignVerticesToBone,
   boneWeightOfVertex,
   computeBodyRegions,
@@ -367,5 +368,104 @@ describe("resolveRegionWeights (Plan 064)", () => {
       if (!regionSet.has(v)) { outside = v; break; }
     }
     expect(boneWeightOfVertex(w, outside, 0)).toBeCloseTo(1, 5);
+  });
+});
+
+describe("shrinkwrapWeights (Plan 064)", () => {
+  /** Tube of rings along X from x0 to x1 at radius r. */
+  function tube(x0: number, x1: number, r: number, rings: number, sides: number) {
+    const positions: number[] = [];
+    const indices: number[] = [];
+    for (let ring = 0; ring < rings; ring += 1) {
+      const x = x0 + ((x1 - x0) * ring) / (rings - 1);
+      for (let side = 0; side < sides; side += 1) {
+        const angle = (side / sides) * Math.PI * 2;
+        positions.push(x, Math.cos(angle) * r, Math.sin(angle) * r);
+      }
+    }
+    for (let ring = 0; ring < rings - 1; ring += 1) {
+      for (let side = 0; side < sides; side += 1) {
+        const a = ring * sides + side;
+        const b = ring * sides + ((side + 1) % sides);
+        const c = (ring + 1) * sides + side;
+        const d = (ring + 1) * sides + ((side + 1) % sides);
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    return { positions, indices };
+  }
+
+  it("confidently copies where close, inpaints where far, gates by distance", () => {
+    // Source "arm": tube x 0..1, r=0.08, graduated weights: bone 0
+    // (upper) fades to bone 1 (fore) along x.
+    const arm = tube(0, 1, 0.08, 21, 8);
+    // Target "sleeve": tube x 0..1, r=0.12 — close to the arm
+    // everywhere EXCEPT a bulge: rings past x=0.8 at r=0.5
+    // (a flap far from the body).
+    const sleeve = tube(0, 1, 0.12, 21, 8);
+    for (let ring = 17; ring < 21; ring += 1) {
+      for (let side = 0; side < 8; side += 1) {
+        const v = ring * 8 + side;
+        const y = sleeve.positions[v * 3 + 1]!;
+        const z = sleeve.positions[v * 3 + 2]!;
+        const scale = 0.5 / 0.12;
+        sleeve.positions[v * 3 + 1] = y * scale;
+        sleeve.positions[v * 3 + 2] = z * scale;
+      }
+    }
+    const armCount = arm.positions.length / 3;
+    const positions = new Float32Array([...arm.positions, ...sleeve.positions]);
+    const indices = new Uint32Array([
+      ...arm.indices,
+      ...sleeve.indices.map((index) => index + armCount)
+    ]);
+    const mesh: MeshData = { positions, indices };
+    const total = positions.length / 3;
+    const w = makeWeights(total, ["upper", "fore", "junk"]);
+    // Arm weights: graduated 0->1 along x.
+    for (let v = 0; v < armCount; v += 1) {
+      const t = positions[v * 3]!;
+      w.joints[v * MAX_INFLUENCES] = 0;
+      w.weights[v * MAX_INFLUENCES] = 1 - t;
+      w.joints[v * MAX_INFLUENCES + 1] = 1;
+      w.weights[v * MAX_INFLUENCES + 1] = t;
+    }
+    // Sleeve starts 100% junk (column 2).
+    for (let v = armCount; v < total; v += 1) {
+      w.joints[v * MAX_INFLUENCES] = 2;
+      w.weights[v * MAX_INFLUENCES] = 1;
+    }
+    const result = shrinkwrapWeights(
+      mesh,
+      w,
+      { start: armCount, end: total },
+      { start: 0, end: armCount },
+      { distanceThreshold: 0.1 }
+    );
+    // Most of the sleeve matched directly; the bulge inpainted.
+    expect(result.matched).toBeGreaterThan(100);
+    expect(result.inpainted).toBeGreaterThan(10);
+    expect(result.untouched).toBe(0);
+    // Near sleeve start: upper-dominated. Near x=0.75: fore-dominated.
+    const sleeveVertAt = (x: number) => {
+      for (let v = armCount; v < total; v += 1) {
+        if (Math.abs(positions[v * 3]! - x) < 0.03 && Math.hypot(positions[v*3+1]!, positions[v*3+2]!) < 0.2) return v;
+      }
+      return -1;
+    };
+    expect(boneWeightOfVertex(w, sleeveVertAt(0.05), 0)).toBeGreaterThan(0.8);
+    expect(boneWeightOfVertex(w, sleeveVertAt(0.75), 1)).toBeGreaterThan(0.6);
+    // The far bulge got INPAINTED plausible arm weights (junk gone,
+    // fore-dominant since it hangs off the wrist end).
+    let bulge = -1;
+    for (let v = armCount; v < total; v += 1) {
+      if (Math.hypot(positions[v*3+1]!, positions[v*3+2]!) > 0.4) { bulge = v; break; }
+    }
+    expect(boneWeightOfVertex(w, bulge, 2)).toBeLessThan(0.05);
+    expect(
+      boneWeightOfVertex(w, bulge, 1) + boneWeightOfVertex(w, bulge, 0)
+    ).toBeGreaterThan(0.9);
+    // Source untouched.
+    expect(boneWeightOfVertex(w, 0, 0)).toBeCloseTo(1, 5);
   });
 });
