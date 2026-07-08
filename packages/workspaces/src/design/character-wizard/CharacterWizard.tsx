@@ -340,6 +340,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [weightsVersion, setWeightsVersion] = useState(0);
   // Blender-style mutually exclusive viewport tools (Plan 064).
   const [activeTool, setActiveTool] = useState<"brush" | "select">("brush");
+  // T-pose viewing aid: lift limbs clear of the body for boxing.
+  const [tPose, setTPose] = useState(false);
   const [xray, setXray] = useState(true);
   const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
   const handleSelect = useCallback(
@@ -933,9 +935,24 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 selectMode={activeTool === "select"}
                 xray={xray}
                 selection={selection}
+                tPose={tPose}
                 onSelect={handleSelect}
                 onPaint={handlePaint}
               />
+              <Tooltip
+                label={tPose ? "Back to bind pose" : "T-pose (lift limbs clear)"}
+                position="left"
+              >
+                <ActionIcon
+                  variant={tPose ? "filled" : "default"}
+                  color="teal"
+                  style={{ position: "absolute", top: 10, right: 10, zIndex: 5 }}
+                  onClick={() => setTPose((current) => !current)}
+                  aria-label="Toggle T-pose"
+                >
+                  T
+                </ActionIcon>
+              </Tooltip>
               {/* Blender-style tool rail: mutually exclusive tools,
                   settings under the ACTIVE tool only. */}
               <Stack

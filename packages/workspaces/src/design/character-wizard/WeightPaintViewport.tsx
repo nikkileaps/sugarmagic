@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SkinWeights } from "@sugarmagic/character-rig";
 import { MAX_INFLUENCES, boneWeightOfVertex } from "@sugarmagic/character-rig";
+import { STANDARD_RIG_CORE_WITH_TAIL } from "@sugarmagic/domain";
 
 export interface WeightPaintRange {
   meshIndex: number;
@@ -54,6 +55,10 @@ export interface WeightPaintViewportProps {
    *  set. Cross-cuts material pieces — non-members go dark in the
    *  heatmap and stop catching raycasts/boxes. Null = off. */
   regionSet: ReadonlySet<number> | null;
+  /** T-pose viewing aid (Plan 064, nikki): pose the bones at the
+   *  CONTRACT rest so limbs lift clear of the body for box
+   *  selection. Display-only; weights and data untouched. */
+  tPose: boolean;
   /** Bumped by out-of-band weight edits (Fill piece, Reset) so
    *  the heatmap AND the live skin attributes fully resync. */
   weightsVersion: number;
@@ -189,6 +194,13 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     let disposed = false;
     let mixer: THREE.AnimationMixer | null = null;
     let idleAction: THREE.AnimationAction | null = null;
+    // Bones for the T-pose viewing aid: canonical name -> bone +
+    // its bind-pose quaternion (GLTFLoader sanitizes names).
+    const poseBones: Array<{
+      bone: THREE.Bone;
+      bind: THREE.Quaternion;
+      contract: THREE.Quaternion | null;
+    }> = [];
     /** (meshIndex:primitiveIndex) -> three mesh + its range. */
     const paintTargets: Array<{
       mesh: THREE.Mesh;
@@ -229,6 +241,23 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       applyCamera();
 
       // Map primitives via parser associations.
+      const contractBySanitized = new Map(
+        STANDARD_RIG_CORE_WITH_TAIL.bones.map((bone) => [
+          THREE.PropertyBinding.sanitizeNodeName(bone.name),
+          bone.restRotation
+        ])
+      );
+      gltf.scene.traverse((child) => {
+        if (!(child as THREE.Bone).isBone) return;
+        const rest = contractBySanitized.get(child.name);
+        poseBones.push({
+          bone: child as THREE.Bone,
+          bind: child.quaternion.clone(),
+          contract: rest
+            ? new THREE.Quaternion(rest[0], rest[1], rest[2], rest[3])
+            : null
+        });
+      });
       const associations = gltf.parser.associations as Map<
         THREE.Object3D,
         { meshes?: number; primitives?: number } | undefined
@@ -431,8 +460,14 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         const normalMatrix = new THREE.Matrix3().getNormalMatrix(
           target.mesh.matrixWorld
         );
+        const skinned = target.mesh as THREE.SkinnedMesh;
         for (let local = 0; local < positions.count; local += 1) {
-          world.fromBufferAttribute(positions, local);
+          if (skinned.isSkinnedMesh) {
+            // Posed position (respects T-pose / animation frame).
+            skinned.applyBoneTransform(local, world);
+          } else {
+            world.fromBufferAttribute(positions, local);
+          }
           target.mesh.localToWorld(world);
           // Backface cull unless x-ray: keep verts whose normal
           // faces the camera.
@@ -601,6 +636,16 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       frame = requestAnimationFrame(renderLoop);
       const delta = clock.getDelta();
       mixer?.update(delta);
+      if (propsRef.current.tPose) {
+        // Contract rest = the library T-pose; overrides the mixer.
+        for (const entry of poseBones) {
+          if (entry.contract) entry.bone.quaternion.copy(entry.contract);
+        }
+      } else if (!propsRef.current.animating) {
+        for (const entry of poseBones) {
+          entry.bone.quaternion.copy(entry.bind);
+        }
+      }
       const width = container!.clientWidth;
       const height = container!.clientHeight;
       if (width > 0 && height > 0) {
