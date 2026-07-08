@@ -21,9 +21,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActionIcon,
   Box,
   Button,
   Group,
+  Menu,
+  Paper,
   SegmentedControl,
   Select,
   Stack,
@@ -31,6 +34,7 @@ import {
   Text,
   TextInput
 } from "@mantine/core";
+import { Tooltip } from "@mantine/core";
 import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
@@ -308,8 +312,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Bumped on out-of-band weight edits (Fill piece / Reset) so the
   // viewport fully resyncs heatmap + live skin.
   const [weightsVersion, setWeightsVersion] = useState(0);
-  // Box selection (Plan 064): select precisely, then operate.
-  const [selectMode, setSelectMode] = useState(false);
+  // Blender-style mutually exclusive viewport tools (Plan 064).
+  const [activeTool, setActiveTool] = useState<"brush" | "select">("brush");
   const [xray, setXray] = useState(true);
   const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
   const handleSelect = useCallback(
@@ -803,6 +807,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
 
         {step === "weights" && generated && paintModelUrl ? (
           <Stack gap="xs" style={{ flex: 1 }}>
+            {/* Global row: WHAT you edit + shared actions. Tool-
+                specific settings live on the viewport tool rail. */}
             <Group gap="sm" align="flex-end" wrap="wrap">
               <Select
                 label="Bone"
@@ -815,37 +821,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   if (value !== null) setPaintBoneColumn(Number(value));
                 }}
               />
-              <SegmentedControl
-                size="xs"
-                data={[
-                  { value: "add", label: "Add" },
-                  { value: "subtract", label: "Subtract" },
-                  { value: "smooth", label: "Smooth" },
-                  { value: "fill", label: "Fill" }
-                ]}
-                value={brushMode}
-                onChange={(value) => setBrushMode(value as BrushMode)}
-              />
-              <Box w={140}>
-                <LabeledSlider
-                  label="Radius"
-                  min={0.01}
-                  max={0.4}
-                  step={0.005}
-                  value={brushRadius}
-                  onChange={setBrushRadius}
-                />
-              </Box>
-              <Box w={140}>
-                <LabeledSlider
-                  label="Strength"
-                  min={0.05}
-                  max={1}
-                  step={0.05}
-                  value={brushStrength}
-                  onChange={setBrushStrength}
-                />
-              </Box>
               <Select
                 label="Piece"
                 size="xs"
@@ -856,49 +831,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   if (value !== null) setPaintPiece(Number(value));
                 }}
               />
-              <Button
-                size="compact-xs"
-                variant="light"
-                disabled={paintPiece < 0}
-                onClick={handleFillPiece}
-              >
-                Fill piece with bone
-              </Button>
-              <Switch
-                size="xs"
-                label="Box select"
-                checked={selectMode}
-                onChange={(event) =>
-                  setSelectMode(event.currentTarget.checked)
-                }
-              />
-              {selectMode ? (
-                <>
-                  <Switch
-                    size="xs"
-                    label="X-ray"
-                    checked={xray}
-                    onChange={(event) => setXray(event.currentTarget.checked)}
-                  />
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    disabled={selection.size === 0}
-                    onClick={handleAssignSelection}
-                  >
-                    {`Assign ${selection.size || ""} to bone`}
-                  </Button>
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    color="gray"
-                    disabled={selection.size === 0}
-                    onClick={() => setSelection(new Set())}
-                  >
-                    Clear
-                  </Button>
-                </>
-              ) : null}
               <Switch
                 size="xs"
                 label="Animate"
@@ -907,42 +839,40 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   setPaintAnimating(event.currentTarget.checked)
                 }
               />
-              <Button
-                size="compact-xs"
-                variant="light"
-                onClick={() => handleMirror("leftToRight")}
-              >
-                {"Mirror L > R"}
-              </Button>
-              <Button
-                size="compact-xs"
-                variant="light"
-                onClick={() => handleMirror("rightToLeft")}
-              >
-                {"Mirror R > L"}
-              </Button>
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                color="gray"
-                onClick={() => {
-                  const pristine = pristineWeightsRef.current;
-                  if (!pristine || !generated) return;
-                  generated.weights.joints.set(pristine.joints);
-                  generated.weights.weights.set(pristine.weights);
-                  paintDirtyRef.current = true;
-                  setWeightsVersion((version) => version + 1);
-                }}
-              >
-                Reset to auto
-              </Button>
+              <Menu position="bottom-start" withinPortal>
+                <Menu.Target>
+                  <Button size="compact-xs" variant="light">
+                    Actions
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item onClick={handleFillPiece} disabled={paintPiece < 0}>
+                    Fill piece with bone
+                  </Menu.Item>
+                  <Menu.Item onClick={() => handleMirror("leftToRight")}>
+                    {"Mirror weights L > R"}
+                  </Menu.Item>
+                  <Menu.Item onClick={() => handleMirror("rightToLeft")}>
+                    {"Mirror weights R > L"}
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item
+                    color="red"
+                    onClick={() => {
+                      const pristine = pristineWeightsRef.current;
+                      if (!pristine || !generated) return;
+                      generated.weights.joints.set(pristine.joints);
+                      generated.weights.weights.set(pristine.weights);
+                      paintDirtyRef.current = true;
+                      setWeightsVersion((version) => version + 1);
+                    }}
+                  >
+                    Reset to auto
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
             </Group>
-            <Text size="xs" c="var(--sm-color-subtext)">
-              Heatmap shows the selected bone's influence. Left-drag
-              paints, right-drag orbits, scroll zooms. Skip with Next
-              if the automatic result is good enough.
-            </Text>
-            <Box style={{ height: 360 }}>
+            <Box style={{ height: 380, position: "relative" }}>
               <WeightPaintViewport
                 modelUrl={paintModelUrl}
                 idleClipUrl={paintIdleUrl}
@@ -954,12 +884,118 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 animating={paintAnimating}
                 isolatedPiece={paintPiece}
                 weightsVersion={weightsVersion}
-                selectMode={selectMode}
+                selectMode={activeTool === "select"}
                 xray={xray}
                 selection={selection}
                 onSelect={handleSelect}
                 onPaint={handlePaint}
               />
+              {/* Blender-style tool rail: mutually exclusive tools,
+                  settings under the ACTIVE tool only. */}
+              <Stack
+                gap={6}
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  left: 10,
+                  zIndex: 5
+                }}
+              >
+                <Group gap={4}>
+                  <Tooltip label="Paint brush" position="right">
+                    <ActionIcon
+                      variant={activeTool === "brush" ? "filled" : "default"}
+                      color="blue"
+                      onClick={() => setActiveTool("brush")}
+                      aria-label="Paint brush tool"
+                    >
+                      🖌
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Box select" position="right">
+                    <ActionIcon
+                      variant={activeTool === "select" ? "filled" : "default"}
+                      color="yellow"
+                      onClick={() => setActiveTool("select")}
+                      aria-label="Box select tool"
+                    >
+                      ⬚
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+                <Paper
+                  p="xs"
+                  radius="sm"
+                  withBorder
+                  style={{ width: 170, opacity: 0.95 }}
+                >
+                  {activeTool === "brush" ? (
+                    <Stack gap={6}>
+                      <SegmentedControl
+                        size="xs"
+                        fullWidth
+                        data={[
+                          { value: "add", label: "Add" },
+                          { value: "subtract", label: "Sub" },
+                          { value: "smooth", label: "Smooth" },
+                          { value: "fill", label: "Fill" }
+                        ]}
+                        value={brushMode}
+                        onChange={(value) => setBrushMode(value as BrushMode)}
+                      />
+                      <LabeledSlider
+                        label="Radius"
+                        min={0.01}
+                        max={0.4}
+                        step={0.005}
+                        value={brushRadius}
+                        onChange={setBrushRadius}
+                      />
+                      <LabeledSlider
+                        label="Strength"
+                        min={0.05}
+                        max={1}
+                        step={0.05}
+                        value={brushStrength}
+                        onChange={setBrushStrength}
+                      />
+                    </Stack>
+                  ) : (
+                    <Stack gap={6}>
+                      <Switch
+                        size="xs"
+                        label="X-ray"
+                        checked={xray}
+                        onChange={(event) =>
+                          setXray(event.currentTarget.checked)
+                        }
+                      />
+                      <Button
+                        size="compact-xs"
+                        variant="light"
+                        disabled={selection.size === 0}
+                        onClick={handleAssignSelection}
+                      >
+                        {selection.size > 0
+                          ? `Assign ${selection.size} to bone`
+                          : "Assign to bone"}
+                      </Button>
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color="gray"
+                        disabled={selection.size === 0}
+                        onClick={() => setSelection(new Set())}
+                      >
+                        Clear selection
+                      </Button>
+                      <Text size="xs" c="var(--sm-color-subtext)">
+                        Drag a box; shift adds.
+                      </Text>
+                    </Stack>
+                  )}
+                </Paper>
+              </Stack>
             </Box>
           </Stack>
         ) : null}
