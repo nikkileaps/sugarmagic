@@ -42,11 +42,14 @@ import type {
   MotionRecipe
 } from "@sugarmagic/domain";
 import {
+  BODY_REGION_LABELS,
   applyBrushStroke,
   assignVerticesToBone,
   buildVertexAdjacency,
+  computeBodyRegions,
   fillVerticesWithBone,
   mirrorWeights,
+  type BodyRegionId,
   type BrushMode,
   type GeneratedSkeleton,
   type MeshData,
@@ -307,8 +310,24 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [brushStrength, setBrushStrength] = useState(0.5);
   const [brushMode, setBrushMode] = useState<BrushMode>("add");
   const [paintAnimating, setPaintAnimating] = useState(false);
-  // Piece isolation: -1 = all pieces; otherwise index into ranges.
-  const [paintPiece, setPaintPiece] = useState(-1);
+  // Isolation: "-1" = all; "piece:N" = material piece; "region:ID"
+  // = virtual body region (Plan 064, computed from the pristine
+  // auto-solve — the solver's partition IS the segmentation).
+  const [paintScope, setPaintScope] = useState("-1");
+  const bodyRegions = useMemo(() => {
+    if (!generated || !pristineWeightsRef.current) return null;
+    return computeBodyRegions(
+      pristineWeightsRef.current,
+      generated.weights.boneOrder
+    );
+  }, [generated]);
+  const paintPiece = paintScope.startsWith("piece:")
+    ? Number(paintScope.slice(6))
+    : -1;
+  const regionSet = useMemo(() => {
+    if (!paintScope.startsWith("region:") || !bodyRegions) return null;
+    return bodyRegions.get(paintScope.slice(7) as BodyRegionId) ?? null;
+  }, [paintScope, bodyRegions]);
   // Bumped on out-of-band weight edits (Fill piece / Reset) so the
   // viewport fully resyncs heatmap + live skin.
   const [weightsVersion, setWeightsVersion] = useState(0);
@@ -616,14 +635,29 @@ export function CharacterWizard(props: CharacterWizardProps) {
   }, [generated]);
   const pieceOptions = useMemo(() => {
     if (!generated) return [];
-    return [
-      { value: "-1", label: "All pieces" },
-      ...generated.ranges.map((range, index) => ({
-        value: String(index),
-        label: range.materialName ?? `Piece ${index + 1}`
-      }))
+    const options: Array<
+      { value: string; label: string } | { group: string; items: Array<{ value: string; label: string }> }
+    > = [
+      { value: "-1", label: "Everything" },
+      {
+        group: "Pieces",
+        items: generated.ranges.map((range, index) => ({
+          value: `piece:${index}`,
+          label: range.materialName ?? `Piece ${index + 1}`
+        }))
+      }
     ];
-  }, [generated]);
+    if (bodyRegions) {
+      options.push({
+        group: "Body regions",
+        items: [...bodyRegions.keys()].map((region) => ({
+          value: `region:${region}`,
+          label: BODY_REGION_LABELS[region]
+        }))
+      });
+    }
+    return options;
+  }, [generated, bodyRegions]);
   const paintWindow = useMemo(() => {
     if (!generated || paintPiece < 0) return undefined;
     const range = generated.ranges[paintPiece];
@@ -655,14 +689,15 @@ export function CharacterWizard(props: CharacterWizardProps) {
           boneColumn: paintBoneColumn,
           strength: brushStrength * 0.25,
           mode: brushMode,
-          vertexWindow: paintWindow
+          vertexWindow: paintWindow,
+          vertexSet: regionSet ?? undefined
         },
         adjacencyRef.current ?? undefined
       );
       if (affected.length > 0) paintDirtyRef.current = true;
       return affected;
     },
-    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode, paintWindow]
+    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode, paintWindow, regionSet]
   );
 
   // One-click rigid assignment of the isolated piece to the
@@ -686,11 +721,17 @@ export function CharacterWizard(props: CharacterWizardProps) {
   );
 
   const handleFillPiece = useCallback(() => {
-    if (!generated || !paintWindow) return;
-    fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
+    if (!generated) return;
+    if (regionSet) {
+      assignVerticesToBone(generated.weights, [...regionSet], paintBoneColumn);
+    } else if (paintWindow) {
+      fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
+    } else {
+      return;
+    }
     paintDirtyRef.current = true;
     setWeightsVersion((version) => version + 1);
-  }, [generated, paintWindow, paintBoneColumn]);
+  }, [generated, paintWindow, regionSet, paintBoneColumn]);
 
   return (
     <WizardDialog
@@ -824,11 +865,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
               <Select
                 label="Piece"
                 size="xs"
-                w={150}
+                w={170}
                 data={pieceOptions}
-                value={String(paintPiece)}
+                value={paintScope}
                 onChange={(value) => {
-                  if (value !== null) setPaintPiece(Number(value));
+                  if (value !== null) setPaintScope(value);
                 }}
               />
               <Switch
@@ -846,8 +887,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
                   </Button>
                 </Menu.Target>
                 <Menu.Dropdown>
-                  <Menu.Item onClick={handleFillPiece} disabled={paintPiece < 0}>
-                    Fill piece with bone
+                  <Menu.Item
+                    onClick={handleFillPiece}
+                    disabled={paintPiece < 0 && !regionSet}
+                  >
+                    Fill piece/region with bone
                   </Menu.Item>
                   <Menu.Item onClick={() => handleMirror("leftToRight")}>
                     {"Mirror weights L > R"}
@@ -883,6 +927,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 brushRadius={brushRadius}
                 animating={paintAnimating}
                 isolatedPiece={paintPiece}
+                regionSet={regionSet}
                 weightsVersion={weightsVersion}
                 selectMode={activeTool === "select"}
                 xray={xray}

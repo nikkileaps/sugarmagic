@@ -4,9 +4,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  BODY_REGION_LABELS,
   applyBrushStroke,
   assignVerticesToBone,
   boneWeightOfVertex,
+  computeBodyRegions,
   buildVertexAdjacency,
   mirrorWeights,
   setBoneWeightAtVertex,
@@ -216,5 +218,43 @@ describe("assignVerticesToBone (Plan 064)", () => {
     expect(boneWeightOfVertex(w, 1, 1)).toBeCloseTo(1, 5);
     expect(boneWeightOfVertex(w, 2, 0)).toBeCloseTo(1, 5);
     expect(boneWeightOfVertex(w, 3, 1)).toBeCloseTo(1, 5);
+  });
+});
+
+describe("computeBodyRegions (Plan 064)", () => {
+  it("classifies vertices by dominant bone group; tail only when present", () => {
+    const boneOrder = [
+      "DEF-hips",
+      "DEF-head",
+      "DEF-upper_arm.L",
+      "DEF-thigh.R",
+      "DEF-tail.002"
+    ];
+    const w = makeWeights(5, boneOrder);
+    // v0 hips (default), v1 head, v2 left arm, v3 right leg, v4 tail.
+    for (let v = 1; v < 5; v += 1) {
+      w.joints[v * MAX_INFLUENCES] = v;
+      w.weights[v * MAX_INFLUENCES] = 1;
+    }
+    const regions = computeBodyRegions(
+      { joints: w.joints, weights: w.weights },
+      boneOrder
+    );
+    expect(regions.get("torso")).toEqual(new Set([0]));
+    expect(regions.get("head")).toEqual(new Set([1]));
+    expect(regions.get("leftArm")).toEqual(new Set([2]));
+    expect(regions.get("rightLeg")).toEqual(new Set([3]));
+    expect(regions.get("tail")).toEqual(new Set([4]));
+    expect(BODY_REGION_LABELS.leftArm).toBe("Left Arm");
+    // Mixed vertex: dominant GROUP wins (0.3 head + 0.3 neck-ish
+    // would beat 0.4 hips if grouped — here 0.6 arm beats 0.4 hips).
+    const mixed = makeWeights(1, boneOrder);
+    mixed.joints.set([0, 2, 0, 0], 0);
+    mixed.weights.set([0.4, 0.6, 0, 0], 0);
+    const mixedRegions = computeBodyRegions(
+      { joints: mixed.joints, weights: mixed.weights },
+      boneOrder
+    );
+    expect(mixedRegions.get("leftArm")).toEqual(new Set([0]));
   });
 });

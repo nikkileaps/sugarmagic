@@ -35,6 +35,9 @@ export interface BrushStroke {
    *  tail behind torso) need isolation or the 3D brush paints
    *  through everything (nikki, 2026-07-06). */
   vertexWindow?: { start: number; end: number };
+  /** Restrict the stroke to an explicit vertex set (Plan 064
+   *  virtual body regions, which cross-cut material pieces). */
+  vertexSet?: ReadonlySet<number>;
 }
 
 /** Weight of a bone column at a vertex (0 when uninfluenced). */
@@ -176,6 +179,7 @@ export function applyBrushStroke(
   const first = stroke.vertexWindow?.start ?? 0;
   const last = Math.min(stroke.vertexWindow?.end ?? vertexCount, vertexCount);
   for (let vertex = first; vertex < last; vertex += 1) {
+    if (stroke.vertexSet && !stroke.vertexSet.has(vertex)) continue;
     const dx = mesh.positions[vertex * 3]! - stroke.center[0];
     const dy = mesh.positions[vertex * 3 + 1]! - stroke.center[1];
     const dz = mesh.positions[vertex * 3 + 2]! - stroke.center[2];

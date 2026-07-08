@@ -50,6 +50,10 @@ export interface WeightPaintViewportProps {
    *  other pieces ghost out and stop catching brush raycasts, so
    *  layered shells (tail behind the torso) are paintable. */
   isolatedPiece: number;
+  /** Region isolation (Plan 064): a virtual body-region vertex
+   *  set. Cross-cuts material pieces — non-members go dark in the
+   *  heatmap and stop catching raycasts/boxes. Null = off. */
+  regionSet: ReadonlySet<number> | null;
   /** Bumped by out-of-band weight edits (Fill piece, Reset) so
    *  the heatmap AND the live skin attributes fully resync. */
   weightsVersion: number;
@@ -71,6 +75,7 @@ export interface WeightPaintViewportProps {
 }
 
 const HEAT_LOW = new THREE.Color(0x1a2340);
+const GHOST = new THREE.Color(0x0d0e16);
 const HEAT_HIGH = new THREE.Color(0xff4d6d);
 const SELECT_TINT = new THREE.Color(0xf7d774);
 
@@ -96,7 +101,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   }, [props.weightsVersion]);
   useEffect(() => {
     refreshHeatmapRef.current();
-  }, [props.selection]);
+  }, [props.selection, props.regionSet]);
   useEffect(() => {
     mixerControlRef.current(props.animating);
   }, [props.animating]);
@@ -285,8 +290,13 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         const colorAttribute = (
           target.mesh.geometry as THREE.BufferGeometry
         ).getAttribute("color") as THREE.BufferAttribute;
+        const regionSet = propsRef.current.regionSet;
         const refresh = (local: number) => {
           const flat = target.vertexStart + local;
+          if (regionSet && !regionSet.has(flat)) {
+            colorAttribute.setXYZ(local, GHOST.r, GHOST.g, GHOST.b);
+            return;
+          }
           const weight = boneWeightOfVertex(weights, flat, column);
           const color = HEAT_LOW.clone().lerp(HEAT_HIGH, weight);
           if (propsRef.current.selection.has(flat)) {
@@ -433,10 +443,14 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
           }
           projected.copy(world).project(camera);
           if (projected.z > 1) continue;
+          const flat = target.vertexStart + local;
+          if (propsRef.current.regionSet && !propsRef.current.regionSet.has(flat)) {
+            continue;
+          }
           const sx = ((projected.x + 1) / 2) * rect.width;
           const sy = ((1 - projected.y) / 2) * rect.height;
           if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) {
-            selected.push(target.vertexStart + local);
+            selected.push(flat);
           }
         }
       }
@@ -454,8 +468,15 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     function paintAt(event: PointerEvent) {
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(raycastTargets());
-      const hit = hits[0];
+      const allHits = raycaster.intersectObjects(raycastTargets());
+      const regionSet = propsRef.current.regionSet;
+      const hit = allHits.find((candidate) => {
+        if (!candidate.face) return false;
+        if (!regionSet) return true;
+        const target = paintTargets.find((t) => t.mesh === candidate.object);
+        if (!target) return false;
+        return regionSet.has(target.vertexStart + candidate.face.a);
+      });
       if (!hit || !hit.face) return;
       placeCursor(hit);
       // Face indices reference the BASE geometry — rest space —
@@ -525,9 +546,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       // Hover: show the brush ring.
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(raycastTargets())[0];
-      if (hit) {
-        placeCursor(hit);
+      const hoverHits = raycaster.intersectObjects(raycastTargets());
+      const hoverRegion = propsRef.current.regionSet;
+      const hoverHit = hoverHits.find((candidate) => {
+        if (!hoverRegion) return true;
+        if (!candidate.face) return false;
+        const target = paintTargets.find((t) => t.mesh === candidate.object);
+        return target
+          ? hoverRegion.has(target.vertexStart + candidate.face.a)
+          : false;
+      });
+      if (hoverHit) {
+        placeCursor(hoverHit);
       } else {
         cursor.visible = false;
       }

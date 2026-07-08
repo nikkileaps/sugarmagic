@@ -74,3 +74,8 @@ export {
   type BrushStroke
 } from "./paint";
 export * from "./motion";
+export {
+  BODY_REGION_LABELS,
+  computeBodyRegions,
+  type BodyRegionId
+} from "./segmentation";
