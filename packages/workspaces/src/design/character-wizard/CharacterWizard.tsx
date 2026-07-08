@@ -42,7 +42,6 @@ import {
   buildVertexAdjacency,
   fillVerticesWithBone,
   mirrorWeights,
-  transferWeights,
   type BrushMode,
   type GeneratedSkeleton,
   type MeshData,
@@ -660,24 +659,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
     [generated, paintWindow]
   );
 
-  // Weight transfer (Plan 064): clothing copies the weights of the
-  // nearest vertex on a source piece (the body) — the systematic
-  // fix for sleeves/armpits that brushwork can't reach.
-  const [transferSource, setTransferSource] = useState<number>(-1);
-  const handleTransfer = useCallback(() => {
-    if (!generated || !paintWindow || transferSource < 0) return;
-    const source = generated.ranges[transferSource];
-    if (!source) return;
-    const affected = transferWeights(generated.mesh, generated.weights, paintWindow, {
-      start: source.vertexStart,
-      end: source.vertexStart + source.vertexCount
-    });
-    if (affected.length > 0) {
-      paintDirtyRef.current = true;
-      setWeightsVersion((version) => version + 1);
-    }
-  }, [generated, paintWindow, transferSource]);
-
   const handleFillPiece = useCallback(() => {
     if (!generated || !paintWindow) return;
     fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
@@ -860,35 +841,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 onClick={handleFillPiece}
               >
                 Fill piece with bone
-              </Button>
-              <Select
-                label="Copy weights from"
-                size="xs"
-                w={150}
-                disabled={paintPiece < 0}
-                placeholder="source piece"
-                data={
-                  generated
-                    ? generated.ranges
-                        .map((range, index) => ({
-                          value: String(index),
-                          label: range.materialName ?? `Piece ${index + 1}`
-                        }))
-                        .filter((option) => Number(option.value) !== paintPiece)
-                    : []
-                }
-                value={transferSource >= 0 ? String(transferSource) : null}
-                onChange={(value) => {
-                  if (value !== null) setTransferSource(Number(value));
-                }}
-              />
-              <Button
-                size="compact-xs"
-                variant="light"
-                disabled={paintPiece < 0 || transferSource < 0}
-                onClick={handleTransfer}
-              >
-                Copy
               </Button>
               <Switch
                 size="xs"

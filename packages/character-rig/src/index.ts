@@ -69,7 +69,6 @@ export {
   fillVerticesWithBone,
   mirrorWeights,
   setBoneWeightAtVertex,
-  transferWeights,
   type BrushMode,
   type BrushStroke
 } from "./paint";

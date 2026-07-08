@@ -9,7 +9,6 @@ import {
   buildVertexAdjacency,
   mirrorWeights,
   setBoneWeightAtVertex,
-  transferWeights,
   MAX_INFLUENCES,
   type MeshData,
   type SkinWeights
@@ -205,36 +204,5 @@ describe("mirrorWeights (Plan 062)", () => {
     const affected = mirrorWeights(mesh, w, { direction: "leftToRight" });
     expect(affected).toEqual([]);
     expect(boneWeightOfVertex(w, 1, 0)).toBeCloseTo(1, 5);
-  });
-});
-
-describe("transferWeights (Plan 064)", () => {
-  it("clothing vertices copy the nearest body vertex's full weights", () => {
-    // Source "body" piece: verts 0-1 (arm at x=0.5 weighted to bone
-    // 1; torso at x=0 weighted to bone 0). Target "jacket" piece:
-    // verts 2-3 hovering just outside each.
-    const mesh: MeshData = {
-      positions: new Float32Array([
-        0.5, 1, 0,   0, 1, 0,   0.52, 1.02, 0,   0.02, 0.98, 0
-      ]),
-      indices: new Uint32Array([0, 1, 2, 1, 2, 3])
-    };
-    const w = makeWeights(4, ["torso", "arm"]);
-    setBoneWeightAtVertex(w, 0, 1, 0.9); // body arm: arm 0.9 torso 0.1
-    // jacket verts start 100% torso (wrong).
-    const affected = transferWeights(
-      mesh,
-      w,
-      { start: 2, end: 4 },
-      { start: 0, end: 2 }
-    );
-    expect(affected.sort()).toEqual([2, 3]);
-    // Sleeve vert copied the ARM mix exactly.
-    expect(boneWeightOfVertex(w, 2, 1)).toBeCloseTo(0.9, 5);
-    expect(boneWeightOfVertex(w, 2, 0)).toBeCloseTo(0.1, 5);
-    // Torso vert copied pure torso.
-    expect(boneWeightOfVertex(w, 3, 0)).toBeCloseTo(1, 5);
-    // Source untouched.
-    expect(boneWeightOfVertex(w, 0, 1)).toBeCloseTo(0.9, 5);
   });
 });
