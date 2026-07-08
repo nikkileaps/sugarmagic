@@ -324,7 +324,8 @@ export function CharacterWizard(props: CharacterWizardProps) {
     if (!generated || !pristineWeightsRef.current) return null;
     return computeBodyRegions(
       pristineWeightsRef.current,
-      generated.weights.boneOrder
+      generated.weights.boneOrder,
+      generated.mesh.positions
     );
   }, [generated]);
   const paintPiece = paintScope.startsWith("piece:")

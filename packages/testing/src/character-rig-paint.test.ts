@@ -257,4 +257,23 @@ describe("computeBodyRegions (Plan 064)", () => {
     );
     expect(mixedRegions.get("leftArm")).toEqual(new Set([0]));
   });
+
+  it("coincident seam duplicates classify into the SAME region", () => {
+    const boneOrder = ["DEF-hips", "DEF-tail.002"];
+    const w = makeWeights(2, boneOrder);
+    // Twin 0: 100% tail. Twin 1: 100% hips. Same position.
+    w.joints[0] = 1;
+    w.weights[0] = 1;
+    const positions = new Float32Array([0.04, 1.05, -0.11, 0.04, 1.05, -0.11]);
+    const regions = computeBodyRegions(
+      { joints: w.joints, weights: w.weights },
+      boneOrder,
+      positions
+    );
+    // Joint vote: both land in ONE region (whichever wins), never split.
+    const tail = regions.get("tail") ?? new Set();
+    const torso = regions.get("torso") ?? new Set();
+    expect(tail.size === 2 || torso.size === 2).toBe(true);
+    expect(tail.size === 1 || torso.size === 1).toBe(false);
+  });
 });

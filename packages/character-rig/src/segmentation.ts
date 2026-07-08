@@ -65,20 +65,55 @@ function regionOfBone(boneName: string): BodyRegionId {
  */
 export function computeBodyRegions(
   pristine: { joints: Uint16Array; weights: Float32Array },
-  boneOrder: readonly string[]
+  boneOrder: readonly string[],
+  /** Vertex positions — when provided, COINCIDENT duplicates
+   *  (UV/normal seam twins at the same position) are classified
+   *  JOINTLY, so a region never splits a seam pair. Splitting one
+   *  hid a twin from region-scoped selection and produced an
+   *  unfixable surface tear (nikki's tail sliver, 2026-07-08). */
+  positions?: Float32Array
 ): Map<BodyRegionId, Set<number>> {
   const boneRegion = boneOrder.map((name) => regionOfBone(name));
   const regions = new Map<BodyRegionId, Set<number>>();
   const vertexCount = pristine.joints.length / MAX_INFLUENCES;
+
+  // Coincident-duplicate groups: vertices sharing a (quantized)
+  // position vote together.
+  const groupOf = new Array<number>(vertexCount);
+  const groups: number[][] = [];
+  if (positions && positions.length === vertexCount * 3) {
+    const byKey = new Map<string, number>();
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const key = `${Math.round(positions[vertex * 3]! * 1000)}:${Math.round(
+        positions[vertex * 3 + 1]! * 1000
+      )}:${Math.round(positions[vertex * 3 + 2]! * 1000)}`;
+      let index = byKey.get(key);
+      if (index === undefined) {
+        index = groups.length;
+        byKey.set(key, index);
+        groups.push([]);
+      }
+      groups[index]!.push(vertex);
+      groupOf[vertex] = index;
+    }
+  } else {
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      groups.push([vertex]);
+      groupOf[vertex] = groups.length - 1;
+    }
+  }
+
   const totals = new Map<BodyRegionId, number>();
-  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+  for (const group of groups) {
     totals.clear();
-    for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
-      const weight = pristine.weights[vertex * MAX_INFLUENCES + slot]!;
-      if (weight <= 0) continue;
-      const column = pristine.joints[vertex * MAX_INFLUENCES + slot]!;
-      const region = boneRegion[column] ?? "torso";
-      totals.set(region, (totals.get(region) ?? 0) + weight);
+    for (const vertex of group) {
+      for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
+        const weight = pristine.weights[vertex * MAX_INFLUENCES + slot]!;
+        if (weight <= 0) continue;
+        const column = pristine.joints[vertex * MAX_INFLUENCES + slot]!;
+        const region = boneRegion[column] ?? "torso";
+        totals.set(region, (totals.get(region) ?? 0) + weight);
+      }
     }
     let best: BodyRegionId = "torso";
     let bestWeight = 0;
@@ -93,7 +128,7 @@ export function computeBodyRegions(
       set = new Set();
       regions.set(best, set);
     }
-    set.add(vertex);
+    for (const vertex of group) set.add(vertex);
   }
   return regions;
 }
