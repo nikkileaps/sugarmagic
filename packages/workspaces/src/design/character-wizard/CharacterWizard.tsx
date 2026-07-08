@@ -310,6 +310,12 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [brushStrength, setBrushStrength] = useState(0.5);
   const [brushMode, setBrushMode] = useState<BrushMode>("add");
   const [paintAnimating, setPaintAnimating] = useState(false);
+  const paintDirtyRef = useRef(false);
+  const adjacencyRef = useRef<Array<Set<number>> | null>(null);
+  const pristineWeightsRef = useRef<{
+    joints: Uint16Array;
+    weights: Float32Array;
+  } | null>(null);
   // Isolation: "-1" = all; "piece:N" = material piece; "region:ID"
   // = virtual body region (Plan 064, computed from the pristine
   // auto-solve — the solver's partition IS the segmentation).
@@ -352,12 +358,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
     paintDirtyRef.current = true;
     setWeightsVersion((version) => version + 1);
   }, [generated, selection, paintBoneColumn]);
-  const paintDirtyRef = useRef(false);
-  const adjacencyRef = useRef<Array<Set<number>> | null>(null);
-  const pristineWeightsRef = useRef<{
-    joints: Uint16Array;
-    weights: Float32Array;
-  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Blob URLs created for preview; revoked on teardown.
   const blobUrlsRef = useRef<string[]>([]);
