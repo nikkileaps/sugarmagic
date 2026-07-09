@@ -1781,12 +1781,11 @@ export function createWebRuntimeHost(
       "region-aware"
     ]);
     // hostPlayerRestore now reflects whatever the host.player
-    // participant received. Region + position spawn from there;
-    // fall through to state.activeRegionId for the implicit
-    // boot.json case where neither save nor authored default set
-    // a region.
-    const resolvedActiveRegionId =
-      hostPlayerRestore?.currentRegionId ?? state.activeRegionId ?? null;
+    // participant received. Region precedence (identical for
+    // Preview and published boots — Preview is the game):
+    // saved region (Continue) > the active Scene's authored
+    // starting region > legacy boot activeRegionId > first.
+    const resolvedActiveRegionId = hostPlayerRestore?.currentRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
     // Plan 058 §058.1 — belt-and-suspenders migration for stale
@@ -1846,14 +1845,12 @@ export function createWebRuntimeHost(
                   : ("locked" as const)
         }))
     };
-    // Region precedence: saved region (Continue) > explicit boot
-    // request (Studio Preview's edited region) > the active
-    // Scene's authored starting region > first region. Published
-    // fresh boots carry no explicit region, so the Scene's choice
-    // is what players get.
     const activeRegion = getActiveRegion(
       migratedContent.regions,
-      resolvedActiveRegionId ?? activeScene?.startingRegionId ?? null
+      resolvedActiveRegionId ??
+        activeScene?.startingRegionId ??
+        state.activeRegionId ??
+        null
     );
     // Composed Base + Overlay view (Pattern 1) — every presence /
     // spawn read below sources from this, never region fields.

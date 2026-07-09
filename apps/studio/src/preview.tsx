@@ -265,7 +265,11 @@ window.addEventListener("message", (event) => {
         scenes: data.scenes,
         scenesUiLabel: data.scenesUiLabel,
         activeSceneId: data.activeSceneId,
-        activeRegionId: data.activeRegionId,
+        // Deliberately NOT forwarding the Studio-edited region:
+        // Preview is the GAME (same region resolution as a
+        // published boot — saved game > scene starting region >
+        // first). The workspace viewport is where you look at the
+        // region you're editing (nikki, 2026-07-09).
         activeEnvironmentId: data.activeEnvironmentId,
         savedGamePromise,
         currentUser: identityProvider.currentUser(),
