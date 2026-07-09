@@ -44,7 +44,12 @@ import {
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
 import type { ViewportStore } from "@sugarmagic/shell";
-import { PanelSection } from "@sugarmagic/ui";
+import {
+  PanelSection,
+  ToolOptionSlider,
+  ToolOptionsBar,
+  ToolRail
+} from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
@@ -394,7 +399,6 @@ export function useLandscapeWorkspaceView(
     onCommand
   } = props;
 
-  const [brushMenuOpen, setBrushMenuOpen] = useState(false);
   const activeChannelIndex = useVanillaStoreSelector(
     viewportStore,
     (state) => state.activeLandscapeChannelIndex
@@ -653,138 +657,60 @@ export function useLandscapeWorkspaceView(
     ),
     viewportOverlay: isActive ? (
       <>
-        <Box
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            pointerEvents: "auto"
-          }}
-        >
-          <Popover
-            opened={brushMenuOpen}
-            onChange={setBrushMenuOpen}
-            position="bottom-start"
-            shadow="md"
-            withinPortal={false}
-          >
-            <Popover.Target>
-              <Box
-                style={{
-                  display: "inline-flex",
-                  gap: 8,
-                  padding: 8,
-                  borderRadius: "var(--sm-radius-md)",
-                  border: "1px solid var(--sm-panel-border)",
-                  background: "rgba(30, 30, 46, 0.9)"
-                }}
-              >
-                <ActionIcon
-                  variant={brushSettings.mode === "paint" ? "filled" : "subtle"}
-                  color={brushSettings.mode === "paint" ? "blue" : "gray"}
-                  aria-label="Paint landscape"
-                  onClick={() => {
-                    if (brushSettings.mode === "paint") {
-                      setBrushMenuOpen((open) => !open);
-                    } else {
-                      setBrushMode("paint");
-                      setBrushMenuOpen(true);
-                    }
-                  }}
-                >
-                  🖌️
-                </ActionIcon>
-                <ActionIcon
-                  variant={brushSettings.mode === "erase" ? "filled" : "subtle"}
-                  color={brushSettings.mode === "erase" ? "blue" : "gray"}
-                  aria-label="Erase landscape"
-                  onClick={() => {
-                    if (brushSettings.mode === "erase") {
-                      setBrushMenuOpen((open) => !open);
-                    } else {
-                      setBrushMode("erase");
-                      setBrushMenuOpen(true);
-                    }
-                  }}
-                >
-                  🧽
-                </ActionIcon>
-              </Box>
-            </Popover.Target>
-            <Popover.Dropdown>
-              <Stack gap="sm" style={{ minWidth: 220 }}>
-                <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
-                  {brushSettings.mode === "paint" ? "Paint Brush" : "Erase Brush"}
-                </Text>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Radius
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.radius.toFixed(1)}m
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.5}
-                    max={24}
-                    step={0.5}
-                    value={brushSettings.radius}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        radius: value
-                      })
-                    }
-                  />
-                </Stack>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Strength
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.strength.toFixed(2)}
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.01}
-                    max={1}
-                    step={0.01}
-                    value={brushSettings.strength}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        strength: value
-                      })
-                    }
-                  />
-                </Stack>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Falloff
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.falloff.toFixed(2)}
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.01}
-                    max={1}
-                    step={0.01}
-                    value={brushSettings.falloff}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        falloff: value
-                      })
-                    }
-                  />
-                </Stack>
-              </Stack>
-            </Popover.Dropdown>
-          </Popover>
+        <Box style={{ pointerEvents: "auto" }}>
+          <ToolRail
+            tools={[
+              { id: "paint", icon: "🖌️", label: "Paint landscape" },
+              { id: "erase", icon: "🧽", label: "Erase landscape" }
+            ]}
+            activeToolId={brushSettings.mode}
+            onSelect={(toolId) => setBrushMode(toolId as "paint" | "erase")}
+          />
+          <ToolOptionsBar>
+            <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+              {brushSettings.mode === "paint" ? "Paint" : "Erase"}
+            </Text>
+            <ToolOptionSlider
+              label="Radius"
+              min={0.5}
+              max={24}
+              step={0.5}
+              value={brushSettings.radius}
+              format={(value) => `${value.toFixed(1)}m`}
+              onChange={(value) =>
+                viewportStore.getState().setBrushSettings({
+                  ...brushSettings,
+                  radius: value
+                })
+              }
+            />
+            <ToolOptionSlider
+              label="Strength"
+              min={0.01}
+              max={1}
+              step={0.01}
+              value={brushSettings.strength}
+              onChange={(value) =>
+                viewportStore.getState().setBrushSettings({
+                  ...brushSettings,
+                  strength: value
+                })
+              }
+            />
+            <ToolOptionSlider
+              label="Falloff"
+              min={0.01}
+              max={1}
+              step={0.01}
+              value={brushSettings.falloff}
+              onChange={(value) =>
+                viewportStore.getState().setBrushSettings({
+                  ...brushSettings,
+                  falloff: value
+                })
+              }
+            />
+          </ToolOptionsBar>
         </Box>
         <Box style={{ position: "absolute", top: 12, right: 12, pointerEvents: "none" }}>
           <LayoutOrientationWidget quaternion={cameraQuaternion} />

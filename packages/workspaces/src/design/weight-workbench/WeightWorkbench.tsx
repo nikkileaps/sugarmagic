@@ -25,7 +25,6 @@ import {
   Group,
   Loader,
   MultiSelect,
-  Paper,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -35,7 +34,12 @@ import {
   TextInput,
   Tooltip
 } from "@mantine/core";
-import { LabeledSlider, PanelSection } from "@sugarmagic/ui";
+import {
+  PanelSection,
+  ToolOptionSlider,
+  ToolOptionsBar,
+  ToolRail
+} from "@sugarmagic/ui";
 import type { CharacterModelDefinition } from "@sugarmagic/domain";
 import {
   BODY_REGION_LABELS,
@@ -747,144 +751,118 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
             onSelect={handleSelect}
             onPaint={handlePaint}
           />
-          <Stack
-            gap={6}
-            style={{ position: "absolute", top: 10, left: 10, zIndex: 5 }}
-          >
-            <Group gap={4}>
-              <Tooltip label="Paint brush" position="right">
-                <ActionIcon
-                  variant={activeTool === "brush" ? "filled" : "default"}
-                  color="blue"
-                  onClick={() => setActiveTool("brush")}
-                  aria-label="Paint brush tool"
+          <ToolRail
+            tools={[
+              { id: "brush", icon: "🖌", label: "Paint brush" },
+              { id: "select", icon: "⬚", label: "Box select", color: "yellow" },
+              {
+                id: "shrinkwrap",
+                icon: "🧲",
+                label: "Shrinkwrap weights (copy from source pieces)",
+                color: "teal"
+              }
+            ]}
+            activeToolId={activeTool}
+            onSelect={(toolId) =>
+              setActiveTool(toolId as "brush" | "select" | "shrinkwrap")
+            }
+          />
+          <ToolOptionsBar>
+            {activeTool === "brush" ? (
+              <>
+                <SegmentedControl
+                  size="xs"
+                  data={[
+                    { value: "add", label: "Add" },
+                    { value: "subtract", label: "Sub" },
+                    { value: "smooth", label: "Smooth" },
+                    { value: "fill", label: "Fill" }
+                  ]}
+                  value={brushMode}
+                  onChange={(value) => setBrushMode(value as BrushMode)}
+                />
+                <ToolOptionSlider
+                  label="Radius"
+                  min={0.01}
+                  max={0.4}
+                  step={0.005}
+                  value={brushRadius}
+                  onChange={setBrushRadius}
+                />
+                <ToolOptionSlider
+                  label="Strength"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={brushStrength}
+                  onChange={setBrushStrength}
+                />
+              </>
+            ) : activeTool === "select" ? (
+              <>
+                <Switch
+                  size="xs"
+                  label="X-ray"
+                  checked={xray}
+                  onChange={(event) => setXray(event.currentTarget.checked)}
+                />
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  disabled={selection.size === 0}
+                  onClick={handleAssignSelection}
                 >
-                  🖌
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Box select" position="right">
-                <ActionIcon
-                  variant={activeTool === "select" ? "filled" : "default"}
-                  color="yellow"
-                  onClick={() => setActiveTool("select")}
-                  aria-label="Box select tool"
+                  {selection.size > 0
+                    ? `Assign ${selection.size} to bone`
+                    : "Assign to bone"}
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="gray"
+                  disabled={selection.size === 0}
+                  onClick={() => setSelection(new Set())}
                 >
-                  ⬚
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Shrinkwrap weights (copy from source pieces)" position="right">
-                <ActionIcon
-                  variant={activeTool === "shrinkwrap" ? "filled" : "default"}
-                  color="teal"
-                  onClick={() => setActiveTool("shrinkwrap")}
-                  aria-label="Shrinkwrap tool"
+                  Clear
+                </Button>
+                <Text size="xs" c="var(--sm-color-subtext)">
+                  Drag a box; shift adds.
+                </Text>
+              </>
+            ) : (
+              <>
+                <MultiSelect
+                  size="xs"
+                  w={220}
+                  placeholder="source piece(s)"
+                  data={generated.ranges
+                    .map((range, index) => ({
+                      value: String(index),
+                      label: range.materialName ?? `Piece ${index + 1}`
+                    }))
+                    .filter((option) => Number(option.value) !== paintPiece)}
+                  value={shrinkSources}
+                  onChange={setShrinkSources}
+                />
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  loading={resolving}
+                  disabled={
+                    shrinkSources.length === 0 ||
+                    (paintPiece < 0 && !regionSet && selection.size === 0)
+                  }
+                  onClick={handleShrinkwrap}
                 >
-                  🧲
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-            <Paper p="xs" radius="sm" withBorder style={{ width: 170, opacity: 0.95 }}>
-              {activeTool === "shrinkwrap" ? (
-                <Stack gap={6}>
-                  <MultiSelect
-                    size="xs"
-                    label="From piece(s)"
-                    placeholder="source piece(s)"
-                    data={generated.ranges
-                      .map((range, index) => ({
-                        value: String(index),
-                        label: range.materialName ?? `Piece ${index + 1}`
-                      }))
-                      .filter((option) => Number(option.value) !== paintPiece)}
-                    value={shrinkSources}
-                    onChange={setShrinkSources}
-                  />
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    loading={resolving}
-                    disabled={
-                      shrinkSources.length === 0 ||
-                      (paintPiece < 0 && !regionSet && selection.size === 0)
-                    }
-                    onClick={handleShrinkwrap}
-                  >
-                    {selection.size > 0
-                      ? `Shrinkwrap ${selection.size} selected`
-                      : regionSet
-                        ? "Shrinkwrap region"
-                        : "Shrinkwrap piece"}
-                  </Button>
-                  <Text size="xs" c="var(--sm-color-subtext)">
-                    Target = selection, else the isolated
-                    piece/region. Box-drag works in this tool.
-                  </Text>
-                </Stack>
-              ) : activeTool === "brush" ? (
-                <Stack gap={6}>
-                  <SegmentedControl
-                    size="xs"
-                    fullWidth
-                    data={[
-                      { value: "add", label: "Add" },
-                      { value: "subtract", label: "Sub" },
-                      { value: "smooth", label: "Smooth" },
-                      { value: "fill", label: "Fill" }
-                    ]}
-                    value={brushMode}
-                    onChange={(value) => setBrushMode(value as BrushMode)}
-                  />
-                  <LabeledSlider
-                    label="Radius"
-                    min={0.01}
-                    max={0.4}
-                    step={0.005}
-                    value={brushRadius}
-                    onChange={setBrushRadius}
-                  />
-                  <LabeledSlider
-                    label="Strength"
-                    min={0.05}
-                    max={1}
-                    step={0.05}
-                    value={brushStrength}
-                    onChange={setBrushStrength}
-                  />
-                </Stack>
-              ) : (
-                <Stack gap={6}>
-                  <Switch
-                    size="xs"
-                    label="X-ray"
-                    checked={xray}
-                    onChange={(event) => setXray(event.currentTarget.checked)}
-                  />
-                  <Button
-                    size="compact-xs"
-                    variant="light"
-                    disabled={selection.size === 0}
-                    onClick={handleAssignSelection}
-                  >
-                    {selection.size > 0
-                      ? `Assign ${selection.size} to bone`
-                      : "Assign to bone"}
-                  </Button>
-                  <Button
-                    size="compact-xs"
-                    variant="subtle"
-                    color="gray"
-                    disabled={selection.size === 0}
-                    onClick={() => setSelection(new Set())}
-                  >
-                    Clear selection
-                  </Button>
-                  <Text size="xs" c="var(--sm-color-subtext)">
-                    Drag a box; shift adds.
-                  </Text>
-                </Stack>
-              )}
-            </Paper>
-          </Stack>
+                  {selection.size > 0
+                    ? `Shrinkwrap ${selection.size} selected`
+                    : regionSet
+                      ? "Shrinkwrap region"
+                      : "Shrinkwrap piece"}
+                </Button>
+              </>
+            )}
+          </ToolOptionsBar>
           <Tooltip
             label={tPose ? "Back to bind pose" : "T-pose (lift limbs clear)"}
             position="left"
