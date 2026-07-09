@@ -104,6 +104,8 @@ import {
   removeMaterialDefinitionFromSession,
   removeTextureDefinitionFromSession,
   textureDefinitionHasReferences,
+  removeAssetDefinitionFromSession,
+  assetDefinitionHasReferences,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
   createDefaultMaterialPbr,
@@ -1236,6 +1238,18 @@ export function App() {
         result.assetDefinition
       );
       projectStore.getState().updateSession(nextSession);
+      // The import wrote new files; without refreshing their blob
+      // URLs the Layout viewport can't render the asset until the
+      // project reloads (the preview re-reads files at boot, which
+      // hid this). Same pattern as audio/texture imports.
+      await assetSourceStore
+        .getState()
+        .refreshPaths([
+          result.assetDefinition.source.relativeAssetPath,
+          ...result.textureDefinitions.map(
+            (definition) => definition.source.relativeAssetPath
+          )
+        ]);
       if (result.warnings.length > 0) {
         window.alert(
           `Asset import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
@@ -1300,6 +1314,47 @@ export function App() {
     },
     []
   );
+
+  // Assets library modal (Game > Libraries > Assets): when opened
+  // from a placed instance's "Edit definition", preselect that asset.
+  const [assetsLibraryPreselectId, setAssetsLibraryPreselectId] = useState<
+    string | null
+  >(null);
+
+  const handleSetAssetDefaultShader = useCallback(
+    (
+      definitionId: string,
+      slot: "surface" | "deform" | "effect",
+      shaderDefinitionId: string | null
+    ) =>
+      dispatchCommand({
+        kind: "SetAssetDefaultShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          shaderDefinitionId: shaderDefinitionId ?? null
+        }
+      }),
+    []
+  );
+
+  const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    projectStore
+      .getState()
+      .updateSession(
+        removeAssetDefinitionFromSession(currentSession, definitionId)
+      );
+  }, []);
 
   const handleCreateMaterialDefinition = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
@@ -2108,63 +2163,10 @@ export function App() {
           })
         );
     },
-    onUpdateAssetDefinition: handleUpdateAssetDefinition,
-    onSetAssetMaterialSlotBinding: handleSetAssetMaterialSlotBinding,
-    onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShader",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          shaderDefinitionId: shaderDefinitionId ?? null
-        }
-      }),
-    onSetAssetDefaultShaderParameterOverride: (definitionId, slot, override) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShaderParameterOverride",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          override
-        }
-      }),
-    onClearAssetDefaultShaderParameterOverride: (
-      definitionId,
-      slot,
-      parameterId
-    ) =>
-      dispatchCommand({
-        kind: "ClearAssetDefaultShaderParameterOverride",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          parameterId
-        }
-      }),
+    onOpenAssetsLibrary: (definitionId) => {
+      setAssetsLibraryPreselectId(definitionId);
+      shellStore.getState().setActiveLibrary("assets");
+    },
     onCreateMaterialDefinition: handleCreateMaterialDefinition,
     onImportPbrMaterial: handleImportPbrMaterial,
     onImportTextureDefinition: handleImportTextureDefinition,
@@ -2590,6 +2592,13 @@ export function App() {
         textureDefinitions={textureDefinitions}
         shaderDefinitions={shaderDefinitions}
         audioClipDefinitions={audioClipDefinitions}
+        assetDefinitions={assetDefinitions}
+        contentLibrary={session?.contentLibrary ?? null}
+        surfaceDefinitions={surfaceDefinitions}
+        grassTypeDefinitions={grassTypeDefinitions}
+        flowerTypeDefinitions={flowerTypeDefinitions}
+        rockTypeDefinitions={rockTypeDefinitions}
+        maskTextureDefinitions={maskTextureDefinitions}
         assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
         isMaterialReferenced={(definitionId) =>
@@ -2602,6 +2611,15 @@ export function App() {
             ? textureDefinitionHasReferences(session, definitionId)
             : false
         }
+        isAssetReferenced={(definitionId) =>
+          session ? assetDefinitionHasReferences(session, definitionId) : false
+        }
+        assetsPreselectId={assetsLibraryPreselectId}
+        onImportAssetDefinition={handleImportAsset}
+        onUpdateAssetDefinition={handleUpdateAssetDefinition}
+        onSetAssetMaterialSlotBinding={handleSetAssetMaterialSlotBinding}
+        onSetAssetDefaultShader={handleSetAssetDefaultShader}
+        onRemoveAssetDefinition={handleRemoveAssetDefinition}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
           if (!currentSession) return;
@@ -2944,6 +2962,22 @@ export function App() {
                           }
                         }}
                       >
+                        <Menu.Item
+                          onClick={() => {
+                            setAssetsLibraryPreselectId(null);
+                            shellStore.getState().setActiveLibrary("assets");
+                          }}
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          📦 Assets
+                        </Menu.Item>
                         <Menu.Item
                           onClick={() =>
                             shellStore.getState().setActiveLibrary("materials")

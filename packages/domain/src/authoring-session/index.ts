@@ -3753,6 +3753,75 @@ export function assetDefinitionHasSceneReferences(
   );
 }
 
+/** Recursively true when any nested object carries this assetDefinitionId
+ *  (scatter layer asset specs, LOD specs — the key is unique to asset refs). */
+function valueReferencesAssetDefinition(
+  value: unknown,
+  definitionId: string
+): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((entry) =>
+      valueReferencesAssetDefinition(entry, definitionId)
+    );
+  }
+  const record = value as Record<string, unknown>;
+  if (record.assetDefinitionId === definitionId) return true;
+  return Object.values(record).some((entry) =>
+    valueReferencesAssetDefinition(entry, definitionId)
+  );
+}
+
+/**
+ * True when an asset definition is referenced anywhere: placed
+ * instances (region base + Scene overlays), grass/flower/rock
+ * scatter types, or surface layer stacks (library definitions,
+ * asset slots, landscape channels). Referenced assets cannot be
+ * deleted from the Library.
+ */
+export function assetDefinitionHasReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  if (assetDefinitionHasSceneReferences(session, definitionId)) return true;
+
+  const library = session.contentLibrary;
+  const scatterTypes: unknown[] = [
+    ...(library.grassTypeDefinitions ?? []),
+    ...(library.flowerTypeDefinitions ?? []),
+    ...(library.rockTypeDefinitions ?? [])
+  ];
+  if (
+    scatterTypes.some((definition) =>
+      valueReferencesAssetDefinition(definition, definitionId)
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    (library.surfaceDefinitions ?? []).some((definition) =>
+      valueReferencesAssetDefinition(definition.surface, definitionId)
+    )
+  ) {
+    return true;
+  }
+  if (
+    library.assetDefinitions.some(
+      (definition) =>
+        definition.definitionId !== definitionId &&
+        valueReferencesAssetDefinition(definition.surfaceSlots, definitionId)
+    )
+  ) {
+    return true;
+  }
+  return getAllRegions(session).some((region) =>
+    region.landscape.surfaceSlots.some((channel) =>
+      valueReferencesAssetDefinition(channel.surface, definitionId)
+    )
+  );
+}
+
 export function environmentDefinitionHasRegionBindings(
   session: AuthoringSession,
   definitionId: string

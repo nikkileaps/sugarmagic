@@ -58,7 +58,6 @@ import { useLandscapeWorkspaceView } from "./landscape";
 import { useSpatialWorkspaceView } from "./spatial";
 import { useBehaviorWorkspaceView } from "./behavior";
 import { useEnvironmentWorkspaceView } from "./environment";
-import { useAssetsWorkspaceView } from "./assets";
 import { useAudioWorkspaceView } from "./audio";
 import { useSurfaceLibraryView } from "./surfaces";
 
@@ -69,8 +68,7 @@ const buildWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "behavior", label: "Behavior", icon: "🎭" },
   { id: "environment", label: "Environment", icon: "🌅" },
   { id: "audio", label: "Audio", icon: "🔊" },
-  { id: "surfaces", label: "Surfaces", icon: "🪴" },
-  { id: "assets", label: "Assets", icon: "📦" }
+  { id: "surfaces", label: "Surfaces", icon: "🪴" }
 ];
 
 export interface BuildProductModeViewProps {
@@ -120,28 +118,9 @@ export interface BuildProductModeViewProps {
     kind: "npc" | "item" | "player" | "asset";
     id: string;
   }) => void;
-  onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
-  onSetAssetMaterialSlotBinding: (
-    definitionId: string,
-    slotName: string,
-    slotIndex: number,
-    surface: SurfaceBinding<"universal"> | null
-  ) => void;
-  onSetAssetDefaultShader: (
-    definitionId: string,
-    slot: "surface" | "deform" | "effect",
-    shaderDefinitionId: string | null
-  ) => void;
-  onSetAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: "surface" | "deform" | "effect",
-    override: ShaderParameterOverride
-  ) => void;
-  onClearAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: "surface" | "deform" | "effect",
-    parameterId: string
-  ) => void;
+  /** Open Game > Libraries > Assets with this definition selected
+   *  (asset definition editing lives in the library modal now). */
+  onOpenAssetsLibrary: (definitionId: string) => void;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -234,11 +213,6 @@ export function useBuildProductModeView(
     onConsumeNavigationTarget,
     onNavigateToTarget,
     onImportAsset,
-    onUpdateAssetDefinition,
-    onSetAssetMaterialSlotBinding,
-    onSetAssetDefaultShader,
-    onSetAssetDefaultShaderParameterOverride,
-    onClearAssetDefaultShaderParameterOverride,
     onCreateMaterialDefinition,
     onImportPbrMaterial,
     onImportTextureDefinition,
@@ -265,15 +239,6 @@ export function useBuildProductModeView(
   } = props;
 
   const activeRegion = session ? getActiveRegion(session) : null;
-  const [selectedAssetDefinitionIdState, setSelectedAssetDefinitionId] =
-    useState<string | null>(assetDefinitions[0]?.definitionId ?? null);
-  const selectedAssetDefinitionId =
-    selectedAssetDefinitionIdState &&
-    assetDefinitions.some(
-      (definition) => definition.definitionId === selectedAssetDefinitionIdState
-    )
-      ? selectedAssetDefinitionIdState
-      : (assetDefinitions[0]?.definitionId ?? null);
 
   const selectedEnvironment = useMemo(() => {
     if (environmentDefinitions.length === 0) return null;
@@ -307,10 +272,10 @@ export function useBuildProductModeView(
     soundCueDefinitions,
     onImportAsset,
     renderInspectorSections: renderLayoutInspectorSections,
-    onEditAssetDefinition: (definitionId) => {
-      setSelectedAssetDefinitionId(definitionId);
-      onSelectKind("assets");
-    }
+    // Assets are library content (2026-07-09); "edit definition"
+    // opens the Assets library modal instead of a workspace tab.
+    onEditAssetDefinition: (definitionId) =>
+      props.onOpenAssetsLibrary(definitionId)
   });
 
   const boundRegionNames = useMemo(() => {
@@ -498,35 +463,6 @@ export function useBuildProductModeView(
     onUpdateMusicBindings
   });
 
-  const assetsView = useAssetsWorkspaceView({
-    assetDefinitions,
-    contentLibrary:
-      session?.contentLibrary ??
-      createEmptyContentLibrarySnapshot("empty:content-library"),
-    surfaceDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
-    materialDefinitions,
-    textureDefinitions,
-    maskTextureDefinitions,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition,
-    activeMaskPaintTarget,
-    onSetMaskPaintTarget,
-    shaderDefinitions,
-    selectedAssetDefinitionId,
-    onSelectAssetDefinition: setSelectedAssetDefinitionId,
-    onImportAsset,
-    onUpdateAssetDefinition,
-    onSetAssetMaterialSlotBinding,
-    onSetAssetDefaultShader,
-    onSetAssetDefaultShaderParameterOverride,
-    onClearAssetDefaultShaderParameterOverride,
-    onEditShaderGraph: (shaderDefinitionId) =>
-      onNavigateToTarget?.({ kind: "shader-graph", shaderDefinitionId })
-  });
-
   const surfacesView = useSurfaceLibraryView({
     surfaceDefinitions,
     materialDefinitions,
@@ -559,9 +495,7 @@ export function useBuildProductModeView(
               ? audioView
               : activeBuildKind === "environment"
                 ? environmentView
-                : activeBuildKind === "surfaces"
-                  ? surfacesView
-                  : assetsView;
+                : surfacesView;
 
   const contextSelector: BuildContextSelector | null =
     activeBuildKind === "layout" ||

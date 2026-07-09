@@ -350,6 +350,8 @@ export function useLayoutWorkspaceView(
   const [npcQuery, setNPCQuery] = useState("");
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
+  const [addAssetOpen, setAddAssetOpen] = useState(false);
+  const [assetQuery, setAssetQuery] = useState("");
 
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const getViewportElementRef = useRef(getViewportElement);
@@ -921,41 +923,50 @@ export function useLayoutWorkspaceView(
     [onEditAssetDefinition, region]
   );
 
-  const handleImportAssetFromExplorer = useCallback(async () => {
-    if (!region) return;
+  const handlePlaceAssetDefinition = useCallback(
+    (definition: AssetDefinition) => {
+      if (!region) return;
 
+      const instanceId = createPlacedAssetInstanceId(definition.displayName);
+
+      onCommand({
+        kind: "PlaceAssetInstance",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: instanceId
+        },
+        payload: {
+          instanceId,
+          assetDefinitionId: definition.definitionId,
+          displayName: definition.displayName,
+          parentFolderId:
+            selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
+          position: [0, 0.5, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          // Plan 058 §058.2 — Ambient Context: new placements land
+          // in the active Scene's overlay. Promote to Base via the
+          // scope-conversion action (Plan 058.3).
+          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+        }
+      });
+      onSelect([instanceId]);
+      setAddAssetOpen(false);
+    },
+    [activeScene, onCommand, onSelect, region, selectedFolderId]
+  );
+
+  // The "+ Asset" picker's escape hatch for a file not yet in the
+  // library: run the normal import, then place the result.
+  const handleImportAndPlaceAsset = useCallback(async () => {
     const importedAsset = await onImportAsset();
     if (!importedAsset) return;
-
-    const instanceId = createPlacedAssetInstanceId(importedAsset.displayName);
-
-    onCommand({
-      kind: "PlaceAssetInstance",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: instanceId
-      },
-      payload: {
-        instanceId,
-        assetDefinitionId: importedAsset.definitionId,
-        displayName: importedAsset.displayName,
-        parentFolderId:
-          selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
-        position: [0, 0.5, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        // Plan 058 §058.2 — Ambient Context: new placements land
-        // in the active Scene's overlay. Promote to Base via the
-        // scope-conversion action (Plan 058.3).
-        scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
-      }
-    });
-    onSelect([instanceId]);
-  }, [activeScene, onCommand, onImportAsset, onSelect, region, selectedFolderId]);
+    handlePlaceAssetDefinition(importedAsset);
+  }, [handlePlaceAssetDefinition, onImportAsset]);
 
   const handleAddPlayerToScene = useCallback(() => {
     if (!region || !playerDefinition) return;
@@ -1182,6 +1193,14 @@ export function useLayoutWorkspaceView(
     );
   }, [itemDefinitions, itemQuery]);
 
+  const filteredAssetDefinitions = useMemo(() => {
+    const query = assetQuery.trim().toLowerCase();
+    if (!query) return assetDefinitions;
+    return assetDefinitions.filter((definition) =>
+      definition.displayName.toLowerCase().includes(query)
+    );
+  }, [assetDefinitions, assetQuery]);
+
   return {
     leftPanel: region ? (
       <PanelSection
@@ -1200,7 +1219,12 @@ export function useLayoutWorkspaceView(
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item onClick={() => void handleImportAssetFromExplorer()}>
+                <Menu.Item
+                  onClick={() => {
+                    setAddAssetOpen(true);
+                    setAssetQuery("");
+                  }}
+                >
                   Asset
                 </Menu.Item>
                 <Menu.Item
@@ -1259,8 +1283,68 @@ export function useLayoutWorkspaceView(
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
+            getEntityScopeAction={(instanceId) => {
+              // Same action pair as the viewport context menu
+              // (Plan 058.3); placed assets only.
+              if (
+                !region ||
+                !regionContents.placedAssets.some(
+                  (entry) => entry.instanceId === instanceId
+                )
+              ) {
+                return null;
+              }
+              return {
+                label: overlayAssetIds.has(instanceId)
+                  ? "Promote to Base"
+                  : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`,
+                onClick: () =>
+                  onConvertAssetScope(region.identity.id, instanceId)
+              };
+            }}
           />
         </Stack>
+        <Modal
+          opened={addAssetOpen}
+          onClose={() => setAddAssetOpen(false)}
+          title="Add Asset"
+          centered
+        >
+          <Stack gap="sm">
+            <TextInput
+              placeholder="Search assets..."
+              value={assetQuery}
+              onChange={(event) => setAssetQuery(event.currentTarget.value)}
+              autoFocus
+            />
+            {filteredAssetDefinitions.length > 0 ? (
+              filteredAssetDefinitions.map((definition) => (
+                <Button
+                  key={definition.definitionId}
+                  variant="light"
+                  justify="flex-start"
+                  onClick={() => handlePlaceAssetDefinition(definition)}
+                >
+                  {definition.assetKind === "foliage" ? "🌳" : "📦"}{" "}
+                  {definition.displayName}
+                </Button>
+              ))
+            ) : (
+              <Text size="sm" c="dimmed">
+                {assetQuery.trim()
+                  ? "No assets match that search."
+                  : "No assets in the library yet."}
+              </Text>
+            )}
+            <Button
+              variant="subtle"
+              size="xs"
+              onClick={() => void handleImportAndPlaceAsset()}
+            >
+              Import new asset...
+            </Button>
+          </Stack>
+        </Modal>
         <Modal
           opened={addNPCOpen}
           onClose={() => setAddNPCOpen(false)}
