@@ -35,8 +35,11 @@ export interface WeightPaintRange {
 export interface WeightPaintViewportProps {
   /** The SKINNED model GLB (blob URL). */
   modelUrl: string;
-  /** Idle clip GLB (blob URL) for the animate toggle; optional. */
-  idleClipUrl: string | null;
+  /** Per-slot clip GLBs (blob URLs) for the playback controls. */
+  clips: Array<{ slot: string; url: string }>;
+  /** Slot currently playing, or null for the bind pose (Static). */
+  activeClip: string | null;
+  playing: boolean;
   weights: SkinWeights;
   ranges: WeightPaintRange[];
   /** Column into weights.boneOrder currently being painted. */
@@ -46,7 +49,6 @@ export interface WeightPaintViewportProps {
   columnToJointSlot: number[];
   /** World-space brush radius. */
   brushRadius: number;
-  animating: boolean;
   /** Piece isolation: -1 = all; otherwise index into `ranges` —
    *  other pieces ghost out and stop catching brush raycasts, so
    *  layered shells (tail behind the torso) are paintable. */
@@ -90,7 +92,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   propsRef.current = props;
   // Imperative handles the effect exposes for prop-driven updates.
   const refreshHeatmapRef = useRef<(vertices?: number[]) => void>(() => {});
-  const mixerControlRef = useRef<(playing: boolean) => void>(() => {});
+  const mixerControlRef = useRef<() => void>(() => {});
 
   // Selected bone / weights identity changes repaint the heatmap.
   useEffect(() => {
@@ -108,8 +110,8 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     refreshHeatmapRef.current();
   }, [props.selection, props.regionSet]);
   useEffect(() => {
-    mixerControlRef.current(props.animating);
-  }, [props.animating]);
+    mixerControlRef.current();
+  }, [props.activeClip, props.playing]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -193,7 +195,8 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
 
     let disposed = false;
     let mixer: THREE.AnimationMixer | null = null;
-    let idleAction: THREE.AnimationAction | null = null;
+    const actionsBySlot = new Map<string, THREE.AnimationAction>();
+    let currentSlot: string | null = null;
     // Bones for the T-pose viewing aid: canonical name -> bone +
     // its bind-pose quaternion (GLTFLoader sanitizes names).
     const poseBones: Array<{
@@ -295,19 +298,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       refreshHeatmap();
       applyIsolation();
 
-      // Idle playback (optional). NOT started until the Animate
-      // toggle asks: a paused-at-frame-0 action is a slightly
-      // POSED model, and painting against it shears partially-
-      // painted regions (2026-07-06 sleeve-spike bug) — Animate
-      // off must mean TRUE rest pose.
-      if (propsRef.current.idleClipUrl) {
-        loader.load(propsRef.current.idleClipUrl, (clipGltf) => {
+      // Clip playback: load every slot's clip; nothing plays until
+      // the controls ask (Static = TRUE bind pose — a paused-at-
+      // frame-0 action is a slightly POSED model and shears
+      // partially-painted regions; 2026-07-06 sleeve-spike bug).
+      for (const entry of propsRef.current.clips) {
+        loader.load(entry.url, (clipGltf) => {
           if (disposed) return;
           const clip = clipGltf.animations[0];
           if (!clip) return;
-          mixer = new THREE.AnimationMixer(gltf.scene);
-          idleAction = mixer.clipAction(clip);
-          if (propsRef.current.animating) idleAction.play();
+          if (!mixer) mixer = new THREE.AnimationMixer(gltf.scene);
+          actionsBySlot.set(entry.slot, mixer.clipAction(clip));
+          mixerControlRef.current();
         });
       }
     });
@@ -397,15 +399,15 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       }
     }
 
-    mixerControlRef.current = (playing: boolean) => {
-      if (!idleAction) return;
-      if (playing) {
-        idleAction.reset().play();
-      } else {
-        // stop() unbinds the action — nodes return to their rest
-        // TRS, i.e. the actual bind pose.
-        idleAction.stop();
+    mixerControlRef.current = () => {
+      const wanted = propsRef.current.activeClip;
+      if (wanted !== currentSlot) {
+        for (const action of actionsBySlot.values()) action.stop();
+        currentSlot = wanted;
+        if (wanted) actionsBySlot.get(wanted)?.reset().play();
       }
+      const action = wanted ? actionsBySlot.get(wanted) : null;
+      if (action) action.paused = !propsRef.current.playing;
     };
 
     fullSyncRef.current = () => {
@@ -641,7 +643,8 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         for (const entry of poseBones) {
           if (entry.contract) entry.bone.quaternion.copy(entry.contract);
         }
-      } else if (!propsRef.current.animating) {
+      } else if (!propsRef.current.activeClip) {
+        // Static: true bind pose.
         for (const entry of poseBones) {
           entry.bone.quaternion.copy(entry.bind);
         }

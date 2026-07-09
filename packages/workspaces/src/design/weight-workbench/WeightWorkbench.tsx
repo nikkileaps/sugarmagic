@@ -28,6 +28,7 @@ import {
   Paper,
   ScrollArea,
   SegmentedControl,
+  Select,
   Stack,
   Switch,
   Text,
@@ -179,7 +180,8 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
   const [brushRadius, setBrushRadius] = useState(0.08);
   const [brushStrength, setBrushStrength] = useState(0.5);
   const [brushMode, setBrushMode] = useState<BrushMode>("add");
-  const [paintAnimating, setPaintAnimating] = useState(false);
+  const [paintClip, setPaintClip] = useState<string | null>(null);
+  const [paintPlaying, setPaintPlaying] = useState(true);
   const [weightsVersion, setWeightsVersion] = useState(0);
   const [paintScope, setPaintScope] = useState("-1");
   const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
@@ -262,10 +264,12 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
     () => (generated ? trackBlobUrl(generated.modelGlb) : null),
     [generated, trackBlobUrl]
   );
-  const paintIdleUrl = useMemo(() => {
-    if (!generated) return null;
-    const idle = generated.clips.find((clip) => clip.slot === "idle");
-    return idle ? trackBlobUrl(idle.bytes) : null;
+  const paintClipUrls = useMemo(() => {
+    if (!generated) return [];
+    return generated.clips.map((clip) => ({
+      slot: clip.slot,
+      url: trackBlobUrl(clip.bytes)
+    }));
   }, [generated, trackBlobUrl]);
 
   // ---- Handlers (the proven set) ------------------------------
@@ -555,12 +559,31 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
       ) : null}
       <Group gap="sm" align="center" wrap="nowrap">
         {modeTabs}
-        <Switch
+        <Select
           size="xs"
-          label="Animate"
-          checked={paintAnimating}
-          onChange={(event) => setPaintAnimating(event.currentTarget.checked)}
+          w={140}
+          data={[
+            { value: "__static__", label: "Static" },
+            ...paintClipUrls.map((clip) => ({
+              value: clip.slot,
+              label: clip.slot
+            }))
+          ]}
+          value={paintClip ?? "__static__"}
+          onChange={(value) =>
+            setPaintClip(value && value !== "__static__" ? value : null)
+          }
         />
+        <Tooltip label={paintPlaying ? "Pause" : "Play"}>
+          <ActionIcon
+            variant="subtle"
+            color="blue"
+            onClick={() => setPaintPlaying((current) => !current)}
+            aria-label={paintPlaying ? "Pause preview" : "Play preview"}
+          >
+            {paintPlaying ? "❚❚" : "▶"}
+          </ActionIcon>
+        </Tooltip>
         {shrinkInfo ? (
           <Text size="xs" c="var(--sm-color-subtext)">
             {shrinkInfo}
@@ -731,13 +754,14 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
         <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <WeightPaintViewport
             modelUrl={paintModelUrl}
-            idleClipUrl={paintIdleUrl}
+            clips={paintClipUrls}
+            activeClip={paintClip}
+            playing={paintPlaying}
             weights={generated.weights}
             ranges={generated.ranges}
             selectedBoneColumn={paintBoneColumn}
             columnToJointSlot={columnToJointSlot}
             brushRadius={brushRadius}
-            animating={paintAnimating}
             isolatedPiece={paintPiece}
             regionSet={regionSet}
             weightsVersion={weightsVersion}
