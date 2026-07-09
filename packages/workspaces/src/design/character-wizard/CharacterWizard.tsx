@@ -44,6 +44,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   BODY_REGION_LABELS,
+  GeodesicVoxelWeightSolver,
   applyBrushStroke,
   computeBoneSegments,
   resolveRegionWeights,
@@ -819,9 +820,53 @@ export function CharacterWizard(props: CharacterWizardProps) {
     }, 30);
   }, [generated, shrinkSources, selection, regionSet, paintWindow]);
 
-  // Scoped reset: restore the PRISTINE auto-solve weights for the
-  // current scope only (selection > region > piece) — healing one
-  // piece without losing work elsewhere.
+  // TRUE fresh solve (2026-07-08): in EDIT sessions "pristine" is
+  // the file state at open, which can itself be damaged — the
+  // lying "Reset to auto" cost a full afternoon. This re-runs the
+  // ACTUAL solver over everything and re-baselines pristine (and
+  // therefore the body regions) to genuine solver output.
+  const handleFreshSolve = useCallback(() => {
+    if (!generated) return;
+    setResolving(true);
+    setShrinkInfo(null);
+    setTimeout(() => {
+      try {
+        let meshTopY = -Infinity;
+        for (let i = 1; i < generated.mesh.positions.length; i += 3) {
+          if (generated.mesh.positions[i]! > meshTopY) {
+            meshTopY = generated.mesh.positions[i]!;
+          }
+        }
+        const segments = computeBoneSegments(generated.skeleton, { meshTopY });
+        const solved = new GeodesicVoxelWeightSolver().solve(
+          generated.mesh,
+          segments
+        );
+        generated.weights.joints.set(solved.joints);
+        generated.weights.weights.set(solved.weights);
+        pristineWeightsRef.current = {
+          joints: solved.joints.slice(),
+          weights: solved.weights.slice()
+        };
+        paintDirtyRef.current = true;
+        setSelection(new Set());
+        setWeightsVersion((version) => version + 1);
+        // New object identity re-derives the body regions from the
+        // NEW pristine.
+        setGenerated({ ...generated });
+        setShrinkInfo("fresh solver weights for all pieces");
+      } catch (solveError) {
+        setError(
+          solveError instanceof Error ? solveError.message : String(solveError)
+        );
+      } finally {
+        setResolving(false);
+      }
+    }, 30);
+  }, [generated]);
+
+  // Scoped reset: restore the SESSION-START weights for the
+  // current scope only (selection > region > piece).
   const handleResetScope = useCallback(() => {
     const pristine = pristineWeightsRef.current;
     if (!generated || !pristine) return;
@@ -1079,7 +1124,10 @@ export function CharacterWizard(props: CharacterWizardProps) {
                     onClick={handleResetScope}
                     disabled={paintPiece < 0 && !regionSet && selection.size === 0}
                   >
-                    Reset scope to auto (piece/region/selection)
+                    Reset scope to session start
+                  </Menu.Item>
+                  <Menu.Item onClick={handleFreshSolve} disabled={resolving}>
+                    {resolving ? "Solving..." : "Fresh auto-solve (ALL pieces)"}
                   </Menu.Item>
                   <Menu.Divider />
                   <Menu.Item
@@ -1093,7 +1141,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
                       setWeightsVersion((version) => version + 1);
                     }}
                   >
-                    Reset to auto
+                    Reset ALL to session start
                   </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
