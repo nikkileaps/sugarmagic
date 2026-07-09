@@ -189,14 +189,14 @@ describe("Scene.startingRegionId (first-playable region binding)", () => {
       ...createDefaultScene(),
       startingRegionId: "region:arrival-station"
     });
-    expect(scene.startingRegionId).toBe("region:arrival-station");
+    expect(scene?.startingRegionId).toBe("region:arrival-station");
     expect(
       normalizeScene({ ...createDefaultScene(), startingRegionId: "  " })
-        .startingRegionId
+        ?.startingRegionId
     ).toBeNull();
     expect(
       normalizeScene({ ...createDefaultScene(), startingRegionId: 42 })
-        .startingRegionId
+        ?.startingRegionId
     ).toBeNull();
   });
 });
