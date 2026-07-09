@@ -25,6 +25,7 @@ import {
   Button,
   Group,
   Loader,
+  Paper,
   ScrollArea,
   SegmentedControl,
   Stack,
@@ -596,7 +597,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
                             }}
                             aria-label={`Toggle ${slot} source`}
                           >
-                            {slots[slot].source === "generated" ? "✨" : "📦"}
+                            {slots[slot].source === "generated" ? "G" : "L"}
                           </ActionIcon>
                         </Tooltip>
                       </Group>
@@ -635,34 +636,6 @@ export function AnimationPanel(props: AnimationPanelProps) {
                     </Stack>
                   </PanelSection>
                 ) : null}
-                <PanelSection title="Pose" icon="🤸" defaultOpen={false}>
-                  <Stack gap={6}>
-                    <Switch
-                      size="xs"
-                      label="Adjust pose"
-                      checked={poseMode}
-                      onChange={(event) =>
-                        setPoseMode(event.currentTarget.checked)
-                      }
-                    />
-                    {poseMode ? (
-                      <>
-                        <Switch
-                          size="xs"
-                          label="Mirror"
-                          checked={poseMirroring}
-                          onChange={(event) =>
-                            setPoseMirroring(event.currentTarget.checked)
-                          }
-                        />
-                        <Text size="xs" c="var(--sm-color-subtext)">
-                          Drag a wrist or tail handle; the pose
-                          applies to all generated slots.
-                        </Text>
-                      </>
-                    ) : null}
-                  </Stack>
-                </PanelSection>
                 {active?.source === "generated" ? (
                   <PanelSection title="Curves" icon="📈" defaultOpen={false}>
                     <Stack gap={6}>
@@ -705,7 +678,43 @@ export function AnimationPanel(props: AnimationPanelProps) {
             </ScrollArea>
             {/* Center: preview / pose viewport + optional curve strip. */}
             <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
-              <Box style={{ flex: 1, minHeight: 0 }}>
+              <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
+                {/* Tool rail, matching the rig workbench. */}
+                <Stack
+                  gap={6}
+                  style={{ position: "absolute", top: 10, left: 10, zIndex: 10 }}
+                >
+                  <Group gap={4}>
+                    <Tooltip label="Adjust pose (puppet handles)" position="right">
+                      <ActionIcon
+                        variant={poseMode ? "filled" : "default"}
+                        color="grape"
+                        onClick={() => setPoseMode((current) => !current)}
+                        aria-label="Adjust pose tool"
+                      >
+                        🤸
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                  {poseMode ? (
+                    <Paper p="xs" radius="sm" withBorder style={{ width: 170, opacity: 0.95 }}>
+                      <Stack gap={6}>
+                        <Switch
+                          size="xs"
+                          label="Mirror"
+                          checked={poseMirroring}
+                          onChange={(event) =>
+                            setPoseMirroring(event.currentTarget.checked)
+                          }
+                        />
+                        <Text size="xs" c="var(--sm-color-subtext)">
+                          Drag a wrist or tail handle; applies to all
+                          generated slots.
+                        </Text>
+                      </Stack>
+                    </Paper>
+                  ) : null}
+                </Stack>
                 {poseMode && modelBlobUrl && relaxedPose ? (
                   <PoseViewport
                     modelUrl={modelBlobUrl}
