@@ -43,7 +43,7 @@ import {
   createLandscapeSurfaceSlot,
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
-import type { ViewportStore } from "@sugarmagic/shell";
+import { DEFAULT_SKETCH_SETTINGS, type ViewportStore } from "@sugarmagic/shell";
 import {
   PanelSection,
   ToolOptionSlider,
@@ -91,6 +91,16 @@ const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
   falloff: 0.7,
   mode: "paint"
 };
+
+/** Plan 065 §065.1 — the pencil's ink palette. */
+const SKETCH_INK_COLORS = [
+  "#1e1e2e",
+  "#ffffff",
+  "#d20f39",
+  "#1e66f5",
+  "#df8e1d",
+  "#40a02b"
+];
 
 function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
@@ -531,6 +541,56 @@ export function useLandscapeWorkspaceView(
     });
   };
 
+  const sketchSettings =
+    useVanillaStoreSelector(viewportStore, (state) => state.sketchSettings) ??
+    DEFAULT_SKETCH_SETTINGS;
+  const setSketch = (
+    patch: Partial<typeof sketchSettings>
+  ) => {
+    viewportStore.getState().setSketchSettings({
+      ...sketchSettings,
+      ...patch
+    });
+  };
+  const layoutSketch = region?.layoutSketch ?? null;
+  const commitLayoutSketch = (
+    patch: Partial<NonNullable<RegionDocument["layoutSketch"]>>
+  ) => {
+    if (!region) return;
+    onCommand({
+      kind: "UpdateRegionLayoutSketch",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: {
+        subjectKind: "region-landscape",
+        subjectId: region.identity.id
+      },
+      payload: {
+        layoutSketch: {
+          ink: layoutSketch?.ink ?? null,
+          referenceImage: layoutSketch?.referenceImage ?? null,
+          referenceOpacity: layoutSketch?.referenceOpacity ?? 0.4,
+          ...patch
+        }
+      }
+    });
+  };
+  const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const importReferenceImage = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        commitLayoutSketch({ referenceImage: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  // Local echo while dragging; the command commits on release.
+  const [referenceOpacityDraft, setReferenceOpacityDraft] = useState<number | null>(null);
+
   return {
     leftPanel: null,
     rightPanel: (
@@ -661,56 +721,181 @@ export function useLandscapeWorkspaceView(
           <ToolRail
             tools={[
               { id: "paint", icon: "🖌️", label: "Paint landscape" },
-              { id: "erase", icon: "🧽", label: "Erase landscape" }
+              { id: "erase", icon: "🧽", label: "Erase landscape" },
+              { id: "sketch", icon: "✏️", label: "Layout sketch" }
             ]}
             activeToolId={brushSettings.mode}
-            onSelect={(toolId) => setBrushMode(toolId as "paint" | "erase")}
+            onSelect={(toolId) =>
+              setBrushMode(toolId as LandscapeBrushSettings["mode"])
+            }
           />
-          <ToolOptionsBar>
-            <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
-              {brushSettings.mode === "paint" ? "Paint" : "Erase"}
-            </Text>
-            <ToolOptionSlider
-              label="Radius"
-              min={0.5}
-              max={24}
-              step={0.5}
-              value={brushSettings.radius}
-              format={(value) => `${value.toFixed(1)}m`}
-              onChange={(value) =>
-                viewportStore.getState().setBrushSettings({
-                  ...brushSettings,
-                  radius: value
-                })
-              }
-            />
-            <ToolOptionSlider
-              label="Strength"
-              min={0.01}
-              max={1}
-              step={0.01}
-              value={brushSettings.strength}
-              onChange={(value) =>
-                viewportStore.getState().setBrushSettings({
-                  ...brushSettings,
-                  strength: value
-                })
-              }
-            />
-            <ToolOptionSlider
-              label="Falloff"
-              min={0.01}
-              max={1}
-              step={0.01}
-              value={brushSettings.falloff}
-              onChange={(value) =>
-                viewportStore.getState().setBrushSettings({
-                  ...brushSettings,
-                  falloff: value
-                })
-              }
-            />
-          </ToolOptionsBar>
+          {brushSettings.mode === "sketch" ? (
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                Sketch
+              </Text>
+              <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                {SKETCH_INK_COLORS.map((color) => (
+                  <ColorSwatch
+                    key={color}
+                    color={color}
+                    size={16}
+                    component="button"
+                    onClick={() => setSketch({ color, erase: false })}
+                    style={{
+                      cursor: "pointer",
+                      outline:
+                        !sketchSettings.erase && sketchSettings.color === color
+                          ? "2px solid var(--sm-color-subtext)"
+                          : "none",
+                      outlineOffset: 1
+                    }}
+                  />
+                ))}
+              </Group>
+              <ToolOptionSlider
+                label="Size"
+                min={0.1}
+                max={4}
+                step={0.1}
+                value={sketchSettings.size}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) => setSketch({ size: value })}
+              />
+              <ToolOptionSlider
+                label="Opacity"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={sketchSettings.opacity}
+                onChange={(value) => setSketch({ opacity: value })}
+              />
+              <ActionIcon
+                variant={sketchSettings.erase ? "filled" : "subtle"}
+                color={sketchSettings.erase ? "red" : "gray"}
+                size="sm"
+                title="Erase ink"
+                aria-label="Erase ink"
+                onClick={() => setSketch({ erase: !sketchSettings.erase })}
+              >
+                🧽
+              </ActionIcon>
+              <ActionIcon
+                variant={sketchSettings.visible ? "subtle" : "filled"}
+                color={sketchSettings.visible ? "gray" : "blue"}
+                size="sm"
+                title={sketchSettings.visible ? "Hide sketch" : "Show sketch"}
+                aria-label="Show or hide sketch"
+                onClick={() => setSketch({ visible: !sketchSettings.visible })}
+              >
+                👁
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                title="Import reference image"
+                aria-label="Import reference image"
+                onClick={() => referenceFileInputRef.current?.click()}
+              >
+                🖼
+              </ActionIcon>
+              <input
+                ref={referenceFileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  importReferenceImage(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+              {layoutSketch?.referenceImage ? (
+                <>
+                  <ToolOptionSlider
+                    label="Ref"
+                    min={0.05}
+                    max={1}
+                    step={0.05}
+                    value={
+                      referenceOpacityDraft ?? layoutSketch.referenceOpacity
+                    }
+                    onChange={setReferenceOpacityDraft}
+                    onChangeEnd={(value) => {
+                      setReferenceOpacityDraft(null);
+                      commitLayoutSketch({ referenceOpacity: value });
+                    }}
+                  />
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="sm"
+                    title="Remove reference image"
+                    aria-label="Remove reference image"
+                    onClick={() => commitLayoutSketch({ referenceImage: null })}
+                  >
+                    🗑
+                  </ActionIcon>
+                </>
+              ) : null}
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                title="Clear all ink"
+                aria-label="Clear all ink"
+                onClick={() => commitLayoutSketch({ ink: null })}
+              >
+                🧹
+              </ActionIcon>
+            </ToolOptionsBar>
+          ) : (
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                {brushSettings.mode === "paint" ? "Paint" : "Erase"}
+              </Text>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.5}
+                max={24}
+                step={0.5}
+                value={brushSettings.radius}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    radius: value
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Strength"
+                min={0.01}
+                max={1}
+                step={0.01}
+                value={brushSettings.strength}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    strength: value
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Falloff"
+                min={0.01}
+                max={1}
+                step={0.01}
+                value={brushSettings.falloff}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    falloff: value
+                  })
+                }
+              />
+            </ToolOptionsBar>
+          )}
         </Box>
         <Box style={{ position: "absolute", top: 12, right: 12, pointerEvents: "none" }}>
           <LayoutOrientationWidget quaternion={cameraQuaternion} />

@@ -45,6 +45,7 @@ import type {
   DeleteLandscapeChannelCommand,
   PaintLandscapeCommand,
   ConfigureLandscapeCommand,
+  UpdateRegionLayoutSketchCommand,
   CreateRegionSoundEmitterCommand,
   UpdateRegionSoundEmitterCommand,
   DeleteRegionSoundEmitterCommand,
@@ -1205,6 +1206,19 @@ function applyPaintLandscape(
   };
 }
 
+function applyUpdateRegionLayoutSketch(
+  region: RegionDocument,
+  command: UpdateRegionLayoutSketchCommand
+): RegionDocument {
+  // Deliberately leaves `region.landscape` reference untouched so
+  // sketch commits skip the render mesh's re-apply path (Plan 065
+  // §065.1 — the sketch is authoring ink, not surface data).
+  return {
+    ...region,
+    layoutSketch: command.payload.layoutSketch
+  };
+}
+
 function applyConfigureLandscape(
   region: RegionDocument,
   command: ConfigureLandscapeCommand
@@ -1435,6 +1449,9 @@ export function executeCommand(
       break;
     case "ConfigureLandscape":
       updatedRegion = applyConfigureLandscape(region, command);
+      break;
+    case "UpdateRegionLayoutSketch":
+      updatedRegion = applyUpdateRegionLayoutSketch(region, command);
       break;
     case "CreateRegionSoundEmitter":
       updatedRegion = applyCreateRegionSoundEmitter(region, command);

@@ -19,7 +19,7 @@ import {
   type RegionLandscapeState
 } from "@sugarmagic/domain";
 
-export type LandscapeBrushMode = "paint" | "erase";
+export type LandscapeBrushMode = "paint" | "erase" | "sketch";
 
 export interface LandscapeBrushSettings {
   radius: number;
@@ -27,6 +27,32 @@ export interface LandscapeBrushSettings {
   falloff: number;
   mode: LandscapeBrushMode;
 }
+
+/**
+ * Plan 065 §065.1 — Layout Sketch pencil settings. Transient UI
+ * state (tool feel + visibility); the ink itself is canonical on
+ * `RegionDocument.layoutSketch`.
+ */
+export interface LandscapeSketchSettings {
+  /** Ink color as a css hex string. */
+  color: string;
+  /** Stroke width in world meters. */
+  size: number;
+  /** Ink alpha, 0..1. */
+  opacity: number;
+  /** Pencil erases ink instead of drawing. */
+  erase: boolean;
+  /** Show/hide the whole sketch overlay (ink + reference). */
+  visible: boolean;
+}
+
+export const DEFAULT_SKETCH_SETTINGS: LandscapeSketchSettings = {
+  color: "#1e1e2e",
+  size: 0.6,
+  opacity: 0.9,
+  erase: false,
+  visible: true
+};
 
 export type TransformTool = "select" | "move" | "rotate" | "scale";
 
@@ -60,6 +86,7 @@ export interface ViewportState {
   activeTransformTool: TransformTool;
   activeSpatialTool: "select" | "draw-rect";
   cameraQuaternion: [number, number, number, number];
+  sketchSettings: LandscapeSketchSettings;
 }
 
 export interface ViewportActions {
@@ -81,6 +108,7 @@ export interface ViewportActions {
   setCameraQuaternion: (
     quaternion: [number, number, number, number]
   ) => void;
+  setSketchSettings: (settings: LandscapeSketchSettings) => void;
 }
 
 function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
@@ -143,6 +171,7 @@ export function createViewportStore() {
     activeTransformTool: "move",
     activeSpatialTool: "select",
     cameraQuaternion: [0, 0, 0, 1],
+    sketchSettings: DEFAULT_SKETCH_SETTINGS,
     setLandscapeDraft(landscape) {
       set({ landscapeDraft: landscape });
     },
@@ -199,6 +228,9 @@ export function createViewportStore() {
     },
     setCameraQuaternion(quaternion) {
       set({ cameraQuaternion: quaternion });
+    },
+    setSketchSettings(settings) {
+      set({ sketchSettings: settings });
     }
   }));
 }

@@ -2,6 +2,7 @@ import type { DocumentDefinition } from "../document-definition";
 import type {
   RegionNPCBehaviorDefinition,
   RegionLandscapePaintPayload,
+  RegionLayoutSketchState,
   RegionAmbienceZone,
   RegionSoundEmitter
 } from "../region-authoring";
@@ -237,6 +238,17 @@ export type ConfigureLandscapeCommand = SemanticCommandBase<
     enabled?: boolean;
     size?: number;
     subdivisions?: number;
+  }
+>;
+
+/**
+ * Plan 065 §065.1 — replace the region's authoring-only Layout
+ * Sketch (blockout ink + reference underlay). Null clears it.
+ */
+export type UpdateRegionLayoutSketchCommand = SemanticCommandBase<
+  "UpdateRegionLayoutSketch",
+  {
+    layoutSketch: RegionLayoutSketchState | null;
   }
 >;
 
@@ -942,6 +954,7 @@ export type SemanticCommand =
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
+  | UpdateRegionLayoutSketchCommand
   | CreateRegionSoundEmitterCommand
   | UpdateRegionSoundEmitterCommand
   | DeleteRegionSoundEmitterCommand

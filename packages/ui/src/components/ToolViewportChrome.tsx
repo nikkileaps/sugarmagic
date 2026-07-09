@@ -113,6 +113,8 @@ export interface ToolOptionSliderProps {
   step: number;
   value: number;
   onChange: (value: number) => void;
+  /** Fires once when the drag ends — for expensive commits. */
+  onChangeEnd?: (value: number) => void;
   /** Formatted readout; defaults to 2 decimals. */
   format?: (value: number) => string;
   /** Slider track width; the option sizes to content around it. */
@@ -127,6 +129,7 @@ export function ToolOptionSlider({
   step,
   value,
   onChange,
+  onChangeEnd,
   format,
   width = 72
 }: ToolOptionSliderProps) {
@@ -146,6 +149,7 @@ export function ToolOptionSlider({
         step={step}
         value={value}
         onChange={onChange}
+        onChangeEnd={onChangeEnd}
         label={null}
       />
       <Text
