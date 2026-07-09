@@ -19,19 +19,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActionIcon,
   Alert,
   Box,
   Button,
   Group,
   Loader,
-  Modal,
+  ScrollArea,
   SegmentedControl,
   Stack,
   Switch,
-  Text
+  Text,
+  Tooltip
 } from "@mantine/core";
-import { CurveEditor } from "@sugarmagic/ui";
-import { LabeledSlider } from "@sugarmagic/ui";
+import { CurveEditor, LabeledSlider, PanelSection } from "@sugarmagic/ui";
 import {
   createDefaultMotionRecipe,
   type CharacterAnimationDefinition,
@@ -56,7 +57,6 @@ interface SlotState {
 }
 
 export interface AnimationPanelProps {
-  opened: boolean;
   /** Safe character name (asset paths derive from it). */
   characterName: string;
   model: CharacterModelDefinition;
@@ -71,6 +71,8 @@ export interface AnimationPanelProps {
     bindings: Array<{ slot: Slot; definition: CharacterAnimationDefinition }>
   ) => void;
   onClose: () => void;
+  /** Switch to the weight workbench (the 🦴 tab). */
+  onSwitchToRig: () => void;
 }
 
 /** §063.6 — editable semantic curves per generator. L/R-paired
@@ -111,7 +113,6 @@ const PERSONALITY_LABELS: Array<{
 
 export function AnimationPanel(props: AnimationPanelProps) {
   const {
-    opened,
     characterName,
     model,
     boundAnimations,
@@ -119,7 +120,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
     targetHeight,
     services,
     onCommitted,
-    onClose
+    onClose,
+    onSwitchToRig
   } = props;
   const [previewPlaying, setPreviewPlaying] = useState(true);
   // §063.5 pose adjust mode.
@@ -151,20 +153,18 @@ export function AnimationPanel(props: AnimationPanelProps) {
     blobUrlsRef.current.push(url);
     return url;
   }, []);
-  useEffect(() => {
-    if (opened) return;
-    for (const url of blobUrlsRef.current) URL.revokeObjectURL(url);
-    blobUrlsRef.current = [];
-    loadedRef.current = false;
-    setSlots(null);
-    setError(null);
-  }, [opened]);
+  useEffect(
+    () => () => {
+      for (const url of blobUrlsRef.current) URL.revokeObjectURL(url);
+    },
+    []
+  );
 
   // Bootstrap: hip scale from the model recipe + per-slot state
   // from each bound clip's stamped recipe (generated) or absence
   // of one (library).
   useEffect(() => {
-    if (!opened || loadedRef.current) return;
+    if (loadedRef.current) return;
     loadedRef.current = true;
     setBusy(true);
     setBusyLabel("Reading character...");
@@ -231,7 +231,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
         setBusy(false);
       }
     })();
-  }, [opened, assetSources, boundAnimations, model, services]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const active = slots?.[activeSlot] ?? null;
 
@@ -493,153 +494,211 @@ export function AnimationPanel(props: AnimationPanelProps) {
     ? SLOTS.filter((slot) => slots[slot].dirty && slots[slot].pending).length
     : 0;
 
-  return (
-    <Modal
-      opened={opened}
-      onClose={busy ? () => {} : onClose}
-      title="Animations"
-      size="xl"
-      centered
+  const modeTabs = (
+    <Group
+      gap={4}
+      style={{
+        padding: 6,
+        borderRadius: 8,
+        border: "1px solid var(--sm-panel-border)",
+        background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
+      }}
     >
-      <Stack gap="sm">
-        {error ? (
-          <Alert color="red" variant="light">
-            {error}
-          </Alert>
-        ) : null}
-        {!slots ? (
-          <Group justify="center" p="xl">
-            <Loader size="sm" />
-            <Text size="sm">{busyLabel || "Loading..."}</Text>
+      <Tooltip label="Weights + rig">
+        <ActionIcon
+          variant="subtle"
+          color="grape"
+          onClick={onSwitchToRig}
+          aria-label="Switch to the weight workbench"
+        >
+          🦴
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label="Animations (active)">
+        <ActionIcon variant="filled" color="cyan" onClick={onClose} aria-label="Exit animation mode">
+          ✨
+        </ActionIcon>
+      </Tooltip>
+    </Group>
+  );
+
+  return (
+    <Stack gap="xs" h="100%" p="xs" style={{ minHeight: 0 }}>
+      {error ? (
+        <Alert color="red" variant="light" withCloseButton onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      ) : null}
+      {!slots ? (
+        <Group justify="center" p="xl">
+          <Loader size="sm" />
+          <Text size="sm">{busyLabel || "Loading..."}</Text>
+        </Group>
+      ) : (
+        <>
+          <Group gap="sm" align="center" wrap="nowrap">
+            {modeTabs}
+            <Box style={{ flex: 1 }} />
+            <Button
+              onClick={() => void handleSave()}
+              loading={busy}
+              disabled={dirtyCount === 0}
+              size="compact-sm"
+            >
+              {dirtyCount > 0
+                ? `Save ${dirtyCount} slot${dirtyCount === 1 ? "" : "s"}`
+                : "Save"}
+            </Button>
           </Group>
-        ) : (
-          <>
-            <Group gap="sm" align="flex-end" wrap="wrap">
-              <SegmentedControl
-                size="xs"
-                data={SLOTS.map((slot) => ({
-                  value: slot,
-                  label:
-                    slot + (slots[slot].dirty && slots[slot].pending ? " *" : "")
-                }))}
-                value={activeSlot}
-                onChange={(value) => setActiveSlot(value as Slot)}
-              />
-              <SegmentedControl
-                size="xs"
-                data={[
-                  { value: "generated", label: "Generated" },
-                  { value: "library", label: "Library clip" }
-                ]}
-                value={active?.source ?? "library"}
-                onChange={(value) =>
-                  chooseSource(value as SlotState["source"])
-                }
-              />
-              {active?.source === "generated" ? (
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  onClick={() =>
-                    updateRecipe({ seed: (active.recipe.seed % 9973) + 1 })
-                  }
-                >
-                  Reroll variation
-                </Button>
-              ) : null}
-              <Switch
-                size="xs"
-                label="Adjust pose"
-                checked={poseMode}
-                onChange={(event) => setPoseMode(event.currentTarget.checked)}
-              />
-              {active?.source === "generated" && !poseMode ? (
-                <Switch
-                  size="xs"
-                  label="Edit curves"
-                  checked={curveMode}
-                  onChange={(event) =>
-                    setCurveMode(event.currentTarget.checked)
-                  }
-                />
-              ) : null}
-              {poseMode ? (
-                <Switch
-                  size="xs"
-                  label="Mirror"
-                  checked={poseMirroring}
-                  onChange={(event) =>
-                    setPoseMirroring(event.currentTarget.checked)
-                  }
-                />
-              ) : null}
-            </Group>
-
-            {active?.source === "generated" ? (
-              <Group gap="md" wrap="wrap">
-                {PERSONALITY_LABELS.map((entry) => (
-                  <Box key={entry.key} w={170}>
-                    <LabeledSlider
-                      label={`${entry.label}`}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={active.recipe.personality[entry.key]}
-                      onChange={(value) => updateRecipe({ [entry.key]: value })}
+          <Group gap="xs" align="stretch" wrap="nowrap" style={{ flex: 1, minHeight: 0 }}>
+            {/* Properties column (Blender-style). */}
+            <ScrollArea w={250} style={{ flexShrink: 0 }}>
+              <Stack gap="xs" pr={6}>
+                <PanelSection title="Animations" icon="✨" defaultOpen>
+                  <Stack gap={2}>
+                    {SLOTS.map((slot) => (
+                      <Button
+                        key={slot}
+                        size="compact-xs"
+                        fullWidth
+                        justify="flex-start"
+                        variant={activeSlot === slot ? "light" : "subtle"}
+                        color={activeSlot === slot ? "blue" : "gray"}
+                        onClick={() => setActiveSlot(slot)}
+                      >
+                        {slot}
+                        {slots[slot].dirty && slots[slot].pending ? " *" : ""}
+                      </Button>
+                    ))}
+                  </Stack>
+                </PanelSection>
+                <PanelSection title="Source" icon="🎬" defaultOpen>
+                  <Stack gap={6}>
+                    <SegmentedControl
+                      size="xs"
+                      fullWidth
+                      data={[
+                        { value: "generated", label: "Generated" },
+                        { value: "library", label: "Library" }
+                      ]}
+                      value={active?.source ?? "library"}
+                      onChange={(value) =>
+                        chooseSource(value as SlotState["source"])
+                      }
                     />
-                    <Text size="xs" c="var(--sm-color-subtext)">
-                      {entry.hint}
-                    </Text>
-                  </Box>
-                ))}
-              </Group>
-            ) : (
-              <Text size="xs" c="var(--sm-color-subtext)">
-                The vendored library clip for this slot. Switch to
-                Generated for personality sliders.
-              </Text>
-            )}
-
-            {curveMode && !poseMode && active?.source === "generated" && curvePoints ? (
-              <Group gap="sm" align="flex-start" wrap="nowrap">
-                <Stack gap={4} w={170}>
-                  <Select
-                    label="Curve"
-                    size="xs"
-                    data={editableChannels}
-                    value={curveChannel}
-                    onChange={(value) => {
-                      if (value) setCurveChannel(value);
-                    }}
-                  />
-                  <Button size="compact-xs" variant="subtle" color="gray" onClick={handleCurveReset}>
-                    Reset curve
-                  </Button>
-                  <Text size="xs" c="var(--sm-color-subtext)">
-                    Drag points; double-click to add, double-click a
-                    point to remove. One loop, left to right; the
-                    ends wrap.
-                  </Text>
-                </Stack>
-                <Box style={{ flex: 1 }}>
-                  <CurveEditor
-                    points={[...curvePoints]}
-                    yMin={curveRange.min}
-                    yMax={curveRange.max}
-                    onChange={handleCurveChange}
-                    evaluate={(pts, phase) => evaluateOverrideCurve(pts, phase)}
-                  />
-                </Box>
-              </Group>
-            ) : null}
-
-            {poseMode && modelBlobUrl && relaxedPose ? (
-              <>
-                <Text size="xs" c="var(--sm-color-subtext)">
-                  Drag a wrist to swing the whole arm at the shoulder.
-                  The pose applies to all generated slots.
-                </Text>
-                <Box style={{ height: 380 }}>
+                    {active?.source === "generated" ? (
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        onClick={() =>
+                          updateRecipe({ seed: (active.recipe.seed % 9973) + 1 })
+                        }
+                      >
+                        Reroll variation
+                      </Button>
+                    ) : (
+                      <Text size="xs" c="var(--sm-color-subtext)">
+                        The vendored library clip. Switch to Generated
+                        for personality sliders.
+                      </Text>
+                    )}
+                  </Stack>
+                </PanelSection>
+                {active?.source === "generated" ? (
+                  <PanelSection title="Personality" icon="🎭" defaultOpen>
+                    <Stack gap={6}>
+                      {PERSONALITY_LABELS.map((entry) => (
+                        <Box key={entry.key}>
+                          <LabeledSlider
+                            label={entry.label}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={active.recipe.personality[entry.key]}
+                            onChange={(value) =>
+                              updateRecipe({ [entry.key]: value })
+                            }
+                          />
+                          <Text size="xs" c="var(--sm-color-subtext)">
+                            {entry.hint}
+                          </Text>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </PanelSection>
+                ) : null}
+                <PanelSection title="Pose" icon="🤸" defaultOpen={false}>
+                  <Stack gap={6}>
+                    <Switch
+                      size="xs"
+                      label="Adjust pose"
+                      checked={poseMode}
+                      onChange={(event) =>
+                        setPoseMode(event.currentTarget.checked)
+                      }
+                    />
+                    {poseMode ? (
+                      <>
+                        <Switch
+                          size="xs"
+                          label="Mirror"
+                          checked={poseMirroring}
+                          onChange={(event) =>
+                            setPoseMirroring(event.currentTarget.checked)
+                          }
+                        />
+                        <Text size="xs" c="var(--sm-color-subtext)">
+                          Drag a wrist or tail handle; the pose
+                          applies to all generated slots.
+                        </Text>
+                      </>
+                    ) : null}
+                  </Stack>
+                </PanelSection>
+                {active?.source === "generated" ? (
+                  <PanelSection title="Curves" icon="📈" defaultOpen={false}>
+                    <Stack gap={6}>
+                      <Switch
+                        size="xs"
+                        label="Edit curves"
+                        checked={curveMode}
+                        onChange={(event) =>
+                          setCurveMode(event.currentTarget.checked)
+                        }
+                      />
+                      {curveMode ? (
+                        <>
+                          <Select
+                            size="xs"
+                            data={editableChannels}
+                            value={curveChannel}
+                            onChange={(value) => {
+                              if (value) setCurveChannel(value);
+                            }}
+                          />
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="gray"
+                            onClick={handleCurveReset}
+                          >
+                            Reset curve
+                          </Button>
+                          <Text size="xs" c="var(--sm-color-subtext)">
+                            Drag points; double-click adds or removes.
+                            Ends wrap.
+                          </Text>
+                        </>
+                      ) : null}
+                    </Stack>
+                  </PanelSection>
+                ) : null}
+              </Stack>
+            </ScrollArea>
+            {/* Center: preview / pose viewport + optional curve strip. */}
+            <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
+              <Box style={{ flex: 1, minHeight: 0 }}>
+                {poseMode && modelBlobUrl && relaxedPose ? (
                   <PoseViewport
                     modelUrl={modelBlobUrl}
                     relaxedPose={relaxedPose}
@@ -652,36 +711,36 @@ export function AnimationPanel(props: AnimationPanelProps) {
                     mirroring={poseMirroring}
                     onChange={handlePoseChange}
                   />
-                </Box>
-              </>
-            ) : preview ? (
-              <Box style={{ height: 380 }}>
-                <CharacterPreview
-                  model={model}
-                  targetHeight={targetHeight}
-                  slots={preview.previewSlots}
-                  activeSlot={activeSlot}
-                  onChangeActiveSlot={(slot) => {
-                    if (slot) setActiveSlot(slot as Slot);
-                  }}
-                  isPlaying={previewPlaying}
-                  onChangePlaying={setPreviewPlaying}
-                  assetSources={preview.previewSources}
-                />
+                ) : preview ? (
+                  <CharacterPreview
+                    model={model}
+                    targetHeight={targetHeight}
+                    slots={preview.previewSlots}
+                    activeSlot={activeSlot}
+                    onChangeActiveSlot={(slot) => {
+                      if (slot) setActiveSlot(slot as Slot);
+                    }}
+                    isPlaying={previewPlaying}
+                    onChangePlaying={setPreviewPlaying}
+                    assetSources={preview.previewSources}
+                  />
+                ) : null}
               </Box>
-            ) : null}
-
-            <Group justify="flex-end">
-              <Button variant="subtle" color="gray" onClick={onClose} disabled={busy}>
-                Cancel
-              </Button>
-              <Button onClick={() => void handleSave()} loading={busy} disabled={dirtyCount === 0}>
-                {dirtyCount > 0 ? `Save ${dirtyCount} slot${dirtyCount === 1 ? "" : "s"}` : "Save"}
-              </Button>
-            </Group>
-          </>
-        )}
-      </Stack>
-    </Modal>
+              {curveMode && !poseMode && active?.source === "generated" && curvePoints ? (
+                <Box>
+                  <CurveEditor
+                    points={[...curvePoints]}
+                    yMin={curveRange.min}
+                    yMax={curveRange.max}
+                    onChange={handleCurveChange}
+                    evaluate={(pts, phase) => evaluateOverrideCurve(pts, phase)}
+                  />
+                </Box>
+              ) : null}
+            </Stack>
+          </Group>
+        </>
+      )}
+    </Stack>
   );
 }

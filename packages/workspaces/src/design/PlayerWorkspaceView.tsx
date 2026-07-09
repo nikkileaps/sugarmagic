@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Box,
   Button,
   Group,
   NumberInput,
@@ -90,7 +91,7 @@ export function usePlayerWorkspaceView(
     characterWizardServices
   } = props;
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
+  const [animMode, setAnimMode] = useState(false);
   // Plan 064 UX rework: the rig button TOGGLES the weight
   // workbench for rigged characters (create-wizard for unrigged).
   const [rigMode, setRigMode] = useState(false);
@@ -210,64 +211,10 @@ export function usePlayerWorkspaceView(
     });
   }
 
-  const centerPanel = (
-    <>
-      {rigMode && characterWizardServices && boundCharacterModel?.rigId ? (
-        <WeightWorkbench
-          key={boundCharacterModel.definitionId}
-          model={boundCharacterModel}
-          characterName={boundCharacterModel.source.fileName.replace(
-            /-rigged\.glb$/i,
-            ""
-          )}
-          assetSources={assetSources}
-          services={characterWizardServices}
-          onEditMarkers={() => {
-            setRigMode(false);
-            void launchWizard(boundCharacterModel);
-          }}
-          onClose={() => setRigMode(false)}
-          onOpenAnimations={() => {
-            setRigMode(false);
-            setAnimationPanelOpen(true);
-          }}
-        />
-      ) : (
-      <CharacterPreview
-        model={boundCharacterModel}
-        targetHeight={
-          playerDefinition?.physicalProfile.height ?? 1.8
-        }
-        slots={previewSlots}
-        activeSlot={activeAnimationSlot}
-        onChangeActiveSlot={(slot) =>
-          designPreviewStore
-            .getState()
-            .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
-        }
-        isPlaying={isAnimationPlaying}
-        onChangePlaying={(playing) =>
-          designPreviewStore.getState().setAnimationPlaying(playing)
-        }
-        assetSources={assetSources}
-        onLaunchRigWizard={
-          characterWizardServices
-            ? () =>
-                boundCharacterModel?.rigId
-                  ? setRigMode(true)
-                  : void launchWizard(boundCharacterModel)
-            : undefined
-        }
-        onLaunchAnimationPanel={
-          characterWizardServices && boundCharacterModel?.rigId
-            ? () => setAnimationPanelOpen(true)
-            : undefined
-        }
-      />
-      )}
-      {characterWizardServices && boundCharacterModel?.rigId && playerDefinition ? (
+  const animationPanelNode =
+    characterWizardServices && boundCharacterModel?.rigId && playerDefinition ? (
         <AnimationPanel
-          opened={animationPanelOpen}
+          key={boundCharacterModel.definitionId}
           characterName={boundCharacterModel.source.fileName.replace(
             /-rigged\.glb$/i,
             ""
@@ -296,9 +243,72 @@ export function usePlayerWorkspaceView(
               }
             });
           }}
-          onClose={() => setAnimationPanelOpen(false)}
+          onClose={() => setAnimMode(false)}
+          onSwitchToRig={() => {
+            setAnimMode(false);
+            setRigMode(true);
+          }}
         />
-      ) : null}
+      ) : null;
+
+  const centerPanel = (
+    <>
+      {rigMode && characterWizardServices && boundCharacterModel?.rigId ? (
+        <WeightWorkbench
+          key={boundCharacterModel.definitionId}
+          model={boundCharacterModel}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          assetSources={assetSources}
+          services={characterWizardServices}
+          onEditMarkers={() => {
+            setRigMode(false);
+            void launchWizard(boundCharacterModel);
+          }}
+          onClose={() => setRigMode(false)}
+          onOpenAnimations={() => {
+            setRigMode(false);
+            setAnimMode(true);
+          }}
+        />
+      ) : animMode && characterWizardServices && boundCharacterModel?.rigId ? (
+        <Box style={{ height: "100%" }}>{animationPanelNode}</Box>
+      ) : (
+      <CharacterPreview
+        model={boundCharacterModel}
+        targetHeight={
+          playerDefinition?.physicalProfile.height ?? 1.8
+        }
+        slots={previewSlots}
+        activeSlot={activeAnimationSlot}
+        onChangeActiveSlot={(slot) =>
+          designPreviewStore
+            .getState()
+            .setAnimationSlot(slot ? (slot as PlayerAnimationSlot) : null)
+        }
+        isPlaying={isAnimationPlaying}
+        onChangePlaying={(playing) =>
+          designPreviewStore.getState().setAnimationPlaying(playing)
+        }
+        assetSources={assetSources}
+        onLaunchRigWizard={
+          characterWizardServices
+            ? () =>
+                boundCharacterModel?.rigId
+                  ? setRigMode(true)
+                  : void launchWizard(boundCharacterModel)
+            : undefined
+        }
+        onLaunchAnimationPanel={
+          characterWizardServices && boundCharacterModel?.rigId
+            ? () => setAnimMode(true)
+            : undefined
+        }
+      />
+      )}
+
       {characterWizardServices ? (
         <CharacterWizard
           opened={wizardOpen}
