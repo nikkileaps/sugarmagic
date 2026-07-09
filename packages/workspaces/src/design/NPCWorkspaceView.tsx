@@ -352,6 +352,10 @@ export function useNPCWorkspaceView(
             void launchWizard(boundCharacterModel);
           }}
           onClose={() => setRigMode(false)}
+          onOpenAnimations={() => {
+            setRigMode(false);
+            setAnimationPanelOpen(true);
+          }}
         />
       ) : (
       <CharacterPreview

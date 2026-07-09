@@ -227,6 +227,10 @@ export function usePlayerWorkspaceView(
             void launchWizard(boundCharacterModel);
           }}
           onClose={() => setRigMode(false)}
+          onOpenAnimations={() => {
+            setRigMode(false);
+            setAnimationPanelOpen(true);
+          }}
         />
       ) : (
       <CharacterPreview
