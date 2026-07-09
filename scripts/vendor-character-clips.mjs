@@ -365,6 +365,24 @@ function computeRelaxedPose(document, bin) {
   // (invisible until weights made sleeves follow arms). Mirror-
   // average each pair so the relaxed hang is symmetric.
   const qMirror = (q) => [q[0], -q[1], -q[2], q[3]];
+  // Straighten the arms (2026-07-08): the library idle's mean has
+  // ~29 degrees of elbow bend baked in, which reads "old man" on
+  // chibi proportions. Scale selected offsets toward identity
+  // (nlerp) so the relaxed hang is mostly straight.
+  const OFFSET_SCALE = {
+    "DEF-forearm.L": 0.25,
+    "DEF-forearm.R": 0.25,
+    "DEF-hand.L": 0.6,
+    "DEF-hand.R": 0.6
+  };
+  for (const [name, t] of Object.entries(OFFSET_SCALE)) {
+    const q = offsets[name];
+    if (!q) continue;
+    const sign = q[3] >= 0 ? 1 : -1;
+    const lerped = [q[0] * t * sign, q[1] * t * sign, q[2] * t * sign, 1 + (q[3] * sign - 1) * t];
+    const norm = Math.hypot(...lerped) || 1;
+    offsets[name] = lerped.map((c) => Number((c / norm).toFixed(6)));
+  }
   for (const name of Object.keys(offsets)) {
     if (!name.endsWith(".L")) continue;
     const twin = `${name.slice(0, -2)}.R`;
