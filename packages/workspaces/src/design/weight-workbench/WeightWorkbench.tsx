@@ -171,7 +171,9 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
   const generated = session?.generated ?? null;
 
   // ---- Tool state ---------------------------------------------
-  const [activeTool, setActiveTool] = useState<"brush" | "select">("brush");
+  const [activeTool, setActiveTool] = useState<"brush" | "select" | "shrinkwrap">(
+    "brush"
+  );
   const [tPose, setTPose] = useState(false);
   const [paintBoneColumn, setPaintBoneColumn] = useState(0);
   const [brushRadius, setBrushRadius] = useState(0.08);
@@ -660,39 +662,6 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
                 )}
               </Stack>
             </PanelSection>
-            <PanelSection title="Shrinkwrap" icon="🧲" defaultOpen={false}>
-              <Stack gap={6}>
-                <MultiSelect
-                  size="xs"
-                  placeholder="source piece(s)"
-                  disabled={paintPiece < 0 && !regionSet && selection.size === 0}
-                  data={generated.ranges
-                    .map((range, index) => ({
-                      value: String(index),
-                      label: range.materialName ?? `Piece ${index + 1}`
-                    }))
-                    .filter((option) => Number(option.value) !== paintPiece)}
-                  value={shrinkSources}
-                  onChange={setShrinkSources}
-                />
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  loading={resolving}
-                  disabled={
-                    shrinkSources.length === 0 ||
-                    (paintPiece < 0 && !regionSet && selection.size === 0)
-                  }
-                  onClick={handleShrinkwrap}
-                >
-                  {selection.size > 0
-                    ? `Shrinkwrap ${selection.size} selected`
-                    : regionSet
-                      ? "Shrinkwrap region"
-                      : "Shrinkwrap piece"}
-                </Button>
-              </Stack>
-            </PanelSection>
             <PanelSection title="Actions" icon="⚙" defaultOpen={false}>
               <Stack gap={4}>
                 <Button
@@ -772,7 +741,7 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
             isolatedPiece={paintPiece}
             regionSet={regionSet}
             weightsVersion={weightsVersion}
-            selectMode={activeTool === "select"}
+            selectMode={activeTool !== "brush"}
             xray={xray}
             selection={selection}
             tPose={tPose}
@@ -804,9 +773,55 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
                   ⬚
                 </ActionIcon>
               </Tooltip>
+              <Tooltip label="Shrinkwrap weights (copy from source pieces)" position="right">
+                <ActionIcon
+                  variant={activeTool === "shrinkwrap" ? "filled" : "default"}
+                  color="teal"
+                  onClick={() => setActiveTool("shrinkwrap")}
+                  aria-label="Shrinkwrap tool"
+                >
+                  🧲
+                </ActionIcon>
+              </Tooltip>
             </Group>
             <Paper p="xs" radius="sm" withBorder style={{ width: 170, opacity: 0.95 }}>
-              {activeTool === "brush" ? (
+              {activeTool === "shrinkwrap" ? (
+                <Stack gap={6}>
+                  <MultiSelect
+                    size="xs"
+                    label="From piece(s)"
+                    placeholder="source piece(s)"
+                    data={generated.ranges
+                      .map((range, index) => ({
+                        value: String(index),
+                        label: range.materialName ?? `Piece ${index + 1}`
+                      }))
+                      .filter((option) => Number(option.value) !== paintPiece)}
+                    value={shrinkSources}
+                    onChange={setShrinkSources}
+                  />
+                  <Button
+                    size="compact-xs"
+                    variant="light"
+                    loading={resolving}
+                    disabled={
+                      shrinkSources.length === 0 ||
+                      (paintPiece < 0 && !regionSet && selection.size === 0)
+                    }
+                    onClick={handleShrinkwrap}
+                  >
+                    {selection.size > 0
+                      ? `Shrinkwrap ${selection.size} selected`
+                      : regionSet
+                        ? "Shrinkwrap region"
+                        : "Shrinkwrap piece"}
+                  </Button>
+                  <Text size="xs" c="var(--sm-color-subtext)">
+                    Target = selection, else the isolated
+                    piece/region. Box-drag works in this tool.
+                  </Text>
+                </Stack>
+              ) : activeTool === "brush" ? (
                 <Stack gap={6}>
                   <SegmentedControl
                     size="xs"
