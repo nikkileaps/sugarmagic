@@ -373,23 +373,23 @@ export function AnimationPanel(props: AnimationPanelProps) {
   }, [activeSlot, curveChannel, regenerate]);
 
   const chooseSource = useCallback(
-    (source: SlotState["source"]) => {
+    (slot: Slot, source: SlotState["source"]) => {
       setSlots((current) => {
         if (!current) return current;
-        const state = current[activeSlot];
+        const state = current[slot];
         if (source === state.source && state.pending) return current;
         if (source === "generated") {
           const next = {
             ...current,
-            [activeSlot]: { ...state, source, dirty: true }
+            [slot]: { ...state, source, dirty: true }
           };
-          regenerate(activeSlot, next[activeSlot], true);
+          regenerate(slot, next[slot], true);
           return next;
         }
         // Library: fetch async, mark dirty.
         void services
           .getLibraryClip(
-            activeSlot,
+            slot,
             hipScale,
             hasTail
               ? {
@@ -403,8 +403,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
               latest
                 ? {
                     ...latest,
-                    [activeSlot]: {
-                      ...latest[activeSlot],
+                    [slot]: {
+                      ...latest[slot],
                       source: "library",
                       pending,
                       dirty: true
@@ -420,10 +420,10 @@ export function AnimationPanel(props: AnimationPanelProps) {
                 : String(libraryError)
             )
           );
-        return { ...current, [activeSlot]: { ...state, source } };
+        return { ...current, [slot]: { ...state, source } };
       });
     },
-    [activeSlot, services, hipScale, hasTail, regenerate]
+    [services, hipScale, hasTail, regenerate]
   );
 
   // Preview: real definitions everywhere, blob stubs for slots
@@ -557,51 +557,50 @@ export function AnimationPanel(props: AnimationPanelProps) {
                 <PanelSection title="Animations" icon="✨" defaultOpen>
                   <Stack gap={2}>
                     {SLOTS.map((slot) => (
-                      <Button
-                        key={slot}
-                        size="compact-xs"
-                        fullWidth
-                        justify="flex-start"
-                        variant={activeSlot === slot ? "light" : "subtle"}
-                        color={activeSlot === slot ? "blue" : "gray"}
-                        onClick={() => setActiveSlot(slot)}
-                      >
-                        {slot}
-                        {slots[slot].dirty && slots[slot].pending ? " *" : ""}
-                      </Button>
+                      <Group key={slot} gap={4} wrap="nowrap">
+                        <Button
+                          size="compact-xs"
+                          fullWidth
+                          justify="flex-start"
+                          style={{ flex: 1 }}
+                          variant={activeSlot === slot ? "light" : "subtle"}
+                          color={activeSlot === slot ? "blue" : "gray"}
+                          onClick={() => setActiveSlot(slot)}
+                        >
+                          {slot}
+                          {slots[slot].dirty && slots[slot].pending ? " *" : ""}
+                        </Button>
+                        <Tooltip
+                          label={
+                            slots[slot].source === "generated"
+                              ? "Generated — click for library clip"
+                              : "Library clip — click to generate"
+                          }
+                        >
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color={
+                              slots[slot].source === "generated"
+                                ? "cyan"
+                                : "gray"
+                            }
+                            onClick={() => {
+                              setActiveSlot(slot);
+                              chooseSource(
+                                slot,
+                                slots[slot].source === "generated"
+                                  ? "library"
+                                  : "generated"
+                              );
+                            }}
+                            aria-label={`Toggle ${slot} source`}
+                          >
+                            {slots[slot].source === "generated" ? "✨" : "📦"}
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
                     ))}
-                  </Stack>
-                </PanelSection>
-                <PanelSection title="Source" icon="🎬" defaultOpen>
-                  <Stack gap={6}>
-                    <SegmentedControl
-                      size="xs"
-                      fullWidth
-                      data={[
-                        { value: "generated", label: "Generated" },
-                        { value: "library", label: "Library" }
-                      ]}
-                      value={active?.source ?? "library"}
-                      onChange={(value) =>
-                        chooseSource(value as SlotState["source"])
-                      }
-                    />
-                    {active?.source === "generated" ? (
-                      <Button
-                        size="compact-xs"
-                        variant="subtle"
-                        onClick={() =>
-                          updateRecipe({ seed: (active.recipe.seed % 9973) + 1 })
-                        }
-                      >
-                        Reroll variation
-                      </Button>
-                    ) : (
-                      <Text size="xs" c="var(--sm-color-subtext)">
-                        The vendored library clip. Switch to Generated
-                        for personality sliders.
-                      </Text>
-                    )}
                   </Stack>
                 </PanelSection>
                 {active?.source === "generated" ? (
@@ -624,6 +623,15 @@ export function AnimationPanel(props: AnimationPanelProps) {
                           </Text>
                         </Box>
                       ))}
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        onClick={() =>
+                          updateRecipe({ seed: (active.recipe.seed % 9973) + 1 })
+                        }
+                      >
+                        Reroll variation
+                      </Button>
                     </Stack>
                   </PanelSection>
                 ) : null}
