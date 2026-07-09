@@ -115,6 +115,7 @@ export interface ToolOptionSliderProps {
   onChange: (value: number) => void;
   /** Formatted readout; defaults to 2 decimals. */
   format?: (value: number) => string;
+  /** Slider track width; the option sizes to content around it. */
   width?: number;
 }
 
@@ -127,16 +128,19 @@ export function ToolOptionSlider({
   value,
   onChange,
   format,
-  width = 130
+  width = 72
 }: ToolOptionSliderProps) {
+  // Content-sized: fixed slider track width, everything else sizes
+  // to its text — adjacent options can never overlap (the
+  // "0.25Falloff" collision, 2026-07-09).
   return (
-    <Group gap={6} wrap="nowrap" align="center" style={{ width }}>
+    <Group gap={6} wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
       <Text size="xs" c="var(--sm-color-subtext)" style={{ whiteSpace: "nowrap" }}>
         {label}
       </Text>
       <Slider
         size="xs"
-        style={{ flex: 1, minWidth: 60 }}
+        style={{ width }}
         min={min}
         max={max}
         step={step}
@@ -144,7 +148,11 @@ export function ToolOptionSlider({
         onChange={onChange}
         label={null}
       />
-      <Text size="xs" c="var(--sm-color-overlay0)" style={{ whiteSpace: "nowrap", width: 34, textAlign: "right" }}>
+      <Text
+        size="xs"
+        c="var(--sm-color-overlay0)"
+        style={{ whiteSpace: "nowrap", minWidth: 34, textAlign: "right" }}
+      >
         {format ? format(value) : value.toFixed(2)}
       </Text>
     </Group>
