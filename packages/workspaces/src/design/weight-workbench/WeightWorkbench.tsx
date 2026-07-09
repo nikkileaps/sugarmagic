@@ -559,31 +559,6 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
       ) : null}
       <Group gap="sm" align="center" wrap="nowrap">
         {modeTabs}
-        <Select
-          size="xs"
-          w={140}
-          data={[
-            { value: "__static__", label: "Static" },
-            ...paintClipUrls.map((clip) => ({
-              value: clip.slot,
-              label: clip.slot
-            }))
-          ]}
-          value={paintClip ?? "__static__"}
-          onChange={(value) =>
-            setPaintClip(value && value !== "__static__" ? value : null)
-          }
-        />
-        <Tooltip label={paintPlaying ? "Pause" : "Play"}>
-          <ActionIcon
-            variant="subtle"
-            color="blue"
-            onClick={() => setPaintPlaying((current) => !current)}
-            aria-label={paintPlaying ? "Pause preview" : "Play preview"}
-          >
-            {paintPlaying ? "❚❚" : "▶"}
-          </ActionIcon>
-        </Tooltip>
         {shrinkInfo ? (
           <Text size="xs" c="var(--sm-color-subtext)">
             {shrinkInfo}
@@ -924,6 +899,49 @@ export function WeightWorkbench(props: WeightWorkbenchProps) {
               T
             </ActionIcon>
           </Tooltip>
+          {/* Playback: bottom-center, matching the main workspace. */}
+          <Group
+            gap="xs"
+            wrap="nowrap"
+            style={{
+              position: "absolute",
+              bottom: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 5,
+              padding: 8,
+              borderRadius: 8,
+              border: "1px solid var(--sm-panel-border)",
+              background:
+                "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
+            }}
+          >
+            <Select
+              size="xs"
+              w={140}
+              data={[
+                { value: "__static__", label: "Static" },
+                ...paintClipUrls.map((clip) => ({
+                  value: clip.slot,
+                  label: clip.slot
+                }))
+              ]}
+              value={paintClip ?? "__static__"}
+              onChange={(value) =>
+                setPaintClip(value && value !== "__static__" ? value : null)
+              }
+            />
+            <Tooltip label={paintPlaying ? "Pause" : "Play"}>
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                onClick={() => setPaintPlaying((current) => !current)}
+                aria-label={paintPlaying ? "Pause preview" : "Play preview"}
+              >
+                {paintPlaying ? "❚❚" : "▶"}
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Box>
       </Group>
     </Stack>
