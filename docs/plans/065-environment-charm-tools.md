@@ -31,7 +31,35 @@ that's the auto-material moment.)
 
 ## Stories
 
-### 065.1 — Scatter/prop paint brush
+### 065.1 — Layout Sketch (grease-pencil blockout ink)
+
+A studio-only annotation layer for blocking out a region before
+building it: freehand strokes drawn directly on the landscape
+plane (roads, zones, building footprints, arrows). Planning ink,
+not content — it NEVER renders in game or preview (the "preview
+is the game" doctrine, 2026-07-09).
+
+- Pencil tool in the landscape workspace ToolRail beside brush/
+  eraser. Options bar: small ink color palette, pen size,
+  opacity, eraser toggle, show/hide sketch toggle.
+- Strokes rasterize into ONE dedicated sketch bitmap per region
+  (~2048 square). Bitmap ink, not vector strokes — erase-and-
+  redraw beats stroke editing for blockout, at a fraction of the
+  work. Brush projection reuses the landscape paint world-XZ ->
+  UV math (trivial on the flat plane).
+- Rendered as a transparent overlay plane just above the
+  landscape in the STUDIO viewport only. No changes to the shared
+  landscape material, no runtime code — the game ignores the
+  field entirely.
+- Persists as an authoring-only payload on the region beside
+  paintPayload so sketches survive sessions.
+- Bundled complement: import a reference image as an underlay
+  (same overlay plane, loaded texture, adjustable opacity) for
+  tracing a layout drawn elsewhere.
+- v1 defers: ink undo (erase is the undo), text labels, vector
+  strokes.
+
+### 065.2 — Scatter/prop paint brush
 
 Spray placed assets instead of placing them one-by-one: pick one
 or MORE asset definitions as a palette, then paint — instances
@@ -55,7 +83,7 @@ commits).
   65K-per-layer GPU scatter path remains the answer for grass-
   scale density.
 
-### 065.2 — Stylized water v1 (plane + shader)
+### 065.3 — Stylized water v1 (plane + shader)
 
 A `water` region element: a placeable rectangular water plane
 (position, size, surface height) rendered with a stylized water
@@ -71,7 +99,7 @@ colors, foam color/width, scroll speed/direction, wave scale.
 - Rivers-as-splines are explicitly v2 (defer with trigger: first
   region that needs a bending stream; the shader carries over).
 
-### 065.3 — Ambient particle layers
+### 065.4 — Ambient particle layers
 
 Environment-level particle systems for drifting charm: leaf-fall,
 dust motes, petals, fireflies as authorable presets. Region-wide
@@ -85,7 +113,7 @@ size range, color/tint, drift direction/speed, flutter amount.
   cheap and deploy-safe).
 - Presets ship as built-ins like the wind/grass presets do.
 
-### 065.4 — Masking + channel authoring UX rework
+### 065.5 — Masking + channel authoring UX rework
 
 The splatmap-channel and layer-mask workflows work but are janky:
 channel management, painted-mask gating rules (inline-only), mask
