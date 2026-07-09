@@ -49,3 +49,21 @@ Same pattern as the fix for paper cut #1 (talk-objective dialogue picker): make 
 **Action:** Either (a) implement the missing handlers (`moveNpc` -> set a WorldFlag that behavior tasks can react to, or directly emit a task override; `teleportNpc` -> write to the NPC's Position component; `setNpcState` -> depends on what "state" means; `playSound` -> emit an audio event; `spawnVfx` -> emit a vfx event), OR (b) trim the enum to only the working types and hide the others from the Studio picker until they're implemented. As a minimum-effort intermediate step: at the runtime dispatcher, add a `default:` case that emits a `console.warn` naming the unhandled type — silent failure is worse than a noisy failure.
 
 **Meta-lesson:** Any authoring surface driven off a domain enum where a runtime dispatcher branches on that enum needs a compile-time or at least run-time assertion that every enum member has a corresponding handler. Otherwise adding an enum member is a silent-authoring-failure hazard.
+
+### 4. Studio icon system: 3D glyph set replacing raw emoji
+
+**Severity:** Low (polish; cross-platform consistency)
+
+Tool rails and HUD buttons use raw Unicode emoji glyphs (brush,
+bone, sparkles, magnet, eraser-sponge...). Rendering differs per
+OS/browser, and Unicode has gaps (no eraser emoji — currently a
+sponge). The 3D emoji aesthetic is a deliberate style choice
+(anti-flat) and should be KEPT — just made consistent.
+
+**Action:** Small curated PNG glyph set in packages/ui behind a
+`GlyphIcon` component: [Microsoft Fluent Emoji 3D](https://github.com/microsoft/fluentui-emoji)
+(MIT) for emoji-shaped glyphs + [3dicons](https://3dicons.co)
+(CC0, Blender-made) for tool gaps; any remaining hero glyphs
+(eraser, box-select marquee) can be one-off in-house Blender
+renders in the same style. Sweep: landscape brush toolbar, weight
+workbench rail, animation mode rail, preview HUD, mode tabs.
