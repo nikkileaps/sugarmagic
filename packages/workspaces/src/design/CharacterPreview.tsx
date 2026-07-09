@@ -442,6 +442,7 @@ export function CharacterPreview({
 
   return (
     <Stack h="100%" gap={0} style={{ position: "relative" }}>
+      {/* Tool corner: launchers only (rig wizard + animations). */}
       <Group
         gap="xs"
         wrap="nowrap"
@@ -449,6 +450,47 @@ export function CharacterPreview({
           position: "absolute",
           top: 16,
           left: 16,
+          zIndex: 10,
+          padding: 6,
+          borderRadius: 8,
+          border: "1px solid var(--sm-panel-border)",
+          background: "color-mix(in srgb, var(--sm-viewport-bg) 88%, black 12%)"
+        }}
+      >
+        {onLaunchRigWizard ? (
+          <Tooltip label="Character Wizard — rig + animate this model">
+            <ActionIcon
+              variant="subtle"
+              color="grape"
+              onClick={onLaunchRigWizard}
+              aria-label="Open the Character Wizard"
+            >
+              🦴
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+        {onLaunchAnimationPanel ? (
+          <Tooltip label="Animations — generate + tune idle/walk/run">
+            <ActionIcon
+              variant="subtle"
+              color="cyan"
+              onClick={onLaunchAnimationPanel}
+              aria-label="Open the animation panel"
+            >
+              ✨
+            </ActionIcon>
+          </Tooltip>
+        ) : null}
+      </Group>
+      {/* Playback controls: bottom-center, media-player style. */}
+      <Group
+        gap="xs"
+        wrap="nowrap"
+        style={{
+          position: "absolute",
+          bottom: 14,
+          left: "50%",
+          transform: "translateX(-50%)",
           zIndex: 10,
           padding: 8,
           borderRadius: 8,
@@ -488,30 +530,6 @@ export function CharacterPreview({
             {isPlaying ? "❚❚" : "▶"}
           </ActionIcon>
         </Tooltip>
-        {onLaunchRigWizard ? (
-          <Tooltip label="Character Wizard — rig + animate this model">
-            <ActionIcon
-              variant="subtle"
-              color="grape"
-              onClick={onLaunchRigWizard}
-              aria-label="Open the Character Wizard"
-            >
-              🦴
-            </ActionIcon>
-          </Tooltip>
-        ) : null}
-        {onLaunchAnimationPanel ? (
-          <Tooltip label="Animations — generate + tune idle/walk/run">
-            <ActionIcon
-              variant="subtle"
-              color="cyan"
-              onClick={onLaunchAnimationPanel}
-              aria-label="Open the animation panel"
-            >
-              ✨
-            </ActionIcon>
-          </Tooltip>
-        ) : null}
       </Group>
       <Box
         ref={containerRef}
