@@ -379,7 +379,8 @@ export class RuntimeLandscapeMesh {
     channelColor: THREE.Color,
     worldUv: unknown,
     contentLibrary: ContentLibrarySnapshot | null,
-    splatmapWeightNode?: (channelIndex: number) => unknown | null
+    splatmapWeightNode?: (channelIndex: number) => unknown | null,
+    debugTrail?: string[]
   ): ShaderSurfaceNodeSet {
     const shaderRuntime = this.getShaderRuntime();
     const binding =
@@ -395,8 +396,31 @@ export class RuntimeLandscapeMesh {
         splatmapWeightNode
       });
       if (evaluated) {
+        debugTrail?.push("evaluated");
         return this.fillSurfaceNodeDefaults(evaluated, channelColor);
       }
+    }
+
+    // A slot with an authored surface landing on the flat fallback is
+    // a silent divergence (editor may render it fine while a boot-time
+    // failure here shows a flat color) — say WHY, loudly.
+    if (slot?.surface) {
+      const reason = !shaderRuntime
+        ? "no shader runtime"
+        : !contentLibrary
+          ? "no content library"
+          : binding && !binding.ok
+            ? `binding failed: ${binding.diagnostic?.message ?? "unknown"}`
+            : "layer stack evaluated to null";
+      debugTrail?.push(`flat-fallback (${reason})`);
+      console.warn("[landscape-material] channel fell back to flat color", {
+        slotName: slot.slotName,
+        surfaceKind: slot.surface.kind,
+        fallbackColor: `#${channelColor.getHexString()}`,
+        reason
+      });
+    } else {
+      debugTrail?.push("flat (no surface)");
     }
 
     return this.flatSurfaceNodeSet(channelColor);
@@ -520,6 +544,7 @@ export class RuntimeLandscapeMesh {
     let blendedRoughness: TslFloat = float(0);
     let blendedMetalness: TslFloat = float(0);
     let blendedAo: TslFloat = float(0);
+    const debugTrail: string[] = [];
 
     for (let index = 0; index < this.channelColors.length; index += 1) {
       const color = this.channelColors[index]!;
@@ -542,7 +567,8 @@ export class RuntimeLandscapeMesh {
         color,
         channelUv,
         contentLibrary,
-        (channelIndex) => weights[channelIndex] ?? float(0)
+        (channelIndex) => weights[channelIndex] ?? float(0),
+        debugTrail
       );
 
       // Each channel contributes weight × its node to the blend. Null
@@ -564,6 +590,19 @@ export class RuntimeLandscapeMesh {
         (nodeSet.aoNode as TslFloat).mul(weight)
       ) as TslFloat;
     }
+
+    // One line per material rebuild (rebuilds are signature-gated, so
+    // this is quiet in steady state). Pairs with the resolver's
+    // divergence logging: Studio and Preview each print their channel
+    // paths, so a mismatch reads directly off the two consoles.
+    console.info("[landscape-material] rebuilt", {
+      channels: (landscape?.surfaceSlots ?? []).map(
+        (slot, index) =>
+          `${slot.displayName}:${slot.surface?.kind ?? "none"}:${debugTrail[index] ?? "?"}`
+      ),
+      shaderRuntime: Boolean(this.getShaderRuntime()),
+      contentLibrary: contentLibrary?.identity.id ?? null
+    });
 
     // Fresh material per binding change (see field docs). We swap it
     // onto the mesh and retire the old one after a brief delay. This sidesteps a Three

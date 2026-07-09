@@ -20,22 +20,16 @@ const PLACEHOLDER_CONTENT_LIBRARY = createEmptyContentLibrarySnapshot(
   "web-runtime:render-engine-projector:placeholder"
 );
 
-function getActiveRegion(
-  regions: RegionDocument[],
-  activeRegionId?: string | null
-): RegionDocument | null {
-  if (regions.length === 0) {
-    return null;
-  }
-  return (
-    regions.find((region) => region.identity.id === activeRegionId) ??
-    regions[0] ??
-    null
-  );
-}
-
 export interface RuntimeRenderEngineProjector {
-  push(state: WebRuntimeStartState): void;
+  /**
+   * `activeRegion` is the region the HOST resolved at start() (saved
+   * region > scene starting region > legacy activeRegionId > first).
+   * The projector must never re-derive it from `state` — a second
+   * resolver here once disagreed with the host's and the engine's
+   * texture-loaded callback re-applied the WRONG region's landscape
+   * over the correct one (the preview green-ground bug, 2026-07-09).
+   */
+  push(state: WebRuntimeStartState, activeRegion: RegionDocument | null): void;
   reset(): void;
 }
 
@@ -45,7 +39,7 @@ export function createRuntimeRenderEngineProjector(
   let lastSeenProjectId: string | null = null;
 
   return {
-    push(state) {
+    push(state, activeRegion) {
       const incomingProjectId = state.contentLibrary.identity.id ?? null;
       if (incomingProjectId !== lastSeenProjectId) {
         engine.resetForProjectSwitch();
@@ -53,10 +47,7 @@ export function createRuntimeRenderEngineProjector(
       lastSeenProjectId = incomingProjectId;
       engine.setContentLibrary(state.contentLibrary ?? PLACEHOLDER_CONTENT_LIBRARY);
       engine.setAssetSources(state.assetSources);
-      engine.setEnvironment(
-        getActiveRegion(state.regions, state.activeRegionId),
-        state.activeEnvironmentId ?? null
-      );
+      engine.setEnvironment(activeRegion, state.activeEnvironmentId ?? null);
     },
     reset() {
       lastSeenProjectId = null;
