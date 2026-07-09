@@ -236,11 +236,13 @@ describe("motion core (Plan 063)", () => {
     for (const phase of [0, 0.2, 0.35, 0.7]) {
       expect(at("legSwingL", phase)).toBeCloseTo(at("legSwingR", phase + 0.5), 6);
     }
-    // Counter-swing: left arm tracks the RIGHT leg's phase.
+    // Counter-swing: the arm CHANNEL matches its own-side leg's
+    // phase — the hanging-frame axis inversion makes that a
+    // world-space counter-swing (see the arm-swing component).
     for (const phase of [0.1, 0.4, 0.8]) {
       const armL = at("armSwingL", phase);
-      const legR = at("legSwingR", phase);
-      expect(Math.sign(armL)).toBe(Math.sign(legR));
+      const legL = at("legSwingL", phase);
+      expect(Math.sign(armL)).toBe(Math.sign(legL));
     }
     // Knees never hyperextend backward (DC keeps flexion >= 0).
     for (let i = 0; i <= 40; i += 1) {
