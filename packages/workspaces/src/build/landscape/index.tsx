@@ -707,7 +707,7 @@ export function useLandscapeWorkspaceView(
                     }
                   }}
                 >
-                  ⌫
+                  🧽
                 </ActionIcon>
               </Box>
             </Popover.Target>
