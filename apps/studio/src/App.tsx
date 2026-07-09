@@ -2627,6 +2627,10 @@ export function App() {
               displayName: definition.displayName
             })
           )}
+          regions={[...session.regions.values()].map((region) => ({
+            regionId: region.identity.id,
+            displayName: region.displayName
+          }))}
           soundCueDefinitions={(
             session.contentLibrary.soundCueDefinitions ?? []
           ).map((cue) => ({

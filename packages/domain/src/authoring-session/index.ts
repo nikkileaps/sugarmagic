@@ -2549,6 +2549,7 @@ export function updateSceneInSession(
       | "description"
       | "notes"
       | "unlockCondition"
+      | "startingRegionId"
       | "environmentOverride"
       | "audioOverride"
       | "transitionConfig"

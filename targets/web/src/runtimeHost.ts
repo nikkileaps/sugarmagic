@@ -1846,9 +1846,14 @@ export function createWebRuntimeHost(
                   : ("locked" as const)
         }))
     };
+    // Region precedence: saved region (Continue) > explicit boot
+    // request (Studio Preview's edited region) > the active
+    // Scene's authored starting region > first region. Published
+    // fresh boots carry no explicit region, so the Scene's choice
+    // is what players get.
     const activeRegion = getActiveRegion(
       migratedContent.regions,
-      resolvedActiveRegionId
+      resolvedActiveRegionId ?? activeScene?.startingRegionId ?? null
     );
     // Composed Base + Overlay view (Pattern 1) — every presence /
     // spawn read below sources from this, never region fields.

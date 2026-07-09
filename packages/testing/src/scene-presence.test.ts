@@ -178,3 +178,25 @@ describe("layout scene presences", () => {
     expect(sceneObjects[1]?.transform.position).toEqual([3, 0, -2]);
   });
 });
+
+describe("Scene.startingRegionId (first-playable region binding)", () => {
+  it("defaults null, survives normalize, rejects blanks", async () => {
+    const { createDefaultScene, normalizeScene } = await import(
+      "@sugarmagic/domain"
+    );
+    expect(createDefaultScene().startingRegionId).toBeNull();
+    const scene = normalizeScene({
+      ...createDefaultScene(),
+      startingRegionId: "region:arrival-station"
+    });
+    expect(scene.startingRegionId).toBe("region:arrival-station");
+    expect(
+      normalizeScene({ ...createDefaultScene(), startingRegionId: "  " })
+        .startingRegionId
+    ).toBeNull();
+    expect(
+      normalizeScene({ ...createDefaultScene(), startingRegionId: 42 })
+        .startingRegionId
+    ).toBeNull();
+  });
+});
