@@ -3,7 +3,9 @@
  *
  * Purpose: Plan 062 §062.6 — the Character Wizard modal: import a
  * static A/T-pose humanoid GLB, confirm/adjust the 16 detected
- * joint markers, generate (rig + bind + attach clips), preview
+ * joint markers, then Finish generates (rig + bind + clips) and
+ * commits in one motion — weight tooling lives in the workspace's
+ * WeightWorkbench (Plan 064 UX rework), not here. Old flow:
  * idle/walk/run, and commit — all inside the reusable
  * WizardDialog frame (ui, §062.5).
  *
@@ -21,51 +23,27 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionIcon,
   Box,
   Button,
   Group,
-  Menu,
-  MultiSelect,
-  Paper,
-  SegmentedControl,
-  Select,
   Stack,
   Switch,
   Text,
   TextInput
 } from "@mantine/core";
-import { Tooltip } from "@mantine/core";
-import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
+import { WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   MotionRecipe
 } from "@sugarmagic/domain";
-import {
-  BODY_REGION_LABELS,
-  GeodesicVoxelWeightSolver,
-  applyBrushStroke,
-  computeBoneSegments,
-  resolveRegionWeights,
-  shrinkwrapWeights,
-  assignVerticesToBone,
-  buildVertexAdjacency,
-  computeBodyRegions,
-  fillVerticesWithBone,
-  mirrorWeights,
-  type BodyRegionId,
-  type BrushMode,
-  type GeneratedSkeleton,
-  type MeshData,
-  type SkinWeights
+import type {
+  GeneratedSkeleton,
+  MeshData,
+  SkinWeights
 } from "@sugarmagic/character-rig";
-import { CharacterPreview } from "../CharacterPreview";
 import { MarkerViewport } from "./MarkerViewport";
-import {
-  WeightPaintViewport,
-  type WeightPaintRange
-} from "./WeightPaintViewport";
+import type { WeightPaintRange } from "./WeightPaintViewport";
 
 /** The wizard's 16 landmarks: name -> world position. */
 export type WizardLandmarks = Record<string, [number, number, number]>;
@@ -226,13 +204,11 @@ export interface CharacterWizardProps {
   onClose: () => void;
 }
 
-type WizardStep = "import" | "joints" | "weights" | "preview";
+type WizardStep = "import" | "joints";
 
 const STEPS = [
   { id: "import", label: "Import", description: "Pick a GLB" },
-  { id: "joints", label: "Joints", description: "Confirm markers" },
-  { id: "weights", label: "Weights", description: "Touch up (optional)" },
-  { id: "preview", label: "Preview", description: "Watch it move" }
+  { id: "joints", label: "Joints", description: "Confirm markers" }
 ];
 
 /** "DEF-upper_arm.L" -> "Left Upper Arm" for the bone picker. */
@@ -276,8 +252,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [busyLabel, setBusyLabel] = useState("");
   const [busyProgress, setBusyProgress] = useState<number | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const [previewSlot, setPreviewSlot] = useState<string | null>("idle");
-  const [previewPlaying, setPreviewPlaying] = useState(true);
   // Mirroring defaults ON — symmetric characters are the design
   // center, so one drag places both sides (nikki, 2026-07-06).
   const [mirroring, setMirroring] = useState(true);
@@ -309,63 +283,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
     },
     []
   );
-  // Weight-paint step state (§062.8).
-  const [paintBoneColumn, setPaintBoneColumn] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.08);
-  const [brushStrength, setBrushStrength] = useState(0.5);
-  const [brushMode, setBrushMode] = useState<BrushMode>("add");
-  const [paintAnimating, setPaintAnimating] = useState(false);
-  const paintDirtyRef = useRef(false);
-  const adjacencyRef = useRef<Array<Set<number>> | null>(null);
-  const pristineWeightsRef = useRef<{
-    joints: Uint16Array;
-    weights: Float32Array;
-  } | null>(null);
-  // Isolation: "-1" = all; "piece:N" = material piece; "region:ID"
-  // = virtual body region (Plan 064, computed from the pristine
-  // auto-solve — the solver's partition IS the segmentation).
-  const [paintScope, setPaintScope] = useState("-1");
-  const bodyRegions = useMemo(() => {
-    if (!generated || !pristineWeightsRef.current) return null;
-    return computeBodyRegions(
-      pristineWeightsRef.current,
-      generated.weights.boneOrder,
-      generated.mesh.positions
-    );
-  }, [generated]);
-  const paintPiece = paintScope.startsWith("piece:")
-    ? Number(paintScope.slice(6))
-    : -1;
-  const regionSet = useMemo(() => {
-    if (!paintScope.startsWith("region:") || !bodyRegions) return null;
-    return bodyRegions.get(paintScope.slice(7) as BodyRegionId) ?? null;
-  }, [paintScope, bodyRegions]);
-  // Bumped on out-of-band weight edits (Fill piece / Reset) so the
-  // viewport fully resyncs heatmap + live skin.
-  const [weightsVersion, setWeightsVersion] = useState(0);
-  // Blender-style mutually exclusive viewport tools (Plan 064).
-  const [activeTool, setActiveTool] = useState<"brush" | "select">("brush");
-  // T-pose viewing aid: lift limbs clear of the body for boxing.
-  const [tPose, setTPose] = useState(false);
-  const [xray, setXray] = useState(true);
-  const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
-  const handleSelect = useCallback(
-    (vertices: number[], additive: boolean) => {
-      setSelection((current) => {
-        if (!additive) return new Set(vertices);
-        const next = new Set(current);
-        for (const vertex of vertices) next.add(vertex);
-        return next;
-      });
-    },
-    []
-  );
-  const handleAssignSelection = useCallback(() => {
-    if (!generated || selection.size === 0) return;
-    assignVerticesToBone(generated.weights, [...selection], paintBoneColumn);
-    paintDirtyRef.current = true;
-    setWeightsVersion((version) => version + 1);
-  }, [generated, selection, paintBoneColumn]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Blob URLs created for preview; revoked on teardown.
   const blobUrlsRef = useRef<string[]>([]);
@@ -388,7 +305,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
     setGenerated(null);
     setBusy(false);
     setError(null);
-    setPreviewSlot("idle");
   }, []);
 
   const handleCancel = useCallback(() => {
@@ -416,14 +332,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
         setSourceBytes(loaded.sourceBytes);
         setSourceUrl(trackBlobUrl(loaded.sourceBytes));
         setLandmarks(loaded.landmarks);
-        pristineWeightsRef.current = {
-          joints: loaded.generated.weights.joints.slice(),
-          weights: loaded.generated.weights.weights.slice()
-        };
-        adjacencyRef.current = buildVertexAdjacency(loaded.generated.mesh);
-        paintDirtyRef.current = false;
         landmarksDirtyRef.current = false;
-        setBrushRadius(loaded.generated.characterHeight * 0.06);
         setGenerated(loaded.generated);
         setStep("joints");
       })
@@ -463,446 +372,66 @@ export function CharacterWizard(props: CharacterWizardProps) {
 
   async function handleNext() {
     setError(null);
-    if (step === "import") {
-      setStep("joints");
-      return;
-    }
-    if (step === "weights") {
-      if (!generated || !sourceBytes) return;
-      if (!paintDirtyRef.current) {
-        setStep("preview");
-        return;
-      }
-      setBusy(true);
-      setBusyLabel("Rebuilding model with painted weights...");
-      setBusyProgress(undefined);
-      try {
-        const modelGlb = await services.reassemble(sourceBytes, generated);
-        setGenerated({ ...generated, modelGlb });
-        paintDirtyRef.current = false;
-        setStep("preview");
-      } catch (reassembleError) {
-        setError(
-          reassembleError instanceof Error
-            ? reassembleError.message
-            : String(reassembleError)
-        );
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    if (step === "joints") {
-      if (!sourceBytes || !landmarks) return;
-      if (isEditMode && !landmarksDirtyRef.current && generated) {
-        // Markers untouched: keep the loaded (possibly painted)
-        // weights instead of re-solving over them.
-        setStep("weights");
-        return;
-      }
-      setBusy(true);
-      setBusyLabel("Generating rig + binding weights...");
-      setBusyProgress(0);
-      try {
-        const result = await services.generate(sourceBytes, landmarks, (f) =>
-          setBusyProgress(f)
-        );
-        pristineWeightsRef.current = {
-          joints: result.weights.joints.slice(),
-          weights: result.weights.weights.slice()
-        };
-        adjacencyRef.current = buildVertexAdjacency(result.mesh);
-        paintDirtyRef.current = false;
-        setBrushRadius(result.characterHeight * 0.06);
-        setGenerated(result);
-        setStep("weights");
-      } catch (generateError) {
-        setError(
-          generateError instanceof Error
-            ? generateError.message
-            : String(generateError)
-        );
-      } finally {
-        setBusy(false);
-        setBusyProgress(undefined);
-      }
-    }
+    if (step === "import") setStep("joints");
   }
 
+  // Joints is the LAST step (Plan 064 UX rework): Finish runs the
+  // solve and commits in one motion — the user lands back in the
+  // workspace with a fully rigged character, and all weight
+  // tooling lives in the WeightWorkbench there.
   async function handleFinish() {
-    if (!generated || !sourceBytes || !landmarks) return;
+    if (!sourceBytes || !landmarks) return;
+    if (isEditMode && !landmarksDirtyRef.current) {
+      // Markers untouched: nothing to save.
+      reset();
+      onClose();
+      return;
+    }
     setBusy(true);
-    setBusyLabel("Writing character assets...");
-    setBusyProgress(undefined);
+    setError(null);
     try {
+      setBusyLabel("Generating rig + binding weights...");
+      setBusyProgress(0);
+      const result = await services.generate(sourceBytes, landmarks, (f) =>
+        setBusyProgress(f)
+      );
+      setBusyLabel("Writing character assets...");
+      setBusyProgress(undefined);
       if (isEditMode) {
-        const result = await services.commitEdit({
+        const committed = await services.commitEdit({
           characterName,
           sourceBytes,
           landmarks,
-          generated,
-          // Markers untouched = skeleton unchanged = clips still
-          // valid; leave animation bindings (incl. generated
-          // slots) alone.
-          skipAnimations: !landmarksDirtyRef.current,
+          generated: result,
+          skipAnimations: false,
           boundClips: editSession?.boundClips
         });
-        onCommitted(result);
+        onCommitted(committed);
       } else {
-        const result = await services.commit({
+        const committed = await services.commit({
           characterName,
           sourceBytes,
           landmarks,
-          generated
+          generated: result
         });
-        onCommitted(result);
+        onCommitted(committed);
       }
       reset();
       onClose();
-    } catch (commitError) {
+    } catch (finishError) {
       setError(
-        commitError instanceof Error ? commitError.message : String(commitError)
+        finishError instanceof Error ? finishError.message : String(finishError)
       );
       setBusy(false);
+      setBusyProgress(undefined);
     }
   }
-
-  // Preview step feeds CharacterPreview via stub definitions +
-  // blob-URL asset sources — the same component the workspace
-  // renders, so what you approve is what you get.
-  const preview = useMemo(() => {
-    if (!generated) return null;
-    const assetSources: Record<string, string> = {
-      "__wizard__/model.glb": trackBlobUrl(generated.modelGlb)
-    };
-    const model: CharacterModelDefinition = {
-      definitionId: "__wizard__:model",
-      definitionKind: "character-model",
-      displayName: characterName,
-      source: {
-        relativeAssetPath: "__wizard__/model.glb",
-        fileName: "model.glb",
-        mimeType: "model/gltf-binary"
-      }
-    };
-    const slots = generated.clips.map((clip) => {
-      const path = `__wizard__/${clip.slot}.glb`;
-      assetSources[path] = trackBlobUrl(clip.bytes);
-      return {
-        value: clip.slot,
-        label: clip.slot,
-        animation: {
-          definitionId: `__wizard__:${clip.slot}`,
-          definitionKind: "character-animation" as const,
-          displayName: clip.clipName,
-          source: {
-            relativeAssetPath: path,
-            fileName: `${clip.slot}.glb`,
-            mimeType: "model/gltf-binary"
-          },
-          clipNames: [clip.clipName]
-        }
-      };
-    });
-    return { model, slots, assetSources };
-  }, [generated, characterName, trackBlobUrl]);
 
   const canAdvance =
     !busy &&
     (step === "import"
       ? sourceBytes !== null && characterName.trim().length > 0
-      : step === "joints"
-        ? landmarks !== null
-        : generated !== null);
-
-  // Paint-step derived data.
-  const paintModelUrl = useMemo(
-    () => (step === "weights" && generated ? trackBlobUrl(generated.modelGlb) : null),
-    [step, generated, trackBlobUrl]
-  );
-  const paintIdleUrl = useMemo(() => {
-    if (step !== "weights" || !generated) return null;
-    const idle = generated.clips.find((clip) => clip.slot === "idle");
-    return idle ? trackBlobUrl(idle.bytes) : null;
-  }, [step, generated, trackBlobUrl]);
-  const boneOptions = useMemo(
-    () =>
-      generated
-        ? generated.weights.boneOrder.map((boneName, column) => ({
-            value: String(column),
-            label: friendlyBoneName(boneName)
-          }))
-        : [],
-    [generated]
-  );
-  const columnToJointSlot = useMemo(() => {
-    if (!generated) return [];
-    return generated.weights.boneOrder.map((boneName) =>
-      generated.skeleton.bones.findIndex((bone) => bone.name === boneName)
-    );
-  }, [generated]);
-  const pieceOptions = useMemo(() => {
-    if (!generated) return [];
-    const options: Array<
-      { value: string; label: string } | { group: string; items: Array<{ value: string; label: string }> }
-    > = [
-      { value: "-1", label: "Everything" },
-      {
-        group: "Pieces",
-        items: generated.ranges.map((range, index) => ({
-          value: `piece:${index}`,
-          label: range.materialName ?? `Piece ${index + 1}`
-        }))
-      }
-    ];
-    if (bodyRegions) {
-      options.push({
-        group: "Body regions",
-        items: [...bodyRegions.keys()].map((region) => ({
-          value: `region:${region}`,
-          label: BODY_REGION_LABELS[region]
-        }))
-      });
-    }
-    return options;
-  }, [generated, bodyRegions]);
-  const paintWindow = useMemo(() => {
-    if (!generated || paintPiece < 0) return undefined;
-    const range = generated.ranges[paintPiece];
-    if (!range) return undefined;
-    return {
-      start: range.vertexStart,
-      end: range.vertexStart + range.vertexCount
-    };
-  }, [generated, paintPiece]);
-
-  const handlePaint = useCallback(
-    (faceVertices: [number, number, number]): number[] => {
-      if (!generated) return [];
-      // Brush center = the clicked face's REST-space centroid, so
-      // strokes land correctly even while the preview animates.
-      const positions = generated.mesh.positions;
-      const center: [number, number, number] = [0, 0, 0];
-      for (const vertex of faceVertices) {
-        center[0] += positions[vertex * 3]! / 3;
-        center[1] += positions[vertex * 3 + 1]! / 3;
-        center[2] += positions[vertex * 3 + 2]! / 3;
-      }
-      const affected = applyBrushStroke(
-        generated.mesh,
-        generated.weights,
-        {
-          center,
-          radius: brushRadius,
-          boneColumn: paintBoneColumn,
-          strength: brushStrength * 0.25,
-          mode: brushMode,
-          vertexWindow: paintWindow,
-          vertexSet: regionSet ?? undefined
-        },
-        adjacencyRef.current ?? undefined
-      );
-      if (affected.length > 0) paintDirtyRef.current = true;
-      return affected;
-    },
-    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode, paintWindow, regionSet]
-  );
-
-  // One-click rigid assignment of the isolated piece to the
-  // selected bone — the intended fix for boneless shells (tail,
-  // eyes) where brushwork is the wrong tool.
-  // Mirror painted weights across the sagittal plane — respects
-  // piece isolation (mirrors within the selected piece only).
-  const handleMirror = useCallback(
-    (direction: "leftToRight" | "rightToLeft") => {
-      if (!generated) return;
-      const result = mirrorWeights(generated.mesh, generated.weights, {
-        direction,
-        vertexWindow: paintWindow
-      });
-      const total = result.affected.length + result.unmatched;
-      setShrinkInfo(
-        `mirrored ${result.affected.length} of ${total}` +
-          (result.unmatched > 0
-            ? ` — ${result.unmatched} had NO mirror twin (asymmetric mesh); use Shrinkwrap for those`
-            : "")
-      );
-      if (result.affected.length > 0) {
-        paintDirtyRef.current = true;
-        setWeightsVersion((version) => version + 1);
-      }
-    },
-    [generated, paintWindow]
-  );
-
-  // Region re-solve (Plan 064): the solver, scoped to one limb's
-  // bones — the systematic sleeve fix. When a box SELECTION exists
-  // it defines the target set instead of the region partition:
-  // the partition is derived from the pristine solve and inherits
-  // its armpit leaks (the bunched-sleeve bug, 2026-07-08), while a
-  // T-pose box catches every vertex, hidden twins and leaks
-  // included. The region scope still names the bone chain.
-  const [resolving, setResolving] = useState(false);
-  const handleResolveRegion = useCallback(() => {
-    if (!generated || !regionSet || !paintScope.startsWith("region:")) return;
-    setResolving(true);
-    // Yield a frame so the busy state paints before the solve.
-    setTimeout(() => {
-      try {
-        const segments = computeBoneSegments(generated.skeleton);
-        const targetSet = selection.size > 0 ? selection : regionSet;
-        const affected = resolveRegionWeights(
-          generated.mesh,
-          generated.weights,
-          segments,
-          targetSet,
-          paintScope.slice(7) as BodyRegionId
-        );
-        if (affected.length > 0) {
-          paintDirtyRef.current = true;
-          setWeightsVersion((version) => version + 1);
-        }
-      } catch (solveError) {
-        setError(
-          solveError instanceof Error ? solveError.message : String(solveError)
-        );
-      } finally {
-        setResolving(false);
-      }
-    }, 30);
-  }, [generated, regionSet, paintScope, selection]);
-
-  // Shrinkwrap weights (Plan 064, nikki's ask): robust transfer
-  // (Abdrashitov et al. 2023) from a source piece onto the current
-  // scope — confident surface matches + inpainting.
-  const [shrinkSources, setShrinkSources] = useState<string[]>([]);
-  const [shrinkInfo, setShrinkInfo] = useState<string | null>(null);
-  const handleShrinkwrap = useCallback(() => {
-    if (!generated || shrinkSources.length === 0) return;
-    const sourceWindows = shrinkSources
-      .map((value) => generated.ranges[Number(value)])
-      .filter((range): range is NonNullable<typeof range> => Boolean(range))
-      .map((range) => ({
-        start: range.vertexStart,
-        end: range.vertexStart + range.vertexCount
-      }));
-    if (sourceWindows.length === 0) return;
-    const targetScope: ReadonlySet<number> | { start: number; end: number } | null =
-      selection.size > 0
-        ? selection
-        : regionSet ?? paintWindow ?? null;
-    if (!targetScope) return;
-    setResolving(true);
-    setShrinkInfo(null);
-    setTimeout(() => {
-      try {
-        const result = shrinkwrapWeights(
-          generated.mesh,
-          generated.weights,
-          targetScope,
-          sourceWindows
-        );
-        setShrinkInfo(
-          `matched ${result.matched}, inpainted ${result.inpainted}` +
-            (result.untouched > 0 ? `, untouched ${result.untouched}` : "")
-        );
-        if (result.affected.length > 0) {
-          paintDirtyRef.current = true;
-          setWeightsVersion((version) => version + 1);
-        }
-      } catch (wrapError) {
-        setError(
-          wrapError instanceof Error ? wrapError.message : String(wrapError)
-        );
-      } finally {
-        setResolving(false);
-      }
-    }, 30);
-  }, [generated, shrinkSources, selection, regionSet, paintWindow]);
-
-  // TRUE fresh solve (2026-07-08): in EDIT sessions "pristine" is
-  // the file state at open, which can itself be damaged — the
-  // lying "Reset to auto" cost a full afternoon. This re-runs the
-  // ACTUAL solver over everything and re-baselines pristine (and
-  // therefore the body regions) to genuine solver output.
-  const handleFreshSolve = useCallback(() => {
-    if (!generated) return;
-    setResolving(true);
-    setShrinkInfo(null);
-    setTimeout(() => {
-      try {
-        let meshTopY = -Infinity;
-        for (let i = 1; i < generated.mesh.positions.length; i += 3) {
-          if (generated.mesh.positions[i]! > meshTopY) {
-            meshTopY = generated.mesh.positions[i]!;
-          }
-        }
-        const segments = computeBoneSegments(generated.skeleton, { meshTopY });
-        const solved = new GeodesicVoxelWeightSolver().solve(
-          generated.mesh,
-          segments
-        );
-        generated.weights.joints.set(solved.joints);
-        generated.weights.weights.set(solved.weights);
-        pristineWeightsRef.current = {
-          joints: solved.joints.slice(),
-          weights: solved.weights.slice()
-        };
-        paintDirtyRef.current = true;
-        setSelection(new Set());
-        setWeightsVersion((version) => version + 1);
-        // New object identity re-derives the body regions from the
-        // NEW pristine.
-        setGenerated({ ...generated });
-        setShrinkInfo("fresh solver weights for all pieces");
-      } catch (solveError) {
-        setError(
-          solveError instanceof Error ? solveError.message : String(solveError)
-        );
-      } finally {
-        setResolving(false);
-      }
-    }, 30);
-  }, [generated]);
-
-  // Scoped reset: restore the SESSION-START weights for the
-  // current scope only (selection > region > piece).
-  const handleResetScope = useCallback(() => {
-    const pristine = pristineWeightsRef.current;
-    if (!generated || !pristine) return;
-    let vertices: Iterable<number>;
-    if (selection.size > 0) vertices = selection;
-    else if (regionSet) vertices = regionSet;
-    else if (paintWindow) {
-      vertices = Array.from(
-        { length: paintWindow.end - paintWindow.start },
-        (_, i) => paintWindow.start + i
-      );
-    } else return;
-    for (const vertex of vertices) {
-      for (let slot = 0; slot < 4; slot += 1) {
-        generated.weights.joints[vertex * 4 + slot] =
-          pristine.joints[vertex * 4 + slot]!;
-        generated.weights.weights[vertex * 4 + slot] =
-          pristine.weights[vertex * 4 + slot]!;
-      }
-    }
-    paintDirtyRef.current = true;
-    setWeightsVersion((version) => version + 1);
-  }, [generated, selection, regionSet, paintWindow]);
-
-  const handleFillPiece = useCallback(() => {
-    if (!generated) return;
-    if (regionSet) {
-      assignVerticesToBone(generated.weights, [...regionSet], paintBoneColumn);
-    } else if (paintWindow) {
-      fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
-    } else {
-      return;
-    }
-    paintDirtyRef.current = true;
-    setWeightsVersion((version) => version + 1);
-  }, [generated, paintWindow, regionSet, paintBoneColumn]);
+      : landmarks !== null);
 
   return (
     <WizardDialog
@@ -918,13 +447,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
       finishLabel={isEditMode ? "Save changes" : "Add to project"}
       onBack={() => {
         setError(null);
-        setStep(
-          step === "preview"
-            ? "weights"
-            : step === "weights"
-              ? "joints"
-              : "import"
-        );
+        setStep("import");
       }}
       onNext={() => void handleNext()}
       onFinish={() => void handleFinish()}
@@ -1017,299 +540,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
           </Stack>
         ) : null}
 
-        {step === "weights" && generated && paintModelUrl ? (
-          <Stack gap="xs" style={{ flex: 1 }}>
-            {/* Global row: WHAT you edit + shared actions. Tool-
-                specific settings live on the viewport tool rail. */}
-            <Group gap="sm" align="flex-end" wrap="wrap">
-              <Select
-                label="Bone"
-                size="xs"
-                w={180}
-                searchable
-                data={boneOptions}
-                value={String(paintBoneColumn)}
-                onChange={(value) => {
-                  if (value !== null) setPaintBoneColumn(Number(value));
-                }}
-              />
-              <Select
-                label="Piece"
-                size="xs"
-                w={170}
-                data={pieceOptions}
-                value={paintScope}
-                onChange={(value) => {
-                  if (value !== null) setPaintScope(value);
-                }}
-              />
-              <Switch
-                size="xs"
-                label="Animate"
-                checked={paintAnimating}
-                onChange={(event) =>
-                  setPaintAnimating(event.currentTarget.checked)
-                }
-              />
-              <MultiSelect
-                label="Shrinkwrap from"
-                size="xs"
-                w={210}
-                placeholder="source piece(s)"
-                disabled={paintPiece < 0 && !regionSet && selection.size === 0}
-                data={
-                  generated
-                    ? generated.ranges
-                        .map((range, index) => ({
-                          value: String(index),
-                          label: range.materialName ?? `Piece ${index + 1}`
-                        }))
-                        .filter((option) => Number(option.value) !== paintPiece)
-                    : []
-                }
-                value={shrinkSources}
-                onChange={setShrinkSources}
-              />
-              <Button
-                size="compact-xs"
-                variant="light"
-                loading={resolving}
-                disabled={
-                  shrinkSources.length === 0 ||
-                  (paintPiece < 0 && !regionSet && selection.size === 0)
-                }
-                onClick={handleShrinkwrap}
-              >
-                {selection.size > 0
-                  ? `Shrinkwrap ${selection.size} selected`
-                  : regionSet
-                    ? "Shrinkwrap region"
-                    : "Shrinkwrap piece"}
-              </Button>
-              {shrinkInfo ? (
-                <Text size="xs" c="var(--sm-color-subtext)">
-                  {shrinkInfo}
-                </Text>
-              ) : null}
-              <Menu position="bottom-start" withinPortal>
-                <Menu.Target>
-                  <Button size="compact-xs" variant="light">
-                    Actions
-                  </Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Item
-                    onClick={handleFillPiece}
-                    disabled={paintPiece < 0 && !regionSet}
-                  >
-                    Fill piece/region with bone
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleResolveRegion}
-                    disabled={!regionSet || resolving}
-                  >
-                    {resolving
-                      ? "Re-solving..."
-                      : selection.size > 0
-                        ? `Re-solve ${selection.size} selected (auto)`
-                        : "Re-solve region weights (auto)"}
-                  </Menu.Item>
-                  <Menu.Item onClick={() => handleMirror("leftToRight")}>
-                    {"Mirror weights L > R"}
-                  </Menu.Item>
-                  <Menu.Item onClick={() => handleMirror("rightToLeft")}>
-                    {"Mirror weights R > L"}
-                  </Menu.Item>
-                  <Menu.Item
-                    onClick={handleResetScope}
-                    disabled={paintPiece < 0 && !regionSet && selection.size === 0}
-                  >
-                    Reset scope to session start
-                  </Menu.Item>
-                  <Menu.Item onClick={handleFreshSolve} disabled={resolving}>
-                    {resolving ? "Solving..." : "Fresh auto-solve (ALL pieces)"}
-                  </Menu.Item>
-                  <Menu.Divider />
-                  <Menu.Item
-                    color="red"
-                    onClick={() => {
-                      const pristine = pristineWeightsRef.current;
-                      if (!pristine || !generated) return;
-                      generated.weights.joints.set(pristine.joints);
-                      generated.weights.weights.set(pristine.weights);
-                      paintDirtyRef.current = true;
-                      setWeightsVersion((version) => version + 1);
-                    }}
-                  >
-                    Reset ALL to session start
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
-            </Group>
-            <Box style={{ height: 380, position: "relative" }}>
-              <WeightPaintViewport
-                modelUrl={paintModelUrl}
-                idleClipUrl={paintIdleUrl}
-                weights={generated.weights}
-                ranges={generated.ranges}
-                selectedBoneColumn={paintBoneColumn}
-                columnToJointSlot={columnToJointSlot}
-                brushRadius={brushRadius}
-                animating={paintAnimating}
-                isolatedPiece={paintPiece}
-                regionSet={regionSet}
-                weightsVersion={weightsVersion}
-                selectMode={activeTool === "select"}
-                xray={xray}
-                selection={selection}
-                tPose={tPose}
-                onSelect={handleSelect}
-                onPaint={handlePaint}
-              />
-              <Tooltip
-                label={tPose ? "Back to bind pose" : "T-pose (lift limbs clear)"}
-                position="left"
-              >
-                <ActionIcon
-                  variant={tPose ? "filled" : "default"}
-                  color="teal"
-                  style={{ position: "absolute", top: 10, right: 10, zIndex: 5 }}
-                  onClick={() => setTPose((current) => !current)}
-                  aria-label="Toggle T-pose"
-                >
-                  T
-                </ActionIcon>
-              </Tooltip>
-              {/* Blender-style tool rail: mutually exclusive tools,
-                  settings under the ACTIVE tool only. */}
-              <Stack
-                gap={6}
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  left: 10,
-                  zIndex: 5
-                }}
-              >
-                <Group gap={4}>
-                  <Tooltip label="Paint brush" position="right">
-                    <ActionIcon
-                      variant={activeTool === "brush" ? "filled" : "default"}
-                      color="blue"
-                      onClick={() => setActiveTool("brush")}
-                      aria-label="Paint brush tool"
-                    >
-                      🖌
-                    </ActionIcon>
-                  </Tooltip>
-                  <Tooltip label="Box select" position="right">
-                    <ActionIcon
-                      variant={activeTool === "select" ? "filled" : "default"}
-                      color="yellow"
-                      onClick={() => setActiveTool("select")}
-                      aria-label="Box select tool"
-                    >
-                      ⬚
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-                <Paper
-                  p="xs"
-                  radius="sm"
-                  withBorder
-                  style={{ width: 170, opacity: 0.95 }}
-                >
-                  {activeTool === "brush" ? (
-                    <Stack gap={6}>
-                      <SegmentedControl
-                        size="xs"
-                        fullWidth
-                        data={[
-                          { value: "add", label: "Add" },
-                          { value: "subtract", label: "Sub" },
-                          { value: "smooth", label: "Smooth" },
-                          { value: "fill", label: "Fill" }
-                        ]}
-                        value={brushMode}
-                        onChange={(value) => setBrushMode(value as BrushMode)}
-                      />
-                      <LabeledSlider
-                        label="Radius"
-                        min={0.01}
-                        max={0.4}
-                        step={0.005}
-                        value={brushRadius}
-                        onChange={setBrushRadius}
-                      />
-                      <LabeledSlider
-                        label="Strength"
-                        min={0.05}
-                        max={1}
-                        step={0.05}
-                        value={brushStrength}
-                        onChange={setBrushStrength}
-                      />
-                    </Stack>
-                  ) : (
-                    <Stack gap={6}>
-                      <Switch
-                        size="xs"
-                        label="X-ray"
-                        checked={xray}
-                        onChange={(event) =>
-                          setXray(event.currentTarget.checked)
-                        }
-                      />
-                      <Button
-                        size="compact-xs"
-                        variant="light"
-                        disabled={selection.size === 0}
-                        onClick={handleAssignSelection}
-                      >
-                        {selection.size > 0
-                          ? `Assign ${selection.size} to bone`
-                          : "Assign to bone"}
-                      </Button>
-                      <Button
-                        size="compact-xs"
-                        variant="subtle"
-                        color="gray"
-                        disabled={selection.size === 0}
-                        onClick={() => setSelection(new Set())}
-                      >
-                        Clear selection
-                      </Button>
-                      <Text size="xs" c="var(--sm-color-subtext)">
-                        Drag a box; shift adds.
-                      </Text>
-                    </Stack>
-                  )}
-                </Paper>
-              </Stack>
-            </Box>
-          </Stack>
-        ) : null}
 
-        {step === "preview" && preview ? (
-          <Box style={{ height: 400 }}>
-            <CharacterPreview
-              model={preview.model}
-              targetHeight={generated?.characterHeight ?? 1.6}
-              slots={preview.slots}
-              activeSlot={previewSlot}
-              onChangeActiveSlot={setPreviewSlot}
-              isPlaying={previewPlaying}
-              onChangePlaying={setPreviewPlaying}
-              assetSources={preview.assetSources}
-            />
-          </Box>
-        ) : null}
-
-        {error ? (
-          <Text size="xs" c="var(--sm-color-danger, #f7768e)">
-            {error}
-          </Text>
-        ) : null}
       </Stack>
     </WizardDialog>
   );

@@ -27,6 +27,7 @@ import {
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
 import { AnimationPanel } from "./animation-panel/AnimationPanel";
+import { WeightWorkbench } from "./weight-workbench/WeightWorkbench";
 
 export interface PlayerWorkspaceViewProps {
   isActive: boolean;
@@ -90,6 +91,9 @@ export function usePlayerWorkspaceView(
   } = props;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
+  // Plan 064 UX rework: the rig button TOGGLES the weight
+  // workbench for rigged characters (create-wizard for unrigged).
+  const [rigMode, setRigMode] = useState(false);
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
@@ -208,6 +212,23 @@ export function usePlayerWorkspaceView(
 
   const centerPanel = (
     <>
+      {rigMode && characterWizardServices && boundCharacterModel?.rigId ? (
+        <WeightWorkbench
+          key={boundCharacterModel.definitionId}
+          model={boundCharacterModel}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          assetSources={assetSources}
+          services={characterWizardServices}
+          onEditMarkers={() => {
+            setRigMode(false);
+            void launchWizard(boundCharacterModel);
+          }}
+          onClose={() => setRigMode(false)}
+        />
+      ) : (
       <CharacterPreview
         model={boundCharacterModel}
         targetHeight={
@@ -227,7 +248,10 @@ export function usePlayerWorkspaceView(
         assetSources={assetSources}
         onLaunchRigWizard={
           characterWizardServices
-            ? () => void launchWizard(boundCharacterModel)
+            ? () =>
+                boundCharacterModel?.rigId
+                  ? setRigMode(true)
+                  : void launchWizard(boundCharacterModel)
             : undefined
         }
         onLaunchAnimationPanel={
@@ -236,6 +260,7 @@ export function usePlayerWorkspaceView(
             : undefined
         }
       />
+      )}
       {characterWizardServices && boundCharacterModel?.rigId && playerDefinition ? (
         <AnimationPanel
           opened={animationPanelOpen}
