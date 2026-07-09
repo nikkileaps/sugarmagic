@@ -3599,6 +3599,98 @@ export function removeMaterialDefinitionFromSession(
   };
 }
 
+export function removeTextureDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      textureDefinitions: session.contentLibrary.textureDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+/**
+ * True when a texture definition is referenced anywhere: material
+ * texture maps, or texture-content / texture-mask layers in
+ * inline surfaces (assets + landscape channels). Referenced
+ * textures cannot be deleted from the Library.
+ */
+export function textureDefinitionHasReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  const usedByMaterial = session.contentLibrary.materialDefinitions.some(
+    (material) =>
+      [
+        material.pbr.baseColorMap,
+        material.pbr.normalMap,
+        material.pbr.ormMap,
+        material.pbr.roughnessMap,
+        material.pbr.metallicMap,
+        material.pbr.ambientOcclusionMap,
+        material.pbr.emissiveMap
+      ].includes(definitionId)
+  );
+  if (usedByMaterial) return true;
+
+  const layerUsesTexture = (layer: {
+    kind: string;
+    content?: { kind: string; textureDefinitionId?: string };
+    masks?: Array<{ kind: string; textureDefinitionId?: string }>;
+  }): boolean => {
+    if (
+      (layer.kind === "appearance" || layer.kind === "emission") &&
+      layer.content?.kind === "texture" &&
+      layer.content.textureDefinitionId === definitionId
+    ) {
+      return true;
+    }
+    return (layer.masks ?? []).some(
+      (mask) =>
+        mask.kind === "texture" &&
+        mask.textureDefinitionId === definitionId
+    );
+  };
+  const surfaceUsesTexture = (binding: {
+    kind: string;
+    surface?: { layers: readonly unknown[] };
+  } | null): boolean =>
+    binding?.kind === "inline" &&
+    Boolean(
+      binding.surface?.layers.some((layer) =>
+        layerUsesTexture(layer as Parameters<typeof layerUsesTexture>[0])
+      )
+    );
+
+  const usedBySurfaceDefinition =
+    session.contentLibrary.surfaceDefinitions?.some((definition) =>
+      definition.surface.layers.some((layer) =>
+        layerUsesTexture(layer as Parameters<typeof layerUsesTexture>[0])
+      )
+    ) ?? false;
+  if (usedBySurfaceDefinition) return true;
+
+  const usedByAsset = session.contentLibrary.assetDefinitions.some(
+    (assetDefinition) =>
+      assetDefinition.surfaceSlots.some((slot) =>
+        surfaceUsesTexture(slot.surface as Parameters<typeof surfaceUsesTexture>[0])
+      )
+  );
+  if (usedByAsset) return true;
+
+  return getAllRegions(session).some((region) =>
+    region.landscape.surfaceSlots.some((channel) =>
+      surfaceUsesTexture(channel.surface as Parameters<typeof surfaceUsesTexture>[0])
+    )
+  );
+}
+
 export function updateMaskTextureDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,

@@ -13,6 +13,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "zustand";
 import {
+  ActionIcon,
   Box,
   Button,
   Group,
@@ -20,7 +21,8 @@ import {
   ScrollArea,
   Stack,
   Text,
-  TextInput
+  TextInput,
+  Tooltip
 } from "@mantine/core";
 import type {
   AudioClipDefinition,
@@ -47,6 +49,8 @@ export interface LibraryPopoverProps {
   /** For resolving texture refs in MaterialPreview. */
   assetResolver: AuthoredAssetResolver | null;
   isMaterialReferenced: (definitionId: string) => boolean;
+  isTextureReferenced: (definitionId: string) => boolean;
+  onRemoveTextureDefinition: (definitionId: string) => void;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -113,6 +117,8 @@ export function LibraryPopover({
   assetSources,
   assetResolver,
   isMaterialReferenced,
+  isTextureReferenced,
+  onRemoveTextureDefinition,
   onCreateMaterialDefinition,
   onImportPbrMaterial,
   onImportTextureDefinition,
@@ -393,6 +399,31 @@ export function LibraryPopover({
             </>
           ) : activeLibrary === "textures" ? (
             <>
+              {selectedTexture ? (
+                <Group justify="flex-end" mb={-8}>
+                  <Tooltip
+                    label={
+                      isTextureReferenced(selectedTexture.definitionId)
+                        ? "In use by a material or surface — remove those references first"
+                        : "Delete texture from the library"
+                    }
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      disabled={isTextureReferenced(
+                        selectedTexture.definitionId
+                      )}
+                      onClick={() =>
+                        onRemoveTextureDefinition(selectedTexture.definitionId)
+                      }
+                      aria-label="Delete texture"
+                    >
+                      🗑
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              ) : null}
               <TexturePreview
                 texture={selectedTexture}
                 assetResolver={assetResolver}

@@ -102,6 +102,8 @@ import {
   duplicateMaterialDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
+  removeTextureDefinitionFromSession,
+  textureDefinitionHasReferences,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
   createDefaultMaterialPbr,
@@ -2595,6 +2597,20 @@ export function App() {
             ? materialDefinitionHasReferences(session, definitionId)
             : false
         }
+        isTextureReferenced={(definitionId) =>
+          session
+            ? textureDefinitionHasReferences(session, definitionId)
+            : false
+        }
+        onRemoveTextureDefinition={(definitionId) => {
+          const { session: currentSession } = projectStore.getState();
+          if (!currentSession) return;
+          projectStore
+            .getState()
+            .updateSession(
+              removeTextureDefinitionFromSession(currentSession, definitionId)
+            );
+        }}
         onCreateMaterialDefinition={handleCreateMaterialDefinition}
         onImportPbrMaterial={handleImportPbrMaterial}
         onImportTextureDefinition={handleImportTextureDefinition}
