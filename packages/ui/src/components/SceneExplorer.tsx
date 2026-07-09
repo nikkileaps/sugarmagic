@@ -61,6 +61,14 @@ export interface SceneExplorerProps {
   onDuplicateEntity?: (instanceId: string) => void;
   onEditEntity?: (instanceId: string) => void;
   onDeleteEntity?: (instanceId: string) => void;
+  /**
+   * Optional scope-conversion menu entry for an entity (Plan 058.3
+   * "Promote to Base" / "Move to Scene"). Return null to omit —
+   * the explorer stays agnostic of what scopes mean.
+   */
+  getEntityScopeAction?: (
+    instanceId: string
+  ) => { label: string; onClick: () => void } | null;
 }
 
 type ContextMenuState =
@@ -403,7 +411,8 @@ export function SceneExplorer({
   onDeleteFolder,
   onDuplicateEntity,
   onEditEntity,
-  onDeleteEntity
+  onDeleteEntity,
+  getEntityScopeAction
 }: SceneExplorerProps) {
   const entityCount = countEntities(roots);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -474,6 +483,16 @@ export function SceneExplorer({
                   <Menu.Item onClick={() => onEditEntity?.(contextMenu.instanceId)}>
                     Edit
                   </Menu.Item>
+                  {(() => {
+                    const scopeAction = getEntityScopeAction?.(
+                      contextMenu.instanceId
+                    );
+                    return scopeAction ? (
+                      <Menu.Item onClick={scopeAction.onClick}>
+                        {scopeAction.label}
+                      </Menu.Item>
+                    ) : null;
+                  })()}
                   <Menu.Divider />
                 </>
               )}

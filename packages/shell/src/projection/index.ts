@@ -11,10 +11,12 @@ import type {
   ItemDefinition,
   NPCDefinition,
   PlayerDefinition,
-  RegionDocument
+  RegionDocument,
+  Scene
 } from "@sugarmagic/domain";
 import {
   getActiveRegion,
+  getActiveScene,
   getPlayerDefinition,
   getAllItemDefinitions,
   getAllNPCDefinitions
@@ -30,6 +32,10 @@ import type { ViewportState, ViewportStore } from "../viewport";
 
 export interface ViewportProjection {
   region: RegionDocument | null;
+  /** Plan 058 — the ambient Scene whose overlay composes onto the
+   *  region. Without it the viewport renders base-scope content
+   *  only, silently hiding every Scene-scoped placement. */
+  activeScene: Scene | null;
   contentLibrary: ContentLibrarySnapshot | null;
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
@@ -141,6 +147,7 @@ export function selectViewportProjection(
   const session = project.session;
   return {
     region: session ? getActiveRegion(session) : null,
+    activeScene: session ? getActiveScene(session) : null,
     contentLibrary: session?.contentLibrary ?? null,
     playerDefinition: session ? getPlayerDefinition(session) : null,
     itemDefinitions: session ? getAllItemDefinitions(session) : [],
