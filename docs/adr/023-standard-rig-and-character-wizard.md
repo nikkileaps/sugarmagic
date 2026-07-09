@@ -91,3 +91,30 @@ cost of the recipe stamp.
 - The contract test suite (`packages/testing/src/standard-rig-contract.test.ts`)
   is the enforcement point: contract/data drift, finger tracks, or
   non-hips translation tracks fail before anything ships.
+
+## Amendments
+
+### 2026-07-08 — schema v2: the optional tail extension (Plan 064)
+
+`STANDARD_RIG_SCHEMA_VERSION` is 2. Three hand-authored bones
+(`DEF-tail.001..003` off `DEF-hips`, rest arc curling toward
+vertical) form an OPTIONAL, ADDITIVE extension
+(`packages/domain/src/standard-rig/tail-extension.ts`). Name-based
+binding degrades gracefully in both directions — tail-less
+characters ignore tail tracks and tail-less clips leave tail bones
+at rest — so v1 content required no migration. This is the
+template for future optional chains (ears).
+
+### 2026-07-08 — relaxed-pose refinements + layered-clothing rule
+
+The vendored relaxed base pose is mirror-symmetrized (the library
+idle is an asymmetric combat stance) and elbow/wrist offsets are
+scaled toward identity (arms hang straight, not bent) at vendor
+time. Decision 5's "hand touch-up is first-class" gained a settled
+doctrine for layered clothing: garments take their weights by
+ROBUST TRANSFER from the surfaces beneath them (confident
+point-on-surface matches + Laplacian inpainting, after Abdrashitov
+et al., SIGGRAPH Asia 2023; `shrinkwrapWeights` in
+packages/character-rig), cascading inner-to-outer. Weight
+MIRRORING is reserved for mirror-symmetric geometry and reports
+unmatched twins.

@@ -10,37 +10,51 @@ this page is the user-and-integrator surface.
 
 ## Using it
 
-Open the Player or NPC workspace and click the animation button
-(next to the rig button) in the character preview HUD — available
-for Character-Wizard-generated models.
+Click the animation button in the Player or NPC workspace preview
+(available for wizard-rigged characters) — the workspace center
+becomes ANIMATION MODE (a mode tab beside the rig workbench; one
+click switches between them).
 
-The panel shows the three animation slots (idle / walk / run).
-Per slot:
-
-- **Source**: "Generated" (procedural) or "Library clip" (the
-  vendored CC0 clip). Slots choose independently — keep the
-  library walk, generate the idle.
-- **Personality sliders** (Generated): Energy (speed, arm swing),
+- **Animations list** (left column): the three slots (idle / walk
+  / run), each with a G/L badge — Generated or Library — that
+  toggles the slot's source on click. Slots choose independently:
+  keep the library walk, generate the idle. Dirty slots show `*`.
+- **Personality** (Generated slots): Energy (speed, arm swing),
   Bounce (vertical bob, hips), Curiosity (head + torso motion),
-  Fidgetiness (variation, weight shifts). The preview regenerates
-  live as you drag. "Reroll variation" picks a different flavor of
-  the same settings.
-- **Adjust pose**: freezes the preview at the character's base
-  pose with draggable handles on the wrists. Dragging swings the
-  whole arm at the shoulder (elbow angle preserved); Mirror (on by
-  default) drives both arms symmetrically. The pose applies to all
-  generated slots — it is the character's stance, not one clip's.
-- **Edit curves**: reshape a semantic motion curve (Breathing,
-  Weight Shift, Head Motion, Arm Drift, Bounce for idle; Weight
-  Shift, Hip Twist, Torso Lean, Bounce for walk/run) with
-  draggable control points. Double-click adds a point;
-  double-click a point removes it; the ends wrap (one loop). An
-  edited curve replaces that channel's generated signal until
-  "Reset curve"; sliders keep driving everything else.
+  Fidgetiness (variation, weight shifts, tail liveliness). The
+  preview regenerates live as you drag; "Reroll variation" picks a
+  different flavor of the same settings.
+- **Adjust pose** (viewport tool rail): puppet handles at the
+  wrists (and on tailed characters, the tail: swing at the base,
+  curl at the tip). Dragging a wrist swings the whole arm at the
+  shoulder; Mirror drives both arms symmetrically. The pose
+  applies to all generated slots — it is the character's stance,
+  not one clip's.
+- **Curves**: reshape a semantic motion curve (Breathing, Weight
+  Shift, Head Motion, Arm Drift, Bounce for idle; Weight Shift,
+  Hip Twist, Torso Lean, Bounce for walk/run; Tail on tailed
+  characters) with draggable control points in a strip under the
+  preview. Double-click adds a point; double-click a point removes
+  it; the ends wrap. An edited curve replaces that channel's
+  generated signal until "Reset curve".
+- Playback (Static + slots, play/pause) sits bottom-center, as in
+  every Studio viewport.
 
-**Save** writes only the changed slots and rebinds them. Reopening
-the panel restores sliders, pose, and curves exactly — the full
-recipe travels inside each generated clip file.
+**Save** writes only the changed slots and rebinds them. The full
+recipe travels inside each generated clip file — reopening
+restores sliders, pose, and curves exactly. On open, each
+generated slot is regenerated through the CURRENT engine and
+byte-compared against the bound file: engine improvements surface
+automatically as dirty slots to save, never trapped in stale
+files.
+
+## Tails
+
+Characters rigged with the wizard's "Has tail" toggle wag: a
+phase-lagged sway component joins every generated clip, and
+LIBRARY clips get tail tracks merged into the per-character copy
+at the host clip's loop duration — a tailed character wags on a
+library walk too.
 
 ## Interplay with the Character Wizard
 
