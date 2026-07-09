@@ -27,7 +27,11 @@
 
 import { STANDARD_RIG_BONES, STANDARD_RIG_RELAXED_POSE_DATA } from "./rig-data";
 
-export const STANDARD_RIG_SCHEMA_VERSION = 1;
+// v2 (2026-07-07, Plan 064): OPTIONAL tail extension added
+// (DEF-tail.001..003 off DEF-hips; see ./tail-extension). Additive
+// optional bones — name-based binding degrades gracefully in both
+// directions, so v1 content needs no migration.
+export const STANDARD_RIG_SCHEMA_VERSION = 2;
 
 export const STANDARD_RIG_ID = "sugarmagic-humanoid-v1";
 
@@ -142,3 +146,21 @@ export { STANDARD_RIG_BONES } from "./rig-data";
  * their arms instead of holding the contract T-pose.
  */
 export const STANDARD_RIG_RELAXED_POSE = STANDARD_RIG_RELAXED_POSE_DATA;
+
+export {
+  STANDARD_RIG_TAIL_BONES,
+  STANDARD_RIG_TAIL_LANDMARK_BONES,
+  isStandardRigTailBoneName
+} from "./tail-extension";
+
+import {
+  STANDARD_RIG_TAIL_BONES as TAIL_BONES_INTERNAL
+} from "./tail-extension";
+
+/** The core wizard skeleton PLUS the optional tail chain — the
+ *  bone set for characters rigged with "Has tail" (Plan 064). */
+export const STANDARD_RIG_CORE_WITH_TAIL: StandardRigDefinition = {
+  rigId: STANDARD_RIG.rigId,
+  rigSchemaVersion: STANDARD_RIG_SCHEMA_VERSION,
+  bones: [...STANDARD_RIG_CORE.bones, ...TAIL_BONES_INTERNAL]
+};

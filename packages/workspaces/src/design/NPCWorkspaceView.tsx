@@ -54,6 +54,7 @@ import {
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
 import { AnimationPanel } from "./animation-panel/AnimationPanel";
+import { WeightWorkbench } from "./weight-workbench/WeightWorkbench";
 
 export interface NPCWorkspaceViewProps {
   isActive: boolean;
@@ -130,7 +131,10 @@ export function useNPCWorkspaceView(
     definitionId: string;
   } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [animationPanelOpen, setAnimationPanelOpen] = useState(false);
+  const [animMode, setAnimMode] = useState(false);
+  // Plan 064 UX rework: the rig button TOGGLES the weight
+  // workbench for rigged characters (create-wizard for unrigged).
+  const [rigMode, setRigMode] = useState(false);
   const [wizardEditSession, setWizardEditSession] = useState<{
     characterName: string;
     riggedBytes: ArrayBuffer;
@@ -331,37 +335,10 @@ export function useNPCWorkspaceView(
     }
   }
 
-  const centerPanel = (
-    <>
-      <CharacterPreview
-        model={boundCharacterModel}
-        targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
-        slots={previewSlots}
-        activeSlot={activeAnimationSlot}
-        onChangeActiveSlot={(slot) =>
-          designPreviewStore
-            .getState()
-            .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
-        }
-        isPlaying={isAnimationPlaying}
-        onChangePlaying={(playing) =>
-          designPreviewStore.getState().setAnimationPlaying(playing)
-        }
-        assetSources={assetSources}
-        onLaunchRigWizard={
-          characterWizardServices && selectedNPC
-            ? () => void launchWizard(boundCharacterModel)
-            : undefined
-        }
-        onLaunchAnimationPanel={
-          characterWizardServices && selectedNPC && boundCharacterModel?.rigId
-            ? () => setAnimationPanelOpen(true)
-            : undefined
-        }
-      />
-      {characterWizardServices && selectedNPC && boundCharacterModel?.rigId ? (
+  const animationPanelNode =
+    characterWizardServices && selectedNPC && boundCharacterModel?.rigId ? (
         <AnimationPanel
-          opened={animationPanelOpen}
+          key={boundCharacterModel.definitionId}
           characterName={boundCharacterModel.source.fileName.replace(
             /-rigged\.glb$/i,
             ""
@@ -390,9 +367,70 @@ export function useNPCWorkspaceView(
               }
             });
           }}
-          onClose={() => setAnimationPanelOpen(false)}
+          onClose={() => setAnimMode(false)}
+          onSwitchToRig={() => {
+            setAnimMode(false);
+            setRigMode(true);
+          }}
         />
-      ) : null}
+      ) : null;
+
+  const centerPanel = (
+    <>
+      {rigMode && characterWizardServices && boundCharacterModel?.rigId ? (
+        <WeightWorkbench
+          key={boundCharacterModel.definitionId}
+          model={boundCharacterModel}
+          characterName={boundCharacterModel.source.fileName.replace(
+            /-rigged\.glb$/i,
+            ""
+          )}
+          assetSources={assetSources}
+          services={characterWizardServices}
+          onEditMarkers={() => {
+            setRigMode(false);
+            void launchWizard(boundCharacterModel);
+          }}
+          onClose={() => setRigMode(false)}
+          onOpenAnimations={() => {
+            setRigMode(false);
+            setAnimMode(true);
+          }}
+        />
+      ) : animMode && characterWizardServices && boundCharacterModel?.rigId ? (
+        <Box style={{ height: "100%" }}>{animationPanelNode}</Box>
+      ) : (
+      <CharacterPreview
+        model={boundCharacterModel}
+        targetHeight={selectedNPC?.presentation.modelHeight ?? 1.7}
+        slots={previewSlots}
+        activeSlot={activeAnimationSlot}
+        onChangeActiveSlot={(slot) =>
+          designPreviewStore
+            .getState()
+            .setAnimationSlot(slot ? (slot as NPCAnimationSlot) : null)
+        }
+        isPlaying={isAnimationPlaying}
+        onChangePlaying={(playing) =>
+          designPreviewStore.getState().setAnimationPlaying(playing)
+        }
+        assetSources={assetSources}
+        onLaunchRigWizard={
+          characterWizardServices && selectedNPC
+            ? () =>
+                boundCharacterModel?.rigId
+                  ? setRigMode(true)
+                  : void launchWizard(boundCharacterModel)
+            : undefined
+        }
+        onLaunchAnimationPanel={
+          characterWizardServices && selectedNPC && boundCharacterModel?.rigId
+            ? () => setAnimMode(true)
+            : undefined
+        }
+      />
+      )}
+
       {characterWizardServices && selectedNPC ? (
         <CharacterWizard
           opened={wizardOpen}

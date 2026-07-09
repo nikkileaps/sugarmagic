@@ -35,6 +35,9 @@ export interface BrushStroke {
    *  tail behind torso) need isolation or the 3D brush paints
    *  through everything (nikki, 2026-07-06). */
   vertexWindow?: { start: number; end: number };
+  /** Restrict the stroke to an explicit vertex set (Plan 064
+   *  virtual body regions, which cross-cut material pieces). */
+  vertexSet?: ReadonlySet<number>;
 }
 
 /** Weight of a bone column at a vertex (0 when uninfluenced). */
@@ -176,6 +179,7 @@ export function applyBrushStroke(
   const first = stroke.vertexWindow?.start ?? 0;
   const last = Math.min(stroke.vertexWindow?.end ?? vertexCount, vertexCount);
   for (let vertex = first; vertex < last; vertex += 1) {
+    if (stroke.vertexSet && !stroke.vertexSet.has(vertex)) continue;
     const dx = mesh.positions[vertex * 3]! - stroke.center[0];
     const dy = mesh.positions[vertex * 3 + 1]! - stroke.center[1];
     const dz = mesh.positions[vertex * 3 + 2]! - stroke.center[2];
@@ -318,7 +322,7 @@ export function mirrorWeights(
      *  diagonal. */
     tolerance?: number;
   }
-): number[] {
+): { affected: number[]; unmatched: number } {
   const vertexCount = mesh.positions.length / 3;
   const first = options.vertexWindow?.start ?? 0;
   const last = Math.min(options.vertexWindow?.end ?? vertexCount, vertexCount);
@@ -339,7 +343,7 @@ export function mirrorWeights(
     max[2]! - min[2]!
   );
   const tolerance = options.tolerance ?? diagonal * 0.005;
-  if (!(tolerance > 0)) return [];
+  if (!(tolerance > 0)) return { affected: [], unmatched: 0 };
 
   // Column -> mirrored column via bone-name suffix swap.
   const columnMirror = weights.boneOrder.map((name) => {
@@ -363,6 +367,7 @@ export function mirrorWeights(
   }
 
   const affected: number[] = [];
+  let unmatched = 0;
   const toleranceSq = tolerance * tolerance;
   for (let v = first; v < last; v += 1) {
     const x = mesh.positions[v * 3]!;
@@ -395,7 +400,13 @@ export function mirrorWeights(
         }
       }
     }
-    if (best === -1) continue;
+    if (best === -1) {
+      // Asymmetric geometry: no twin. Counted and REPORTED — a
+      // silent 73% miss on an asymmetric jacket produced garbage
+      // that read as "mirroring is broken" (nikki, 2026-07-08).
+      unmatched += 1;
+      continue;
+    }
     for (let slot = 0; slot < MAX_INFLUENCES; slot += 1) {
       const sourceColumn = weights.joints[best * MAX_INFLUENCES + slot]!;
       weights.joints[v * MAX_INFLUENCES + slot] =
@@ -405,7 +416,23 @@ export function mirrorWeights(
     }
     affected.push(v);
   }
-  return affected;
+  return { affected, unmatched };
+}
+
+/**
+ * Rigidly assign an explicit vertex list to one bone — the
+ * operation behind box-selection assignment (Plan 064): select
+ * precisely (x-ray box), then set ownership in one step.
+ */
+export function assignVerticesToBone(
+  weights: SkinWeights,
+  vertices: readonly number[],
+  boneColumn: number
+): number[] {
+  for (const vertex of vertices) {
+    setBoneWeightAtVertex(weights, vertex, boneColumn, 1);
+  }
+  return [...vertices];
 }
 
 export { buildVertexAdjacency };

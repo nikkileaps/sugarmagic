@@ -24,6 +24,7 @@
 import type { MotionComponent } from "./components";
 import { composeComponents, type ComposedMotion } from "./components";
 import type { PersonalityParams } from "./idle";
+import { tailWag } from "./tail";
 
 /** Gait scaling — WALK vs RUN parameterizations of one stack. */
 export interface GaitConfig {
@@ -137,15 +138,21 @@ const hipMotion: MotionComponent<LocomotionRecipeParams> = {
   })
 };
 
-/** Arms counter-swing: each arm in phase with the OPPOSITE leg. */
+/** Arms counter-swing: each arm opposes its own-side leg in WORLD
+ *  space. NOTE the phases match the SAME-side leg on purpose: the
+ *  swing rotation applies in the arm's hanging frame (after the
+ *  ~70-degree relaxed-pose rotation), which INVERTS the world
+ *  sense of the swing axis relative to the thigh's — channel-
+ *  opposite phases produced arms pinned to the thighs (nikki,
+ *  2026-07-08). Same-phase channels = counter-swing on screen. */
 const armSwing: MotionComponent<LocomotionRecipeParams> = {
   componentId: "arm-swing",
   contribute: ({ gait, energy }) => {
     const amplitude = gait.armSwing * lerp(0.6, 1.4, energy);
     return {
       channels: {
-        armSwingL: { harmonics: [{ cycles: 1, amplitude, phase: 0.5 }] },
-        armSwingR: { harmonics: [{ cycles: 1, amplitude, phase: 0 }] }
+        armSwingL: { harmonics: [{ cycles: 1, amplitude, phase: 0 }] },
+        armSwingR: { harmonics: [{ cycles: 1, amplitude, phase: 0.5 }] }
       }
     };
   }
@@ -192,7 +199,7 @@ const headStabilization: MotionComponent<LocomotionRecipeParams> = {
 
 export const LOCOMOTION_COMPONENTS: Array<
   MotionComponent<LocomotionRecipeParams>
-> = [legCycle, hipMotion, armSwing, bodyBounce, headStabilization];
+> = [legCycle, hipMotion, armSwing, bodyBounce, headStabilization, tailWag];
 
 function generateLocomotion(
   params: Omit<LocomotionRecipeParams, "gait">,

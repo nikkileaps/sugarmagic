@@ -52,3 +52,4 @@ export {
   type GaitConfig,
   type LocomotionRecipeParams
 } from "./locomotion";
+export { TAIL_WAG_LAG, sampleTailWag, tailWag, type TailWagParams } from "./tail";

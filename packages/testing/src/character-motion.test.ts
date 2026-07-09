@@ -11,6 +11,7 @@ import {
   IDLE_DEFAULTS,
   LOCOMOTION_COMPONENTS,
   RELAXED_ARM_POSE,
+  TAIL_WAG_LAG,
   composeBasePose,
   evaluateOverrideCurve,
   normalizeOverridePoints,
@@ -22,7 +23,11 @@ import {
   sampleMotion,
   type SampledMotion
 } from "@sugarmagic/character-rig";
-import { STANDARD_RIG_CORE, isStandardRigCoreBoneName } from "@sugarmagic/domain";
+import {
+  STANDARD_RIG_CORE,
+  isStandardRigCoreBoneName,
+  isStandardRigTailBoneName
+} from "@sugarmagic/domain";
 
 function sampleIdle(overrides: Partial<typeof IDLE_DEFAULTS> = {}): SampledMotion {
   return sampleMotion(generateIdleChannels({ ...IDLE_DEFAULTS, ...overrides }));
@@ -90,7 +95,11 @@ describe("motion core (Plan 063)", () => {
     const motion = sampleIdle({ energy: 1, bounce: 1, curiosity: 1, fidgetiness: 1 });
     expect(motion.boneTracks.length).toBeGreaterThan(0);
     for (const track of motion.boneTracks) {
-      expect(isStandardRigCoreBoneName(track.boneName), track.boneName).toBe(true);
+      expect(
+        isStandardRigCoreBoneName(track.boneName) ||
+          isStandardRigTailBoneName(track.boneName),
+        track.boneName
+      ).toBe(true);
       for (let key = 0; key < track.times.length; key += 1) {
         const norm = Math.hypot(
           track.rotations[key * 4]!,
@@ -103,10 +112,14 @@ describe("motion core (Plan 063)", () => {
     }
   });
 
-  it("projection table targets only core bones", () => {
+  it("projection table targets only core or tail bones", () => {
     for (const targets of Object.values(CHANNEL_PROJECTION)) {
       for (const target of targets) {
-        expect(isStandardRigCoreBoneName(target.boneName), target.boneName).toBe(true);
+        expect(
+          isStandardRigCoreBoneName(target.boneName) ||
+            isStandardRigTailBoneName(target.boneName),
+          target.boneName
+        ).toBe(true);
       }
     }
   });
@@ -141,7 +154,8 @@ describe("motion core (Plan 063)", () => {
       "breathing",
       "weight-shift",
       "head-motion",
-      "arm-drift"
+      "arm-drift",
+      "tail-wag"
     ]);
     // Breathing owns the bob: it contributes bounce, others do not.
     const composed = generateIdleChannels(IDLE_DEFAULTS);
@@ -160,6 +174,38 @@ describe("motion core (Plan 063)", () => {
     expect(doubledSpine).toBeGreaterThan(singleSpine * 1.5);
   });
 
+  it("the tail wags with phase lag down the chain (Plan 064)", () => {
+    const composed = generateIdleChannels(IDLE_DEFAULTS);
+    // All three sway channels emitted; peak of each trails the
+    // previous link by the configured lag.
+    const peakPhase = (channel: "tailSway1" | "tailSway2" | "tailSway3") => {
+      const curves = composed.channels[channel]!;
+      let best = 0;
+      let bestValue = -Infinity;
+      for (let i = 0; i < 200; i += 1) {
+        const phase = i / 200;
+        let value = 0;
+        for (const curve of curves) value += evaluateCurve(curve, phase);
+        if (value > bestValue) {
+          bestValue = value;
+          best = phase;
+        }
+      }
+      return best;
+    };
+    const p1 = peakPhase("tailSway1");
+    const p2 = peakPhase("tailSway2");
+    const p3 = peakPhase("tailSway3");
+    const forward = (from: number, to: number) => (to - from + 1) % 1;
+    expect(forward(p1, p2)).toBeCloseTo(TAIL_WAG_LAG / 2, 1);
+    expect(forward(p2, p3)).toBeCloseTo(TAIL_WAG_LAG / 2, 1);
+    // Sampled motion carries tail tracks (superset rest map).
+    const motion = sampleMotion(composed);
+    expect(
+      motion.boneTracks.some((track) => track.boneName === "DEF-tail.002")
+    ).toBe(true);
+  });
+
   it("curves are periodic including noise", () => {
     const curve = {
       harmonics: [{ cycles: 2, amplitude: 1, phase: 0.3 }],
@@ -176,7 +222,8 @@ describe("motion core (Plan 063)", () => {
       "hip-motion",
       "arm-swing",
       "body-bounce",
-      "head-stabilization"
+      "head-stabilization",
+      "tail-wag"
     ]);
     const at = (channel: keyof typeof walk.channels, phase: number) => {
       let value = 0;
@@ -189,11 +236,13 @@ describe("motion core (Plan 063)", () => {
     for (const phase of [0, 0.2, 0.35, 0.7]) {
       expect(at("legSwingL", phase)).toBeCloseTo(at("legSwingR", phase + 0.5), 6);
     }
-    // Counter-swing: left arm tracks the RIGHT leg's phase.
+    // Counter-swing: the arm CHANNEL matches its own-side leg's
+    // phase — the hanging-frame axis inversion makes that a
+    // world-space counter-swing (see the arm-swing component).
     for (const phase of [0.1, 0.4, 0.8]) {
       const armL = at("armSwingL", phase);
-      const legR = at("legSwingR", phase);
-      expect(Math.sign(armL)).toBe(Math.sign(legR));
+      const legL = at("legSwingL", phase);
+      expect(Math.sign(armL)).toBe(Math.sign(legL));
     }
     // Knees never hyperextend backward (DC keeps flexion >= 0).
     for (let i = 0; i <= 40; i += 1) {
@@ -225,7 +274,11 @@ describe("motion core (Plan 063)", () => {
     // Contract compliance holds for locomotion output too.
     const motion = sampleMotion(run);
     for (const track of motion.boneTracks) {
-      expect(isStandardRigCoreBoneName(track.boneName), track.boneName).toBe(true);
+      expect(
+        isStandardRigCoreBoneName(track.boneName) ||
+          isStandardRigTailBoneName(track.boneName),
+        track.boneName
+      ).toBe(true);
     }
     // Loop closure.
     for (const track of motion.boneTracks) {

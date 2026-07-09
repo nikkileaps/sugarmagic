@@ -415,3 +415,7 @@ export {
   AnimationPanel,
   type AnimationPanelProps
 } from "./animation-panel/AnimationPanel";
+export {
+  WeightWorkbench,
+  type WeightWorkbenchProps
+} from "./weight-workbench/WeightWorkbench";

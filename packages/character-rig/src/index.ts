@@ -65,6 +65,7 @@ export { detectRigLandmarks } from "./detection";
 export { getStandardRigHipHeight } from "./skeleton";
 export {
   applyBrushStroke,
+  assignVerticesToBone,
   boneWeightOfVertex,
   fillVerticesWithBone,
   mirrorWeights,
@@ -73,3 +74,14 @@ export {
   type BrushStroke
 } from "./paint";
 export * from "./motion";
+export {
+  BODY_REGION_LABELS,
+  computeBodyRegions,
+  type BodyRegionId
+} from "./segmentation";
+export { bonesOfRegion, resolveRegionWeights } from "./region-solve";
+export {
+  shrinkwrapWeights,
+  type ShrinkwrapOptions,
+  type ShrinkwrapResult
+} from "./weight-transfer";

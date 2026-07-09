@@ -7,7 +7,7 @@
  * non-watertight tolerance.
  */
 import { describe, expect, it } from "vitest";
-import { STANDARD_RIG_CORE } from "@sugarmagic/domain";
+import { STANDARD_RIG_CORE, STANDARD_RIG_CORE_WITH_TAIL } from "@sugarmagic/domain";
 import {
   GeodesicVoxelWeightSolver,
   MAX_INFLUENCES,
@@ -126,6 +126,56 @@ function sampleLandmarks(): RigLandmarks {
 }
 
 describe("generateStandardSkeleton (Plan 062)", () => {
+  it("tail landmarks grow the skeleton by the aligned tail chain (Plan 064)", () => {
+    const landmarks = {
+      ...sampleLandmarks(),
+      tailBase: [0, 0.7, -0.15] as const,
+      tailMid: [0, 0.8, -0.35] as const,
+      tailTip: [0, 1.05, -0.45] as const
+    };
+    const skeleton = generateStandardSkeleton(landmarks);
+    expect(skeleton.bones.length).toBe(STANDARD_RIG_CORE_WITH_TAIL.bones.length);
+    const byName = new Map(skeleton.bones.map((bone) => [bone.name, bone]));
+    expect(byName.get("DEF-tail.001")!.headPosition).toEqual([0, 0.7, -0.15]);
+    expect(byName.get("DEF-tail.002")!.headPosition).toEqual([0, 0.8, -0.35]);
+    expect(byName.get("DEF-tail.003")!.headPosition).toEqual([0, 1.05, -0.45]);
+    expect(byName.get("DEF-tail.001")!.parentName).toBe("DEF-hips");
+    // Rest alignment: tail.001's +Y aims at tail.002's head.
+    const world = new Map<string, [number, number, number, number]>();
+    const mul = (
+      a: [number, number, number, number],
+      b: [number, number, number, number]
+    ): [number, number, number, number] => [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+    ];
+    for (const bone of skeleton.bones) {
+      const parent = bone.parentName
+        ? world.get(bone.parentName)!
+        : ([0, 0, 0, 1] as [number, number, number, number]);
+      world.set(
+        bone.name,
+        mul(parent, bone.localRestRotation as [number, number, number, number])
+      );
+    }
+    const [x, y, z, w] = world.get("DEF-tail.001")!;
+    const boneY = [2 * (x * y + z * w) * 0 + 2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)];
+    const dir = [0, 0.1, -0.2];
+    const len = Math.hypot(...dir);
+    const dot =
+      (boneY[0]! * dir[0]!) / len +
+      (boneY[1]! * dir[1]!) / len +
+      (boneY[2]! * dir[2]!) / len;
+    expect(dot).toBeGreaterThan(0.999);
+    // Segments include the tail (weights bind it).
+    const segments = computeBoneSegments(skeleton);
+    expect(segments.some((segment) => segment.boneName === "DEF-tail.003")).toBe(true);
+    // Tail-less landmarks unchanged: still 23 bones.
+    expect(generateStandardSkeleton(sampleLandmarks()).bones.length).toBe(23);
+  });
+
   it("produces every contract bone, rest-aligned to the character's limb directions", () => {
     const skeleton = generateStandardSkeleton(sampleLandmarks());
     // Core set only (2026-07-06): no finger bones on wizard rigs.

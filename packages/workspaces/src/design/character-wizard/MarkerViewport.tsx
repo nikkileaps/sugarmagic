@@ -46,7 +46,10 @@ const LANDMARK_LABELS: Record<string, string> = {
   ankleLeft: "Left Ankle",
   hipRight: "Right Hip",
   kneeRight: "Right Knee",
-  ankleRight: "Right Ankle"
+  ankleRight: "Right Ankle",
+  tailBase: "Tail Base",
+  tailMid: "Tail Middle",
+  tailTip: "Tail Tip"
 };
 
 /** Counterpart landmark across the symmetry plane, or null. */

@@ -34,7 +34,10 @@ export type SemanticChannel =
   | "footPitchL"
   | "footPitchR"
   | "armSwingL"
-  | "armSwingR";
+  | "armSwingR"
+  | "tailSway1"
+  | "tailSway2"
+  | "tailSway3";
 
 export interface BoneAxisGain {
   boneName: string;
@@ -116,5 +119,12 @@ export const CHANNEL_PROJECTION: Record<SemanticChannel, BoneAxisGain[]> = {
   armSwingR: [
     { boneName: "DEF-upper_arm.R", axis: "x", gain: 1.0 },
     { boneName: "DEF-forearm.R", axis: "x", gain: 0.35 }
-  ]
+  ],
+  // Tail wag (Plan 064): one channel per chain link so the whip
+  // lag (tip trails base) can be expressed as per-channel phase —
+  // lag is timing, not amplitude, so gains cannot encode it.
+  // Lateral sway is bone-local z in the tail's minimal-arc frames.
+  tailSway1: [{ boneName: "DEF-tail.001", axis: "z", gain: 1.0 }],
+  tailSway2: [{ boneName: "DEF-tail.002", axis: "z", gain: 1.0 }],
+  tailSway3: [{ boneName: "DEF-tail.003", axis: "z", gain: 1.0 }]
 };

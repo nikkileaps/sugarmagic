@@ -26,7 +26,10 @@
 import {
   STANDARD_RIG,
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
   STANDARD_RIG_LANDMARK_BONES,
+  STANDARD_RIG_TAIL_BONES,
+  STANDARD_RIG_TAIL_LANDMARK_BONES,
   type StandardRigBone
 } from "@sugarmagic/domain";
 import {
@@ -96,7 +99,7 @@ interface ContractBoneInfo {
  * by walking the hierarchy (parents are ordered before children
  * in the generated rig data; asserted defensively).
  */
-function computeContractWorld(): Map<string, ContractBoneInfo> {
+function computeContractWorldBase(): Map<string, ContractBoneInfo> {
   const byName = new Map<string, ContractBoneInfo>();
   for (const bone of STANDARD_RIG.bones) {
     const parent = bone.parentName ? byName.get(bone.parentName) : null;
@@ -116,7 +119,27 @@ function computeContractWorld(): Map<string, ContractBoneInfo> {
       : asVec3(bone.restPosition);
     byName.set(bone.name, { bone, worldRestRotation, worldRestPosition });
   }
+  // Tail extension (Plan 064): optional bones chained off hips —
+  // same composition, appended after the vendored contract.
+  for (const bone of STANDARD_RIG_TAIL_BONES) {
+    const parent = byName.get(bone.parentName!)!;
+    byName.set(bone.name, {
+      bone,
+      worldRestRotation: quatMultiply(
+        parent.worldRestRotation,
+        asQuat(bone.restRotation)
+      ),
+      worldRestPosition: vec3Add(
+        parent.worldRestPosition,
+        quatRotateVec3(parent.worldRestRotation, asVec3(bone.restPosition))
+      )
+    });
+  }
   return byName;
+}
+
+function computeContractWorld(): Map<string, ContractBoneInfo> {
+  return computeContractWorldBase();
 }
 
 /**
@@ -158,6 +181,13 @@ function deriveWorldHeads(landmarks: RigLandmarks): Map<string, Vec3> {
 
   for (const [boneName, position] of landmarkByBone) {
     heads.set(boneName, position);
+  }
+  // Optional tail landmarks (Plan 064).
+  for (const [landmarkKey, boneName] of Object.entries(
+    STANDARD_RIG_TAIL_LANDMARK_BONES
+  )) {
+    const position = landmarks[landmarkKey];
+    if (position) heads.set(boneName, position);
   }
   // Upper arms start where the shoulder (clavicle) bone ends — at
   // the shoulder landmark; the shoulder bone itself starts inward
@@ -209,7 +239,12 @@ export function generateStandardSkeleton(
   // (clipRotationOffset), which is what keeps library poses from
   // over-rotating limbs that start at a different angle than the
   // library rig's. CORE bones only — no fingers.
-  const coreBones = STANDARD_RIG_CORE.bones;
+  const hasTail = Object.keys(STANDARD_RIG_TAIL_LANDMARK_BONES).every(
+    (landmarkKey) => landmarks[landmarkKey] !== undefined
+  );
+  const coreBones = hasTail
+    ? STANDARD_RIG_CORE_WITH_TAIL.bones
+    : STANDARD_RIG_CORE.bones;
   const childrenOf = new Map<string, string[]>();
   for (const bone of coreBones) {
     if (!bone.parentName) continue;

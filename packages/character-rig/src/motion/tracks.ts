@@ -12,7 +12,7 @@
  * Status: active
  */
 
-import { STANDARD_RIG_CORE } from "@sugarmagic/domain";
+import { STANDARD_RIG_CORE_WITH_TAIL } from "@sugarmagic/domain";
 import { quatMultiply, type Quat, type Vec3 } from "../math";
 import { evaluateCurve, type PeriodicCurve } from "./curves";
 import type { ComposedMotion } from "./components";
@@ -113,8 +113,10 @@ export function sampleMotion(
     }
   }
 
+  // Superset incl. the optional tail: tail-less clip assembly
+  // simply drops tail tracks (buildClipGlb skips unknown targets).
   const restByName = new Map(
-    STANDARD_RIG_CORE.bones.map((bone) => [
+    STANDARD_RIG_CORE_WITH_TAIL.bones.map((bone) => [
       bone.name,
       {
         rotation: [

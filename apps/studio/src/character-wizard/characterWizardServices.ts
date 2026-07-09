@@ -18,6 +18,7 @@ import {
   composeBasePose,
   computeBoneSegments,
   evaluateCurve,
+  sampleTailWag,
   detectRigLandmarks,
   generateIdleChannels,
   generateRunChannels,
@@ -37,6 +38,8 @@ import {
   extractMeshFromGlb,
   readBlobFile,
   readClipRecipe,
+  mergeClipTracks,
+  readClipDuration,
   readSkinWeightsFromGlb,
   readWizardRecipe,
   scaleClipHipsTranslation,
@@ -44,6 +47,8 @@ import {
 } from "@sugarmagic/io";
 import {
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
+  STANDARD_RIG_TAIL_BONES,
   isMotionRecipe,
   type CharacterAnimationDefinition,
   type CharacterModelDefinition,
@@ -130,7 +135,8 @@ function solveWeightsInWorker(
 
 function generateClipFromRecipe(
   recipe: MotionRecipe,
-  hipScale: number
+  hipScale: number,
+  hasTail: boolean
 ): { clipName: string; bytes: ArrayBuffer } {
   const generators = {
     idle: generateIdleChannels,
@@ -146,12 +152,17 @@ function generateClipFromRecipe(
     channelOverrides: recipe.curveOverrides
   });
   const clipName = `Generated_${recipe.generatorId[0]!.toUpperCase()}${recipe.generatorId.slice(1)}`;
+  // Tail-less characters get the 23-bone clip: tail tracks are
+  // dropped by the writer when their nodes are absent.
+  const clipBones = hasTail
+    ? STANDARD_RIG_CORE_WITH_TAIL.bones
+    : STANDARD_RIG_CORE.bones;
   const glb = buildClipGlb({
     clipName,
     duration: motion.duration,
     boneTracks: motion.boneTracks,
     hipsTranslation: motion.hipsTranslation,
-    bones: STANDARD_RIG_CORE.bones.map((bone) => ({
+    bones: clipBones.map((bone) => ({
       name: bone.name,
       parentName: bone.parentName,
       restPosition: bone.restPosition,
@@ -162,10 +173,49 @@ function generateClipFromRecipe(
   return { clipName, bytes: scaleClipHipsTranslation(glb, hipScale) };
 }
 
+/** Bake the wag into a library-clip copy for tailed characters
+ *  (Plan 064 §064.4) — tracks sampled at the HOST's duration so
+ *  the wag loops with the clip. */
+function overlayTailWag(
+  clipBytes: ArrayBuffer,
+  personality: {
+    energy: number;
+    bounce: number;
+    curiosity: number;
+    fidgetiness: number;
+  },
+  seed: number
+): ArrayBuffer {
+  const duration = readClipDuration(clipBytes);
+  if (duration <= 0) return clipBytes;
+  const motion = sampleTailWag({ ...personality, seed }, duration);
+  return mergeClipTracks({
+    hostGlb: clipBytes,
+    bones: STANDARD_RIG_TAIL_BONES.map((bone) => ({
+      name: bone.name,
+      parentName: bone.parentName,
+      restPosition: bone.restPosition,
+      restRotation: bone.restRotation
+    })),
+    tracks: motion.boneTracks.filter((track) =>
+      track.boneName.startsWith("DEF-tail.")
+    )
+  });
+}
+
 async function prepareClips(
   skeleton: GeneratedSkeleton
 ): Promise<WizardGenerated["clips"]> {
   const hipScale = skeleton.hipHeight / getStandardRigHipHeight();
+  const hasTail = skeleton.bones.some((bone) =>
+    bone.name.startsWith("DEF-tail.")
+  );
+  const defaultPersonality = {
+    energy: 0.35,
+    bounce: 0.4,
+    curiosity: 0.45,
+    fidgetiness: 0.3
+  };
   // Rotations play VERBATIM. With the rest-ALIGNED skeleton (mesh
   // along bone axes), verbatim locals reproduce the library's
   // world orientations at the character's own bone lengths —
@@ -176,10 +226,12 @@ async function prepareClips(
   const clips: WizardGenerated["clips"] = [];
   for (const entry of SLOT_CLIPS) {
     const clipBytes = await (await fetch(entry.url)).arrayBuffer();
+    let bytes = scaleClipHipsTranslation(clipBytes, hipScale);
+    if (hasTail) bytes = overlayTailWag(bytes, defaultPersonality, 1);
     clips.push({
       slot: entry.slot,
       clipName: entry.clipName,
-      bytes: scaleClipHipsTranslation(clipBytes, hipScale)
+      bytes
     });
   }
   return clips;
@@ -345,7 +397,13 @@ export function createCharacterWizardServices(
                 const hipScale =
                   request.generated.skeleton.hipHeight /
                   getStandardRigHipHeight();
-                const regenerated = generateClipFromRecipe(recipe, hipScale);
+                const regenerated = generateClipFromRecipe(
+                  recipe,
+                  hipScale,
+                  request.generated.skeleton.bones.some((bone) =>
+                    bone.name.startsWith("DEF-tail.")
+                  )
+                );
                 return {
                   clipName: regenerated.clipName,
                   bytes: regenerated.bytes
@@ -404,21 +462,23 @@ export function createCharacterWizardServices(
       );
       return {
         hipScale: skeleton.hipHeight / getStandardRigHipHeight(),
-        relaxedPose: RELAXED_ARM_POSE
+        relaxedPose: RELAXED_ARM_POSE,
+        hasTail: skeleton.bones.some((bone) =>
+          bone.name.startsWith("DEF-tail.")
+        )
       };
     },
 
-    generateClip(recipe, hipScale) {
-      return generateClipFromRecipe(recipe, hipScale);
+    generateClip(recipe, hipScale, hasTail) {
+      return generateClipFromRecipe(recipe, hipScale, hasTail);
     },
 
-    async getLibraryClip(slot, hipScale) {
+    async getLibraryClip(slot, hipScale, tail) {
       const entry = SLOT_CLIPS.find((candidate) => candidate.slot === slot)!;
-      const bytes = await (await fetch(entry.url)).arrayBuffer();
-      return {
-        clipName: entry.clipName,
-        bytes: scaleClipHipsTranslation(bytes, hipScale)
-      };
+      const raw = await (await fetch(entry.url)).arrayBuffer();
+      let bytes = scaleClipHipsTranslation(raw, hipScale);
+      if (tail) bytes = overlayTailWag(bytes, tail.personality, tail.seed);
+      return { clipName: entry.clipName, bytes };
     },
 
     sampleChannel(recipe, channel, count) {

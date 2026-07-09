@@ -3,7 +3,9 @@
  *
  * Purpose: Plan 062 §062.6 — the Character Wizard modal: import a
  * static A/T-pose humanoid GLB, confirm/adjust the 16 detected
- * joint markers, generate (rig + bind + attach clips), preview
+ * joint markers, then Finish generates (rig + bind + clips) and
+ * commits in one motion — weight tooling lives in the workspace's
+ * WeightWorkbench (Plan 064 UX rework), not here. Old flow:
  * idle/walk/run, and commit — all inside the reusable
  * WizardDialog frame (ui, §062.5).
  *
@@ -24,35 +26,24 @@ import {
   Box,
   Button,
   Group,
-  SegmentedControl,
-  Select,
   Stack,
   Switch,
   Text,
   TextInput
 } from "@mantine/core";
-import { LabeledSlider, WizardDialog } from "@sugarmagic/ui";
+import { WizardDialog } from "@sugarmagic/ui";
 import type {
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   MotionRecipe
 } from "@sugarmagic/domain";
-import {
-  applyBrushStroke,
-  buildVertexAdjacency,
-  fillVerticesWithBone,
-  mirrorWeights,
-  type BrushMode,
-  type GeneratedSkeleton,
-  type MeshData,
-  type SkinWeights
+import type {
+  GeneratedSkeleton,
+  MeshData,
+  SkinWeights
 } from "@sugarmagic/character-rig";
-import { CharacterPreview } from "../CharacterPreview";
 import { MarkerViewport } from "./MarkerViewport";
-import {
-  WeightPaintViewport,
-  type WeightPaintRange
-} from "./WeightPaintViewport";
+import type { WeightPaintRange } from "./WeightPaintViewport";
 
 /** The wizard's 16 landmarks: name -> world position. */
 export type WizardLandmarks = Record<string, [number, number, number]>;
@@ -129,16 +120,25 @@ export interface CharacterWizardServices {
   prepareAnimationPanel(riggedBytes: ArrayBuffer): Promise<{
     hipScale: number;
     relaxedPose: Readonly<Record<string, readonly number[]>>;
+    /** Plan 064 — whether this character's skeleton has the tail
+     *  chain (gates tail tracks in generated clips). */
+    hasTail: boolean;
   }>;
   /** Generate a clip from a recipe, hips-scaled for the character. */
   generateClip(
     recipe: MotionRecipe,
-    hipScale: number
+    hipScale: number,
+    hasTail: boolean
   ): { clipName: string; bytes: ArrayBuffer };
-  /** The vendored library clip for a slot, hips-scaled. */
+  /** The vendored library clip for a slot, hips-scaled; tailed
+   *  characters get the wag baked into the copy (Plan 064). */
   getLibraryClip(
     slot: "idle" | "walk" | "run",
-    hipScale: number
+    hipScale: number,
+    tail?: {
+      personality: MotionRecipe["personality"];
+      seed: number;
+    } | null
   ): Promise<{ clipName: string; bytes: ArrayBuffer }>;
   /** Recipe stamped in a generated clip, or null. */
   readSlotRecipe(clipBytes: ArrayBuffer): MotionRecipe | null;
@@ -204,13 +204,11 @@ export interface CharacterWizardProps {
   onClose: () => void;
 }
 
-type WizardStep = "import" | "joints" | "weights" | "preview";
+type WizardStep = "import" | "joints";
 
 const STEPS = [
   { id: "import", label: "Import", description: "Pick a GLB" },
-  { id: "joints", label: "Joints", description: "Confirm markers" },
-  { id: "weights", label: "Weights", description: "Touch up (optional)" },
-  { id: "preview", label: "Preview", description: "Watch it move" }
+  { id: "joints", label: "Joints", description: "Confirm markers" }
 ];
 
 /** "DEF-upper_arm.L" -> "Left Upper Arm" for the bone picker. */
@@ -254,28 +252,37 @@ export function CharacterWizard(props: CharacterWizardProps) {
   const [busyLabel, setBusyLabel] = useState("");
   const [busyProgress, setBusyProgress] = useState<number | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const [previewSlot, setPreviewSlot] = useState<string | null>("idle");
-  const [previewPlaying, setPreviewPlaying] = useState(true);
   // Mirroring defaults ON — symmetric characters are the design
   // center, so one drag places both sides (nikki, 2026-07-06).
   const [mirroring, setMirroring] = useState(true);
-  // Weight-paint step state (§062.8).
-  const [paintBoneColumn, setPaintBoneColumn] = useState(0);
-  const [brushRadius, setBrushRadius] = useState(0.08);
-  const [brushStrength, setBrushStrength] = useState(0.5);
-  const [brushMode, setBrushMode] = useState<BrushMode>("add");
-  const [paintAnimating, setPaintAnimating] = useState(false);
-  // Piece isolation: -1 = all pieces; otherwise index into ranges.
-  const [paintPiece, setPaintPiece] = useState(-1);
-  // Bumped on out-of-band weight edits (Fill piece / Reset) so the
-  // viewport fully resyncs heatmap + live skin.
-  const [weightsVersion, setWeightsVersion] = useState(0);
-  const paintDirtyRef = useRef(false);
-  const adjacencyRef = useRef<Array<Set<number>> | null>(null);
-  const pristineWeightsRef = useRef<{
-    joints: Uint16Array;
-    weights: Float32Array;
-  } | null>(null);
+  // Plan 064 — optional tail: three extra sagittal markers.
+  const hasTail = Boolean(landmarks?.tailBase);
+  const toggleTail = useCallback(
+    (enabled: boolean) => {
+      landmarksDirtyRef.current = true;
+      setLandmarks((current) => {
+        if (!current) return current;
+        if (!enabled) {
+          const next = { ...current };
+          delete next.tailBase;
+          delete next.tailMid;
+          delete next.tailTip;
+          return next;
+        }
+        // Seed the chain behind the pelvis, scaled by hip height —
+        // rough on purpose; the markers are the correction loop.
+        const pelvis = current.pelvis;
+        const scale = pelvis[1];
+        return {
+          ...current,
+          tailBase: [pelvis[0], pelvis[1] - 0.08 * scale, pelvis[2] - 0.15 * scale],
+          tailMid: [pelvis[0], pelvis[1] + 0.05 * scale, pelvis[2] - 0.32 * scale],
+          tailTip: [pelvis[0], pelvis[1] + 0.3 * scale, pelvis[2] - 0.42 * scale]
+        };
+      });
+    },
+    []
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Blob URLs created for preview; revoked on teardown.
   const blobUrlsRef = useRef<string[]>([]);
@@ -298,7 +305,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
     setGenerated(null);
     setBusy(false);
     setError(null);
-    setPreviewSlot("idle");
   }, []);
 
   const handleCancel = useCallback(() => {
@@ -326,14 +332,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
         setSourceBytes(loaded.sourceBytes);
         setSourceUrl(trackBlobUrl(loaded.sourceBytes));
         setLandmarks(loaded.landmarks);
-        pristineWeightsRef.current = {
-          joints: loaded.generated.weights.joints.slice(),
-          weights: loaded.generated.weights.weights.slice()
-        };
-        adjacencyRef.current = buildVertexAdjacency(loaded.generated.mesh);
-        paintDirtyRef.current = false;
         landmarksDirtyRef.current = false;
-        setBrushRadius(loaded.generated.characterHeight * 0.06);
         setGenerated(loaded.generated);
         setStep("joints");
       })
@@ -373,261 +372,66 @@ export function CharacterWizard(props: CharacterWizardProps) {
 
   async function handleNext() {
     setError(null);
-    if (step === "import") {
-      setStep("joints");
-      return;
-    }
-    if (step === "weights") {
-      if (!generated || !sourceBytes) return;
-      if (!paintDirtyRef.current) {
-        setStep("preview");
-        return;
-      }
-      setBusy(true);
-      setBusyLabel("Rebuilding model with painted weights...");
-      setBusyProgress(undefined);
-      try {
-        const modelGlb = await services.reassemble(sourceBytes, generated);
-        setGenerated({ ...generated, modelGlb });
-        paintDirtyRef.current = false;
-        setStep("preview");
-      } catch (reassembleError) {
-        setError(
-          reassembleError instanceof Error
-            ? reassembleError.message
-            : String(reassembleError)
-        );
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    if (step === "joints") {
-      if (!sourceBytes || !landmarks) return;
-      if (isEditMode && !landmarksDirtyRef.current && generated) {
-        // Markers untouched: keep the loaded (possibly painted)
-        // weights instead of re-solving over them.
-        setStep("weights");
-        return;
-      }
-      setBusy(true);
-      setBusyLabel("Generating rig + binding weights...");
-      setBusyProgress(0);
-      try {
-        const result = await services.generate(sourceBytes, landmarks, (f) =>
-          setBusyProgress(f)
-        );
-        pristineWeightsRef.current = {
-          joints: result.weights.joints.slice(),
-          weights: result.weights.weights.slice()
-        };
-        adjacencyRef.current = buildVertexAdjacency(result.mesh);
-        paintDirtyRef.current = false;
-        setBrushRadius(result.characterHeight * 0.06);
-        setGenerated(result);
-        setStep("weights");
-      } catch (generateError) {
-        setError(
-          generateError instanceof Error
-            ? generateError.message
-            : String(generateError)
-        );
-      } finally {
-        setBusy(false);
-        setBusyProgress(undefined);
-      }
-    }
+    if (step === "import") setStep("joints");
   }
 
+  // Joints is the LAST step (Plan 064 UX rework): Finish runs the
+  // solve and commits in one motion — the user lands back in the
+  // workspace with a fully rigged character, and all weight
+  // tooling lives in the WeightWorkbench there.
   async function handleFinish() {
-    if (!generated || !sourceBytes || !landmarks) return;
+    if (!sourceBytes || !landmarks) return;
+    if (isEditMode && !landmarksDirtyRef.current) {
+      // Markers untouched: nothing to save.
+      reset();
+      onClose();
+      return;
+    }
     setBusy(true);
-    setBusyLabel("Writing character assets...");
-    setBusyProgress(undefined);
+    setError(null);
     try {
+      setBusyLabel("Generating rig + binding weights...");
+      setBusyProgress(0);
+      const result = await services.generate(sourceBytes, landmarks, (f) =>
+        setBusyProgress(f)
+      );
+      setBusyLabel("Writing character assets...");
+      setBusyProgress(undefined);
       if (isEditMode) {
-        const result = await services.commitEdit({
+        const committed = await services.commitEdit({
           characterName,
           sourceBytes,
           landmarks,
-          generated,
-          // Markers untouched = skeleton unchanged = clips still
-          // valid; leave animation bindings (incl. generated
-          // slots) alone.
-          skipAnimations: !landmarksDirtyRef.current,
+          generated: result,
+          skipAnimations: false,
           boundClips: editSession?.boundClips
         });
-        onCommitted(result);
+        onCommitted(committed);
       } else {
-        const result = await services.commit({
+        const committed = await services.commit({
           characterName,
           sourceBytes,
           landmarks,
-          generated
+          generated: result
         });
-        onCommitted(result);
+        onCommitted(committed);
       }
       reset();
       onClose();
-    } catch (commitError) {
+    } catch (finishError) {
       setError(
-        commitError instanceof Error ? commitError.message : String(commitError)
+        finishError instanceof Error ? finishError.message : String(finishError)
       );
       setBusy(false);
+      setBusyProgress(undefined);
     }
   }
-
-  // Preview step feeds CharacterPreview via stub definitions +
-  // blob-URL asset sources — the same component the workspace
-  // renders, so what you approve is what you get.
-  const preview = useMemo(() => {
-    if (!generated) return null;
-    const assetSources: Record<string, string> = {
-      "__wizard__/model.glb": trackBlobUrl(generated.modelGlb)
-    };
-    const model: CharacterModelDefinition = {
-      definitionId: "__wizard__:model",
-      definitionKind: "character-model",
-      displayName: characterName,
-      source: {
-        relativeAssetPath: "__wizard__/model.glb",
-        fileName: "model.glb",
-        mimeType: "model/gltf-binary"
-      }
-    };
-    const slots = generated.clips.map((clip) => {
-      const path = `__wizard__/${clip.slot}.glb`;
-      assetSources[path] = trackBlobUrl(clip.bytes);
-      return {
-        value: clip.slot,
-        label: clip.slot,
-        animation: {
-          definitionId: `__wizard__:${clip.slot}`,
-          definitionKind: "character-animation" as const,
-          displayName: clip.clipName,
-          source: {
-            relativeAssetPath: path,
-            fileName: `${clip.slot}.glb`,
-            mimeType: "model/gltf-binary"
-          },
-          clipNames: [clip.clipName]
-        }
-      };
-    });
-    return { model, slots, assetSources };
-  }, [generated, characterName, trackBlobUrl]);
 
   const canAdvance =
     !busy &&
     (step === "import"
       ? sourceBytes !== null && characterName.trim().length > 0
-      : step === "joints"
-        ? landmarks !== null
-        : generated !== null);
-
-  // Paint-step derived data.
-  const paintModelUrl = useMemo(
-    () => (step === "weights" && generated ? trackBlobUrl(generated.modelGlb) : null),
-    [step, generated, trackBlobUrl]
-  );
-  const paintIdleUrl = useMemo(() => {
-    if (step !== "weights" || !generated) return null;
-    const idle = generated.clips.find((clip) => clip.slot === "idle");
-    return idle ? trackBlobUrl(idle.bytes) : null;
-  }, [step, generated, trackBlobUrl]);
-  const boneOptions = useMemo(
-    () =>
-      generated
-        ? generated.weights.boneOrder.map((boneName, column) => ({
-            value: String(column),
-            label: friendlyBoneName(boneName)
-          }))
-        : [],
-    [generated]
-  );
-  const columnToJointSlot = useMemo(() => {
-    if (!generated) return [];
-    return generated.weights.boneOrder.map((boneName) =>
-      generated.skeleton.bones.findIndex((bone) => bone.name === boneName)
-    );
-  }, [generated]);
-  const pieceOptions = useMemo(() => {
-    if (!generated) return [];
-    return [
-      { value: "-1", label: "All pieces" },
-      ...generated.ranges.map((range, index) => ({
-        value: String(index),
-        label: range.materialName ?? `Piece ${index + 1}`
-      }))
-    ];
-  }, [generated]);
-  const paintWindow = useMemo(() => {
-    if (!generated || paintPiece < 0) return undefined;
-    const range = generated.ranges[paintPiece];
-    if (!range) return undefined;
-    return {
-      start: range.vertexStart,
-      end: range.vertexStart + range.vertexCount
-    };
-  }, [generated, paintPiece]);
-
-  const handlePaint = useCallback(
-    (faceVertices: [number, number, number]): number[] => {
-      if (!generated) return [];
-      // Brush center = the clicked face's REST-space centroid, so
-      // strokes land correctly even while the preview animates.
-      const positions = generated.mesh.positions;
-      const center: [number, number, number] = [0, 0, 0];
-      for (const vertex of faceVertices) {
-        center[0] += positions[vertex * 3]! / 3;
-        center[1] += positions[vertex * 3 + 1]! / 3;
-        center[2] += positions[vertex * 3 + 2]! / 3;
-      }
-      const affected = applyBrushStroke(
-        generated.mesh,
-        generated.weights,
-        {
-          center,
-          radius: brushRadius,
-          boneColumn: paintBoneColumn,
-          strength: brushStrength * 0.25,
-          mode: brushMode,
-          vertexWindow: paintWindow
-        },
-        adjacencyRef.current ?? undefined
-      );
-      if (affected.length > 0) paintDirtyRef.current = true;
-      return affected;
-    },
-    [generated, brushRadius, paintBoneColumn, brushStrength, brushMode, paintWindow]
-  );
-
-  // One-click rigid assignment of the isolated piece to the
-  // selected bone — the intended fix for boneless shells (tail,
-  // eyes) where brushwork is the wrong tool.
-  // Mirror painted weights across the sagittal plane — respects
-  // piece isolation (mirrors within the selected piece only).
-  const handleMirror = useCallback(
-    (direction: "leftToRight" | "rightToLeft") => {
-      if (!generated) return;
-      const affected = mirrorWeights(generated.mesh, generated.weights, {
-        direction,
-        vertexWindow: paintWindow
-      });
-      if (affected.length > 0) {
-        paintDirtyRef.current = true;
-        setWeightsVersion((version) => version + 1);
-      }
-    },
-    [generated, paintWindow]
-  );
-
-  const handleFillPiece = useCallback(() => {
-    if (!generated || !paintWindow) return;
-    fillVerticesWithBone(generated.weights, paintWindow, paintBoneColumn);
-    paintDirtyRef.current = true;
-    setWeightsVersion((version) => version + 1);
-  }, [generated, paintWindow, paintBoneColumn]);
+      : landmarks !== null);
 
   return (
     <WizardDialog
@@ -643,13 +447,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
       finishLabel={isEditMode ? "Save changes" : "Add to project"}
       onBack={() => {
         setError(null);
-        setStep(
-          step === "preview"
-            ? "weights"
-            : step === "weights"
-              ? "joints"
-              : "import"
-        );
+        setStep("import");
       }}
       onNext={() => void handleNext()}
       onFinish={() => void handleFinish()}
@@ -708,17 +506,28 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 Drag any marker that missed its joint — hover names
                 it. Right-drag to orbit, scroll to zoom.
               </Text>
-              <Switch
-                size="xs"
-                label="Mirror left/right"
-                checked={mirroring}
-                onChange={(event) =>
-                  setMirroring(event.currentTarget.checked)
-                }
-              />
+              <Group gap="sm">
+                <Switch
+                  size="xs"
+                  label="Has tail"
+                  checked={hasTail}
+                  onChange={(event) =>
+                    toggleTail(event.currentTarget.checked)
+                  }
+                />
+                <Switch
+                  size="xs"
+                  label="Mirror left/right"
+                  checked={mirroring}
+                  onChange={(event) =>
+                    setMirroring(event.currentTarget.checked)
+                  }
+                />
+              </Group>
             </Group>
             <Box style={{ height: 380 }}>
               <MarkerViewport
+                key={hasTail ? "with-tail" : "no-tail"}
                 modelUrl={sourceUrl}
                 landmarks={landmarks}
                 onChange={(next) => {
@@ -731,150 +540,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
           </Stack>
         ) : null}
 
-        {step === "weights" && generated && paintModelUrl ? (
-          <Stack gap="xs" style={{ flex: 1 }}>
-            <Group gap="sm" align="flex-end" wrap="wrap">
-              <Select
-                label="Bone"
-                size="xs"
-                w={180}
-                searchable
-                data={boneOptions}
-                value={String(paintBoneColumn)}
-                onChange={(value) => {
-                  if (value !== null) setPaintBoneColumn(Number(value));
-                }}
-              />
-              <SegmentedControl
-                size="xs"
-                data={[
-                  { value: "add", label: "Add" },
-                  { value: "subtract", label: "Subtract" },
-                  { value: "smooth", label: "Smooth" },
-                  { value: "fill", label: "Fill" }
-                ]}
-                value={brushMode}
-                onChange={(value) => setBrushMode(value as BrushMode)}
-              />
-              <Box w={140}>
-                <LabeledSlider
-                  label="Radius"
-                  min={0.01}
-                  max={0.4}
-                  step={0.005}
-                  value={brushRadius}
-                  onChange={setBrushRadius}
-                />
-              </Box>
-              <Box w={140}>
-                <LabeledSlider
-                  label="Strength"
-                  min={0.05}
-                  max={1}
-                  step={0.05}
-                  value={brushStrength}
-                  onChange={setBrushStrength}
-                />
-              </Box>
-              <Select
-                label="Piece"
-                size="xs"
-                w={150}
-                data={pieceOptions}
-                value={String(paintPiece)}
-                onChange={(value) => {
-                  if (value !== null) setPaintPiece(Number(value));
-                }}
-              />
-              <Button
-                size="compact-xs"
-                variant="light"
-                disabled={paintPiece < 0}
-                onClick={handleFillPiece}
-              >
-                Fill piece with bone
-              </Button>
-              <Switch
-                size="xs"
-                label="Animate"
-                checked={paintAnimating}
-                onChange={(event) =>
-                  setPaintAnimating(event.currentTarget.checked)
-                }
-              />
-              <Button
-                size="compact-xs"
-                variant="light"
-                onClick={() => handleMirror("leftToRight")}
-              >
-                {"Mirror L > R"}
-              </Button>
-              <Button
-                size="compact-xs"
-                variant="light"
-                onClick={() => handleMirror("rightToLeft")}
-              >
-                {"Mirror R > L"}
-              </Button>
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                color="gray"
-                onClick={() => {
-                  const pristine = pristineWeightsRef.current;
-                  if (!pristine || !generated) return;
-                  generated.weights.joints.set(pristine.joints);
-                  generated.weights.weights.set(pristine.weights);
-                  paintDirtyRef.current = true;
-                  setWeightsVersion((version) => version + 1);
-                }}
-              >
-                Reset to auto
-              </Button>
-            </Group>
-            <Text size="xs" c="var(--sm-color-subtext)">
-              Heatmap shows the selected bone's influence. Left-drag
-              paints, right-drag orbits, scroll zooms. Skip with Next
-              if the automatic result is good enough.
-            </Text>
-            <Box style={{ height: 360 }}>
-              <WeightPaintViewport
-                modelUrl={paintModelUrl}
-                idleClipUrl={paintIdleUrl}
-                weights={generated.weights}
-                ranges={generated.ranges}
-                selectedBoneColumn={paintBoneColumn}
-                columnToJointSlot={columnToJointSlot}
-                brushRadius={brushRadius}
-                animating={paintAnimating}
-                isolatedPiece={paintPiece}
-                weightsVersion={weightsVersion}
-                onPaint={handlePaint}
-              />
-            </Box>
-          </Stack>
-        ) : null}
 
-        {step === "preview" && preview ? (
-          <Box style={{ height: 400 }}>
-            <CharacterPreview
-              model={preview.model}
-              targetHeight={generated?.characterHeight ?? 1.6}
-              slots={preview.slots}
-              activeSlot={previewSlot}
-              onChangeActiveSlot={setPreviewSlot}
-              isPlaying={previewPlaying}
-              onChangePlaying={setPreviewPlaying}
-              assetSources={preview.assetSources}
-            />
-          </Box>
-        ) : null}
-
-        {error ? (
-          <Text size="xs" c="var(--sm-color-danger, #f7768e)">
-            {error}
-          </Text>
-        ) : null}
       </Stack>
     </WizardDialog>
   );

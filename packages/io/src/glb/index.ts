@@ -823,6 +823,139 @@ export function readClipRecipe(clipGlb: ArrayBuffer): unknown | null {
   return extras?.sugarmagicAnimation ?? null;
 }
 
+// ---- Tail track merge (Plan 064 §064.4) --------------------------------
+
+/** Longest animation input time in the clip (its loop duration). */
+export function readClipDuration(clipGlb: ArrayBuffer): number {
+  const chunks = readGlb(clipGlb);
+  if (!chunks) return 0;
+  let duration = 0;
+  for (const animation of chunks.document.animations ?? []) {
+    for (const sampler of animation.samplers) {
+      const accessor = chunks.document.accessors?.[sampler.input];
+      const max = accessor?.max?.[0];
+      if (typeof max === "number") duration = Math.max(duration, max);
+    }
+  }
+  return duration;
+}
+
+/**
+ * Merge extra bone tracks into an existing clip GLB: appends the
+ * bones as nodes (parented by NAME into the host hierarchy) plus
+ * their rotation channels/samplers/accessors. Used to bake tail
+ * motion into per-character COPIES of library clips — the vendored
+ * originals never change, and tail-less characters skip the merge
+ * entirely. Tracks must already be sampled at the host's duration.
+ */
+export function mergeClipTracks(request: {
+  hostGlb: ArrayBuffer;
+  bones: Array<{
+    name: string;
+    parentName: string | null;
+    restPosition: readonly number[];
+    restRotation: readonly number[];
+  }>;
+  tracks: ClipBoneTrack[];
+}): ArrayBuffer {
+  const chunks = readGlb(request.hostGlb);
+  if (!chunks?.binaryChunk) throw new Error("Not a valid clip GLB.");
+  const { document } = chunks;
+  const animation = document.animations?.[0];
+  if (!animation) throw new Error("Host clip has no animation.");
+  document.nodes = document.nodes ?? [];
+  document.accessors = document.accessors ?? [];
+  document.bufferViews = document.bufferViews ?? [];
+
+  // Append bone nodes, parenting by name (host or newly added).
+  const nodeIndexByName = new Map<string, number>();
+  document.nodes.forEach((node, index) => {
+    if (node.name) nodeIndexByName.set(node.name, index);
+  });
+  for (const bone of request.bones) {
+    if (nodeIndexByName.has(bone.name)) continue;
+    const index = document.nodes.length;
+    document.nodes.push({
+      name: bone.name,
+      translation: [...bone.restPosition],
+      rotation: [...bone.restRotation]
+    });
+    nodeIndexByName.set(bone.name, index);
+    const parentIndex = bone.parentName
+      ? nodeIndexByName.get(bone.parentName)
+      : undefined;
+    if (parentIndex !== undefined) {
+      const parent = document.nodes[parentIndex]!;
+      ((parent.children as number[] | undefined) ??
+        (parent.children = [])).push(index);
+    }
+  }
+
+  // Grow the bin with the new accessor payloads (4-aligned).
+  const parts: Uint8Array[] = [chunks.binaryChunk];
+  let binLength = chunks.binaryChunk.byteLength;
+  const appendAccessor = (
+    data: Float32Array,
+    type: "SCALAR" | "VEC4",
+    minMax?: { min: number[]; max: number[] }
+  ): number => {
+    const pad = (4 - (binLength % 4)) % 4;
+    if (pad) {
+      parts.push(new Uint8Array(pad));
+      binLength += pad;
+    }
+    const bytes = new Uint8Array(
+      data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+    );
+    document.bufferViews!.push({
+      buffer: 0,
+      byteOffset: binLength,
+      byteLength: bytes.byteLength
+    });
+    parts.push(bytes);
+    binLength += bytes.byteLength;
+    document.accessors!.push({
+      bufferView: document.bufferViews!.length - 1,
+      componentType: 5126,
+      count: data.length / (type === "SCALAR" ? 1 : 4),
+      type,
+      ...(minMax ?? {})
+    });
+    return document.accessors!.length - 1;
+  };
+
+  let sharedTimes: number | null = null;
+  for (const track of request.tracks) {
+    const nodeIndex = nodeIndexByName.get(track.boneName);
+    if (nodeIndex === undefined) continue;
+    if (sharedTimes === null) {
+      sharedTimes = appendAccessor(track.times, "SCALAR", {
+        min: [0],
+        max: [track.times[track.times.length - 1] ?? 0]
+      });
+    }
+    const output = appendAccessor(track.rotations, "VEC4");
+    animation.samplers.push({
+      input: sharedTimes,
+      output,
+      interpolation: "LINEAR"
+    });
+    animation.channels.push({
+      sampler: animation.samplers.length - 1,
+      target: { node: nodeIndex, path: "rotation" }
+    });
+  }
+
+  const bin = new Uint8Array(binLength);
+  let offset = 0;
+  for (const part of parts) {
+    bin.set(part, offset);
+    offset += part.byteLength;
+  }
+  (document.buffers![0] as { byteLength: number }).byteLength = bin.byteLength;
+  return packGlb(document, bin);
+}
+
 // ---- Wizard reopen (§062.9) -------------------------------------------
 
 export interface WizardRecipe {

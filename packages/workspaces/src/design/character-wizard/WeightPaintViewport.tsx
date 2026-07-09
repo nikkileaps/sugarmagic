@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { SkinWeights } from "@sugarmagic/character-rig";
 import { MAX_INFLUENCES, boneWeightOfVertex } from "@sugarmagic/character-rig";
+import { STANDARD_RIG_CORE_WITH_TAIL } from "@sugarmagic/domain";
 
 export interface WeightPaintRange {
   meshIndex: number;
@@ -34,8 +35,11 @@ export interface WeightPaintRange {
 export interface WeightPaintViewportProps {
   /** The SKINNED model GLB (blob URL). */
   modelUrl: string;
-  /** Idle clip GLB (blob URL) for the animate toggle; optional. */
-  idleClipUrl: string | null;
+  /** Per-slot clip GLBs (blob URLs) for the playback controls. */
+  clips: Array<{ slot: string; url: string }>;
+  /** Slot currently playing, or null for the bind pose (Static). */
+  activeClip: string | null;
+  playing: boolean;
   weights: SkinWeights;
   ranges: WeightPaintRange[];
   /** Column into weights.boneOrder currently being painted. */
@@ -45,14 +49,31 @@ export interface WeightPaintViewportProps {
   columnToJointSlot: number[];
   /** World-space brush radius. */
   brushRadius: number;
-  animating: boolean;
   /** Piece isolation: -1 = all; otherwise index into `ranges` —
    *  other pieces ghost out and stop catching brush raycasts, so
    *  layered shells (tail behind the torso) are paintable. */
   isolatedPiece: number;
+  /** Region isolation (Plan 064): a virtual body-region vertex
+   *  set. Cross-cuts material pieces — non-members go dark in the
+   *  heatmap and stop catching raycasts/boxes. Null = off. */
+  regionSet: ReadonlySet<number> | null;
+  /** T-pose viewing aid (Plan 064, nikki): pose the bones at the
+   *  CONTRACT rest so limbs lift clear of the body for box
+   *  selection. Display-only; weights and data untouched. */
+  tPose: boolean;
   /** Bumped by out-of-band weight edits (Fill piece, Reset) so
    *  the heatmap AND the live skin attributes fully resync. */
   weightsVersion: number;
+  /** Box-select mode (Plan 064): left-drag draws a screen-space
+   *  box; verts inside it (piece-filtered; back-facing verts
+   *  excluded unless x-ray) become the selection. Shift-drag adds
+   *  to it. */
+  selectMode: boolean;
+  xray: boolean;
+  /** Current selection (flattened vertex indices) — tinted in the
+   *  heatmap. */
+  selection: ReadonlySet<number>;
+  onSelect: (vertices: number[], additive: boolean) => void;
   /** Paint callback: the clicked face's FLATTENED vertex indices
    *  (rest-space identity — valid even while the mesh is posed by
    *  the Animate toggle). The caller centers the brush on their
@@ -61,7 +82,9 @@ export interface WeightPaintViewportProps {
 }
 
 const HEAT_LOW = new THREE.Color(0x1a2340);
+const GHOST = new THREE.Color(0x0d0e16);
 const HEAT_HIGH = new THREE.Color(0xff4d6d);
+const SELECT_TINT = new THREE.Color(0xf7d774);
 
 export function WeightPaintViewport(props: WeightPaintViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -69,7 +92,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
   propsRef.current = props;
   // Imperative handles the effect exposes for prop-driven updates.
   const refreshHeatmapRef = useRef<(vertices?: number[]) => void>(() => {});
-  const mixerControlRef = useRef<(playing: boolean) => void>(() => {});
+  const mixerControlRef = useRef<() => void>(() => {});
 
   // Selected bone / weights identity changes repaint the heatmap.
   useEffect(() => {
@@ -84,8 +107,11 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     fullSyncRef.current();
   }, [props.weightsVersion]);
   useEffect(() => {
-    mixerControlRef.current(props.animating);
-  }, [props.animating]);
+    refreshHeatmapRef.current();
+  }, [props.selection, props.regionSet]);
+  useEffect(() => {
+    mixerControlRef.current();
+  }, [props.activeClip, props.playing]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -169,7 +195,15 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
 
     let disposed = false;
     let mixer: THREE.AnimationMixer | null = null;
-    let idleAction: THREE.AnimationAction | null = null;
+    const actionsBySlot = new Map<string, THREE.AnimationAction>();
+    let currentSlot: string | null = null;
+    // Bones for the T-pose viewing aid: canonical name -> bone +
+    // its bind-pose quaternion (GLTFLoader sanitizes names).
+    const poseBones: Array<{
+      bone: THREE.Bone;
+      bind: THREE.Quaternion;
+      contract: THREE.Quaternion | null;
+    }> = [];
     /** (meshIndex:primitiveIndex) -> three mesh + its range. */
     const paintTargets: Array<{
       mesh: THREE.Mesh;
@@ -210,6 +244,23 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       applyCamera();
 
       // Map primitives via parser associations.
+      const contractBySanitized = new Map(
+        STANDARD_RIG_CORE_WITH_TAIL.bones.map((bone) => [
+          THREE.PropertyBinding.sanitizeNodeName(bone.name),
+          bone.restRotation
+        ])
+      );
+      gltf.scene.traverse((child) => {
+        if (!(child as THREE.Bone).isBone) return;
+        const rest = contractBySanitized.get(child.name);
+        poseBones.push({
+          bone: child as THREE.Bone,
+          bind: child.quaternion.clone(),
+          contract: rest
+            ? new THREE.Quaternion(rest[0], rest[1], rest[2], rest[3])
+            : null
+        });
+      });
       const associations = gltf.parser.associations as Map<
         THREE.Object3D,
         { meshes?: number; primitives?: number } | undefined
@@ -247,19 +298,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       refreshHeatmap();
       applyIsolation();
 
-      // Idle playback (optional). NOT started until the Animate
-      // toggle asks: a paused-at-frame-0 action is a slightly
-      // POSED model, and painting against it shears partially-
-      // painted regions (2026-07-06 sleeve-spike bug) — Animate
-      // off must mean TRUE rest pose.
-      if (propsRef.current.idleClipUrl) {
-        loader.load(propsRef.current.idleClipUrl, (clipGltf) => {
+      // Clip playback: load every slot's clip; nothing plays until
+      // the controls ask (Static = TRUE bind pose — a paused-at-
+      // frame-0 action is a slightly POSED model and shears
+      // partially-painted regions; 2026-07-06 sleeve-spike bug).
+      for (const entry of propsRef.current.clips) {
+        loader.load(entry.url, (clipGltf) => {
           if (disposed) return;
           const clip = clipGltf.animations[0];
           if (!clip) return;
-          mixer = new THREE.AnimationMixer(gltf.scene);
-          idleAction = mixer.clipAction(clip);
-          if (propsRef.current.animating) idleAction.play();
+          if (!mixer) mixer = new THREE.AnimationMixer(gltf.scene);
+          actionsBySlot.set(entry.slot, mixer.clipAction(clip));
+          mixerControlRef.current();
         });
       }
     });
@@ -271,10 +321,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         const colorAttribute = (
           target.mesh.geometry as THREE.BufferGeometry
         ).getAttribute("color") as THREE.BufferAttribute;
+        const regionSet = propsRef.current.regionSet;
         const refresh = (local: number) => {
           const flat = target.vertexStart + local;
+          if (regionSet && !regionSet.has(flat)) {
+            colorAttribute.setXYZ(local, GHOST.r, GHOST.g, GHOST.b);
+            return;
+          }
           const weight = boneWeightOfVertex(weights, flat, column);
           const color = HEAT_LOW.clone().lerp(HEAT_HIGH, weight);
+          if (propsRef.current.selection.has(flat)) {
+            color.lerp(SELECT_TINT, 0.65);
+          }
           colorAttribute.setXYZ(local, color.r, color.g, color.b);
         };
         if (vertices) {
@@ -341,15 +399,15 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       }
     }
 
-    mixerControlRef.current = (playing: boolean) => {
-      if (!idleAction) return;
-      if (playing) {
-        idleAction.reset().play();
-      } else {
-        // stop() unbinds the action — nodes return to their rest
-        // TRS, i.e. the actual bind pose.
-        idleAction.stop();
+    mixerControlRef.current = () => {
+      const wanted = propsRef.current.activeClip;
+      if (wanted !== currentSlot) {
+        for (const action of actionsBySlot.values()) action.stop();
+        currentSlot = wanted;
+        if (wanted) actionsBySlot.get(wanted)?.reset().play();
       }
+      const action = wanted ? actionsBySlot.get(wanted) : null;
+      if (action) action.paused = !propsRef.current.playing;
     };
 
     fullSyncRef.current = () => {
@@ -367,6 +425,75 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     let orbiting = false;
     let lastPointer: [number, number] = [0, 0];
 
+    // Box-select state (Plan 064).
+    let boxing = false;
+    let boxAdditive = false;
+    let boxStart: [number, number] = [0, 0];
+    const boxDiv = document.createElement("div");
+    boxDiv.style.position = "absolute";
+    boxDiv.style.border = "1px dashed #f7d774";
+    boxDiv.style.background = "rgba(247, 215, 116, 0.08)";
+    boxDiv.style.pointerEvents = "none";
+    boxDiv.style.display = "none";
+    container.style.position = "relative";
+    container.appendChild(boxDiv);
+
+    function finishBox(endX: number, endY: number) {
+      boxDiv.style.display = "none";
+      const rect = renderer.domElement.getBoundingClientRect();
+      const minX = Math.min(boxStart[0], endX);
+      const maxX = Math.max(boxStart[0], endX);
+      const minY = Math.min(boxStart[1], endY);
+      const maxY = Math.max(boxStart[1], endY);
+      if (maxX - minX < 3 && maxY - minY < 3) return;
+      const isolated = propsRef.current.isolatedPiece;
+      const cameraPosition = camera.getWorldPosition(new THREE.Vector3());
+      const selected: number[] = [];
+      const world = new THREE.Vector3();
+      const normal = new THREE.Vector3();
+      const toCamera = new THREE.Vector3();
+      const projected = new THREE.Vector3();
+      for (const target of paintTargets) {
+        if (isolated >= 0 && target.rangeIndex !== isolated) continue;
+        const geometry = target.mesh.geometry as THREE.BufferGeometry;
+        const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
+        const normals = geometry.getAttribute("normal") as THREE.BufferAttribute | null;
+        target.mesh.updateWorldMatrix(true, false);
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(
+          target.mesh.matrixWorld
+        );
+        const skinned = target.mesh as THREE.SkinnedMesh;
+        for (let local = 0; local < positions.count; local += 1) {
+          if (skinned.isSkinnedMesh) {
+            // Posed position (respects T-pose / animation frame).
+            skinned.applyBoneTransform(local, world);
+          } else {
+            world.fromBufferAttribute(positions, local);
+          }
+          target.mesh.localToWorld(world);
+          // Backface cull unless x-ray: keep verts whose normal
+          // faces the camera.
+          if (!propsRef.current.xray && normals) {
+            normal.fromBufferAttribute(normals, local).applyMatrix3(normalMatrix);
+            toCamera.copy(cameraPosition).sub(world);
+            if (normal.dot(toCamera) <= 0) continue;
+          }
+          projected.copy(world).project(camera);
+          if (projected.z > 1) continue;
+          const flat = target.vertexStart + local;
+          if (propsRef.current.regionSet && !propsRef.current.regionSet.has(flat)) {
+            continue;
+          }
+          const sx = ((projected.x + 1) / 2) * rect.width;
+          const sy = ((1 - projected.y) / 2) * rect.height;
+          if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) {
+            selected.push(flat);
+          }
+        }
+      }
+      propsRef.current.onSelect(selected, boxAdditive);
+    }
+
     function pointerToNdc(event: PointerEvent) {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set(
@@ -378,8 +505,15 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
     function paintAt(event: PointerEvent) {
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(raycastTargets());
-      const hit = hits[0];
+      const allHits = raycaster.intersectObjects(raycastTargets());
+      const regionSet = propsRef.current.regionSet;
+      const hit = allHits.find((candidate) => {
+        if (!candidate.face) return false;
+        if (!regionSet) return true;
+        const target = paintTargets.find((t) => t.mesh === candidate.object);
+        if (!target) return false;
+        return regionSet.has(target.vertexStart + candidate.face.a);
+      });
       if (!hit || !hit.face) return;
       placeCursor(hit);
       // Face indices reference the BASE geometry — rest space —
@@ -406,6 +540,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         lastPointer = [event.clientX, event.clientY];
         return;
       }
+      if (propsRef.current.selectMode) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        boxing = true;
+        boxAdditive = event.shiftKey;
+        boxStart = [event.clientX - rect.left, event.clientY - rect.top];
+        boxDiv.style.display = "block";
+        boxDiv.style.left = `${boxStart[0]}px`;
+        boxDiv.style.top = `${boxStart[1]}px`;
+        boxDiv.style.width = "0px";
+        boxDiv.style.height = "0px";
+        return;
+      }
       painting = true;
       paintAt(event);
     }
@@ -420,6 +566,16 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         applyCamera();
         return;
       }
+      if (boxing) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        boxDiv.style.left = `${Math.min(boxStart[0], x)}px`;
+        boxDiv.style.top = `${Math.min(boxStart[1], y)}px`;
+        boxDiv.style.width = `${Math.abs(x - boxStart[0])}px`;
+        boxDiv.style.height = `${Math.abs(y - boxStart[1])}px`;
+        return;
+      }
       if (painting) {
         paintAt(event);
         return;
@@ -427,9 +583,18 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       // Hover: show the brush ring.
       pointerToNdc(event);
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(raycastTargets())[0];
-      if (hit) {
-        placeCursor(hit);
+      const hoverHits = raycaster.intersectObjects(raycastTargets());
+      const hoverRegion = propsRef.current.regionSet;
+      const hoverHit = hoverHits.find((candidate) => {
+        if (!hoverRegion) return true;
+        if (!candidate.face) return false;
+        const target = paintTargets.find((t) => t.mesh === candidate.object);
+        return target
+          ? hoverRegion.has(target.vertexStart + candidate.face.a)
+          : false;
+      });
+      if (hoverHit) {
+        placeCursor(hoverHit);
       } else {
         cursor.visible = false;
       }
@@ -437,6 +602,11 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
 
     function handlePointerUp(event: PointerEvent) {
       renderer.domElement.releasePointerCapture(event.pointerId);
+      if (boxing) {
+        boxing = false;
+        const rect = renderer.domElement.getBoundingClientRect();
+        finishBox(event.clientX - rect.left, event.clientY - rect.top);
+      }
       painting = false;
       orbiting = false;
     }
@@ -468,6 +638,17 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       frame = requestAnimationFrame(renderLoop);
       const delta = clock.getDelta();
       mixer?.update(delta);
+      if (propsRef.current.tPose) {
+        // Contract rest = the library T-pose; overrides the mixer.
+        for (const entry of poseBones) {
+          if (entry.contract) entry.bone.quaternion.copy(entry.contract);
+        }
+      } else if (!propsRef.current.activeClip) {
+        // Static: true bind pose.
+        for (const entry of poseBones) {
+          entry.bone.quaternion.copy(entry.bind);
+        }
+      }
       const width = container!.clientWidth;
       const height = container!.clientHeight;
       if (width > 0 && height > 0) {
@@ -489,6 +670,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       renderer.domElement.removeEventListener("wheel", handleWheel);
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
       renderer.dispose();
+      container.removeChild(boxDiv);
       container.removeChild(renderer.domElement);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

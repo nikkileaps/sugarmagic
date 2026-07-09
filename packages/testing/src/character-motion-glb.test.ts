@@ -13,16 +13,25 @@ import {
 } from "@sugarmagic/character-rig";
 import {
   STANDARD_RIG_CORE,
+  STANDARD_RIG_CORE_WITH_TAIL,
   createDefaultMotionRecipe,
   isMotionRecipe,
-  isStandardRigCoreBoneName
+  isStandardRigCoreBoneName,
+  isStandardRigTailBoneName
 } from "@sugarmagic/domain";
 import {
   buildClipGlb,
+  mergeClipTracks,
+  readClipDuration,
   readClipRecipe,
   readGlb,
   scaleClipHipsTranslation
 } from "@sugarmagic/io";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { sampleTailWag } from "@sugarmagic/character-rig";
+import { STANDARD_RIG_TAIL_BONES } from "@sugarmagic/domain";
 
 function buildIdleClip(): ArrayBuffer {
   const motion = sampleMotion(generateIdleChannels(IDLE_DEFAULTS));
@@ -106,6 +115,88 @@ describe("generated clip GLBs (Plan 063)", () => {
     const recipe = readClipRecipe(buildIdleClip());
     expect(isMotionRecipe(recipe)).toBe(true);
     expect((recipe as { generatorId: string }).generatorId).toBe("idle");
+  });
+
+  it("tail tracks ride tailed clips and drop from tail-less ones (Plan 064)", () => {
+    const motion = sampleMotion(generateIdleChannels(IDLE_DEFAULTS));
+    const build = (bones: typeof STANDARD_RIG_CORE.bones) =>
+      buildClipGlb({
+        clipName: "Idle",
+        duration: motion.duration,
+        boneTracks: motion.boneTracks,
+        hipsTranslation: motion.hipsTranslation,
+        bones: bones.map((bone) => ({
+          name: bone.name,
+          parentName: bone.parentName,
+          restPosition: bone.restPosition,
+          restRotation: bone.restRotation
+        }))
+      });
+    const targets = (glb: ArrayBuffer) => {
+      const chunks = readGlb(glb)!;
+      return chunks.document.animations![0]!.channels.map(
+        (channel) => chunks.document.nodes![channel.target.node!]!.name!
+      );
+    };
+    const tailless = targets(build(STANDARD_RIG_CORE.bones));
+    expect(tailless.some((name) => isStandardRigTailBoneName(name))).toBe(false);
+    const tailed = targets(build(STANDARD_RIG_CORE_WITH_TAIL.bones));
+    expect(tailed).toContain("DEF-tail.001");
+    expect(tailed).toContain("DEF-tail.003");
+  });
+
+  it("bakes the wag into a REAL library clip copy (Plan 064 §064.4)", () => {
+    const clipsDir = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../vendor/quaternius-ual/clips"
+    );
+    const host = readFileSync(resolve(clipsDir, "Walk_Loop.glb"));
+    const hostGlb = host.buffer.slice(
+      host.byteOffset,
+      host.byteOffset + host.byteLength
+    );
+    const duration = readClipDuration(hostGlb);
+    expect(duration).toBeGreaterThan(0);
+    const wag = sampleTailWag(
+      { energy: 0.4, bounce: 0.4, curiosity: 0.4, fidgetiness: 0.6, seed: 1 },
+      duration
+    );
+    const merged = mergeClipTracks({
+      hostGlb,
+      bones: STANDARD_RIG_TAIL_BONES.map((bone) => ({
+        name: bone.name,
+        parentName: bone.parentName,
+        restPosition: bone.restPosition,
+        restRotation: bone.restRotation
+      })),
+      tracks: wag.boneTracks.filter((track) =>
+        track.boneName.startsWith("DEF-tail.")
+      )
+    });
+    const chunks = readGlb(merged)!;
+    const document = chunks.document;
+    // Tail nodes exist, parented under hips.
+    const names = document.nodes!.map((node) => node.name);
+    expect(names).toContain("DEF-tail.001");
+    const hips = document.nodes!.find((node) => node.name === "DEF-hips")!;
+    const tail1 = names.indexOf("DEF-tail.001");
+    expect(hips.children).toContain(tail1);
+    // The animation gained exactly three rotation channels
+    // targeting tail bones; wag tracks match the host duration.
+    const animation = document.animations![0]!;
+    const tailChannels = animation.channels.filter((channel) =>
+      document.nodes![channel.target.node!]!.name!.startsWith("DEF-tail.")
+    );
+    expect(tailChannels.length).toBe(3);
+    for (const channel of tailChannels) {
+      expect(channel.target.path).toBe("rotation");
+      const input = document.accessors![
+        animation.samplers[channel.sampler]!.input
+      ]!;
+      expect(input.max?.[0]).toBeCloseTo(duration, 4);
+    }
+    // Host tracks untouched in count.
+    expect(animation.channels.length).toBe(24 + 3); // 23 rot + 1 hips T + 3 tail
   });
 
   it("hips scaling applies to generated clips unchanged", () => {
