@@ -17,6 +17,14 @@ export interface SurfaceDefinition {
   definitionKind: "surface";
   displayName: string;
   surface: Surface;
+  /**
+   * Built-in presets are factory-owned: the load normalizer
+   * replaces them from the factory on every project load, so
+   * in-place edits DO NOT PERSIST. The authoring UI must gate
+   * editing behind "Duplicate to edit" (Procreate-brush model) —
+   * the duplicate omits this metadata and is user-owned.
+   */
+  metadata?: { builtIn?: boolean; builtInKey?: string };
 }
 
 /**

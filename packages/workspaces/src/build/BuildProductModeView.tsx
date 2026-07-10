@@ -137,6 +137,8 @@ export interface BuildProductModeViewProps {
     definitionId: string,
     patch: Partial<SurfaceDefinition>
   ) => void;
+  /** "Duplicate to edit" — returns the new user-owned copy's id. */
+  onDuplicateSurfaceDefinition: (definitionId: string) => string | null;
   onRemoveSurfaceDefinition: (definitionId: string) => void;
   onCreateSoundCueDefinition: () => SoundCueDefinition | null;
   onUpdateSoundCueDefinition: (
@@ -469,6 +471,7 @@ export function useBuildProductModeView(
     onSelectSurfaceDefinition,
     onCreateSurfaceDefinition,
     onUpdateSurfaceDefinition,
+    onDuplicateSurfaceDefinition: props.onDuplicateSurfaceDefinition,
     onRemoveSurfaceDefinition,
     centerPanel: surfaceCenterPanel
   });

@@ -101,6 +101,7 @@ import {
   updateMusicBindingsInSession,
   updateCreditsInSession,
   duplicateMaterialDefinitionInSession,
+  duplicateSurfaceDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
   removeTextureDefinitionFromSession,
@@ -2021,6 +2022,21 @@ export function App() {
     []
   );
 
+  const handleDuplicateSurfaceDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return null;
+      const result = duplicateSurfaceDefinitionInSession(
+        currentSession,
+        definitionId
+      );
+      if (!result) return null;
+      projectStore.getState().updateSession(result.session);
+      return result.newDefinitionId;
+    },
+    []
+  );
+
   const handleRemoveSurfaceDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -2179,6 +2195,7 @@ export function App() {
     onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
     onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
     onUpdateSurfaceDefinition: handleUpdateSurfaceDefinition,
+    onDuplicateSurfaceDefinition: handleDuplicateSurfaceDefinition,
     onRemoveSurfaceDefinition: handleRemoveSurfaceDefinition,
     onCreateSoundCueDefinition: handleCreateSoundCueDefinition,
     onUpdateSoundCueDefinition: handleUpdateSoundCueDefinition,

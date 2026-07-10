@@ -134,6 +134,7 @@ import {
 } from "../ui-definition";
 import {
   assertReusableSurfaceHasNoPaintedMasks,
+  cloneSurface,
   type SurfaceDefinition
 } from "../surface";
 import {
@@ -3596,6 +3597,48 @@ export function removeMaterialDefinitionFromSession(
       )
     },
     isDirty: true
+  };
+}
+
+/**
+ * "Duplicate to edit" for surfaces (Procreate-brush model): the
+ * copy deep-clones the layer stack, gets a project-scoped id, and
+ * omits metadata so it is user-owned (built-in originals are
+ * factory-replaced on every load and cannot hold edits).
+ */
+export function duplicateSurfaceDefinitionInSession(
+  session: AuthoringSession,
+  sourceDefinitionId: string,
+  options: { displayName?: string } = {}
+): { session: AuthoringSession; newDefinitionId: string } | null {
+  const source = (session.contentLibrary.surfaceDefinitions ?? []).find(
+    (definition) => definition.definitionId === sourceDefinitionId
+  );
+  if (!source) {
+    return null;
+  }
+  const projectScope = session.gameProject.identity.id;
+  const newDefinitionId = `${projectScope}:surface:${createUuid()}`;
+  const copy: SurfaceDefinition = {
+    definitionId: newDefinitionId,
+    definitionKind: "surface",
+    displayName: options.displayName ?? `${source.displayName} (Copy)`,
+    surface: cloneSurface(source.surface)
+    // metadata intentionally omitted so the copy is user-owned.
+  };
+  return {
+    session: {
+      ...session,
+      contentLibrary: {
+        ...session.contentLibrary,
+        surfaceDefinitions: [
+          ...(session.contentLibrary.surfaceDefinitions ?? []),
+          copy
+        ]
+      },
+      isDirty: true
+    },
+    newDefinitionId
   };
 }
 
