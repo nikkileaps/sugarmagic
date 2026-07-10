@@ -10,7 +10,7 @@
  */
 
 import * as THREE from "three";
-import type { RegionDocument, SemanticCommand } from "@sugarmagic/domain";
+import type { RegionDocument, Scene, SemanticCommand } from "@sugarmagic/domain";
 import { resolveSceneObjects, type SceneObject } from "@sugarmagic/runtime-core";
 import {
   createInputRouter,
@@ -38,6 +38,10 @@ export interface LayoutWorkspaceConfig {
   onPreviewTransform: (instanceId: string, position: [number, number, number], rotation: [number, number, number], scale: [number, number, number]) => void;
   getSelectedId: () => string | null;
   getRegion: () => RegionDocument | null;
+  /** Plan 058 — the ambient Scene whose overlay composes onto the
+   *  region. Without it the gizmo can't find Scene-scoped
+   *  placements/presences and silently hides. */
+  getActiveScene: () => Scene | null;
 }
 
 export interface LayoutWorkspaceInstance {
@@ -87,7 +91,9 @@ export function createLayoutWorkspace(
   function getSceneObject(instanceId: string): SceneObject | null {
     const region = config.getRegion();
     if (!region) return null;
-    const objects = resolveSceneObjects(region);
+    const objects = resolveSceneObjects(region, {
+      activeScene: config.getActiveScene()
+    });
     return objects.find((o: SceneObject) => o.instanceId === instanceId) ?? null;
   }
 
