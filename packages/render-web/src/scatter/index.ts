@@ -609,7 +609,17 @@ export function buildSurfaceScatterLayer(
         const gpuBinInput = gpuBinInputs[index]!;
         const scatterMesh = computeBin.mesh;
         scatterMesh.name = `${root.name}:${gpuBinInput.bin}`;
-        scatterMesh.onBeforeRender = (renderer, _scene, camera) => {
+        // SINGLE dispatch path: RenderView calls this BEFORE the
+        // render pass (RenderView.renderOnce). Never dispatch these
+        // computes from onBeforeRender — mid-render-pass compute
+        // silently corrupts multi-bin compaction (every bin's
+        // visibleCount lands 0; backlog 003, the surface-preview
+        // grass bug). ADR 014 makes RenderView the only view class,
+        // so the pre-pass hook covers every render surface.
+        scatterMesh.userData.sugarmagicScatterPrepare = (
+          renderer: unknown,
+          camera: THREE.Camera
+        ) => {
           if (renderer instanceof WebGPURenderer) {
             sharedComputePipeline.prepareForRender(renderer, camera);
           }
