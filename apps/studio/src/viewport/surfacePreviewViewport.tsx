@@ -88,16 +88,21 @@ export function SurfacePreviewViewport({
     previewRootRef.current = previewRoot;
     scene.add(previewRoot);
 
-    // Same rig as CharacterPreview: warm key + cool fill + ambient.
-    // Without lights the PBR surface renders black-on-void and the
-    // preview reads nothing like the sunlit viewport (2026-07-10).
-    const keyLight = new THREE.DirectionalLight(0xfff1d6, 1.6);
+    // Warm key + cool fill + ambient. Without lights the PBR
+    // surface renders black-on-void (2026-07-10). Intensities are
+    // deliberately LOWER than CharacterPreview's rig: this preview
+    // has no tone-mapping post pass, so an overbright rig clips
+    // saturated albedo toward pastel and the surface reads nothing
+    // like its authored color. True fidelity (default environment
+    // sun + ACES chain) is surface-epic work; this keeps colors
+    // recognizable meanwhile.
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.9);
     keyLight.position.set(4, 6, 3);
     scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0xb0c8ff, 0.55);
+    const fillLight = new THREE.DirectionalLight(0xb0c8ff, 0.3);
     fillLight.position.set(-3, 2.5, -2);
     scene.add(fillLight);
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.25);
     scene.add(ambient);
 
     const renderView = createRenderView({
