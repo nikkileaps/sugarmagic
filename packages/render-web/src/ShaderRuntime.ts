@@ -1339,10 +1339,23 @@ export class ShaderRuntime {
       binding.shaderDefinitionId
     );
     if (!shaderDefinition || shaderDefinition.targetKind !== "mesh-surface") {
+      // A null here silently downgrades the caller to its flat
+      // fallback (landscape channels go BLACK) — always say why.
+      this.logger?.warn?.("evaluateMeshSurfaceBinding: shader unusable", {
+        shaderDefinitionId: binding.shaderDefinitionId,
+        found: Boolean(shaderDefinition),
+        targetKind: shaderDefinition?.targetKind ?? null
+      });
       return null;
     }
     const ir = this.getCompiledIR(shaderDefinition);
     if (ir.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+      this.logger?.warn?.("evaluateMeshSurfaceBinding: IR compile errors", {
+        shaderDefinitionId: binding.shaderDefinitionId,
+        diagnostics: ir.diagnostics.filter(
+          (diagnostic) => diagnostic.severity === "error"
+        )
+      });
       return null;
     }
 

@@ -1489,18 +1489,34 @@ export function createBuiltInFlatTextureShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Flat Texture",
     targetKind: "mesh-surface",
-    revision: 1,
+    // revision 2 (2026-07-10): the original graph wired vec2 uv and
+    // vec2 tiling straight into math.multiply, whose ports are
+    // strict-float — the IR compiler rejects it and every material
+    // convention-routed here (baseColorMap-only) evaluated to null
+    // (landscape channels rendered their BLACK fallback). Same
+    // split/scale/recombine pattern the grass shaders document.
+    revision: 2,
     nodes: [
       { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
       createParameterNode("tiling", "tiling", { x: 48, y: 304 }),
-      { nodeId: "scale-uv", nodeType: "math.multiply", position: { x: 320, y: 224 }, settings: {} },
-      createMaterialTextureNode("texture", "texture", { x: 608, y: 160 }),
-      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+      { nodeId: "split-uv", nodeType: "math.split-vector", position: { x: 240, y: 160 }, settings: {} },
+      { nodeId: "split-tiling", nodeType: "math.split-vector", position: { x: 240, y: 304 }, settings: {} },
+      { nodeId: "scale-u", nodeType: "math.multiply", position: { x: 432, y: 140 }, settings: {} },
+      { nodeId: "scale-v", nodeType: "math.multiply", position: { x: 432, y: 240 }, settings: {} },
+      { nodeId: "scaled-uv", nodeType: "math.combine-vector", position: { x: 624, y: 190 }, settings: {} },
+      createMaterialTextureNode("texture", "texture", { x: 816, y: 160 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 1104, y: 160 }, settings: {} }
     ],
     edges: [
-      createShaderEdge("edge-uv-scale", "uv", "value", "scale-uv", "a"),
-      createShaderEdge("edge-tiling-scale", "tiling", "value", "scale-uv", "b"),
-      createShaderEdge("edge-scale-texture-uv", "scale-uv", "value", "texture", "uv"),
+      createShaderEdge("edge-uv-split", "uv", "value", "split-uv", "input"),
+      createShaderEdge("edge-tiling-split", "tiling", "value", "split-tiling", "input"),
+      createShaderEdge("edge-scale-u-a", "split-uv", "x", "scale-u", "a"),
+      createShaderEdge("edge-scale-u-b", "split-tiling", "x", "scale-u", "b"),
+      createShaderEdge("edge-scale-v-a", "split-uv", "y", "scale-v", "a"),
+      createShaderEdge("edge-scale-v-b", "split-tiling", "y", "scale-v", "b"),
+      createShaderEdge("edge-combine-u", "scale-u", "value", "scaled-uv", "x"),
+      createShaderEdge("edge-combine-v", "scale-v", "value", "scaled-uv", "y"),
+      createShaderEdge("edge-scale-texture-uv", "scaled-uv", "vec2", "texture", "uv"),
       createShaderEdge("edge-texture-output", "texture", "color", "output", "color"),
       createShaderEdge("edge-texture-alpha-output", "texture", "alpha", "output", "alpha")
     ],
