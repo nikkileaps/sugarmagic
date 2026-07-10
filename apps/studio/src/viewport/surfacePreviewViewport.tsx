@@ -88,6 +88,18 @@ export function SurfacePreviewViewport({
     previewRootRef.current = previewRoot;
     scene.add(previewRoot);
 
+    // Same rig as CharacterPreview: warm key + cool fill + ambient.
+    // Without lights the PBR surface renders black-on-void and the
+    // preview reads nothing like the sunlit viewport (2026-07-10).
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 1.6);
+    keyLight.position.set(4, 6, 3);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xb0c8ff, 0.55);
+    fillLight.position.set(-3, 2.5, -2);
+    scene.add(fillLight);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambient);
+
     const renderView = createRenderView({
       engine,
       scene,
@@ -202,16 +214,30 @@ export function SurfacePreviewViewport({
       if (layer.kind !== "scatter") {
         continue;
       }
-      const build = buildSurfaceScatterLayer(
-        layer,
-        spec.scatterSamplesForDensity(layer.density),
-        {
-          contentLibrary,
-          assetResolver: renderView.assetResolver,
-          shaderRuntime: renderView.shaderRuntime,
-          logger: engine.logger
-        }
-      );
+      const samples = spec.scatterSamplesForDensity(layer.density);
+      const build = buildSurfaceScatterLayer(layer, samples, {
+        contentLibrary,
+        assetResolver: renderView.assetResolver,
+        shaderRuntime: renderView.shaderRuntime,
+        logger: engine.logger
+      });
+      // Preview-vs-landscape scatter divergence breadcrumb
+      // (2026-07-10): sample/instance inputs per layer, so a
+      // silent zero names its stage.
+      console.info("[surface-preview] scatter layer", {
+        layerId: layer.layerId,
+        contentKind: layer.contentKind,
+        definitionId: layer.definitionId,
+        density: layer.density,
+        opacity: layer.opacity,
+        enabled: layer.enabled,
+        samples: samples.length,
+        rootChildren: build.root.children.length,
+        meshes: build.root.children.map((child) => ({
+          name: child.name,
+          count: (child as THREE.InstancedMesh).count ?? null
+        }))
+      });
       previewRoot.add(build.root);
       scatterBuildsRef.current.push(build);
     }
