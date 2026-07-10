@@ -130,6 +130,13 @@ findings. Known candidates from the audit, to be confirmed:
   landscape paint and mask paint is unclear.
 - No visualization of a mask's effect in isolation (a "show this
   mask as heatmap" toggle, like the weight heatmap).
+- No channel-weight heatmap in the viewport. Confirmed in the
+  field (2026-07-10): scatter density reads as "established" at
+  ~7% weight while the channel's ground color is still invisible
+  at that weight, so underpainting looks like a broken surface
+  instead of a light touch. A weight overlay would make this a
+  five-second diagnosis; also consider a higher default brush
+  strength for channel painting.
 
 ## Not in this epic
 
