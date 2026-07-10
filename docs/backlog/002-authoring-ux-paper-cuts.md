@@ -67,3 +67,52 @@ sponge). The 3D emoji aesthetic is a deliberate style choice
 (eraser, box-select marquee) can be one-off in-house Blender
 renders in the same style. Sweep: landscape brush toolbar, weight
 workbench rail, animation mode rail, preview HUD, mode tabs.
+
+### 5. Undo/redo is unreliable: half the editor mutates the session outside command history
+
+**Severity:** High (destroys trust in Cmd+Z; authors stop using it and hand-revert mistakes)
+
+**Symptom:** nikki (2026-07-10), while blocking out the Arrival
+Station region: undo behaves unpredictably — some edits undo,
+some don't, and undoing past a non-undoable edit can appear to
+"undo the wrong thing." Concrete symptom list still being
+collected in the field; the architecture makes the general shape
+inevitable (below).
+
+**Root cause (structural):** two parallel mutation paths write to
+the authoring session:
+1. `applyCommand(session, ...)` — semantic commands, tracked by
+   undo history (placements, transforms, landscape paint/sketch,
+   channel edits, ...).
+2. Direct `projectStore.updateSession(sessionFn(...))` — session
+   helper functions that BYPASS history entirely. From one day's
+   work alone: asset/texture/material/audio definition imports and
+   removals, `updateAssetDefinitionInSession` (renames + surface
+   slot bindings), scene updates, character model commits.
+
+Undo pops commands off the history stack, but the un-tracked
+mutations interleave with tracked ones. Undoing a tracked command
+after an un-tracked mutation replays the older state WITHOUT the
+un-tracked change's context — from the author's seat, undo
+either "skips" edits or clobbers newer ones. There may also be
+secondary issues (drafts/preview stores not resetting on undo)
+but the two-path split is the disease.
+
+**Action (needs a proper plan/epic, not a paper-cut fix):**
+- Audit every `projectStore.updateSession` call site in
+  apps/studio (grep is cheap; the list is long) and classify:
+  should-be-a-command vs. legitimately-outside-history (project
+  load, save-clean marking).
+- Pick the architecture: either (a) promote everything user-
+  visible to semantic commands so the command stack IS the
+  truth, or (b) switch undo history to session snapshots
+  (immutable spreads make structural sharing cheap; large blob
+  payloads like sketch ink and paint need care) so ALL mutations
+  are captured uniformly regardless of path. (b) is more robust
+  to future drift — new code can't forget to be undoable.
+- Whatever is chosen: one enforcer. A lint or runtime assert
+  that flags new direct-mutation paths, or delete the direct
+  path entirely.
+- Include redo, and define undo scope boundaries (per-region?
+  per-workspace? global?) explicitly instead of inheriting them
+  from implementation accident.
