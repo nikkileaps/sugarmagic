@@ -7,17 +7,7 @@
  */
 
 import { ColorSwatch, Popover, UnstyledButton } from "@mantine/core";
-import type {
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  Layer,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  RockTypeDefinition,
-  ShaderGraphDocument,
-  SurfaceContext,
-  TextureDefinition
-} from "@sugarmagic/domain";
+import type { Layer } from "@sugarmagic/domain";
 import { useState } from "react";
 import { LayerDetailPanel } from "./LayerDetailPanel";
 import { previewColorForLayer } from "./utils";
@@ -25,16 +15,6 @@ import { previewColorForLayer } from "./utils";
 export interface LayerSettingsPopoverProps {
   layer: Layer;
   isBaseLayer: boolean;
-  allowedContext: SurfaceContext;
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onChange: (nextLayer: Layer) => void;
   onActivate?: () => void;
 }
@@ -42,16 +22,6 @@ export interface LayerSettingsPopoverProps {
 export function LayerSettingsPopover({
   layer,
   isBaseLayer,
-  allowedContext,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  shaderDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
   onChange,
   onActivate
 }: LayerSettingsPopoverProps) {
@@ -86,16 +56,6 @@ export function LayerSettingsPopover({
         <LayerDetailPanel
           layer={layer}
           isBaseLayer={isBaseLayer}
-          allowedContext={allowedContext}
-          materialDefinitions={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onChange={onChange}
         />
       </Popover.Dropdown>

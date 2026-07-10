@@ -26,6 +26,7 @@ export {
   type ToolRailItem,
   type ToolRailProps
 } from "./ToolViewportChrome";
+export { DraftTextInput, type DraftTextInputProps } from "./DraftTextInput";
 export { LabeledSlider, type LabeledSliderProps } from "./LabeledSlider";
 export { MaskPreview, type MaskPreviewProps } from "./MaskPreview";
 export {

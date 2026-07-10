@@ -5,35 +5,14 @@
  */
 
 import { type ReactNode } from "react";
-import { Stack, Text, TextInput } from "@mantine/core";
-import type {
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  RockTypeDefinition,
-  ShaderGraphDocument,
-  SurfaceDefinition,
-  TextureDefinition
-} from "@sugarmagic/domain";
-import { Inspector, PanelSectionList } from "@sugarmagic/ui";
+import { Stack, Text } from "@mantine/core";
+import type { SurfaceDefinition } from "@sugarmagic/domain";
+import { DraftTextInput, Inspector, PanelSectionList } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { LayerStackView } from "./LayerStackView";
 
 export interface SurfaceLibraryViewProps {
   surfaceDefinitions: SurfaceDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () =>
-    | Promise<MaskTextureDefinition | null>
-    | MaskTextureDefinition
-    | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   selectedSurfaceDefinitionId: string | null;
   onSelectSurfaceDefinition: (definitionId: string) => void;
   onCreateSurfaceDefinition: () => SurfaceDefinition | null;
@@ -50,15 +29,6 @@ export function useSurfaceLibraryView(
 ): WorkspaceViewContribution {
   const {
     surfaceDefinitions,
-    materialDefinitions,
-    textureDefinitions,
-    maskTextureDefinitions,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition,
-    shaderDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     onCreateSurfaceDefinition,
@@ -111,13 +81,14 @@ export function useSurfaceLibraryView(
       <Inspector selectionLabel={selectedDefinition?.displayName ?? null}>
         {selectedDefinition ? (
           <Stack gap="sm">
-            <TextInput
+            <DraftTextInput
+              key={selectedDefinition.definitionId}
               size="xs"
               label="Display Name"
               value={selectedDefinition.displayName}
-              onChange={(event) =>
+              onCommit={(displayName) =>
                 onUpdateSurfaceDefinition(selectedDefinition.definitionId, {
-                  displayName: event.currentTarget.value
+                  displayName
                 })
               }
             />
@@ -126,15 +97,6 @@ export function useSurfaceLibraryView(
               allowedContext="landscape-only"
               allowPainted={false}
               paintOwner={null}
-              materialDefinitions={materialDefinitions}
-              textureDefinitions={textureDefinitions}
-              maskTextureDefinitions={maskTextureDefinitions}
-              onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-              onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-              shaderDefinitions={shaderDefinitions}
-              grassTypeDefinitions={grassTypeDefinitions}
-              flowerTypeDefinitions={flowerTypeDefinitions}
-              rockTypeDefinitions={rockTypeDefinitions}
               onChangeSurface={(surface) => {
                 onUpdateSurfaceDefinition(selectedDefinition.definitionId, {
                   surface

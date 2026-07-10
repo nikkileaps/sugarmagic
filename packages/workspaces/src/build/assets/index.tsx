@@ -16,22 +16,14 @@ import { Stack, Text, Button, TextInput } from "@mantine/core";
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  PaintedMaskTargetAddress,
-  RockTypeDefinition,
-  SurfaceDefinition,
   SurfaceBinding,
-  ShaderGraphDocument,
-  ShaderSlotKind,
-  TextureDefinition
+  ShaderSlotKind
 } from "@sugarmagic/domain";
 import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
 import { resolveAssetDefinitionShaderBindings } from "@sugarmagic/runtime-core";
 import { MaterialSlotBindingsEditor } from "../MaterialSlotBindingsEditor";
 import { ShaderSlotEditor } from "../ShaderSlotEditor";
+import { useSurfaceAuthoring } from "../surfaces";
 
 function getAssetKindLabel(assetDefinition: AssetDefinition): string {
   return assetDefinition.assetKind === "foliage" ? "Foliage" : "Model";
@@ -40,21 +32,6 @@ function getAssetKindLabel(assetDefinition: AssetDefinition): string {
 export interface AssetDefinitionInspectorProps {
   assetDefinition: AssetDefinition;
   contentLibrary: ContentLibrarySnapshot;
-  surfaceDefinitions: SurfaceDefinition[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  shaderDefinitions: ShaderGraphDocument[];
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  onCreateMaskTextureDefinition?: () =>
-    | Promise<MaskTextureDefinition | null>
-    | MaskTextureDefinition
-    | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
@@ -73,23 +50,12 @@ export interface AssetDefinitionInspectorProps {
 export function AssetDefinitionInspector({
   assetDefinition,
   contentLibrary,
-  surfaceDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  shaderDefinitions,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
   onUpdateAssetDefinition,
   onSetAssetMaterialSlotBinding,
   onSetAssetDefaultShader,
   onEditShaderGraph
 }: AssetDefinitionInspectorProps) {
+  const { shaderDefinitions } = useSurfaceAuthoring();
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
   );
@@ -160,18 +126,6 @@ export function AssetDefinitionInspector({
         <MaterialSlotBindingsEditor
           bindings={assetDefinition.surfaceSlots}
           assetDefinitionId={assetDefinition.definitionId}
-          surfaceDefinitions={surfaceDefinitions}
-          materialDefinitions={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activeMaskPaintTarget={activeMaskPaintTarget}
-          onSetMaskPaintTarget={onSetMaskPaintTarget}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onChangeBinding={(slotName, slotIndex, surface) =>
             onSetAssetMaterialSlotBinding(
               assetDefinition.definitionId,

@@ -6,13 +6,34 @@
  */
 
 import { createScopedId } from "../shared/identity";
-import { createDefaultSurface, type Surface } from "./index";
+import {
+  createDefaultSurface,
+  type Surface,
+  type SurfaceContext
+} from "./index";
 
 export interface SurfaceDefinition {
   definitionId: string;
   definitionKind: "surface";
   displayName: string;
   surface: Surface;
+}
+
+/**
+ * True when a library surface may bind to a slot of the given
+ * context. Landscape slots accept everything; universal slots
+ * (asset meshes) reject landscape-only surfaces (splatmap masks).
+ * SINGLE ENFORCER of context compatibility — UI pickers and
+ * resolvers must call this, never re-derive the rule.
+ */
+export function surfaceDefinitionMatchesContext(
+  definition: SurfaceDefinition,
+  allowedContext: SurfaceContext
+): boolean {
+  return (
+    allowedContext === "landscape-only" ||
+    definition.surface.context === "universal"
+  );
 }
 
 export function createDefaultSurfaceDefinition(

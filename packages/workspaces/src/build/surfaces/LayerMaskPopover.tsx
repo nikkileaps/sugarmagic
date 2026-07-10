@@ -10,10 +10,8 @@
 import { Button, Popover, Stack, UnstyledButton } from "@mantine/core";
 import type {
   Mask,
-  MaskTextureDefinition,
   PaintedMaskTargetAddress,
-  SurfaceContext,
-  TextureDefinition
+  SurfaceContext
 } from "@sugarmagic/domain";
 import { cloneMask } from "@sugarmagic/domain";
 import { MaskPreview } from "@sugarmagic/ui";
@@ -30,12 +28,6 @@ export interface LayerMaskPopoverProps {
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
     | null;
   layerId: string;
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onApply: (nextMask: Mask) => void;
   onActivate?: () => void;
 }
@@ -46,12 +38,6 @@ export function LayerMaskPopover({
   allowPainted,
   paintOwner,
   layerId,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
   onApply,
   onActivate
 }: LayerMaskPopoverProps) {
@@ -111,12 +97,6 @@ export function LayerMaskPopover({
                   }
                 : null
             }
-            textureDefinitions={textureDefinitions}
-            maskTextureDefinitions={maskTextureDefinitions}
-            onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-            onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-            activeMaskPaintTarget={activeMaskPaintTarget}
-            onSetMaskPaintTarget={onSetMaskPaintTarget}
             onChange={setDraftMask}
           />
           <Button

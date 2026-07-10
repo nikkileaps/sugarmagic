@@ -36,6 +36,7 @@ import type {
   AudioClipDefinition,
   AudioMixerSettings,
   MusicBindings,
+  PaintedMaskTargetAddress,
   RuntimeSoundEventKey,
   SoundCueDefinition
 } from "@sugarmagic/domain";
@@ -164,6 +165,7 @@ import {
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
 import {
+  SurfaceAuthoringProvider,
   useBuildProductModeView,
   useDesignProductModeView,
   usePublishProductModeView,
@@ -2574,8 +2576,44 @@ export function App() {
     return `${activeProductMode} workspace ready${dirty}`;
   }, [phase, isDirty, activeProductMode]);
 
+  // The shared definition catalogs every surface editor consumes
+  // (binding editor, layer stack, mask editor, slot editors) —
+  // provided once here instead of threading a 10-prop bundle down
+  // 4+ component levels. Memoized so consumers only re-render when
+  // a catalog actually changes.
+  const surfaceAuthoringCatalog = useMemo(
+    () => ({
+      surfaceDefinitions,
+      materialDefinitions,
+      textureDefinitions,
+      maskTextureDefinitions,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
+      rockTypeDefinitions,
+      onCreateMaskTextureDefinition: handleCreateMaskTextureDefinition,
+      onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
+      activeMaskPaintTarget,
+      onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) =>
+        viewportStore.getState().setActiveMaskPaintTarget(target)
+    }),
+    [
+      surfaceDefinitions,
+      materialDefinitions,
+      textureDefinitions,
+      maskTextureDefinitions,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
+      rockTypeDefinitions,
+      handleCreateMaskTextureDefinition,
+      handleImportMaskTextureDefinition,
+      activeMaskPaintTarget
+    ]
+  );
+
   return (
-    <>
+    <SurfaceAuthoringProvider catalog={surfaceAuthoringCatalog}>
       <ProjectManagerDialog
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
@@ -2594,11 +2632,6 @@ export function App() {
         audioClipDefinitions={audioClipDefinitions}
         assetDefinitions={assetDefinitions}
         contentLibrary={session?.contentLibrary ?? null}
-        surfaceDefinitions={surfaceDefinitions}
-        grassTypeDefinitions={grassTypeDefinitions}
-        flowerTypeDefinitions={flowerTypeDefinitions}
-        rockTypeDefinitions={rockTypeDefinitions}
-        maskTextureDefinitions={maskTextureDefinitions}
         assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
         isMaterialReferenced={(definitionId) =>
@@ -3265,6 +3298,6 @@ export function App() {
           )
         }
       />
-    </>
+    </SurfaceAuthoringProvider>
   );
 }

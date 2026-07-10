@@ -22,6 +22,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   cloneMask,
+  cloneSurface,
   createAppearanceLayer,
   createColorAppearanceContent,
   createColorEmissionContent,
@@ -30,6 +31,20 @@ import {
   createScatterLayer,
   createSurface
 } from "@sugarmagic/domain";
+
+/**
+ * "Make Local" (Plan 036 §36.13): fork a library surface into an
+ * inline copy that no longer tracks the library. The ONLY place
+ * this conversion happens — both the explicit button and the
+ * binding-mode switch route here.
+ */
+export function makeBindingLocal<C extends SurfaceContext>(
+  definition: SurfaceDefinition
+): SurfaceBinding<C> {
+  return createInlineSurfaceBinding(
+    cloneSurface(definition.surface)
+  ) as SurfaceBinding<C>;
+}
 
 export function cloneLayer(layer: Layer): Layer {
   if (layer.kind === "appearance") {
@@ -165,13 +180,6 @@ function previewColorForLayerContent(content: Layer["content"]): string {
       return "#a89984";
   }
   return "#89b4fa";
-}
-
-export function surfaceDefinitionMatchesContext(
-  definition: SurfaceDefinition,
-  allowedContext: SurfaceContext
-): boolean {
-  return allowedContext === "landscape-only" || definition.surface.context === "universal";
 }
 
 export function createDefaultLayer(

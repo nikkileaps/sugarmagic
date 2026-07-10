@@ -50,6 +50,7 @@ import {
   ToolOptionsBar,
   ToolRail
 } from "@sugarmagic/ui";
+import { useSurfaceAuthoring } from "../surfaces";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
@@ -142,45 +143,22 @@ function ChannelCard(props: {
   channelIndex: number;
   isActive: boolean;
   landscape: RegionLandscapeState | null;
-  surfaceDefinitions: SurfaceDefinition[];
-  materials: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
   onSurfaceChange: (surface: SurfaceBinding | null) => void;
   onDelete: () => void;
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
 }) {
   const {
     channel,
     channelIndex,
     isActive,
     landscape,
-    surfaceDefinitions,
-    materials,
-    textureDefinitions,
-    maskTextureDefinitions,
-    activeMaskPaintTarget,
-    onSetMaskPaintTarget,
-    shaderDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
     onSelect,
     onRename,
     onSurfaceChange,
-    onDelete,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition
+    onDelete
   } = props;
+  const { surfaceDefinitions } = useSurfaceAuthoring();
 
   const isBase = channelIndex === 0;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -271,18 +249,6 @@ function ChannelCard(props: {
                   scope: "landscape-channel",
                   channelKey: channel.channelId
                 }}
-                surfaceDefinitions={surfaceDefinitions}
-                materialDefinitions={materials}
-                textureDefinitions={textureDefinitions}
-                maskTextureDefinitions={maskTextureDefinitions}
-                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                activeMaskPaintTarget={activeMaskPaintTarget}
-                onSetMaskPaintTarget={onSetMaskPaintTarget}
-                shaderDefinitions={shaderDefinitions}
-                grassTypeDefinitions={grassTypeDefinitions}
-                flowerTypeDefinitions={flowerTypeDefinitions}
-                rockTypeDefinitions={rockTypeDefinitions}
                 onChange={(next) => {
                   onSurfaceChange(next);
                   setPickerOpen(false);
@@ -441,18 +407,6 @@ export function useLandscapeWorkspaceView(
           channelIndex={channelIndex}
           isActive={channelIndex === effectiveActiveChannelIndex}
           landscape={displayedLandscape}
-          surfaceDefinitions={surfaceDefinitions}
-          materials={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          activeMaskPaintTarget={activeMaskPaintTarget}
-          onSetMaskPaintTarget={onSetMaskPaintTarget}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onSelect={() =>
             viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
           }

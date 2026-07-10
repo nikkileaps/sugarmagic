@@ -32,15 +32,10 @@ import type {
   AssetDefinition,
   AudioClipDefinition,
   ContentLibrarySnapshot,
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaskTextureDefinition,
   MaterialDefinition,
-  RockTypeDefinition,
   ShaderGraphDocument,
   ShaderSlotKind,
   SurfaceBinding,
-  SurfaceDefinition,
   TextureDefinition
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
@@ -62,11 +57,6 @@ export interface LibraryPopoverProps {
   assetDefinitions: AssetDefinition[];
   /** Full snapshot + scatter/mask defs for the asset inspector. */
   contentLibrary: ContentLibrarySnapshot | null;
-  surfaceDefinitions: SurfaceDefinition[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
   assetSources: Record<string, string>;
   /** For resolving texture refs in MaterialPreview. */
   assetResolver: AuthoredAssetResolver | null;
@@ -172,11 +162,6 @@ export function LibraryPopover({
   audioClipDefinitions,
   assetDefinitions,
   contentLibrary,
-  surfaceDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
-  maskTextureDefinitions,
   assetSources,
   assetResolver,
   isMaterialReferenced,
@@ -492,14 +477,6 @@ export function LibraryPopover({
                     key={selectedAsset.definitionId}
                     assetDefinition={selectedAsset}
                     contentLibrary={contentLibrary}
-                    surfaceDefinitions={surfaceDefinitions}
-                    grassTypeDefinitions={grassTypeDefinitions}
-                    flowerTypeDefinitions={flowerTypeDefinitions}
-                    rockTypeDefinitions={rockTypeDefinitions}
-                    materialDefinitions={materialDefinitions}
-                    textureDefinitions={textureDefinitions}
-                    maskTextureDefinitions={maskTextureDefinitions}
-                    shaderDefinitions={shaderDefinitions}
                     onUpdateAssetDefinition={onUpdateAssetDefinition}
                     onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
                     onSetAssetDefaultShader={onSetAssetDefaultShader}

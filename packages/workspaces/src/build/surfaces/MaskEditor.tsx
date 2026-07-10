@@ -8,12 +8,11 @@
 import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import type {
   Mask,
-  MaskTextureDefinition,
   PaintedMaskTargetAddress,
-  SurfaceContext,
-  TextureDefinition
+  SurfaceContext
 } from "@sugarmagic/domain";
 import { LabeledSlider, MaskPreview } from "@sugarmagic/ui";
+import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
 import { sampleMask } from "./maskSampling";
 
 const MASK_KIND_OPTIONS = [
@@ -35,12 +34,6 @@ export interface MaskEditorProps {
   allowedContext: SurfaceContext;
   allowPainted?: boolean;
   paintTarget?: PaintedMaskTargetAddress | null;
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onChange: (next: Mask) => void;
 }
 
@@ -50,14 +43,16 @@ export function MaskEditor({
   allowedContext,
   allowPainted = false,
   paintTarget = null,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
   onChange
 }: MaskEditorProps) {
+  const {
+    textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget
+  } = useSurfaceAuthoring();
   const options =
     allowedContext === "landscape-only"
       ? MASK_KIND_OPTIONS

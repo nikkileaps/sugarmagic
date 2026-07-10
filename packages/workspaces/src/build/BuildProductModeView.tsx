@@ -465,15 +465,6 @@ export function useBuildProductModeView(
 
   const surfacesView = useSurfaceLibraryView({
     surfaceDefinitions,
-    materialDefinitions,
-    textureDefinitions,
-    maskTextureDefinitions,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition,
-    shaderDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
     selectedSurfaceDefinitionId,
     onSelectSurfaceDefinition,
     onCreateSurfaceDefinition,
