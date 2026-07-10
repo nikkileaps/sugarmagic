@@ -500,7 +500,7 @@ export function resolveAppearanceLayer(
         : expectedTargetKind === "mesh-effect"
           ? "effect"
           : "surface";
-    return validateResolvedSurfaceTarget(
+    const materialResult = validateResolvedSurfaceTarget(
       resolveMaterialEffectiveShaderBinding(
         contentLibrary,
         surface.materialDefinitionId,
@@ -512,6 +512,36 @@ export function resolveAppearanceLayer(
       ),
       expectedTargetKind
     );
+    // Per-layer tiling multiplies the material's own tiling (which
+    // is library-wide — retiling it would retile every use of the
+    // material). Applied at the binding's "tiling" parameter, the
+    // same name the PBR auto-bind convention uses.
+    const layerTiling = surface.tiling;
+    if (
+      !materialResult.ok ||
+      !layerTiling ||
+      (layerTiling[0] === 1 && layerTiling[1] === 1)
+    ) {
+      return materialResult;
+    }
+    const baseTilingValue = materialResult.binding.parameterValues["tiling"];
+    const baseTiling: [number, number] =
+      Array.isArray(baseTilingValue) && baseTilingValue.length === 2
+        ? [Number(baseTilingValue[0]) || 1, Number(baseTilingValue[1]) || 1]
+        : [1, 1];
+    return {
+      ok: true,
+      binding: {
+        ...materialResult.binding,
+        parameterValues: {
+          ...materialResult.binding.parameterValues,
+          tiling: [
+            baseTiling[0] * layerTiling[0],
+            baseTiling[1] * layerTiling[1]
+          ]
+        }
+      }
+    };
   }
 
   if (!getShaderDefinition(contentLibrary, surface.shaderDefinitionId)) {

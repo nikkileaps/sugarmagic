@@ -35,6 +35,13 @@ export type AppearanceContent =
        * there — there is no per-use parameter-override mechanism.
        */
       shaderOverrideDefinitionId?: string | null;
+      /**
+       * Per-use UV repeat, multiplied onto the material's own
+       * tiling. `null`/`undefined` = [1, 1] (material tiling
+       * as-is). The material's tiling is library-wide; this is how
+       * one layer retiles it without forking the material.
+       */
+      tiling?: [number, number] | null;
     }
   | {
       kind: "shader";

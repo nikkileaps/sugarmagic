@@ -182,6 +182,7 @@ export function AppearanceLayerEditor({
             );
             const shaderOverride =
               materialContent.shaderOverrideDefinitionId ?? null;
+            const layerTiling = materialContent.tiling ?? [1, 1];
             const materialOwnShaderId = boundMaterial?.shaderDefinitionId ?? null;
             const materialOwnShaderName = materialOwnShaderId
               ? surfaceShaders.find(
@@ -204,8 +205,55 @@ export function AppearanceLayerEditor({
                       onChange({
                         ...layer,
                         content: createMaterialAppearanceContent(next, {
-                          shaderOverrideDefinitionId: shaderOverride
+                          shaderOverrideDefinitionId: shaderOverride,
+                          tiling: materialContent.tiling ?? null
                         })
+                      });
+                    }
+                  }}
+                />
+                <NumberInput
+                  size="xs"
+                  label="Tile X"
+                  min={0.01}
+                  value={layerTiling[0]}
+                  onChange={(next) => {
+                    if (typeof next === "number" && Number.isFinite(next) && next > 0) {
+                      onChange({
+                        ...layer,
+                        content: createMaterialAppearanceContent(
+                          materialContent.materialDefinitionId,
+                          {
+                            shaderOverrideDefinitionId: shaderOverride,
+                            tiling:
+                              next === 1 && layerTiling[1] === 1
+                                ? null
+                                : [next, layerTiling[1]]
+                          }
+                        )
+                      });
+                    }
+                  }}
+                />
+                <NumberInput
+                  size="xs"
+                  label="Tile Y"
+                  min={0.01}
+                  value={layerTiling[1]}
+                  onChange={(next) => {
+                    if (typeof next === "number" && Number.isFinite(next) && next > 0) {
+                      onChange({
+                        ...layer,
+                        content: createMaterialAppearanceContent(
+                          materialContent.materialDefinitionId,
+                          {
+                            shaderOverrideDefinitionId: shaderOverride,
+                            tiling:
+                              layerTiling[0] === 1 && next === 1
+                                ? null
+                                : [layerTiling[0], next]
+                          }
+                        )
                       });
                     }
                   }}
@@ -234,7 +282,8 @@ export function AppearanceLayerEditor({
                       content: createMaterialAppearanceContent(
                         materialContent.materialDefinitionId,
                         {
-                          shaderOverrideDefinitionId: nextOverride
+                          shaderOverrideDefinitionId: nextOverride,
+                          tiling: materialContent.tiling ?? null
                         }
                       )
                     });

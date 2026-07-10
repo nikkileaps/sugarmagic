@@ -60,7 +60,14 @@ export function cloneLayer(layer: Layer): Layer {
                 parameterValues: { ...layer.content.parameterValues },
                 textureBindings: { ...layer.content.textureBindings }
               }
-            : { ...layer.content }
+            : layer.content.kind === "material"
+              ? {
+                  ...layer.content,
+                  tiling: layer.content.tiling
+                    ? ([...layer.content.tiling] as [number, number])
+                    : layer.content.tiling ?? null
+                }
+              : { ...layer.content }
     };
   }
   if (layer.kind === "emission") {
