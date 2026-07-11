@@ -62,6 +62,12 @@ export interface ShaderIRParameter {
    * value is a linear-space multiplier/math term used verbatim.
    */
   colorSpace?: ShaderParameter["colorSpace"];
+  /**
+   * Carried through so the render layer can materialize inheriting
+   * params dynamically (e.g. sample the landscape ground-color map
+   * per instance) instead of the resolver-seeded literal.
+   */
+  inheritSource?: ShaderParameter["inheritSource"];
 }
 
 export interface ShaderIRTextureSlot {

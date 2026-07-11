@@ -15,7 +15,7 @@
  */
 
 import * as THREE from "three";
-import { MeshStandardNodeMaterial } from "three/webgpu";
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import { float, max, normalMap, positionWorld, texture, vec2, vec3 } from "three/tsl";
 import type {
   ContentLibrarySnapshot,
@@ -37,6 +37,8 @@ import type {
   ShaderSurfaceNodeSet
 } from "../ShaderRuntime";
 import { buildLandscapeScatterForSurface } from "./scatter";
+
+const GROUND_COLOR_MAP_RESOLUTION = 512;
 
 type TslNode = ReturnType<typeof vec3>;
 type TslFloat = ReturnType<typeof float>;
@@ -99,6 +101,35 @@ export class RuntimeLandscapeMesh {
   private lastAppliedLandscape: RegionLandscapeState | null = null;
   private lastAppliedContentLibrary: ContentLibrarySnapshot | null = null;
   /**
+   * Ground-color map: the landscape's UNLIT albedo (splat-blended
+   * channel colors/textures, no lighting, no shadows) baked top-down
+   * into a small render target. Scatter shaders with
+   * inheritSource:"baseLayerColor" sample it at each instance's
+   * world XZ so every blade takes the floor color underneath it --
+   * the Lemoine "no albedo, just the base color of the floor"
+   * technique. The target is created eagerly so the texture OBJECT
+   * is stable for material caching; bakes fill it in the render
+   * pre-pass whenever splat paint or channel bindings change.
+   */
+  private readonly groundColorTarget: THREE.RenderTarget;
+  /**
+   * The texture scatter shaders actually sample. The bake renders
+   * into groundColorTarget, then the pixels are read back and
+   * republished through this plain DataTexture. Sampling the render
+   * target texture directly is NOT viable: three's WebGPU backend
+   * resolves render-target v-orientation inconsistently across the
+   * per-bin scatter pipelines (some bins sampled the map v-flipped,
+   * 2026-07-11), while a regular texture upload has one deterministic
+   * orientation everywhere.
+   */
+  private readonly groundColorTexture: THREE.DataTexture;
+  private groundReadbackInFlight = false;
+  private groundBakeMaterial: MeshBasicNodeMaterial | null = null;
+  private groundBakeDirty = true;
+  private groundBakeScene: THREE.Scene | null = null;
+  private groundBakeMesh: THREE.Mesh | null = null;
+  private groundBakeCamera: THREE.OrthographicCamera | null = null;
+  /**
    * A reusable carrier material handed to ShaderRuntime.evaluate-
    * MeshSurfaceBinding as the `carrierMaterial` argument. The runtime
    * needs a material with a `.map` field for the legacy fallback path
@@ -147,6 +178,113 @@ export class RuntimeLandscapeMesh {
     this.scatterRoot.name = "region-landscape-scatter-root";
     this.root.add(this.mesh);
     this.root.add(this.scatterRoot);
+
+    this.groundColorTarget = new THREE.RenderTarget(
+      GROUND_COLOR_MAP_RESOLUTION,
+      GROUND_COLOR_MAP_RESOLUTION
+    );
+    this.groundColorTarget.texture.name = "landscape-ground-color-bake";
+    this.groundColorTexture = new THREE.DataTexture(
+      new Uint8Array(
+        GROUND_COLOR_MAP_RESOLUTION * GROUND_COLOR_MAP_RESOLUTION * 4
+      ),
+      GROUND_COLOR_MAP_RESOLUTION,
+      GROUND_COLOR_MAP_RESOLUTION,
+      THREE.RGBAFormat
+    );
+    this.groundColorTexture.name = "landscape-ground-color-map";
+    this.groundColorTexture.minFilter = THREE.LinearFilter;
+    this.groundColorTexture.magFilter = THREE.LinearFilter;
+    this.groundColorTexture.wrapS = THREE.ClampToEdgeWrapping;
+    this.groundColorTexture.wrapT = THREE.ClampToEdgeWrapping;
+    // Piggyback on the scatter pre-pass hook: RenderView traverses the
+    // scene calling these before the render pipeline runs, which is
+    // exactly when the bake must happen (a render-target switch
+    // mid-pass is not allowed). Parents traverse before children, so
+    // the bake lands before this landscape's scatter dispatches.
+    this.root.userData.sugarmagicScatterPrepare = (renderer: unknown) => {
+      this.prepareGroundColorMap(renderer as WebGPURenderer);
+    };
+  }
+
+  /**
+   * Stable handle for scatter materials to sample. Content updates on
+   * every bake; the texture object identity never changes.
+   */
+  getGroundColorMap(): { texture: THREE.Texture; size: number } {
+    return { texture: this.groundColorTexture, size: this.size };
+  }
+
+  private prepareGroundColorMap(renderer: WebGPURenderer): void {
+    if (!this.groundBakeDirty || !this.groundBakeMaterial) {
+      return;
+    }
+    if (!this.groundBakeMesh || !this.groundBakeScene || !this.groundBakeCamera) {
+      this.groundBakeMesh = new THREE.Mesh(this.geometry, this.groundBakeMaterial);
+      this.groundBakeScene = new THREE.Scene();
+      this.groundBakeScene.add(this.groundBakeMesh);
+      const half = this.size / 2;
+      // Top-down ortho with up=(0,0,-1) makes screen-right = +x; the
+      // top/bottom flip makes the target's v axis track +z, so texel
+      // (u, v) lines up exactly with the material's worldUv
+      // convention (worldXz / size + 0.5) and scatter can sample with
+      // the same math.
+      this.groundBakeCamera = new THREE.OrthographicCamera(
+        -half,
+        half,
+        -half,
+        half,
+        0.1,
+        20
+      );
+      this.groundBakeCamera.position.set(0, 10, 0);
+      this.groundBakeCamera.up.set(0, 0, -1);
+      this.groundBakeCamera.lookAt(0, 0, 0);
+    }
+    if (this.groundReadbackInFlight) {
+      // A readback is still resolving; keep the dirty flag so the
+      // next frame re-bakes with the freshest content.
+      return;
+    }
+    this.groundBakeMesh.material = this.groundBakeMaterial;
+    const previousTarget = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.groundColorTarget);
+    renderer.render(this.groundBakeScene, this.groundBakeCamera);
+    renderer.setRenderTarget(previousTarget);
+    this.groundBakeDirty = false;
+    this.groundReadbackInFlight = true;
+    renderer
+      .readRenderTargetPixelsAsync(
+        this.groundColorTarget,
+        0,
+        0,
+        GROUND_COLOR_MAP_RESOLUTION,
+        GROUND_COLOR_MAP_RESOLUTION
+      )
+      .then((pixels) => {
+        this.groundReadbackInFlight = false;
+        const source = pixels as unknown as Uint8Array;
+        const data = this.groundColorTexture.image.data as Uint8Array;
+        // Row-flip during the copy: the WebGPU readback returns rows
+        // top-first while DataTexture uploads expect v=0 first. Without
+        // this every ground-inheriting blade sampled the map mirrored
+        // in v (verified in the gradient harness, 2026-07-11).
+        const rowBytes = GROUND_COLOR_MAP_RESOLUTION * 4;
+        for (let row = 0; row < GROUND_COLOR_MAP_RESOLUTION; row += 1) {
+          const sourceOffset = row * rowBytes;
+          const targetOffset =
+            (GROUND_COLOR_MAP_RESOLUTION - 1 - row) * rowBytes;
+          data.set(
+            source.subarray(sourceOffset, sourceOffset + rowBytes),
+            targetOffset
+          );
+        }
+        this.groundColorTexture.needsUpdate = true;
+      })
+      .catch(() => {
+        this.groundReadbackInFlight = false;
+        this.groundBakeDirty = true;
+      });
   }
 
   getResolution(): number {
@@ -157,6 +295,15 @@ export class RuntimeLandscapeMesh {
     landscape: RegionLandscapeState,
     contentLibrary: ContentLibrarySnapshot | null
   ): void {
+    // Re-bake the ground-color map on every apply. The material
+    // rebuild below is signature-gated, and texture LOADS re-enter
+    // here without changing the signature -- the live material picks
+    // the loaded texture up automatically, but the bake is a snapshot
+    // and would otherwise keep showing the pre-load placeholder
+    // forever (blades sampled base-channel brown while the terrain
+    // rendered the loaded green; found 2026-07-11). One 512px draw,
+    // only on real apply events, not per-frame.
+    this.groundBakeDirty = true;
     this.mesh.visible = landscape.enabled;
 
     // Skip the rebuild chain entirely when applyLandscapeState is
@@ -229,6 +376,10 @@ export class RuntimeLandscapeMesh {
   }
 
   dispose(): void {
+    this.groundColorTarget.dispose();
+    this.groundColorTexture.dispose();
+    this.groundBakeMaterial?.dispose();
+    this.groundBakeScene?.clear();
     this.disposeScatterBuilds();
     this.disposeRetiredMaterials();
     this.geometry.dispose();
@@ -269,6 +420,7 @@ export class RuntimeLandscapeMesh {
   }
 
   private rebuildSplatTextures(): void {
+    this.groundBakeDirty = true;
     const buffers = this.splatmap.getBuffers();
     while (this.splatTextures.length < buffers.length) {
       const texture = new THREE.DataTexture(
@@ -341,6 +493,7 @@ export class RuntimeLandscapeMesh {
           contentLibrary,
           assetResolver: this.assetResolver,
           shaderRuntime: this.getShaderRuntime(),
+          groundColorMap: this.getGroundColorMap(),
           logger: this.logger
         }
       );
@@ -610,6 +763,27 @@ export class RuntimeLandscapeMesh {
     // an already-compiled material doesn't reliably cause the
     // compiled shader / bind groups to pick up the new nodes, even
     // with `material.needsUpdate = true`.
+    // Refresh the ground-color bake material alongside the real one.
+    // Uses the raw albedo blend (no effect-node overrides, no
+    // lighting) -- MeshBasicNodeMaterial renders colorNode unlit,
+    // which is exactly what "base color of the floor" means.
+    const previousBakeMaterial = this.groundBakeMaterial;
+    this.groundBakeMaterial = new MeshBasicNodeMaterial();
+    // The bake camera's projection is intentionally inverted (top and
+    // bottom swapped so the target's v axis tracks +z). An inverted
+    // projection flips triangle winding, and a front-side-only
+    // material gets entirely backface-culled -- the bake renders
+    // nothing and every ground-inheriting blade samples black (found
+    // 2026-07-11 via the harness debug quad). DoubleSide makes the
+    // bake winding-proof.
+    this.groundBakeMaterial.side = THREE.DoubleSide;
+    this.groundBakeMaterial.colorNode = blendedColor as never;
+    // Raw albedo: no tone mapping in the bake, the grass shader wants
+    // the same linear values the landscape material starts from.
+    this.groundBakeMaterial.toneMapped = false;
+    previousBakeMaterial?.dispose();
+    this.groundBakeDirty = true;
+
     const nextMaterial = new MeshStandardNodeMaterial({
       roughness: 0.95,
       metalness: 0

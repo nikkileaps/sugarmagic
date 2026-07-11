@@ -36,6 +36,7 @@ import {
   vertexColor,
   texture as textureNode,
   uniform,
+  vertexStage,
   viewportLinearDepth
 } from "three/tsl";
 import type {
@@ -76,6 +77,7 @@ export type ShaderApplyTarget =
       material: THREE.Material;
       geometry: THREE.BufferGeometry;
       materialTextures?: Record<string, THREE.Texture | null>;
+      groundColorMap?: { texture: unknown; size: number } | null;
     }
   | {
       targetKind: "billboard-surface";
@@ -171,6 +173,12 @@ interface FinalizationContext {
    * compiled literal. See uniformForParameter() below.
    */
   parameterUniforms: Map<string, UniformNodeLike>;
+  /**
+   * Per-instance ground-color sampling for inheritSource params. Only
+   * set when the apply target had a groundColorMap AND the geometry
+   * carries `instanceOrigin` (see MeshShaderSetApplyTarget).
+   */
+  groundColorMap?: { texture: unknown; size: number } | null;
   sunDirectionUniform: UniformNodeLike;
   /**
    * Per-binding cache of effect nodes whose wrapped Three helpers take JS
@@ -200,6 +208,15 @@ interface MeshShaderSetApplyTarget {
   material: THREE.Material;
   geometry: THREE.BufferGeometry;
   fileSources?: Record<string, string>;
+  /**
+   * Landscape ground-color map (unlit albedo aligned to worldUv =
+   * worldXz / size + 0.5). When set AND the geometry carries the
+   * per-instance `instanceOrigin` attribute, parameters declaring
+   * inheritSource "baseLayerColor" materialize as a sample of this
+   * map at the instance's world XZ -- the floor color under each
+   * blade -- instead of the resolver-seeded flat literal.
+   */
+  groundColorMap?: { texture: unknown; size: number } | null;
 }
 
 function stableStringify(value: unknown): string {
@@ -820,6 +837,41 @@ function uniformForParameter(
   // poke. That price is fine — graphics shaders are short and Three's
   // compile is fast.
   let currentValue = context.parameterValues[parameterId] ?? 0;
+  // Ground-inheriting params sample the landscape's baked albedo at
+  // the instance's own world XZ when a ground-color map is available:
+  // every blade takes the floor color underneath it (splat blends,
+  // dirt boundaries and all) instead of one flat color per surface.
+  // The bake stores LINEAR values, so no sRGB conversion applies.
+  if (dataType === "color" && context.groundColorMap) {
+    const declaration = context.ir.parameters.find(
+      (parameter) => parameter.parameterId === parameterId
+    );
+    if (declaration?.inheritSource === "baseLayerColor") {
+      const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
+        div: (value: unknown) => { add: (value: unknown) => unknown };
+      };
+      // Two constraints, each learned the hard way (2026-07-11):
+      // 1. The instanced attribute must be read in the VERTEX stage
+      //    (vertexStage) -- fragment-stage reads bind garbage.
+      // 2. positionWorld is NOT an alternative -- it lacks the
+      //    per-instance transform on this NodeMaterial path (every
+      //    blade sampled the map center).
+      // The map itself must be a plain DataTexture, never a render-
+      // target texture: RT sampling orientation is inconsistent
+      // across the per-bin scatter pipelines (see the readback in
+      // RuntimeLandscapeMesh).
+      const originUv = vertexStage(
+        origin
+          .div(float(context.groundColorMap.size))
+          .add(vec2(0.5, 0.5)) as never
+      );
+      const sample = textureNode(
+        context.groundColorMap.texture as THREE.Texture,
+        originUv as never
+      ) as unknown as { rgb: unknown };
+      return sample.rgb;
+    }
+  }
   // Color params carry AUTHORED (sRGB) values -- swatch hexes, ground
   // colors, inherited base-layer colors. The pipeline is linear, so
   // convert here; without it every authored color rendered paler and
@@ -896,6 +948,13 @@ function evaluateIRToSurfaceNodes(
       : ir.targetKind === "post-process"
         ? ir.postProcessOps
         : [...ir.vertexOps, ...ir.fragmentOps];
+  // Ground sampling reads the per-instance `instanceOrigin` attribute.
+  // Both scatter paths attach it (the GPU pipeline after material
+  // creation, so don't gate on its presence here -- only on the map,
+  // which only scatter builds pass). Non-scatter targets never carry
+  // a groundColorMap and keep the literal fallback.
+  const groundColorMap =
+    ("groundColorMap" in target ? target.groundColorMap : null) ?? null;
   const context: FinalizationContext = {
     ir,
     target,
@@ -905,6 +964,7 @@ function evaluateIRToSurfaceNodes(
     builtinSceneColorNode: null,
     builtinSceneDepthNode: null,
     parameterUniforms,
+    groundColorMap,
     sunDirectionUniform,
     effectNodes,
     uvOverride,
@@ -1055,6 +1115,18 @@ function applyNodeSetToMaterial(
         (material as { depthWrite: boolean }).depthWrite = true;
       }
     }
+    // Shadow-pass cutout. Three's shadow depth pass derives its alpha
+    // from material.map / colorNode.a / castShadowNode / maskShadowNode
+    // (Renderer._getShadowNodes) and NEVER from opacityNode, so an
+    // alpha-tested silhouette card would cast its full-quad shadow (a
+    // rectangle) without this. maskShadowNode discards shadow fragments
+    // below the same threshold the main pass clips at.
+    const shadowThreshold = blendMode === "blend" ? 0.01 : 0.5;
+    (material as { maskShadowNode?: unknown }).maskShadowNode = (
+      nodeSet.alphaNode as unknown as {
+        greaterThan: (value: unknown) => unknown;
+      }
+    ).greaterThan(float(shadowThreshold));
   }
   if (nodeSet.emissiveNode && material instanceof MeshStandardNodeMaterial) {
     material.emissiveNode = nodeSet.emissiveNode as never;
@@ -1654,7 +1726,10 @@ export class ShaderRuntime {
       stableStringify(effect?.textureBindings ?? {}),
       textureBindingSignature(effectTextures),
       this.compileProfile,
-      materialCarrierSignature(target.material, target.geometry)
+      materialCarrierSignature(target.material, target.geometry),
+      target.groundColorMap
+        ? `ground:${(target.groundColorMap.texture as THREE.Texture).uuid}`
+        : "no-ground"
     ].join("|");
 
     return this.acquireMaterial(
@@ -1675,7 +1750,8 @@ export class ShaderRuntime {
             targetKind: "mesh-surface",
             material,
             geometry: target.geometry,
-            materialTextures: surfaceTextures
+            materialTextures: surfaceTextures,
+            groundColorMap: target.groundColorMap ?? null
           },
           this.getOrCreateParameterUniformCache(surfaceBinding.shaderDefinitionId),
           this.sunDirectionUniform,

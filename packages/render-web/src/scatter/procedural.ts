@@ -80,8 +80,9 @@ function createCardGrassGeometry(
   const heights: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  const detailBudget = clampVertexBudget(options.vertexBudget);
-  const cardCount = Math.max(1, Math.round(tuft.cardsPerClump * detailBudget));
+  // Cards ignore the LOD vertex budget: a clump is 2-4 quads, so a
+  // "reduced" variant saves nothing.
+  const cardCount = Math.max(1, Math.round(tuft.cardsPerClump));
   const baseColor = rgbTuple(definition.baseColor);
   const tipColor = rgbTuple(definition.tipColor);
   const upNormal = new THREE.Vector3(0, 1, 0);

@@ -507,6 +507,7 @@ function compileNodePort(
     node.nodeType === "color.luminance" ||
     node.nodeType === "color.add" ||
     node.nodeType === "color.multiply" ||
+    node.nodeType === "color.adjust" ||
     node.nodeType === "color.divide" ||
     node.nodeType === "color.pow" ||
     node.nodeType === "math.dot" ||
@@ -665,7 +666,8 @@ export function compileShaderGraph(
       displayName: parameter.displayName,
       dataType: parameter.dataType,
       defaultValue: parameter.defaultValue,
-      colorSpace: parameter.colorSpace
+      colorSpace: parameter.colorSpace,
+      inheritSource: parameter.inheritSource
     })),
     textureSlots: [],
     diagnostics: context.diagnostics

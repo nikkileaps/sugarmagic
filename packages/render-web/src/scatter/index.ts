@@ -7,6 +7,7 @@
  */
 
 import * as THREE from "three";
+import { transformNormalToView, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import type {
   ContentLibrarySnapshot,
@@ -54,6 +55,14 @@ export interface SurfaceScatterBuildOptions {
   contentLibrary: ContentLibrarySnapshot;
   assetResolver: AuthoredAssetResolver;
   shaderRuntime?: ShaderRuntime | null;
+  /**
+   * Landscape ground-color map (unlit albedo, worldUv-aligned). When
+   * present, shader params declaring inheritSource "baseLayerColor"
+   * sample the floor color under each instance instead of using the
+   * resolver-seeded flat color. Absent in the Surface Library preview
+   * (no landscape there) -- the literal fallback keeps working.
+   */
+  groundColorMap?: { texture: unknown; size: number } | null;
   enableGpuCompute?: boolean;
   logger?: {
     warn: (message: string, payload?: Record<string, unknown>) => void;
@@ -239,9 +248,27 @@ function createScatterMaterialForGeometry(
       },
       {
         material,
-        geometry
+        geometry,
+        groundColorMap: options.groundColorMap ?? null
       }
     );
+  }
+
+  if (
+    (layer.contentKind === "grass" || layer.contentKind === "flowers") &&
+    "normalNode" in appliedMaterial &&
+    !(appliedMaterial as { normalNode?: unknown }).normalNode
+  ) {
+    // Up-normal doctrine, fragment side. The geometry already bakes
+    // straight-up normals, but Three's double-sided default path
+    // multiplies the shading normal by faceDirection -- every
+    // back-facing card gets a DOWN normal and shades dark, which
+    // striped the grass mass with dark blades (~0.8x the ground
+    // color, measured 2026-07-11). An explicit normalNode returns
+    // from setupNormal verbatim, skipping the flip: both card faces
+    // shade exactly like the flat ground they grow from.
+    (appliedMaterial as { normalNode?: unknown }).normalNode =
+      transformNormalToView(vec3(0, 1, 0));
   }
 
   return {
@@ -710,7 +737,9 @@ export function buildSurfaceScatterLayer(
     acceptedSamples.length
   );
   instancedMesh.name = `${root.name}:instances`;
-  instancedMesh.castShadow = true;
+  // Same shadow policy as the GPU path: only rocks cast (see
+  // ScatterComputeLayerParams.castShadows).
+  instancedMesh.castShadow = layer.contentKind === "rocks";
   instancedMesh.receiveShadow = true;
 
   // Per-instance world-XZ origin. Each blade (instance) carries its own

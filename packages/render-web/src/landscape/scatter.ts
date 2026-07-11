@@ -78,6 +78,7 @@ export function buildLandscapeScatterForSurface(
     contentLibrary: ContentLibrarySnapshot;
     assetResolver: AuthoredAssetResolver;
     shaderRuntime?: ShaderRuntime | null;
+    groundColorMap?: { texture: unknown; size: number } | null;
     logger?: {
       warn: (message: string, payload?: Record<string, unknown>) => void;
     };
