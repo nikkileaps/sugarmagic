@@ -696,6 +696,22 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: []
   },
   {
+    // HSV-style grade of one color: scale saturation and value by
+    // fixed factors. The card-foliage tip derivation ("same color as
+    // the floor, less saturated, slightly less value") is the first
+    // user; general enough for any relative color tweak.
+    nodeType: "color.adjust",
+    displayName: "Color Adjust",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("color", "Color", "color")],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: [
+      setting("saturation", "Saturation Scale", "float", 1),
+      setting("value", "Value Scale", "float", 1)
+    ]
+  },
+  {
     nodeType: "color.divide",
     displayName: "Color Divide",
     category: "color",
@@ -3316,22 +3332,30 @@ export function createBuiltInCardFoliageShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Card Foliage",
     targetKind: "mesh-surface",
-    revision: 1,
+    revision: 2,
     nodes: [
       { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
       { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootTint" } },
-      { nodeId: "tip-lift", nodeType: "input.parameter", position: { x: 256, y: 104 }, settings: { parameterId: "tipLift" } },
-      { nodeId: "tip-relative", nodeType: "color.multiply", position: { x: 448, y: 64 }, settings: {} },
+      {
+        // Tip = the floor color itself, desaturated and pulled
+        // slightly down in value (art direction 2026-07-11): the
+        // blade STARTS as the ground at the root and drifts toward a
+        // softer version of the same hue at the tip. No independent
+        // tip color, no brighten multiplier.
+        nodeId: "tip-adjust",
+        nodeType: "color.adjust",
+        position: { x: 448, y: 64 },
+        settings: { saturation: 0.75, value: 0.94 }
+      },
       { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
       createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 260 }),
       { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
     ],
     edges: [
-      createShaderEdge("cf-e-root-tiprel", "root-tint", "value", "tip-relative", "a"),
-      createShaderEdge("cf-e-lift-tiprel", "tip-lift", "value", "tip-relative", "b"),
+      createShaderEdge("cf-e-root-tipadj", "root-tint", "value", "tip-adjust", "color"),
       createShaderEdge("cf-e-root-tint", "root-tint", "value", "height-tint", "a"),
-      createShaderEdge("cf-e-tiprel-tint", "tip-relative", "value", "height-tint", "b"),
+      createShaderEdge("cf-e-tipadj-tint", "tip-adjust", "value", "height-tint", "b"),
       createShaderEdge("cf-e-height-tint", "tree-height", "value", "height-tint", "alpha"),
       createShaderEdge("cf-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
       createShaderEdge("cf-e-tint-output", "height-tint", "value", "output", "color"),
@@ -3346,11 +3370,65 @@ export function createBuiltInCardFoliageShaderGraph(
         inheritSource: "baseLayerColor"
       },
       {
-        parameterId: "tipLift",
-        displayName: "Tip Lift",
+        parameterId: "silhouette",
+        displayName: "Silhouette",
+        dataType: "texture2d",
+        defaultValue: null,
+        textureRole: "color"
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "card-foliage"
+    }
+  };
+}
+
+/**
+ * Card Foliage 2: the sanity-check baseline (2026-07-11). One flat
+ * fill color, silhouette alpha, nothing else -- no inheritance, no
+ * tip math, no lighting tricks in the graph. If a card doesn't render
+ * as this exact green, the problem is not the color math.
+ */
+export function createBuiltInCardFoliage2ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:card-foliage-2`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Card Foliage 2",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "fill", nodeType: "input.parameter", position: { x: 256, y: 64 }, settings: { parameterId: "fill" } },
+      createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 260 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("cf2-e-fill-output", "fill", "value", "output", "color"),
+      createShaderEdge("cf2-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
+      createShaderEdge("cf2-e-alpha-output", "silhouette", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        // Ingredient two (2026-07-11): the fill inherits the ground.
+        // In the game view this materializes as a per-blade sample of
+        // the baked landscape color under the instance; the swatch
+        // value is only the fallback where no bake exists (surface
+        // preview, for now).
+        parameterId: "fill",
+        displayName: "Fill",
         dataType: "color",
-        colorSpace: "hdr",
-        defaultValue: [1.25, 1.3, 1.05]
+        defaultValue: [0x6f / 255, 0x8f / 255, 0x52 / 255],
+        inheritSource: "baseLayerColor"
       },
       {
         parameterId: "silhouette",
@@ -3362,7 +3440,7 @@ export function createBuiltInCardFoliageShaderGraph(
     ],
     metadata: {
       builtIn: true,
-      builtInKey: "card-foliage"
+      builtInKey: "card-foliage-2"
     }
   };
 }

@@ -15,6 +15,7 @@ import {
   float,
   length,
   luminance,
+  saturation,
   max,
   min,
   mix,
@@ -91,6 +92,18 @@ export function materializeMathOp({
       };
     case "color.add":
       return { handled: true, value: (input("a") as { add: (other: unknown) => unknown }).add(input("b")) };
+    case "color.adjust": {
+      const saturationScale = Number(op.settings?.saturation ?? 1);
+      const valueScale = Number(op.settings?.value ?? 1);
+      return {
+        handled: true,
+        value: (
+          saturation(input("color") as never, saturationScale) as unknown as {
+            mul: (other: unknown) => unknown;
+          }
+        ).mul(valueScale)
+      };
+    }
     case "color.multiply":
       return { handled: true, value: (input("a") as { mul: (other: unknown) => unknown }).mul(input("b")) };
     case "color.divide":

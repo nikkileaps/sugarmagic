@@ -96,7 +96,15 @@ export function createBuiltInGrassTypeDefinitions(
         height: 0.55,
         splayDegrees: 14
       },
-      colorJitter: 0.06
+      colorJitter: 0.06,
+      // No far bin: a card clump is 3 quads, so reduced-detail LOD
+      // saves nothing. Near geometry carries to the billboard
+      // distance instead.
+      lodMeshes: {
+        near: { kind: "procedural-default" as const },
+        far: null,
+        billboard: { kind: "billboard" as const }
+      }
     },
   ];
 }
