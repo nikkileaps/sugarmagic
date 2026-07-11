@@ -34,7 +34,8 @@ describe("content-library built-ins", () => {
       "Wild Tall",
       "Autumn Golden",
       "Dry Sparse",
-      "Painterly Tuft"
+      "Painterly Tuft",
+      "Painterly Card"
     ]);
     expect(flowerTypeDefinitions.map((definition) => definition.displayName)).toEqual([
       "White Meadow",
@@ -96,7 +97,7 @@ describe("content-library built-ins", () => {
     );
 
     expect(normalized.materialDefinitions).toHaveLength(6);
-    expect(normalized.grassTypeDefinitions).toHaveLength(5);
+    expect(normalized.grassTypeDefinitions).toHaveLength(6);
     expect(normalized.flowerTypeDefinitions).toHaveLength(3);
     expect(normalized.rockTypeDefinitions).toHaveLength(1);
     expect(normalized.surfaceDefinitions).toHaveLength(6);

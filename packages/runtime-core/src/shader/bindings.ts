@@ -671,18 +671,44 @@ function resolveScatterWind(
 function resolveScatterAppearance(
   shaderDefinitionId: string | null,
   materialDefinitionId: string | null,
-  contentLibrary: ContentLibrarySnapshot
+  contentLibrary: ContentLibrarySnapshot,
+  surfaceBaseColor: [number, number, number] | null = null,
+  layerTextureBindings: Record<string, string> | undefined = undefined
 ): ResolveAppearanceLayerResult | null {
   const migratedShaderDefinitionId =
     shaderDefinitionId ??
     migrateLegacyScatterMaterialToShader(materialDefinitionId, contentLibrary);
   if (migratedShaderDefinitionId) {
+    // Seed inherited ground color BEFORE resolution: resolveSlotBinding
+    // bakes every declared parameter default into parameterValues, so
+    // the post-hoc applyBaseLayerColorInheritance sees them as
+    // "author-set" and always skips -- inheritance was silently dead
+    // (found 2026-07-10). Scatter layers have no author parameter
+    // channel today, so seeding here cannot shadow explicit intent.
+    const inheritedValues: Record<string, unknown> = {};
+    if (surfaceBaseColor) {
+      const shader = getShaderDefinition(
+        contentLibrary,
+        migratedShaderDefinitionId
+      );
+      for (const parameter of shader?.parameters ?? []) {
+        if (
+          parameter.inheritSource === "baseLayerColor" &&
+          parameter.dataType === "color"
+        ) {
+          inheritedValues[parameter.parameterId] = surfaceBaseColor;
+        }
+      }
+    }
     return resolveAppearanceLayer(
       {
         kind: "shader",
         shaderDefinitionId: migratedShaderDefinitionId,
-        parameterValues: {},
-        textureBindings: {}
+        parameterValues: inheritedValues,
+        // Layer-authored texture bindings (e.g. the painted card
+        // silhouette on a Card Foliage shader) flow through exactly
+        // like a shader-content appearance layer's bindings.
+        textureBindings: layerTextureBindings ?? {}
       },
       contentLibrary,
       "mesh-surface"
@@ -981,7 +1007,9 @@ export function resolveSurfaceBinding(
     const resolvedAppearance = resolveScatterAppearance(
       effectiveLayer.shaderDefinitionId ?? null,
       effectiveLayer.materialDefinitionId,
-      contentLibrary
+      contentLibrary,
+      surfaceBaseColor,
+      effectiveLayer.textureBindings
     );
     if (resolvedAppearance && !resolvedAppearance.ok) {
       return resolvedSurfaceDiagnostic(

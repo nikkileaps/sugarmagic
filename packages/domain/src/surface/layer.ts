@@ -98,6 +98,14 @@ export interface ScatterLayer extends LayerCommon {
    * unchanged (backwards-compatible with older authored surfaces).
    */
   deform?: ShaderReference | null;
+  /**
+   * Texture bindings for the layer's shader's texture2d parameters
+   * (parameterId -> TextureDefinition id). This is how a painted
+   * silhouette PNG reaches a card-foliage shader -- the general
+   * "artist-authored image drives the shader" channel for scatter,
+   * parallel to shader-content appearance layers.
+   */
+  textureBindings?: Record<string, string>;
 }
 
 export interface EmissionLayer extends LayerCommon {
@@ -184,6 +192,7 @@ export function createScatterLayer(
     shaderDefinitionId?: string | null;
     materialDefinitionId?: string | null;
     deform?: ShaderReference | null;
+    textureBindings?: Record<string, string>;
   } = {}
 ): ScatterLayer {
   const common = createLayerCommon(overrides);
@@ -194,7 +203,8 @@ export function createScatterLayer(
     content,
     shaderDefinitionId: overrides.shaderDefinitionId ?? null,
     materialDefinitionId: overrides.materialDefinitionId ?? null,
-    deform: overrides.deform ?? null
+    deform: overrides.deform ?? null,
+    textureBindings: overrides.textureBindings ?? {}
   };
 }
 

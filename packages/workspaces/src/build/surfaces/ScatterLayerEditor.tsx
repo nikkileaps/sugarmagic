@@ -20,6 +20,7 @@ export interface ScatterLayerEditorProps {
 export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps) {
   const {
     shaderDefinitions,
+    textureDefinitions,
     grassTypeDefinitions,
     flowerTypeDefinitions,
     rockTypeDefinitions
@@ -34,6 +35,18 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
   );
   const deformValue =
     layer.deform?.kind === "shader" ? layer.deform.shaderDefinitionId : null;
+  // The selected shader's texture2d parameters each get a picker from
+  // the texture library (e.g. the Silhouette input on Card Foliage).
+  // Bindings live on the layer, not the shader, so one shader serves
+  // many painted silhouettes without forking.
+  const selectedShader =
+    scatterShaders.find(
+      (shader) => shader.shaderDefinitionId === layer.shaderDefinitionId
+    ) ?? null;
+  const textureParameters =
+    selectedShader?.parameters.filter(
+      (parameter) => parameter.dataType === "texture2d"
+    ) ?? [];
   return (
     <Stack gap="sm">
       <KindTabs
@@ -188,6 +201,31 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
           ) : null
         }
       />
+      {textureParameters.map((parameter) => (
+        <Select
+          key={parameter.parameterId}
+          size="xs"
+          label={parameter.displayName}
+          clearable
+          searchable
+          comboboxProps={{ withinPortal: false }}
+          placeholder="Pick a texture"
+          data={textureDefinitions.map((definition) => ({
+            value: definition.definitionId,
+            label: definition.displayName
+          }))}
+          value={layer.textureBindings?.[parameter.parameterId] ?? null}
+          onChange={(next) => {
+            const bindings = { ...(layer.textureBindings ?? {}) };
+            if (next) {
+              bindings[parameter.parameterId] = next;
+            } else {
+              delete bindings[parameter.parameterId];
+            }
+            onChange({ ...layer, textureBindings: bindings });
+          }}
+        />
+      ))}
       <Select
         size="xs"
         label="Wind"

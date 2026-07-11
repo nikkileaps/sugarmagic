@@ -47,6 +47,7 @@ import {
   createDefaultGrassSurface4ShaderGraph,
   createDefaultGrassSurface6ShaderGraph,
   createDefaultPainterlyGrassShaderGraph,
+  createBuiltInCardFoliageShaderGraph,
   createDefaultMeadowGrassShaderGraph,
   createDefaultSunlitLawnShaderGraph,
   createDefaultAutumnFieldGrassShaderGraph,
@@ -2132,6 +2133,10 @@ function createBuiltInShaderDefinitions(
     createDefaultPainterlyGrassShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:painterly-grass`,
       displayName: "Painterly Grass"
+    }),
+    createBuiltInCardFoliageShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:card-foliage`,
+      displayName: "Card Foliage"
     }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,

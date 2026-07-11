@@ -68,6 +68,7 @@ export interface SurfaceScatterBuildResult {
 export * from "./compute-pipeline";
 export * from "./instance-buffer";
 export * from "./lod";
+export * from "./procedural";
 
 interface ScatterLodDefinitionLike {
   lodMeshes: {

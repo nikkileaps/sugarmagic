@@ -53,13 +53,50 @@ export function createBuiltInGrassTypeDefinitions(
       baseColor: 0x7e6337,
       wind
     }),
-    createDefaultGrassTypeDefinition(projectId, {
-      definitionId: `${projectId}:grass-type:painterly-tuft`,
-      displayName: "Painterly Tuft",
-      density: 70,
-      tipColor: 0xd6e793,
-      baseColor: 0x628640,
-      wind: wind
-    }),
+    {
+      // Painterly Tuft is the Lemoine-style carpet: near-neutral
+      // vertex colors (the ground-inheriting shader owns the hue),
+      // wide soft short blades, high density. Retuned 2026-07-10.
+      ...createDefaultGrassTypeDefinition(projectId, {
+        definitionId: `${projectId}:grass-type:painterly-tuft`,
+        displayName: "Painterly Tuft",
+        density: 110,
+        tipColor: 0xf5f7e8,
+        baseColor: 0xdfe4d0,
+        wind: wind
+      }),
+      tuft: {
+        kind: "procedural" as const,
+        bladeProfile: "tapered" as const,
+        bladesPerTuft: 5,
+        heightRange: [0.24, 0.5] as [number, number],
+        widthBase: 0.3,
+        bendAmount: 0.75
+      },
+      colorJitter: 0.08
+    },
+    {
+      // Painterly Card is the painted-silhouette primitive: static
+      // splayed card quads whose blade shapes come from a silhouette
+      // texture (bind one to the layer shader's Silhouette input --
+      // pair with the Card Foliage shader). Vertex colors stay
+      // near-white; hue is inherited from the ground.
+      ...createDefaultGrassTypeDefinition(projectId, {
+        definitionId: `${projectId}:grass-type:painterly-card`,
+        displayName: "Painterly Card",
+        density: 26,
+        tipColor: 0xffffff,
+        baseColor: 0xf2f4ea,
+        wind
+      }),
+      tuft: {
+        kind: "card" as const,
+        cardsPerClump: 3,
+        width: 0.9,
+        height: 0.55,
+        splayDegrees: 14
+      },
+      colorJitter: 0.06
+    },
   ];
 }
