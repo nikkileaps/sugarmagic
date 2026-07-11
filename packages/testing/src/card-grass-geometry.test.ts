@@ -95,11 +95,11 @@ describe("card grass geometry", () => {
     expect(Math.min(delta, Math.PI - delta)).toBeGreaterThan(0.5);
   });
 
-  it("reduces card count under a reduced vertex budget but never below one", () => {
+  it("ignores the LOD vertex budget (a clump is already minimal geometry)", () => {
     const type = createCardGrassType({ cardsPerClump: 4 });
     const reduced = createProceduralGrassGeometry(type, { vertexBudget: 0.5 });
-    expect(reduced.getAttribute("position").count).toBe(2 * 4);
+    expect(reduced.getAttribute("position").count).toBe(4 * 4);
     const floor = createProceduralGrassGeometry(type, { vertexBudget: 0.1 });
-    expect(floor.getAttribute("position").count).toBe(4);
+    expect(floor.getAttribute("position").count).toBe(4 * 4);
   });
 });
