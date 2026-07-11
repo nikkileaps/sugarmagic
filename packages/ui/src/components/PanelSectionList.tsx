@@ -14,7 +14,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   ActionIcon,
+  Badge,
   Box,
+  Group,
   Menu,
   Stack,
   Text,
@@ -37,6 +39,8 @@ export interface PanelSectionListProps<TItem> {
   getId: (item: TItem) => string;
   getLabel: (item: TItem) => string;
   getDescription?: (item: TItem) => ReactNode;
+  /** Optional small chip rendered next to the label (e.g. "Built-in"). */
+  getBadge?: (item: TItem) => string | null;
   onSelect: (id: string, item: TItem) => void;
   searchPlaceholder: string;
   emptyText?: ReactNode;
@@ -54,6 +58,7 @@ export function PanelSectionList<TItem>({
   getId,
   getLabel,
   getDescription,
+  getBadge,
   onSelect,
   searchPlaceholder,
   emptyText,
@@ -135,9 +140,16 @@ export function PanelSectionList<TItem>({
                   }
                 }}
               >
-                <Text size="xs" fw={isSelected ? 600 : 500} truncate>
-                  {getLabel(item)}
-                </Text>
+                <Group gap={6} wrap="nowrap" style={{ minWidth: 0, maxWidth: "100%" }}>
+                  <Text size="xs" fw={isSelected ? 600 : 500} truncate>
+                    {getLabel(item)}
+                  </Text>
+                  {getBadge?.(item) ? (
+                    <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>
+                      {getBadge(item)}
+                    </Badge>
+                  ) : null}
+                </Group>
                 {description ? (
                   <Text size="xs" c="var(--sm-color-overlay0)" truncate>
                     {description}

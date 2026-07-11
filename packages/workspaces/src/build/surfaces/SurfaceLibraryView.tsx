@@ -5,7 +5,7 @@
  */
 
 import { type ReactNode } from "react";
-import { Button, Stack, Text } from "@mantine/core";
+import { Badge, Group, Stack, Text } from "@mantine/core";
 import type { SurfaceDefinition } from "@sugarmagic/domain";
 import { DraftTextInput, Inspector, PanelSectionList } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../../workspace-view";
@@ -59,7 +59,10 @@ export function useSurfaceLibraryView(
         getDescription={(definition) =>
           `${definition.surface.layers.length} layer${
             definition.surface.layers.length === 1 ? "" : "s"
-          }${definition.metadata?.builtIn ? " · built-in" : ""}`
+          }`
+        }
+        getBadge={(definition) =>
+          definition.metadata?.builtIn ? "Built-in" : null
         }
         onSelect={(definitionId) => onSelectSurfaceDefinition(definitionId)}
         searchPlaceholder="Search surfaces..."
@@ -99,27 +102,27 @@ export function useSurfaceLibraryView(
       <Inspector selectionLabel={selectedDefinition?.displayName ?? null}>
         {selectedDefinition ? (
           selectedDefinition.metadata?.builtIn ? (
-            // Built-ins are factory-owned: edits would be silently
-            // replaced on the next project load. Procreate-brush
-            // model — duplicate into a user-owned copy to edit.
+            // Built-ins are factory-owned (edits would be replaced on
+            // the next load): show the stack read-only. Duplicate via
+            // the list's context menu to get an editable copy.
             <Stack gap="sm">
-              <Text size="xs" c="var(--sm-color-overlay0)">
-                Built-in preset. Duplicate it to make an editable copy —
-                edits to the original do not persist.
-              </Text>
-              <Button
-                size="xs"
-                onClick={() => {
-                  const newId = onDuplicateSurfaceDefinition(
-                    selectedDefinition.definitionId
-                  );
-                  if (newId) {
-                    onSelectSurfaceDefinition(newId);
-                  }
-                }}
-              >
-                Duplicate to Edit
-              </Button>
+              <Group gap={8} wrap="nowrap">
+                <Text size="sm" fw={600} truncate>
+                  {selectedDefinition.displayName}
+                </Text>
+                <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>
+                  Built-in
+                </Badge>
+              </Group>
+              <div style={{ opacity: 0.55, pointerEvents: "none" }} aria-disabled>
+                <LayerStackView
+                  surface={selectedDefinition.surface}
+                  allowedContext="landscape-only"
+                  allowPainted={false}
+                  paintOwner={null}
+                  onChangeSurface={() => {}}
+                />
+              </div>
             </Stack>
           ) : (
             <Stack gap="sm">
