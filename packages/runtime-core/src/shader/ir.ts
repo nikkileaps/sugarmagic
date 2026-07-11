@@ -56,6 +56,12 @@ export interface ShaderIRParameter {
   displayName: string;
   dataType: ShaderParameter["dataType"];
   defaultValue: ShaderParameter["defaultValue"];
+  /**
+   * Color params default to AUTHORED (sRGB) semantics and are
+   * converted to linear at materialization. "hdr" opts out: the
+   * value is a linear-space multiplier/math term used verbatim.
+   */
+  colorSpace?: ShaderParameter["colorSpace"];
 }
 
 export interface ShaderIRTextureSlot {

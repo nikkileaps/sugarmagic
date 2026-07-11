@@ -153,7 +153,7 @@ export function createBuiltInSurfaceDefinitions(
       definitionKind: "surface",
       displayName: "Painterly Grass",
       surface: createSurface([
-        createAppearanceLayer(createColorAppearanceContent(0x6d8644), {
+        createAppearanceLayer(createColorAppearanceContent(0x5f9440), {
           displayName: "Ground",
           blendMode: "base"
         }),

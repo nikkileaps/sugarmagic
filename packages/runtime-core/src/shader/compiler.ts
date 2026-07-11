@@ -664,7 +664,8 @@ export function compileShaderGraph(
       parameterId: parameter.parameterId,
       displayName: parameter.displayName,
       dataType: parameter.dataType,
-      defaultValue: parameter.defaultValue
+      defaultValue: parameter.defaultValue,
+      colorSpace: parameter.colorSpace
     })),
     textureSlots: [],
     diagnostics: context.diagnostics

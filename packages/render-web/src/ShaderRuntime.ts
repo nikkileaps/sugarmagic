@@ -819,7 +819,26 @@ function uniformForParameter(
   // works; it just costs a recompile per change instead of a uniform
   // poke. That price is fine — graphics shaders are short and Three's
   // compile is fast.
-  const currentValue = context.parameterValues[parameterId] ?? 0;
+  let currentValue = context.parameterValues[parameterId] ?? 0;
+  // Color params carry AUTHORED (sRGB) values -- swatch hexes, ground
+  // colors, inherited base-layer colors. The pipeline is linear, so
+  // convert here; without it every authored color rendered paler and
+  // desaturated (found 2026-07-10). Params declared colorSpace "hdr"
+  // are linear multipliers/math terms and pass through verbatim.
+  if (dataType === "color" && Array.isArray(currentValue)) {
+    const declaration = context.ir.parameters.find(
+      (parameter) => parameter.parameterId === parameterId
+    );
+    if (declaration?.colorSpace !== "hdr") {
+      const converted = new THREE.Color().setRGB(
+        Number(currentValue[0]) || 0,
+        Number(currentValue[1]) || 0,
+        Number(currentValue[2]) || 0,
+        THREE.SRGBColorSpace
+      );
+      currentValue = [converted.r, converted.g, converted.b];
+    }
+  }
   const node = literalNode(dataType, currentValue);
   // Keep cache write for compat with anything that reads it; nothing
   // in the new path reads it back.
