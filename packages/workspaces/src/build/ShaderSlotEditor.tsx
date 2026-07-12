@@ -6,7 +6,7 @@
  * the lower-level UI package.
  */
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import type {
   ShaderGraphDocument,
@@ -61,6 +61,9 @@ export interface ShaderSlotEditorProps {
   ) => void;
   onClearParameterOverride?: (slot: ShaderSlotKind, parameterId: string) => void;
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
+  /** Optional chip rendered beside the slot label (Plan 068.3:
+   *  provenance in the Layout inspector). */
+  renderSlotBadge?: (slot: ShaderSlotKind) => ReactNode;
 }
 
 export function ShaderSlotEditor({
@@ -72,7 +75,8 @@ export function ShaderSlotEditor({
   onChangeBinding,
   onChangeParameterOverride,
   onClearParameterOverride,
-  onEditShaderGraph
+  onEditShaderGraph,
+  renderSlotBadge
 }: ShaderSlotEditorProps) {
   const definitionsById = useMemo(
     () =>
@@ -93,9 +97,12 @@ export function ShaderSlotEditor({
         return (
           <Stack key={slot} gap="xs">
             <Group justify="space-between" align="center">
-              <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
-                {SLOT_LABELS[slot]}
-              </Text>
+              <Group gap={6} align="center">
+                <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+                  {SLOT_LABELS[slot]}
+                </Text>
+                {renderSlotBadge?.(slot)}
+              </Group>
               {currentShader && onEditShaderGraph ? (
                 <Button
                   size="compact-xs"

@@ -127,6 +127,56 @@ export interface SceneAssetAppearanceOverride {
   shaderOverrides?: ShaderBindingOverride[];
 }
 
+/** Which tier supplied a merged appearance entry (Plan 068.3
+ *  provenance chips read this; "definition" is the absence of any
+ *  entry). */
+export type AppearanceOverrideTier = "base" | "scene";
+
+export interface MergedAppearanceOverrides {
+  shaderOverrides: (ShaderBindingOverride & { tier: AppearanceOverrideTier })[];
+  surfaceSlotOverrides: (PlacedAssetSurfaceSlotOverride & {
+    tier: AppearanceOverrideTier;
+  })[];
+}
+
+/**
+ * THE merge of the two override tiers (Plan 068.2/068.3): scene
+ * entries win per material-slot name and per shader-slot kind;
+ * instance ("base") entries survive for everything the Scene doesn't
+ * touch. Runtime resolution AND the inspector's provenance display
+ * both consume this -- precedence order lives here and nowhere else.
+ */
+export function mergeAppearanceOverrideTiers(
+  instanceFields: Pick<
+    PlacedAssetInstance,
+    "shaderOverrides" | "surfaceSlotOverrides"
+  >,
+  sceneOverride: SceneAssetAppearanceOverride | null | undefined
+): MergedAppearanceOverrides {
+  const shaderBySlot = new Map(
+    (instanceFields.shaderOverrides ?? []).map((entry) => [
+      entry.slot,
+      { ...entry, tier: "base" as AppearanceOverrideTier }
+    ])
+  );
+  const surfaceBySlotName = new Map(
+    (instanceFields.surfaceSlotOverrides ?? []).map((entry) => [
+      entry.slotName,
+      { ...entry, tier: "base" as AppearanceOverrideTier }
+    ])
+  );
+  for (const entry of sceneOverride?.shaderOverrides ?? []) {
+    shaderBySlot.set(entry.slot, { ...entry, tier: "scene" });
+  }
+  for (const entry of sceneOverride?.surfaceSlotOverrides ?? []) {
+    surfaceBySlotName.set(entry.slotName, { ...entry, tier: "scene" });
+  }
+  return {
+    shaderOverrides: [...shaderBySlot.values()],
+    surfaceSlotOverrides: [...surfaceBySlotName.values()]
+  };
+}
+
 export interface RegionSceneOverlay {
   itemPresences: RegionItemPresence[];
   npcPresences: RegionNPCPresence[];

@@ -67,6 +67,7 @@ import type { ScatterBrushSettings, ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
+import { AssetAppearanceSection } from "./AssetAppearanceSection";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
@@ -1621,6 +1622,22 @@ export function useLayoutWorkspaceView(
                 )
               }
             />
+            {region ? (
+              <AssetAppearanceSection
+                instance={selectedAsset}
+                assetDefinition={
+                  assetDefinitions.find(
+                    (definition) =>
+                      definition.definitionId === selectedAsset.assetDefinitionId
+                  ) ?? null
+                }
+                regionId={region.identity.id}
+                activeScene={activeScene}
+                isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
+                onCommand={onCommand}
+                onEditAssetDefinition={onEditAssetDefinition}
+              />
+            ) : null}
             <Stack gap="xs">
               <Text
                 size="xs"

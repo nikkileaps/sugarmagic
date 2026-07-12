@@ -6,7 +6,7 @@
  * not create or delete slots inside Sugarmagic.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Box, ColorSwatch, Group, Popover, Stack, Text } from "@mantine/core";
 import type { AssetSurfaceSlot, SurfaceBinding } from "@sugarmagic/domain";
 import { SurfaceBindingEditor, useSurfaceAuthoring } from "./surfaces";
@@ -24,12 +24,16 @@ export interface MaterialSlotBindingsEditorProps {
     slotIndex: number,
     surface: SurfaceBinding<"universal"> | null
   ) => void;
+  /** Optional chip rendered after the slot name (Plan 068.3: the
+   *  Layout inspector shows per-slot provenance). */
+  renderSlotBadge?: (slotName: string) => ReactNode;
 }
 
 export function MaterialSlotBindingsEditor({
   bindings,
   assetDefinitionId,
-  onChangeBinding
+  onChangeBinding,
+  renderSlotBadge
 }: MaterialSlotBindingsEditorProps) {
   const { surfaceDefinitions } = useSurfaceAuthoring();
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null);
@@ -55,7 +59,10 @@ export function MaterialSlotBindingsEditor({
               onChange={(opened) => setOpenSlotKey(opened ? slotKey : null)}
               position="bottom-start"
               shadow="md"
-              withinPortal={false}
+              // Portal: this editor renders inside overflow
+              // containers now (Layout inspector aside) -- a
+              // non-portal dropdown clips (the options-bar lesson).
+              withinPortal
             >
               <Popover.Target>
                 {/* Whole row is the popover trigger — matches the
@@ -87,6 +94,7 @@ export function MaterialSlotBindingsEditor({
                     <Text size="sm" fw={500} truncate style={{ flex: 1, minWidth: 0 }}>
                       {binding.slotName}
                     </Text>
+                    {renderSlotBadge?.(binding.slotName)}
                   </Group>
                 </Box>
               </Popover.Target>

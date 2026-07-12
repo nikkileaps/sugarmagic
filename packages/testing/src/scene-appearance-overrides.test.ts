@@ -28,6 +28,7 @@ import {
   createSurface,
   executeCommand
 } from "@sugarmagic/domain";
+import { mergeAppearanceOverrideTiers } from "@sugarmagic/domain";
 import {
   resolveEffectiveAssetMaterialSlotBindings,
   resolveSceneObjects
@@ -201,6 +202,35 @@ describe("scene-scoped appearance commands", () => {
       { slot: "deform", shaderDefinitionId: "shader:wind" }
     ]);
     expect(result.region.placedAssets[0]!.shaderOverrides).toBeUndefined();
+  });
+});
+
+describe("mergeAppearanceOverrideTiers", () => {
+  it("tags each merged entry with the tier that supplied it (scene wins per slot)", () => {
+    const instance = makeInstance({
+      surfaceSlotOverrides: [
+        { slotName: "roof", surface: colorSurface(0x111111) },
+        { slotName: "walls", surface: colorSurface(0x222222) }
+      ],
+      shaderOverrides: [{ slot: "deform", shaderDefinitionId: "shader:sway" }]
+    });
+    const merged = mergeAppearanceOverrideTiers(instance, {
+      surfaceSlotOverrides: [
+        { slotName: "roof", surface: colorSurface(0x999999) }
+      ],
+      shaderOverrides: [{ slot: "effect", shaderDefinitionId: "shader:glow" }]
+    });
+
+    const roof = merged.surfaceSlotOverrides.find((e) => e.slotName === "roof")!;
+    const walls = merged.surfaceSlotOverrides.find((e) => e.slotName === "walls")!;
+    expect(roof.tier).toBe("scene");
+    expect(walls.tier).toBe("base");
+    expect(
+      merged.shaderOverrides.find((e) => e.slot === "deform")!.tier
+    ).toBe("base");
+    expect(
+      merged.shaderOverrides.find((e) => e.slot === "effect")!.tier
+    ).toBe("scene");
   });
 });
 

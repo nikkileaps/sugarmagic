@@ -33,6 +33,7 @@ import type {
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
+  mergeAppearanceOverrideTiers,
   createAppearanceLayer,
   createColorAppearanceContent,
   createInlineSurfaceBinding,
@@ -1332,45 +1333,6 @@ export function resolveAssetDefinitionShaderBindings(
     shaderOverrides: [],
     shaderParameterOverrides: []
   });
-}
-
-/**
- * Merge the Scene restyle tier over the instance tier (Plan 068.2):
- * scene entries win per material-slot name and per shader-slot kind;
- * instance entries survive for everything the Scene doesn't touch.
- * The definition tier stays below both inside
- * resolveBindingSetForOwner -- precedence is decided HERE and
- * nowhere else.
- */
-function mergeAppearanceOverrideTiers(
-  asset: PlacedAssetInstance,
-  sceneOverride: SceneAssetAppearanceOverride | null | undefined
-): {
-  shaderOverrides: { shaderDefinitionId: string; slot: ShaderSlotKind }[];
-  surfaceSlotOverrides: PlacedAssetSurfaceSlotOverride[];
-} {
-  if (!sceneOverride) {
-    return {
-      shaderOverrides: asset.shaderOverrides ?? [],
-      surfaceSlotOverrides: asset.surfaceSlotOverrides ?? []
-    };
-  }
-  const shaderBySlot = new Map(
-    (asset.shaderOverrides ?? []).map((entry) => [entry.slot, entry])
-  );
-  for (const entry of sceneOverride.shaderOverrides ?? []) {
-    shaderBySlot.set(entry.slot, entry);
-  }
-  const surfaceBySlotName = new Map(
-    (asset.surfaceSlotOverrides ?? []).map((entry) => [entry.slotName, entry])
-  );
-  for (const entry of sceneOverride.surfaceSlotOverrides ?? []) {
-    surfaceBySlotName.set(entry.slotName, entry);
-  }
-  return {
-    shaderOverrides: [...shaderBySlot.values()],
-    surfaceSlotOverrides: [...surfaceBySlotName.values()]
-  };
 }
 
 export function resolveEffectiveAssetShaderBindings(
