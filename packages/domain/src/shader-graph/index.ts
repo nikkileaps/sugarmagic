@@ -3389,11 +3389,12 @@ export function createBuiltInCardFoliage2ShaderGraph(
 }
 
 /**
- * Card Foliage 4 -- DIAGNOSTIC BASELINE (2026-07-11): the dumbest
- * possible blade gradient. Two literal color swatches lerped along
- * blade height, silhouette alpha. NO ground inheritance, NO color
- * math, NO derivation. Exists to answer "can a blade render a plain
- * two-color gradient at all" independent of every other system.
+ * Card Foliage 4: root = the floor color under each blade, tip =
+ * that same color with only its hue rotated a static amount toward
+ * yellow (clamped to a band so extreme grounds can't swing it into
+ * orange or teal), blended along blade height. The tip follows the
+ * ground automatically -- repainting the terrain restyles the grass
+ * with no color re-picking.
  */
 export function createBuiltInCardFoliage4ShaderGraph(
   projectId: string,
@@ -3410,19 +3411,28 @@ export function createBuiltInCardFoliage4ShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Card Foliage 4",
     targetKind: "mesh-surface",
-    revision: 4,
+    revision: 5,
     nodes: [
       { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 200 }, settings: {} },
       { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
       { nodeId: "root-color", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootColor" } },
-      { nodeId: "tip-color", nodeType: "input.parameter", position: { x: 256, y: 104 }, settings: { parameterId: "tipColor" } },
+      {
+        // Green sits around 100-120deg on the hue wheel; yellow at
+        // 60deg. Negative shift = toward yellow. The clamp band keeps
+        // dirt-rooted blades from swinging into orange.
+        nodeId: "tip-hue",
+        nodeType: "color.hue-shift",
+        position: { x: 448, y: 64 },
+        settings: { shiftDegrees: -18, minDegrees: 50, maxDegrees: 150 }
+      },
       { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
       createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 280 }),
       { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
     ],
     edges: [
+      createShaderEdge("cf4-e-root-tiphue", "root-color", "value", "tip-hue", "color"),
       createShaderEdge("cf4-e-root-tint", "root-color", "value", "height-tint", "a"),
-      createShaderEdge("cf4-e-tip-tint", "tip-color", "value", "height-tint", "b"),
+      createShaderEdge("cf4-e-tiphue-tint", "tip-hue", "value", "height-tint", "b"),
       createShaderEdge("cf4-e-height-tint", "tree-height", "value", "height-tint", "alpha"),
       createShaderEdge("cf4-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
       createShaderEdge("cf4-e-tint-output", "height-tint", "value", "output", "color"),
@@ -3438,12 +3448,6 @@ export function createBuiltInCardFoliage4ShaderGraph(
         dataType: "color",
         defaultValue: [0x2e / 255, 0x6b / 255, 0x21 / 255],
         inheritSource: "baseLayerColor"
-      },
-      {
-        parameterId: "tipColor",
-        displayName: "Tip Color",
-        dataType: "color",
-        defaultValue: [0xd9 / 255, 0xc9 / 255, 0x4a / 255]
       },
       {
         parameterId: "silhouette",
