@@ -712,6 +712,24 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     ]
   },
   {
+    // Rotate ONLY the hue of a color by a fixed offset, with the
+    // resulting hue clamped to [min, max]. Saturation and value pass
+    // through untouched. First user: card-foliage tips shifting a
+    // static amount toward yellow without ever leaving the
+    // green-yellow band.
+    nodeType: "color.hue-shift",
+    displayName: "Hue Shift",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("color", "Color", "color")],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: [
+      setting("shiftDegrees", "Shift (degrees)", "float", 0),
+      setting("minDegrees", "Min Hue (degrees)", "float", 0),
+      setting("maxDegrees", "Max Hue (degrees)", "float", 360)
+    ]
+  },
+  {
     nodeType: "color.divide",
     displayName: "Color Divide",
     category: "color",
@@ -3310,81 +3328,6 @@ export function createDefaultAutumnFieldGrassShaderGraph(
  * meadow/lawn/field looks.
  */
 /**
- * Card Foliage: the painted-silhouette card shader (Lemoine
- * doctrine, 2026-07-10 research). Color is ENTIRELY the inherited
- * ground color with a relative tip lift -- "no albedo, just the
- * base color of the floor." Alpha is the artist's painted clump
- * silhouette texture (white on transparent; only alpha is read).
- * Pair with a grass type whose tuft kind is "card".
- */
-export function createBuiltInCardFoliageShaderGraph(
-  projectId: string,
-  options: {
-    shaderDefinitionId?: string;
-    displayName?: string;
-  } = {}
-): ShaderGraphDocument {
-  const shaderDefinitionId =
-    options.shaderDefinitionId ?? `${projectId}:shader:card-foliage`;
-
-  return {
-    shaderDefinitionId,
-    definitionKind: "shader",
-    displayName: options.displayName ?? "Card Foliage",
-    targetKind: "mesh-surface",
-    revision: 2,
-    nodes: [
-      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
-      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
-      { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootTint" } },
-      {
-        // Tip = the floor color itself, desaturated and pulled
-        // slightly down in value (art direction 2026-07-11): the
-        // blade STARTS as the ground at the root and drifts toward a
-        // softer version of the same hue at the tip. No independent
-        // tip color, no brighten multiplier.
-        nodeId: "tip-adjust",
-        nodeType: "color.adjust",
-        position: { x: 448, y: 64 },
-        settings: { saturation: 0.75, value: 0.94 }
-      },
-      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
-      createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 260 }),
-      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
-    ],
-    edges: [
-      createShaderEdge("cf-e-root-tipadj", "root-tint", "value", "tip-adjust", "color"),
-      createShaderEdge("cf-e-root-tint", "root-tint", "value", "height-tint", "a"),
-      createShaderEdge("cf-e-tipadj-tint", "tip-adjust", "value", "height-tint", "b"),
-      createShaderEdge("cf-e-height-tint", "tree-height", "value", "height-tint", "alpha"),
-      createShaderEdge("cf-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
-      createShaderEdge("cf-e-tint-output", "height-tint", "value", "output", "color"),
-      createShaderEdge("cf-e-alpha-output", "silhouette", "alpha", "output", "alpha")
-    ],
-    parameters: [
-      {
-        parameterId: "rootTint",
-        displayName: "Root Tint",
-        dataType: "color",
-        defaultValue: [0.36, 0.55, 0.25],
-        inheritSource: "baseLayerColor"
-      },
-      {
-        parameterId: "silhouette",
-        displayName: "Silhouette",
-        dataType: "texture2d",
-        defaultValue: null,
-        textureRole: "color"
-      }
-    ],
-    metadata: {
-      builtIn: true,
-      builtInKey: "card-foliage"
-    }
-  };
-}
-
-/**
  * Card Foliage 2: the sanity-check baseline (2026-07-11). One flat
  * fill color, silhouette alpha, nothing else -- no inheritance, no
  * tip math, no lighting tricks in the graph. If a card doesn't render
@@ -3441,6 +3384,78 @@ export function createBuiltInCardFoliage2ShaderGraph(
     metadata: {
       builtIn: true,
       builtInKey: "card-foliage-2"
+    }
+  };
+}
+
+/**
+ * Card Foliage 4 -- DIAGNOSTIC BASELINE (2026-07-11): the dumbest
+ * possible blade gradient. Two literal color swatches lerped along
+ * blade height, silhouette alpha. NO ground inheritance, NO color
+ * math, NO derivation. Exists to answer "can a blade render a plain
+ * two-color gradient at all" independent of every other system.
+ */
+export function createBuiltInCardFoliage4ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:card-foliage-4`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Card Foliage 4",
+    targetKind: "mesh-surface",
+    revision: 4,
+    nodes: [
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 200 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+      { nodeId: "root-color", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootColor" } },
+      { nodeId: "tip-color", nodeType: "input.parameter", position: { x: 256, y: 104 }, settings: { parameterId: "tipColor" } },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
+      createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 280 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("cf4-e-root-tint", "root-color", "value", "height-tint", "a"),
+      createShaderEdge("cf4-e-tip-tint", "tip-color", "value", "height-tint", "b"),
+      createShaderEdge("cf4-e-height-tint", "tree-height", "value", "height-tint", "alpha"),
+      createShaderEdge("cf4-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
+      createShaderEdge("cf4-e-tint-output", "height-tint", "value", "output", "color"),
+      createShaderEdge("cf4-e-alpha-output", "silhouette", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        // Root = the floor color under the blade (same channel the
+        // flat-fill shader uses); the swatch value is only the
+        // fallback where no ground bake exists.
+        parameterId: "rootColor",
+        displayName: "Root Color",
+        dataType: "color",
+        defaultValue: [0x2e / 255, 0x6b / 255, 0x21 / 255],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "tipColor",
+        displayName: "Tip Color",
+        dataType: "color",
+        defaultValue: [0xd9 / 255, 0xc9 / 255, 0x4a / 255]
+      },
+      {
+        parameterId: "silhouette",
+        displayName: "Silhouette",
+        dataType: "texture2d",
+        defaultValue: null,
+        textureRole: "color"
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "card-foliage-4"
     }
   };
 }

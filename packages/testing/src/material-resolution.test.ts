@@ -241,7 +241,7 @@ describe("material resolution", () => {
           { kind: "grass", grassTypeId },
           {
             displayName: "Card Grass",
-            shaderDefinitionId: "wordlark:shader:card-foliage",
+            shaderDefinitionId: "wordlark:shader:card-foliage-2",
             textureBindings: { silhouette: "wordlark:texture:brick-base" }
           }
         )
@@ -261,15 +261,15 @@ describe("material resolution", () => {
       throw new Error("Expected resolved scatter layer.");
     }
     expect(scatterLayer.appearanceBinding?.shaderDefinitionId).toBe(
-      "wordlark:shader:card-foliage"
+      "wordlark:shader:card-foliage-2"
     );
     expect(scatterLayer.appearanceBinding?.textureBindings.silhouette).toBe(
       "wordlark:texture:brick-base"
     );
     // The base color inheritance seeded before resolution must still
-    // hold alongside the texture bindings (rootTint declares
+    // hold alongside the texture bindings (fill declares
     // inheritSource baseLayerColor).
-    expect(scatterLayer.appearanceBinding?.parameterValues.rootTint).toEqual([
+    expect(scatterLayer.appearanceBinding?.parameterValues.fill).toEqual([
       0x6f / 255,
       0x8f / 255,
       0x52 / 255
