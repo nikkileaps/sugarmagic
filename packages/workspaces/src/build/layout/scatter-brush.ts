@@ -281,6 +281,19 @@ export function createScatterBrushTool(
       lastStampPoint = null;
       commitStroke();
       return true;
+    },
+    onCancel() {
+      // Escape mid-stroke = "never mind": discard the in-flight
+      // stroke entirely (065.7). Without this the router clears its
+      // active controller, onPointerUp never fires, and the stranded
+      // placements silently leaked into the NEXT stroke's commit.
+      // Contrast detach(), which COMMITS -- tool deactivation should
+      // not eat landed work, but an explicit cancel should.
+      strokeActive = false;
+      lastStampPoint = null;
+      strokePlacements = [];
+      strokeEraseIds = new Set();
+      clearStrokePreview();
     }
   };
 
