@@ -28,6 +28,7 @@ import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
 import {
+  SCATTER_GROUND_LIFT,
   createScatterComputeLayerParams,
   createScatterComputePipeline
 } from "./compute-pipeline";
@@ -801,7 +802,7 @@ export function buildSurfaceScatterLayer(
               Math.max(0, grassDefinition!.heightJitter))
         : baseScale;
     instanceScale.set(baseScale, verticalScale, baseScale);
-    samplePosition.addScaledVector(sampleNormal, 0.01);
+    samplePosition.addScaledVector(sampleNormal, SCATTER_GROUND_LIFT);
     instanceMatrix.compose(samplePosition, composedRotation, instanceScale);
     instancedMesh.setMatrixAt(index, instanceMatrix);
 

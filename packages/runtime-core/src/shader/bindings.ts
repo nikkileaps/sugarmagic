@@ -681,10 +681,11 @@ function resolveScatterAppearance(
   if (migratedShaderDefinitionId) {
     // Seed inherited ground color BEFORE resolution: resolveSlotBinding
     // bakes every declared parameter default into parameterValues, so
-    // the post-hoc applyBaseLayerColorInheritance sees them as
-    // "author-set" and always skips -- inheritance was silently dead
+    // any post-hoc injection would see them as "author-set" and skip
+    // -- inheritance was silently dead until this moved pre-resolution
     // (found 2026-07-10). Scatter layers have no author parameter
     // channel today, so seeding here cannot shadow explicit intent.
+    // This is the SINGLE enforcer for baseLayerColor inheritance.
     const inheritedValues: Record<string, unknown> = {};
     if (surfaceBaseColor) {
       const shader = getShaderDefinition(
@@ -846,34 +847,6 @@ function materialTextureBindingValues(
   };
 }
 
-/**
- * Inject the containing Surface's base color into scatter-shader parameters
- * that opted in with `inheritSource: "baseLayerColor"`, but only if the
- * author hasn't already set that parameter explicitly in the material's
- * parameterValues. Explicit author intent always beats inheritance.
- */
-function applyBaseLayerColorInheritance(
-  binding: EffectiveShaderBinding,
-  baseColor: [number, number, number] | null,
-  contentLibrary: ContentLibrarySnapshot
-): EffectiveShaderBinding {
-  if (!baseColor) return binding;
-  const shader = getShaderDefinition(contentLibrary, binding.shaderDefinitionId);
-  if (!shader) return binding;
-  let nextParameterValues: Record<string, unknown> | null = null;
-  for (const parameter of shader.parameters) {
-    if (parameter.inheritSource !== "baseLayerColor") continue;
-    if (parameter.dataType !== "color") continue;
-    if (parameter.parameterId in binding.parameterValues) continue;
-    if (!nextParameterValues) {
-      nextParameterValues = { ...binding.parameterValues };
-    }
-    nextParameterValues[parameter.parameterId] = baseColor;
-  }
-  if (!nextParameterValues) return binding;
-  return { ...binding, parameterValues: nextParameterValues };
-}
-
 function surfaceStackFromBinding(
   binding: EffectiveShaderBinding
 ): ResolvedSurfaceStack<"universal"> {
@@ -1018,12 +991,12 @@ export function resolveSurfaceBinding(
         resolvedAppearance.diagnostic.shaderDefinitionId
       );
     }
+    // Base-color inheritance is seeded BEFORE resolution inside
+    // resolveScatterAppearance (the single enforcer); the old
+    // post-hoc injection pass always no-op'd after that change and
+    // was deleted (065.11).
     const scatterAppearanceBinding = resolvedAppearance?.ok
-      ? applyBaseLayerColorInheritance(
-          resolvedAppearance.binding,
-          surfaceBaseColor,
-          contentLibrary
-        )
+      ? resolvedAppearance.binding
       : null;
     resolvedLayers.push({
       kind: "scatter",

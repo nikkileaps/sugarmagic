@@ -71,7 +71,7 @@ const DEFAULT_SCATTER_MAX_DRAW_DISTANCE = 96;
  * hovers above flat ground at anything larger (the old 0.01 read as
  * "grass floating one centimeter in the air" up close).
  */
-const SCATTER_GROUND_LIFT = 0.002;
+export const SCATTER_GROUND_LIFT = 0.002;
 /**
  * Per-layer candidate ceiling for the GPU-compaction path. Above this
  * count the single-level partials scan can't cover the workgroup count
