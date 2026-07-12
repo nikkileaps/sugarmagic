@@ -25,10 +25,15 @@ import {
   planePointForRay,
   pointerRayFromCamera
 } from "./transform-math";
+import {
+  gizmoWorldScaleForCamera,
+  parseGizmoHandleName,
+  TRACKBALL_RADIUS_GIZMO_UNITS,
+  type DragAxis,
+  type TransformAxis
+} from "./gizmo-contract";
 
-export type TransformAxis = "x" | "y" | "z";
-/** Center handles manipulate all axes at once. */
-export type DragAxis = TransformAxis | "center";
+export type { DragAxis, TransformAxis } from "./gizmo-contract";
 
 export interface TransformValues {
   position: [number, number, number];
@@ -50,6 +55,9 @@ interface DragAnchor {
    */
   cameraPlaneNormal: THREE.Vector3 | null;
   cameraPlanePoint: THREE.Vector3 | null;
+  /** Center scale: the screen up-right diagonal in world space,
+   *  frozen at drag start (signed drag axis for uniform scale). */
+  screenDiagonal: THREE.Vector3 | null;
 }
 
 export interface TransformSession {
@@ -63,20 +71,22 @@ export interface TransformSession {
 
 export interface TransformControllerConfig {
   hitTestService: HitTestService;
-  camera: THREE.Camera;
+  /** Accessor, not a snapshot: the active camera can be swapped
+   *  (perspective <-> orthographic top) while the controller lives. */
+  getCamera: () => THREE.Camera;
   getActiveTool: () => TransformTool;
   onPreview: (instanceId: string, values: TransformValues) => void;
   onCommit: (instanceId: string, values: TransformValues) => void;
   onCancel: (instanceId: string, values: TransformValues) => void;
   onSelect: (instanceId: string | null) => void;
+  /** Hover affordances (no gesture active): the gizmo handle under
+   *  the cursor, or null to clear the brighten. */
+  onHoverHandle: (handleName: string | null) => void;
+  /** The selectable scene object under the cursor (outline cue),
+   *  or null to clear it. */
+  onHoverTarget: (object: THREE.Object3D | null) => void;
   getSelectedId: () => string | null;
   getTransform: (instanceId: string) => TransformValues | null;
-}
-
-function parseGizmoHit(name: string): { mode: TransformTool; axis: DragAxis } | null {
-  const match = name.match(/^gizmo-(move|rotate|scale)-(x|y|z|center)$/);
-  if (!match) return null;
-  return { mode: match[1] as TransformTool, axis: match[2] as DragAxis };
 }
 
 const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
@@ -86,14 +96,10 @@ const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
 };
 
 const MIN_SCALE = 0.01;
-/** Grab points closer to center than this can't drive a stable scale ratio. */
+/** Axis-scale grab points closer to the center than this can't drive
+ *  a stable ratio (the axis handles sit ~1.3 gizmo units out, so only
+ *  degenerate shaft grabs near the origin are affected). */
 const MIN_SCALE_ANCHOR = 0.05;
-/**
- * Free-rotate feel: dragging this fraction of the camera distance
- * across the trackball turns the object one radian. Matches the
- * on-screen gizmo size driven by updateForCamera (distance * 0.09).
- */
-const TRACKBALL_RADIUS_FACTOR = 0.11;
 
 export function createTransformController(
   config: TransformControllerConfig
@@ -106,23 +112,32 @@ export function createTransformController(
     axis: DragAxis,
     center: THREE.Vector3
   ): DragAnchor {
+    const camera = config.getCamera();
     const ray = pointerRayFromCamera(
       event.normalizedX,
       event.normalizedY,
-      config.camera
+      camera
     );
     if (axis === "center") {
       // All center handles drag on the camera-facing plane through
       // the object -- the grab point tracks the cursor exactly.
       const normal = new THREE.Vector3();
-      config.camera.getWorldDirection(normal);
+      camera.getWorldDirection(normal);
       const hit = planePointForRay(ray, center, normal);
+      const worldQuaternion = camera.getWorldQuaternion(
+        new THREE.Quaternion()
+      );
+      const screenDiagonal = new THREE.Vector3(1, 0, 0)
+        .applyQuaternion(worldQuaternion)
+        .add(new THREE.Vector3(0, 1, 0).applyQuaternion(worldQuaternion))
+        .normalize();
       return {
         center,
         axisParameter: null,
         planeVector: null,
         cameraPlaneNormal: normal,
-        cameraPlanePoint: hit
+        cameraPlanePoint: hit,
+        screenDiagonal
       };
     }
     if (mode === "rotate") {
@@ -132,7 +147,8 @@ export function createTransformController(
         axisParameter: null,
         planeVector: hit ? hit.sub(center) : null,
         cameraPlaneNormal: null,
-        cameraPlanePoint: null
+        cameraPlanePoint: null,
+        screenDiagonal: null
       };
     }
     return {
@@ -140,7 +156,8 @@ export function createTransformController(
       axisParameter: axisParameterForRay(ray, center, AXIS_VECTORS[axis]),
       planeVector: null,
       cameraPlaneNormal: null,
-      cameraPlanePoint: null
+      cameraPlanePoint: null,
+      screenDiagonal: null
     };
   }
 
@@ -168,12 +185,19 @@ export function createTransformController(
     }
 
     if (activeSession.mode === "scale") {
-      const anchorRadius = cameraPlanePoint.distanceTo(center);
-      if (anchorRadius < MIN_SCALE_ANCHOR) return;
-      const factor = Math.max(
-        MIN_SCALE,
-        hit.distanceTo(center) / anchorRadius
-      );
+      // SIGNED drag along the screen's up-right diagonal (the Unity
+      // center-cube mapping): up/right grows, down/left shrinks,
+      // unbounded both ways. Distance-from-center mappings both
+      // failed here: a grab-point ratio has a near-zero denominator
+      // (pixels of drag exploded the scale), and an unsigned radial
+      // delta bounces at the center -- the cursor crosses it after a
+      // few pixels of shrink and the object grows again. Exponential
+      // so one gizmo-width of drag doubles or halves symmetrically.
+      const { screenDiagonal } = activeSession.anchor;
+      if (!screenDiagonal) return;
+      const gizmoScale = gizmoWorldScaleForCamera(config.getCamera(), center);
+      const signedDrag = hit.clone().sub(cameraPlanePoint).dot(screenDiagonal);
+      const factor = Math.pow(2, signedDrag / gizmoScale);
       activeSession.current = {
         ...activeSession.current,
         scale: [
@@ -188,15 +212,19 @@ export function createTransformController(
     // Free rotate (trackball): drag direction in the camera plane
     // spins the object around the in-plane axis perpendicular to the
     // drag -- pull down to tip toward you, drag sideways to spin.
+    // Operand order matters: drag x forward (NOT forward x drag,
+    // which rolled the ball AWAY from the cursor -- caught by the
+    // 2026-07-12 branch review; direction is pinned by a test now).
     const drag = hit.clone().sub(cameraPlanePoint);
     const dragLength = drag.length();
     if (dragLength < 1e-6) return;
     const rotationAxis = new THREE.Vector3()
-      .crossVectors(cameraPlaneNormal, drag)
+      .crossVectors(drag, cameraPlaneNormal)
       .normalize();
-    const cameraDistance = ray.origin.distanceTo(center);
-    const angle =
-      dragLength / Math.max(0.1, cameraDistance * TRACKBALL_RADIUS_FACTOR);
+    const trackballRadius =
+      gizmoWorldScaleForCamera(config.getCamera(), center) *
+      TRACKBALL_RADIUS_GIZMO_UNITS;
+    const angle = dragLength / trackballRadius;
     const startQuaternion = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(...activeSession.start.rotation, "XYZ")
     );
@@ -226,7 +254,7 @@ export function createTransformController(
       );
 
       if (gizmoHit) {
-        const parsed = parseGizmoHit(gizmoHit.objectName);
+        const parsed = parseGizmoHandleName(gizmoHit.objectName);
         if (parsed) {
           const selectedId = config.getSelectedId();
           if (!selectedId) return false;
@@ -265,7 +293,7 @@ export function createTransformController(
       const ray = pointerRayFromCamera(
         event.normalizedX,
         event.normalizedY,
-        config.camera
+        config.getCamera()
       );
 
       if (session.axis === "center") {
@@ -325,9 +353,42 @@ export function createTransformController(
       config.onPreview(session.instanceId, session.current);
     },
 
+    onHoverMove(event: NormalizedPointerEvent): void {
+      // A held button without an accepted gesture (camera orbit)
+      // must not churn hover affordances mid-motion.
+      if (event.buttons !== 0) return;
+      const gizmoHit = config.hitTestService.testGizmo(
+        event.normalizedX,
+        event.normalizedY
+      );
+      config.onHoverHandle(gizmoHit?.objectName ?? null);
+      if (gizmoHit) {
+        config.onHoverTarget(null);
+        return;
+      }
+      const selectHit = config.hitTestService.testSelect(
+        event.normalizedX,
+        event.normalizedY
+      );
+      config.onHoverTarget(
+        selectHit && selectHit.objectName ? selectHit.object : null
+      );
+    },
+
+    onHoverLeave(): void {
+      config.onHoverHandle(null);
+      config.onHoverTarget(null);
+    },
+
     onPointerUp(): void {
       if (!session) return;
-      config.onCommit(session.instanceId, session.current);
+      // Frozen/degenerate drags end with current === start; committing
+      // those would push no-op transform commands into undo history.
+      const moved =
+        JSON.stringify(session.current) !== JSON.stringify(session.start);
+      if (moved) {
+        config.onCommit(session.instanceId, session.current);
+      }
       session = null;
     },
 

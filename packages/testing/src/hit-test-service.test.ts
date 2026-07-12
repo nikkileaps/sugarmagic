@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { createHitTestService, createLayoutGizmo } from "@sugarmagic/workspaces";
+import {
+  createHitTestService,
+  createLayoutGizmo,
+  SCENE_OBJECT_MARKER_KEY
+} from "@sugarmagic/workspaces";
 
 function makeCamera(): THREE.PerspectiveCamera {
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
@@ -76,5 +80,58 @@ describe("hit-test service visibility", () => {
     gizmo.setActiveTool("rotate");
     const hit = service.testGizmo(0.01, 0.01);
     expect(hit?.objectName).toBe("gizmo-rotate-center");
+  });
+});
+
+describe("hit-test service select resolution", () => {
+  it("resolves select hits to the tagged scene-object root, not GLB-internal mesh names", () => {
+    const authoredRoot = new THREE.Group();
+
+    // Mimic a placed-asset root the authoring viewport builds: a
+    // tagged group (name = instanceId) wrapping a glTF scene whose
+    // internal meshes carry their own author-given names.
+    const instanceRoot = new THREE.Group();
+    instanceRoot.name = "placed-asset-42";
+    instanceRoot.userData[SCENE_OBJECT_MARKER_KEY] = {
+      instanceId: "placed-asset-42",
+      kind: "asset"
+    };
+    const gltfScene = new THREE.Group();
+    gltfScene.name = "Scene";
+    const blooms = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 8, 6),
+      new THREE.MeshBasicMaterial()
+    );
+    blooms.name = "blooms";
+    gltfScene.add(blooms);
+    instanceRoot.add(gltfScene);
+    authoredRoot.add(instanceRoot);
+    authoredRoot.updateMatrixWorld(true);
+
+    const service = createHitTestService();
+    service.setCamera(makeCamera());
+    service.setAuthoredRoot(authoredRoot);
+
+    const hit = service.testSelect(0, 0);
+    expect(hit?.objectName).toBe("placed-asset-42");
+    expect(hit?.object).toBe(instanceRoot);
+  });
+
+  it("falls back to the generic named-node walk for untagged content", () => {
+    const authoredRoot = new THREE.Group();
+    const landscape = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 10),
+      new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+    );
+    landscape.name = "landscape-plane";
+    authoredRoot.add(landscape);
+    authoredRoot.updateMatrixWorld(true);
+
+    const service = createHitTestService();
+    service.setCamera(makeCamera());
+    service.setAuthoredRoot(authoredRoot);
+
+    const hit = service.testSelect(0, 0);
+    expect(hit?.objectName).toBe("landscape-plane");
   });
 });

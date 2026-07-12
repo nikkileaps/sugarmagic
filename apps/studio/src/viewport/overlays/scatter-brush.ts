@@ -162,7 +162,6 @@ export const mountScatterBrushOverlay: ViewportOverlayFactory = (context) => {
     if (!layoutWorkspace) return;
     attached = true;
     tool.attach({
-      viewportElement: context.domElement,
       inputRouter: layoutWorkspace.inputRouter,
       camera: context.getCamera(),
       authoredRoot: context.authoredRoot,

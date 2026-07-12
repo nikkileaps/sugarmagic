@@ -86,7 +86,7 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
 
   const unsubscribeFrame = context.subscribeFrame(() => {
     if (attached) {
-      layout.updateForCamera();
+      layout.updateForCamera(context.getCamera());
     }
   });
 

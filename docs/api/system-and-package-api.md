@@ -253,14 +253,20 @@ The authoring viewport (`apps/studio/src/viewport/authoringViewport.ts`)
 loads renderables (glTF) asynchronously off projection updates. Two
 invariants keep that safe:
 
-- **Completion checks the desired set, not a churn counter.** A
+- **Completion checks the desired OBJECT, not a churn counter.** A
   finished load asks "is this instanceId still in the latest
-  projection?" against a desired-objects map, and applies the
-  object's LATEST transform. It must not be gated on a per-update
-  generation number: projection emits happen on any store tick, so a
-  generation bump per update silently discarded every in-flight load
-  during first scene load and nothing appeared until the next
-  projection change re-scheduled them.
+  projection, with the representation I loaded?" against a
+  desired-objects map (pure logic in
+  `apps/studio/src/viewport/renderable-lifecycle.ts`, tested in
+  `packages/testing/src/renderable-completion.test.ts`): adopt when
+  both match (applying the object's LATEST transform), re-schedule
+  when the representation changed mid-flight (the pending-load guard
+  deduped that re-schedule away, so completion must trigger it), and
+  discard otherwise. It must not be gated on a per-update generation
+  number: projection emits happen on any store tick, so a generation
+  bump per update silently discarded every in-flight load during
+  first scene load and nothing appeared until the next projection
+  change re-scheduled them.
 - **The render generation only advances on teardown** (unmount,
   region cleared) -- the moments when every in-flight load must be
   discarded and disposed.
@@ -431,6 +437,12 @@ these behavioral contracts:
 - **One `InputRouter` per viewport element.** Tools join the owning
   workspace's router as controllers on a stack (top controller wins);
   a tool must never attach a second router to the same element.
+- **Hover rides the same stack.** Pointer motion with no active
+  gesture dispatches to the top controller's `onHoverMove` (and
+  `onHoverLeave` on exit); hover affordances (handle brighten,
+  outlines, brush cursors) live in controllers, never in raw DOM
+  listeners, so they respect controller precedence and there is
+  exactly one copy of the event normalization (the router's).
 - **`HitTestService` is the single enforcer of hit resolution.** It
   serves three modes (select / gizmo / surface). Select hits resolve
   to the ancestor tagged `userData.sugarmagicSceneObject`, whose node

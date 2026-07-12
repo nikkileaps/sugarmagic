@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 import type { TransformTool } from "../../interaction/tool-state";
+import { gizmoHandleName } from "../../interaction/gizmo-contract";
 
 const AXIS_COLORS = {
   x: 0xf38ba8,
@@ -42,7 +43,7 @@ function configureOverlayMesh(
 
 function createMoveHandle(axis: Axis, color: number): THREE.Group {
   const group = new THREE.Group();
-  group.name = `gizmo-move-${axis}`;
+  group.name = gizmoHandleName("move", axis);
 
   const direction =
     axis === "x" ? new THREE.Vector3(1, 0, 0)
@@ -58,7 +59,7 @@ function createMoveHandle(axis: Axis, color: number): THREE.Group {
   shaft.position.copy(direction.clone().multiplyScalar(0.75));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
-  shaft.name = `gizmo-move-${axis}`;
+  shaft.name = gizmoHandleName("move", axis);
   group.add(shaft);
 
   const cone = configureOverlayMesh(new THREE.Mesh(
@@ -68,7 +69,7 @@ function createMoveHandle(axis: Axis, color: number): THREE.Group {
   cone.position.copy(direction.clone().multiplyScalar(1.625));
   if (axis === "x") cone.rotation.z = -Math.PI / 2;
   if (axis === "z") cone.rotation.x = Math.PI / 2;
-  cone.name = `gizmo-move-${axis}`;
+  cone.name = gizmoHandleName("move", axis);
   group.add(cone);
 
   return group;
@@ -78,7 +79,7 @@ function createMoveHandle(axis: Axis, color: number): THREE.Group {
 
 function createRotateHandle(axis: Axis, color: number): THREE.Group {
   const group = new THREE.Group();
-  group.name = `gizmo-rotate-${axis}`;
+  group.name = gizmoHandleName("rotate", axis);
 
   const mat = new THREE.MeshBasicMaterial({
     color,
@@ -90,7 +91,7 @@ function createRotateHandle(axis: Axis, color: number): THREE.Group {
     new THREE.TorusGeometry(1.2, 0.03, 8, 48),
     mat
   ), 999);
-  ring.name = `gizmo-rotate-${axis}`;
+  ring.name = gizmoHandleName("rotate", axis);
 
   // A torus's rotation axis is its local Z. Orient each ring so its
   // AXIS matches its name: x-ring faces sideways, y-ring lies FLAT
@@ -110,7 +111,7 @@ function createRotateHandle(axis: Axis, color: number): THREE.Group {
 
 function createScaleHandle(axis: Axis, color: number): THREE.Group {
   const group = new THREE.Group();
-  group.name = `gizmo-scale-${axis}`;
+  group.name = gizmoHandleName("scale", axis);
 
   const direction =
     axis === "x" ? new THREE.Vector3(1, 0, 0)
@@ -126,7 +127,7 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
   shaft.position.copy(direction.clone().multiplyScalar(0.6));
   if (axis === "x") shaft.rotation.z = -Math.PI / 2;
   if (axis === "z") shaft.rotation.x = Math.PI / 2;
-  shaft.name = `gizmo-scale-${axis}`;
+  shaft.name = gizmoHandleName("scale", axis);
   group.add(shaft);
 
   const cube = configureOverlayMesh(new THREE.Mesh(
@@ -134,7 +135,7 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
     mat
   ), 999);
   cube.position.copy(direction.clone().multiplyScalar(1.3));
-  cube.name = `gizmo-scale-${axis}`;
+  cube.name = gizmoHandleName("scale", axis);
   group.add(cube);
 
   return group;
@@ -152,7 +153,7 @@ function createMoveCenter(): THREE.Mesh {
     ),
     999
   );
-  handle.name = "gizmo-move-center";
+  handle.name = gizmoHandleName("move", "center");
   return handle;
 }
 
@@ -164,7 +165,7 @@ function createScaleCenter(): THREE.Mesh {
     ),
     999
   );
-  handle.name = "gizmo-scale-center";
+  handle.name = gizmoHandleName("scale", "center");
   return handle;
 }
 
@@ -183,7 +184,7 @@ function createRotateCenter(): THREE.Mesh {
     ),
     998
   );
-  handle.name = "gizmo-rotate-center";
+  handle.name = gizmoHandleName("rotate", "center");
   return handle;
 }
 
@@ -443,6 +444,16 @@ export function createSelectionHoverHull(): SelectionHoverHull {
     },
     syncTransform() {
       if (!target) return;
+      // Target removed from the scene without a pointermove to re-aim
+      // the hull (delete key, undo, representation swap): clear it,
+      // or a ghost outline follows a detached root with disposed
+      // geometries until the cursor next moves.
+      if (!target.parent) {
+        target = null;
+        root.visible = false;
+        root.clear();
+        return;
+      }
       target.updateWorldMatrix(true, false);
       root.matrix
         .copy(target.matrixWorld)

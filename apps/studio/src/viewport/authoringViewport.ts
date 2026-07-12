@@ -38,9 +38,11 @@ import {
   computeSceneDelta,
   type SceneObject
 } from "@sugarmagic/runtime-core";
-import type {
-  WorkspaceViewport
+import {
+  SCENE_OBJECT_MARKER_KEY,
+  type WorkspaceViewport
 } from "@sugarmagic/workspaces";
+import { resolveRenderableCompletion } from "./renderable-lifecycle";
 import type { ViewportOverlayFactory } from "./overlay-context";
 import {
   asAuthoredViewportRoot,
@@ -213,7 +215,7 @@ async function createRenderableRoot(
 ): Promise<SceneObjectEntry> {
   const root = new THREE.Group();
   root.name = object.instanceId;
-  root.userData.sugarmagicSceneObject = {
+  root.userData[SCENE_OBJECT_MARKER_KEY] = {
     instanceId: object.instanceId,
     assetDefinitionId: object.assetDefinitionId ?? null,
     kind: object.kind
@@ -397,17 +399,30 @@ export function createAuthoringViewport(
     void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
-        // Still wanted? The generation only advances on teardown
-        // (unmount / region cleared); per-object liveness comes from
-        // the desired map. Checking `generation` per applyProjection
-        // call used to discard every in-flight load whenever ANY
-        // store ticked during the async gltf load -- on first scene
-        // load nothing survived, and no assets appeared until the
-        // next projection change (e.g. clicking a selection)
-        // re-scheduled them.
-        const latest = desiredObjects.get(object.instanceId);
-        if (generation !== renderGeneration || !latest) {
+        // Judge this load against the CURRENT desired set (see
+        // renderable-lifecycle.ts for why not a per-update counter):
+        // discarded on teardown or removal, re-scheduled when the
+        // representation changed mid-flight (the pending guard
+        // deduped that re-schedule away), adopted otherwise.
+        const latest = desiredObjects.get(object.instanceId) ?? null;
+        const decision = resolveRenderableCompletion({
+          scheduledGeneration: generation,
+          currentGeneration: renderGeneration,
+          loadedRepresentationKey: entry.representationKey,
+          desiredRepresentationKey: latest?.representationKey ?? null
+        });
+        if (decision === "discard" || !latest) {
           disposeRenderableObject(entry.root);
+          return;
+        }
+        if (decision === "reschedule") {
+          disposeRenderableObject(entry.root);
+          scheduleRenderableLoad(
+            latest,
+            currentAssetSources,
+            renderView.shaderRuntime,
+            renderGeneration
+          );
           return;
         }
         const existing = objectMap.get(object.instanceId);

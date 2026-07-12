@@ -17,6 +17,7 @@ import {
   createHitTestService,
   createToolStateStore,
   createTransformController,
+  gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
   type InputRouter,
   type HitTestService,
@@ -54,8 +55,9 @@ export interface LayoutWorkspaceInstance {
   ) => void;
   detach: () => void;
   syncOverlays: () => void;
-  /** Per-frame: keep the gizmo a constant size on screen. */
-  updateForCamera: () => void;
+  /** Per-frame: keep the gizmo a constant size on screen and track
+   *  the host's ACTIVE camera (perspective <-> ortho toggles). */
+  updateForCamera: (camera: THREE.Camera) => void;
   /** Release GPU resources; call on final teardown, not on detach. */
   dispose: () => void;
   gizmo: LayoutGizmo;
@@ -105,15 +107,14 @@ export function createLayoutWorkspace(
 
   let transformController: ReturnType<typeof createTransformController> | null = null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
-  let hoverHandler: ((event: PointerEvent) => void) | null = null;
   let attachedOverlayRoot: THREE.Object3D | null = null;
   let attachedElement: HTMLElement | null = null;
   let attachedCamera: THREE.Camera | null = null;
 
-  function buildTransformController(camera: THREE.Camera) {
+  function buildTransformController(initialCamera: THREE.Camera) {
     return createTransformController({
       hitTestService,
-      camera,
+      getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedId: config.getSelectedId,
       getTransform,
@@ -204,6 +205,14 @@ export function createLayoutWorkspace(
       },
       onSelect(instanceId) {
         config.onSelect(instanceId ? [instanceId] : []);
+      },
+      // Hover affordances arrive through the InputRouter's hover
+      // dispatch (top controller only) -- never a raw DOM listener.
+      onHoverHandle(handleName) {
+        gizmo.setHoveredHandle(handleName);
+      },
+      onHoverTarget(object) {
+        hoverHull.setTarget(object);
       }
     });
   }
@@ -233,29 +242,6 @@ export function createLayoutWorkspace(
       inputRouter.pushController(transformController);
       inputRouter.attach(viewportElement);
 
-      // Hover affordances: brighten the gizmo handle under the
-      // cursor; failing that, outline the selectable scene object
-      // under it (the standard "you can click this" cue). Frozen
-      // while a button is held so outlines don't churn mid-drag.
-      hoverHandler = (event: PointerEvent) => {
-        const rect = viewportElement.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        if (event.buttons !== 0) return;
-        const normalizedX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        const normalizedY = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-        const gizmoHit = hitTestService.testGizmo(normalizedX, normalizedY);
-        gizmo.setHoveredHandle(gizmoHit?.objectName ?? null);
-        if (gizmoHit) {
-          hoverHull.setTarget(null);
-          return;
-        }
-        const selectHit = hitTestService.testSelect(normalizedX, normalizedY);
-        hoverHull.setTarget(
-          selectHit && selectHit.objectName ? selectHit.object : null
-        );
-      };
-      viewportElement.addEventListener("pointermove", hoverHandler);
-
       // Keyboard shortcuts (G/R/S)
       keydownHandler = (e: KeyboardEvent) => {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -277,10 +263,6 @@ export function createLayoutWorkspace(
         window.removeEventListener("keydown", keydownHandler);
         keydownHandler = null;
       }
-      if (hoverHandler && attachedElement) {
-        attachedElement.removeEventListener("pointermove", hoverHandler);
-        hoverHandler = null;
-      }
       attachedElement = null;
       attachedCamera = null;
       gizmo.setHoveredHandle(null);
@@ -296,14 +278,18 @@ export function createLayoutWorkspace(
       originMarker.setVisible(false);
     },
 
-    updateForCamera() {
+    updateForCamera(camera) {
+      // The host swaps cameras on projection toggle; keep every
+      // camera consumer in agreement (rays, picks, gizmo sizing).
+      if (attachedElement && camera !== attachedCamera) {
+        attachedCamera = camera;
+        hitTestService.setCamera(camera);
+      }
       hoverHull.syncTransform();
       if (!attachedCamera || !gizmo.root.visible) return;
-      // Constant screen size: world scale proportional to distance.
-      // 0.09 puts the ~1.6-unit gizmo around 90-100px at the default
-      // FOV; clamped so extreme zooms stay usable.
-      const distance = attachedCamera.position.distanceTo(gizmo.root.position);
-      gizmo.setScale(Math.min(30, Math.max(0.5, distance * 0.09)));
+      gizmo.setScale(
+        gizmoWorldScaleForCamera(attachedCamera, gizmo.root.position)
+      );
     },
 
     dispose() {

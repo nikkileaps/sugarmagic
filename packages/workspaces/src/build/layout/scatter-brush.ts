@@ -37,7 +37,6 @@ export interface ScatterBrushConfig {
 }
 
 export interface ScatterBrushAttachOptions {
-  viewportElement: HTMLElement;
   /**
    * The LAYOUT WORKSPACE'S router -- the brush controller joins that
    * router's stack (top controller wins), so while the brush is armed
@@ -128,10 +127,7 @@ export function createScatterBrushTool(
   markerGroup.name = "scatter-brush-stroke-preview";
 
   let settings: ScatterBrushSettings | null = null;
-  let attachedElement: HTMLElement | null = null;
   let attachedOverlayRoot: THREE.Group | null = null;
-  let hoverHandler: ((event: PointerEvent) => void) | null = null;
-  let pointerLeaveHandler: (() => void) | null = null;
 
   let strokeActive = false;
   let lastStampPoint: { x: number; z: number } | null = null;
@@ -288,6 +284,17 @@ export function createScatterBrushTool(
       commitStroke();
       return true;
     },
+    // Ring preview follows the cursor between strokes via the
+    // router's hover dispatch -- the brush is the top controller
+    // while armed, so no raw DOM listener and no second copy of the
+    // event normalization.
+    onHoverMove(event: NormalizedPointerEvent) {
+      const hit = hitTestService.testSurface(event.normalizedX, event.normalizedY);
+      updateBrushCursor(hit?.point ?? null);
+    },
+    onHoverLeave() {
+      updateBrushCursor(null);
+    },
     onCancel() {
       // Escape mid-stroke = "never mind": discard the in-flight
       // stroke entirely (065.7). Without this the router clears its
@@ -313,25 +320,11 @@ export function createScatterBrushTool(
       attachedOverlayRoot = options.overlayRoot;
       attachedOverlayRoot.add(brushCursor);
       attachedOverlayRoot.add(markerGroup);
-      attachedElement = options.viewportElement;
 
       // Join the layout router's stack -- do NOT attach a second
-      // router to the element.
+      // router to the element. Hover (ring preview) rides the same
+      // stack via onHoverMove/onHoverLeave.
       inputRouter.pushController(brushController);
-
-      const viewportElement = options.viewportElement;
-      hoverHandler = (event: PointerEvent) => {
-        const rect = viewportElement.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        const normalizedX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        const normalizedY = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-        const hit = hitTestService.testSurface(normalizedX, normalizedY);
-        updateBrushCursor(hit?.point ?? null);
-      };
-      viewportElement.addEventListener("pointermove", hoverHandler);
-
-      pointerLeaveHandler = () => updateBrushCursor(null);
-      viewportElement.addEventListener("pointerleave", pointerLeaveHandler);
     },
     detach() {
       // Commit any in-flight stroke rather than dropping it -- tool
@@ -342,15 +335,6 @@ export function createScatterBrushTool(
         commitStroke();
       }
       inputRouter?.popController(brushController.id);
-      if (hoverHandler && attachedElement) {
-        attachedElement.removeEventListener("pointermove", hoverHandler);
-        hoverHandler = null;
-      }
-      if (pointerLeaveHandler && attachedElement) {
-        attachedElement.removeEventListener("pointerleave", pointerLeaveHandler);
-        pointerLeaveHandler = null;
-      }
-      attachedElement = null;
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(brushCursor);
         attachedOverlayRoot.remove(markerGroup);

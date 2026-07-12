@@ -12,6 +12,8 @@ export interface NormalizedPointerEvent {
   normalizedX: number;
   normalizedY: number;
   button: number;
+  /** Currently-held button bitmask (PointerEvent.buttons). */
+  buttons: number;
   shiftKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
@@ -23,6 +25,13 @@ export interface InteractionController {
   onPointerDown?: (event: NormalizedPointerEvent) => boolean;
   onPointerMove?: (event: NormalizedPointerEvent) => void;
   onPointerUp?: (event: NormalizedPointerEvent) => void;
+  /** Pointer motion while NO gesture is active -- hover affordances
+   *  (handle brighten, outlines, brush cursors) live here so they
+   *  respect controller precedence instead of bypassing the stack
+   *  with raw DOM listeners. Only the top controller receives it. */
+  onHoverMove?: (event: NormalizedPointerEvent) => void;
+  /** Pointer left the viewport element (clear hover affordances). */
+  onHoverLeave?: () => void;
   onCancel?: () => void;
 }
 
@@ -44,6 +53,7 @@ function normalizePointerEvent(
     normalizedX: ((event.clientX - rect.left) / rect.width) * 2 - 1,
     normalizedY: -((event.clientY - rect.top) / rect.height) * 2 + 1,
     button: event.button,
+    buttons: event.buttons,
     shiftKey: event.shiftKey,
     ctrlKey: event.ctrlKey,
     altKey: event.altKey,
@@ -75,10 +85,20 @@ export function createInputRouter(): InputRouter {
   }
 
   function handlePointerMove(event: PointerEvent) {
-    if (!element || !activeController) return;
+    if (!element) return;
     const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const normalized = normalizePointerEvent(event, rect);
-    activeController.onPointerMove?.(normalized);
+    if (activeController) {
+      activeController.onPointerMove?.(normalized);
+      return;
+    }
+    getTopController()?.onHoverMove?.(normalized);
+  }
+
+  function handlePointerLeave() {
+    if (activeController) return;
+    getTopController()?.onHoverLeave?.();
   }
 
   function handlePointerUp(event: PointerEvent) {
@@ -103,6 +123,7 @@ export function createInputRouter(): InputRouter {
       el.addEventListener("pointerdown", handlePointerDown);
       el.addEventListener("pointermove", handlePointerMove);
       el.addEventListener("pointerup", handlePointerUp);
+      el.addEventListener("pointerleave", handlePointerLeave);
       window.addEventListener("keydown", handleKeyDown);
     },
 
@@ -111,6 +132,7 @@ export function createInputRouter(): InputRouter {
         element.removeEventListener("pointerdown", handlePointerDown);
         element.removeEventListener("pointermove", handlePointerMove);
         element.removeEventListener("pointerup", handlePointerUp);
+        element.removeEventListener("pointerleave", handlePointerLeave);
       }
       window.removeEventListener("keydown", handleKeyDown);
       element = null;

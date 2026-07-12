@@ -1,16 +1,29 @@
 /**
- * HitTestService: raycast queries over the rendered scene.
+ * HitTestService: the SINGLE ENFORCER of hit resolution.
  *
  * Based on Sugarbuilder ADR 056. Provides three hit-test modes:
- * - select: pick authored scene objects
- * - gizmo: pick gizmo handles (overlay objects)
+ * - select: pick authored scene objects, resolved to the scene-object
+ *   ROOT (the ancestor tagged with SCENE_OBJECT_MARKER_KEY, named
+ *   with the instanceId) so hover outlines, click-select, the gizmo,
+ *   and the Scene Explorer all agree
+ * - gizmo: pick gizmo handles, applying the center-handle pick
+ *   priority from the gizmo contract
  * - surface: pick placement surfaces
  *
- * Low-level Three.js raycasting is performed here.
- * Meaning/interpretation of hits belongs to the workspace layer.
+ * What a hit MEANS (which command to run, what to do with the
+ * instanceId) still belongs to the workspace layer -- but which
+ * object a ray resolves to is decided here and nowhere else.
  */
 
 import * as THREE from "three";
+import { isCenterPickPriorityHandle } from "./gizmo-contract";
+
+/**
+ * userData key marking a scene-object root. Hosts tag renderable
+ * roots with it (value: { instanceId, kind, ... }, node name =
+ * instanceId); select-mode hits resolve to the tagged ancestor.
+ */
+export const SCENE_OBJECT_MARKER_KEY = "sugarmagicSceneObject";
 
 export type HitTestMode = "select" | "gizmo" | "surface";
 
@@ -81,7 +94,7 @@ function pickNearest(
   // is the coarse target and the thin rings keep priority over it.
   if (mode === "gizmo") {
     const center = visible.find((intersect) =>
-      /^gizmo-(move|scale)-center$/.test(intersect.object.name)
+      isCenterPickPriorityHandle(intersect.object.name)
     );
     if (center) hit = center;
   }
@@ -97,7 +110,7 @@ function pickNearest(
   if (mode === "select") {
     let node: THREE.Object3D | null = hit.object;
     while (node && node !== root) {
-      if (node.userData && node.userData.sugarmagicSceneObject) {
+      if (node.userData && node.userData[SCENE_OBJECT_MARKER_KEY]) {
         return {
           mode,
           objectName: node.name,
