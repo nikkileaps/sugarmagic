@@ -454,6 +454,10 @@ export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
     instanceId: string;
     slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
+    /** Plan 068.2 — "scene" writes a Scene restyle of a BASE
+     *  placement into the active Scene's overlay record instead of
+     *  the instance. Omitted/"base" writes the instance itself. */
+    scope?: "base" | "scene";
   }
 >;
 
@@ -466,6 +470,8 @@ export type SetPlacedAssetSurfaceSlotOverrideCommand = SemanticCommandBase<
     instanceId: string;
     slotName: string;
     surface: SurfaceBinding<"universal"> | null;
+    /** Plan 068.2 — see SetPlacedAssetShaderOverrideCommand.scope. */
+    scope?: "base" | "scene";
   }
 >;
 

@@ -87,7 +87,8 @@ import type {
 import {
   createRegionSceneOverlay,
   type RegionSceneOverlay,
-  type Scene
+  type Scene,
+  type SceneAssetAppearanceOverride
 } from "../scenes";
 
 /**
@@ -670,10 +671,73 @@ function upsertShaderBindingOverride(
   return next;
 }
 
+/**
+ * Scene-scope appearance routing (Plan 068.2). A "scene" write on a
+ * BASE placement lands in the active Scene's
+ * `assetAppearanceOverrides` record. A "scene" write on an instance
+ * that LIVES in the Scene overlay routes to the instance itself --
+ * containment already scene-scopes its fields, and double-recording
+ * would create two competing sources of truth for one look.
+ */
+function isSceneContainedInstance(
+  context: CommandExecutionContext,
+  instanceId: string
+): boolean {
+  const overlay = context.scene.regionOverlays[context.region.identity.id];
+  return Boolean(
+    overlay?.placedAssets.some((asset) => asset.instanceId === instanceId)
+  );
+}
+
+function mutateSceneAppearanceOverride(
+  context: CommandExecutionContext,
+  instanceId: string,
+  mutate: (
+    current: SceneAssetAppearanceOverride
+  ) => SceneAssetAppearanceOverride
+): { region: RegionDocument; scene: Scene } {
+  const regionId = context.region.identity.id;
+  const scene = withOverlay(context.scene, regionId, (overlay) => {
+    const current = overlay.assetAppearanceOverrides[instanceId] ?? {};
+    const next = mutate(current);
+    const isEmpty =
+      (next.surfaceSlotOverrides?.length ?? 0) === 0 &&
+      (next.shaderOverrides?.length ?? 0) === 0;
+    const assetAppearanceOverrides = { ...overlay.assetAppearanceOverrides };
+    if (isEmpty) {
+      delete assetAppearanceOverrides[instanceId];
+    } else {
+      assetAppearanceOverrides[instanceId] = next;
+    }
+    return { ...overlay, assetAppearanceOverrides };
+  });
+  return { region: context.region, scene };
+}
+
 function applySetPlacedAssetShaderOverride(
   context: CommandExecutionContext,
   command: SetPlacedAssetShaderOverrideCommand
 ): { region: RegionDocument; scene: Scene } {
+  if (
+    command.payload.scope === "scene" &&
+    !isSceneContainedInstance(context, command.payload.instanceId)
+  ) {
+    return mutateSceneAppearanceOverride(
+      context,
+      command.payload.instanceId,
+      (current) => ({
+        ...current,
+        shaderOverrides: command.payload.shaderDefinitionId
+          ? upsertShaderBindingOverride(current.shaderOverrides ?? [], {
+              shaderDefinitionId: command.payload.shaderDefinitionId,
+              slot: command.payload.slot
+            })
+          : (current.shaderOverrides ?? []).filter(
+              (override) => override.slot !== command.payload.slot
+            )
+      })
+    );
+  }
   return mapPlacedAssetsEverywhere(context, (assets) =>
     assets.map((asset) =>
       asset.instanceId === command.payload.instanceId
@@ -697,6 +761,32 @@ function applySetPlacedAssetSurfaceSlotOverride(
   context: CommandExecutionContext,
   command: SetPlacedAssetSurfaceSlotOverrideCommand
 ): { region: RegionDocument; scene: Scene } {
+  if (
+    command.payload.scope === "scene" &&
+    !isSceneContainedInstance(context, command.payload.instanceId)
+  ) {
+    return mutateSceneAppearanceOverride(
+      context,
+      command.payload.instanceId,
+      (current) => {
+        const kept = (current.surfaceSlotOverrides ?? []).filter(
+          (slotOverride) => slotOverride.slotName !== command.payload.slotName
+        );
+        return {
+          ...current,
+          surfaceSlotOverrides: command.payload.surface
+            ? [
+                ...kept,
+                {
+                  slotName: command.payload.slotName,
+                  surface: command.payload.surface
+                }
+              ]
+            : kept
+        };
+      }
+    );
+  }
   return mapPlacedAssetsEverywhere(context, (assets) =>
     assets.map((asset) => {
       if (asset.instanceId !== command.payload.instanceId) {

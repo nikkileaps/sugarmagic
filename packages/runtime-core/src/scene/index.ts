@@ -12,7 +12,8 @@ import {
   type PlacedAssetInstance,
   type RegionNPCPresence,
   type RegionPlayerPresence,
-  type Scene
+  type Scene,
+  type SceneAssetAppearanceOverride
 } from "@sugarmagic/domain";
 import type {
   EffectiveMaterialSlotBinding,
@@ -116,9 +117,17 @@ export function resolveSceneObjects(
     activeScene = null
   } = options;
   const contents = composeRegionContents(region, activeScene);
+  // Plan 068.2 -- the active Scene may restyle base placements.
+  const appearanceOverrides =
+    activeScene?.regionOverlays[region.identity.id]?.assetAppearanceOverrides ??
+    {};
 
   const sceneObjects = contents.placedAssets.map((asset) =>
-    createPlacedAssetSceneObject(asset, contentLibrary)
+    createPlacedAssetSceneObject(
+      asset,
+      contentLibrary,
+      appearanceOverrides[asset.instanceId] ?? null
+    )
   );
 
   if (includePlayerPresence && contents.playerPresence) {
@@ -247,17 +256,26 @@ function surfaceStackRepresentation(
 
 function createPlacedAssetSceneObject(
   asset: PlacedAssetInstance,
-  contentLibrary?: ContentLibrarySnapshot
+  contentLibrary?: ContentLibrarySnapshot,
+  sceneAppearanceOverride?: SceneAssetAppearanceOverride | null
 ): SceneObject {
   const assetDescriptor = getAssetSourceDescriptor(
     asset.assetDefinitionId,
     contentLibrary
   );
   const effectiveShaders = contentLibrary
-    ? resolveEffectiveAssetShaderBindings(asset, contentLibrary)
+    ? resolveEffectiveAssetShaderBindings(
+        asset,
+        contentLibrary,
+        sceneAppearanceOverride
+      )
     : { surface: null, deform: null, effect: null };
   const effectiveMaterialSlots = contentLibrary
-    ? resolveEffectiveAssetMaterialSlotBindings(asset, contentLibrary)
+    ? resolveEffectiveAssetMaterialSlotBindings(
+        asset,
+        contentLibrary,
+        sceneAppearanceOverride
+      )
     : [];
 
   return {

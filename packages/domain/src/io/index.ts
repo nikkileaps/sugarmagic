@@ -408,7 +408,8 @@ export function normalizeScenesForLoad(
             surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset)
           })
         ),
-        folders: [...overlay.folders]
+        folders: [...overlay.folders],
+        assetAppearanceOverrides: overlay.assetAppearanceOverrides ?? {}
       };
     }
     return { ...scene, regionOverlays };

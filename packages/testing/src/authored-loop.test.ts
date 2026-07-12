@@ -148,6 +148,7 @@ describe("first authored loop", () => {
       sceneId: "scene:test",
       regionOverlays: {
         [region.identity.id]: {
+          assetAppearanceOverrides: {},
           folders: [],
           playerPresence: null,
           npcPresences: [],

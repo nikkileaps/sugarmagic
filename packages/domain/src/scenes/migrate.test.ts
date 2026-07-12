@@ -163,6 +163,7 @@ describe("migrateToScenes", () => {
       sceneId: DEFAULT_SCENE_ID,
       regionOverlays: {
         "region:town": {
+          assetAppearanceOverrides: {},
           folders: [],
           placedAssets: [],
           playerPresence: null,
@@ -244,6 +245,7 @@ describe("composeRegionContents", () => {
       sceneId: "scene:x",
       regionOverlays: {
         "region:town": {
+          assetAppearanceOverrides: {},
           folders: [],
           placedAssets: [
             {
