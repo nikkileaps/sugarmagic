@@ -25,6 +25,7 @@ import {
 } from "../../interaction";
 import {
   createLayoutGizmo,
+  createSelectionHoverHull,
   createOriginMarker,
   createWorldCursor,
   type LayoutGizmo,
@@ -74,6 +75,7 @@ export function createLayoutWorkspace(
   const gizmo = createLayoutGizmo();
   const originMarker = createOriginMarker();
   const worldCursor = createWorldCursor();
+  const hoverHull = createSelectionHoverHull();
 
   worldCursor.setPosition([0, 0, 0]);
 
@@ -223,6 +225,7 @@ export function createLayoutWorkspace(
       overlayRoot.add(gizmo.root);
       overlayRoot.add(originMarker.root);
       overlayRoot.add(worldCursor.root);
+      overlayRoot.add(hoverHull.root);
 
       attachedCamera = camera;
       attachedElement = viewportElement;
@@ -230,14 +233,26 @@ export function createLayoutWorkspace(
       inputRouter.pushController(transformController);
       inputRouter.attach(viewportElement);
 
-      // Hover affordance: brighten the gizmo handle under the cursor.
+      // Hover affordances: brighten the gizmo handle under the
+      // cursor; failing that, outline the selectable scene object
+      // under it (the standard "you can click this" cue). Frozen
+      // while a button is held so outlines don't churn mid-drag.
       hoverHandler = (event: PointerEvent) => {
         const rect = viewportElement.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
+        if (event.buttons !== 0) return;
         const normalizedX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         const normalizedY = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-        const hit = hitTestService.testGizmo(normalizedX, normalizedY);
-        gizmo.setHoveredHandle(hit?.objectName ?? null);
+        const gizmoHit = hitTestService.testGizmo(normalizedX, normalizedY);
+        gizmo.setHoveredHandle(gizmoHit?.objectName ?? null);
+        if (gizmoHit) {
+          hoverHull.setTarget(null);
+          return;
+        }
+        const selectHit = hitTestService.testSelect(normalizedX, normalizedY);
+        hoverHull.setTarget(
+          selectHit && selectHit.objectName ? selectHit.object : null
+        );
       };
       viewportElement.addEventListener("pointermove", hoverHandler);
 
@@ -269,10 +284,12 @@ export function createLayoutWorkspace(
       attachedElement = null;
       attachedCamera = null;
       gizmo.setHoveredHandle(null);
+      hoverHull.setTarget(null);
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(gizmo.root);
         attachedOverlayRoot.remove(originMarker.root);
         attachedOverlayRoot.remove(worldCursor.root);
+        attachedOverlayRoot.remove(hoverHull.root);
         attachedOverlayRoot = null;
       }
       gizmo.setVisible(false);
@@ -280,6 +297,7 @@ export function createLayoutWorkspace(
     },
 
     updateForCamera() {
+      hoverHull.syncTransform();
       if (!attachedCamera || !gizmo.root.visible) return;
       // Constant screen size: world scale proportional to distance.
       // 0.09 puts the ~1.6-unit gizmo around 90-100px at the default
@@ -292,6 +310,7 @@ export function createLayoutWorkspace(
       gizmo.dispose();
       originMarker.dispose();
       worldCursor.dispose();
+      hoverHull.dispose();
     },
 
     syncOverlays() {

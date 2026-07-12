@@ -50,6 +50,33 @@ function pickNearest(
   if (intersects.length === 0) return null;
 
   const hit = intersects[0];
+
+  // SELECT hits resolve to the SCENE-OBJECT ROOT -- the ancestor
+  // carrying the `sugarmagicSceneObject` marker (named with the
+  // instanceId). This is the single enforcer of hit-to-instance
+  // resolution: hover outlines, click-select, the gizmo, and the
+  // Scene Explorer all agree because they all come through here.
+  // The old "first named node" walk stopped at GLB-internal mesh
+  // names ("blooms", "stems"), flickering hover between sub-meshes
+  // and feeding non-instanceIds to selection.
+  if (mode === "select") {
+    let node: THREE.Object3D | null = hit.object;
+    while (node && node !== root) {
+      if (node.userData && node.userData.sugarmagicSceneObject) {
+        return {
+          mode,
+          objectName: node.name,
+          point: hit.point.clone(),
+          distance: hit.distance,
+          object: node
+        };
+      }
+      node = node.parent;
+    }
+    // Untagged content under the authored root (e.g. landscape
+    // plane) falls through to the generic walk below.
+  }
+
   let target = hit.object;
   while (target.parent && target.parent !== root) {
     if (target.name) break;

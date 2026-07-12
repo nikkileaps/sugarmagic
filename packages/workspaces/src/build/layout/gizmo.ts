@@ -323,6 +323,85 @@ export function createWorldCursor(): WorldCursor {
   };
 }
 
+// --- Selection hover hull ---
+
+export interface SelectionHoverHull {
+  root: THREE.Group;
+  /** Rebuild the hull around a scene object (null clears it). */
+  setTarget: (target: THREE.Object3D | null) => void;
+  /** Per-frame: follow the target's current world transform. */
+  syncTransform: () => void;
+  dispose: () => void;
+}
+
+/**
+ * Hover affordance: an enlarged back-face shell in selection orange
+ * around the object under the cursor -- the standard editor "this is
+ * selectable" outline, done as geometry (no post-process pass).
+ * Hull meshes SHARE the target's geometries; only the one hull
+ * material is owned here.
+ */
+export function createSelectionHoverHull(): SelectionHoverHull {
+  const root = new THREE.Group();
+  root.name = "selection-hover-hull";
+  root.visible = false;
+  root.matrixAutoUpdate = false;
+
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xfab387,
+    side: THREE.BackSide,
+    toneMapped: false,
+    depthWrite: false
+  });
+
+  const HULL_SCALE = 1.035;
+  let target: THREE.Object3D | null = null;
+  const inverseTarget = new THREE.Matrix4();
+  const relative = new THREE.Matrix4();
+
+  function rebuild() {
+    root.clear();
+    if (!target) return;
+    target.updateWorldMatrix(true, true);
+    inverseTarget.copy(target.matrixWorld).invert();
+    target.traverse((object) => {
+      // Skinned meshes deform on the GPU; a static hull clone would
+      // show the bind pose. Placed props are the audience here.
+      if (!(object instanceof THREE.Mesh) || (object as THREE.SkinnedMesh).isSkinnedMesh) {
+        return;
+      }
+      const hull = new THREE.Mesh(object.geometry, material);
+      hull.matrixAutoUpdate = false;
+      relative.multiplyMatrices(inverseTarget, object.matrixWorld);
+      hull.matrix.copy(relative);
+      hull.renderOrder = 1;
+      root.add(hull);
+    });
+  }
+
+  return {
+    root,
+    setTarget(next) {
+      if (next === target) return;
+      target = next;
+      root.visible = Boolean(next);
+      rebuild();
+      this.syncTransform();
+    },
+    syncTransform() {
+      if (!target) return;
+      target.updateWorldMatrix(true, false);
+      root.matrix
+        .copy(target.matrixWorld)
+        .scale(new THREE.Vector3(HULL_SCALE, HULL_SCALE, HULL_SCALE));
+    },
+    dispose() {
+      root.clear();
+      material.dispose();
+    }
+  };
+}
+
 function disposeOverlayGroup(root: THREE.Group): void {
   root.traverse((object) => {
     if (object instanceof THREE.Mesh) {
