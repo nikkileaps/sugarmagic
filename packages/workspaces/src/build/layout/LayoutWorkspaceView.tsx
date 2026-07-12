@@ -59,9 +59,9 @@ import {
   TransformInspector,
   ToolOptionSlider,
   ToolOptionsBar,
-  ViewportToolbar,
+  ToolRail,
   type SceneExplorerNode,
-  type ViewportToolbarItem
+  type ToolRailItem
 } from "@sugarmagic/ui";
 import type { ScatterBrushSettings, ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
@@ -71,14 +71,18 @@ import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 
-const transformTools: ViewportToolbarItem[] = [
-  { id: "move", label: "Move", icon: "✥", shortcut: "G" },
-  { id: "rotate", label: "Rotate", icon: "↻", shortcut: "R" },
-  { id: "scale", label: "Scale", icon: "⤢", shortcut: "S" },
+// Vertical side rail (the Design > Animation viewport pattern): the
+// rail sits below the options-bar row, so an armed tool's settings
+// never cover the tool switcher -- there is always a visible way OUT
+// of a mode (065 review UX fix, 2026-07-12).
+const layoutTools: ToolRailItem[] = [
+  { id: "move", label: "Move", icon: "✥" },
+  { id: "rotate", label: "Rotate", icon: "↻" },
+  { id: "scale", label: "Scale", icon: "⤢" },
   // Plan 065.2 -- scatter/prop paint brush. Arming it swallows
   // viewport pointer input (top of the layout input-router stack);
   // switching back to a transform tool disarms it.
-  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", shortcut: "B" }
+  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", color: "green" }
 ];
 
 const DEFAULT_SCATTER_BRUSH_SETTINGS: ScatterBrushSettings = {
@@ -1879,21 +1883,23 @@ export function useLayoutWorkspaceView(
 
     viewportOverlay: region ? (
       <>
-        <ViewportToolbar
-          items={transformTools}
-          activeId={scatterBrushSettings ? "scatter-brush" : activeTool}
-          onSelect={(id) => {
-            if (id === "scatter-brush") {
-              viewportStore
-                .getState()
-                .setScatterBrushSettings(lastScatterBrushSettingsRef.current);
-              return;
-            }
-            viewportStore.getState().setScatterBrushSettings(null);
-            const tool = id as TransformTool;
-            viewportStore.getState().setActiveTransformTool(tool);
-          }}
-        />
+        <Box style={{ pointerEvents: "auto" }}>
+          <ToolRail
+            tools={layoutTools}
+            activeToolId={scatterBrushSettings ? "scatter-brush" : activeTool}
+            onSelect={(id) => {
+              if (id === "scatter-brush") {
+                viewportStore
+                  .getState()
+                  .setScatterBrushSettings(lastScatterBrushSettingsRef.current);
+                return;
+              }
+              viewportStore.getState().setScatterBrushSettings(null);
+              const tool = id as TransformTool;
+              viewportStore.getState().setActiveTransformTool(tool);
+            }}
+          />
+        </Box>
         {scatterBrushSettings ? (
           <Box style={{ pointerEvents: "auto" }}>
             <ToolOptionsBar>
