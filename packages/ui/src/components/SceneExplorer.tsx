@@ -69,6 +69,16 @@ export interface SceneExplorerProps {
   getEntityScopeAction?: (
     instanceId: string
   ) => { label: string; onClick: () => void } | null;
+  /**
+   * Drag an asset row onto a folder row to re-parent it (Plan 065.2d
+   * -- moving sprayed props into patch folders). null = the region
+   * root (un-foldered). Only asset entities are draggable; presences
+   * live outside the folder tree.
+   */
+  onMoveEntityToFolder?: (
+    instanceId: string,
+    folderId: string | null
+  ) => void;
 }
 
 type ContextMenuState =
@@ -155,7 +165,8 @@ function EntityRow({
   isSelected,
   onSelect,
   onToggleVisibility,
-  onOpenContextMenu
+  onOpenContextMenu,
+  draggable
 }: {
   node: SceneExplorerEntity;
   depth: number;
@@ -163,9 +174,22 @@ function EntityRow({
   onSelect: (id: string) => void;
   onToggleVisibility?: (id: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
+  draggable?: boolean;
 }) {
   return (
     <Box
+      draggable={draggable}
+      onDragStart={
+        draggable
+          ? (event) => {
+              event.dataTransfer.setData(
+                "application/x-sugarmagic-instance",
+                node.instanceId
+              );
+              event.dataTransfer.effectAllowed = "move";
+            }
+          : undefined
+      }
       onClick={() => onSelect(node.instanceId)}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -233,7 +257,8 @@ function FolderRow({
   onSelect,
   onSelectFolder,
   onToggleVisibility,
-  onOpenContextMenu
+  onOpenContextMenu,
+  onMoveEntityToFolder
 }: {
   node: SceneExplorerFolder;
   depth: number;
@@ -246,12 +271,52 @@ function FolderRow({
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
+  onMoveEntityToFolder?: (
+    instanceId: string,
+    folderId: string | null
+  ) => void;
 }) {
   const folderIcon = node.isRoot ? "🗺️" : "📁";
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
   return (
     <>
       <Box
+        onDragOver={
+          onMoveEntityToFolder
+            ? (event) => {
+                if (
+                  event.dataTransfer.types.includes(
+                    "application/x-sugarmagic-instance"
+                  )
+                ) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setIsDropTarget(true);
+                }
+              }
+            : undefined
+        }
+        onDragLeave={
+          onMoveEntityToFolder ? () => setIsDropTarget(false) : undefined
+        }
+        onDrop={
+          onMoveEntityToFolder
+            ? (event) => {
+                event.preventDefault();
+                setIsDropTarget(false);
+                const instanceId = event.dataTransfer.getData(
+                  "application/x-sugarmagic-instance"
+                );
+                if (instanceId) {
+                  onMoveEntityToFolder(
+                    instanceId,
+                    node.isRoot ? null : node.folderId
+                  );
+                }
+              }
+            : undefined
+        }
         onClick={() => onSelectFolder?.(node.folderId)}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -274,7 +339,15 @@ function FolderRow({
           color: isSelected
             ? "var(--sm-accent-blue)"
             : "var(--sm-color-subtext)",
-          background: isSelected ? "var(--sm-active-bg)" : "transparent",
+          background: isDropTarget
+            ? "var(--sm-hover-bg)"
+            : isSelected
+              ? "var(--sm-active-bg)"
+              : "transparent",
+          outline: isDropTarget
+            ? "1px dashed var(--sm-accent-blue)"
+            : "none",
+          outlineOffset: -1,
           transition: "var(--sm-transition-fast)",
           cursor: "pointer"
         }}
@@ -329,6 +402,7 @@ function FolderRow({
             onSelectFolder={onSelectFolder}
             onToggleVisibility={onToggleVisibility}
             onOpenContextMenu={onOpenContextMenu}
+            onMoveEntityToFolder={onMoveEntityToFolder}
           />
         ))}
     </>
@@ -343,7 +417,8 @@ function TreeNode({
   onSelect,
   onSelectFolder,
   onToggleVisibility,
-  onOpenContextMenu
+  onOpenContextMenu,
+  onMoveEntityToFolder
 }: {
   node: SceneExplorerNode;
   depth: number;
@@ -353,6 +428,10 @@ function TreeNode({
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
+  onMoveEntityToFolder?: (
+    instanceId: string,
+    folderId: string | null
+  ) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -365,6 +444,9 @@ function TreeNode({
         onSelect={onSelect}
         onToggleVisibility={onToggleVisibility}
         onOpenContextMenu={onOpenContextMenu}
+        draggable={Boolean(
+          onMoveEntityToFolder && node.entityKind === "asset"
+        )}
       />
     );
   }
@@ -393,6 +475,7 @@ function TreeNode({
       onSelectFolder={onSelectFolder}
       onToggleVisibility={onToggleVisibility}
       onOpenContextMenu={onOpenContextMenu}
+      onMoveEntityToFolder={onMoveEntityToFolder}
     />
   );
 }
@@ -412,7 +495,8 @@ export function SceneExplorer({
   onDuplicateEntity,
   onEditEntity,
   onDeleteEntity,
-  getEntityScopeAction
+  getEntityScopeAction,
+  onMoveEntityToFolder
 }: SceneExplorerProps) {
   const entityCount = countEntities(roots);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -442,6 +526,7 @@ export function SceneExplorer({
           onSelectFolder={onSelectFolder}
           onToggleVisibility={onToggleVisibility}
           onOpenContextMenu={(_event, state) => setContextMenu(state)}
+          onMoveEntityToFolder={onMoveEntityToFolder}
         />
       ))}
       {entityCount === 0 && (
