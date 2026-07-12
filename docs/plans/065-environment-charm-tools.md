@@ -83,35 +83,18 @@ commits).
   65K-per-layer GPU scatter path remains the answer for grass-
   scale density.
 
-### 065.3 — Stylized water v1 (plane + shader)
+### 065.3 — Stylized water v1 — PROMOTED to Plan 066
 
-A `water` region element: a placeable rectangular water plane
-(position, size, surface height) rendered with a stylized water
-material — depth-tinted color ramp (shallow -> deep), scrolling
-surface normals/sparkle, and EDGE FOAM where the water meets
-geometry (scene-depth delta). Parameters exposed: shallow/deep
-colors, foam color/width, scroll speed/direction, wave scale.
+Promoted to its own epic (2026-07-12): water touches more seams
+than one story covers (region element type, scene controller,
+depth-reading shader, placement UI, audio hook). See
+`docs/plans/066-stylized-water.md`.
 
-- Rides the environment/render seams (ADR 014): a scene controller
-  in packages/render-web alongside landscape/environment
-  controllers; domain gets the water settings type on the region;
-  Layout workspace places/sizes it like an asset.
-- Rivers-as-splines are explicitly v2 (defer with trigger: first
-  region that needs a bending stream; the shader carries over).
+### 065.4 — Ambient particle layers — PROMOTED to Plan 067
 
-### 065.4 — Ambient particle layers
-
-Environment-level particle systems for drifting charm: leaf-fall,
-dust motes, petals, fireflies as authorable presets. Region-wide
-(or box-bounded) emitters, GPU-instanced quads, wind-aligned
-drift + flutter, soft fade in/out. Parameters: preset, density,
-size range, color/tint, drift direction/speed, flutter amount.
-
-- Lives on `EnvironmentDefinition` beside fog/sky/post; realized
-  by a small controller in packages/render-web (instanced quads,
-  no physics, deterministic seeded motion in the vertex stage —
-  cheap and deploy-safe).
-- Presets ship as built-ins like the wind/grass presets do.
+Promoted to its own epic (2026-07-12): even a tiny particle system
+is its own vocabulary (presets, emitters, environment vs region
+ownership). See `docs/plans/067-ambient-particles.md`.
 
 ### 065.5 — Masking + channel authoring UX rework
 
