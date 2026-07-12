@@ -9,15 +9,20 @@
 import {
   abs,
   clamp,
+  sRGBTransferEOTF,
+  sRGBTransferOETF,
   cos,
   dot,
   exp,
   float,
   length,
   luminance,
+  saturation,
   max,
   min,
   mix,
+  mx_hsvtorgb,
+  mx_rgbtohsv,
   normalize,
   pow,
   saturate,
@@ -29,10 +34,65 @@ import {
 } from "three/tsl";
 import type { MaterializeOpRequest, MaterializeOpResult } from "./types";
 
+/**
+ * Artistic color ops run in sRGB space -- SINGLE ENFORCER.
+ *
+ * Hue / saturation / value as authored in any art tool are sRGB-space
+ * concepts. Running them on the pipeline's LINEAR rgb lands somewhere
+ * perceptually different (a mild desaturate read as chalk, a mild hue
+ * nudge read as washed sage -- 2026-07-11, see the color-space ADR).
+ * Ops in this registry receive an ALREADY-CONVERTED sRGB color node
+ * and return an sRGB-space result; the dispatcher below owns both
+ * conversions. A new artistic color op added here cannot forget the
+ * round-trip. Space-agnostic arithmetic (color.multiply / add /
+ * divide / pow, luminance) stays in the plain switch.
+ */
+const SRGB_SPACE_COLOR_OPS: Record<
+  string,
+  (op: MaterializeOpRequest["op"], srgbColor: unknown) => unknown
+> = {
+  "color.adjust": (op, srgbColor) => {
+    const saturationScale = Number(op.settings?.saturation ?? 1);
+    const valueScale = Number(op.settings?.value ?? 1);
+    return (
+      saturation(srgbColor as never, saturationScale) as unknown as {
+        mul: (other: unknown) => unknown;
+      }
+    ).mul(valueScale);
+  },
+  "color.hue-shift": (op, srgbColor) => {
+    const shift = Number(op.settings?.shiftDegrees ?? 0) / 360;
+    const minHue = Number(op.settings?.minDegrees ?? 0) / 360;
+    const maxHue = Number(op.settings?.maxDegrees ?? 360) / 360;
+    const hsv = mx_rgbtohsv(srgbColor as never) as unknown as {
+      x: unknown;
+      y: unknown;
+      z: unknown;
+    };
+    const shiftedHue = clamp(
+      (hsv.x as { add: (other: unknown) => unknown }).add(float(shift)) as never,
+      float(minHue),
+      float(maxHue)
+    );
+    return mx_hsvtorgb(
+      vec3(shiftedHue as never, hsv.y as never, hsv.z as never) as never
+    );
+  }
+};
+
 export function materializeMathOp({
   op,
   input
 }: MaterializeOpRequest): MaterializeOpResult {
+  const srgbSpaceOp = SRGB_SPACE_COLOR_OPS[op.opKind];
+  if (srgbSpaceOp) {
+    const srgb = sRGBTransferOETF(input("color") as never);
+    return {
+      handled: true,
+      value: sRGBTransferEOTF(srgbSpaceOp(op, srgb) as never)
+    };
+  }
+
   switch (op.opKind) {
     case "math.add":
       return { handled: true, value: (input("a") as { add: (other: unknown) => unknown }).add(input("b")) };
@@ -91,6 +151,8 @@ export function materializeMathOp({
       };
     case "color.add":
       return { handled: true, value: (input("a") as { add: (other: unknown) => unknown }).add(input("b")) };
+
+
     case "color.multiply":
       return { handled: true, value: (input("a") as { mul: (other: unknown) => unknown }).mul(input("b")) };
     case "color.divide":

@@ -129,6 +129,12 @@ export interface Scene {
   /** Free-form author notes (design intent, TODOs). */
   notes: string;
   unlockCondition: SceneUnlockCondition;
+  /** Region the game loads when this Scene is entered on a fresh
+   *  boot (no save, no explicit request). Null = first region.
+   *  Resolution precedence at runtime: saved region > explicit
+   *  request (Studio Preview's edited region) > this > first.
+   *  Mid-session region transitions (doors) are a follow-up. */
+  startingRegionId: string | null;
   environmentOverride: SceneEnvironmentOverride | null;
   audioOverride: SceneAudioOverride | null;
   transitionConfig: SceneTransitionConfig | null;
@@ -159,6 +165,7 @@ export function createDefaultScene(
     description: overrides.description ?? "",
     notes: overrides.notes ?? "",
     unlockCondition: overrides.unlockCondition ?? "always",
+    startingRegionId: overrides.startingRegionId ?? null,
     environmentOverride: overrides.environmentOverride ?? null,
     audioOverride: overrides.audioOverride ?? null,
     transitionConfig: overrides.transitionConfig ?? null,
@@ -317,6 +324,11 @@ export function normalizeScene(input: unknown): Scene | null {
       typeof record.description === "string" ? record.description : "",
     notes: typeof record.notes === "string" ? record.notes : "",
     unlockCondition: normalizeUnlockCondition(record.unlockCondition),
+    startingRegionId:
+      typeof record.startingRegionId === "string" &&
+      record.startingRegionId.trim().length > 0
+        ? record.startingRegionId
+        : null,
     environmentOverride: normalizeEnvironmentOverride(
       record.environmentOverride
     ),

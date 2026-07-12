@@ -34,6 +34,15 @@ export interface PlacedAssetInstance {
    */
   shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
+  /**
+   * True when the instance was landed by the scatter brush (065.8).
+   * The brush's erase mode only removes brushed instances, so a
+   * swipe can never delete hand-placed props. Absent/undefined =
+   * hand-placed = protected. Deliberately a data flag rather than
+   * folder membership: dragging instances between folders must not
+   * change their erasability.
+   */
+  brushed?: boolean;
   transform: {
     position: [number, number, number];
     rotation: [number, number, number];
@@ -250,6 +259,38 @@ export interface RegionDocument {
   audio?: RegionAudioState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
+  /**
+   * Plan 065 §065.1 — Layout Sketch: authoring-only blockout ink
+   * drawn on the landscape plane in Studio. The RUNTIME NEVER
+   * reads this (preview is the game; planning ink is not content).
+   * Lives at region level, NOT inside `landscape`, so sketch
+   * commits keep the `landscape` reference stable and skip the
+   * render mesh's expensive re-apply path.
+   */
+  layoutSketch?: RegionLayoutSketchState | null;
+}
+
+/** Plan 065 §065.1 — persisted Layout Sketch payload. */
+export interface RegionLayoutSketchState {
+  /** Ink bitmap as a PNG data URL; null when nothing is drawn. */
+  ink: string | null;
+  /** Optional reference underlay image as a data URL. */
+  referenceImage: string | null;
+  /** Reference underlay opacity, 0..1. */
+  referenceOpacity: number;
+}
+
+export function createRegionLayoutSketchState(
+  overrides: Partial<RegionLayoutSketchState> = {}
+): RegionLayoutSketchState {
+  return {
+    ink: overrides.ink ?? null,
+    referenceImage: overrides.referenceImage ?? null,
+    referenceOpacity:
+      typeof overrides.referenceOpacity === "number"
+        ? Math.max(0, Math.min(1, overrides.referenceOpacity))
+        : 0.4
+  };
 }
 
 export const DEFAULT_REGION_LANDSCAPE_SIZE = 100;

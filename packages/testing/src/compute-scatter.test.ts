@@ -50,6 +50,13 @@ function makeScatterLayer(): ResolvedScatterLayer {
           grassTypeId
         },
         {
+          // Pinned: the layerId seeds BOTH acceptance hashes under
+          // comparison, and the two paths use different hash formulas
+          // whose counts only loosely track. With a random uuid the
+          // +-2 tolerance below is a per-run dice roll (flaked twice
+          // in full-suite runs, 2026-07-11); a fixed id makes the
+          // comparison deterministic.
+          layerId: "compute-scatter-test-layer",
           displayName: "Tall Grass",
           opacity: 1
         }

@@ -1781,12 +1781,11 @@ export function createWebRuntimeHost(
       "region-aware"
     ]);
     // hostPlayerRestore now reflects whatever the host.player
-    // participant received. Region + position spawn from there;
-    // fall through to state.activeRegionId for the implicit
-    // boot.json case where neither save nor authored default set
-    // a region.
-    const resolvedActiveRegionId =
-      hostPlayerRestore?.currentRegionId ?? state.activeRegionId ?? null;
+    // participant received. Region precedence (identical for
+    // Preview and published boots — Preview is the game):
+    // saved region (Continue) > the active Scene's authored
+    // starting region > legacy boot activeRegionId > first.
+    const resolvedActiveRegionId = hostPlayerRestore?.currentRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
     // Plan 058 §058.1 — belt-and-suspenders migration for stale
@@ -1848,7 +1847,10 @@ export function createWebRuntimeHost(
     };
     const activeRegion = getActiveRegion(
       migratedContent.regions,
-      resolvedActiveRegionId
+      resolvedActiveRegionId ??
+        activeScene?.startingRegionId ??
+        state.activeRegionId ??
+        null
     );
     // Composed Base + Overlay view (Pattern 1) — every presence /
     // spawn read below sources from this, never region fields.
@@ -1881,13 +1883,28 @@ export function createWebRuntimeHost(
             ...state,
             activeEnvironmentId: activeScene.environmentOverride.environmentId
           }
-        : state
+        : state,
+      activeRegion
     );
-    renderView.landscapeController.applyLandscape(
+    const landscapeApplyResult = renderView.landscapeController.applyLandscape(
       activeRegion?.landscape ?? null,
       state.contentLibrary,
       state.assetSources
     );
+    // Preview-vs-editor divergence breadcrumb: which region's landscape
+    // the game actually applied, and any warnings the controller
+    // returned (previously swallowed).
+    console.info("[web-runtime] landscape-apply", {
+      regionId: activeRegion?.identity.id ?? null,
+      hasLandscape: Boolean(activeRegion?.landscape),
+      surfaceSlots: (activeRegion?.landscape?.surfaceSlots ?? []).map(
+        (slot) => `${slot.displayName}:${slot.surface?.kind ?? "none"}`
+      ),
+      warnings: landscapeApplyResult.warnings
+    });
+    for (const warning of landscapeApplyResult.warnings) {
+      console.warn("[web-runtime] landscape-apply warning", warning);
+    }
 
     if (activeRegion) {
       const region = activeRegion;

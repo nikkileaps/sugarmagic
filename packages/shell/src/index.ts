@@ -35,8 +35,7 @@ export type BuildWorkspaceKind =
   | "behavior"
   | "environment"
   | "audio"
-  | "surfaces"
-  | "assets";
+  | "surfaces";
 export type CoreDesignWorkspaceKind =
   | "player"
   | "npcs"
@@ -98,7 +97,12 @@ export interface ShellSelectionState {
  * are NOT library kinds either — they're entity-owned content authored via the
  * Player/NPC inspector file-pickers.
  */
-export type LibraryKind = "materials" | "textures" | "shaders" | "audio";
+export type LibraryKind =
+  | "assets"
+  | "materials"
+  | "textures"
+  | "shaders"
+  | "audio";
 
 export interface ShellToolSessionState {
   workspaceId: string | null;

@@ -8,20 +8,8 @@
 
 import { useState } from "react";
 import { Box, ColorSwatch, Group, Popover, Stack, Text } from "@mantine/core";
-import type {
-  AssetSurfaceSlot,
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  PaintedMaskTargetAddress,
-  RockTypeDefinition,
-  ShaderGraphDocument,
-  SurfaceBinding,
-  SurfaceDefinition,
-  TextureDefinition
-} from "@sugarmagic/domain";
-import { SurfaceBindingEditor } from "./surfaces";
+import type { AssetSurfaceSlot, SurfaceBinding } from "@sugarmagic/domain";
+import { SurfaceBindingEditor, useSurfaceAuthoring } from "./surfaces";
 import { previewColorForBinding } from "./surfaces/utils";
 
 function looksLikeDefaultBlenderSlotName(slotName: string): boolean {
@@ -31,18 +19,6 @@ function looksLikeDefaultBlenderSlotName(slotName: string): boolean {
 export interface MaterialSlotBindingsEditorProps {
   bindings: AssetSurfaceSlot[];
   assetDefinitionId: string;
-  surfaceDefinitions: SurfaceDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onChangeBinding: (
     slotName: string,
     slotIndex: number,
@@ -53,20 +29,9 @@ export interface MaterialSlotBindingsEditorProps {
 export function MaterialSlotBindingsEditor({
   bindings,
   assetDefinitionId,
-  surfaceDefinitions,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
-  shaderDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
   onChangeBinding
 }: MaterialSlotBindingsEditorProps) {
+  const { surfaceDefinitions } = useSurfaceAuthoring();
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null);
 
   if (bindings.length === 0) {
@@ -134,18 +99,6 @@ export function MaterialSlotBindingsEditor({
                     assetDefinitionId,
                     slotName: binding.slotName
                   }}
-                  surfaceDefinitions={surfaceDefinitions}
-                  materialDefinitions={materialDefinitions}
-                  textureDefinitions={textureDefinitions}
-                  maskTextureDefinitions={maskTextureDefinitions}
-                  onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                  onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                  activeMaskPaintTarget={activeMaskPaintTarget}
-                  onSetMaskPaintTarget={onSetMaskPaintTarget}
-                  shaderDefinitions={shaderDefinitions}
-                  grassTypeDefinitions={grassTypeDefinitions}
-                  flowerTypeDefinitions={flowerTypeDefinitions}
-                  rockTypeDefinitions={rockTypeDefinitions}
                   onChange={(next) => {
                     onChangeBinding(binding.slotName, binding.slotIndex, next);
                     setOpenSlotKey(null);

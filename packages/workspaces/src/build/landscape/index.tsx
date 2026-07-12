@@ -43,8 +43,14 @@ import {
   createLandscapeSurfaceSlot,
   renderLandscapeMaskToCanvas
 } from "@sugarmagic/domain";
-import type { ViewportStore } from "@sugarmagic/shell";
-import { PanelSection } from "@sugarmagic/ui";
+import { DEFAULT_SKETCH_SETTINGS, type ViewportStore } from "@sugarmagic/shell";
+import {
+  PanelSection,
+  ToolOptionSlider,
+  ToolOptionsBar,
+  ToolRail
+} from "@sugarmagic/ui";
+import { useSurfaceAuthoring } from "../surfaces";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
@@ -87,6 +93,16 @@ const DEFAULT_BRUSH_SETTINGS: LandscapeBrushSettings = {
   mode: "paint"
 };
 
+/** Plan 065 §065.1 — the pencil's ink palette. */
+const SKETCH_INK_COLORS = [
+  "#1e1e2e",
+  "#ffffff",
+  "#d20f39",
+  "#1e66f5",
+  "#df8e1d",
+  "#40a02b"
+];
+
 function nextLandscapeChannelName(channels: LandscapeSurfaceSlot[]): string {
   return `Channel ${channels.length}`;
 }
@@ -127,45 +143,22 @@ function ChannelCard(props: {
   channelIndex: number;
   isActive: boolean;
   landscape: RegionLandscapeState | null;
-  surfaceDefinitions: SurfaceDefinition[];
-  materials: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onSelect: () => void;
   onRename: (displayName: string) => void;
   onSurfaceChange: (surface: SurfaceBinding | null) => void;
   onDelete: () => void;
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
 }) {
   const {
     channel,
     channelIndex,
     isActive,
     landscape,
-    surfaceDefinitions,
-    materials,
-    textureDefinitions,
-    maskTextureDefinitions,
-    activeMaskPaintTarget,
-    onSetMaskPaintTarget,
-    shaderDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
     onSelect,
     onRename,
     onSurfaceChange,
-    onDelete,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition
+    onDelete
   } = props;
+  const { surfaceDefinitions } = useSurfaceAuthoring();
 
   const isBase = channelIndex === 0;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -256,18 +249,6 @@ function ChannelCard(props: {
                   scope: "landscape-channel",
                   channelKey: channel.channelId
                 }}
-                surfaceDefinitions={surfaceDefinitions}
-                materialDefinitions={materials}
-                textureDefinitions={textureDefinitions}
-                maskTextureDefinitions={maskTextureDefinitions}
-                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                activeMaskPaintTarget={activeMaskPaintTarget}
-                onSetMaskPaintTarget={onSetMaskPaintTarget}
-                shaderDefinitions={shaderDefinitions}
-                grassTypeDefinitions={grassTypeDefinitions}
-                flowerTypeDefinitions={flowerTypeDefinitions}
-                rockTypeDefinitions={rockTypeDefinitions}
                 onChange={(next) => {
                   onSurfaceChange(next);
                   setPickerOpen(false);
@@ -394,7 +375,6 @@ export function useLandscapeWorkspaceView(
     onCommand
   } = props;
 
-  const [brushMenuOpen, setBrushMenuOpen] = useState(false);
   const activeChannelIndex = useVanillaStoreSelector(
     viewportStore,
     (state) => state.activeLandscapeChannelIndex
@@ -427,18 +407,6 @@ export function useLandscapeWorkspaceView(
           channelIndex={channelIndex}
           isActive={channelIndex === effectiveActiveChannelIndex}
           landscape={displayedLandscape}
-          surfaceDefinitions={surfaceDefinitions}
-          materials={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          activeMaskPaintTarget={activeMaskPaintTarget}
-          onSetMaskPaintTarget={onSetMaskPaintTarget}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onSelect={() =>
             viewportStore.getState().setActiveLandscapeChannelIndex(channelIndex)
           }
@@ -526,6 +494,56 @@ export function useLandscapeWorkspaceView(
       mode
     });
   };
+
+  const sketchSettings =
+    useVanillaStoreSelector(viewportStore, (state) => state.sketchSettings) ??
+    DEFAULT_SKETCH_SETTINGS;
+  const setSketch = (
+    patch: Partial<typeof sketchSettings>
+  ) => {
+    viewportStore.getState().setSketchSettings({
+      ...sketchSettings,
+      ...patch
+    });
+  };
+  const layoutSketch = region?.layoutSketch ?? null;
+  const commitLayoutSketch = (
+    patch: Partial<NonNullable<RegionDocument["layoutSketch"]>>
+  ) => {
+    if (!region) return;
+    onCommand({
+      kind: "UpdateRegionLayoutSketch",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: {
+        subjectKind: "region-landscape",
+        subjectId: region.identity.id
+      },
+      payload: {
+        layoutSketch: {
+          ink: layoutSketch?.ink ?? null,
+          referenceImage: layoutSketch?.referenceImage ?? null,
+          referenceOpacity: layoutSketch?.referenceOpacity ?? 0.4,
+          ...patch
+        }
+      }
+    });
+  };
+  const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const importReferenceImage = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        commitLayoutSketch({ referenceImage: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  // Local echo while dragging; the command commits on release.
+  const [referenceOpacityDraft, setReferenceOpacityDraft] = useState<number | null>(null);
 
   return {
     leftPanel: null,
@@ -653,138 +671,185 @@ export function useLandscapeWorkspaceView(
     ),
     viewportOverlay: isActive ? (
       <>
-        <Box
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            pointerEvents: "auto"
-          }}
-        >
-          <Popover
-            opened={brushMenuOpen}
-            onChange={setBrushMenuOpen}
-            position="bottom-start"
-            shadow="md"
-            withinPortal={false}
-          >
-            <Popover.Target>
-              <Box
-                style={{
-                  display: "inline-flex",
-                  gap: 8,
-                  padding: 8,
-                  borderRadius: "var(--sm-radius-md)",
-                  border: "1px solid var(--sm-panel-border)",
-                  background: "rgba(30, 30, 46, 0.9)"
-                }}
+        <Box style={{ pointerEvents: "auto" }}>
+          <ToolRail
+            tools={[
+              { id: "paint", icon: "🖌️", label: "Paint landscape" },
+              { id: "erase", icon: "🧽", label: "Erase landscape" },
+              { id: "sketch", icon: "✏️", label: "Layout sketch" }
+            ]}
+            activeToolId={brushSettings.mode}
+            onSelect={(toolId) =>
+              setBrushMode(toolId as LandscapeBrushSettings["mode"])
+            }
+          />
+          {brushSettings.mode === "sketch" ? (
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                Sketch
+              </Text>
+              <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                {SKETCH_INK_COLORS.map((color) => (
+                  <ColorSwatch
+                    key={color}
+                    color={color}
+                    size={16}
+                    component="button"
+                    onClick={() => setSketch({ color, erase: false })}
+                    style={{
+                      cursor: "pointer",
+                      outline:
+                        !sketchSettings.erase && sketchSettings.color === color
+                          ? "2px solid var(--sm-color-subtext)"
+                          : "none",
+                      outlineOffset: 1
+                    }}
+                  />
+                ))}
+              </Group>
+              <ToolOptionSlider
+                label="Size"
+                min={0.1}
+                max={4}
+                step={0.1}
+                value={sketchSettings.size}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) => setSketch({ size: value })}
+              />
+              <ToolOptionSlider
+                label="Opacity"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={sketchSettings.opacity}
+                onChange={(value) => setSketch({ opacity: value })}
+              />
+              <ActionIcon
+                variant={sketchSettings.erase ? "filled" : "subtle"}
+                color={sketchSettings.erase ? "red" : "gray"}
+                size="sm"
+                title="Erase ink"
+                aria-label="Erase ink"
+                onClick={() => setSketch({ erase: !sketchSettings.erase })}
               >
-                <ActionIcon
-                  variant={brushSettings.mode === "paint" ? "filled" : "subtle"}
-                  color={brushSettings.mode === "paint" ? "blue" : "gray"}
-                  aria-label="Paint landscape"
-                  onClick={() => {
-                    if (brushSettings.mode === "paint") {
-                      setBrushMenuOpen((open) => !open);
-                    } else {
-                      setBrushMode("paint");
-                      setBrushMenuOpen(true);
-                    }
-                  }}
-                >
-                  🖌️
-                </ActionIcon>
-                <ActionIcon
-                  variant={brushSettings.mode === "erase" ? "filled" : "subtle"}
-                  color={brushSettings.mode === "erase" ? "blue" : "gray"}
-                  aria-label="Erase landscape"
-                  onClick={() => {
-                    if (brushSettings.mode === "erase") {
-                      setBrushMenuOpen((open) => !open);
-                    } else {
-                      setBrushMode("erase");
-                      setBrushMenuOpen(true);
-                    }
-                  }}
-                >
-                  ⌫
-                </ActionIcon>
-              </Box>
-            </Popover.Target>
-            <Popover.Dropdown>
-              <Stack gap="sm" style={{ minWidth: 220 }}>
-                <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
-                  {brushSettings.mode === "paint" ? "Paint Brush" : "Erase Brush"}
-                </Text>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Radius
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.radius.toFixed(1)}m
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.5}
-                    max={24}
-                    step={0.5}
-                    value={brushSettings.radius}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        radius: value
-                      })
-                    }
-                  />
-                </Stack>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Strength
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.strength.toFixed(2)}
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.01}
+                🧽
+              </ActionIcon>
+              <ActionIcon
+                variant={sketchSettings.visible ? "subtle" : "filled"}
+                color={sketchSettings.visible ? "gray" : "blue"}
+                size="sm"
+                title={sketchSettings.visible ? "Hide sketch" : "Show sketch"}
+                aria-label="Show or hide sketch"
+                onClick={() => setSketch({ visible: !sketchSettings.visible })}
+              >
+                👁
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                title="Import reference image"
+                aria-label="Import reference image"
+                onClick={() => referenceFileInputRef.current?.click()}
+              >
+                🖼
+              </ActionIcon>
+              <input
+                ref={referenceFileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  importReferenceImage(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+              {layoutSketch?.referenceImage ? (
+                <>
+                  <ToolOptionSlider
+                    label="Ref"
+                    min={0.05}
                     max={1}
-                    step={0.01}
-                    value={brushSettings.strength}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        strength: value
-                      })
+                    step={0.05}
+                    value={
+                      referenceOpacityDraft ?? layoutSketch.referenceOpacity
                     }
+                    onChange={setReferenceOpacityDraft}
+                    onChangeEnd={(value) => {
+                      setReferenceOpacityDraft(null);
+                      commitLayoutSketch({ referenceOpacity: value });
+                    }}
                   />
-                </Stack>
-                <Stack gap={6}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text size="xs" c="var(--sm-color-text)">
-                      Falloff
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {brushSettings.falloff.toFixed(2)}
-                    </Text>
-                  </Group>
-                  <Slider
-                    min={0.01}
-                    max={1}
-                    step={0.01}
-                    value={brushSettings.falloff}
-                    onChange={(value) =>
-                      viewportStore.getState().setBrushSettings({
-                        ...brushSettings,
-                        falloff: value
-                      })
-                    }
-                  />
-                </Stack>
-              </Stack>
-            </Popover.Dropdown>
-          </Popover>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="sm"
+                    title="Remove reference image"
+                    aria-label="Remove reference image"
+                    onClick={() => commitLayoutSketch({ referenceImage: null })}
+                  >
+                    🗑
+                  </ActionIcon>
+                </>
+              ) : null}
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                title="Clear all ink"
+                aria-label="Clear all ink"
+                onClick={() => commitLayoutSketch({ ink: null })}
+              >
+                🧹
+              </ActionIcon>
+            </ToolOptionsBar>
+          ) : (
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                {brushSettings.mode === "paint" ? "Paint" : "Erase"}
+              </Text>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.5}
+                max={24}
+                step={0.5}
+                value={brushSettings.radius}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    radius: value
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Strength"
+                min={0.01}
+                max={1}
+                step={0.01}
+                value={brushSettings.strength}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    strength: value
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Falloff"
+                min={0.01}
+                max={1}
+                step={0.01}
+                value={brushSettings.falloff}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    ...brushSettings,
+                    falloff: value
+                  })
+                }
+              />
+            </ToolOptionsBar>
+          )}
         </Box>
         <Box style={{ position: "absolute", top: 12, right: 12, pointerEvents: "none" }}>
           <LayoutOrientationWidget quaternion={cameraQuaternion} />

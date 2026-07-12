@@ -224,4 +224,55 @@ describe("material resolution", () => {
       "wordlark:shader:standard-pbr"
     );
   });
+
+  it("carries scatter-layer texture bindings into the resolved appearance binding", () => {
+    const contentLibrary = makeContentLibrary();
+    const grassTypeId = contentLibrary.grassTypeDefinitions?.[0]?.definitionId;
+    if (!grassTypeId) {
+      throw new Error("Expected starter grass definition.");
+    }
+    const binding = createInlineSurfaceBinding(
+      createSurface([
+        createAppearanceLayer(createColorAppearanceContent(0x6f8f52), {
+          displayName: "Ground",
+          blendMode: "base"
+        }),
+        createScatterLayer(
+          { kind: "grass", grassTypeId },
+          {
+            displayName: "Card Grass",
+            shaderDefinitionId: "wordlark:shader:card-foliage-2",
+            textureBindings: { silhouette: "wordlark:texture:brick-base" }
+          }
+        )
+      ])
+    );
+
+    const result = resolveSurfaceBinding(binding, contentLibrary, "universal");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const scatterLayer = result.binding.layers.find(
+      (layer) => layer.kind === "scatter"
+    );
+    if (scatterLayer?.kind !== "scatter") {
+      throw new Error("Expected resolved scatter layer.");
+    }
+    expect(scatterLayer.appearanceBinding?.shaderDefinitionId).toBe(
+      "wordlark:shader:card-foliage-2"
+    );
+    expect(scatterLayer.appearanceBinding?.textureBindings.silhouette).toBe(
+      "wordlark:texture:brick-base"
+    );
+    // The base color inheritance seeded before resolution must still
+    // hold alongside the texture bindings (fill declares
+    // inheritSource baseLayerColor).
+    expect(scatterLayer.appearanceBinding?.parameterValues.fill).toEqual([
+      0x6f / 255,
+      0x8f / 255,
+      0x52 / 255
+    ]);
+  });
 });

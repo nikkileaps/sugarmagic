@@ -477,7 +477,11 @@ export function createAuthoringViewport(
       contentLibrary,
       playerDefinition,
       itemDefinitions,
-      npcDefinitions
+      npcDefinitions,
+      // Compose the ambient Scene's overlay exactly like the game
+      // does — Scene-scoped placements must render here too (they
+      // were invisible in the viewport before 2026-07-09).
+      activeScene: projection.activeScene
     });
     const currentObjects = resolvedObjects.map((object) =>
       applyTransformOverride(

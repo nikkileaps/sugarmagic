@@ -13,6 +13,7 @@
 import {
   applyCommand,
   getActiveRegion,
+  getActiveScene,
   type SemanticCommand
 } from "@sugarmagic/domain";
 import { shallowEqual } from "@sugarmagic/shell";
@@ -49,6 +50,10 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     },
     getRegion() {
       return context.stateAccess.getActiveRegion();
+    },
+    getActiveScene() {
+      const session = context.stateAccess.getSession();
+      return session ? getActiveScene(session) : null;
     }
   });
 

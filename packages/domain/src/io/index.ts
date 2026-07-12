@@ -22,6 +22,7 @@ import {
   createRegionNPCBehaviorTask,
   createRegionNPCPresence,
   createRegionPlayerPresence,
+  createRegionLayoutSketchState,
   type RegionDocument
 } from "../region-authoring";
 import type { RegionSceneOverlay, Scene } from "../scenes";
@@ -335,7 +336,14 @@ export function normalizeRegionDocumentForLoad(
           audio?: Parameters<typeof createRegionAudioState>[0];
         }
       ).audio
-    )
+    ),
+    // Plan 065 §065.1 — authoring-only Layout Sketch. Coerced on
+    // load so a malformed payload can't leak into the session;
+    // absent stays null (the common case).
+    layoutSketch:
+      region.layoutSketch && typeof region.layoutSketch === "object"
+        ? createRegionLayoutSketchState(region.layoutSketch)
+        : null
   };
 }
 

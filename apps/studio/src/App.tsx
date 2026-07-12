@@ -36,6 +36,7 @@ import type {
   AudioClipDefinition,
   AudioMixerSettings,
   MusicBindings,
+  PaintedMaskTargetAddress,
   RuntimeSoundEventKey,
   SoundCueDefinition
 } from "@sugarmagic/domain";
@@ -100,8 +101,13 @@ import {
   updateMusicBindingsInSession,
   updateCreditsInSession,
   duplicateMaterialDefinitionInSession,
+  duplicateSurfaceDefinitionInSession,
   updateSurfaceDefinitionInSession,
   removeMaterialDefinitionFromSession,
+  removeTextureDefinitionFromSession,
+  textureDefinitionHasReferences,
+  removeAssetDefinitionFromSession,
+  assetDefinitionHasReferences,
   removeSurfaceDefinitionFromSession,
   materialDefinitionHasReferences,
   createDefaultMaterialPbr,
@@ -160,6 +166,7 @@ import {
   type AuthoringContextSnapshot
 } from "@sugarmagic/shell";
 import {
+  SurfaceAuthoringProvider,
   useBuildProductModeView,
   useDesignProductModeView,
   usePublishProductModeView,
@@ -189,6 +196,7 @@ import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
+import { mountScatterBrushOverlay } from "./viewport/overlays/scatter-brush";
 import { mountMaskPaintOverlay } from "./viewport/overlays/mask-paint";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
 import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
@@ -1234,6 +1242,18 @@ export function App() {
         result.assetDefinition
       );
       projectStore.getState().updateSession(nextSession);
+      // The import wrote new files; without refreshing their blob
+      // URLs the Layout viewport can't render the asset until the
+      // project reloads (the preview re-reads files at boot, which
+      // hid this). Same pattern as audio/texture imports.
+      await assetSourceStore
+        .getState()
+        .refreshPaths([
+          result.assetDefinition.source.relativeAssetPath,
+          ...result.textureDefinitions.map(
+            (definition) => definition.source.relativeAssetPath
+          )
+        ]);
       if (result.warnings.length > 0) {
         window.alert(
           `Asset import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
@@ -1298,6 +1318,47 @@ export function App() {
     },
     []
   );
+
+  // Assets library modal (Game > Libraries > Assets): when opened
+  // from a placed instance's "Edit definition", preselect that asset.
+  const [assetsLibraryPreselectId, setAssetsLibraryPreselectId] = useState<
+    string | null
+  >(null);
+
+  const handleSetAssetDefaultShader = useCallback(
+    (
+      definitionId: string,
+      slot: "surface" | "deform" | "effect",
+      shaderDefinitionId: string | null
+    ) =>
+      dispatchCommand({
+        kind: "SetAssetDefaultShader",
+        target: {
+          aggregateKind: "content-definition",
+          aggregateId: definitionId
+        },
+        subject: {
+          subjectKind: "asset-definition",
+          subjectId: definitionId
+        },
+        payload: {
+          definitionId,
+          slot,
+          shaderDefinitionId: shaderDefinitionId ?? null
+        }
+      }),
+    []
+  );
+
+  const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) return;
+    projectStore
+      .getState()
+      .updateSession(
+        removeAssetDefinitionFromSession(currentSession, definitionId)
+      );
+  }, []);
 
   const handleCreateMaterialDefinition = useCallback(() => {
     const { session: currentSession } = projectStore.getState();
@@ -1962,6 +2023,21 @@ export function App() {
     []
   );
 
+  const handleDuplicateSurfaceDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return null;
+      const result = duplicateSurfaceDefinitionInSession(
+        currentSession,
+        definitionId
+      );
+      if (!result) return null;
+      projectStore.getState().updateSession(result.session);
+      return result.newDefinitionId;
+    },
+    []
+  );
+
   const handleRemoveSurfaceDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
     if (!currentSession) return;
@@ -2106,63 +2182,10 @@ export function App() {
           })
         );
     },
-    onUpdateAssetDefinition: handleUpdateAssetDefinition,
-    onSetAssetMaterialSlotBinding: handleSetAssetMaterialSlotBinding,
-    onSetAssetDefaultShader: (definitionId, slot, shaderDefinitionId) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShader",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          shaderDefinitionId: shaderDefinitionId ?? null
-        }
-      }),
-    onSetAssetDefaultShaderParameterOverride: (definitionId, slot, override) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShaderParameterOverride",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          override
-        }
-      }),
-    onClearAssetDefaultShaderParameterOverride: (
-      definitionId,
-      slot,
-      parameterId
-    ) =>
-      dispatchCommand({
-        kind: "ClearAssetDefaultShaderParameterOverride",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          parameterId
-        }
-      }),
+    onOpenAssetsLibrary: (definitionId) => {
+      setAssetsLibraryPreselectId(definitionId);
+      shellStore.getState().setActiveLibrary("assets");
+    },
     onCreateMaterialDefinition: handleCreateMaterialDefinition,
     onImportPbrMaterial: handleImportPbrMaterial,
     onImportTextureDefinition: handleImportTextureDefinition,
@@ -2173,6 +2196,7 @@ export function App() {
     onRemoveMaterialDefinition: handleRemoveMaterialDefinition,
     onCreateSurfaceDefinition: handleCreateSurfaceDefinition,
     onUpdateSurfaceDefinition: handleUpdateSurfaceDefinition,
+    onDuplicateSurfaceDefinition: handleDuplicateSurfaceDefinition,
     onRemoveSurfaceDefinition: handleRemoveSurfaceDefinition,
     onCreateSoundCueDefinition: handleCreateSoundCueDefinition,
     onUpdateSoundCueDefinition: handleUpdateSoundCueDefinition,
@@ -2532,6 +2556,7 @@ export function App() {
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
+              mountScatterBrushOverlay,
               mountMaskPaintOverlay,
               mountTransformGizmoOverlay,
               mountSpatialAuthoringOverlay
@@ -2570,8 +2595,44 @@ export function App() {
     return `${activeProductMode} workspace ready${dirty}`;
   }, [phase, isDirty, activeProductMode]);
 
+  // The shared definition catalogs every surface editor consumes
+  // (binding editor, layer stack, mask editor, slot editors) —
+  // provided once here instead of threading a 10-prop bundle down
+  // 4+ component levels. Memoized so consumers only re-render when
+  // a catalog actually changes.
+  const surfaceAuthoringCatalog = useMemo(
+    () => ({
+      surfaceDefinitions,
+      materialDefinitions,
+      textureDefinitions,
+      maskTextureDefinitions,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
+      rockTypeDefinitions,
+      onCreateMaskTextureDefinition: handleCreateMaskTextureDefinition,
+      onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
+      activeMaskPaintTarget,
+      onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) =>
+        viewportStore.getState().setActiveMaskPaintTarget(target)
+    }),
+    [
+      surfaceDefinitions,
+      materialDefinitions,
+      textureDefinitions,
+      maskTextureDefinitions,
+      shaderDefinitions,
+      grassTypeDefinitions,
+      flowerTypeDefinitions,
+      rockTypeDefinitions,
+      handleCreateMaskTextureDefinition,
+      handleImportMaskTextureDefinition,
+      activeMaskPaintTarget
+    ]
+  );
+
   return (
-    <>
+    <SurfaceAuthoringProvider catalog={surfaceAuthoringCatalog}>
       <ProjectManagerDialog
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
@@ -2588,6 +2649,8 @@ export function App() {
         textureDefinitions={textureDefinitions}
         shaderDefinitions={shaderDefinitions}
         audioClipDefinitions={audioClipDefinitions}
+        assetDefinitions={assetDefinitions}
+        contentLibrary={session?.contentLibrary ?? null}
         assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
         isMaterialReferenced={(definitionId) =>
@@ -2595,6 +2658,29 @@ export function App() {
             ? materialDefinitionHasReferences(session, definitionId)
             : false
         }
+        isTextureReferenced={(definitionId) =>
+          session
+            ? textureDefinitionHasReferences(session, definitionId)
+            : false
+        }
+        isAssetReferenced={(definitionId) =>
+          session ? assetDefinitionHasReferences(session, definitionId) : false
+        }
+        assetsPreselectId={assetsLibraryPreselectId}
+        onImportAssetDefinition={handleImportAsset}
+        onUpdateAssetDefinition={handleUpdateAssetDefinition}
+        onSetAssetMaterialSlotBinding={handleSetAssetMaterialSlotBinding}
+        onSetAssetDefaultShader={handleSetAssetDefaultShader}
+        onRemoveAssetDefinition={handleRemoveAssetDefinition}
+        onRemoveTextureDefinition={(definitionId) => {
+          const { session: currentSession } = projectStore.getState();
+          if (!currentSession) return;
+          projectStore
+            .getState()
+            .updateSession(
+              removeTextureDefinitionFromSession(currentSession, definitionId)
+            );
+        }}
         onCreateMaterialDefinition={handleCreateMaterialDefinition}
         onImportPbrMaterial={handleImportPbrMaterial}
         onImportTextureDefinition={handleImportTextureDefinition}
@@ -2627,6 +2713,10 @@ export function App() {
               displayName: definition.displayName
             })
           )}
+          regions={[...session.regions.values()].map((region) => ({
+            regionId: region.identity.id,
+            displayName: region.displayName
+          }))}
           soundCueDefinitions={(
             session.contentLibrary.soundCueDefinitions ?? []
           ).map((cue) => ({
@@ -2925,6 +3015,22 @@ export function App() {
                         }}
                       >
                         <Menu.Item
+                          onClick={() => {
+                            setAssetsLibraryPreselectId(null);
+                            shellStore.getState().setActiveLibrary("assets");
+                          }}
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          📦 Assets
+                        </Menu.Item>
+                        <Menu.Item
                           onClick={() =>
                             shellStore.getState().setActiveLibrary("materials")
                           }
@@ -3211,6 +3317,6 @@ export function App() {
           )
         }
       />
-    </>
+    </SurfaceAuthoringProvider>
   );
 }

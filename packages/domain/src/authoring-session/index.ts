@@ -134,6 +134,7 @@ import {
 } from "../ui-definition";
 import {
   assertReusableSurfaceHasNoPaintedMasks,
+  cloneSurface,
   type SurfaceDefinition
 } from "../surface";
 import {
@@ -2549,6 +2550,7 @@ export function updateSceneInSession(
       | "description"
       | "notes"
       | "unlockCondition"
+      | "startingRegionId"
       | "environmentOverride"
       | "audioOverride"
       | "transitionConfig"
@@ -3598,6 +3600,140 @@ export function removeMaterialDefinitionFromSession(
   };
 }
 
+/**
+ * "Duplicate to edit" for surfaces (Procreate-brush model): the
+ * copy deep-clones the layer stack, gets a project-scoped id, and
+ * omits metadata so it is user-owned (built-in originals are
+ * factory-replaced on every load and cannot hold edits).
+ */
+export function duplicateSurfaceDefinitionInSession(
+  session: AuthoringSession,
+  sourceDefinitionId: string,
+  options: { displayName?: string } = {}
+): { session: AuthoringSession; newDefinitionId: string } | null {
+  const source = (session.contentLibrary.surfaceDefinitions ?? []).find(
+    (definition) => definition.definitionId === sourceDefinitionId
+  );
+  if (!source) {
+    return null;
+  }
+  const projectScope = session.gameProject.identity.id;
+  const newDefinitionId = `${projectScope}:surface:${createUuid()}`;
+  const copy: SurfaceDefinition = {
+    definitionId: newDefinitionId,
+    definitionKind: "surface",
+    displayName: options.displayName ?? `${source.displayName} (Copy)`,
+    surface: cloneSurface(source.surface)
+    // metadata intentionally omitted so the copy is user-owned.
+  };
+  return {
+    session: {
+      ...session,
+      contentLibrary: {
+        ...session.contentLibrary,
+        surfaceDefinitions: [
+          ...(session.contentLibrary.surfaceDefinitions ?? []),
+          copy
+        ]
+      },
+      isDirty: true
+    },
+    newDefinitionId
+  };
+}
+
+export function removeTextureDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      textureDefinitions: session.contentLibrary.textureDefinitions.filter(
+        (definition) => definition.definitionId !== definitionId
+      )
+    },
+    isDirty: true
+  };
+}
+
+/**
+ * True when a texture definition is referenced anywhere: material
+ * texture maps, or texture-content / texture-mask layers in
+ * inline surfaces (assets + landscape channels). Referenced
+ * textures cannot be deleted from the Library.
+ */
+export function textureDefinitionHasReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  const usedByMaterial = session.contentLibrary.materialDefinitions.some(
+    (material) =>
+      [
+        material.pbr.baseColorMap,
+        material.pbr.normalMap,
+        material.pbr.ormMap,
+        material.pbr.roughnessMap,
+        material.pbr.metallicMap,
+        material.pbr.ambientOcclusionMap,
+        material.pbr.emissiveMap
+      ].includes(definitionId)
+  );
+  if (usedByMaterial) return true;
+
+  const layerUsesTexture = (layer: {
+    kind: string;
+    content?: { kind: string; textureDefinitionId?: string };
+    masks?: Array<{ kind: string; textureDefinitionId?: string }>;
+  }): boolean => {
+    if (
+      (layer.kind === "appearance" || layer.kind === "emission") &&
+      layer.content?.kind === "texture" &&
+      layer.content.textureDefinitionId === definitionId
+    ) {
+      return true;
+    }
+    return (layer.masks ?? []).some(
+      (mask) =>
+        mask.kind === "texture" &&
+        mask.textureDefinitionId === definitionId
+    );
+  };
+  const surfaceUsesTexture = (binding: {
+    kind: string;
+    surface?: { layers: readonly unknown[] };
+  } | null): boolean =>
+    binding?.kind === "inline" &&
+    Boolean(
+      binding.surface?.layers.some((layer) =>
+        layerUsesTexture(layer as Parameters<typeof layerUsesTexture>[0])
+      )
+    );
+
+  const usedBySurfaceDefinition =
+    session.contentLibrary.surfaceDefinitions?.some((definition) =>
+      definition.surface.layers.some((layer) =>
+        layerUsesTexture(layer as Parameters<typeof layerUsesTexture>[0])
+      )
+    ) ?? false;
+  if (usedBySurfaceDefinition) return true;
+
+  const usedByAsset = session.contentLibrary.assetDefinitions.some(
+    (assetDefinition) =>
+      assetDefinition.surfaceSlots.some((slot) =>
+        surfaceUsesTexture(slot.surface as Parameters<typeof surfaceUsesTexture>[0])
+      )
+  );
+  if (usedByAsset) return true;
+
+  return getAllRegions(session).some((region) =>
+    region.landscape.surfaceSlots.some((channel) =>
+      surfaceUsesTexture(channel.surface as Parameters<typeof surfaceUsesTexture>[0])
+    )
+  );
+}
+
 export function updateMaskTextureDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
@@ -3656,6 +3792,75 @@ export function assetDefinitionHasSceneReferences(
       overlay.placedAssets.some(
         (asset) => asset.assetDefinitionId === definitionId
       )
+    )
+  );
+}
+
+/** Recursively true when any nested object carries this assetDefinitionId
+ *  (scatter layer asset specs, LOD specs — the key is unique to asset refs). */
+function valueReferencesAssetDefinition(
+  value: unknown,
+  definitionId: string
+): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((entry) =>
+      valueReferencesAssetDefinition(entry, definitionId)
+    );
+  }
+  const record = value as Record<string, unknown>;
+  if (record.assetDefinitionId === definitionId) return true;
+  return Object.values(record).some((entry) =>
+    valueReferencesAssetDefinition(entry, definitionId)
+  );
+}
+
+/**
+ * True when an asset definition is referenced anywhere: placed
+ * instances (region base + Scene overlays), grass/flower/rock
+ * scatter types, or surface layer stacks (library definitions,
+ * asset slots, landscape channels). Referenced assets cannot be
+ * deleted from the Library.
+ */
+export function assetDefinitionHasReferences(
+  session: AuthoringSession,
+  definitionId: string
+): boolean {
+  if (assetDefinitionHasSceneReferences(session, definitionId)) return true;
+
+  const library = session.contentLibrary;
+  const scatterTypes: unknown[] = [
+    ...(library.grassTypeDefinitions ?? []),
+    ...(library.flowerTypeDefinitions ?? []),
+    ...(library.rockTypeDefinitions ?? [])
+  ];
+  if (
+    scatterTypes.some((definition) =>
+      valueReferencesAssetDefinition(definition, definitionId)
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    (library.surfaceDefinitions ?? []).some((definition) =>
+      valueReferencesAssetDefinition(definition.surface, definitionId)
+    )
+  ) {
+    return true;
+  }
+  if (
+    library.assetDefinitions.some(
+      (definition) =>
+        definition.definitionId !== definitionId &&
+        valueReferencesAssetDefinition(definition.surfaceSlots, definitionId)
+    )
+  ) {
+    return true;
+  }
+  return getAllRegions(session).some((region) =>
+    region.landscape.surfaceSlots.some((channel) =>
+      valueReferencesAssetDefinition(channel.surface, definitionId)
     )
   );
 }

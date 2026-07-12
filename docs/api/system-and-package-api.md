@@ -205,6 +205,15 @@ For the initial `Build > Layout` pass, `SceneExplorer` should begin as:
 - derived from canonical region/workspace structure
 - synchronized with viewport selection and gizmo state
 
+Current capabilities beyond the initial pass:
+
+- asset rows drag onto folder rows to re-parent (dispatches
+  `MovePlacedAssetToFolder`; dropping on the region root un-folders;
+  no-op drops are guarded so they cannot clear the redo stack)
+- folder expansion is a persisted UI preference (localStorage):
+  collapsed by default, region roots expanded by default, explicit
+  toggles remembered across reloads
+
 ## `/apps/studio` API
 
 ### Purpose
@@ -312,6 +321,9 @@ Top-level application shell and shared hosting surfaces.
 - active ProductMode
 - panel layout and visibility
 - active tool-session coordination
+- viewport tool settings (`ScatterBrushSettings` -- non-null while
+  the Layout scatter brush is armed; the brush palette and jitter
+  ranges are UI state, the landed instances are canonical)
 - shell notifications
 
 ## `/packages/productmodes` API

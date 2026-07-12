@@ -88,6 +88,23 @@ export function SurfacePreviewViewport({
     previewRootRef.current = previewRoot;
     scene.add(previewRoot);
 
+    // Warm key + cool fill + ambient. Without lights the PBR
+    // surface renders black-on-void (2026-07-10). Intensities are
+    // deliberately LOWER than CharacterPreview's rig: this preview
+    // has no tone-mapping post pass, so an overbright rig clips
+    // saturated albedo toward pastel and the surface reads nothing
+    // like its authored color. True fidelity (default environment
+    // sun + ACES chain) is surface-epic work; this keeps colors
+    // recognizable meanwhile.
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.9);
+    keyLight.position.set(4, 6, 3);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xb0c8ff, 0.3);
+    fillLight.position.set(-3, 2.5, -2);
+    scene.add(fillLight);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+    scene.add(ambient);
+
     const renderView = createRenderView({
       engine,
       scene,
@@ -202,16 +219,30 @@ export function SurfacePreviewViewport({
       if (layer.kind !== "scatter") {
         continue;
       }
-      const build = buildSurfaceScatterLayer(
-        layer,
-        spec.scatterSamplesForDensity(layer.density),
-        {
-          contentLibrary,
-          assetResolver: renderView.assetResolver,
-          shaderRuntime: renderView.shaderRuntime,
-          logger: engine.logger
-        }
-      );
+      const samples = spec.scatterSamplesForDensity(layer.density);
+      const build = buildSurfaceScatterLayer(layer, samples, {
+        contentLibrary,
+        assetResolver: renderView.assetResolver,
+        shaderRuntime: renderView.shaderRuntime,
+        logger: engine.logger
+      });
+      // Preview-vs-landscape scatter divergence breadcrumb
+      // (2026-07-10): sample/instance inputs per layer, so a
+      // silent zero names its stage.
+      console.info("[surface-preview] scatter layer", {
+        layerId: layer.layerId,
+        contentKind: layer.contentKind,
+        definitionId: layer.definitionId,
+        density: layer.density,
+        opacity: layer.opacity,
+        enabled: layer.enabled,
+        samples: samples.length,
+        rootChildren: build.root.children.length,
+        meshes: build.root.children.map((child) => ({
+          name: child.name,
+          count: (child as THREE.InstancedMesh).count ?? null
+        }))
+      });
       previewRoot.add(build.root);
       scatterBuildsRef.current.push(build);
     }

@@ -51,6 +51,8 @@ export interface ManageScenesModalProps {
   scenesUiLabel: string;
   questDefinitions: QuestDefinition[];
   environmentDefinitions: { definitionId: string; displayName: string }[];
+  /** Region options for the per-Scene starting region. */
+  regions: { regionId: string; displayName: string }[];
   /** Plan 059 §059.1 — options for the background-music override. */
   soundCueDefinitions: { definitionId: string; displayName: string }[];
   onAddScene: (displayName: string) => void;
@@ -63,6 +65,7 @@ export interface ManageScenesModalProps {
         | "description"
         | "notes"
         | "unlockCondition"
+        | "startingRegionId"
         | "environmentOverride"
         | "audioOverride"
         | "transitionConfig"
@@ -105,6 +108,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
     scenesUiLabel,
     questDefinitions,
     environmentDefinitions,
+    regions,
     soundCueDefinitions,
     onAddScene,
     onRenameScene,
@@ -465,6 +469,23 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                 {...fieldLabelProps}
               />
             )}
+            <Select
+              size="xs"
+              label="Starting region"
+              placeholder="(first region)"
+              clearable
+              data={regions.map((region) => ({
+                value: region.regionId,
+                label: region.displayName
+              }))}
+              value={selectedScene.startingRegionId ?? null}
+              onChange={(value) =>
+                onUpdateScene(selectedScene.sceneId, {
+                  startingRegionId: value ?? null
+                })
+              }
+              {...fieldLabelProps}
+            />
             <Select
               size="xs"
               label="Environment override"

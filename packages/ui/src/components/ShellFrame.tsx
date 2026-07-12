@@ -82,7 +82,10 @@ export function ShellFrame({
           styles={{
             navbar: {
               background: "var(--sm-panel-bg)",
-              borderRight: "1px solid var(--sm-panel-border)"
+              borderRight: "1px solid var(--sm-panel-border)",
+              // Long panel content (Scene Explorer with hundreds of
+              // rows) scrolls instead of punching out the shell.
+              overflowY: "auto"
             }
           }}
         >
@@ -97,7 +100,8 @@ export function ShellFrame({
           styles={{
             aside: {
               background: "var(--sm-panel-bg)",
-              borderLeft: "1px solid var(--sm-panel-border)"
+              borderLeft: "1px solid var(--sm-panel-border)",
+              overflowY: "auto"
             }
           }}
         >

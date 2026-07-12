@@ -57,11 +57,13 @@ import {
   SceneExplorer,
   Inspector,
   TransformInspector,
-  ViewportToolbar,
+  ToolOptionSlider,
+  ToolOptionsBar,
+  ToolRail,
   type SceneExplorerNode,
-  type ViewportToolbarItem
+  type ToolRailItem
 } from "@sugarmagic/ui";
-import type { ViewportStore } from "@sugarmagic/shell";
+import type { ScatterBrushSettings, ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
@@ -69,11 +71,28 @@ import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 
-const transformTools: ViewportToolbarItem[] = [
-  { id: "move", label: "Move", icon: "✥", shortcut: "G" },
-  { id: "rotate", label: "Rotate", icon: "↻", shortcut: "R" },
-  { id: "scale", label: "Scale", icon: "⤢", shortcut: "S" }
+// Vertical side rail (the Design > Animation viewport pattern): the
+// rail sits below the options-bar row, so an armed tool's settings
+// never cover the tool switcher -- there is always a visible way OUT
+// of a mode (065 review UX fix, 2026-07-12).
+const layoutTools: ToolRailItem[] = [
+  { id: "move", label: "Move", icon: "✥" },
+  { id: "rotate", label: "Rotate", icon: "↻" },
+  { id: "scale", label: "Scale", icon: "⤢" },
+  // Plan 065.2 -- scatter/prop paint brush. Arming it swallows
+  // viewport pointer input (top of the layout input-router stack);
+  // switching back to a transform tool disarms it.
+  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", color: "green" }
 ];
+
+const DEFAULT_SCATTER_BRUSH_SETTINGS: ScatterBrushSettings = {
+  radius: 4,
+  density: 0.15,
+  paletteAssetDefinitionIds: [],
+  scaleJitter: [0.8, 1.25],
+  rotationJitter: 1,
+  mode: "paint"
+};
 
 export interface LayoutWorkspaceViewProps {
   isActive: boolean;
@@ -350,6 +369,8 @@ export function useLayoutWorkspaceView(
   const [npcQuery, setNPCQuery] = useState("");
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [itemQuery, setItemQuery] = useState("");
+  const [addAssetOpen, setAddAssetOpen] = useState(false);
+  const [assetQuery, setAssetQuery] = useState("");
 
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const getViewportElementRef = useRef(getViewportElement);
@@ -358,6 +379,23 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.activeTransformTool
   );
+  const scatterBrushSettings = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.scatterBrushSettings
+  );
+  // Settings survive disarm/re-arm within the session (palette and
+  // sliders come back as you left them).
+  const lastScatterBrushSettingsRef = useRef<ScatterBrushSettings>(
+    DEFAULT_SCATTER_BRUSH_SETTINGS
+  );
+  const updateScatterBrush = (patch: Partial<ScatterBrushSettings>) => {
+    const current =
+      viewportStore.getState().scatterBrushSettings ??
+      lastScatterBrushSettingsRef.current;
+    const next = { ...current, ...patch };
+    lastScatterBrushSettingsRef.current = next;
+    viewportStore.getState().setScatterBrushSettings(next);
+  };
   const cameraQuaternion = useVanillaStoreSelector(
     viewportStore,
     (state) => state.cameraQuaternion
@@ -710,6 +748,33 @@ export function useLayoutWorkspaceView(
     [activeScene, getRegion, onCommand]
   );
 
+  const handleMoveEntityToFolder = useCallback(
+    (instanceId: string, folderId: string | null) => {
+      const currentRegion = getRegion();
+      if (!currentRegion) return;
+      // Only placed assets live in the folder tree; presence rows are
+      // not draggable (the explorer already gates this), but guard
+      // anyway so a stray drop can't dispatch a bogus command.
+      const asset = (
+        getRegionContents() ?? EMPTY_REGION_CONTENTS
+      ).placedAssets.find((entry) => entry.instanceId === instanceId);
+      if (!asset) return;
+      // Dropping onto the asset's CURRENT folder is a no-op; skip the
+      // dispatch so it can't wipe the redo stack (065.12a).
+      if (asset.parentFolderId === folderId) return;
+      onCommand({
+        kind: "MovePlacedAssetToFolder",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: currentRegion.identity.id
+        },
+        subject: { subjectKind: "placed-asset", subjectId: instanceId },
+        payload: { instanceId, parentFolderId: folderId }
+      });
+    },
+    [getRegion, getRegionContents, onCommand]
+  );
+
   const handleCreateFolderAtSelection = useCallback(() => {
     handleCreateFolder(
       selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId
@@ -921,41 +986,50 @@ export function useLayoutWorkspaceView(
     [onEditAssetDefinition, region]
   );
 
-  const handleImportAssetFromExplorer = useCallback(async () => {
-    if (!region) return;
+  const handlePlaceAssetDefinition = useCallback(
+    (definition: AssetDefinition) => {
+      if (!region) return;
 
+      const instanceId = createPlacedAssetInstanceId(definition.displayName);
+
+      onCommand({
+        kind: "PlaceAssetInstance",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: instanceId
+        },
+        payload: {
+          instanceId,
+          assetDefinitionId: definition.definitionId,
+          displayName: definition.displayName,
+          parentFolderId:
+            selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
+          position: [0, 0.5, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          // Plan 058 §058.2 — Ambient Context: new placements land
+          // in the active Scene's overlay. Promote to Base via the
+          // scope-conversion action (Plan 058.3).
+          scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
+        }
+      });
+      onSelect([instanceId]);
+      setAddAssetOpen(false);
+    },
+    [activeScene, onCommand, onSelect, region, selectedFolderId]
+  );
+
+  // The "+ Asset" picker's escape hatch for a file not yet in the
+  // library: run the normal import, then place the result.
+  const handleImportAndPlaceAsset = useCallback(async () => {
     const importedAsset = await onImportAsset();
     if (!importedAsset) return;
-
-    const instanceId = createPlacedAssetInstanceId(importedAsset.displayName);
-
-    onCommand({
-      kind: "PlaceAssetInstance",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: instanceId
-      },
-      payload: {
-        instanceId,
-        assetDefinitionId: importedAsset.definitionId,
-        displayName: importedAsset.displayName,
-        parentFolderId:
-          selectedFolderId === SCENE_ROOT_FOLDER_ID ? null : selectedFolderId,
-        position: [0, 0.5, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        // Plan 058 §058.2 — Ambient Context: new placements land
-        // in the active Scene's overlay. Promote to Base via the
-        // scope-conversion action (Plan 058.3).
-        scope: activeScene ? { sceneId: activeScene.sceneId } : "base"
-      }
-    });
-    onSelect([instanceId]);
-  }, [activeScene, onCommand, onImportAsset, onSelect, region, selectedFolderId]);
+    handlePlaceAssetDefinition(importedAsset);
+  }, [handlePlaceAssetDefinition, onImportAsset]);
 
   const handleAddPlayerToScene = useCallback(() => {
     if (!region || !playerDefinition) return;
@@ -1182,6 +1256,14 @@ export function useLayoutWorkspaceView(
     );
   }, [itemDefinitions, itemQuery]);
 
+  const filteredAssetDefinitions = useMemo(() => {
+    const query = assetQuery.trim().toLowerCase();
+    if (!query) return assetDefinitions;
+    return assetDefinitions.filter((definition) =>
+      definition.displayName.toLowerCase().includes(query)
+    );
+  }, [assetDefinitions, assetQuery]);
+
   return {
     leftPanel: region ? (
       <PanelSection
@@ -1200,7 +1282,12 @@ export function useLayoutWorkspaceView(
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item onClick={() => void handleImportAssetFromExplorer()}>
+                <Menu.Item
+                  onClick={() => {
+                    setAddAssetOpen(true);
+                    setAssetQuery("");
+                  }}
+                >
                   Asset
                 </Menu.Item>
                 <Menu.Item
@@ -1259,8 +1346,69 @@ export function useLayoutWorkspaceView(
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
+            onMoveEntityToFolder={handleMoveEntityToFolder}
+            getEntityScopeAction={(instanceId) => {
+              // Same action pair as the viewport context menu
+              // (Plan 058.3); placed assets only.
+              if (
+                !region ||
+                !regionContents.placedAssets.some(
+                  (entry) => entry.instanceId === instanceId
+                )
+              ) {
+                return null;
+              }
+              return {
+                label: overlayAssetIds.has(instanceId)
+                  ? "Promote to Base"
+                  : `Move to 🎬 ${activeScene?.displayName ?? "Scene"}`,
+                onClick: () =>
+                  onConvertAssetScope(region.identity.id, instanceId)
+              };
+            }}
           />
         </Stack>
+        <Modal
+          opened={addAssetOpen}
+          onClose={() => setAddAssetOpen(false)}
+          title="Add Asset"
+          centered
+        >
+          <Stack gap="sm">
+            <TextInput
+              placeholder="Search assets..."
+              value={assetQuery}
+              onChange={(event) => setAssetQuery(event.currentTarget.value)}
+              autoFocus
+            />
+            {filteredAssetDefinitions.length > 0 ? (
+              filteredAssetDefinitions.map((definition) => (
+                <Button
+                  key={definition.definitionId}
+                  variant="light"
+                  justify="flex-start"
+                  onClick={() => handlePlaceAssetDefinition(definition)}
+                >
+                  {definition.assetKind === "foliage" ? "🌳" : "📦"}{" "}
+                  {definition.displayName}
+                </Button>
+              ))
+            ) : (
+              <Text size="sm" c="dimmed">
+                {assetQuery.trim()
+                  ? "No assets match that search."
+                  : "No assets in the library yet."}
+              </Text>
+            )}
+            <Button
+              variant="subtle"
+              size="xs"
+              onClick={() => void handleImportAndPlaceAsset()}
+            >
+              Import new asset...
+            </Button>
+          </Stack>
+        </Modal>
         <Modal
           opened={addNPCOpen}
           onClose={() => setAddNPCOpen(false)}
@@ -1735,14 +1883,158 @@ export function useLayoutWorkspaceView(
 
     viewportOverlay: region ? (
       <>
-        <ViewportToolbar
-          items={transformTools}
-          activeId={activeTool}
-          onSelect={(id) => {
-            const tool = id as TransformTool;
-            viewportStore.getState().setActiveTransformTool(tool);
-          }}
-        />
+        <Box style={{ pointerEvents: "auto" }}>
+          <ToolRail
+            tools={layoutTools}
+            activeToolId={scatterBrushSettings ? "scatter-brush" : activeTool}
+            onSelect={(id) => {
+              if (id === "scatter-brush") {
+                viewportStore
+                  .getState()
+                  .setScatterBrushSettings(lastScatterBrushSettingsRef.current);
+                return;
+              }
+              viewportStore.getState().setScatterBrushSettings(null);
+              const tool = id as TransformTool;
+              viewportStore.getState().setActiveTransformTool(tool);
+            }}
+          />
+        </Box>
+        {scatterBrushSettings ? (
+          <Box style={{ pointerEvents: "auto" }}>
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                {scatterBrushSettings.mode === "paint" ? "Scatter" : "Erase"}
+              </Text>
+              <ActionIcon
+                variant={scatterBrushSettings.mode === "erase" ? "filled" : "subtle"}
+                color={scatterBrushSettings.mode === "erase" ? "red" : "gray"}
+                size="sm"
+                title="Erase brushed props"
+                aria-label="Erase brushed props"
+                onClick={() =>
+                  updateScatterBrush({
+                    mode: scatterBrushSettings.mode === "erase" ? "paint" : "erase"
+                  })
+                }
+              >
+                🧽
+              </ActionIcon>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.5}
+                max={16}
+                step={0.5}
+                value={scatterBrushSettings.radius}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) => updateScatterBrush({ radius: value })}
+              />
+              {scatterBrushSettings.mode === "paint" ? (
+                <>
+                  <ToolOptionSlider
+                    label="Density"
+                    min={0.02}
+                    max={1}
+                    step={0.02}
+                    value={scatterBrushSettings.density}
+                    onChange={(value) => updateScatterBrush({ density: value })}
+                  />
+                  <ToolOptionSlider
+                    label="Scale"
+                    min={0}
+                    max={0.6}
+                    step={0.05}
+                    value={
+                      (scatterBrushSettings.scaleJitter[1] -
+                        scatterBrushSettings.scaleJitter[0]) /
+                      2
+                    }
+                    onChange={(value) =>
+                      updateScatterBrush({
+                        scaleJitter: [
+                          Math.max(0.05, 1 - value),
+                          1 + value
+                        ]
+                      })
+                    }
+                  />
+                  <ToolOptionSlider
+                    label="Spin"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={scatterBrushSettings.rotationJitter}
+                    onChange={(value) =>
+                      updateScatterBrush({ rotationJitter: value })
+                    }
+                  />
+                  <Select
+                    size="xs"
+                    w={150}
+                    searchable
+                    placeholder="Add asset..."
+                    value={null}
+                    // Portal the dropdown out: ToolOptionsBar is an
+                    // overflow scroll container that clips it otherwise.
+                    comboboxProps={{ withinPortal: true }}
+                    data={assetDefinitions
+                      .filter(
+                        (definition) =>
+                          !scatterBrushSettings.paletteAssetDefinitionIds.includes(
+                            definition.definitionId
+                          )
+                      )
+                      .map((definition) => ({
+                        value: definition.definitionId,
+                        label: definition.displayName
+                      }))}
+                    onChange={(definitionId) => {
+                      if (!definitionId) return;
+                      updateScatterBrush({
+                        paletteAssetDefinitionIds: [
+                          ...scatterBrushSettings.paletteAssetDefinitionIds,
+                          definitionId
+                        ]
+                      });
+                    }}
+                  />
+                  <Group gap={4} wrap="nowrap">
+                    {scatterBrushSettings.paletteAssetDefinitionIds.map((id) => {
+                      const definition = assetDefinitions.find(
+                        (candidate) => candidate.definitionId === id
+                      );
+                      return (
+                        <Button
+                          key={id}
+                          size="compact-xs"
+                          variant="light"
+                          color="gray"
+                          rightSection={<span aria-hidden>✕</span>}
+                          onClick={() =>
+                            updateScatterBrush({
+                              paletteAssetDefinitionIds:
+                                scatterBrushSettings.paletteAssetDefinitionIds.filter(
+                                  (existing) => existing !== id
+                                )
+                            })
+                          }
+                        >
+                          {definition?.displayName ?? id}
+                        </Button>
+                      );
+                    })}
+                    {scatterBrushSettings.paletteAssetDefinitionIds.length ===
+                    0 ? (
+                      <Text size="xs" c="var(--sm-color-overlay0)">
+                        Pick assets to spray
+                      </Text>
+                    ) : null}
+                  </Group>
+                </>
+              ) : null}
+            </ToolOptionsBar>
+          </Box>
+        ) : null}
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
         {contextMenu && (
           <Box

@@ -3,17 +3,23 @@
  *
  * Edits the authored `Mask` union for one layer using the generic reusable UI
  * primitives from `@sugarmagic/ui`.
+ *
+ * Plan 065.5 (masking/channel UX rework) was DEFERRED 2026-07-12:
+ * field use went smoothly and no concrete gripes existed to build
+ * against. If you are here because mask/channel authoring produced
+ * real friction, that is the revisit trigger -- scope the fix by the
+ * actual complaint (see the deferred story in plan 065 for audit-era
+ * candidates, but re-derive from the field first).
  */
 
 import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import type {
   Mask,
-  MaskTextureDefinition,
   PaintedMaskTargetAddress,
-  SurfaceContext,
-  TextureDefinition
+  SurfaceContext
 } from "@sugarmagic/domain";
 import { LabeledSlider, MaskPreview } from "@sugarmagic/ui";
+import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
 import { sampleMask } from "./maskSampling";
 
 const MASK_KIND_OPTIONS = [
@@ -35,12 +41,6 @@ export interface MaskEditorProps {
   allowedContext: SurfaceContext;
   allowPainted?: boolean;
   paintTarget?: PaintedMaskTargetAddress | null;
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
   onChange: (next: Mask) => void;
 }
 
@@ -50,14 +50,16 @@ export function MaskEditor({
   allowedContext,
   allowPainted = false,
   paintTarget = null,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
   onChange
 }: MaskEditorProps) {
+  const {
+    textureDefinitions,
+    maskTextureDefinitions,
+    onCreateMaskTextureDefinition,
+    onImportMaskTextureDefinition,
+    activeMaskPaintTarget,
+    onSetMaskPaintTarget
+  } = useSurfaceAuthoring();
   const options =
     allowedContext === "landscape-only"
       ? MASK_KIND_OPTIONS
@@ -88,7 +90,7 @@ export function MaskEditor({
         <Select
           size="xs"
           label="Mask Type"
-          comboboxProps={{ withinPortal: false }}
+          comboboxProps={{ withinPortal: true }}
           data={visibleOptions}
           value={value.kind}
           onChange={(kind) => {
@@ -162,7 +164,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Texture"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={textureDefinitions.map((texture) => ({
                         value: texture.definitionId,
                         label: texture.displayName
@@ -177,7 +179,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Channel"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={[
                         { value: "r", label: "Red" },
                         { value: "g", label: "Green" },
@@ -198,7 +200,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Mask Texture"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={maskTextureDefinitions.map((definition) => ({
                         value: definition.definitionId,
                         label: definition.displayName
@@ -305,7 +307,7 @@ export function MaskEditor({
                   <Select
                     size="xs"
                     label="Channel"
-                    comboboxProps={{ withinPortal: false }}
+                    comboboxProps={{ withinPortal: true }}
                     data={[
                       { value: "r", label: "Red" },
                       { value: "g", label: "Green" },
@@ -393,7 +395,7 @@ export function MaskEditor({
                 <Select
                   size="xs"
                   label="Axis"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={[
                     { value: "x", label: "X" },
                         { value: "y", label: "Y" },

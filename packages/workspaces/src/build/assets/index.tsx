@@ -1,256 +1,37 @@
 /**
- * Build-mode asset library inspector and placement surface.
+ * Asset definition inspector.
  *
- * Shows the canonical project asset definitions, including specialized
- * foliage assets, without creating a second asset browser just for trees.
+ * The Assets library modal's right-hand panel (Game > Libraries >
+ * Assets): rename, source info, per-slot surface bindings, and
+ * default deform/effect shaders for one imported asset definition.
+ *
+ * History: this used to be a whole Build workspace ("Assets" tab)
+ * because assets predate the library pattern. The workspace is gone
+ * (2026-07-09) — assets are ordinary library content now; only this
+ * inspector survived the move.
  */
 
 import { useMemo, useState } from "react";
-import {
-  Stack,
-  Text,
-  Button,
-  UnstyledButton,
-  Group,
-  TextInput
-} from "@mantine/core";
+import { Stack, Text, Button, TextInput } from "@mantine/core";
 import type {
   AssetDefinition,
   ContentLibrarySnapshot,
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
-  PaintedMaskTargetAddress,
-  RockTypeDefinition,
-  SurfaceDefinition,
   SurfaceBinding,
-  ShaderGraphDocument,
-  ShaderParameterOverride,
-  ShaderSlotKind,
-  TextureDefinition
+  ShaderSlotKind
 } from "@sugarmagic/domain";
 import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
-import { PanelSection, Inspector } from "@sugarmagic/ui";
 import { resolveAssetDefinitionShaderBindings } from "@sugarmagic/runtime-core";
-import type { WorkspaceViewContribution } from "../../workspace-view";
 import { MaterialSlotBindingsEditor } from "../MaterialSlotBindingsEditor";
 import { ShaderSlotEditor } from "../ShaderSlotEditor";
-
-export interface AssetsWorkspaceViewProps {
-  assetDefinitions: AssetDefinition[];
-  contentLibrary: ContentLibrarySnapshot;
-  surfaceDefinitions: SurfaceDefinition[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  shaderDefinitions: ShaderGraphDocument[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  selectedAssetDefinitionId: string | null;
-  onSelectAssetDefinition: (definitionId: string) => void;
-  onImportAsset: () => Promise<AssetDefinition | null>;
-  onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
-  onSetAssetMaterialSlotBinding: (
-    definitionId: string,
-    slotName: string,
-    slotIndex: number,
-    surface: SurfaceBinding<"universal"> | null
-  ) => void;
-  onSetAssetDefaultShader: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    shaderDefinitionId: string | null
-  ) => void;
-  onSetAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    override: ShaderParameterOverride
-  ) => void;
-  onClearAssetDefaultShaderParameterOverride?: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    parameterId: string
-  ) => void;
-  onEditShaderGraph?: (shaderDefinitionId: string) => void;
-}
-
-function getAssetKindIcon(assetDefinition: AssetDefinition): string {
-  return assetDefinition.assetKind === "foliage" ? "🌳" : "📦";
-}
+import { useSurfaceAuthoring } from "../surfaces";
 
 function getAssetKindLabel(assetDefinition: AssetDefinition): string {
   return assetDefinition.assetKind === "foliage" ? "Foliage" : "Model";
 }
 
-export function useAssetsWorkspaceView(
-  props: AssetsWorkspaceViewProps
-): WorkspaceViewContribution {
-  const {
-    assetDefinitions,
-    contentLibrary,
-    surfaceDefinitions,
-    grassTypeDefinitions,
-    flowerTypeDefinitions,
-    rockTypeDefinitions,
-    materialDefinitions,
-    textureDefinitions,
-    maskTextureDefinitions,
-    shaderDefinitions,
-    onCreateMaskTextureDefinition,
-    onImportMaskTextureDefinition,
-    activeMaskPaintTarget,
-    onSetMaskPaintTarget,
-    selectedAssetDefinitionId,
-    onSelectAssetDefinition,
-    onImportAsset,
-    onUpdateAssetDefinition,
-    onSetAssetMaterialSlotBinding,
-    onSetAssetDefaultShader,
-    onEditShaderGraph,
-  } = props;
-
-  const selectedAsset = useMemo(
-    () =>
-      assetDefinitions.find(
-        (definition) => definition.definitionId === selectedAssetDefinitionId
-      ) ?? null,
-    [assetDefinitions, selectedAssetDefinitionId]
-  );
-
-  return {
-    leftPanel: (
-      <>
-        <PanelSection title="Asset Library" icon="📦">
-          <Stack gap="xs">
-            <Button size="xs" variant="light" onClick={async () => {
-              const importedAsset = await onImportAsset();
-              if (importedAsset) {
-                onSelectAssetDefinition(importedAsset.definitionId);
-              }
-            }}>
-              Import Asset
-            </Button>
-            {assetDefinitions.length === 0 ? (
-              <Text size="xs" c="var(--sm-color-overlay0)" p="sm" ta="center">
-                No imported assets yet.
-              </Text>
-            ) : (
-              <Stack gap={4}>
-                {assetDefinitions.map((definition) => {
-                  const isSelected = definition.definitionId === selectedAssetDefinitionId;
-                  return (
-                    <UnstyledButton
-                      key={definition.definitionId}
-                      onClick={() => onSelectAssetDefinition(definition.definitionId)}
-                      styles={{
-                        root: {
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "var(--sm-space-sm)",
-                          padding: "6px 8px",
-                          borderRadius: "var(--sm-radius-sm)",
-                          background: isSelected ? "var(--sm-active-bg)" : "transparent",
-                          color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)",
-                          transition: "var(--sm-transition-fast)",
-                          "&:hover": {
-                            background: isSelected ? "var(--sm-active-bg-hover)" : "var(--sm-hover-bg)"
-                          }
-                        }
-                      }}
-                    >
-                      <Text size="xs">{getAssetKindIcon(definition)}</Text>
-                      <Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                        <Text size="xs" truncate fw={isSelected ? 600 : 400}>
-                          {definition.displayName}
-                        </Text>
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          {getAssetKindLabel(definition)}
-                        </Text>
-                      </Group>
-                    </UnstyledButton>
-                  );
-                })}
-              </Stack>
-            )}
-          </Stack>
-        </PanelSection>
-      </>
-    ),
-    rightPanel: (
-      <Inspector selectionLabel={selectedAsset?.displayName ?? null}>
-        {selectedAsset ? (
-          <AssetInspectorPanel
-            key={selectedAsset.definitionId}
-            assetDefinition={selectedAsset}
-            contentLibrary={contentLibrary}
-            surfaceDefinitions={surfaceDefinitions}
-            grassTypeDefinitions={grassTypeDefinitions}
-            flowerTypeDefinitions={flowerTypeDefinitions}
-            rockTypeDefinitions={rockTypeDefinitions}
-            materialDefinitions={materialDefinitions}
-            textureDefinitions={textureDefinitions}
-            maskTextureDefinitions={maskTextureDefinitions}
-            shaderDefinitions={shaderDefinitions}
-            activeMaskPaintTarget={activeMaskPaintTarget}
-            onSetMaskPaintTarget={onSetMaskPaintTarget}
-            onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-            onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-            onUpdateAssetDefinition={onUpdateAssetDefinition}
-            onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
-            onSetAssetDefaultShader={onSetAssetDefaultShader}
-            onEditShaderGraph={onEditShaderGraph}
-          />
-        ) : (
-          <Text size="xs" c="var(--sm-color-overlay0)">
-            Select an imported asset to inspect and edit it.
-          </Text>
-        )}
-      </Inspector>
-    ),
-    viewportOverlay: null
-  };
-}
-
-function AssetInspectorPanel({
-  assetDefinition,
-  contentLibrary,
-  surfaceDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  shaderDefinitions,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  onUpdateAssetDefinition,
-  onSetAssetMaterialSlotBinding,
-  onSetAssetDefaultShader,
-  onEditShaderGraph
-}: {
+export interface AssetDefinitionInspectorProps {
   assetDefinition: AssetDefinition;
   contentLibrary: ContentLibrarySnapshot;
-  surfaceDefinitions: SurfaceDefinition[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  shaderDefinitions: ShaderGraphDocument[];
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onSetAssetMaterialSlotBinding: (
     definitionId: string,
@@ -264,7 +45,17 @@ function AssetInspectorPanel({
     shaderDefinitionId: string | null
   ) => void;
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
-}) {
+}
+
+export function AssetDefinitionInspector({
+  assetDefinition,
+  contentLibrary,
+  onUpdateAssetDefinition,
+  onSetAssetMaterialSlotBinding,
+  onSetAssetDefaultShader,
+  onEditShaderGraph
+}: AssetDefinitionInspectorProps) {
+  const { shaderDefinitions } = useSurfaceAuthoring();
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
   );
@@ -335,18 +126,6 @@ function AssetInspectorPanel({
         <MaterialSlotBindingsEditor
           bindings={assetDefinition.surfaceSlots}
           assetDefinitionId={assetDefinition.definitionId}
-          surfaceDefinitions={surfaceDefinitions}
-          materialDefinitions={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activeMaskPaintTarget={activeMaskPaintTarget}
-          onSetMaskPaintTarget={onSetMaskPaintTarget}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onChangeBinding={(slotName, slotIndex, surface) =>
             onSetAssetMaterialSlotBinding(
               assetDefinition.definitionId,
@@ -369,18 +148,18 @@ function AssetInspectorPanel({
               ? assetDefinition.effect.shaderDefinitionId
               : null
         }}
-        shaderDefinitions={
-          shaderDefinitions.filter((definition) =>
-            assetDefinition.assetKind === "foliage"
-              ? definition.targetKind === "mesh-deform" ||
-                definition.targetKind === "mesh-effect"
-              : definition.targetKind === "mesh-deform" ||
-                definition.targetKind === "mesh-effect"
-          )
-        }
+        shaderDefinitions={shaderDefinitions.filter(
+          (definition) =>
+            definition.targetKind === "mesh-deform" ||
+            definition.targetKind === "mesh-effect"
+        )}
         slots={["deform", "effect"]}
         onChangeBinding={(slot, shaderDefinitionId) =>
-          onSetAssetDefaultShader(assetDefinition.definitionId, slot, shaderDefinitionId)
+          onSetAssetDefaultShader(
+            assetDefinition.definitionId,
+            slot,
+            shaderDefinitionId
+          )
         }
         parameterOverrides={[]}
         diagnostics={shaderResolution.diagnostics}

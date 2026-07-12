@@ -2,6 +2,7 @@ import type { DocumentDefinition } from "../document-definition";
 import type {
   RegionNPCBehaviorDefinition,
   RegionLandscapePaintPayload,
+  RegionLayoutSketchState,
   RegionAmbienceZone,
   RegionSoundEmitter
 } from "../region-authoring";
@@ -101,6 +102,45 @@ export type RemovePlacedAssetCommand = SemanticCommandBase<
   "RemovePlacedAsset",
   {
     instanceId: string;
+  }
+>;
+
+/** One landed instance from a scatter-brush stroke (Plan 065.2). */
+export interface BrushPlacement {
+  instanceId: string;
+  assetDefinitionId: string;
+  displayName: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+}
+
+/**
+ * Batch placement from ONE scatter-brush stroke. A single command
+ * (and therefore a single transaction) so undo removes the whole
+ * stroke, not one prop at a time.
+ */
+export type BrushPlaceAssetsCommand = SemanticCommandBase<
+  "BrushPlaceAssets",
+  {
+    placements: BrushPlacement[];
+    parentFolderId: string | null;
+    /**
+     * When set and no folder with that id exists yet, the folder is
+     * created IN THE SAME transaction (undoing the stroke removes the
+     * folder too, no orphan). The brush uses this to auto-contain
+     * strokes so mass-sprayed props collapse to one explorer row.
+     */
+    createFolder?: { folderId: string; displayName: string } | null;
+    scope?: PlacementScope;
+  }
+>;
+
+/** Batch removal from ONE scatter-brush erase stroke. */
+export type BrushEraseAssetsCommand = SemanticCommandBase<
+  "BrushEraseAssets",
+  {
+    instanceIds: string[];
   }
 >;
 
@@ -237,6 +277,17 @@ export type ConfigureLandscapeCommand = SemanticCommandBase<
     enabled?: boolean;
     size?: number;
     subdivisions?: number;
+  }
+>;
+
+/**
+ * Plan 065 §065.1 — replace the region's authoring-only Layout
+ * Sketch (blockout ink + reference underlay). Null clears it.
+ */
+export type UpdateRegionLayoutSketchCommand = SemanticCommandBase<
+  "UpdateRegionLayoutSketch",
+  {
+    layoutSketch: RegionLayoutSketchState | null;
   }
 >;
 
@@ -923,6 +974,8 @@ export type UpdateUIThemeCommand = SemanticCommandBase<
 export type SemanticCommand =
   | MovePlacedAssetCommand
   | PlaceAssetInstanceCommand
+  | BrushPlaceAssetsCommand
+  | BrushEraseAssetsCommand
   | DuplicatePlacedAssetCommand
   | RemovePlacedAssetCommand
   | MovePlacedAssetToFolderCommand
@@ -942,6 +995,7 @@ export type SemanticCommand =
   | TransformPlacedAssetCommand
   | PaintLandscapeCommand
   | ConfigureLandscapeCommand
+  | UpdateRegionLayoutSketchCommand
   | CreateRegionSoundEmitterCommand
   | UpdateRegionSoundEmitterCommand
   | DeleteRegionSoundEmitterCommand

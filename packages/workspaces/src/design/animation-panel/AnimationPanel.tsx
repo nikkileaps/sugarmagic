@@ -33,7 +33,13 @@ import {
   Text,
   Tooltip
 } from "@mantine/core";
-import { CurveEditor, LabeledSlider, PanelSection } from "@sugarmagic/ui";
+import {
+  CurveEditor,
+  LabeledSlider,
+  PanelSection,
+  ToolOptionsBar,
+  ToolRail
+} from "@sugarmagic/ui";
 import {
   createDefaultMotionRecipe,
   type CharacterAnimationDefinition,
@@ -679,42 +685,35 @@ export function AnimationPanel(props: AnimationPanelProps) {
             {/* Center: preview / pose viewport + optional curve strip. */}
             <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
               <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
-                {/* Tool rail, matching the rig workbench. */}
-                <Stack
-                  gap={6}
-                  style={{ position: "absolute", top: 10, left: 10, zIndex: 10 }}
-                >
-                  <Group gap={4}>
-                    <Tooltip label="Adjust pose (puppet handles)" position="right">
-                      <ActionIcon
-                        variant={poseMode ? "filled" : "default"}
-                        color="grape"
-                        onClick={() => setPoseMode((current) => !current)}
-                        aria-label="Adjust pose tool"
-                      >
-                        🤸
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                  {poseMode ? (
-                    <Paper p="xs" radius="sm" withBorder style={{ width: 170, opacity: 0.95 }}>
-                      <Stack gap={6}>
-                        <Switch
-                          size="xs"
-                          label="Mirror"
-                          checked={poseMirroring}
-                          onChange={(event) =>
-                            setPoseMirroring(event.currentTarget.checked)
-                          }
-                        />
-                        <Text size="xs" c="var(--sm-color-subtext)">
-                          Drag a wrist or tail handle; applies to all
-                          generated slots.
-                        </Text>
-                      </Stack>
-                    </Paper>
-                  ) : null}
-                </Stack>
+                <ToolRail
+                  tools={[
+                    { id: "orbit", icon: "🎥", label: "Orbit / watch" },
+                    {
+                      id: "pose",
+                      icon: "🤸",
+                      label: "Adjust pose (puppet handles)",
+                      color: "grape"
+                    }
+                  ]}
+                  activeToolId={poseMode ? "pose" : "orbit"}
+                  onSelect={(toolId) => setPoseMode(toolId === "pose")}
+                />
+                {poseMode ? (
+                  <ToolOptionsBar>
+                    <Switch
+                      size="xs"
+                      label="Mirror"
+                      checked={poseMirroring}
+                      onChange={(event) =>
+                        setPoseMirroring(event.currentTarget.checked)
+                      }
+                    />
+                    <Text size="xs" c="var(--sm-color-subtext)">
+                      Drag a wrist or tail handle; applies to all
+                      generated slots.
+                    </Text>
+                  </ToolOptionsBar>
+                ) : null}
                 {poseMode && modelBlobUrl && relaxedPose ? (
                   <PoseViewport
                     modelUrl={modelBlobUrl}

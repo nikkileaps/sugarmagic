@@ -22,8 +22,8 @@ describe("Build navigation model", () => {
     expect(deriveBuildWorkspaceId("environment", "env_default")).toBe(
       "build:environment:env_default"
     );
-    expect(deriveBuildWorkspaceId("assets", "cave_01")).toBe(
-      "build:assets:cave_01"
+    expect(deriveBuildWorkspaceId("audio", "cave_01")).toBe(
+      "build:audio:cave_01"
     );
   });
 

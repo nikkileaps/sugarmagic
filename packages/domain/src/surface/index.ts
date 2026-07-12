@@ -163,12 +163,14 @@ export function createMaterialAppearanceContent(
   materialDefinitionId: string,
   options: {
     shaderOverrideDefinitionId?: string | null;
+    tiling?: [number, number] | null;
   } = {}
 ): Extract<AppearanceContent, { kind: "material" }> {
   return {
     kind: "material",
     materialDefinitionId,
-    shaderOverrideDefinitionId: options.shaderOverrideDefinitionId ?? null
+    shaderOverrideDefinitionId: options.shaderOverrideDefinitionId ?? null,
+    tiling: options.tiling ?? null
   };
 }
 

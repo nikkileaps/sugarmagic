@@ -47,6 +47,8 @@ import {
   createDefaultGrassSurface4ShaderGraph,
   createDefaultGrassSurface6ShaderGraph,
   createDefaultPainterlyGrassShaderGraph,
+  createBuiltInCardFoliage2ShaderGraph,
+  createBuiltInCardFoliage4ShaderGraph,
   createDefaultMeadowGrassShaderGraph,
   createDefaultSunlitLawnShaderGraph,
   createDefaultAutumnFieldGrassShaderGraph,
@@ -482,7 +484,12 @@ export const DEFAULT_SUN_SHADOWS: SunShadowSettings = {
   strength: 1,
   softness: 0.5,
   bias: -0.0001,
-  normalBias: 0.05
+  // Receiver-side shadow offset. Keep small: this displaces where the
+  // ground samples the shadow map, so contact shadows detach from
+  // object bases by roughly normalBias / tan(sunElevation). At the old
+  // 0.05 every grass clump's shadow started ~7cm from its roots, which
+  // read as "the foliage is floating".
+  normalBias: 0.02
 };
 
 export const DEFAULT_SUN_LIGHT: SunLight = {
@@ -2132,6 +2139,14 @@ function createBuiltInShaderDefinitions(
     createDefaultPainterlyGrassShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:painterly-grass`,
       displayName: "Painterly Grass"
+    }),
+    createBuiltInCardFoliage2ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:card-foliage-2`,
+      displayName: "Card Foliage 2"
+    }),
+    createBuiltInCardFoliage4ShaderGraph(projectId, {
+      shaderDefinitionId: `${projectId}:shader:card-foliage-4`,
+      displayName: "Card Foliage 4"
     }),
     createDefaultFoliageWindShaderGraph(projectId, {
       shaderDefinitionId: `${projectId}:shader:foliage-wind`,

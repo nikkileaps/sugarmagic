@@ -7,26 +7,19 @@
 
 import { Button, Select, Stack, Text } from "@mantine/core";
 import type {
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
-  MaterialDefinition,
-  MaskTextureDefinition,
   PaintedMaskTargetAddress,
-  RockTypeDefinition,
-  ShaderGraphDocument,
   SurfaceBinding,
-  SurfaceContext,
-  SurfaceDefinition,
-  TextureDefinition
+  SurfaceContext
 } from "@sugarmagic/domain";
 import {
-  cloneSurface,
   createDefaultSurface,
   createInlineSurfaceBinding,
-  createReferenceSurfaceBinding
+  createReferenceSurfaceBinding,
+  surfaceDefinitionMatchesContext
 } from "@sugarmagic/domain";
 import { LayerStackView } from "./LayerStackView";
-import { surfaceDefinitionMatchesContext } from "./utils";
+import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
+import { makeBindingLocal } from "./utils";
 
 export interface SurfaceBindingEditorProps<C extends SurfaceContext = SurfaceContext> {
   value: SurfaceBinding<C> | null;
@@ -35,18 +28,6 @@ export interface SurfaceBindingEditorProps<C extends SurfaceContext = SurfaceCon
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
     | null;
-  surfaceDefinitions: SurfaceDefinition[];
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onChange: (next: SurfaceBinding<C> | null) => void;
 }
 
@@ -54,20 +35,9 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
   value,
   allowedContext,
   paintOwner,
-  surfaceDefinitions,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
-  shaderDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
   onChange
 }: SurfaceBindingEditorProps<C>) {
+  const { surfaceDefinitions } = useSurfaceAuthoring();
   const compatibleSurfaceDefinitions = surfaceDefinitions.filter((definition) =>
     surfaceDefinitionMatchesContext(definition, allowedContext)
   );
@@ -96,11 +66,7 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
           }
           if (next === "inline") {
             if (value?.kind === "reference" && selectedReferenceSurface) {
-              onChange(
-                createInlineSurfaceBinding(
-                  cloneSurface(selectedReferenceSurface.surface)
-                ) as SurfaceBinding<C>
-              );
+              onChange(makeBindingLocal<C>(selectedReferenceSurface));
               return;
             }
             onChange(
@@ -141,11 +107,7 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
               size="compact-xs"
               variant="subtle"
               onClick={() =>
-                onChange(
-                  createInlineSurfaceBinding(
-                    cloneSurface(selectedReferenceSurface.surface)
-                  ) as SurfaceBinding<C>
-                )
+                onChange(makeBindingLocal<C>(selectedReferenceSurface))
               }
             >
               Make Local
@@ -160,17 +122,6 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
           allowedContext={allowedContext}
           allowPainted={paintOwner !== null}
           paintOwner={paintOwner}
-          materialDefinitions={materialDefinitions}
-          textureDefinitions={textureDefinitions}
-          maskTextureDefinitions={maskTextureDefinitions}
-          onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-          onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-          activeMaskPaintTarget={activeMaskPaintTarget}
-          onSetMaskPaintTarget={onSetMaskPaintTarget}
-          shaderDefinitions={shaderDefinitions}
-          grassTypeDefinitions={grassTypeDefinitions}
-          flowerTypeDefinitions={flowerTypeDefinitions}
-          rockTypeDefinitions={rockTypeDefinitions}
           onChangeSurface={(surface) => {
             onChange({
               kind: "inline",

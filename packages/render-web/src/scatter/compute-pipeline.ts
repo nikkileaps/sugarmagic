@@ -65,6 +65,14 @@ import type { SurfaceScatterSample } from "./index";
 const SCATTER_COMPUTE_WORKGROUP_SIZE = 64;
 const DEFAULT_SCATTER_MAX_DRAW_DISTANCE = 96;
 /**
+ * Tiny along-normal nudge applied to every instance origin so scatter
+ * never sits mathematically coincident with the surface that spawned
+ * it. Keep this at millimeter scale: root-anchored foliage visibly
+ * hovers above flat ground at anything larger (the old 0.01 read as
+ * "grass floating one centimeter in the air" up close).
+ */
+export const SCATTER_GROUND_LIFT = 0.002;
+/**
  * Per-layer candidate ceiling for the GPU-compaction path. Above this
  * count the single-level partials scan can't cover the workgroup count
  * (ceil(N / SCATTER_SCAN_WORKGROUP_SIZE) > SCATTER_SCAN_WORKGROUP_SIZE
@@ -144,6 +152,15 @@ function verticalScaleJitterForLayer(layer: ResolvedScatterLayer): number {
 export interface ScatterComputeLayerParams {
   layerId: string;
   seed: number;
+  /**
+   * Whether instances cast sun shadows. Painterly doctrine: grass and
+   * flowers never cast (per-blade cast shadows read as speckle noise,
+   * not cozy -- the references light grass purely by ground color and
+   * large occluder shadows), rocks do (volumetric objects need a
+   * contact shadow to sit on the ground). Everything still RECEIVES
+   * shadows so trees and buildings shade the meadow.
+   */
+  castShadows: boolean;
   baseColor: number;
   colorJitter: number;
   scaleJitter: [number, number];
@@ -200,6 +217,7 @@ export function createScatterComputeLayerParams(
   return {
     layerId: layer.layerId,
     seed: hashLayerId(layer.layerId),
+    castShadows: layer.contentKind === "rocks",
     baseColor: baseColorForLayer(layer),
     colorJitter: layer.definition.colorJitter,
     scaleJitter: scaleJitterForLayer(layer),
@@ -251,7 +269,9 @@ export function simulateScatterCandidateBuild(
       packedInputs.normals[index * 3 + 1] ?? 1,
       packedInputs.normals[index * 3 + 2] ?? 0
     ).normalize();
-    const liftedLocalPosition = localPosition.clone().addScaledVector(localNormal, 0.01);
+    const liftedLocalPosition = localPosition
+      .clone()
+      .addScaledVector(localNormal, SCATTER_GROUND_LIFT);
 
     const baseScale = baseScaleMin + baseScaleRange * hash01(params.seed + index * 13 + 3);
     const verticalScale =
@@ -481,7 +501,9 @@ export function createScatterComputePipeline(options: {
           .mul(verticalScaleJitterUniform)
       )
     ).toVar();
-    const liftedLocalPosition = localPosition.add(sampleNormal.mul(float(0.01))).toVar();
+    const liftedLocalPosition = localPosition
+      .add(sampleNormal.mul(float(SCATTER_GROUND_LIFT)))
+      .toVar();
     const jitter = nodeHash01(layerSeedUniform.add(sampleIndex).add(float(5)))
       .mul(float(2))
       .sub(float(1))
@@ -587,7 +609,7 @@ export function createScatterComputePipeline(options: {
       packedInputs.sampleCount
     );
     mesh.name = `surface-scatter:${params.layerId}:gpu:${binConfig.bin}`;
-    mesh.castShadow = true;
+    mesh.castShadow = params.castShadows;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     mesh.instanceMatrix =
@@ -840,7 +862,7 @@ export function createScatterComputePipeline(options: {
         const localPosition = candidatePositionNode.element(tid).toVar();
         const sampleNormal = normalize(sampleNormalsNode.element(tid)).toVar();
         const liftedLocalPosition = localPosition
-          .add(sampleNormal.mul(float(0.01)))
+          .add(sampleNormal.mul(float(SCATTER_GROUND_LIFT)))
           .toVar();
         const toCamera = cameraLocalPositionUniform
           .sub(liftedLocalPosition)

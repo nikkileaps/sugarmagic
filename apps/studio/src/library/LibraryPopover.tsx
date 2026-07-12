@@ -2,17 +2,22 @@
  * Library popover.
  *
  * Single owner of the Game > Libraries > {kind} dialog. Renders the
- * library kinds (Materials / Textures / Shaders / Audio — Surfaces are NOT a
- * library kind per Plan 037; character models + animations are NOT
- * library kinds per Plan 038, they're entity-owned and authored via
- * the Player/NPC inspector file-pickers) with a list-on-left +
- * preview-on-right layout. Reads `activeLibrary` from the shell
- * store; the menu trigger lives in App.tsx's Game menu.
+ * library kinds (Assets / Materials / Textures / Shaders / Audio —
+ * Surfaces are NOT a library kind per Plan 037; character models +
+ * animations are NOT library kinds per Plan 038, they're
+ * entity-owned and authored via the Player/NPC inspector
+ * file-pickers) with a list-on-left + preview-on-right layout.
+ * Reads `activeLibrary` from the shell store; the menu trigger
+ * lives in App.tsx's Game menu.
+ *
+ * Assets joined the library kinds 2026-07-09 (they predate the
+ * library pattern and used to be a whole Build workspace).
  */
 
 import { useMemo, useState } from "react";
 import { useStore } from "zustand";
 import {
+  ActionIcon,
   Box,
   Button,
   Group,
@@ -20,17 +25,23 @@ import {
   ScrollArea,
   Stack,
   Text,
-  TextInput
+  TextInput,
+  Tooltip
 } from "@mantine/core";
 import type {
+  AssetDefinition,
   AudioClipDefinition,
+  ContentLibrarySnapshot,
   MaterialDefinition,
   ShaderGraphDocument,
+  ShaderSlotKind,
+  SurfaceBinding,
   TextureDefinition
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
 import type { ShellStore } from "@sugarmagic/shell";
 import { AudioTransport } from "@sugarmagic/ui";
+import { AssetDefinitionInspector } from "@sugarmagic/workspaces";
 import {
   MaterialPreview,
   type MaterialPreviewGeometryKind
@@ -43,14 +54,37 @@ export interface LibraryPopoverProps {
   textureDefinitions: TextureDefinition[];
   shaderDefinitions: ShaderGraphDocument[];
   audioClipDefinitions: AudioClipDefinition[];
+  assetDefinitions: AssetDefinition[];
+  /** Full snapshot + scatter/mask defs for the asset inspector. */
+  contentLibrary: ContentLibrarySnapshot | null;
   assetSources: Record<string, string>;
   /** For resolving texture refs in MaterialPreview. */
   assetResolver: AuthoredAssetResolver | null;
   isMaterialReferenced: (definitionId: string) => boolean;
+  isTextureReferenced: (definitionId: string) => boolean;
+  isAssetReferenced: (definitionId: string) => boolean;
+  /** Preselects this asset when the Assets library opens (the
+   *  "Edit definition" affordance on a placed instance). */
+  assetsPreselectId: string | null;
+  onRemoveTextureDefinition: (definitionId: string) => void;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
   onImportAudioClipDefinition: () => Promise<AudioClipDefinition | null>;
+  onImportAssetDefinition: () => Promise<AssetDefinition | null>;
+  onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  onSetAssetMaterialSlotBinding: (
+    definitionId: string,
+    slotName: string,
+    slotIndex: number,
+    surface: SurfaceBinding<"universal"> | null
+  ) => void;
+  onSetAssetDefaultShader: (
+    definitionId: string,
+    slot: ShaderSlotKind,
+    shaderDefinitionId: string | null
+  ) => void;
+  onRemoveAssetDefinition: (definitionId: string) => void;
   onUpdateAudioClipDefinition: (
     definitionId: string,
     patch: Partial<AudioClipDefinition>
@@ -104,19 +138,46 @@ function getAudioItems(definitions: AudioClipDefinition[]): ListItem[] {
   }));
 }
 
+function assetKindIcon(definition: AssetDefinition): string {
+  return definition.assetKind === "foliage" ? "🌳" : "📦";
+}
+
+function assetKindLabel(definition: AssetDefinition): string {
+  return definition.assetKind === "foliage" ? "Foliage" : "Model";
+}
+
+function getAssetItems(definitions: AssetDefinition[]): ListItem[] {
+  return definitions.map((d) => ({
+    id: d.definitionId,
+    displayName: `${assetKindIcon(d)} ${d.displayName}`,
+    isBuiltIn: false
+  }));
+}
+
 export function LibraryPopover({
   shellStore,
   materialDefinitions,
   textureDefinitions,
   shaderDefinitions,
   audioClipDefinitions,
+  assetDefinitions,
+  contentLibrary,
   assetSources,
   assetResolver,
   isMaterialReferenced,
+  isTextureReferenced,
+  isAssetReferenced,
+  assetsPreselectId,
+  onRemoveTextureDefinition,
   onCreateMaterialDefinition,
   onImportPbrMaterial,
   onImportTextureDefinition,
   onImportAudioClipDefinition,
+  onImportAssetDefinition,
+  onUpdateAssetDefinition,
+  onSetAssetMaterialSlotBinding,
+  onSetAssetDefaultShader,
+  onRemoveAssetDefinition,
   onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
   onRemoveAudioClipDefinition,
@@ -126,6 +187,7 @@ export function LibraryPopover({
   const onClose = () => shellStore.getState().setActiveLibrary(null);
 
   const allItems: ListItem[] = useMemo(() => {
+    if (activeLibrary === "assets") return getAssetItems(assetDefinitions);
     if (activeLibrary === "materials")
       return getMaterialItems(materialDefinitions);
     if (activeLibrary === "textures")
@@ -135,6 +197,7 @@ export function LibraryPopover({
     return [];
   }, [
     activeLibrary,
+    assetDefinitions,
     audioClipDefinitions,
     materialDefinitions,
     textureDefinitions,
@@ -164,13 +227,19 @@ export function LibraryPopover({
 
   // Derive fallback selection instead of mutating state when filters or library
   // kind changes. This preserves the old "first visible item is selected"
-  // behavior while avoiding an auto-select effect.
+  // behavior while avoiding an auto-select effect. The Assets kind
+  // honors an externally-requested preselect ("Edit definition" on a
+  // placed instance) ahead of the first-item default.
   const effectiveSelectedId =
     activeLibrary !== null &&
     selectedId &&
     items.some((i) => i.id === selectedId)
       ? selectedId
-      : (items[0]?.id ?? null);
+      : activeLibrary === "assets" &&
+          assetsPreselectId &&
+          items.some((i) => i.id === assetsPreselectId)
+        ? assetsPreselectId
+        : (items[0]?.id ?? null);
 
   const selectedMaterial =
     activeLibrary === "materials"
@@ -196,17 +265,25 @@ export function LibraryPopover({
           (d) => d.definitionId === effectiveSelectedId
         ) ?? null)
       : null;
+  const selectedAsset =
+    activeLibrary === "assets"
+      ? (assetDefinitions.find(
+          (d) => d.definitionId === effectiveSelectedId
+        ) ?? null)
+      : null;
 
   const titleText =
-    activeLibrary === "materials"
-      ? "Materials"
-      : activeLibrary === "textures"
-        ? "Textures"
-        : activeLibrary === "shaders"
-          ? "Shaders"
-          : activeLibrary === "audio"
-            ? "Audio"
-            : "Library";
+    activeLibrary === "assets"
+      ? "Assets"
+      : activeLibrary === "materials"
+        ? "Materials"
+        : activeLibrary === "textures"
+          ? "Textures"
+          : activeLibrary === "shaders"
+            ? "Shaders"
+            : activeLibrary === "audio"
+              ? "Audio"
+              : "Library";
 
   return (
     <Modal
@@ -257,7 +334,14 @@ export function LibraryPopover({
               flex: "0 0 auto"
             }}
           >
-            {activeLibrary === "materials" ? (
+            {activeLibrary === "assets" ? (
+              <Button
+                size="xs"
+                onClick={() => void onImportAssetDefinition()}
+              >
+                Import Asset
+              </Button>
+            ) : activeLibrary === "materials" ? (
               <>
                 <Button size="xs" onClick={() => onCreateMaterialDefinition()}>
                   New
@@ -350,7 +434,64 @@ export function LibraryPopover({
 
         {/* RIGHT: preview + details */}
         <Stack gap="md" p="md" style={{ flex: 1, minWidth: 0 }}>
-          {activeLibrary === "materials" ? (
+          {activeLibrary === "assets" ? (
+            selectedAsset && contentLibrary ? (
+              <ScrollArea style={{ flex: 1, minHeight: 0 }}>
+                <Stack gap="md" pr="sm">
+                  <Group justify="space-between" align="center">
+                    <Text size="md" fw={700}>
+                      {assetKindIcon(selectedAsset)}{" "}
+                      {selectedAsset.displayName}
+                      <Text
+                        span
+                        size="xs"
+                        c="var(--sm-color-overlay0)"
+                        ml={8}
+                      >
+                        {assetKindLabel(selectedAsset)}
+                      </Text>
+                    </Text>
+                    <Tooltip
+                      label={
+                        isAssetReferenced(selectedAsset.definitionId)
+                          ? "Placed in a region or referenced by scatter/surfaces — remove those first"
+                          : "Delete asset from the library"
+                      }
+                    >
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        disabled={isAssetReferenced(
+                          selectedAsset.definitionId
+                        )}
+                        onClick={() =>
+                          onRemoveAssetDefinition(selectedAsset.definitionId)
+                        }
+                        aria-label="Delete asset"
+                      >
+                        🗑
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                  <AssetDefinitionInspector
+                    key={selectedAsset.definitionId}
+                    assetDefinition={selectedAsset}
+                    contentLibrary={contentLibrary}
+                    onUpdateAssetDefinition={onUpdateAssetDefinition}
+                    onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
+                    onSetAssetDefaultShader={onSetAssetDefaultShader}
+                    onEditShaderGraph={onEditShaderInGraph}
+                  />
+                </Stack>
+              </ScrollArea>
+            ) : (
+              <Stack h="100%" align="center" justify="center">
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  Import a .glb / .gltf to add it to the library.
+                </Text>
+              </Stack>
+            )
+          ) : activeLibrary === "materials" ? (
             <>
               <MaterialPreview
                 material={selectedMaterial}
@@ -393,6 +534,31 @@ export function LibraryPopover({
             </>
           ) : activeLibrary === "textures" ? (
             <>
+              {selectedTexture ? (
+                <Group justify="flex-end" mb={-8}>
+                  <Tooltip
+                    label={
+                      isTextureReferenced(selectedTexture.definitionId)
+                        ? "In use by a material or surface — remove those references first"
+                        : "Delete texture from the library"
+                    }
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      disabled={isTextureReferenced(
+                        selectedTexture.definitionId
+                      )}
+                      onClick={() =>
+                        onRemoveTextureDefinition(selectedTexture.definitionId)
+                      }
+                      aria-label="Delete texture"
+                    >
+                      🗑
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              ) : null}
               <TexturePreview
                 texture={selectedTexture}
                 assetResolver={assetResolver}

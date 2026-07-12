@@ -39,6 +39,7 @@ export function createBuiltInSurfaceDefinitions(
   return [
     {
       definitionId: `${projectId}:surface:wildflower-meadow`,
+      metadata: { builtIn: true, builtInKey: "wildflower-meadow" },
       definitionKind: "surface",
       displayName: "Wildflower Meadow",
       surface: createSurface([
@@ -65,6 +66,7 @@ export function createBuiltInSurfaceDefinitions(
     },
     {
       definitionId: `${projectId}:surface:autumn-field`,
+      metadata: { builtIn: true, builtInKey: "autumn-field" },
       definitionKind: "surface",
       displayName: "Autumn Field",
       surface: createSurface([
@@ -87,6 +89,7 @@ export function createBuiltInSurfaceDefinitions(
     },
     {
       definitionId: `${projectId}:surface:mossy-bark`,
+      metadata: { builtIn: true, builtInKey: "mossy-bark" },
       definitionKind: "surface",
       displayName: "Mossy Bark",
       surface: createSurface([
@@ -103,6 +106,7 @@ export function createBuiltInSurfaceDefinitions(
     },
     {
       definitionId: `${projectId}:surface:manicured-lawn`,
+      metadata: { builtIn: true, builtInKey: "manicured-lawn" },
       definitionKind: "surface",
       displayName: "Manicured Lawn",
       surface: createSurface([
@@ -121,6 +125,7 @@ export function createBuiltInSurfaceDefinitions(
     },
     {
       definitionId: `${projectId}:surface:clover-patch`,
+      metadata: { builtIn: true, builtInKey: "clover-patch" },
       definitionKind: "surface",
       displayName: "Clover Patch",
       surface: createSurface([
@@ -144,10 +149,11 @@ export function createBuiltInSurfaceDefinitions(
     },
     {
       definitionId: `${projectId}:surface:painterly-grass`,
+      metadata: { builtIn: true, builtInKey: "painterly-grass" },
       definitionKind: "surface",
       displayName: "Painterly Grass",
       surface: createSurface([
-        createAppearanceLayer(createColorAppearanceContent(0x6d8644), {
+        createAppearanceLayer(createColorAppearanceContent(0x5f9440), {
           displayName: "Ground",
           blendMode: "base"
         }),

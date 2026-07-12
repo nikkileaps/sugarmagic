@@ -696,6 +696,40 @@ const SHADER_NODE_DEFINITIONS: ShaderNodeDefinition[] = [
     settings: []
   },
   {
+    // HSV-style grade of one color: scale saturation and value by
+    // fixed factors. The card-foliage tip derivation ("same color as
+    // the floor, less saturated, slightly less value") is the first
+    // user; general enough for any relative color tweak.
+    nodeType: "color.adjust",
+    displayName: "Color Adjust",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("color", "Color", "color")],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: [
+      setting("saturation", "Saturation Scale", "float", 1),
+      setting("value", "Value Scale", "float", 1)
+    ]
+  },
+  {
+    // Rotate ONLY the hue of a color by a fixed offset, with the
+    // resulting hue clamped to [min, max]. Saturation and value pass
+    // through untouched. First user: card-foliage tips shifting a
+    // static amount toward yellow without ever leaving the
+    // green-yellow band.
+    nodeType: "color.hue-shift",
+    displayName: "Hue Shift",
+    category: "color",
+    validTargetKinds: ["mesh-surface", "mesh-deform", "post-process", "billboard-surface"],
+    inputPorts: [inputPort("color", "Color", "color")],
+    outputPorts: [outputPort("value", "Value", "color")],
+    settings: [
+      setting("shiftDegrees", "Shift (degrees)", "float", 0),
+      setting("minDegrees", "Min Hue (degrees)", "float", 0),
+      setting("maxDegrees", "Max Hue (degrees)", "float", 360)
+    ]
+  },
+  {
     nodeType: "color.divide",
     displayName: "Color Divide",
     category: "color",
@@ -1489,18 +1523,34 @@ export function createBuiltInFlatTextureShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Flat Texture",
     targetKind: "mesh-surface",
-    revision: 1,
+    // revision 2 (2026-07-10): the original graph wired vec2 uv and
+    // vec2 tiling straight into math.multiply, whose ports are
+    // strict-float — the IR compiler rejects it and every material
+    // convention-routed here (baseColorMap-only) evaluated to null
+    // (landscape channels rendered their BLACK fallback). Same
+    // split/scale/recombine pattern the grass shaders document.
+    revision: 2,
     nodes: [
       { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
       createParameterNode("tiling", "tiling", { x: 48, y: 304 }),
-      { nodeId: "scale-uv", nodeType: "math.multiply", position: { x: 320, y: 224 }, settings: {} },
-      createMaterialTextureNode("texture", "texture", { x: 608, y: 160 }),
-      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+      { nodeId: "split-uv", nodeType: "math.split-vector", position: { x: 240, y: 160 }, settings: {} },
+      { nodeId: "split-tiling", nodeType: "math.split-vector", position: { x: 240, y: 304 }, settings: {} },
+      { nodeId: "scale-u", nodeType: "math.multiply", position: { x: 432, y: 140 }, settings: {} },
+      { nodeId: "scale-v", nodeType: "math.multiply", position: { x: 432, y: 240 }, settings: {} },
+      { nodeId: "scaled-uv", nodeType: "math.combine-vector", position: { x: 624, y: 190 }, settings: {} },
+      createMaterialTextureNode("texture", "texture", { x: 816, y: 160 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 1104, y: 160 }, settings: {} }
     ],
     edges: [
-      createShaderEdge("edge-uv-scale", "uv", "value", "scale-uv", "a"),
-      createShaderEdge("edge-tiling-scale", "tiling", "value", "scale-uv", "b"),
-      createShaderEdge("edge-scale-texture-uv", "scale-uv", "value", "texture", "uv"),
+      createShaderEdge("edge-uv-split", "uv", "value", "split-uv", "input"),
+      createShaderEdge("edge-tiling-split", "tiling", "value", "split-tiling", "input"),
+      createShaderEdge("edge-scale-u-a", "split-uv", "x", "scale-u", "a"),
+      createShaderEdge("edge-scale-u-b", "split-tiling", "x", "scale-u", "b"),
+      createShaderEdge("edge-scale-v-a", "split-uv", "y", "scale-v", "a"),
+      createShaderEdge("edge-scale-v-b", "split-tiling", "y", "scale-v", "b"),
+      createShaderEdge("edge-combine-u", "scale-u", "value", "scaled-uv", "x"),
+      createShaderEdge("edge-combine-v", "scale-v", "value", "scaled-uv", "y"),
+      createShaderEdge("edge-scale-texture-uv", "scaled-uv", "vec2", "texture", "uv"),
       createShaderEdge("edge-texture-output", "texture", "color", "output", "color"),
       createShaderEdge("edge-texture-alpha-output", "texture", "alpha", "output", "alpha")
     ],
@@ -2301,7 +2351,6 @@ export function createDefaultGrassSurface2ShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
         defaultValue: [0.36, 0.52, 0.24],
         inheritSource: "baseLayerColor"
       },
@@ -2431,7 +2480,6 @@ export function createDefaultGrassSurface3ShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
         defaultValue: [0.36, 0.52, 0.24],
         inheritSource: "baseLayerColor"
       },
@@ -2614,7 +2662,6 @@ export function createDefaultGrassSurface4ShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
         defaultValue: [0.36, 0.52, 0.24],
         inheritSource: "baseLayerColor"
       },
@@ -2935,7 +2982,6 @@ export function createDefaultGrassSurface6ShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
         defaultValue: [0.36, 0.52, 0.24],
         inheritSource: "baseLayerColor"
       },
@@ -3137,7 +3183,6 @@ function createBuiltInGrassSurfaceShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
         defaultValue: preset.rootTint
       },
       {
@@ -3282,6 +3327,143 @@ export function createDefaultAutumnFieldGrassShaderGraph(
  * painterly surface can be added without disturbing the existing starter
  * meadow/lawn/field looks.
  */
+/**
+ * Card Foliage 2: the sanity-check baseline (2026-07-11). One flat
+ * fill color, silhouette alpha, nothing else -- no inheritance, no
+ * tip math, no lighting tricks in the graph. If a card doesn't render
+ * as this exact green, the problem is not the color math.
+ */
+export function createBuiltInCardFoliage2ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:card-foliage-2`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Card Foliage 2",
+    targetKind: "mesh-surface",
+    revision: 2,
+    nodes: [
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 160 }, settings: {} },
+      { nodeId: "fill", nodeType: "input.parameter", position: { x: 256, y: 64 }, settings: { parameterId: "fill" } },
+      createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 260 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("cf2-e-fill-output", "fill", "value", "output", "color"),
+      createShaderEdge("cf2-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
+      createShaderEdge("cf2-e-alpha-output", "silhouette", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        // Ingredient two (2026-07-11): the fill inherits the ground.
+        // In the game view this materializes as a per-blade sample of
+        // the baked landscape color under the instance; the swatch
+        // value is only the fallback where no bake exists (surface
+        // preview, for now).
+        parameterId: "fill",
+        displayName: "Fill",
+        dataType: "color",
+        defaultValue: [0x6f / 255, 0x8f / 255, 0x52 / 255],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "silhouette",
+        displayName: "Silhouette",
+        dataType: "texture2d",
+        defaultValue: null,
+        textureRole: "color"
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "card-foliage-2"
+    }
+  };
+}
+
+/**
+ * Card Foliage 4: root = the floor color under each blade, tip =
+ * that same color with only its hue rotated a static amount toward
+ * yellow (clamped to a band so extreme grounds can't swing it into
+ * orange or teal), blended along blade height. The tip follows the
+ * ground automatically -- repainting the terrain restyles the grass
+ * with no color re-picking.
+ */
+export function createBuiltInCardFoliage4ShaderGraph(
+  projectId: string,
+  options: {
+    shaderDefinitionId?: string;
+    displayName?: string;
+  } = {}
+): ShaderGraphDocument {
+  const shaderDefinitionId =
+    options.shaderDefinitionId ?? `${projectId}:shader:card-foliage-4`;
+
+  return {
+    shaderDefinitionId,
+    definitionKind: "shader",
+    displayName: options.displayName ?? "Card Foliage 4",
+    targetKind: "mesh-surface",
+    revision: 5,
+    nodes: [
+      { nodeId: "uv", nodeType: "input.uv", position: { x: 48, y: 200 }, settings: {} },
+      { nodeId: "tree-height", nodeType: "input.tree-height", position: { x: 48, y: 60 }, settings: {} },
+      { nodeId: "root-color", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootColor" } },
+      {
+        // Green sits around 100-120deg on the hue wheel; yellow at
+        // 60deg. Negative shift = toward yellow. The clamp band keeps
+        // dirt-rooted blades from swinging into orange.
+        nodeId: "tip-hue",
+        nodeType: "color.hue-shift",
+        position: { x: 448, y: 64 },
+        settings: { shiftDegrees: -18, minDegrees: 50, maxDegrees: 150 }
+      },
+      { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
+      createMaterialTextureNode("silhouette", "silhouette", { x: 448, y: 280 }),
+      { nodeId: "output", nodeType: "output.surface", position: { x: 912, y: 160 }, settings: {} }
+    ],
+    edges: [
+      createShaderEdge("cf4-e-root-tiphue", "root-color", "value", "tip-hue", "color"),
+      createShaderEdge("cf4-e-root-tint", "root-color", "value", "height-tint", "a"),
+      createShaderEdge("cf4-e-tiphue-tint", "tip-hue", "value", "height-tint", "b"),
+      createShaderEdge("cf4-e-height-tint", "tree-height", "value", "height-tint", "alpha"),
+      createShaderEdge("cf4-e-uv-silhouette", "uv", "value", "silhouette", "uv"),
+      createShaderEdge("cf4-e-tint-output", "height-tint", "value", "output", "color"),
+      createShaderEdge("cf4-e-alpha-output", "silhouette", "alpha", "output", "alpha")
+    ],
+    parameters: [
+      {
+        // Root = the floor color under the blade (same channel the
+        // flat-fill shader uses); the swatch value is only the
+        // fallback where no ground bake exists.
+        parameterId: "rootColor",
+        displayName: "Root Color",
+        dataType: "color",
+        defaultValue: [0x2e / 255, 0x6b / 255, 0x21 / 255],
+        inheritSource: "baseLayerColor"
+      },
+      {
+        parameterId: "silhouette",
+        displayName: "Silhouette",
+        dataType: "texture2d",
+        defaultValue: null,
+        textureRole: "color"
+      }
+    ],
+    metadata: {
+      builtIn: true,
+      builtInKey: "card-foliage-4"
+    }
+  };
+}
+
 export function createDefaultPainterlyGrassShaderGraph(
   projectId: string,
   options: {
@@ -3297,7 +3479,7 @@ export function createDefaultPainterlyGrassShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Painterly Grass",
     targetKind: "mesh-surface",
-    revision: 2,
+    revision: 4,
     nodes: [
       { nodeId: "vertex-color", nodeType: "input.vertex-color", position: { x: 48, y: 240 }, settings: {} },
       { nodeId: "split-vertex-color", nodeType: "math.split-vector", position: { x: 256, y: 240 }, settings: {} },
@@ -3311,6 +3493,10 @@ export function createDefaultPainterlyGrassShaderGraph(
 
       { nodeId: "root-tint", nodeType: "input.parameter", position: { x: 256, y: 24 }, settings: { parameterId: "rootTint" } },
       { nodeId: "tip-tint", nodeType: "input.parameter", position: { x: 256, y: 104 }, settings: { parameterId: "tipTint" } },
+      // Tip color is RELATIVE to the (ground-inherited) root so
+      // blades stay anchored to whatever terrain they grow from --
+      // the Lemoine "no albedo, floor color" doctrine (2026-07-10).
+      { nodeId: "tip-relative", nodeType: "color.multiply", position: { x: 448, y: 64 }, settings: {} },
       { nodeId: "height-tint", nodeType: "math.lerp", position: { x: 672, y: 64 }, settings: {} },
       { nodeId: "base-color", nodeType: "color.multiply", position: { x: 896, y: 168 }, settings: {} },
 
@@ -3347,6 +3533,7 @@ export function createDefaultPainterlyGrassShaderGraph(
       { nodeId: "abs-x", nodeType: "math.abs", position: { x: 672, y: 560 }, settings: {} },
       { nodeId: "root-width", nodeType: "input.parameter", position: { x: 672, y: 880 }, settings: { parameterId: "rootWidth" } },
       { nodeId: "tip-width", nodeType: "input.parameter", position: { x: 672, y: 960 }, settings: { parameterId: "tipWidth" } },
+      { nodeId: "uvy-squared", nodeType: "math.multiply", position: { x: 896, y: 840 }, settings: {} },
       { nodeId: "width-delta", nodeType: "math.subtract", position: { x: 896, y: 920 }, settings: {} },
       { nodeId: "width-scale", nodeType: "math.multiply", position: { x: 1120, y: 960 }, settings: {} },
       { nodeId: "width-at-height", nodeType: "math.add", position: { x: 1344, y: 920 }, settings: {} },
@@ -3367,8 +3554,10 @@ export function createDefaultPainterlyGrassShaderGraph(
       createShaderEdge("e-vertexsplit-z", "split-vertex-color", "z", "vertex-rgb", "z"),
       createShaderEdge("e-uv-splituv", "uv", "value", "split-uv", "input"),
 
+      createShaderEdge("e-root-tiprelative", "root-tint", "value", "tip-relative", "a"),
+      createShaderEdge("e-tiplift-tiprelative", "tip-tint", "value", "tip-relative", "b"),
       createShaderEdge("e-root-heighttint", "root-tint", "value", "height-tint", "a"),
-      createShaderEdge("e-tip-heighttint", "tip-tint", "value", "height-tint", "b"),
+      createShaderEdge("e-tip-heighttint", "tip-relative", "value", "height-tint", "b"),
       createShaderEdge("e-treeheight-heighttint", "tree-height", "value", "height-tint", "alpha"),
       createShaderEdge("e-vertexrgb-basecolor", "vertex-rgb", "vec3", "base-color", "a"),
       createShaderEdge("e-heighttint-basecolor", "height-tint", "value", "base-color", "b"),
@@ -3404,8 +3593,10 @@ export function createDefaultPainterlyGrassShaderGraph(
       createShaderEdge("e-centerx-absx", "center-x", "value", "abs-x", "input"),
       createShaderEdge("e-tipwidth-widthdelta", "tip-width", "value", "width-delta", "a"),
       createShaderEdge("e-rootwidth-widthdelta", "root-width", "value", "width-delta", "b"),
+      createShaderEdge("e-uvy-sq-a", "split-uv", "y", "uvy-squared", "a"),
+      createShaderEdge("e-uvy-sq-b", "split-uv", "y", "uvy-squared", "b"),
       createShaderEdge("e-widthdelta-widthscale", "width-delta", "value", "width-scale", "a"),
-      createShaderEdge("e-uvy-widthscale", "split-uv", "y", "width-scale", "b"),
+      createShaderEdge("e-uvy-widthscale", "uvy-squared", "value", "width-scale", "b"),
       createShaderEdge("e-rootwidth-widthatheight", "root-width", "value", "width-at-height", "a"),
       createShaderEdge("e-widthscale-widthatheight", "width-scale", "value", "width-at-height", "b"),
       createShaderEdge("e-widthatheight-distancetoedge", "width-at-height", "value", "distance-to-edge", "a"),
@@ -3429,21 +3620,21 @@ export function createDefaultPainterlyGrassShaderGraph(
         parameterId: "rootTint",
         displayName: "Root Tint",
         dataType: "color",
-        colorSpace: "hdr",
-        defaultValue: [0.88, 0.98, 0.78]
+        defaultValue: [0.55, 0.66, 0.35],
+        inheritSource: "baseLayerColor"
       },
       {
         parameterId: "tipTint",
-        displayName: "Tip Tint",
+        displayName: "Tip Lift",
         dataType: "color",
         colorSpace: "hdr",
-        defaultValue: [1.26, 1.34, 0.96]
+        defaultValue: [1.1, 1.18, 0.95]
       },
       {
         parameterId: "baseShade",
         displayName: "Base Shade",
         dataType: "float",
-        defaultValue: 0.58
+        defaultValue: 0.48
       },
       {
         parameterId: "tipShade",
@@ -3462,7 +3653,7 @@ export function createDefaultPainterlyGrassShaderGraph(
         parameterId: "sunStrength",
         displayName: "Sun Strength",
         dataType: "float",
-        defaultValue: 0.34
+        defaultValue: 0.1
       },
       {
         parameterId: "tipBoostColor",
@@ -3475,7 +3666,7 @@ export function createDefaultPainterlyGrassShaderGraph(
         parameterId: "tipBoostStrength",
         displayName: "Tip Boost Strength",
         dataType: "float",
-        defaultValue: 0.22
+        defaultValue: 0.05
       },
       {
         parameterId: "rimColor",
@@ -3500,7 +3691,7 @@ export function createDefaultPainterlyGrassShaderGraph(
         parameterId: "rootWidth",
         displayName: "Root Width",
         dataType: "float",
-        defaultValue: 0.48
+        defaultValue: 0.5
       },
       {
         parameterId: "tipWidth",
@@ -3512,7 +3703,7 @@ export function createDefaultPainterlyGrassShaderGraph(
         parameterId: "edgeSoftness",
         displayName: "Edge Softness",
         dataType: "float",
-        defaultValue: 0.16
+        defaultValue: 0.3
       }
     ],
     metadata: {
@@ -4355,9 +4546,12 @@ export function createDefaultColorGradePostProcessShaderGraph(
       createShaderEdge("edge-contrast-output", "apply-contrast", "value", "output", "color")
     ],
     parameters: [
-      { parameterId: "lift", displayName: "Lift", dataType: "color", defaultValue: [0, 0, 0] },
-      { parameterId: "gamma", displayName: "Gamma", dataType: "color", defaultValue: [1, 1, 1] },
-      { parameterId: "gain", displayName: "Gain", dataType: "color", defaultValue: [1, 1, 1] },
+      { parameterId: "lift", displayName: "Lift", dataType: "color",
+        colorSpace: "hdr", defaultValue: [0, 0, 0] },
+      { parameterId: "gamma", displayName: "Gamma", dataType: "color",
+        colorSpace: "hdr", defaultValue: [1, 1, 1] },
+      { parameterId: "gain", displayName: "Gain", dataType: "color",
+        colorSpace: "hdr", defaultValue: [1, 1, 1] },
       { parameterId: "saturation", displayName: "Saturation", dataType: "float", defaultValue: 1 },
       { parameterId: "contrast", displayName: "Contrast", dataType: "float", defaultValue: 1 }
     ],

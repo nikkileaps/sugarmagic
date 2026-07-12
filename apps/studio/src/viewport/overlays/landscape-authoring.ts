@@ -15,9 +15,10 @@ import {
   applyCommand,
   serializeLandscapePaintPayload,
   type RegionLandscapePaintPayload,
-  type RegionLandscapeState
+  type RegionLandscapeState,
+  type RegionLayoutSketchState
 } from "@sugarmagic/domain";
-import { shallowEqual } from "@sugarmagic/shell";
+import { DEFAULT_SKETCH_SETTINGS, shallowEqual } from "@sugarmagic/shell";
 import {
   createLandscapeWorkspace,
   type LandscapeBrushSettings,
@@ -90,6 +91,31 @@ export const mountLandscapeAuthoringOverlay: ViewportOverlayFactory = (context) 
       context.stateAccess.updateSession(nextSession);
       context.stateAccess.clearLandscapeDraft();
     },
+    getLayoutSketch() {
+      return context.stateAccess.getActiveRegion()?.layoutSketch ?? null;
+    },
+    commitLayoutSketch(sketch: RegionLayoutSketchState) {
+      const session = context.stateAccess.getSession();
+      const region = context.stateAccess.getActiveRegion();
+      if (!session || !region) {
+        return;
+      }
+      const nextSession = applyCommand(session, {
+        kind: "UpdateRegionLayoutSketch",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "region-landscape",
+          subjectId: region.identity.id
+        },
+        payload: {
+          layoutSketch: sketch
+        }
+      });
+      context.stateAccess.updateSession(nextSession);
+    },
     onPreviewTick() {}
   });
 
@@ -130,7 +156,11 @@ export const mountLandscapeAuthoringOverlay: ViewportOverlayFactory = (context) 
         : null,
       landscape: resolveLandscapeDraft(context),
       activeChannelIndex: viewport.activeLandscapeChannelIndex,
-      brushSettings: viewport.brushSettings
+      brushSettings: viewport.brushSettings,
+      layoutSketch: project.session
+        ? context.stateAccess.getActiveRegion()?.layoutSketch ?? null
+        : null,
+      sketchSettings: viewport.sketchSettings
     }),
     (slice) => {
       const isActive =
@@ -144,7 +174,9 @@ export const mountLandscapeAuthoringOverlay: ViewportOverlayFactory = (context) 
       attachWorkspace();
       workspace.setActiveChannelIndex(slice.activeChannelIndex);
       workspace.setBrushSettings(slice.brushSettings ?? DEFAULT_BRUSH_SETTINGS);
+      workspace.setSketchSettings(slice.sketchSettings ?? DEFAULT_SKETCH_SETTINGS);
       workspace.syncLandscape();
+      workspace.syncSketch();
     },
     { equalityFn: shallowEqual }
   );

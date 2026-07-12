@@ -60,10 +60,103 @@ function clampVertexBudget(vertexBudget: number | undefined): number {
   return Math.max(0.1, Math.min(1, vertexBudget));
 }
 
+/**
+ * Painted-silhouette card clump: N static quads crossed around the clump
+ * center, each leaning `splayDegrees` off vertical so a 3/4 camera sees
+ * card area instead of card edges. The blade SHAPE lives entirely in the
+ * silhouette texture the layer's shader samples (UVs span the full quad,
+ * root at v=0) -- this geometry is deliberately dumb. Normals are forced
+ * world-up, same trick as procedural blades, so the whole clump shades
+ * as one flat patch of ground.
+ */
+function createCardGrassGeometry(
+  definition: GrassTypeDefinition,
+  tuft: Extract<GrassTypeDefinition["tuft"], { kind: "card" }>,
+  options: ProceduralScatterGeometryOptions
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const heights: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  // Cards ignore the LOD vertex budget: a clump is 2-4 quads, so a
+  // "reduced" variant saves nothing.
+  const cardCount = Math.max(1, Math.round(tuft.cardsPerClump));
+  const baseColor = rgbTuple(definition.baseColor);
+  const tipColor = rgbTuple(definition.tipColor);
+  const upNormal = new THREE.Vector3(0, 1, 0);
+  const splayRadians = (tuft.splayDegrees * Math.PI) / 180;
+
+  for (let cardIndex = 0; cardIndex < cardCount; cardIndex += 1) {
+    // Even fan around Y (PI, not 2*PI -- a quad is two-faced, so cards
+    // repeat every 180 degrees) plus a little yaw jitter so clumps of
+    // the same type don't all align across the field.
+    const yaw =
+      (cardIndex / cardCount) * Math.PI +
+      (hash01(cardIndex + 31) - 0.5) * 0.5;
+    const yawRotation = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      yaw
+    );
+    // Alternate the lean direction card-to-card so the clump splays
+    // open like a fan instead of every card leaning the same way.
+    const leanSign = cardIndex % 2 === 0 ? 1 : -1;
+    const splay =
+      leanSign * splayRadians * (0.6 + hash01(cardIndex + 47) * 0.8);
+    const splayRotation = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0).applyQuaternion(yawRotation),
+      splay
+    );
+    const rotation = splayRotation.multiply(yawRotation);
+
+    const halfWidth = tuft.width * 0.5;
+    const corner = (x: number, y: number) =>
+      new THREE.Vector3(x, y, 0).applyQuaternion(rotation);
+    const bottomLeft = corner(-halfWidth, 0);
+    const bottomRight = corner(halfWidth, 0);
+    const topLeft = corner(-halfWidth, tuft.height);
+    const topRight = corner(halfWidth, tuft.height);
+    const vertexOffset = positions.length / 3;
+
+    pushVertex(positions, normals, colors, heights, uvs, bottomLeft, upNormal, baseColor, 0, [0, 0]);
+    pushVertex(positions, normals, colors, heights, uvs, bottomRight, upNormal, baseColor, 0, [1, 0]);
+    pushVertex(positions, normals, colors, heights, uvs, topLeft, upNormal, tipColor, 1, [0, 1]);
+    pushVertex(positions, normals, colors, heights, uvs, topRight, upNormal, tipColor, 1, [1, 1]);
+
+    indices.push(
+      vertexOffset,
+      vertexOffset + 2,
+      vertexOffset + 1,
+      vertexOffset + 1,
+      vertexOffset + 2,
+      vertexOffset + 3
+    );
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setIndex(indices);
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3)
+  );
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute(
+    "_tree_height",
+    new THREE.Float32BufferAttribute(heights, 1)
+  );
+  return geometry;
+}
+
 export function createProceduralGrassGeometry(
   definition: GrassTypeDefinition,
   options: ProceduralScatterGeometryOptions = {}
 ): THREE.BufferGeometry {
+  if (definition.tuft.kind === "card") {
+    return createCardGrassGeometry(definition, definition.tuft, options);
+  }
   const positions: number[] = [];
   const normals: number[] = [];
   const colors: number[] = [];

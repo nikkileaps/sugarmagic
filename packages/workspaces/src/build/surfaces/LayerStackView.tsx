@@ -8,21 +8,15 @@
 import { ActionIcon, Group, Menu, Stack, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import type {
-  FlowerTypeDefinition,
-  GrassTypeDefinition,
   Layer,
-  MaterialDefinition,
-  MaskTextureDefinition,
   PaintedMaskTargetAddress,
-  RockTypeDefinition,
-  ShaderGraphDocument,
   Surface,
-  SurfaceContext,
-  TextureDefinition
+  SurfaceContext
 } from "@sugarmagic/domain";
 import { SortableList } from "@sugarmagic/ui";
 import { LayerMaskPopover } from "./LayerMaskPopover";
 import { LayerSettingsPopover } from "./LayerSettingsPopover";
+import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
 import { cloneLayer, createDefaultLayer } from "./utils";
 
 export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> {
@@ -33,17 +27,6 @@ export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> 
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
     | null;
-  materialDefinitions: MaterialDefinition[];
-  textureDefinitions: TextureDefinition[];
-  maskTextureDefinitions: MaskTextureDefinition[];
-  onCreateMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null> | MaskTextureDefinition | null;
-  onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
-  activeMaskPaintTarget?: PaintedMaskTargetAddress | null;
-  onSetMaskPaintTarget?: (target: PaintedMaskTargetAddress | null) => void;
-  shaderDefinitions: ShaderGraphDocument[];
-  grassTypeDefinitions: GrassTypeDefinition[];
-  flowerTypeDefinitions: FlowerTypeDefinition[];
-  rockTypeDefinitions: RockTypeDefinition[];
   onChangeSurface: (surface: Surface<C>) => void;
 }
 
@@ -52,19 +35,10 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   allowedContext,
   allowPainted,
   paintOwner,
-  materialDefinitions,
-  textureDefinitions,
-  maskTextureDefinitions,
-  onCreateMaskTextureDefinition,
-  onImportMaskTextureDefinition,
-  activeMaskPaintTarget,
-  onSetMaskPaintTarget,
-  shaderDefinitions,
-  grassTypeDefinitions,
-  flowerTypeDefinitions,
-  rockTypeDefinitions,
   onChangeSurface
 }: LayerStackViewProps<C>) {
+  const { grassTypeDefinitions, flowerTypeDefinitions, rockTypeDefinitions } =
+    useSurfaceAuthoring();
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
     surface.layers[0]?.layerId ?? null
   );
@@ -220,12 +194,6 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                 allowPainted={allowPainted}
                 paintOwner={paintOwner}
                 layerId={item.layer.layerId}
-                textureDefinitions={textureDefinitions}
-                maskTextureDefinitions={maskTextureDefinitions}
-                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                activeMaskPaintTarget={activeMaskPaintTarget}
-                onSetMaskPaintTarget={onSetMaskPaintTarget}
                 onActivate={() => setSelectedLayerId(item.id)}
                 onApply={(nextMask) =>
                   commitLayers(
@@ -243,16 +211,6 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
               <LayerSettingsPopover
                 layer={item.layer}
                 isBaseLayer={surface.layers[0]?.layerId === item.id}
-                allowedContext={allowedContext}
-                materialDefinitions={materialDefinitions}
-                textureDefinitions={textureDefinitions}
-                maskTextureDefinitions={maskTextureDefinitions}
-                onCreateMaskTextureDefinition={onCreateMaskTextureDefinition}
-                onImportMaskTextureDefinition={onImportMaskTextureDefinition}
-                shaderDefinitions={shaderDefinitions}
-                grassTypeDefinitions={grassTypeDefinitions}
-                flowerTypeDefinitions={flowerTypeDefinitions}
-                rockTypeDefinitions={rockTypeDefinitions}
                 onActivate={() => setSelectedLayerId(item.id)}
                 onChange={(nextLayer) =>
                   commitLayers(

@@ -6,3 +6,8 @@ export {
   SurfaceBindingEditor,
   type SurfaceBindingEditorProps
 } from "./SurfaceBindingEditor";
+export {
+  SurfaceAuthoringProvider,
+  useSurfaceAuthoring,
+  type SurfaceAuthoringCatalog
+} from "./SurfaceAuthoringContext";

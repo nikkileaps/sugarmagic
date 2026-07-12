@@ -26,6 +26,24 @@ export interface GrassTypeDefinition extends ScatterLodDefinition {
     | {
         kind: "asset";
         assetDefinitionId: string;
+      }
+    | {
+        /**
+         * Painted-silhouette card clump (the standard stylized
+         * foliage primitive): N static quads crossed around the
+         * clump center and splayed slightly off vertical so a 3/4
+         * camera sees area, not edges. Blade shapes come from a
+         * silhouette texture sampled by the layer's shader (bound
+         * via the scatter layer's textureBindings) -- never
+         * camera-facing, never modeled geometry.
+         */
+        kind: "card";
+        cardsPerClump: number;
+        /** Card width/height in meters. */
+        width: number;
+        height: number;
+        /** Degrees each card leans outward from vertical. */
+        splayDegrees: number;
       };
   density: number;
   scaleJitter: [number, number];

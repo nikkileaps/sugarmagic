@@ -7,6 +7,7 @@
  */
 
 import * as THREE from "three";
+import { transformNormalToView, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import type {
   ContentLibrarySnapshot,
@@ -27,6 +28,7 @@ import type { ResolvedScatterLayer } from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "../authoredAssetResolver";
 import type { ShaderRuntime } from "../ShaderRuntime";
 import {
+  SCATTER_GROUND_LIFT,
   createScatterComputeLayerParams,
   createScatterComputePipeline
 } from "./compute-pipeline";
@@ -54,6 +56,14 @@ export interface SurfaceScatterBuildOptions {
   contentLibrary: ContentLibrarySnapshot;
   assetResolver: AuthoredAssetResolver;
   shaderRuntime?: ShaderRuntime | null;
+  /**
+   * Landscape ground-color map (unlit albedo, worldUv-aligned). When
+   * present, shader params declaring inheritSource "baseLayerColor"
+   * sample the floor color under each instance instead of using the
+   * resolver-seeded flat color. Absent in the Surface Library preview
+   * (no landscape there) -- the literal fallback keeps working.
+   */
+  groundColorMap?: { texture: unknown; size: number } | null;
   enableGpuCompute?: boolean;
   logger?: {
     warn: (message: string, payload?: Record<string, unknown>) => void;
@@ -68,6 +78,7 @@ export interface SurfaceScatterBuildResult {
 export * from "./compute-pipeline";
 export * from "./instance-buffer";
 export * from "./lod";
+export * from "./procedural";
 
 interface ScatterLodDefinitionLike {
   lodMeshes: {
@@ -238,9 +249,27 @@ function createScatterMaterialForGeometry(
       },
       {
         material,
-        geometry
+        geometry,
+        groundColorMap: options.groundColorMap ?? null
       }
     );
+  }
+
+  if (
+    (layer.contentKind === "grass" || layer.contentKind === "flowers") &&
+    "normalNode" in appliedMaterial &&
+    !(appliedMaterial as { normalNode?: unknown }).normalNode
+  ) {
+    // Up-normal doctrine, fragment side. The geometry already bakes
+    // straight-up normals, but Three's double-sided default path
+    // multiplies the shading normal by faceDirection -- every
+    // back-facing card gets a DOWN normal and shades dark, which
+    // striped the grass mass with dark blades (~0.8x the ground
+    // color, measured 2026-07-11). An explicit normalNode returns
+    // from setupNormal verbatim, skipping the flip: both card faces
+    // shade exactly like the flat ground they grow from.
+    (appliedMaterial as { normalNode?: unknown }).normalNode =
+      transformNormalToView(vec3(0, 1, 0));
   }
 
   return {
@@ -609,7 +638,17 @@ export function buildSurfaceScatterLayer(
         const gpuBinInput = gpuBinInputs[index]!;
         const scatterMesh = computeBin.mesh;
         scatterMesh.name = `${root.name}:${gpuBinInput.bin}`;
-        scatterMesh.onBeforeRender = (renderer, _scene, camera) => {
+        // SINGLE dispatch path: RenderView calls this BEFORE the
+        // render pass (RenderView.renderOnce). Never dispatch these
+        // computes from onBeforeRender — mid-render-pass compute
+        // silently corrupts multi-bin compaction (every bin's
+        // visibleCount lands 0; backlog 003, the surface-preview
+        // grass bug). ADR 014 makes RenderView the only view class,
+        // so the pre-pass hook covers every render surface.
+        scatterMesh.userData.sugarmagicScatterPrepare = (
+          renderer: unknown,
+          camera: THREE.Camera
+        ) => {
           if (renderer instanceof WebGPURenderer) {
             sharedComputePipeline.prepareForRender(renderer, camera);
           }
@@ -699,7 +738,9 @@ export function buildSurfaceScatterLayer(
     acceptedSamples.length
   );
   instancedMesh.name = `${root.name}:instances`;
-  instancedMesh.castShadow = true;
+  // Same shadow policy as the GPU path: only rocks cast (see
+  // ScatterComputeLayerParams.castShadows).
+  instancedMesh.castShadow = layer.contentKind === "rocks";
   instancedMesh.receiveShadow = true;
 
   // Per-instance world-XZ origin. Each blade (instance) carries its own
@@ -761,7 +802,7 @@ export function buildSurfaceScatterLayer(
               Math.max(0, grassDefinition!.heightJitter))
         : baseScale;
     instanceScale.set(baseScale, verticalScale, baseScale);
-    samplePosition.addScaledVector(sampleNormal, 0.01);
+    samplePosition.addScaledVector(sampleNormal, SCATTER_GROUND_LIFT);
     instanceMatrix.compose(samplePosition, composedRotation, instanceScale);
     instancedMesh.setMatrixAt(index, instanceMatrix);
 

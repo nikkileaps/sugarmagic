@@ -500,7 +500,7 @@ export function resolveAppearanceLayer(
         : expectedTargetKind === "mesh-effect"
           ? "effect"
           : "surface";
-    return validateResolvedSurfaceTarget(
+    const materialResult = validateResolvedSurfaceTarget(
       resolveMaterialEffectiveShaderBinding(
         contentLibrary,
         surface.materialDefinitionId,
@@ -512,6 +512,36 @@ export function resolveAppearanceLayer(
       ),
       expectedTargetKind
     );
+    // Per-layer tiling multiplies the material's own tiling (which
+    // is library-wide — retiling it would retile every use of the
+    // material). Applied at the binding's "tiling" parameter, the
+    // same name the PBR auto-bind convention uses.
+    const layerTiling = surface.tiling;
+    if (
+      !materialResult.ok ||
+      !layerTiling ||
+      (layerTiling[0] === 1 && layerTiling[1] === 1)
+    ) {
+      return materialResult;
+    }
+    const baseTilingValue = materialResult.binding.parameterValues["tiling"];
+    const baseTiling: [number, number] =
+      Array.isArray(baseTilingValue) && baseTilingValue.length === 2
+        ? [Number(baseTilingValue[0]) || 1, Number(baseTilingValue[1]) || 1]
+        : [1, 1];
+    return {
+      ok: true,
+      binding: {
+        ...materialResult.binding,
+        parameterValues: {
+          ...materialResult.binding.parameterValues,
+          tiling: [
+            baseTiling[0] * layerTiling[0],
+            baseTiling[1] * layerTiling[1]
+          ]
+        }
+      }
+    };
   }
 
   if (!getShaderDefinition(contentLibrary, surface.shaderDefinitionId)) {
@@ -641,18 +671,45 @@ function resolveScatterWind(
 function resolveScatterAppearance(
   shaderDefinitionId: string | null,
   materialDefinitionId: string | null,
-  contentLibrary: ContentLibrarySnapshot
+  contentLibrary: ContentLibrarySnapshot,
+  surfaceBaseColor: [number, number, number] | null = null,
+  layerTextureBindings: Record<string, string> | undefined = undefined
 ): ResolveAppearanceLayerResult | null {
   const migratedShaderDefinitionId =
     shaderDefinitionId ??
     migrateLegacyScatterMaterialToShader(materialDefinitionId, contentLibrary);
   if (migratedShaderDefinitionId) {
+    // Seed inherited ground color BEFORE resolution: resolveSlotBinding
+    // bakes every declared parameter default into parameterValues, so
+    // any post-hoc injection would see them as "author-set" and skip
+    // -- inheritance was silently dead until this moved pre-resolution
+    // (found 2026-07-10). Scatter layers have no author parameter
+    // channel today, so seeding here cannot shadow explicit intent.
+    // This is the SINGLE enforcer for baseLayerColor inheritance.
+    const inheritedValues: Record<string, unknown> = {};
+    if (surfaceBaseColor) {
+      const shader = getShaderDefinition(
+        contentLibrary,
+        migratedShaderDefinitionId
+      );
+      for (const parameter of shader?.parameters ?? []) {
+        if (
+          parameter.inheritSource === "baseLayerColor" &&
+          parameter.dataType === "color"
+        ) {
+          inheritedValues[parameter.parameterId] = surfaceBaseColor;
+        }
+      }
+    }
     return resolveAppearanceLayer(
       {
         kind: "shader",
         shaderDefinitionId: migratedShaderDefinitionId,
-        parameterValues: {},
-        textureBindings: {}
+        parameterValues: inheritedValues,
+        // Layer-authored texture bindings (e.g. the painted card
+        // silhouette on a Card Foliage shader) flow through exactly
+        // like a shader-content appearance layer's bindings.
+        textureBindings: layerTextureBindings ?? {}
       },
       contentLibrary,
       "mesh-surface"
@@ -790,34 +847,6 @@ function materialTextureBindingValues(
   };
 }
 
-/**
- * Inject the containing Surface's base color into scatter-shader parameters
- * that opted in with `inheritSource: "baseLayerColor"`, but only if the
- * author hasn't already set that parameter explicitly in the material's
- * parameterValues. Explicit author intent always beats inheritance.
- */
-function applyBaseLayerColorInheritance(
-  binding: EffectiveShaderBinding,
-  baseColor: [number, number, number] | null,
-  contentLibrary: ContentLibrarySnapshot
-): EffectiveShaderBinding {
-  if (!baseColor) return binding;
-  const shader = getShaderDefinition(contentLibrary, binding.shaderDefinitionId);
-  if (!shader) return binding;
-  let nextParameterValues: Record<string, unknown> | null = null;
-  for (const parameter of shader.parameters) {
-    if (parameter.inheritSource !== "baseLayerColor") continue;
-    if (parameter.dataType !== "color") continue;
-    if (parameter.parameterId in binding.parameterValues) continue;
-    if (!nextParameterValues) {
-      nextParameterValues = { ...binding.parameterValues };
-    }
-    nextParameterValues[parameter.parameterId] = baseColor;
-  }
-  if (!nextParameterValues) return binding;
-  return { ...binding, parameterValues: nextParameterValues };
-}
-
 function surfaceStackFromBinding(
   binding: EffectiveShaderBinding
 ): ResolvedSurfaceStack<"universal"> {
@@ -951,7 +980,9 @@ export function resolveSurfaceBinding(
     const resolvedAppearance = resolveScatterAppearance(
       effectiveLayer.shaderDefinitionId ?? null,
       effectiveLayer.materialDefinitionId,
-      contentLibrary
+      contentLibrary,
+      surfaceBaseColor,
+      effectiveLayer.textureBindings
     );
     if (resolvedAppearance && !resolvedAppearance.ok) {
       return resolvedSurfaceDiagnostic(
@@ -960,12 +991,12 @@ export function resolveSurfaceBinding(
         resolvedAppearance.diagnostic.shaderDefinitionId
       );
     }
+    // Base-color inheritance is seeded BEFORE resolution inside
+    // resolveScatterAppearance (the single enforcer); the old
+    // post-hoc injection pass always no-op'd after that change and
+    // was deleted (065.11).
     const scatterAppearanceBinding = resolvedAppearance?.ok
-      ? applyBaseLayerColorInheritance(
-          resolvedAppearance.binding,
-          surfaceBaseColor,
-          contentLibrary
-        )
+      ? resolvedAppearance.binding
       : null;
     resolvedLayers.push({
       kind: "scatter",

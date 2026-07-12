@@ -152,6 +152,30 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     for (const listener of frameListeners) {
       listener();
     }
+    // Scatter compute pipelines must dispatch BEFORE the render
+    // pass. Dispatching from mesh.onBeforeRender (mid-pass) silently
+    // corrupts multi-bin compaction output — every bin's visibleCount
+    // lands 0 and the layer disappears (backlog 003: the surface-
+    // preview grass bug). The onBeforeRender path remains as a
+    // fallback for out-of-loop renders; its per-camera-frame guard
+    // makes this pre-pass call the one that wins. Gated on
+    // renderPipeline: before backend init completes, compute() eats
+    // the pipeline's one-shot candidate build into the void.
+    if (renderer && renderPipeline) {
+      scene.traverse((object) => {
+        const prepare = (
+          object.userData as {
+            sugarmagicScatterPrepare?: (
+              renderer: unknown,
+              camera: THREE.Camera
+            ) => void;
+          }
+        ).sugarmagicScatterPrepare;
+        if (typeof prepare === "function") {
+          prepare(renderer, activeCamera);
+        }
+      });
+    }
     const t2 = performance.now();
     renderPipeline?.render();
     const t3 = performance.now();

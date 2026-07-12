@@ -332,7 +332,15 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
       activeRegion: project.session ? context.stateAccess.getActiveRegion() : null
     }),
     (slice) => {
-      currentBrushSettings = slice.brushSettings;
+      // Mask painting has no sketch concept; the pencil coerces to
+      // paint so a stale mask target can't erase by accident.
+      currentBrushSettings = {
+        ...slice.brushSettings,
+        mode:
+          slice.brushSettings.mode === "sketch"
+            ? "paint"
+            : slice.brushSettings.mode
+      };
       const isActive = slice.activeProductMode === "build";
       if (!isActive || !slice.target) {
         currentTarget = null;

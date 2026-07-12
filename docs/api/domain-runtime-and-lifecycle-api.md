@@ -357,6 +357,15 @@ Examples:
 - `UpdateEnvironment`
 - `CreateQuestNode`
 
+Batch tools commit ONE semantic command per gesture, not one per
+produced element: a scatter-brush stroke that lands forty props
+commits a single `BrushPlaceAssets` (optionally creating its
+container folder in the same transaction), and an erase stroke
+commits a single `BrushEraseAssets`. One gesture = one transaction =
+one undo step. Instances landed by the brush carry `brushed: true`
+on `PlacedAssetInstance`; erase only removes brushed instances
+(hand-placed props are never erasable by brush).
+
 ### 3. Transaction
 
 The semantic command commits through a transaction boundary.
@@ -506,6 +515,23 @@ That payload is the authored source of truth for painted influence.
 ### `brush session`
 
 The transient interaction that may produce preview and then command commit.
+
+### `ground-color map`
+
+The landscape's UNLIT composited albedo (all channels blended by
+painted weights, textures included) baked top-down into a small
+texture, republished through a CPU readback as a plain
+`DataTexture`. Scatter shaders whose parameters declare
+`inheritSource: "baseLayerColor"` sample it at each instance's
+world position, so foliage takes the floor color underneath it.
+
+Rules (see ADR 025 for the color-space and sampling constraints):
+
+- shaders sample the readback `DataTexture`, never the render
+  target itself
+- the bake refreshes on real landscape changes, on splat paint
+  (throttled), and on explicit `markGroundBakeDirty()` from the
+  texture-loaded path; identity re-applies do not rebake
 
 ### `runtime projection`
 
