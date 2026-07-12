@@ -372,6 +372,10 @@ export function createAuthoringViewport(
 
   const objectMap = new Map<string, SceneObjectEntry>();
   const pendingRenderableLoads = new Set<string>();
+  /** What the latest projection wants on screen, by instanceId --
+   *  async loads consult this on completion instead of a generation
+   *  counter, so projection churn can't strand them (see below). */
+  const desiredObjects = new Map<string, SceneObject>();
   let previousObjects: SceneObject[] = [];
   let currentAssetSources: Record<string, string> = {};
   let renderGeneration = 0;
@@ -393,7 +397,16 @@ export function createAuthoringViewport(
     void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
-        if (generation !== renderGeneration) {
+        // Still wanted? The generation only advances on teardown
+        // (unmount / region cleared); per-object liveness comes from
+        // the desired map. Checking `generation` per applyProjection
+        // call used to discard every in-flight load whenever ANY
+        // store ticked during the async gltf load -- on first scene
+        // load nothing survived, and no assets appeared until the
+        // next projection change (e.g. clicking a selection)
+        // re-scheduled them.
+        const latest = desiredObjects.get(object.instanceId);
+        if (generation !== renderGeneration || !latest) {
           disposeRenderableObject(entry.root);
           return;
         }
@@ -402,10 +415,13 @@ export function createAuthoringViewport(
           authoredRoot.remove(existing.root);
           disposeRenderableObject(existing.root);
         }
+        // The object may have moved while the load was in flight.
+        entry.object = latest;
+        applyObjectTransform(entry.root, latest);
         authoredRoot.add(entry.root);
         ensureRenderableShadersApplied(
           entry,
-          object,
+          latest,
           renderView.shaderRuntime,
           assetSources
         );
@@ -453,6 +469,7 @@ export function createAuthoringViewport(
 
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;
+      desiredObjects.clear();
       previousObjects = [];
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
@@ -490,7 +507,13 @@ export function createAuthoringViewport(
       )
     );
     const delta = computeSceneDelta(previousObjects, currentObjects);
-    const generation = ++renderGeneration;
+    // NOT incremented here: bumping per call raced in-flight loads
+    // (see scheduleRenderableLoad). Teardown paths own the bump.
+    const generation = renderGeneration;
+    desiredObjects.clear();
+    for (const object of currentObjects) {
+      desiredObjects.set(object.instanceId, object);
+    }
 
     for (const id of delta.removed) {
       const entry = objectMap.get(id);
@@ -695,6 +718,7 @@ export function createAuthoringViewport(
 
     unmount() {
       renderGeneration += 1;
+      desiredObjects.clear();
 
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);

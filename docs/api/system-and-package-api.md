@@ -247,6 +247,24 @@ It is also the owner of preview orchestration:
 
 It should use the shared `targets/web` host path for the actual running preview.
 
+### Authoring viewport renderable lifecycle
+
+The authoring viewport (`apps/studio/src/viewport/authoringViewport.ts`)
+loads renderables (glTF) asynchronously off projection updates. Two
+invariants keep that safe:
+
+- **Completion checks the desired set, not a churn counter.** A
+  finished load asks "is this instanceId still in the latest
+  projection?" against a desired-objects map, and applies the
+  object's LATEST transform. It must not be gated on a per-update
+  generation number: projection emits happen on any store tick, so a
+  generation bump per update silently discarded every in-flight load
+  during first scene load and nothing appeared until the next
+  projection change re-scheduled them.
+- **The render generation only advances on teardown** (unmount,
+  region cleared) -- the moments when every in-flight load must be
+  discarded and disposed.
+
 ## `/targets/web` API
 
 ### Purpose
@@ -404,6 +422,64 @@ It is where editor viewport tooling should live when that tooling is:
 Authoring viewport composition belongs on the studio side of the boundary.
 
 `packages/workspaces` may depend on viewport contracts and runtime-facing scene semantics, but it should not depend on a separate browser-runtime package seam.
+
+### Viewport interaction contracts
+
+The interaction layer (`packages/workspaces/src/interaction/`) carries
+these behavioral contracts:
+
+- **One `InputRouter` per viewport element.** Tools join the owning
+  workspace's router as controllers on a stack (top controller wins);
+  a tool must never attach a second router to the same element.
+- **`HitTestService` is the single enforcer of hit resolution.** It
+  serves three modes (select / gizmo / surface). Select hits resolve
+  to the ancestor tagged `userData.sugarmagicSceneObject`, whose node
+  name is the instanceId -- hover outline, click-select, the gizmo,
+  and the Scene Explorer all agree because they all resolve through
+  it. Never interpret raw raycast hits in a tool.
+- **Hidden objects are never hit.** Three's Raycaster intersects
+  invisible objects; the service filters them. Anything toggled off
+  via `.visible` (inactive gizmo mode groups, hidden overlays) cannot
+  steal picks. Purely visual overlays that share the overlay root
+  (the selection hover hull) are raycast-inert.
+- **Transform drags are ray-based.** The pure math lives in
+  `interaction/transform-math.ts` (tested in
+  `packages/testing/src/transform-math.test.ts`): the pointer ray is
+  projected onto the dragged axis line, rotation plane, or trackball
+  plane, so objects track the cursor 1:1 at any zoom or FOV. There
+  are no pixel-delta sensitivity constants. Degenerate configurations
+  (axis viewed edge-on) freeze the drag instead of letting values fly.
+- **Gizmo axes are WORLD axes.** The gizmo renders world-aligned and
+  keeps a constant on-screen size (scaled per frame from camera
+  distance); object rotation is never applied to the gizmo root.
+- **One gesture = one command = one undo step.** Drags preview
+  transiently and commit a single semantic command on release;
+  Escape cancels and restores the drag-start values.
+
+### Gizmo handle affordances
+
+Handle names encode meaning: `gizmo-<mode>-<axis>` where mode is
+`move | rotate | scale` and axis is `x | y | z | center`. Hovered
+handles brighten; hovering a selectable object shows an orange
+back-face-hull outline (the "you can click this" cue).
+
+Center handles manipulate all axes at once, dragging on the
+camera-facing plane through the object:
+
+- **move center** (octahedron): free move -- the object follows the
+  cursor in the camera plane.
+- **scale center** (cube): uniform scale on all three axes, by ratio
+  of grab-point distance from center.
+- **rotate center** (faint trackball sphere inside the rings): free
+  rotate -- drag direction spins around the perpendicular in-plane
+  axis, composed as a world-space rotation.
+
+Pick priority: the small move/scale center handles win over axis
+handles sharing the same ray (otherwise a camera looking straight
+down an axis hands the click to an edge-on handle that cannot drag).
+The rotate trackball is the coarse target and loses to the thin
+rings. Enforced in `HitTestService`; regression-tested in
+`packages/testing/src/hit-test-service.test.ts`.
 
 ## `/packages/domain` API
 
