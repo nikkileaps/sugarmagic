@@ -1,6 +1,6 @@
 # Plan 065 — Environment charm tools: scatter brush, water, ambient particles, masking UX
 
-Status: proposed
+Status: complete (065.1-2 shipped; 065.3-4 promoted to Plans 066/067; 065.5 deferred with trigger)
 Owner: nikki + claude
 Date: 2026-07-09
 
@@ -96,14 +96,17 @@ Promoted to its own epic (2026-07-12): even a tiny particle system
 is its own vocabulary (presets, emitters, environment vs region
 ownership). See `docs/plans/067-ambient-particles.md`.
 
-### 065.5 — Masking + channel authoring UX rework
+### 065.5 — Masking + channel authoring UX rework — DEFERRED
 
-The splatmap-channel and layer-mask workflows work but are janky:
-channel management, painted-mask gating rules (inline-only), mask
-type discoverability, and the layer-stack editor ergonomics all
-have friction. nikki is field-testing the current flow and will
-supply the concrete gripe list; this story is scoped by those
-findings. Known candidates from the audit, to be confirmed:
+Deferred (2026-07-12): the story was always scoped by nikki's
+field-tested gripe list, and field use of the mask + noise workflow
+(the ground-variety layers driving the terrain-tinted grass) went
+smoothly — no concrete gripes to build against. Revisit trigger:
+the first CONCRETE masking/channel friction encountered in real
+authoring; scope that session's story by the actual complaint, not
+this list. The audit candidates below stay as a memory aid only —
+per the consult-code-not-plans rule, re-derive from the field, do
+not build from this list.
 
 - Channel list management (add/rename/reorder/delete, visibility
   toggles, per-channel thumbnails).
@@ -111,15 +114,10 @@ findings. Known candidates from the audit, to be confirmed:
   users silently; either lift it or explain it in the UI.
 - Mask editing entry points are buried; brush-mode handoff between
   landscape paint and mask paint is unclear.
-- No visualization of a mask's effect in isolation (a "show this
-  mask as heatmap" toggle, like the weight heatmap).
-- No channel-weight heatmap in the viewport. Confirmed in the
-  field (2026-07-10): scatter density reads as "established" at
-  ~7% weight while the channel's ground color is still invisible
-  at that weight, so underpainting looks like a broken surface
-  instead of a light touch. A weight overlay would make this a
-  five-second diagnosis; also consider a higher default brush
-  strength for channel painting.
+- No visualization of a mask's effect in isolation.
+- No channel-weight heatmap in the viewport (~7% weight reads as
+  established scatter while the ground color is invisible; a weight
+  overlay makes that a five-second diagnosis).
 
 ## Not in this epic
 

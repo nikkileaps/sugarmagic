@@ -3,6 +3,13 @@
  *
  * Edits the authored `Mask` union for one layer using the generic reusable UI
  * primitives from `@sugarmagic/ui`.
+ *
+ * Plan 065.5 (masking/channel UX rework) was DEFERRED 2026-07-12:
+ * field use went smoothly and no concrete gripes existed to build
+ * against. If you are here because mask/channel authoring produced
+ * real friction, that is the revisit trigger -- scope the fix by the
+ * actual complaint (see the deferred story in plan 065 for audit-era
+ * candidates, but re-derive from the field first).
  */
 
 import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
