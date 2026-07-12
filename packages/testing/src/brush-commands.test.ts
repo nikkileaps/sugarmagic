@@ -89,6 +89,14 @@ describe("scatter brush commands", () => {
     expect(result.region.placedAssets[2].transform.position).toEqual([
       1, 0, -1
     ]);
+    // 065.8: brush-landed instances carry the brushed marker so
+    // erase mode can distinguish them from hand-placed props.
+    expect(
+      result.region.placedAssets
+        .filter((asset) => asset.instanceId.startsWith("brushed-"))
+        .every((asset) => asset.brushed === true)
+    ).toBe(true);
+    expect(result.region.placedAssets[0].brushed).toBeUndefined();
     // One command -> one transaction boundary -> one undo step.
     expect(result.transaction.command.kind).toBe("BrushPlaceAssets");
   });

@@ -406,6 +406,7 @@ function applyBrushPlaceAssets(
       inspectable: null,
       shaderOverrides: [],
       shaderParameterOverrides: [],
+      brushed: true,
       transform: {
         position: placement.position,
         rotation: placement.rotation,

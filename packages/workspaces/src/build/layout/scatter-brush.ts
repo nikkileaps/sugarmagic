@@ -28,6 +28,7 @@ export interface ScatterBrushConfig {
   getPlacedAssets(): Array<{
     instanceId: string;
     position: [number, number, number];
+    brushed: boolean;
   }>;
   getAssetDisplayName(assetDefinitionId: string): string;
   createInstanceId(displayNameStem: string): string;
@@ -210,6 +211,11 @@ export function createScatterBrushTool(
     if (!settings) return;
     const radiusSq = settings.radius * settings.radius;
     for (const asset of config.getPlacedAssets()) {
+      // Erase only touches brush-landed instances (065.8, decided
+      // 2026-07-12): a swipe can never delete hand-placed props.
+      if (!asset.brushed) {
+        continue;
+      }
       const dx = asset.position[0] - x;
       const dz = asset.position[2] - z;
       if (dx * dx + dz * dz <= radiusSq) {

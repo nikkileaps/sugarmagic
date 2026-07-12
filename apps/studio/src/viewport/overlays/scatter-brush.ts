@@ -78,7 +78,8 @@ export const mountScatterBrushOverlay: ViewportOverlayFactory = (context) => {
         [];
       return [...region.placedAssets, ...overlayAssets].map((asset) => ({
         instanceId: asset.instanceId,
-        position: asset.transform.position
+        position: asset.transform.position,
+        brushed: asset.brushed === true
       }));
     },
     getAssetDisplayName(assetDefinitionId) {

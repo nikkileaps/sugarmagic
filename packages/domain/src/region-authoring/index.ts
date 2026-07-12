@@ -34,6 +34,15 @@ export interface PlacedAssetInstance {
    */
   shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
+  /**
+   * True when the instance was landed by the scatter brush (065.8).
+   * The brush's erase mode only removes brushed instances, so a
+   * swipe can never delete hand-placed props. Absent/undefined =
+   * hand-placed = protected. Deliberately a data flag rather than
+   * folder membership: dragging instances between folders must not
+   * change their erasability.
+   */
+  brushed?: boolean;
   transform: {
     position: [number, number, number];
     rotation: [number, number, number];
