@@ -98,6 +98,16 @@ coarse path if nothing else consumes it — one enforcer). Resolution in
 `resolveBindingSetForOwner` merges per-slot: overridden slots win,
 untouched slots fall through to the definition.
 
+Decided during implementation (2026-07-12): the whole-owner surface
+override FALLBACK tier (legacy slot-"surface" shader override silently
+painting unassigned slots) is DELETED, not preserved — no UI ever
+dispatched it and a scan of the real wordlark project data found zero
+occurrences, so there is nothing to migrate. An unassigned slot keeps
+the imported model material (a defined default). A BROKEN surface
+reference resolves to a loud magenta error surface (the slot sibling
+of the error-fallback mesh) plus a diagnostic; 068.3 surfaces that
+diagnostic in the inspector with a fix path (re-pick the surface).
+
 ### 068.2 — Scene-scoped overrides for base placements (domain)
 
 The one genuinely new semantic. `RegionSceneOverlay` gains asset

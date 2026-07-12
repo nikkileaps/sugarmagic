@@ -69,6 +69,7 @@ import type {
   RemovePlacedAssetInspectableCommand,
   UpdateRegionMetadataCommand,
   SetPlacedAssetShaderOverrideCommand,
+  SetPlacedAssetSurfaceSlotOverrideCommand,
   SetPlacedAssetShaderParameterOverrideCommand,
   ClearPlacedAssetShaderParameterOverrideCommand,
   SetNPCPresenceShaderOverrideCommand,
@@ -689,6 +690,35 @@ function applySetPlacedAssetShaderOverride(
           }
         : asset
     )
+  );
+}
+
+function applySetPlacedAssetSurfaceSlotOverride(
+  context: CommandExecutionContext,
+  command: SetPlacedAssetSurfaceSlotOverrideCommand
+): { region: RegionDocument; scene: Scene } {
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) => {
+      if (asset.instanceId !== command.payload.instanceId) {
+        return asset;
+      }
+      const kept = (asset.surfaceSlotOverrides ?? []).filter(
+        (slotOverride) => slotOverride.slotName !== command.payload.slotName
+      );
+      const next = command.payload.surface
+        ? [
+            ...kept,
+            {
+              slotName: command.payload.slotName,
+              surface: command.payload.surface
+            }
+          ]
+        : kept;
+      return {
+        ...asset,
+        surfaceSlotOverrides: next.length > 0 ? next : undefined
+      };
+    })
   );
 }
 
@@ -1499,6 +1529,10 @@ export function executeCommand(
     case "SetPlacedAssetShaderOverride":
       ({ region: updatedRegion, scene: updatedScene } =
         applySetPlacedAssetShaderOverride(context, command));
+      break;
+    case "SetPlacedAssetSurfaceSlotOverride":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetPlacedAssetSurfaceSlotOverride(context, command));
       break;
     case "SetPlacedAssetShaderParameterOverride":
       ({ region: updatedRegion, scene: updatedScene } =

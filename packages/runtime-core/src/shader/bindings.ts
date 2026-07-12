@@ -18,6 +18,7 @@ import type {
   Layer,
   Mask,
   PlacedAssetInstance,
+  PlacedAssetSurfaceSlotOverride,
   PostProcessShaderBinding,
   RockTypeDefinition,
   RegionItemPresence,
@@ -31,6 +32,10 @@ import type {
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
+  createAppearanceLayer,
+  createColorAppearanceContent,
+  createInlineSurfaceBinding,
+  createSurface,
   getAssetDefinition,
   getFlowerTypeDefinition,
   getGrassTypeDefinition,
@@ -1160,6 +1165,8 @@ function resolveBindingSetForOwner(
   overrides: {
     shaderOverrides: { shaderDefinitionId: string; slot: ShaderSlotKind }[];
     shaderParameterOverrides: ShaderParameterOverride[];
+    /** Plan 068.1 — per-material-slot surface overrides (instances). */
+    surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
   }
 ): EffectiveShaderBindingResolution {
   const bindingSet = createEmptyEffectiveShaderBindingSet();
@@ -1210,9 +1217,9 @@ function resolveBindingSetForOwner(
   const materialSlots = resolveSurfaceSlotBindings(
     contentLibrary,
     ownerAssetDefinition?.surfaceSlots ?? [],
-    bindingSet.surface,
     overrides.shaderParameterOverrides,
-    diagnostics
+    diagnostics,
+    overrides.surfaceSlotOverrides ?? []
   );
 
   return {
@@ -1222,20 +1229,62 @@ function resolveBindingSetForOwner(
   };
 }
 
+/** Loud error appearance for a slot whose surface reference is
+ *  broken -- the surface-slot sibling of the magenta error mesh.
+ *  A broken reference must be VISIBLE, never silently absorbed
+ *  (decided 2026-07-12; the old whole-owner fallback tier was
+ *  deleted -- nothing in UI or shipped data ever produced it). */
+const BROKEN_SURFACE_ERROR_COLOR = 0xff00ff;
+
+function resolveBrokenSurfaceErrorStack(
+  contentLibrary: ContentLibrarySnapshot
+): ResolvedSurfaceStack | null {
+  const errorBinding = createInlineSurfaceBinding(
+    createSurface([
+      createAppearanceLayer(
+        createColorAppearanceContent(BROKEN_SURFACE_ERROR_COLOR),
+        { displayName: "Broken surface reference", blendMode: "base" }
+      )
+    ])
+  );
+  const result = resolveSurfaceBinding(
+    errorBinding,
+    contentLibrary,
+    "universal",
+    []
+  );
+  return result.ok ? result.binding : null;
+}
+
 function resolveSurfaceSlotBindings(
   contentLibrary: ContentLibrarySnapshot,
   slotBindings: AssetSurfaceSlot[],
-  fallbackSurface: EffectiveShaderBinding | null,
   parameterOverrides: ShaderParameterOverride[],
-  diagnostics: ShaderBindingResolutionDiagnostic[]
+  diagnostics: ShaderBindingResolutionDiagnostic[],
+  slotOverrides: PlacedAssetSurfaceSlotOverride[] = []
 ): EffectiveMaterialSlotBinding[] {
-  return slotBindings.map((slotBinding) => {
+  // Per-slot precedence (Plan 068.1): instance slot override >
+  // definition slot surface. NO fallback tier below that -- an
+  // unassigned slot keeps the imported model material (surface:
+  // null, a defined default), and a BROKEN reference resolves to
+  // the loud error surface plus a diagnostic.
+  const overrideBySlotName = new Map(
+    slotOverrides.map((slotOverride) => [
+      slotOverride.slotName,
+      slotOverride.surface
+    ])
+  );
+  return slotBindings.map((rawSlotBinding) => {
+    const overrideSurface = overrideBySlotName.get(rawSlotBinding.slotName);
+    const slotBinding: AssetSurfaceSlot = overrideSurface
+      ? { ...rawSlotBinding, surface: overrideSurface }
+      : rawSlotBinding;
     if (!slotBinding.surface) {
       return {
         slotName: slotBinding.slotName,
         slotIndex: slotBinding.slotIndex,
         materialDefinitionId: null,
-        surface: fallbackSurface ? surfaceStackFromBinding(fallbackSurface) : null
+        surface: null
       };
     }
     const result = resolveSurfaceBinding(
@@ -1267,12 +1316,9 @@ function resolveSurfaceSlotBindings(
                 } => layer.kind === "appearance" && layer.content.kind === "material"
               )?.content.materialDefinitionId ?? null
             ),
-      surface:
-        result.ok
-          ? result.binding
-          : fallbackSurface
-            ? surfaceStackFromBinding(fallbackSurface)
-            : null
+      surface: result.ok
+        ? result.binding
+        : resolveBrokenSurfaceErrorStack(contentLibrary)
     };
   });
 }
@@ -1294,7 +1340,8 @@ export function resolveEffectiveAssetShaderBindings(
   const definition = getAssetDefinition(contentLibrary, asset.assetDefinitionId);
   return resolveBindingSetForOwner(contentLibrary, definition, {
     shaderOverrides: asset.shaderOverrides ?? [],
-    shaderParameterOverrides: asset.shaderParameterOverrides
+    shaderParameterOverrides: asset.shaderParameterOverrides,
+    surfaceSlotOverrides: asset.surfaceSlotOverrides ?? []
   }).bindings;
 }
 
@@ -1305,7 +1352,8 @@ export function resolveEffectiveAssetMaterialSlotBindings(
   const definition = getAssetDefinition(contentLibrary, asset.assetDefinitionId);
   return resolveBindingSetForOwner(contentLibrary, definition, {
     shaderOverrides: asset.shaderOverrides ?? [],
-    shaderParameterOverrides: asset.shaderParameterOverrides
+    shaderParameterOverrides: asset.shaderParameterOverrides,
+    surfaceSlotOverrides: asset.surfaceSlotOverrides ?? []
   }).materialSlots;
 }
 

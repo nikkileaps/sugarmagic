@@ -457,6 +457,18 @@ export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
   }
 >;
 
+/** Plan 068.1 — per-material-slot surface override on one instance.
+ *  `surface: null` clears the slot's override (falls back to the
+ *  definition's slot surface). */
+export type SetPlacedAssetSurfaceSlotOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetSurfaceSlotOverride",
+  {
+    instanceId: string;
+    slotName: string;
+    surface: SurfaceBinding<"universal"> | null;
+  }
+>;
+
 export type SetNPCPresenceShaderOverrideCommand = SemanticCommandBase<
   "SetNPCPresenceShaderOverride",
   {
@@ -1016,6 +1028,7 @@ export type SemanticCommand =
   | SetAssetDefaultShaderParameterOverrideCommand
   | ClearAssetDefaultShaderParameterOverrideCommand
   | SetPlacedAssetShaderOverrideCommand
+  | SetPlacedAssetSurfaceSlotOverrideCommand
   | SetNPCPresenceShaderOverrideCommand
   | SetItemPresenceShaderOverrideCommand
   | SetPlacedAssetShaderParameterOverrideCommand

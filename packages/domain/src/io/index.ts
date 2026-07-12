@@ -25,6 +25,7 @@ import {
   createRegionLayoutSketchState,
   type RegionDocument
 } from "../region-authoring";
+import type { PlacedAssetSurfaceSlotOverride } from "../region-authoring";
 import type { RegionSceneOverlay, Scene } from "../scenes";
 import {
   createSurface,
@@ -57,6 +58,26 @@ function slotForShaderDefinitionId(
     return "surface";
   }
   return null;
+}
+
+function normalizeSurfaceSlotOverrides(asset: {
+  surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
+}): PlacedAssetSurfaceSlotOverride[] | undefined {
+  const bySlotName = new Map<string, PlacedAssetSurfaceSlotOverride>();
+  for (const slotOverride of asset.surfaceSlotOverrides ?? []) {
+    if (
+      typeof slotOverride?.slotName !== "string" ||
+      slotOverride.slotName.length === 0 ||
+      !slotOverride.surface
+    ) {
+      continue;
+    }
+    bySlotName.set(slotOverride.slotName, {
+      slotName: slotOverride.slotName,
+      surface: slotOverride.surface
+    });
+  }
+  return bySlotName.size > 0 ? [...bySlotName.values()] : undefined;
 }
 
 function normalizeShaderOverrides(
@@ -211,7 +232,8 @@ export function normalizeRegionDocumentForLoad(
       createPlacedAssetInstance({
         ...asset,
         inspectable: asset.inspectable ?? null,
-        shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
+        shaderOverrides: normalizeShaderOverrides(contentLibrary, asset),
+        surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset)
       })
     ),
     folders: [...baseFolders],
@@ -382,7 +404,8 @@ export function normalizeScenesForLoad(
           createPlacedAssetInstance({
             ...asset,
             inspectable: asset.inspectable ?? null,
-            shaderOverrides: normalizeShaderOverrides(contentLibrary, asset)
+            shaderOverrides: normalizeShaderOverrides(contentLibrary, asset),
+            surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset)
           })
         ),
         folders: [...overlay.folders]
