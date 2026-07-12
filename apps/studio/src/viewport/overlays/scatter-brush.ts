@@ -34,15 +34,20 @@ export const mountScatterBrushOverlay: ViewportOverlayFactory = (context) => {
   // creates the folder in the SAME transaction as the placements, so
   // undoing the first stroke removes the folder too.
   let sessionFolder: { folderId: string; displayName: string } | null = null;
+  let sessionFolderRegionId: string | null = null;
 
   function resolveSessionFolder(
     paletteAssetDefinitionIds: string[]
   ): { folderId: string; displayName: string } {
-    if (sessionFolder) {
-      return sessionFolder;
-    }
     const session = context.stateAccess.getSession();
     const region = context.stateAccess.getActiveRegion();
+    // A patch folder belongs to ONE region: switching regions
+    // mid-arm-session starts a fresh folder instead of minting the
+    // same folderId into a second region (065.12b).
+    if (sessionFolder && sessionFolderRegionId === (region?.identity.id ?? null)) {
+      return sessionFolder;
+    }
+    sessionFolderRegionId = region?.identity.id ?? null;
     const firstAssetId = paletteAssetDefinitionIds[0] ?? null;
     const firstAssetName =
       (firstAssetId &&
@@ -172,6 +177,7 @@ export const mountScatterBrushOverlay: ViewportOverlayFactory = (context) => {
     tool.detach();
     // Next arm-session sprays into a fresh folder.
     sessionFolder = null;
+    sessionFolderRegionId = null;
   };
 
   const unsubscribeFrame = context.subscribeFrame(() => {

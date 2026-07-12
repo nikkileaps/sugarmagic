@@ -751,11 +751,13 @@ export function useLayoutWorkspaceView(
       // Only placed assets live in the folder tree; presence rows are
       // not draggable (the explorer already gates this), but guard
       // anyway so a stray drop can't dispatch a bogus command.
-      const isPlacedAsset =
-        (getRegionContents() ?? EMPTY_REGION_CONTENTS).placedAssets.some(
-          (asset) => asset.instanceId === instanceId
-        );
-      if (!isPlacedAsset) return;
+      const asset = (
+        getRegionContents() ?? EMPTY_REGION_CONTENTS
+      ).placedAssets.find((entry) => entry.instanceId === instanceId);
+      if (!asset) return;
+      // Dropping onto the asset's CURRENT folder is a no-op; skip the
+      // dispatch so it can't wipe the redo stack (065.12a).
+      if (asset.parentFolderId === folderId) return;
       onCommand({
         kind: "MovePlacedAssetToFolder",
         target: {

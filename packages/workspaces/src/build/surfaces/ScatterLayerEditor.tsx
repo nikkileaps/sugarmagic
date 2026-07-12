@@ -47,6 +47,32 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
     selectedShader?.parameters.filter(
       (parameter) => parameter.dataType === "texture2d"
     ) ?? [];
+  // Switching (or clearing) the layer shader prunes textureBindings
+  // to the parameters the NEW shader actually declares -- shared ids
+  // (e.g. "silhouette" across card-foliage variants) carry over,
+  // stale ones stop lingering in the document (065.12c).
+  const changeShader = (next: string | null) => {
+    const nextShader = next
+      ? scatterShaders.find(
+          (shader) => shader.shaderDefinitionId === next
+        ) ?? null
+      : null;
+    const validIds = new Set(
+      (nextShader?.parameters ?? [])
+        .filter((parameter) => parameter.dataType === "texture2d")
+        .map((parameter) => parameter.parameterId)
+    );
+    const prunedBindings = Object.fromEntries(
+      Object.entries(layer.textureBindings ?? {}).filter(([parameterId]) =>
+        validIds.has(parameterId)
+      )
+    );
+    onChange({
+      ...layer,
+      shaderDefinitionId: next ?? null,
+      textureBindings: prunedBindings
+    });
+  };
   return (
     <Stack gap="sm">
       <KindTabs
@@ -114,12 +140,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                   label: definition.displayName
                 }))}
                 value={layer.shaderDefinitionId}
-                onChange={(next) =>
-                  onChange({
-                    ...layer,
-                    shaderDefinitionId: next ?? null
-                  })
-                }
+                onChange={changeShader}
               />
             </Stack>
           ) : kind === "flowers" && layer.content.kind === "flowers" ? (
@@ -152,12 +173,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                   label: definition.displayName
                 }))}
                 value={layer.shaderDefinitionId}
-                onChange={(next) =>
-                  onChange({
-                    ...layer,
-                    shaderDefinitionId: next ?? null
-                  })
-                }
+                onChange={changeShader}
               />
             </Stack>
           ) : kind === "rocks" && layer.content.kind === "rocks" ? (
@@ -190,12 +206,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                   label: definition.displayName
                 }))}
                 value={layer.shaderDefinitionId}
-                onChange={(next) =>
-                  onChange({
-                    ...layer,
-                    shaderDefinitionId: next ?? null
-                  })
-                }
+                onChange={changeShader}
               />
             </Stack>
           ) : null
