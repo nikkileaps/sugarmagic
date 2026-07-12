@@ -148,6 +148,10 @@ export function createWebRenderEngine(
     onTextureUpdated() {
       for (const view of attachedViews) {
         view.markSceneMaterialsDirty();
+        // The identity re-apply below early-returns (same landscape
+        // ref); the bake snapshot still needs the freshly loaded
+        // texture, so request it explicitly (065.6).
+        view.landscapeController.markGroundBakeDirty();
         view.landscapeController.applyLandscape(
           currentRegion?.landscape ?? null,
           currentContentLibrary,

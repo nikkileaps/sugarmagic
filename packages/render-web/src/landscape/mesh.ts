@@ -124,6 +124,7 @@ export class RuntimeLandscapeMesh {
    */
   private readonly groundColorTexture: THREE.DataTexture;
   private groundReadbackInFlight = false;
+  private lastGroundBakeAtMs = 0;
   private groundBakeMaterial: MeshBasicNodeMaterial | null = null;
   private groundBakeDirty = true;
   private groundBakeScene: THREE.Scene | null = null;
@@ -215,6 +216,16 @@ export class RuntimeLandscapeMesh {
     return { texture: this.groundColorTexture, size: this.size };
   }
 
+  /**
+   * Request a rebake without a landscape change -- the texture-loaded
+   * path: a ground texture streaming in changes what the landscape
+   * RENDERS but not the landscape state, and the bake is a snapshot
+   * that would otherwise keep the pre-load placeholder forever.
+   */
+  markGroundBakeDirty(): void {
+    this.groundBakeDirty = true;
+  }
+
   private prepareGroundColorMap(renderer: WebGPURenderer): void {
     if (!this.groundBakeDirty || !this.groundBakeMaterial) {
       return;
@@ -246,6 +257,14 @@ export class RuntimeLandscapeMesh {
       // next frame re-bakes with the freshest content.
       return;
     }
+    // Interactive splat painting dirties the bake on every stroke
+    // sample; rebaking at most ~6x/s keeps the live grass-tint
+    // feedback while capping the bake + 1MB-readback churn (065.6).
+    const nowMs = performance.now();
+    if (nowMs - this.lastGroundBakeAtMs < 160) {
+      return;
+    }
+    this.lastGroundBakeAtMs = nowMs;
     this.groundBakeMesh.material = this.groundBakeMaterial;
     const previousTarget = renderer.getRenderTarget();
     renderer.setRenderTarget(this.groundColorTarget);
@@ -295,15 +314,6 @@ export class RuntimeLandscapeMesh {
     landscape: RegionLandscapeState,
     contentLibrary: ContentLibrarySnapshot | null
   ): void {
-    // Re-bake the ground-color map on every apply. The material
-    // rebuild below is signature-gated, and texture LOADS re-enter
-    // here without changing the signature -- the live material picks
-    // the loaded texture up automatically, but the bake is a snapshot
-    // and would otherwise keep showing the pre-load placeholder
-    // forever (blades sampled base-channel brown while the terrain
-    // rendered the loaded green; found 2026-07-11). One 512px draw,
-    // only on real apply events, not per-frame.
-    this.groundBakeDirty = true;
     this.mesh.visible = landscape.enabled;
 
     // Skip the rebuild chain entirely when applyLandscapeState is
@@ -326,6 +336,14 @@ export class RuntimeLandscapeMesh {
     }
     this.lastAppliedLandscape = landscape;
     this.lastAppliedContentLibrary = contentLibrary;
+    // Re-bake the ground-color map on REAL applies only -- this line
+    // must stay BELOW the reference guard (065.6: setting it above
+    // fired a 512px bake + 1MB readback on every identity re-apply).
+    // The two callers that need a rebake WITHOUT a landscape change
+    // have their own channels: texture loads call
+    // markGroundBakeDirty() explicitly, splat paint dirties via
+    // rebuildSplatTextures.
+    this.groundBakeDirty = true;
 
     this.splatmap.load(landscape.paintPayload, landscape.surfaceSlots.length);
 

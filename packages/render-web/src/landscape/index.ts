@@ -40,6 +40,8 @@ export interface LandscapeSceneController {
     contentLibrary?: ContentLibrarySnapshot | null,
     fileSources?: Record<string, string>
   ) => LandscapeSceneApplyResult;
+  /** See RuntimeLandscapeMesh.markGroundBakeDirty (065.6). */
+  markGroundBakeDirty: () => void;
   paintStroke: (
     stroke: LandscapeBrushStroke,
     contentLibrary?: ContentLibrarySnapshot | null,
@@ -166,6 +168,9 @@ export function createLandscapeSceneController(
       return applyLandscape(region?.landscape ?? null, contentLibrary ?? null, fileSources ?? {});
     },
     applyLandscape,
+    markGroundBakeDirty() {
+      currentLandscapeMesh?.markGroundBakeDirty();
+    },
     paintStroke(stroke, contentLibrary, fileSources) {
       if (!currentLandscapeMesh || !currentLandscapeState?.enabled) {
         return false;
