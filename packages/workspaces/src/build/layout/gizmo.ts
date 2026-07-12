@@ -140,6 +140,53 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
   return group;
 }
 
+// --- Center handles: manipulate all axes at once ---
+
+const CENTER_COLOR = 0xcdd6f4;
+
+function createMoveCenter(): THREE.Mesh {
+  const handle = configureOverlayMesh(
+    new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.14),
+      new THREE.MeshBasicMaterial({ color: CENTER_COLOR, depthTest: false })
+    ),
+    999
+  );
+  handle.name = "gizmo-move-center";
+  return handle;
+}
+
+function createScaleCenter(): THREE.Mesh {
+  const handle = configureOverlayMesh(
+    new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.2, 0.2),
+      new THREE.MeshBasicMaterial({ color: CENTER_COLOR, depthTest: false })
+    ),
+    999
+  );
+  handle.name = "gizmo-scale-center";
+  return handle;
+}
+
+function createRotateCenter(): THREE.Mesh {
+  // Trackball: a faint sphere inside the rings (radius under the
+  // rings' 1.2 so ring silhouettes stay grabbable around it).
+  const handle = configureOverlayMesh(
+    new THREE.Mesh(
+      new THREE.SphereGeometry(0.95, 24, 16),
+      new THREE.MeshBasicMaterial({
+        color: CENTER_COLOR,
+        transparent: true,
+        opacity: 0.12,
+        depthTest: false
+      })
+    ),
+    998
+  );
+  handle.name = "gizmo-rotate-center";
+  return handle;
+}
+
 // --- Composite gizmo ---
 
 export interface LayoutGizmo {
@@ -165,16 +212,19 @@ export function createLayoutGizmo(): LayoutGizmo {
   const moveGroup = new THREE.Group();
   moveGroup.name = "gizmo-move";
   for (const axis of AXES) moveGroup.add(createMoveHandle(axis, AXIS_COLORS[axis]));
+  moveGroup.add(createMoveCenter());
   root.add(moveGroup);
 
   const rotateGroup = new THREE.Group();
   rotateGroup.name = "gizmo-rotate";
   for (const axis of AXES) rotateGroup.add(createRotateHandle(axis, AXIS_COLORS[axis]));
+  rotateGroup.add(createRotateCenter());
   root.add(rotateGroup);
 
   const scaleGroup = new THREE.Group();
   scaleGroup.name = "gizmo-scale";
   for (const axis of AXES) scaleGroup.add(createScaleHandle(axis, AXIS_COLORS[axis]));
+  scaleGroup.add(createScaleCenter());
   root.add(scaleGroup);
 
   root.visible = false;
@@ -371,6 +421,9 @@ export function createSelectionHoverHull(): SelectionHoverHull {
         return;
       }
       const hull = new THREE.Mesh(object.geometry, material);
+      // Visual-only: the hull shares the overlay root with the gizmo
+      // and would otherwise intercept its hit-test rays.
+      hull.raycast = () => {};
       hull.matrixAutoUpdate = false;
       relative.multiplyMatrices(inverseTarget, object.matrixWorld);
       hull.matrix.copy(relative);

@@ -41,15 +41,50 @@ export interface HitTestService {
   setSurfaceRoot: (root: THREE.Object3D | null) => void;
 }
 
+/**
+ * Three's Raycaster intersects HIDDEN objects too -- visibility is a
+ * render concern it never consults. Anything toggled off via
+ * `.visible` (inactive gizmo mode groups, hidden overlays) must be
+ * filtered here or it silently steals hits from what's on screen.
+ */
+function isVisibleThrough(
+  object: THREE.Object3D,
+  root: THREE.Object3D
+): boolean {
+  let node: THREE.Object3D | null = object;
+  while (node) {
+    if (!node.visible) return false;
+    if (node === root) return true;
+    node = node.parent;
+  }
+  return true;
+}
+
 function pickNearest(
   raycaster: THREE.Raycaster,
   root: THREE.Object3D,
   mode: HitTestMode
 ): HitTestResult | null {
   const intersects = raycaster.intersectObjects(root.children, true);
-  if (intersects.length === 0) return null;
+  const visible = intersects.filter((intersect) =>
+    isVisibleThrough(intersect.object, root)
+  );
+  let hit = visible[0];
+  if (!hit) return null;
 
-  const hit = intersects[0];
+  // The small move/scale center handles sit where the axis handles
+  // converge. With the camera looking down an axis, that axis's
+  // shaft/cone projects onto the center pixel IN FRONT of the handle
+  // and wins nearest-first -- yet an edge-on axis is exactly the one
+  // the drag math (correctly) refuses to drive. A center hit anywhere
+  // in the stack takes priority. The rotate trackball is exempt: it
+  // is the coarse target and the thin rings keep priority over it.
+  if (mode === "gizmo") {
+    const center = visible.find((intersect) =>
+      /^gizmo-(move|scale)-center$/.test(intersect.object.name)
+    );
+    if (center) hit = center;
+  }
 
   // SELECT hits resolve to the SCENE-OBJECT ROOT -- the ancestor
   // carrying the `sugarmagicSceneObject` marker (named with the

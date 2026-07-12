@@ -27,6 +27,8 @@ import {
 } from "./transform-math";
 
 export type TransformAxis = "x" | "y" | "z";
+/** Center handles manipulate all axes at once. */
+export type DragAxis = TransformAxis | "center";
 
 export interface TransformValues {
   position: [number, number, number];
@@ -41,12 +43,19 @@ interface DragAnchor {
   axisParameter: number | null;
   /** Rotate: center->pointer vector in the rotation plane at start. */
   planeVector: THREE.Vector3 | null;
+  /**
+   * Center handles: the camera-facing plane through the object at
+   * drag start (normal + grab point on it). Frozen at pointer-down
+   * so camera motion mid-drag cannot warp the manipulation.
+   */
+  cameraPlaneNormal: THREE.Vector3 | null;
+  cameraPlanePoint: THREE.Vector3 | null;
 }
 
 export interface TransformSession {
   instanceId: string;
   mode: TransformTool;
-  axis: TransformAxis;
+  axis: DragAxis;
   start: TransformValues;
   current: TransformValues;
   anchor: DragAnchor;
@@ -64,10 +73,10 @@ export interface TransformControllerConfig {
   getTransform: (instanceId: string) => TransformValues | null;
 }
 
-function parseGizmoHit(name: string): { mode: TransformTool; axis: TransformAxis } | null {
-  const match = name.match(/^gizmo-(move|rotate|scale)-(x|y|z)$/);
+function parseGizmoHit(name: string): { mode: TransformTool; axis: DragAxis } | null {
+  const match = name.match(/^gizmo-(move|rotate|scale)-(x|y|z|center)$/);
   if (!match) return null;
-  return { mode: match[1] as TransformTool, axis: match[2] as TransformAxis };
+  return { mode: match[1] as TransformTool, axis: match[2] as DragAxis };
 }
 
 const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
@@ -79,6 +88,12 @@ const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
 const MIN_SCALE = 0.01;
 /** Grab points closer to center than this can't drive a stable scale ratio. */
 const MIN_SCALE_ANCHOR = 0.05;
+/**
+ * Free-rotate feel: dragging this fraction of the camera distance
+ * across the trackball turns the object one radian. Matches the
+ * on-screen gizmo size driven by updateForCamera (distance * 0.09).
+ */
+const TRACKBALL_RADIUS_FACTOR = 0.11;
 
 export function createTransformController(
   config: TransformControllerConfig
@@ -88,7 +103,7 @@ export function createTransformController(
   function anchorForPointer(
     event: NormalizedPointerEvent,
     mode: TransformTool,
-    axis: TransformAxis,
+    axis: DragAxis,
     center: THREE.Vector3
   ): DragAnchor {
     const ray = pointerRayFromCamera(
@@ -96,18 +111,106 @@ export function createTransformController(
       event.normalizedY,
       config.camera
     );
+    if (axis === "center") {
+      // All center handles drag on the camera-facing plane through
+      // the object -- the grab point tracks the cursor exactly.
+      const normal = new THREE.Vector3();
+      config.camera.getWorldDirection(normal);
+      const hit = planePointForRay(ray, center, normal);
+      return {
+        center,
+        axisParameter: null,
+        planeVector: null,
+        cameraPlaneNormal: normal,
+        cameraPlanePoint: hit
+      };
+    }
     if (mode === "rotate") {
       const hit = planePointForRay(ray, center, AXIS_VECTORS[axis]);
       return {
         center,
         axisParameter: null,
-        planeVector: hit ? hit.sub(center) : null
+        planeVector: hit ? hit.sub(center) : null,
+        cameraPlaneNormal: null,
+        cameraPlanePoint: null
       };
     }
     return {
       center,
       axisParameter: axisParameterForRay(ray, center, AXIS_VECTORS[axis]),
-      planeVector: null
+      planeVector: null,
+      cameraPlaneNormal: null,
+      cameraPlanePoint: null
+    };
+  }
+
+  function applyCenterDrag(
+    activeSession: TransformSession,
+    ray: ReturnType<typeof pointerRayFromCamera>
+  ): void {
+    const { cameraPlaneNormal, cameraPlanePoint, center } =
+      activeSession.anchor;
+    if (!cameraPlaneNormal || !cameraPlanePoint) return;
+    const hit = planePointForRay(ray, center, cameraPlaneNormal);
+    if (!hit) return;
+
+    if (activeSession.mode === "move") {
+      const delta = hit.clone().sub(cameraPlanePoint);
+      activeSession.current = {
+        ...activeSession.current,
+        position: [
+          activeSession.start.position[0] + delta.x,
+          activeSession.start.position[1] + delta.y,
+          activeSession.start.position[2] + delta.z
+        ]
+      };
+      return;
+    }
+
+    if (activeSession.mode === "scale") {
+      const anchorRadius = cameraPlanePoint.distanceTo(center);
+      if (anchorRadius < MIN_SCALE_ANCHOR) return;
+      const factor = Math.max(
+        MIN_SCALE,
+        hit.distanceTo(center) / anchorRadius
+      );
+      activeSession.current = {
+        ...activeSession.current,
+        scale: [
+          Math.max(MIN_SCALE, activeSession.start.scale[0] * factor),
+          Math.max(MIN_SCALE, activeSession.start.scale[1] * factor),
+          Math.max(MIN_SCALE, activeSession.start.scale[2] * factor)
+        ]
+      };
+      return;
+    }
+
+    // Free rotate (trackball): drag direction in the camera plane
+    // spins the object around the in-plane axis perpendicular to the
+    // drag -- pull down to tip toward you, drag sideways to spin.
+    const drag = hit.clone().sub(cameraPlanePoint);
+    const dragLength = drag.length();
+    if (dragLength < 1e-6) return;
+    const rotationAxis = new THREE.Vector3()
+      .crossVectors(cameraPlaneNormal, drag)
+      .normalize();
+    const cameraDistance = ray.origin.distanceTo(center);
+    const angle =
+      dragLength / Math.max(0.1, cameraDistance * TRACKBALL_RADIUS_FACTOR);
+    const startQuaternion = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(...activeSession.start.rotation, "XYZ")
+    );
+    const deltaQuaternion = new THREE.Quaternion().setFromAxisAngle(
+      rotationAxis,
+      angle
+    );
+    const nextEuler = new THREE.Euler().setFromQuaternion(
+      deltaQuaternion.multiply(startQuaternion),
+      "XYZ"
+    );
+    activeSession.current = {
+      ...activeSession.current,
+      rotation: [nextEuler.x, nextEuler.y, nextEuler.z]
     };
   }
 
@@ -164,6 +267,13 @@ export function createTransformController(
         event.normalizedY,
         config.camera
       );
+
+      if (session.axis === "center") {
+        applyCenterDrag(session, ray);
+        config.onPreview(session.instanceId, session.current);
+        return;
+      }
+
       const axisVector = AXIS_VECTORS[session.axis];
       const ai = session.axis === "x" ? 0 : session.axis === "y" ? 1 : 2;
 
