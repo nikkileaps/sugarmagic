@@ -28,6 +28,8 @@ import type {
   MovePlacedAssetCommand,
   TransformPlacedAssetCommand,
   PlaceAssetInstanceCommand,
+  BrushPlaceAssetsCommand,
+  BrushEraseAssetsCommand,
   DuplicatePlacedAssetCommand,
   RemovePlacedAssetCommand,
   MovePlacedAssetToFolderCommand,
@@ -349,6 +351,97 @@ function applyRemovePlacedAsset(
 ): { region: RegionDocument; scene: Scene } {
   return mapPlacedAssetsEverywhere(context, (assets) =>
     assets.filter((asset) => asset.instanceId !== command.payload.instanceId)
+  );
+}
+
+function applyBrushPlaceAssets(
+  context: CommandExecutionContext,
+  command: BrushPlaceAssetsCommand
+): { region: RegionDocument; scene: Scene } {
+  const folderSpec = command.payload.createFolder ?? null;
+  const scope = command.payload.scope ?? "base";
+  let workingContext = context;
+  if (folderSpec) {
+    const existsInBase = context.region.folders.some(
+      (folder) => folder.folderId === folderSpec.folderId
+    );
+    const existsInOverlay = (
+      context.scene.regionOverlays[context.region.identity.id]?.folders ?? []
+    ).some((folder) => folder.folderId === folderSpec.folderId);
+    if (!existsInBase && !existsInOverlay) {
+      const folder = {
+        folderId: folderSpec.folderId,
+        displayName: folderSpec.displayName,
+        parentFolderId: null
+      };
+      workingContext =
+        scope === "base"
+          ? {
+              ...context,
+              region: {
+                ...context.region,
+                folders: [...context.region.folders, folder]
+              }
+            }
+          : {
+              ...context,
+              scene: withOverlay(
+                context.scene,
+                context.region.identity.id,
+                (overlay) => ({
+                  ...overlay,
+                  folders: [...overlay.folders, folder]
+                })
+              )
+            };
+    }
+  }
+  const context2 = workingContext;
+  const created: PlacedAssetInstance[] = command.payload.placements.map(
+    (placement) => ({
+      instanceId: placement.instanceId,
+      assetDefinitionId: placement.assetDefinitionId,
+      displayName: placement.displayName,
+      parentFolderId: folderSpec?.folderId ?? command.payload.parentFolderId,
+      inspectable: null,
+      shaderOverrides: [],
+      shaderParameterOverrides: [],
+      transform: {
+        position: placement.position,
+        rotation: placement.rotation,
+        scale: placement.scale
+      }
+    })
+  );
+  if (scope === "base") {
+    return {
+      region: {
+        ...context2.region,
+        placedAssets: [...context2.region.placedAssets, ...created]
+      },
+      scene: context2.scene
+    };
+  }
+  return {
+    region: context2.region,
+    scene: withOverlay(
+      context2.scene,
+      context2.region.identity.id,
+      (overlay) => ({
+        ...overlay,
+        placedAssets: [...overlay.placedAssets, ...created]
+      })
+    )
+  };
+}
+
+function applyBrushEraseAssets(
+  context: CommandExecutionContext,
+  command: BrushEraseAssetsCommand
+): { region: RegionDocument; scene: Scene } {
+  const doomed = new Set(command.payload.instanceIds);
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.filter((asset) => !doomed.has(asset.instanceId))
   );
 }
 
@@ -1366,6 +1459,18 @@ export function executeCommand(
       ({ region: updatedRegion, scene: updatedScene } =
         applyPlaceAssetInstance(context, command));
       break;
+    case "BrushPlaceAssets": {
+      const result = applyBrushPlaceAssets(context, command);
+      updatedRegion = result.region;
+      updatedScene = result.scene;
+      break;
+    }
+    case "BrushEraseAssets": {
+      const result = applyBrushEraseAssets(context, command);
+      updatedRegion = result.region;
+      updatedScene = result.scene;
+      break;
+    }
     case "DuplicatePlacedAsset":
       ({ region: updatedRegion, scene: updatedScene } =
         applyDuplicatePlacedAsset(context, command));
