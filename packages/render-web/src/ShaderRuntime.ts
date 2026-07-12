@@ -650,13 +650,27 @@ function materializeBuiltin(
       // point at "Foliage Surface 2" which was built without sphereNormal.
       return normalWorld;
     }
-    case "treeHeight":
+    case "treeHeight": {
       // Three's GLTFLoader lowercases custom attribute names — see note
       // on sphereNormal above.
-      return (tslAttribute as unknown as (
+      const heightAttribute = (tslAttribute as unknown as (
         name: string,
         type: string
       ) => unknown)("_tree_height", "float");
+      if (context.ir.targetKind === "mesh-deform") {
+        // Deform graphs run in the vertex stage already (wind reads
+        // this attribute there and always worked).
+        return heightAttribute;
+      }
+      // Fragment consumers (surface color graphs) go through
+      // vertexStage(): evaluated in the vertex stage, interpolated to
+      // the fragment as a varying. Kept consistent with the
+      // instanceOrigin discipline (fragment-stage attribute() reads
+      // proved unreliable on this NodeMaterial path); verified
+      // rendering a smooth root-to-tip gradient on card blades
+      // (2026-07-11).
+      return vertexStage(heightAttribute as never);
+    }
     case "materialTextureColor":
       if (
         context.target.targetKind !== "mesh-surface" &&
@@ -837,15 +851,25 @@ function uniformForParameter(
   // poke. That price is fine — graphics shaders are short and Three's
   // compile is fast.
   let currentValue = context.parameterValues[parameterId] ?? 0;
+  // Color-ness comes from the parameter DECLARATION, never from the
+  // value's dataType: the compiler's coerceValue silently retypes a
+  // color feeding a vec3 port (math.lerp's a/b, any vector math) to
+  // "vec3", and keying the branches below off that stripped type made
+  // every lerp'd color parameter lose BOTH ground inheritance (blades
+  // seeded the surface base color -- white stacks rendered cream) AND
+  // sRGB conversion (swatches rendered paler than authored). Found
+  // 2026-07-11 after it produced the recurring "pale grass" bug in
+  // three different shader generations.
+  const declaration = context.ir.parameters.find(
+    (parameter) => parameter.parameterId === parameterId
+  );
+  const isColorParameter = declaration?.dataType === "color" || dataType === "color";
   // Ground-inheriting params sample the landscape's baked albedo at
   // the instance's own world XZ when a ground-color map is available:
   // every blade takes the floor color underneath it (splat blends,
   // dirt boundaries and all) instead of one flat color per surface.
   // The bake stores LINEAR values, so no sRGB conversion applies.
-  if (dataType === "color" && context.groundColorMap) {
-    const declaration = context.ir.parameters.find(
-      (parameter) => parameter.parameterId === parameterId
-    );
+  if (isColorParameter && context.groundColorMap) {
     if (declaration?.inheritSource === "baseLayerColor") {
       const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
         div: (value: unknown) => { add: (value: unknown) => unknown };
@@ -877,10 +901,7 @@ function uniformForParameter(
   // convert here; without it every authored color rendered paler and
   // desaturated (found 2026-07-10). Params declared colorSpace "hdr"
   // are linear multipliers/math terms and pass through verbatim.
-  if (dataType === "color" && Array.isArray(currentValue)) {
-    const declaration = context.ir.parameters.find(
-      (parameter) => parameter.parameterId === parameterId
-    );
+  if (isColorParameter && Array.isArray(currentValue)) {
     if (declaration?.colorSpace !== "hdr") {
       const converted = new THREE.Color().setRGB(
         Number(currentValue[0]) || 0,

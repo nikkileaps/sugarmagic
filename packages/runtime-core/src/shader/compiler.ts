@@ -508,6 +508,7 @@ function compileNodePort(
     node.nodeType === "color.add" ||
     node.nodeType === "color.multiply" ||
     node.nodeType === "color.adjust" ||
+    node.nodeType === "color.hue-shift" ||
     node.nodeType === "color.divide" ||
     node.nodeType === "color.pow" ||
     node.nodeType === "math.dot" ||
