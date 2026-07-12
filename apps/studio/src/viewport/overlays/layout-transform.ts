@@ -84,6 +84,12 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
     layout.detach();
   };
 
+  const unsubscribeFrame = context.subscribeFrame(() => {
+    if (attached) {
+      layout.updateForCamera(context.getCamera());
+    }
+  });
+
   const unsubscribeProjection = context.subscribeToProjection(
     ({ project, shell, viewport }) => ({
       activeProductMode: shell.activeProductMode,
@@ -111,7 +117,9 @@ export const mountTransformGizmoOverlay: ViewportOverlayFactory = (context) => {
   );
 
   return () => {
+    unsubscribeFrame();
     unsubscribeProjection();
     detachWorkspace();
+    layout.dispose();
   };
 };

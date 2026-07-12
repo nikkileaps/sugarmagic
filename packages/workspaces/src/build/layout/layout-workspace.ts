@@ -17,6 +17,7 @@ import {
   createHitTestService,
   createToolStateStore,
   createTransformController,
+  gizmoWorldScaleForCamera,
   TOOL_SHORTCUTS,
   type InputRouter,
   type HitTestService,
@@ -25,6 +26,7 @@ import {
 } from "../../interaction";
 import {
   createLayoutGizmo,
+  createSelectionHoverHull,
   createOriginMarker,
   createWorldCursor,
   type LayoutGizmo,
@@ -53,6 +55,11 @@ export interface LayoutWorkspaceInstance {
   ) => void;
   detach: () => void;
   syncOverlays: () => void;
+  /** Per-frame: keep the gizmo a constant size on screen and track
+   *  the host's ACTIVE camera (perspective <-> ortho toggles). */
+  updateForCamera: (camera: THREE.Camera) => void;
+  /** Release GPU resources; call on final teardown, not on detach. */
+  dispose: () => void;
   gizmo: LayoutGizmo;
   originMarker: OriginMarker;
   worldCursor: WorldCursor;
@@ -70,6 +77,7 @@ export function createLayoutWorkspace(
   const gizmo = createLayoutGizmo();
   const originMarker = createOriginMarker();
   const worldCursor = createWorldCursor();
+  const hoverHull = createSelectionHoverHull();
 
   worldCursor.setPosition([0, 0, 0]);
 
@@ -100,17 +108,18 @@ export function createLayoutWorkspace(
   let transformController: ReturnType<typeof createTransformController> | null = null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
   let attachedOverlayRoot: THREE.Object3D | null = null;
+  let attachedElement: HTMLElement | null = null;
+  let attachedCamera: THREE.Camera | null = null;
 
-  function buildTransformController(camera: THREE.Camera) {
+  function buildTransformController(initialCamera: THREE.Camera) {
     return createTransformController({
       hitTestService,
-      camera,
+      getCamera: () => attachedCamera ?? initialCamera,
       getActiveTool: () => toolState.getState().activeTool,
       getSelectedId: config.getSelectedId,
       getTransform,
       onPreview(instanceId, values) {
         gizmo.setPosition(values.position);
-        gizmo.setRotation(values.rotation);
         originMarker.setPosition(values.position);
         config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
       },
@@ -191,12 +200,19 @@ export function createLayoutWorkspace(
       },
       onCancel(instanceId, values) {
         gizmo.setPosition(values.position);
-        gizmo.setRotation(values.rotation);
         originMarker.setPosition(values.position);
         config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
       },
       onSelect(instanceId) {
         config.onSelect(instanceId ? [instanceId] : []);
+      },
+      // Hover affordances arrive through the InputRouter's hover
+      // dispatch (top controller only) -- never a raw DOM listener.
+      onHoverHandle(handleName) {
+        gizmo.setHoveredHandle(handleName);
+      },
+      onHoverTarget(object) {
+        hoverHull.setTarget(object);
       }
     });
   }
@@ -218,7 +234,10 @@ export function createLayoutWorkspace(
       overlayRoot.add(gizmo.root);
       overlayRoot.add(originMarker.root);
       overlayRoot.add(worldCursor.root);
+      overlayRoot.add(hoverHull.root);
 
+      attachedCamera = camera;
+      attachedElement = viewportElement;
       transformController = buildTransformController(camera);
       inputRouter.pushController(transformController);
       inputRouter.attach(viewportElement);
@@ -244,14 +263,40 @@ export function createLayoutWorkspace(
         window.removeEventListener("keydown", keydownHandler);
         keydownHandler = null;
       }
+      attachedElement = null;
+      attachedCamera = null;
+      gizmo.setHoveredHandle(null);
+      hoverHull.setTarget(null);
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(gizmo.root);
         attachedOverlayRoot.remove(originMarker.root);
         attachedOverlayRoot.remove(worldCursor.root);
+        attachedOverlayRoot.remove(hoverHull.root);
         attachedOverlayRoot = null;
       }
       gizmo.setVisible(false);
       originMarker.setVisible(false);
+    },
+
+    updateForCamera(camera) {
+      // The host swaps cameras on projection toggle; keep every
+      // camera consumer in agreement (rays, picks, gizmo sizing).
+      if (attachedElement && camera !== attachedCamera) {
+        attachedCamera = camera;
+        hitTestService.setCamera(camera);
+      }
+      hoverHull.syncTransform();
+      if (!attachedCamera || !gizmo.root.visible) return;
+      gizmo.setScale(
+        gizmoWorldScaleForCamera(attachedCamera, gizmo.root.position)
+      );
+    },
+
+    dispose() {
+      gizmo.dispose();
+      originMarker.dispose();
+      worldCursor.dispose();
+      hoverHull.dispose();
     },
 
     syncOverlays() {
@@ -270,13 +315,8 @@ export function createLayoutWorkspace(
       }
 
       gizmo.setPosition(transform.position);
-      gizmo.setRotation(transform.rotation);
-      const largestAxisScale = Math.max(
-        transform.scale[0],
-        transform.scale[1],
-        transform.scale[2]
-      );
-      gizmo.setScale(Math.min(2.4, Math.max(1.4, largestAxisScale * 1.1)));
+      // Size comes from camera distance (updateForCamera), not the
+      // object's scale -- the gizmo reads constant on screen.
       gizmo.setVisible(true);
       originMarker.setPosition(transform.position);
       originMarker.setVisible(true);

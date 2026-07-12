@@ -21,6 +21,7 @@ import {
   type SurfaceBinding
 } from "@sugarmagic/domain";
 import { shallowEqual } from "@sugarmagic/shell";
+import { SCENE_OBJECT_MARKER_KEY } from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "../overlay-context";
 
 interface MaskPaintBrushSettings {
@@ -163,7 +164,7 @@ function findSceneObjectMetadata(object: THREE.Object3D): {
 } | null {
   let current: THREE.Object3D | null = object;
   while (current) {
-    const metadata = current.userData.sugarmagicSceneObject;
+    const metadata = current.userData[SCENE_OBJECT_MARKER_KEY];
     if (metadata) {
       return metadata as {
         instanceId: string;

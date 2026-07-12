@@ -38,9 +38,11 @@ import {
   computeSceneDelta,
   type SceneObject
 } from "@sugarmagic/runtime-core";
-import type {
-  WorkspaceViewport
+import {
+  SCENE_OBJECT_MARKER_KEY,
+  type WorkspaceViewport
 } from "@sugarmagic/workspaces";
+import { resolveRenderableCompletion } from "./renderable-lifecycle";
 import type { ViewportOverlayFactory } from "./overlay-context";
 import {
   asAuthoredViewportRoot,
@@ -213,7 +215,7 @@ async function createRenderableRoot(
 ): Promise<SceneObjectEntry> {
   const root = new THREE.Group();
   root.name = object.instanceId;
-  root.userData.sugarmagicSceneObject = {
+  root.userData[SCENE_OBJECT_MARKER_KEY] = {
     instanceId: object.instanceId,
     assetDefinitionId: object.assetDefinitionId ?? null,
     kind: object.kind
@@ -372,6 +374,10 @@ export function createAuthoringViewport(
 
   const objectMap = new Map<string, SceneObjectEntry>();
   const pendingRenderableLoads = new Set<string>();
+  /** What the latest projection wants on screen, by instanceId --
+   *  async loads consult this on completion instead of a generation
+   *  counter, so projection churn can't strand them (see below). */
+  const desiredObjects = new Map<string, SceneObject>();
   let previousObjects: SceneObject[] = [];
   let currentAssetSources: Record<string, string> = {};
   let renderGeneration = 0;
@@ -393,8 +399,30 @@ export function createAuthoringViewport(
     void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
-        if (generation !== renderGeneration) {
+        // Judge this load against the CURRENT desired set (see
+        // renderable-lifecycle.ts for why not a per-update counter):
+        // discarded on teardown or removal, re-scheduled when the
+        // representation changed mid-flight (the pending guard
+        // deduped that re-schedule away), adopted otherwise.
+        const latest = desiredObjects.get(object.instanceId) ?? null;
+        const decision = resolveRenderableCompletion({
+          scheduledGeneration: generation,
+          currentGeneration: renderGeneration,
+          loadedRepresentationKey: entry.representationKey,
+          desiredRepresentationKey: latest?.representationKey ?? null
+        });
+        if (decision === "discard" || !latest) {
           disposeRenderableObject(entry.root);
+          return;
+        }
+        if (decision === "reschedule") {
+          disposeRenderableObject(entry.root);
+          scheduleRenderableLoad(
+            latest,
+            currentAssetSources,
+            renderView.shaderRuntime,
+            renderGeneration
+          );
           return;
         }
         const existing = objectMap.get(object.instanceId);
@@ -402,10 +430,13 @@ export function createAuthoringViewport(
           authoredRoot.remove(existing.root);
           disposeRenderableObject(existing.root);
         }
+        // The object may have moved while the load was in flight.
+        entry.object = latest;
+        applyObjectTransform(entry.root, latest);
         authoredRoot.add(entry.root);
         ensureRenderableShadersApplied(
           entry,
-          object,
+          latest,
           renderView.shaderRuntime,
           assetSources
         );
@@ -453,6 +484,7 @@ export function createAuthoringViewport(
 
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;
+      desiredObjects.clear();
       previousObjects = [];
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);
@@ -490,7 +522,13 @@ export function createAuthoringViewport(
       )
     );
     const delta = computeSceneDelta(previousObjects, currentObjects);
-    const generation = ++renderGeneration;
+    // NOT incremented here: bumping per call raced in-flight loads
+    // (see scheduleRenderableLoad). Teardown paths own the bump.
+    const generation = renderGeneration;
+    desiredObjects.clear();
+    for (const object of currentObjects) {
+      desiredObjects.set(object.instanceId, object);
+    }
 
     for (const id of delta.removed) {
       const entry = objectMap.get(id);
@@ -695,6 +733,7 @@ export function createAuthoringViewport(
 
     unmount() {
       renderGeneration += 1;
+      desiredObjects.clear();
 
       for (const entry of objectMap.values()) {
         authoredRoot.remove(entry.root);

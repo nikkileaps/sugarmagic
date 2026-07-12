@@ -9,3 +9,7 @@
 export { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 export { createSurfacePreviewGeometry } from "./viewport/surface-preview-samplers";
 export { shouldShowSharedViewport } from "./viewport/viewportVisibility";
+export {
+  resolveRenderableCompletion,
+  type RenderableCompletionDecision
+} from "./viewport/renderable-lifecycle";
