@@ -153,7 +153,52 @@ it becomes the landscape flow: panel arms, viewport paints. Verify
 the arm-from-inspector path end to end in 068.3 (it has only ever
 been reachable through the modal).
 
-### 068.4 — Slim the Asset Manager modal
+### 068.4 — Instance-aware painted masks + in-viewport paint mode
+
+The UV paint machinery (brush-into-mask-texture, UV hit math, live
+preview, scatter-mask evaluation) predates this epic and only knows
+DEFINITION-owned layers. Make it reach the per-instance surfaces this
+epic created, with the paint UX decided 2026-07-12:
+
+- **Addressing**: `PaintedMaskTargetAddress` gains an instance-owned
+  arm (instanceId + slotName + layerId). The paint-target resolver
+  finds the armed layer wherever it lives: definition slot, instance
+  override, or Scene record. Strokes filter by instanceId — painting
+  YOUR outcrop never lands on its siblings.
+- **Interaction (the concrete flow)**: picking Mask Type "Painted" on
+  a layer for the FIRST time closes the popovers and enters paint
+  mode immediately; re-entry is a Paint button in the layer's mask
+  popover. In paint mode: a brush ring follows the object's surface
+  under the cursor, a toolbar appears top-left (radius / strength /
+  falloff sliders, Paint/Erase toggle, live mask-texture thumbnail,
+  Done button), left-drag paints, camera orbit stays live, and ALL
+  other Layout tools (click-select, gizmo, scatter brush) are
+  suspended. Done or Escape exits and restores them.
+- **Architecture**: in the Layout workspace, painting is an
+  `InteractionController` pushed onto the layout InputRouter (the
+  scatter-brush pattern) — NOT the overlay's legacy raw listeners,
+  which would fight the transform controller. Landscape-workspace
+  painting keeps its existing path.
+- **Appearance layers update mid-stroke; grass repopulates on mouse
+  RELEASE** (scatter rebuild is triggered by the stroke commit, not
+  per-frame). Acceptance test is the outcrop scenario: inline stone
+  surface (gradient base + painted scuffs + grass scatter layer with
+  a painted mask), scuffs and grass coverage both painted directly on
+  the placed instance in the viewport.
+- **Mask lifecycle cleanup (nikki: not deferred)**: every painted
+  layer owns a mask texture definition + `masks/*.png`. A save-time
+  SWEEP (single enforcer, not per-deletion bookkeeping hooks) collects
+  every painted-mask id referenced by ANY surface — library, landscape
+  slots, definition slots, instance overrides, Scene records — and
+  removes unreferenced mask texture definitions and their files.
+  Deleting an instance, clearing an override, or removing a layer can
+  never strand PNGs past the next save.
+- Delete the redundant "Make Local" button (the Binding Mode dropdown
+  already forks the referenced surface when switched to Inline).
+- Paint strokes are NOT undoable via command history (they write PNGs
+  through the IO seam, same as landscape painting). Accepted for v1.
+
+### 068.5 — Slim the Asset Manager modal
 
 Remove the Surfaces and Deform/Effect editors from the asset
 definition inspector in the modal (`AssetDefinitionInspector`): it
@@ -162,7 +207,7 @@ sections' users at the Layout inspector (empty-state hint). Delete
 dead editor wiring rather than hiding it. Definition defaults remain
 in the schema and resolution untouched.
 
-### 068.5 — Viewport + explorer truth
+### 068.6 — Viewport + explorer truth
 
 Scene-scoped appearance must read as such everywhere the instance
 shows: the viewport re-resolves when the active Scene changes (verify
@@ -183,12 +228,16 @@ changes without a reload.
   a different surface.
 - Bulk edit (apply an override to every instance of an asset in the
   region). Trigger: first region with dozens of restyled instances.
-- Instance-scoped painted masks (moss on THIS roof only — painted
-  mask addresses are per assetDefinitionId + slot today, so a painted
-  layer reads the same on every instance). Procedural masks (noise /
-  height / world-gradient) already vary per placement and cover much
-  of the want. Trigger: a scene where two instances of one asset need
-  visibly different painted detail.
+- Reference-plus-local-layers surface composition (keep the library
+  link, own only decoration layers) — today Make Local / Inline forks
+  the whole surface, so later library improvements do not propagate
+  to decorated instances. Trigger: the first library-surface tweak
+  nikki expects to show up on already-decorated instances.
+- Dedicated UV-view paint window (model + flattened UV preview,
+  Substance-style). In-viewport painting ships first for context; the
+  toolbar's mask thumbnail covers mirror-spotting. Trigger: the first
+  prop where in-viewport strokes cannot reach or cannot be precise
+  enough.
 
 ## Not in this epic
 
