@@ -124,7 +124,7 @@ export function AppearanceLayerEditor({
                 <Select
                   size="xs"
                   label="Texture"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={textureDefinitions.map((texture) => ({
                     value: texture.definitionId,
                     label: texture.displayName
@@ -194,7 +194,7 @@ export function AppearanceLayerEditor({
                 <Select
                   size="xs"
                   label="Material"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={materialDefinitions.map((material) => ({
                     value: material.definitionId,
                     label: material.displayName
@@ -261,7 +261,7 @@ export function AppearanceLayerEditor({
                 <Select
                   size="xs"
                   label="Shader"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={[
                     { value: SHADER_OVERRIDE_DEFAULT, label: `Default (${materialOwnShaderName})` },
                     ...surfaceShaders.map((shader) => ({
@@ -300,7 +300,7 @@ export function AppearanceLayerEditor({
                 <Select
                   size="xs"
                   label="Shader"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={surfaceShaders.map((shader) => ({
                     value: shader.shaderDefinitionId,
                     label: shader.displayName

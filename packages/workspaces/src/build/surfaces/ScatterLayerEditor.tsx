@@ -89,7 +89,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
               <Select
                 size="xs"
                 label="Grass Type"
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={grassTypeDefinitions.map((definition) => ({
                   value: definition.definitionId,
                   label: definition.displayName
@@ -108,7 +108,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                 size="xs"
                 label="Shader"
                 clearable
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={scatterShaders.map((definition) => ({
                   value: definition.shaderDefinitionId,
                   label: definition.displayName
@@ -127,7 +127,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
               <Select
                 size="xs"
                 label="Flower Type"
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={flowerTypeDefinitions.map((definition) => ({
                   value: definition.definitionId,
                   label: definition.displayName
@@ -146,7 +146,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                 size="xs"
                 label="Shader"
                 clearable
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={scatterShaders.map((definition) => ({
                   value: definition.shaderDefinitionId,
                   label: definition.displayName
@@ -165,7 +165,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
               <Select
                 size="xs"
                 label="Rock Type"
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={rockTypeDefinitions.map((definition) => ({
                   value: definition.definitionId,
                   label: definition.displayName
@@ -184,7 +184,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
                 size="xs"
                 label="Shader"
                 clearable
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={scatterShaders.map((definition) => ({
                   value: definition.shaderDefinitionId,
                   label: definition.displayName
@@ -208,7 +208,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
           label={parameter.displayName}
           clearable
           searchable
-          comboboxProps={{ withinPortal: false }}
+          comboboxProps={{ withinPortal: true }}
           placeholder="Pick a texture"
           data={textureDefinitions.map((definition) => ({
             value: definition.definitionId,
@@ -230,7 +230,7 @@ export function ScatterLayerEditor({ layer, onChange }: ScatterLayerEditorProps)
         size="xs"
         label="Wind"
         clearable
-        comboboxProps={{ withinPortal: false }}
+        comboboxProps={{ withinPortal: true }}
         placeholder="Inherit from type"
         data={deformShaders.map((definition) => ({
           value: definition.shaderDefinitionId,

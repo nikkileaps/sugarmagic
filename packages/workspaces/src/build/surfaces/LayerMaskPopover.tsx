@@ -59,7 +59,7 @@ export function LayerMaskPopover({
           setDraftMask(cloneMask(value));
         }
       }}
-      withinPortal={false}
+      withinPortal
       position="bottom-start"
       shadow="md"
       width={300}

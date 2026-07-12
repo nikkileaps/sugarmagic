@@ -91,7 +91,7 @@ export function EmissionLayerEditor({ layer, onChange }: EmissionLayerEditorProp
               <Select
                 size="xs"
                 label="Texture"
-                comboboxProps={{ withinPortal: false }}
+                comboboxProps={{ withinPortal: true }}
                 data={textureDefinitions.map((texture) => ({
                   value: texture.definitionId,
                   label: texture.displayName
@@ -135,7 +135,7 @@ export function EmissionLayerEditor({ layer, onChange }: EmissionLayerEditorProp
             <Select
               size="xs"
               label="Material"
-              comboboxProps={{ withinPortal: false }}
+              comboboxProps={{ withinPortal: true }}
               data={materialDefinitions.map((material) => ({
                 value: material.definitionId,
                 label: material.displayName

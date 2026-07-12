@@ -90,7 +90,7 @@ export function MaskEditor({
         <Select
           size="xs"
           label="Mask Type"
-          comboboxProps={{ withinPortal: false }}
+          comboboxProps={{ withinPortal: true }}
           data={visibleOptions}
           value={value.kind}
           onChange={(kind) => {
@@ -164,7 +164,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Texture"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={textureDefinitions.map((texture) => ({
                         value: texture.definitionId,
                         label: texture.displayName
@@ -179,7 +179,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Channel"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={[
                         { value: "r", label: "Red" },
                         { value: "g", label: "Green" },
@@ -200,7 +200,7 @@ export function MaskEditor({
                     <Select
                       size="xs"
                       label="Mask Texture"
-                      comboboxProps={{ withinPortal: false }}
+                      comboboxProps={{ withinPortal: true }}
                       data={maskTextureDefinitions.map((definition) => ({
                         value: definition.definitionId,
                         label: definition.displayName
@@ -307,7 +307,7 @@ export function MaskEditor({
                   <Select
                     size="xs"
                     label="Channel"
-                    comboboxProps={{ withinPortal: false }}
+                    comboboxProps={{ withinPortal: true }}
                     data={[
                       { value: "r", label: "Red" },
                       { value: "g", label: "Green" },
@@ -395,7 +395,7 @@ export function MaskEditor({
                 <Select
                   size="xs"
                   label="Axis"
-                  comboboxProps={{ withinPortal: false }}
+                  comboboxProps={{ withinPortal: true }}
                   data={[
                     { value: "x", label: "X" },
                         { value: "y", label: "Y" },

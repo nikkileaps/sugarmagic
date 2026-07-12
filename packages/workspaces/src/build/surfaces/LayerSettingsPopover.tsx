@@ -34,7 +34,7 @@ export function LayerSettingsPopover({
       position="bottom-start"
       shadow="md"
       width={320}
-      withinPortal={false}
+      withinPortal
     >
       <Popover.Target>
         <UnstyledButton
