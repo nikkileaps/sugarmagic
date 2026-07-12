@@ -27,3 +27,10 @@ export {
   type TransformAxis,
   type TransformValues
 } from "./transform-controller";
+export {
+  angleAroundAxis,
+  axisParameterForRay,
+  planePointForRay,
+  pointerRayFromCamera,
+  type PointerRay
+} from "./transform-math";

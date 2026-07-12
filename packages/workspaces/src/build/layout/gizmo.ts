@@ -92,9 +92,15 @@ function createRotateHandle(axis: Axis, color: number): THREE.Group {
   ), 999);
   ring.name = `gizmo-rotate-${axis}`;
 
+  // A torus's rotation axis is its local Z. Orient each ring so its
+  // AXIS matches its name: x-ring faces sideways, y-ring lies FLAT
+  // (the horizontal yaw ring in this Y-up world), z-ring keeps the
+  // default upright orientation. The y/z orientations were swapped
+  // for a long time -- the flat ring was blue and rolled the object
+  // around Z when everyone (correctly) grabbed it expecting yaw.
   if (axis === "x") ring.rotation.y = Math.PI / 2;
-  if (axis === "z") ring.rotation.x = Math.PI / 2;
-  // axis === "y" stays flat (default)
+  if (axis === "y") ring.rotation.x = Math.PI / 2;
+  // axis === "z" stays upright (default torus axis IS Z)
 
   group.add(ring);
   return group;
@@ -139,13 +145,19 @@ function createScaleHandle(axis: Axis, color: number): THREE.Group {
 export interface LayoutGizmo {
   root: THREE.Group;
   setPosition: (pos: [number, number, number]) => void;
-  setRotation: (rot: [number, number, number]) => void;
   setScale: (scale: number) => void;
   setVisible: (visible: boolean) => void;
   setActiveTool: (tool: TransformTool) => void;
+  /** Brighten the handle under the cursor (null = clear). */
+  setHoveredHandle: (handleName: string | null) => void;
+  dispose: () => void;
 }
 
 export function createLayoutGizmo(): LayoutGizmo {
+  // NOTE: the gizmo is WORLD-ALIGNED by design -- object rotation is
+  // never applied to the root, because the transform controller's
+  // drag math works in world axes. Rendering local axes over world
+  // math sent rotated objects sideways (gizmo v2, 2026-07-12).
   const root = new THREE.Group();
   root.name = "layout-gizmo";
   root.renderOrder = 999;
@@ -175,13 +187,27 @@ export function createLayoutGizmo(): LayoutGizmo {
 
   showOnly("move");
 
+  // Hover highlight: collect the material behind every named handle
+  // once; brighten on hover, restore the base color on clear.
+  const handleMaterials = new Map<
+    string,
+    Array<{ material: THREE.MeshBasicMaterial; baseColor: THREE.Color }>
+  >();
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) || !object.name) return;
+    const material = object.material as THREE.MeshBasicMaterial;
+    const entries = handleMaterials.get(object.name) ?? [];
+    if (!entries.some((entry) => entry.material === material)) {
+      entries.push({ material, baseColor: material.color.clone() });
+    }
+    handleMaterials.set(object.name, entries);
+  });
+  let hoveredHandle: string | null = null;
+
   return {
     root,
     setPosition(pos) {
       root.position.set(...pos);
-    },
-    setRotation(rot) {
-      root.rotation.set(...rot);
     },
     setScale(scale) {
       root.scale.setScalar(scale);
@@ -191,6 +217,35 @@ export function createLayoutGizmo(): LayoutGizmo {
     },
     setActiveTool(tool) {
       showOnly(tool);
+    },
+    setHoveredHandle(handleName) {
+      if (handleName === hoveredHandle) return;
+      if (hoveredHandle) {
+        for (const entry of handleMaterials.get(hoveredHandle) ?? []) {
+          entry.material.color.copy(entry.baseColor);
+        }
+      }
+      hoveredHandle = handleName;
+      if (handleName) {
+        for (const entry of handleMaterials.get(handleName) ?? []) {
+          entry.material.color
+            .copy(entry.baseColor)
+            .lerp(new THREE.Color(0xffffff), 0.45);
+        }
+      }
+    },
+    dispose() {
+      root.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          const material = object.material;
+          if (Array.isArray(material)) {
+            material.forEach((entry) => entry.dispose());
+          } else {
+            material.dispose();
+          }
+        }
+      });
     }
   };
 }
@@ -201,6 +256,7 @@ export interface OriginMarker {
   root: THREE.Group;
   setPosition: (pos: [number, number, number]) => void;
   setVisible: (visible: boolean) => void;
+  dispose: () => void;
 }
 
 export function createOriginMarker(): OriginMarker {
@@ -220,7 +276,8 @@ export function createOriginMarker(): OriginMarker {
   return {
     root,
     setPosition(pos) { root.position.set(...pos); },
-    setVisible(visible) { root.visible = visible; }
+    setVisible(visible) { root.visible = visible; },
+    dispose() { disposeOverlayGroup(root); }
   };
 }
 
@@ -230,6 +287,7 @@ export interface WorldCursor {
   root: THREE.Group;
   setPosition: (pos: [number, number, number]) => void;
   setVisible: (visible: boolean) => void;
+  dispose: () => void;
 }
 
 export function createWorldCursor(): WorldCursor {
@@ -260,6 +318,21 @@ export function createWorldCursor(): WorldCursor {
   return {
     root,
     setPosition(pos) { root.position.set(...pos); },
-    setVisible(visible) { root.visible = visible; }
+    setVisible(visible) { root.visible = visible; },
+    dispose() { disposeOverlayGroup(root); }
   };
+}
+
+function disposeOverlayGroup(root: THREE.Group): void {
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.geometry.dispose();
+      const material = object.material;
+      if (Array.isArray(material)) {
+        material.forEach((entry) => entry.dispose());
+      } else {
+        material.dispose();
+      }
+    }
+  });
 }

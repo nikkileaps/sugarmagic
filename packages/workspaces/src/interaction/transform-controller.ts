@@ -3,6 +3,13 @@
  *
  * Manages drag sessions with preview → commit/cancel semantics.
  * Gizmo handle names encode both mode and axis: "gizmo-move-x", "gizmo-rotate-z", etc.
+ *
+ * Manipulation is RAY-BASED (transform-math.ts): the pointer ray is
+ * projected onto the dragged axis line (move), the rotation plane
+ * (rotate), or the axis distance-from-center (scale). The object
+ * tracks the cursor 1:1 at any zoom; degenerate configurations (axis
+ * viewed edge-on) freeze the drag instead of flying. Axes are WORLD
+ * axes — the gizmo renders world-aligned to match.
  */
 
 import * as THREE from "three";
@@ -12,6 +19,12 @@ import type {
 } from "./input-router";
 import type { HitTestService } from "./hit-test-service";
 import type { TransformTool } from "./tool-state";
+import {
+  angleAroundAxis,
+  axisParameterForRay,
+  planePointForRay,
+  pointerRayFromCamera
+} from "./transform-math";
 
 export type TransformAxis = "x" | "y" | "z";
 
@@ -21,13 +34,22 @@ export interface TransformValues {
   scale: [number, number, number];
 }
 
+interface DragAnchor {
+  /** Object center at drag start (axis/plane origin). */
+  center: THREE.Vector3;
+  /** Move/scale: axis parameter of the grab point at drag start. */
+  axisParameter: number | null;
+  /** Rotate: center->pointer vector in the rotation plane at start. */
+  planeVector: THREE.Vector3 | null;
+}
+
 export interface TransformSession {
   instanceId: string;
   mode: TransformTool;
   axis: TransformAxis;
   start: TransformValues;
   current: TransformValues;
-  dragOriginScreen: { x: number; y: number };
+  anchor: DragAnchor;
 }
 
 export interface TransformControllerConfig {
@@ -54,23 +76,39 @@ const AXIS_VECTORS: Record<TransformAxis, THREE.Vector3> = {
   z: new THREE.Vector3(0, 0, 1)
 };
 
-const MOVE_SENSITIVITY = 0.02;
-const ROTATE_SENSITIVITY = 0.01;
-const SCALE_SENSITIVITY = 0.005;
+const MIN_SCALE = 0.01;
+/** Grab points closer to center than this can't drive a stable scale ratio. */
+const MIN_SCALE_ANCHOR = 0.05;
 
 export function createTransformController(
   config: TransformControllerConfig
 ): InteractionController {
   let session: TransformSession | null = null;
 
-  function projectAxisDelta(axis: TransformAxis, dx: number, dy: number): number {
-    const camRight = new THREE.Vector3();
-    const camUp = new THREE.Vector3();
-    camRight.setFromMatrixColumn(config.camera.matrixWorld, 0);
-    camUp.setFromMatrixColumn(config.camera.matrixWorld, 1);
-
-    const axisVec = AXIS_VECTORS[axis];
-    return dx * axisVec.dot(camRight) + dy * axisVec.dot(camUp);
+  function anchorForPointer(
+    event: NormalizedPointerEvent,
+    mode: TransformTool,
+    axis: TransformAxis,
+    center: THREE.Vector3
+  ): DragAnchor {
+    const ray = pointerRayFromCamera(
+      event.normalizedX,
+      event.normalizedY,
+      config.camera
+    );
+    if (mode === "rotate") {
+      const hit = planePointForRay(ray, center, AXIS_VECTORS[axis]);
+      return {
+        center,
+        axisParameter: null,
+        planeVector: hit ? hit.sub(center) : null
+      };
+    }
+    return {
+      center,
+      axisParameter: axisParameterForRay(ray, center, AXIS_VECTORS[axis]),
+      planeVector: null
+    };
   }
 
   return {
@@ -99,7 +137,12 @@ export function createTransformController(
             axis: parsed.axis,
             start: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
             current: { position: [...transform.position], rotation: [...transform.rotation], scale: [...transform.scale] },
-            dragOriginScreen: { x: event.screenX, y: event.screenY }
+            anchor: anchorForPointer(
+              event,
+              parsed.mode,
+              parsed.axis,
+              new THREE.Vector3(...transform.position)
+            )
           };
           return true;
         }
@@ -116,22 +159,56 @@ export function createTransformController(
     onPointerMove(event: NormalizedPointerEvent): void {
       if (!session) return;
 
-      const dx = event.screenX - session.dragOriginScreen.x;
-      const dy = -(event.screenY - session.dragOriginScreen.y);
-      const rawDelta = projectAxisDelta(session.axis, dx, dy);
+      const ray = pointerRayFromCamera(
+        event.normalizedX,
+        event.normalizedY,
+        config.camera
+      );
+      const axisVector = AXIS_VECTORS[session.axis];
       const ai = session.axis === "x" ? 0 : session.axis === "y" ? 1 : 2;
 
       if (session.mode === "move") {
+        if (session.anchor.axisParameter === null) return;
+        const parameter = axisParameterForRay(
+          ray,
+          session.anchor.center,
+          axisVector
+        );
+        if (parameter === null) return;
         const pos: [number, number, number] = [...session.start.position];
-        pos[ai] += rawDelta * MOVE_SENSITIVITY;
+        pos[ai] = session.start.position[ai] + (parameter - session.anchor.axisParameter);
         session.current = { ...session.current, position: pos };
       } else if (session.mode === "rotate") {
+        if (!session.anchor.planeVector) return;
+        const hit = planePointForRay(ray, session.anchor.center, axisVector);
+        if (!hit) return;
+        const angle = angleAroundAxis(
+          session.anchor.planeVector,
+          hit.sub(session.anchor.center),
+          axisVector
+        );
         const rot: [number, number, number] = [...session.start.rotation];
-        rot[ai] += rawDelta * ROTATE_SENSITIVITY;
+        rot[ai] = session.start.rotation[ai] + angle;
         session.current = { ...session.current, rotation: rot };
       } else if (session.mode === "scale") {
+        const anchorParameter = session.anchor.axisParameter;
+        if (
+          anchorParameter === null ||
+          Math.abs(anchorParameter) < MIN_SCALE_ANCHOR
+        ) {
+          return;
+        }
+        const parameter = axisParameterForRay(
+          ray,
+          session.anchor.center,
+          axisVector
+        );
+        if (parameter === null) return;
+        // Drag outward from center to grow, inward to shrink -- the
+        // ratio of the grab point's distance along the axis.
+        const factor = Math.max(MIN_SCALE, parameter / anchorParameter);
         const scl: [number, number, number] = [...session.start.scale];
-        scl[ai] = session.start.scale[ai] * Math.max(0.01, 1 + rawDelta * SCALE_SENSITIVITY);
+        scl[ai] = Math.max(MIN_SCALE, session.start.scale[ai] * factor);
         session.current = { ...session.current, scale: scl };
       }
 

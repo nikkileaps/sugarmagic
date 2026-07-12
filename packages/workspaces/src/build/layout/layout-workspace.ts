@@ -53,6 +53,10 @@ export interface LayoutWorkspaceInstance {
   ) => void;
   detach: () => void;
   syncOverlays: () => void;
+  /** Per-frame: keep the gizmo a constant size on screen. */
+  updateForCamera: () => void;
+  /** Release GPU resources; call on final teardown, not on detach. */
+  dispose: () => void;
   gizmo: LayoutGizmo;
   originMarker: OriginMarker;
   worldCursor: WorldCursor;
@@ -99,7 +103,10 @@ export function createLayoutWorkspace(
 
   let transformController: ReturnType<typeof createTransformController> | null = null;
   let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  let hoverHandler: ((event: PointerEvent) => void) | null = null;
   let attachedOverlayRoot: THREE.Object3D | null = null;
+  let attachedElement: HTMLElement | null = null;
+  let attachedCamera: THREE.Camera | null = null;
 
   function buildTransformController(camera: THREE.Camera) {
     return createTransformController({
@@ -110,7 +117,6 @@ export function createLayoutWorkspace(
       getTransform,
       onPreview(instanceId, values) {
         gizmo.setPosition(values.position);
-        gizmo.setRotation(values.rotation);
         originMarker.setPosition(values.position);
         config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
       },
@@ -191,7 +197,6 @@ export function createLayoutWorkspace(
       },
       onCancel(instanceId, values) {
         gizmo.setPosition(values.position);
-        gizmo.setRotation(values.rotation);
         originMarker.setPosition(values.position);
         config.onPreviewTransform(instanceId, values.position, values.rotation, values.scale);
       },
@@ -219,9 +224,22 @@ export function createLayoutWorkspace(
       overlayRoot.add(originMarker.root);
       overlayRoot.add(worldCursor.root);
 
+      attachedCamera = camera;
+      attachedElement = viewportElement;
       transformController = buildTransformController(camera);
       inputRouter.pushController(transformController);
       inputRouter.attach(viewportElement);
+
+      // Hover affordance: brighten the gizmo handle under the cursor.
+      hoverHandler = (event: PointerEvent) => {
+        const rect = viewportElement.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const normalizedX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        const normalizedY = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+        const hit = hitTestService.testGizmo(normalizedX, normalizedY);
+        gizmo.setHoveredHandle(hit?.objectName ?? null);
+      };
+      viewportElement.addEventListener("pointermove", hoverHandler);
 
       // Keyboard shortcuts (G/R/S)
       keydownHandler = (e: KeyboardEvent) => {
@@ -244,6 +262,13 @@ export function createLayoutWorkspace(
         window.removeEventListener("keydown", keydownHandler);
         keydownHandler = null;
       }
+      if (hoverHandler && attachedElement) {
+        attachedElement.removeEventListener("pointermove", hoverHandler);
+        hoverHandler = null;
+      }
+      attachedElement = null;
+      attachedCamera = null;
+      gizmo.setHoveredHandle(null);
       if (attachedOverlayRoot) {
         attachedOverlayRoot.remove(gizmo.root);
         attachedOverlayRoot.remove(originMarker.root);
@@ -252,6 +277,21 @@ export function createLayoutWorkspace(
       }
       gizmo.setVisible(false);
       originMarker.setVisible(false);
+    },
+
+    updateForCamera() {
+      if (!attachedCamera || !gizmo.root.visible) return;
+      // Constant screen size: world scale proportional to distance.
+      // 0.09 puts the ~1.6-unit gizmo around 90-100px at the default
+      // FOV; clamped so extreme zooms stay usable.
+      const distance = attachedCamera.position.distanceTo(gizmo.root.position);
+      gizmo.setScale(Math.min(30, Math.max(0.5, distance * 0.09)));
+    },
+
+    dispose() {
+      gizmo.dispose();
+      originMarker.dispose();
+      worldCursor.dispose();
     },
 
     syncOverlays() {
@@ -270,13 +310,8 @@ export function createLayoutWorkspace(
       }
 
       gizmo.setPosition(transform.position);
-      gizmo.setRotation(transform.rotation);
-      const largestAxisScale = Math.max(
-        transform.scale[0],
-        transform.scale[1],
-        transform.scale[2]
-      );
-      gizmo.setScale(Math.min(2.4, Math.max(1.4, largestAxisScale * 1.1)));
+      // Size comes from camera distance (updateForCamera), not the
+      // object's scale -- the gizmo reads constant on screen.
       gizmo.setVisible(true);
       originMarker.setPosition(transform.position);
       originMarker.setVisible(true);
