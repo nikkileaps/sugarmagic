@@ -198,7 +198,45 @@ epic created, with the paint UX decided 2026-07-12:
 - Paint strokes are NOT undoable via command history (they write PNGs
   through the IO seam, same as landscape painting). Accepted for v1.
 
-### 068.5 — Slim the Asset Manager modal
+OUTCOME (2026-07-12): shipped and mechanically sound -- addressing,
+stroke filtering, controller mode, and the mask sweep all hold. But
+field QA hit a wall the machinery cannot fix: painting samples the
+mesh's AUTHORED UVs, and real assets don't have paintable UVs. The
+outcrop: 2384 triangles sharing 362 unique UV coords, 6.4x
+overlapping coverage of the UV square, 757 zero-area UV triangles --
+one click stamped confetti across the whole rock. No paint UX fixes
+authored-UV overlap; see 068.8. Everything built here stays
+load-bearing (the studio paints through the same address + texture
+path).
+
+### 068.5 — Master-detail surface editing in the inspector
+
+The popover-in-popover-in-popover chain (slot popover > layer
+settings popover > mask popover) was a vanishing-risk stack and had
+no room to breathe. Replaced with the Blender material-slot pattern
+(nikki's call, 2026-07-12): the slot LIST stays at the top of the
+Appearance section; selecting a slot renders its full surface editor
+BELOW the list in the same panel — Binding Mode, then the layer
+stack with per-layer settings and mask editors expanding INLINE
+(accordion) under their rows. Zero popovers in the flow; the panel
+scrolls; the viewport remains the live preview it already is (every
+edit is a command against the placed object).
+
+Notes: mask editing becomes live-commit inline (the popover's
+draft+Apply buffer dies — it already caused one shipped bug when
+arming paint closed the chain before Apply). The Asset Manager modal
+keeps the popover editors until 068.6 removes its appearance
+sections entirely; landscape channels can adopt master-detail later
+if the pattern earns it.
+
+OUTCOME (2026-07-12): shipped; kills the vanishing-popover class of
+bugs and stays the right home for gradients / blend / scatter
+settings. Verdict from nikki: still not a sufficient PAINTING
+cockpit — combined with the UV wall (068.4 outcome), the decision is
+no more half measures: a dedicated Paint Studio (068.9/068.10) with
+engine-generated paint UVs (068.8) underneath.
+
+### 068.6 — Slim the Asset Manager modal
 
 Remove the Surfaces and Deform/Effect editors from the asset
 definition inspector in the modal (`AssetDefinitionInspector`): it
@@ -207,7 +245,7 @@ sections' users at the Layout inspector (empty-state hint). Delete
 dead editor wiring rather than hiding it. Definition defaults remain
 in the schema and resolution untouched.
 
-### 068.6 — Viewport + explorer truth
+### 068.7 — Viewport + explorer truth (renumbered; see below for 068.8+)
 
 Scene-scoped appearance must read as such everywhere the instance
 shows: the viewport re-resolves when the active Scene changes (verify
@@ -217,6 +255,47 @@ resolution predates scenes), and the explorer/inspector indicate when
 the current look is a Scene restyle of a base placement. Ensure
 preview-vs-committed staleness (shader ensure loop) picks up override
 changes without a reload.
+
+### 068.8 — Paint UVs (engine-generated paint channel)
+
+The root fix for the 068.4 outcome. Painted masks stop sampling
+authored UVs and sample a dedicated PAINT UV channel instead:
+
+- Importer prefers an authored second UV channel (TEXCOORD_1) when
+  the GLB ships one (nikki can use Blender's geometry-nodes
+  auto-unwrap setups when she wants artist-tuned islands; zero
+  round-trip required when she doesn't).
+- Otherwise: "Generate Paint UVs" runs xatlas (MIT, verified
+  2026-07-12; the Godot lightmap-UV2 pattern) in a worker and bakes
+  TEXCOORD_1 into the imported GLB copy -- one artifact, persists,
+  regenerates on reimport. Expose two knobs with sane defaults:
+  chart angle tolerance and island padding (padding is load-bearing:
+  soft brushes bleed across island borders without it).
+- Sampling switch: mesh triangle sampler (scatter), ShaderRuntime
+  painted-mask sampling, and the mask-paint overlay raycast all read
+  the paint channel when present, authored UV0 otherwise (with a
+  visible "no paint UVs" badge in the Appearance section + Paint
+  Studio banner).
+- Third-party notice entry for xatlas; license-check the specific
+  WASM wrapper before it lands.
+
+### 068.9 — Paint Studio: window + 3D view
+
+Full-screen paint editor, entered from a layer's Paint button (the
+in-viewport quick brush remains for touch-ups and landscape). Left
+pane: the ASSET IN ISOLATION with the instance's resolved surface
+stack rendered live, orbit/zoom camera, brush painting via raycast
+into the paint UV channel. Toolbar: Paint/Erase, radius / strength /
+falloff, Done. Same mask texture object the world uses, so the
+placed instance updates live; Done returns to Layout. Banner +
+Generate button when the mesh lacks paint UVs (068.8).
+
+### 068.10 — Paint Studio: UV view
+
+Right pane: the mask texture with the paint-UV island wireframe
+drawn over it, pan/zoom, direct 2D painting into the same canvas.
+Both views live-sync. This is the mirror-spotting / precision view
+the toolbar thumbnail never adequately covered.
 
 ## Deferred
 
@@ -233,11 +312,10 @@ changes without a reload.
   the whole surface, so later library improvements do not propagate
   to decorated instances. Trigger: the first library-surface tweak
   nikki expects to show up on already-decorated instances.
-- Dedicated UV-view paint window (model + flattened UV preview,
-  Substance-style). In-viewport painting ships first for context; the
-  toolbar's mask thumbnail covers mirror-spotting. Trigger: the first
-  prop where in-viewport strokes cannot reach or cannot be precise
-  enough.
+- ~~Dedicated UV-view paint window~~ PROMOTED to 068.9/068.10
+  (2026-07-12): the trigger fired on the first real asset -- authored
+  UVs made in-viewport painting unusable, and nikki called no more
+  half measures.
 
 ## Not in this epic
 
