@@ -57,11 +57,13 @@ import {
   SceneExplorer,
   Inspector,
   TransformInspector,
+  ToolOptionSlider,
+  ToolOptionsBar,
   ViewportToolbar,
   type SceneExplorerNode,
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
-import type { ViewportStore } from "@sugarmagic/shell";
+import type { ScatterBrushSettings, ViewportStore } from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
@@ -72,8 +74,21 @@ import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
 const transformTools: ViewportToolbarItem[] = [
   { id: "move", label: "Move", icon: "✥", shortcut: "G" },
   { id: "rotate", label: "Rotate", icon: "↻", shortcut: "R" },
-  { id: "scale", label: "Scale", icon: "⤢", shortcut: "S" }
+  { id: "scale", label: "Scale", icon: "⤢", shortcut: "S" },
+  // Plan 065.2 -- scatter/prop paint brush. Arming it swallows
+  // viewport pointer input (top of the layout input-router stack);
+  // switching back to a transform tool disarms it.
+  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", shortcut: "B" }
 ];
+
+const DEFAULT_SCATTER_BRUSH_SETTINGS: ScatterBrushSettings = {
+  radius: 4,
+  density: 0.15,
+  paletteAssetDefinitionIds: [],
+  scaleJitter: [0.8, 1.25],
+  rotationJitter: 1,
+  mode: "paint"
+};
 
 export interface LayoutWorkspaceViewProps {
   isActive: boolean;
@@ -360,6 +375,23 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.activeTransformTool
   );
+  const scatterBrushSettings = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.scatterBrushSettings
+  );
+  // Settings survive disarm/re-arm within the session (palette and
+  // sliders come back as you left them).
+  const lastScatterBrushSettingsRef = useRef<ScatterBrushSettings>(
+    DEFAULT_SCATTER_BRUSH_SETTINGS
+  );
+  const updateScatterBrush = (patch: Partial<ScatterBrushSettings>) => {
+    const current =
+      viewportStore.getState().scatterBrushSettings ??
+      lastScatterBrushSettingsRef.current;
+    const next = { ...current, ...patch };
+    lastScatterBrushSettingsRef.current = next;
+    viewportStore.getState().setScatterBrushSettings(next);
+  };
   const cameraQuaternion = useVanillaStoreSelector(
     viewportStore,
     (state) => state.cameraQuaternion
@@ -710,6 +742,31 @@ export function useLayoutWorkspaceView(
       });
     },
     [activeScene, getRegion, onCommand]
+  );
+
+  const handleMoveEntityToFolder = useCallback(
+    (instanceId: string, folderId: string | null) => {
+      const currentRegion = getRegion();
+      if (!currentRegion) return;
+      // Only placed assets live in the folder tree; presence rows are
+      // not draggable (the explorer already gates this), but guard
+      // anyway so a stray drop can't dispatch a bogus command.
+      const isPlacedAsset =
+        (getRegionContents() ?? EMPTY_REGION_CONTENTS).placedAssets.some(
+          (asset) => asset.instanceId === instanceId
+        );
+      if (!isPlacedAsset) return;
+      onCommand({
+        kind: "MovePlacedAssetToFolder",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: currentRegion.identity.id
+        },
+        subject: { subjectKind: "placed-asset", subjectId: instanceId },
+        payload: { instanceId, parentFolderId: folderId }
+      });
+    },
+    [getRegion, getRegionContents, onCommand]
   );
 
   const handleCreateFolderAtSelection = useCallback(() => {
@@ -1283,6 +1340,7 @@ export function useLayoutWorkspaceView(
             onDuplicateEntity={handleDuplicateAsset}
             onEditEntity={handleEditEntityFromExplorer}
             onDeleteEntity={handleDeleteEntityFromScene}
+            onMoveEntityToFolder={handleMoveEntityToFolder}
             getEntityScopeAction={(instanceId) => {
               // Same action pair as the viewport context menu
               // (Plan 058.3); placed assets only.
@@ -1821,12 +1879,154 @@ export function useLayoutWorkspaceView(
       <>
         <ViewportToolbar
           items={transformTools}
-          activeId={activeTool}
+          activeId={scatterBrushSettings ? "scatter-brush" : activeTool}
           onSelect={(id) => {
+            if (id === "scatter-brush") {
+              viewportStore
+                .getState()
+                .setScatterBrushSettings(lastScatterBrushSettingsRef.current);
+              return;
+            }
+            viewportStore.getState().setScatterBrushSettings(null);
             const tool = id as TransformTool;
             viewportStore.getState().setActiveTransformTool(tool);
           }}
         />
+        {scatterBrushSettings ? (
+          <Box style={{ pointerEvents: "auto" }}>
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                {scatterBrushSettings.mode === "paint" ? "Scatter" : "Erase"}
+              </Text>
+              <ActionIcon
+                variant={scatterBrushSettings.mode === "erase" ? "filled" : "subtle"}
+                color={scatterBrushSettings.mode === "erase" ? "red" : "gray"}
+                size="sm"
+                title="Erase brushed props"
+                aria-label="Erase brushed props"
+                onClick={() =>
+                  updateScatterBrush({
+                    mode: scatterBrushSettings.mode === "erase" ? "paint" : "erase"
+                  })
+                }
+              >
+                🧽
+              </ActionIcon>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.5}
+                max={16}
+                step={0.5}
+                value={scatterBrushSettings.radius}
+                format={(value) => `${value.toFixed(1)}m`}
+                onChange={(value) => updateScatterBrush({ radius: value })}
+              />
+              {scatterBrushSettings.mode === "paint" ? (
+                <>
+                  <ToolOptionSlider
+                    label="Density"
+                    min={0.02}
+                    max={1}
+                    step={0.02}
+                    value={scatterBrushSettings.density}
+                    onChange={(value) => updateScatterBrush({ density: value })}
+                  />
+                  <ToolOptionSlider
+                    label="Scale"
+                    min={0}
+                    max={0.6}
+                    step={0.05}
+                    value={
+                      (scatterBrushSettings.scaleJitter[1] -
+                        scatterBrushSettings.scaleJitter[0]) /
+                      2
+                    }
+                    onChange={(value) =>
+                      updateScatterBrush({
+                        scaleJitter: [
+                          Math.max(0.05, 1 - value),
+                          1 + value
+                        ]
+                      })
+                    }
+                  />
+                  <ToolOptionSlider
+                    label="Spin"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={scatterBrushSettings.rotationJitter}
+                    onChange={(value) =>
+                      updateScatterBrush({ rotationJitter: value })
+                    }
+                  />
+                  <Select
+                    size="xs"
+                    w={150}
+                    searchable
+                    placeholder="Add asset..."
+                    value={null}
+                    // Portal the dropdown out: ToolOptionsBar is an
+                    // overflow scroll container that clips it otherwise.
+                    comboboxProps={{ withinPortal: true }}
+                    data={assetDefinitions
+                      .filter(
+                        (definition) =>
+                          !scatterBrushSettings.paletteAssetDefinitionIds.includes(
+                            definition.definitionId
+                          )
+                      )
+                      .map((definition) => ({
+                        value: definition.definitionId,
+                        label: definition.displayName
+                      }))}
+                    onChange={(definitionId) => {
+                      if (!definitionId) return;
+                      updateScatterBrush({
+                        paletteAssetDefinitionIds: [
+                          ...scatterBrushSettings.paletteAssetDefinitionIds,
+                          definitionId
+                        ]
+                      });
+                    }}
+                  />
+                  <Group gap={4} wrap="nowrap">
+                    {scatterBrushSettings.paletteAssetDefinitionIds.map((id) => {
+                      const definition = assetDefinitions.find(
+                        (candidate) => candidate.definitionId === id
+                      );
+                      return (
+                        <Button
+                          key={id}
+                          size="compact-xs"
+                          variant="light"
+                          color="gray"
+                          rightSection={<span aria-hidden>✕</span>}
+                          onClick={() =>
+                            updateScatterBrush({
+                              paletteAssetDefinitionIds:
+                                scatterBrushSettings.paletteAssetDefinitionIds.filter(
+                                  (existing) => existing !== id
+                                )
+                            })
+                          }
+                        >
+                          {definition?.displayName ?? id}
+                        </Button>
+                      );
+                    })}
+                    {scatterBrushSettings.paletteAssetDefinitionIds.length ===
+                    0 ? (
+                      <Text size="xs" c="var(--sm-color-overlay0)">
+                        Pick assets to spray
+                      </Text>
+                    ) : null}
+                  </Group>
+                </>
+              ) : null}
+            </ToolOptionsBar>
+          </Box>
+        ) : null}
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
         {contextMenu && (
           <Box

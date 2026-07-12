@@ -196,6 +196,7 @@ import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
+import { mountScatterBrushOverlay } from "./viewport/overlays/scatter-brush";
 import { mountMaskPaintOverlay } from "./viewport/overlays/mask-paint";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
 import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
@@ -2555,6 +2556,7 @@ export function App() {
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
+              mountScatterBrushOverlay,
               mountMaskPaintOverlay,
               mountTransformGizmoOverlay,
               mountSpatialAuthoringOverlay

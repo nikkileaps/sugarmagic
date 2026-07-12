@@ -27,3 +27,8 @@ export {
   getLayoutWorkspaceForViewport,
   setLayoutWorkspaceForViewport
 } from "./layout-interaction-access";
+export {
+  createScatterBrushTool,
+  type ScatterBrushConfig,
+  type ScatterBrushTool
+} from "./scatter-brush";
