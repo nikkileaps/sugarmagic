@@ -341,23 +341,81 @@ Executes BEFORE 068.9/068.10 (the Paint Studio's 3D pane wants this
 bake anyway, and the parked Surfaces-preview mini-bake is the same
 machinery).
 
-### 068.9 — Paint Studio: window + 3D view
+### PIVOT (2026-07-13): the Surface Brush is the goal
 
-Full-screen paint editor, entered from a layer's Paint button (the
-in-viewport quick brush remains for touch-ups and landscape). Left
-pane: the ASSET IN ISOLATION with the instance's resolved surface
-stack rendered live, orbit/zoom camera, brush painting via raycast
-into the paint UV channel. Toolbar: Paint/Erase, radius / strength /
-falloff, Done. Same mask texture object the world uses, so the
-placed instance updates live; Done returns to Layout. Banner +
-Generate button when the mesh lacks paint UVs (068.8).
+After 068.11 landed, we stepped back and researched how Substance
+Painter, Blender, Unreal, and Unity actually do artist-friendly
+surface painting, and mapped our own code against it (see
+ADR 026). Findings, all confirmed:
 
-### 068.10 — Paint Studio: UV view
+- Our data model IS the industry model: Surface = layer stack, each
+  Layer has a Mask, masks painted-or-procedural, SurfaceDefinition =
+  reusable "smart material". The world-space projection brush IS
+  Blender projection painting. The foundation is correct; the magic
+  is an ABSTRACTION on top, not a rewrite.
+- THE decomposition (settled, ADR 026): a surface is the SHARED
+  "what" (a library reference), coverage is the PER-INSTANCE "where"
+  (a painted mask on an inline override). The
+  painted-masks-inline-only rule already enforces exactly this split.
+- Substrate decision (settled, ADR 026): texture masks, NOT vertex
+  colors. nikki's call -- the low-poly mesh density can't carry the
+  handcrafted touches of detail that sell the painterly style, and
+  texture masks are already working. Vertex-color mask kind stays
+  available as a future lever.
 
-Right pane: the mask texture with the paint-UV island wireframe
-drawn over it, pan/zoom, direct 2D painting into the same canvas.
-Both views live-sync. This is the mirror-spotting / precision view
-the toolbar thumbnail never adequately covered.
+So 068.9/068.10 re-scope from "a paint-mask studio" to the SURFACE
+BRUSH plus a details cockpit. 068.6/068.7 still hold. 068.11 is done
+and SET DOWN -- scatter-color inheritance works; do not extend it
+(overhangs etc.) until the Surface Brush is proven.
+
+### 068.9 — The Surface Brush (the magic)
+
+Arm a library surface, paint on a placed asset in the Layout
+viewport, and the surface appears where you paint. That is the whole
+UX. Under the hood (all pieces exist today):
+
+- A Surface Brush tool in the Layout toolbar (sibling to the scatter
+  brush; joins the same InputRouter, top controller wins).
+- Arming shows a surface picker (the project's library surfaces --
+  the "what").
+- On the first stroke over an instance's slot: resolve that slot to
+  an INLINE override if it isn't already (fork the reference,
+  preserving its layers as the base -- makeBindingLocal), and ensure
+  a masked layer carrying the chosen surface exists (create it +
+  a fresh painted MaskTextureDefinition). Then arm the existing
+  painted-mask painter at that layer and paint via the world-space
+  projection brush (068.11).
+- Result: instance inline override = shared base + a masked layer of
+  the chosen surface, painted where brushed. The material is reused
+  by reference-in-spirit (the layer's content points at the library
+  surface's look); only the mask is per-instance.
+- Scope control (Base/Scene) reuses the AssetAppearanceSection
+  plumbing -- a scene-scoped brush writes the Scene override tier.
+- "no paint UVs yet" -> offer Generate Paint UVs inline (068.8), same
+  as the Appearance section.
+
+Open question to resolve in build: does the painted layer reference
+the whole library surface (a new `surface-ref` layer content kind --
+cleanest, mirrors Substance fill-with-material) or flatten the
+surface's top appearance into an appearance layer (simpler, v1)? Pick
+during implementation; the decomposition holds either way.
+
+### 068.10 — Details cockpit (layers + UV)
+
+The "open the actual UV and masks to adjust" half of nikki's vision.
+From the Surface Brush (or the Appearance section), a Details view
+exposes the instance slot's inline layer stack (the existing
+master-detail LayerStackView, 068.5) alongside a UV VIEW: the mask
+texture with the paint-UV island wireframe drawn over it, pan/zoom,
+direct 2D painting into the same canvas, live-synced with the 3D
+paint. This is where an author hand-tunes what the brush created --
+reorder layers, swap the surface, adjust masks, spot mirror/seam
+issues the 3D view hides.
+
+Not necessarily a separate full-screen window (painting-in-context
+beats an isolated viewer -- Substance/Blender both paint in the main
+3D view with a UV panel). A dockable panel or overlay is the default;
+revisit a dedicated window only if in-context proves cramped.
 
 ## Deferred
 
