@@ -417,6 +417,24 @@ beats an isolated viewer -- Substance/Blender both paint in the main
 3D view with a UV panel). A dockable panel or overlay is the default;
 revisit a dedicated window only if in-context proves cramped.
 
+### 068.12 — UV test grid surface (debug aid)
+
+A Blender-style UV test grid, shipped as a built-in "UV Test Grid"
+surface you can apply to any asset slot to see how the UV mapping
+lands on the mesh -- distortion, stretching, island seams. The grid
+is procedural (drawn from a UV coordinate via the same node ops the
+perlin/voronoi masks already use), so no bundled texture.
+
+Keyed to the PAINT UVs (uv1), not the authored uv0: uv1 is the
+xatlas-generated atlas the Surface Brush and asset scatter actually
+sample, and its fragmentation (the outcrop bakes to ~900 islands) is
+where nearly every paint/grass wart this epic has come from. Applying
+the grid to a rock draws the atlas islands directly on the surface so
+a smeared stroke or misplaced mask becomes visible. Appearances
+currently only sample uv0, so this wires the grid node to read uv1 the
+way painted masks already do. A uv0 variant/toggle is a later add if
+authored-UV inspection is ever wanted.
+
 ## Deferred
 
 - "Set as default for this asset" action promoting an instance's
