@@ -197,6 +197,25 @@ export function createAppearanceLayer(
   };
 }
 
+/**
+ * Plan 068.9 -- a layer that IS a referenced library surface. Defaults
+ * to a full "mix" so the surface shows across the slot until masked;
+ * the Surface Brush / mask editor then restricts coverage.
+ */
+export function createSurfaceRefLayer(
+  surfaceDefinitionId: string,
+  overrides: LayerFactoryOverrides & { blendMode?: BlendMode } = {}
+): AppearanceLayer {
+  const common = createLayerCommon(overrides);
+  return {
+    ...common,
+    kind: "appearance",
+    displayName: overrides.displayName ?? "Surface",
+    blendMode: overrides.blendMode ?? "mix",
+    content: { kind: "surface", surfaceDefinitionId }
+  };
+}
+
 export function createScatterLayer(
   content: ScatterContent,
   overrides: LayerFactoryOverrides & {

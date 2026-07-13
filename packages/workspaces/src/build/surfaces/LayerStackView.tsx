@@ -21,6 +21,7 @@ import { LayerSettingsPopover } from "./LayerSettingsPopover";
 import { MaskEditor } from "./MaskEditor";
 import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
 import { useMaskPreviewSampler } from "./maskSampling";
+import { createSurfaceRefLayer } from "@sugarmagic/domain";
 import { cloneLayer, createDefaultLayer } from "./utils";
 
 /** Hook-per-row wrapper: painted masks preview their real pixels. */
@@ -54,8 +55,12 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   onChangeSurface,
   variant = "popover"
 }: LayerStackViewProps<C>) {
-  const { grassTypeDefinitions, flowerTypeDefinitions, rockTypeDefinitions } =
-    useSurfaceAuthoring();
+  const {
+    surfaceDefinitions,
+    grassTypeDefinitions,
+    flowerTypeDefinitions,
+    rockTypeDefinitions
+  } = useSurfaceAuthoring();
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
     surface.layers[0]?.layerId ?? null
   );
@@ -148,6 +153,29 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
             >
               Add Emission Layer
             </Menu.Item>
+            {surfaceDefinitions.length > 0 ? (
+              <>
+                <Menu.Divider />
+                <Menu.Label>Add Surface Layer</Menu.Label>
+                {surfaceDefinitions.map((definition) => (
+                  <Menu.Item
+                    key={definition.definitionId}
+                    onClick={() => {
+                      // Plan 068.9 -- a masked layer that IS this
+                      // library surface, composited + blended.
+                      const layer = createSurfaceRefLayer(
+                        definition.definitionId,
+                        { displayName: definition.displayName }
+                      );
+                      commitLayers([...surface.layers.map(cloneLayer), layer]);
+                      setSelectedLayerId(layer.layerId);
+                    }}
+                  >
+                    {definition.displayName}
+                  </Menu.Item>
+                ))}
+              </>
+            ) : null}
           </Menu.Dropdown>
         </Menu>
         <SortableList
