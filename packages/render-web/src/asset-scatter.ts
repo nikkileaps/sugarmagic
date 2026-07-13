@@ -16,8 +16,12 @@
  */
 
 import * as THREE from "three";
-import type { ContentLibrarySnapshot } from "@sugarmagic/domain";
-import type { EffectiveMaterialSlotBinding, ResolvedScatterLayer } from "@sugarmagic/runtime-core";
+import type { ContentLibrarySnapshot, Mask } from "@sugarmagic/domain";
+import type {
+  EffectiveMaterialSlotBinding,
+  ResolvedScatterLayer,
+  ResolvedSurfaceStack
+} from "@sugarmagic/runtime-core";
 import type { AuthoredAssetResolver } from "./authoredAssetResolver";
 import { createAssetSurfaceBake } from "./asset-surface-bake";
 import { sampleMeshTrianglesForDensity } from "./mesh-triangle-sampler";
@@ -32,6 +36,52 @@ function matchesNamedSlot(
   slot: EffectiveMaterialSlotBinding
 ): boolean {
   return material.name.trim().length > 0 && material.name === slot.slotName;
+}
+
+/**
+ * Flatten a resolved surface stack into the scatter layers it realizes,
+ * descending into surface-ref layers (Plan 068.9). A grass SURFACE
+ * painted onto an asset via a surface-ref layer must actually grow
+ * blades -- the color composite alone renders only the surface's flat
+ * base color. Each nested scatter layer is gated by the surface-ref
+ * layer's own mask (the painted coverage) so grass appears only where
+ * you painted. When the surface-ref carries a real (non-"always") mask
+ * it wins over the nested scatter's own mask -- the common case is a
+ * grass surface whose scatter mask is "always", painted onto a rock.
+ */
+function collectAssetScatterLayers(
+  stack: ResolvedSurfaceStack,
+  gate: { mask: Mask; opacity: number } | null = null
+): ResolvedScatterLayer[] {
+  const collected: ResolvedScatterLayer[] = [];
+  for (const layer of stack.layers) {
+    if (layer.enabled === false) {
+      continue;
+    }
+    if (layer.kind === "scatter") {
+      if (!gate) {
+        collected.push(layer);
+        continue;
+      }
+      collected.push({
+        ...layer,
+        mask: gate.mask.kind !== "always" ? gate.mask : layer.mask,
+        opacity: layer.opacity * gate.opacity
+      });
+      continue;
+    }
+    if (layer.kind === "surface-ref") {
+      const childGate: { mask: Mask; opacity: number } = {
+        mask:
+          layer.mask.kind !== "always"
+            ? layer.mask
+            : gate?.mask ?? layer.mask,
+        opacity: (gate?.opacity ?? 1) * layer.opacity
+      };
+      collected.push(...collectAssetScatterLayers(layer.nested, childGate));
+    }
+  }
+  return collected;
 }
 
 export function buildScatterInstancesForAssetSlot(
@@ -52,9 +102,9 @@ export function buildScatterInstancesForAssetSlot(
     };
   }
 ): SurfaceScatterBuildResult[] {
-  const scatterLayers = (slot.surface?.layers ?? []).filter(
-    (layer): layer is ResolvedScatterLayer => layer.kind === "scatter"
-  );
+  const scatterLayers = slot.surface
+    ? collectAssetScatterLayers(slot.surface)
+    : [];
   if (scatterLayers.length === 0) {
     return [];
   }
