@@ -97,10 +97,19 @@ export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
   wind: EffectiveShaderBinding | null;
 }
 
+export interface ResolvedSurfaceRefLayer extends ResolvedSurfaceLayerCommon {
+  kind: "surface-ref";
+  blendMode: BlendMode;
+  /** The referenced library surface, resolved (cycle-guarded). Render
+   *  composites this and blends the result with this layer's mask. */
+  nested: ResolvedSurfaceStack;
+}
+
 export type ResolvedSurfaceLayer =
   | ResolvedAppearanceLayer
   | ResolvedEmissionLayer
-  | ResolvedScatterLayer;
+  | ResolvedScatterLayer
+  | ResolvedSurfaceRefLayer;
 
 export interface ResolvedSurfaceStack<
   C extends SurfaceContext = SurfaceContext
@@ -551,6 +560,19 @@ export function resolveAppearanceLayer(
     };
   }
 
+  if (surface.kind === "surface") {
+    // Surface-ref layers (Plan 068.9) are composited by the stack
+    // resolver (resolveSurfaceBinding), never as a single binding --
+    // a surface is a whole stack, not one shader. Reaching here means
+    // a surface-ref was used somewhere a single appearance binding is
+    // required (deform/effect slot), which is invalid.
+    return surfaceDiagnostic(
+      expectedTargetKind,
+      null,
+      "A surface-reference layer is only valid as a mesh-surface appearance layer, not as a deform/effect binding."
+    );
+  }
+
   if (!getShaderDefinition(contentLibrary, surface.shaderDefinitionId)) {
     return surfaceDiagnostic(
       expectedTargetKind,
@@ -884,7 +906,10 @@ export function resolveSurfaceBinding(
   binding: SurfaceBinding,
   contentLibrary: ContentLibrarySnapshot,
   callerContext: SurfaceContext,
-  parameterOverrides: ShaderParameterOverride[] = []
+  parameterOverrides: ShaderParameterOverride[] = [],
+  /** Plan 068.9 -- surface-ref layers recurse into referenced
+   *  surfaces; this tracks the chain to reject cycles. Internal. */
+  visitedSurfaceDefinitionIds: ReadonlySet<string> = new Set()
 ): ResolveSurfaceBindingResult {
   const surface =
     binding.kind === "reference"
@@ -918,6 +943,41 @@ export function resolveSurfaceBinding(
 
   for (const layer of surface.layers) {
     const effectiveLayer = layer;
+
+    if (
+      effectiveLayer.kind === "appearance" &&
+      effectiveLayer.content.kind === "surface"
+    ) {
+      // Surface-ref layer (Plan 068.9): recurse into the referenced
+      // library surface, cycle-guarded, and carry the resolved stack.
+      const refId = effectiveLayer.content.surfaceDefinitionId;
+      if (visitedSurfaceDefinitionIds.has(refId)) {
+        return resolvedSurfaceDiagnostic(
+          `Surface-reference cycle: "${refId}" references itself (directly or transitively).`
+        );
+      }
+      const nested = resolveSurfaceBinding(
+        { kind: "reference", surfaceDefinitionId: refId },
+        contentLibrary,
+        callerContext,
+        parameterOverrides,
+        new Set([...visitedSurfaceDefinitionIds, refId])
+      );
+      if (!nested.ok) {
+        return nested;
+      }
+      resolvedLayers.push({
+        kind: "surface-ref",
+        layerId: effectiveLayer.layerId,
+        displayName: effectiveLayer.displayName,
+        enabled: effectiveLayer.enabled,
+        opacity: effectiveLayer.opacity,
+        mask: effectiveLayer.mask,
+        blendMode: effectiveLayer.blendMode,
+        nested: nested.binding
+      });
+      continue;
+    }
 
     if (effectiveLayer.kind === "appearance") {
       const result = resolveAppearanceLayer(

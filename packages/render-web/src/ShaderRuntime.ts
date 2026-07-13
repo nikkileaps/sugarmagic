@@ -301,6 +301,18 @@ function surfaceStackSignature(
           mask: layer.mask
         };
       }
+      if (layer.kind === "surface-ref") {
+        // Plan 068.9 -- recurse the referenced surface into the key so
+        // library edits invalidate the material cache.
+        return {
+          kind: layer.kind,
+          blendMode: layer.blendMode,
+          enabled: layer.enabled,
+          opacity: layer.opacity,
+          mask: layer.mask,
+          nested: surfaceStackSignature(layer.nested)
+        };
+      }
       return {
         kind: layer.kind,
         contentKind: layer.contentKind,
@@ -1683,6 +1695,33 @@ export class ShaderRuntime {
       const layerAlpha = (maskNode as { mul: (other: unknown) => unknown }).mul(
         float(layer.opacity)
       );
+
+      if (layer.kind === "surface-ref") {
+        // Plan 068.9 -- composite the referenced library surface and
+        // blend it as this layer's appearance, gated by this layer's
+        // mask. Resolution already flattened/cycle-guarded the nested
+        // stack, so this recursion is finite.
+        const nested = this.evaluateLayerStackToNodeSet(layer.nested, {
+          geometry: options.geometry,
+          carrierMaterial: options.carrierMaterial,
+          uvOverride: options.uvOverride,
+          splatmapWeightNode: options.splatmapWeightNode
+        });
+        if (!nested) {
+          continue;
+        }
+        const normalizedNested = withSurfaceNodeDefaults(nested);
+        accumulator =
+          !accumulator || layer.blendMode === "base"
+            ? normalizedNested
+            : blendSurfaceNodeSets(
+                accumulator,
+                normalizedNested,
+                layer.blendMode,
+                layerAlpha
+              );
+        continue;
+      }
 
       if (layer.kind === "scatter") {
         continue;

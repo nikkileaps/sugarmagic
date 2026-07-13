@@ -245,6 +245,11 @@ function surfaceStackRepresentation(
       if (layer.kind === "scatter") {
         return `${layer.kind}:${layer.contentKind}:${layer.definitionId}`;
       }
+      if (layer.kind === "surface-ref") {
+        // Plan 068.9 -- recurse the nested surface so a library edit
+        // (or a painted-mask change gating it) reshapes the key.
+        return `surface-ref(${surfaceStackRepresentation(layer.nested)})`;
+      }
       const serializedParams = Object.keys(layer.binding.parameterValues)
         .sort()
         .map((key) => `${key}=${JSON.stringify(layer.binding.parameterValues[key])}`)

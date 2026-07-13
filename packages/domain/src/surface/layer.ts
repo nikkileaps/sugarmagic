@@ -48,7 +48,16 @@ export type AppearanceContent =
       shaderDefinitionId: string;
       parameterValues: Record<string, unknown>;
       textureBindings: Record<string, string>;
-    };
+    }
+  /**
+   * Plan 068.9 (ADR 026) -- a layer that IS a referenced library
+   * SurfaceDefinition, composited as this layer's appearance and
+   * gated by this layer's mask. The Surface Brush creates these: one
+   * painted surface = one clean masked layer, live-linked to the
+   * library. Resolution recurses into the referenced surface (cycle-
+   * guarded); render composites it and blends with the mask.
+   */
+  | { kind: "surface"; surfaceDefinitionId: string };
 
 export type ScatterContent =
   | { kind: "grass"; grassTypeId: string }
@@ -145,6 +154,8 @@ function appearanceLayerName(content: AppearanceContent): string {
       return "Material";
     case "shader":
       return "Shader";
+    case "surface":
+      return "Surface";
   }
 }
 

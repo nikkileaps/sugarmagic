@@ -148,6 +148,16 @@ export function createColorAppearanceContent(color: number): AppearanceContent {
   return { kind: "color", color };
 }
 
+/**
+ * Plan 068.9 -- an appearance layer that IS a referenced library
+ * surface (composited + masked). The Surface Brush creates these.
+ */
+export function createSurfaceRefAppearanceContent(
+  surfaceDefinitionId: string
+): AppearanceContent {
+  return { kind: "surface", surfaceDefinitionId };
+}
+
 export function createTextureAppearanceContent(
   textureDefinitionId: string,
   tiling: [number, number] = [1, 1]
