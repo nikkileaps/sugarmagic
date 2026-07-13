@@ -121,6 +121,9 @@ export interface BuildProductModeViewProps {
   /** Open Game > Libraries > Assets with this definition selected
    *  (asset definition editing lives in the library modal now). */
   onOpenAssetsLibrary: (definitionId: string) => void;
+  /** Plan 068.8 -- rewrite the asset's GLB with a generated paint UV
+   *  channel (xatlas); studio-owned side effect. */
+  onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -273,6 +276,7 @@ export function useBuildProductModeView(
     npcDefinitions: session?.gameProject.npcDefinitions ?? [],
     soundCueDefinitions,
     onImportAsset,
+    onGenerateAssetPaintUvs: props.onGenerateAssetPaintUvs,
     renderInspectorSections: renderLayoutInspectorSections,
     // Assets are library content (2026-07-09); "edit definition"
     // opens the Assets library modal instead of a workspace tab.

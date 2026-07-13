@@ -1184,6 +1184,7 @@ export function createWebRuntimeHost(
   });
   const renderEngineProjector = createRuntimeRenderEngineProjector(engine);
   let renderView: RenderView | null = null;
+  let unsubscribeTexturesUpdated: (() => void) | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
@@ -1370,6 +1371,8 @@ export function createWebRuntimeHost(
       disposeRenderableObject(scene);
     }
 
+    unsubscribeTexturesUpdated?.();
+    unsubscribeTexturesUpdated = null;
     renderView?.unmount();
     renderView = null;
 
@@ -1750,6 +1753,25 @@ export function createWebRuntimeHost(
       }
     });
 
+    // Painted-mask grass on assets is placed at build time from the
+    // mask PIXELS; the PNG decodes async, so the first build sees an
+    // empty mask. When a texture loads, invalidate scatter-bearing
+    // renderables so the per-frame ensure pass rebuilds their grass
+    // with the now-ready mask (Plan 068.11).
+    unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
+      for (const entry of sceneObjectEntries.values()) {
+        const hasScatter = (entry.object.effectiveMaterialSlots ?? []).some(
+          (slot) =>
+            slot.surface?.layers?.some((layer) => layer.kind === "scatter")
+        );
+        if (!hasScatter) {
+          continue;
+        }
+        entry.shaderApplication.appliedShaderSignature = null;
+        entry.shaderApplication.appliedFileSources = null;
+      }
+    });
+
     // Plan 055 §055.3 — spawn state hydrates through the
     // participant pipeline. Seed precedence: real save wins,
     // then the project's `defaultGameSavePayload` (a fresh-start
@@ -2011,6 +2033,14 @@ export function createWebRuntimeHost(
                 }
               });
               renderView?.enableShadowsOnObject(renderable);
+              // Parent BEFORE building shaders: the asset-surface bake
+              // frames the mesh in WORLD XZ and blades sample it by
+              // world XZ, so the mesh world matrix must include the
+              // instance transform at build time. Building first
+              // (unparented) baked in local space -> black grass
+              // (Plan 068.11, 2026-07-13).
+              rootObject.add(renderable);
+              rootObject.updateMatrixWorld(true);
               ensureShaderSetAppliedToRenderable(
                 renderable,
                 object,
@@ -2018,7 +2048,6 @@ export function createWebRuntimeHost(
                 shaderApplication,
                 state.assetSources
               );
-              rootObject.add(renderable);
 
               // For NPCs with bound animations, load the idle clip and
               // attach an AnimationMixer so the runtime frame loop can

@@ -211,50 +211,6 @@ function findSceneObjectMetadata(object: THREE.Object3D): {
   return null;
 }
 
-/** UV units per world meter at one hit triangle, measured on the
- *  SAME uv attribute painting samples. This is what makes the brush
- *  radius mean meters-on-the-surface: xatlas packs meshes into
- *  hundreds of tiny islands (the outcrop: 923, median 0.013 uv), so
- *  a fixed pixel stamp covers dozens of islands and paints confetti
- *  no matter how correct the UVs are. */
-function uvPerMeterAtHit(
-  hit: THREE.Intersection<THREE.Object3D>
-): number | null {
-  const face = hit.face;
-  const mesh = hit.object as THREE.Mesh;
-  if (!face || !(mesh.geometry instanceof THREE.BufferGeometry)) {
-    return null;
-  }
-  const geometry = mesh.geometry;
-  const position = geometry.getAttribute("position");
-  const uvAttribute = geometry.getAttribute("uv1") ?? geometry.getAttribute("uv");
-  if (!position || !uvAttribute) {
-    return null;
-  }
-  const a = new THREE.Vector3()
-    .fromBufferAttribute(position, face.a)
-    .applyMatrix4(mesh.matrixWorld);
-  const b = new THREE.Vector3()
-    .fromBufferAttribute(position, face.b)
-    .applyMatrix4(mesh.matrixWorld);
-  const c = new THREE.Vector3()
-    .fromBufferAttribute(position, face.c)
-    .applyMatrix4(mesh.matrixWorld);
-  const worldArea =
-    new THREE.Vector3().crossVectors(b.sub(a), c.sub(a)).length() / 2;
-  const ua = new THREE.Vector2(uvAttribute.getX(face.a), uvAttribute.getY(face.a));
-  const ub = new THREE.Vector2(uvAttribute.getX(face.b), uvAttribute.getY(face.b));
-  const uc = new THREE.Vector2(uvAttribute.getX(face.c), uvAttribute.getY(face.c));
-  const uvArea =
-    Math.abs(
-      (ub.x - ua.x) * (uc.y - ua.y) - (uc.x - ua.x) * (ub.y - ua.y)
-    ) / 2;
-  if (worldArea < 1e-10 || uvArea < 1e-12) {
-    return null;
-  }
-  return Math.sqrt(uvArea / worldArea);
-}
-
 function matchesAssetSlotHit(
   hit: THREE.Intersection<THREE.Object3D>,
   target: Extract<
@@ -346,6 +302,144 @@ function createPaintBrushRing(): THREE.Mesh {
   ring.name = "mask-paint-brush-ring";
   ring.raycast = () => {};
   return ring;
+}
+
+/**
+ * World-space projection brush (Plan 068.11 v4 -- the fix).
+ *
+ * A circular stamp in TEXTURE space is wrong on a fragmented paint-UV
+ * atlas: it smears across unrelated islands (confetti) or, shrunk to
+ * avoid that, marks almost nothing. Instead we paint in WORLD space:
+ * walk the hit mesh's triangles, keep the ones within the brush's
+ * WORLD radius, and rasterize THOSE triangles' paint-UV footprints
+ * into the mask -- each texel's value from its real world distance to
+ * the brush center. Every texel of nearby surface gets marked, no
+ * matter which scattered island it lives in.
+ *
+ * paint accumulates (add, clamp 1); erase subtracts (clamp 0). V is
+ * flipped to match the CPU scatter sampler ((1 - v) * height).
+ */
+function stampWorldSpaceBrush(
+  canvas: HTMLCanvasElement,
+  hit: THREE.Intersection<THREE.Object3D>,
+  settings: MaskPaintBrushSettings
+): void {
+  const mesh = hit.object as THREE.Mesh;
+  const geometry = mesh.geometry;
+  if (!(geometry instanceof THREE.BufferGeometry)) {
+    return;
+  }
+  const posAttr = geometry.getAttribute("position");
+  const uvAttr = geometry.getAttribute("uv1") ?? geometry.getAttribute("uv");
+  if (!posAttr || !uvAttr) {
+    return;
+  }
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    return;
+  }
+
+  const center = hit.point;
+  const radius = Math.max(0.001, settings.radius);
+  const radiusSq = radius * radius;
+  const edge = 1 - Math.max(0, Math.min(1, settings.falloff));
+  const width = canvas.width;
+  const height = canvas.height;
+
+  const image = ctx.getImageData(0, 0, width, height);
+  const data = image.data;
+  const matrixWorld = mesh.matrixWorld;
+  const index = geometry.index;
+  const triangleCount = index ? index.count / 3 : posAttr.count / 3;
+
+  const wa = new THREE.Vector3();
+  const wb = new THREE.Vector3();
+  const wc = new THREE.Vector3();
+  const uva = new THREE.Vector2();
+  const uvb = new THREE.Vector2();
+  const uvc = new THREE.Vector2();
+  const triangle = new THREE.Triangle();
+  const closest = new THREE.Vector3();
+
+  for (let t = 0; t < triangleCount; t += 1) {
+    const ia = index ? index.getX(t * 3) : t * 3;
+    const ib = index ? index.getX(t * 3 + 1) : t * 3 + 1;
+    const ic = index ? index.getX(t * 3 + 2) : t * 3 + 2;
+
+    wa.set(posAttr.getX(ia), posAttr.getY(ia), posAttr.getZ(ia)).applyMatrix4(matrixWorld);
+    wb.set(posAttr.getX(ib), posAttr.getY(ib), posAttr.getZ(ib)).applyMatrix4(matrixWorld);
+    wc.set(posAttr.getX(ic), posAttr.getY(ic), posAttr.getZ(ic)).applyMatrix4(matrixWorld);
+
+    // Accurate near-check: closest point on the triangle to the brush.
+    triangle.set(wa, wb, wc);
+    triangle.closestPointToPoint(center, closest);
+    if (closest.distanceToSquared(center) > radiusSq) {
+      continue;
+    }
+
+    uva.set(uvAttr.getX(ia), uvAttr.getY(ia));
+    uvb.set(uvAttr.getX(ib), uvAttr.getY(ib));
+    uvc.set(uvAttr.getX(ic), uvAttr.getY(ic));
+
+    const ax = uva.x * width;
+    const ay = (1 - uva.y) * height;
+    const bx = uvb.x * width;
+    const by = (1 - uvb.y) * height;
+    const cx = uvc.x * width;
+    const cy = (1 - uvc.y) * height;
+
+    const denom = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(denom) < 1e-9) {
+      continue;
+    }
+
+    const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+    const maxX = Math.min(width - 1, Math.ceil(Math.max(ax, bx, cx)));
+    const minY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
+    const maxY = Math.min(height - 1, Math.ceil(Math.max(ay, by, cy)));
+
+    for (let py = minY; py <= maxY; py += 1) {
+      for (let px = minX; px <= maxX; px += 1) {
+        const sx = px + 0.5;
+        const sy = py + 0.5;
+        const l1 = ((by - cy) * (sx - cx) + (cx - bx) * (sy - cy)) / denom;
+        const l2 = ((cy - ay) * (sx - cx) + (ax - cx) * (sy - cy)) / denom;
+        const l3 = 1 - l1 - l2;
+        if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) {
+          continue;
+        }
+        const wx = wa.x * l1 + wb.x * l2 + wc.x * l3;
+        const wy = wa.y * l1 + wb.y * l2 + wc.y * l3;
+        const wz = wa.z * l1 + wb.z * l2 + wc.z * l3;
+        const dx = wx - center.x;
+        const dy = wy - center.y;
+        const dz = wz - center.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        const normalized = Math.sqrt(distSq) / radius;
+        const falloff =
+          normalized <= edge
+            ? 1
+            : Math.max(0, 1 - (normalized - edge) / Math.max(1e-4, 1 - edge));
+        const value = settings.strength * falloff;
+        const offset = (py * width + px) * 4;
+        const current = data[offset]! / 255;
+        const next =
+          settings.mode === "erase"
+            ? Math.max(0, current - value)
+            : Math.min(1, current + value);
+        const byteValue = Math.round(next * 255);
+        data[offset] = byteValue;
+        data[offset + 1] = byteValue;
+        data[offset + 2] = byteValue;
+        data[offset + 3] = 255;
+      }
+    }
+  }
+
+  ctx.putImageData(image, 0, 0);
 }
 
 export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
@@ -448,37 +542,38 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
     pointer.y = -(((clientY - bounds.top) / bounds.height) * 2 - 1);
     raycaster.setFromCamera(pointer, context.getCamera());
 
-    let uv: THREE.Vector2 | null = null;
-    let radiusPx = Math.max(1, brushSettings.radius * 12);
     if (currentTarget.address.scope === "landscape-channel") {
+      // The landscape is a flat plane whose UV IS world XZ -- a
+      // texture-space circle is correct there, no fragmentation.
       const landscapeHit = findLandscapeHit(context.surfaceRoot, raycaster);
-      if (landscapeHit && currentTarget.landscape) {
-        uv = pointerUvOnLandscape(landscapeHit.point, currentTarget.landscape);
+      if (!landscapeHit || !currentTarget.landscape) {
+        return false;
       }
+      const uv = pointerUvOnLandscape(
+        landscapeHit.point,
+        currentTarget.landscape
+      );
+      paintBrush(
+        paintCanvas,
+        uv,
+        brushSettings,
+        Math.max(1, brushSettings.radius * 12)
+      );
     } else {
+      // Assets: WORLD-space projection paint (Plan 068.11) -- a
+      // texture circle is the wrong shape on the fragmented paint-UV
+      // atlas.
       const result = findAssetSlotHit(
         context.authoredRoot,
         raycaster,
         currentTarget.address
       );
-      uv = result?.uv ?? null;
-      // Brush radius means METERS ON THE SURFACE for assets: map
-      // through the hit triangle's texel density so the stamp only
-      // reaches what the cursor actually covers.
-      const uvPerMeter = result ? uvPerMeterAtHit(result.hit) : null;
-      if (uvPerMeter) {
-        radiusPx = Math.min(
-          paintCanvas.width / 4,
-          Math.max(1, brushSettings.radius * uvPerMeter * paintCanvas.width)
-        );
+      if (!result) {
+        return false;
       }
+      stampWorldSpaceBrush(paintCanvas, result.hit, brushSettings);
     }
 
-    if (!uv) {
-      return false;
-    }
-
-    paintBrush(paintCanvas, uv, brushSettings, radiusPx);
     paintDirty = true;
     context.previewMaskTexture(currentTarget.maskTextureId, paintCanvas);
     return true;

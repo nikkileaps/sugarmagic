@@ -68,6 +68,28 @@ export interface SurfaceScatterBuildOptions {
    * (no landscape there) -- the literal fallback keeps working.
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /**
+   * Plan 068.11 -- the owning ASSET's compiled-surface bake (paint-UV
+   * space DataTexture). When set, blades whose card param declares
+   * inheritSource "baseLayerColor" sample THIS (a top-down world-XZ
+   * bake of the mesh's own layers) at their world XZ, taking
+   * precedence over groundColorMap. World-XZ sampling reuses the
+   * existing instanceOrigin attribute, so the shared GPU pipeline is
+   * untouched (a paint-UV attempt broke landscape grass, 2026-07-13).
+   */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
+  /**
+   * Plan 068.11 -- multiply blade scale by this so grass on a SCALED
+   * asset renders at world size (landscape sits at world-scale 1; a
+   * rock scaled up would otherwise render giant blades because they
+   * inherit the asset root's scale). 1/assetWorldScale; default 1
+   * (landscape and the surface preview are unscaled).
+   */
+  instanceWorldScaleCompensation?: number;
   enableGpuCompute?: boolean;
   logger?: {
     warn: (message: string, payload?: Record<string, unknown>) => void;
@@ -254,7 +276,8 @@ function createScatterMaterialForGeometry(
       {
         material,
         geometry,
-        groundColorMap: options.groundColorMap ?? null
+        groundColorMap: options.groundColorMap ?? null,
+        assetSurfaceBake: options.assetSurfaceBake ?? null
       }
     );
   }
@@ -634,6 +657,21 @@ export function buildSurfaceScatterLayer(
       });
     }
 
+    const computeParams = createScatterComputeLayerParams(
+      layer,
+      gpuBinInputs[0]!.geometry,
+      { maxDrawDistance: lodParams.maxDrawDistance }
+    );
+    // World-size compensation (Plan 068.11): scale blade size by the
+    // inverse of the asset's world scale. Mutating params.scaleJitter
+    // (not the compute pipeline) keeps the shared GPU kernel untouched.
+    const scaleComp = options.instanceWorldScaleCompensation ?? 1;
+    if (scaleComp !== 1) {
+      computeParams.scaleJitter = [
+        computeParams.scaleJitter[0] * scaleComp,
+        computeParams.scaleJitter[1] * scaleComp
+      ];
+    }
     const sharedComputePipeline = createScatterComputePipeline({
       bins: gpuBinInputs.map((bin) => ({
         bin: bin.bin,
@@ -642,9 +680,7 @@ export function buildSurfaceScatterLayer(
       })),
       samples,
       densityWeights,
-      params: createScatterComputeLayerParams(layer, gpuBinInputs[0]!.geometry, {
-        maxDrawDistance: lodParams.maxDrawDistance
-      })
+      params: computeParams
     });
 
     if (sharedComputePipeline && sharedComputePipeline.bins.length > 0) {
@@ -807,7 +843,8 @@ export function buildSurfaceScatterLayer(
     const colorSeed = hashVectorSeed(layer.layerId, sample, 5);
     const scaleRange = layer.definition.scaleJitter;
     const baseScale =
-      scaleRange[0] + (scaleRange[1] - scaleRange[0]) * hash01(scaleSeed);
+      (scaleRange[0] + (scaleRange[1] - scaleRange[0]) * hash01(scaleSeed)) *
+      (options.instanceWorldScaleCompensation ?? 1);
     const verticalScale =
       layer.contentKind === "grass"
         ? baseScale *

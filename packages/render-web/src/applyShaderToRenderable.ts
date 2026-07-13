@@ -118,7 +118,10 @@ export function applyShaderToRenderable(
   // groups under a renderable are the ones this apply creates.
   const orphanedScatterRoots: THREE.Object3D[] = [];
   renderable.traverse((node) => {
-    if (node.name.startsWith("asset-scatter:")) {
+    if (
+      node.name.startsWith("asset-scatter:") ||
+      node.name.startsWith("asset-surface-bake:")
+    ) {
       orphanedScatterRoots.push(node);
     }
   });
@@ -243,6 +246,13 @@ export function applyShaderToRenderable(
           contentLibrary,
           assetResolver,
           shaderRuntime,
+          // Authoritative instance scale (Plan 068.11): blade-size
+          // compensation must not depend on whether the renderable is
+          // parented under its transform yet at build time -- the
+          // runtime host builds scatter BEFORE parenting, so reading
+          // the root's world matrix there gave scale 1 and oversized
+          // grass. object.transform.scale is always correct.
+          assetWorldScale: object.transform?.scale,
           logger: {
             warn(message, payload) {
               console.warn("[render-web]", { message, ...(payload ?? {}) });

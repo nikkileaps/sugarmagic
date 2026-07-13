@@ -9,6 +9,7 @@
 export * from "./ShaderRuntime";
 export * from "./applyShaderToRenderable";
 export * from "./asset-scatter";
+export * from "./asset-surface-bake";
 export { sampleMeshTrianglesForDensity } from "./mesh-triangle-sampler";
 export {
   registerLivePaintedMask,

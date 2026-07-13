@@ -291,6 +291,13 @@ async function createRenderableRoot(
   });
   renderView.enableShadowsOnObject(renderable);
   const shaderApplication = createRenderableShaderApplicationState();
+  // Parent BEFORE building shaders: the asset-surface bake frames the
+  // mesh in WORLD XZ and blades sample it by world XZ, so the mesh
+  // world matrix must include the instance transform at build time.
+  // Building first (unparented) baked in local space -> blades
+  // sampled outside the map -> black grass (Plan 068.11, 2026-07-13).
+  root.add(renderable);
+  root.updateMatrixWorld(true);
   try {
     ensureShaderSetAppliedToRenderable(
       renderable,
@@ -310,7 +317,6 @@ async function createRenderableRoot(
       shaderApplication: createRenderableShaderApplicationState()
     };
   }
-  root.add(renderable);
   return {
     root,
     object,
@@ -388,6 +394,7 @@ export function createAuthoringViewport(
   let renderGeneration = 0;
   let unsubscribeProjection: (() => void) | null = null;
   let unsubscribeShaderEnsureFrame: (() => void) | null = null;
+  let unsubscribeTexturesUpdated: (() => void) | null = null;
   let overlayTeardowns: Array<() => void> = [];
 
   function scheduleRenderableLoad(
@@ -628,6 +635,26 @@ export function createAuthoringViewport(
           currentAssetSources
         );
       });
+      // Painted-mask grass on assets is placed at build time from the
+      // mask PIXELS; on fresh load the PNG decodes async, so the first
+      // build sees an empty mask. When a texture finishes loading,
+      // invalidate scatter-bearing renderables so the ensure loop
+      // above rebuilds their grass with the now-ready mask (Plan
+      // 068.11). Per-frame debounced: the ensure pass runs once next
+      // frame regardless of how many textures resolved.
+      unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
+        for (const entry of objectMap.values()) {
+          const hasScatter = (entry.object.effectiveMaterialSlots ?? []).some(
+            (slot) =>
+              slot.surface?.layers?.some((layer) => layer.kind === "scatter")
+          );
+          if (!hasScatter) {
+            continue;
+          }
+          entry.shaderApplication.appliedShaderSignature = null;
+          entry.shaderApplication.appliedFileSources = null;
+        }
+      });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);
@@ -771,6 +798,8 @@ export function createAuthoringViewport(
       overlayTeardowns = [];
       unsubscribeShaderEnsureFrame?.();
       unsubscribeShaderEnsureFrame = null;
+      unsubscribeTexturesUpdated?.();
+      unsubscribeTexturesUpdated = null;
       unsubscribeProjection?.();
       unsubscribeProjection = null;
       renderView.unmount();

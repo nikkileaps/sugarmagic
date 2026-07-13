@@ -42,6 +42,13 @@ export interface RenderView {
   resize(width: number, height: number): void;
   setCamera(camera: THREE.Camera): void;
   subscribeFrame(listener: () => void): () => void;
+  /** Fires when any resolver texture (incl. painted masks) finishes
+   *  loading. Hosts rebuild scatter-bearing renderables here so grass
+   *  gated by a painted mask appears once the PNG decodes -- on fresh
+   *  load the scatter build ran against an empty mask (Plan 068.11). */
+  subscribeTexturesUpdated(listener: () => void): () => void;
+  /** Engine-facing: notify subscribers a texture updated. */
+  notifyTexturesUpdated(): void;
   enableShadowsOnObject(root: THREE.Object3D): void;
   requestEngineStateSync(): void;
   markSceneMaterialsDirty(): void;
@@ -72,6 +79,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
   );
 
   const frameListeners = new Set<() => void>();
+  const textureUpdatedListeners = new Set<() => void>();
   let activeCamera = options.camera;
   let renderer: WebGPURenderer | null = null;
   let renderPipeline: RuntimeRenderPipeline | null = null;
@@ -343,6 +351,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       renderPipeline = null;
       appliedEnvironmentVersion = -1;
       frameListeners.clear();
+      textureUpdatedListeners.clear();
 
       if (renderer && container && renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -382,6 +391,17 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       return () => {
         frameListeners.delete(listener);
       };
+    },
+    subscribeTexturesUpdated(listener) {
+      textureUpdatedListeners.add(listener);
+      return () => {
+        textureUpdatedListeners.delete(listener);
+      };
+    },
+    notifyTexturesUpdated() {
+      for (const listener of textureUpdatedListeners) {
+        listener();
+      }
     },
     enableShadowsOnObject(root) {
       root.traverse((child) => {

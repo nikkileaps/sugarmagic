@@ -157,6 +157,10 @@ export function createWebRenderEngine(
           currentContentLibrary,
           currentAssetSources
         );
+        // Asset renderables (host-owned) rebuild their scatter here:
+        // grass gated by a painted mask needs a rebuild once the mask
+        // PNG decodes (Plan 068.11).
+        view.notifyTexturesUpdated();
       }
     }
   });
@@ -167,6 +171,21 @@ export function createWebRenderEngine(
     logger,
     assetResolver
   });
+
+  /**
+   * Plan 068.11 -- eagerly kick off loading every painted mask so the
+   * CPU scatter density sampler (which places grass at build time from
+   * the mask PIXELS) has them. Without this the mask only loaded lazily
+   * when a scatter build resolved it -- but that build produced empty
+   * grass because the mask wasn't loaded yet, a deadlock on fresh load.
+   * Resolving here starts the image load; completion fires
+   * onTextureUpdated -> notifyTexturesUpdated -> host scatter rebuild.
+   */
+  function preloadMaskTextures(): void {
+    for (const definition of currentContentLibrary.maskTextureDefinitions ?? []) {
+      assetResolver.resolveMaskTextureDefinition(definition);
+    }
+  }
 
   let environmentState: WebRenderEnvironmentState = {
     version: environmentVersion,
@@ -256,6 +275,7 @@ export function createWebRenderEngine(
       currentContentLibrary = library;
       shaderRuntime.setContentLibrary(library);
       assetResolver.sync(library, currentAssetSources);
+      preloadMaskTextures();
       recomputeEnvironmentState();
       notifyViews();
     },
@@ -263,6 +283,7 @@ export function createWebRenderEngine(
       ensureNotDisposed();
       currentAssetSources = sources;
       assetResolver.sync(currentContentLibrary, currentAssetSources);
+      preloadMaskTextures();
       recomputeEnvironmentState();
       notifyViews();
     },

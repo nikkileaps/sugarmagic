@@ -78,6 +78,11 @@ export type ShaderApplyTarget =
       geometry: THREE.BufferGeometry;
       materialTextures?: Record<string, THREE.Texture | null>;
       groundColorMap?: { texture: unknown; size: number } | null;
+      assetSurfaceBake?: {
+        texture: unknown;
+        offset: [number, number];
+        size: [number, number];
+      } | null;
     }
   | {
       targetKind: "billboard-surface";
@@ -179,6 +184,19 @@ interface FinalizationContext {
    * carries `instanceOrigin` (see MeshShaderSetApplyTarget).
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /**
+   * Plan 068.11 -- the owning ASSET's compiled-surface bake in
+   * paint-UV space. When set AND the geometry carries the per-instance
+   * `scatterPaintUv` attribute, inheritSource "baseLayerColor" params
+   * sample THIS (the mesh's own layers under each blade) and it takes
+   * precedence over the landscape groundColorMap. Gated: landscape
+   * grass never sets it, so this branch is dead for the landscape.
+   */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
   sunDirectionUniform: UniformNodeLike;
   /**
    * Per-binding cache of effect nodes whose wrapped Three helpers take JS
@@ -217,6 +235,12 @@ interface MeshShaderSetApplyTarget {
    * blade -- instead of the resolver-seeded flat literal.
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /** Plan 068.11 -- see FinalizationContext.assetSurfaceBake. */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
 }
 
 function stableStringify(value: unknown): string {
@@ -869,6 +893,37 @@ function uniformForParameter(
   // every blade takes the floor color underneath it (splat blends,
   // dirt boundaries and all) instead of one flat color per surface.
   // The bake stores LINEAR values, so no sRGB conversion applies.
+  // Plan 068.11: blades on a placed asset inherit the ASSET'S OWN
+  // compiled surface (the slot's layers baked to paint-UV space), not
+  // the terrain. Same discipline as the ground map: instanced
+  // attribute read in the VERTEX stage; plain DataTexture only. Gated
+  // on assetSurfaceBake, which only asset scatter sets -- landscape
+  // never reaches this branch.
+  if (
+    isColorParameter &&
+    context.assetSurfaceBake &&
+    declaration?.inheritSource === "baseLayerColor"
+  ) {
+    // Same mechanism as the landscape ground map (below), just over
+    // the ASSET's world-XZ bounds instead of the terrain: sample the
+    // top-down surface bake at the blade's world XZ. instanceOrigin
+    // (world XZ, VERTEX stage) is populated by both scatter paths, so
+    // this needs no new attribute and the GPU pipeline is untouched.
+    const bake = context.assetSurfaceBake;
+    const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
+      sub: (value: unknown) => { div: (value: unknown) => unknown };
+    };
+    const bakeUv = vertexStage(
+      origin
+        .sub(vec2(bake.offset[0], bake.offset[1]))
+        .div(vec2(bake.size[0], bake.size[1])) as never
+    );
+    const bakeSample = textureNode(
+      bake.texture as THREE.Texture,
+      bakeUv as never
+    ) as unknown as { rgb: unknown };
+    return bakeSample.rgb;
+  }
   if (isColorParameter && context.groundColorMap) {
     if (declaration?.inheritSource === "baseLayerColor") {
       const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
@@ -976,6 +1031,8 @@ function evaluateIRToSurfaceNodes(
   // a groundColorMap and keep the literal fallback.
   const groundColorMap =
     ("groundColorMap" in target ? target.groundColorMap : null) ?? null;
+  const assetSurfaceBake =
+    ("assetSurfaceBake" in target ? target.assetSurfaceBake : null) ?? null;
   const context: FinalizationContext = {
     ir,
     target,
@@ -986,6 +1043,7 @@ function evaluateIRToSurfaceNodes(
     builtinSceneDepthNode: null,
     parameterUniforms,
     groundColorMap,
+    assetSurfaceBake,
     sunDirectionUniform,
     effectNodes,
     uvOverride,
@@ -1776,7 +1834,10 @@ export class ShaderRuntime {
       materialCarrierSignature(target.material, target.geometry),
       target.groundColorMap
         ? `ground:${(target.groundColorMap.texture as THREE.Texture).uuid}`
-        : "no-ground"
+        : "no-ground",
+      target.assetSurfaceBake
+        ? `bake:${(target.assetSurfaceBake.texture as THREE.Texture).uuid}`
+        : "no-bake"
     ].join("|");
 
     return this.acquireMaterial(
@@ -1798,7 +1859,8 @@ export class ShaderRuntime {
             material,
             geometry: target.geometry,
             materialTextures: surfaceTextures,
-            groundColorMap: target.groundColorMap ?? null
+            groundColorMap: target.groundColorMap ?? null,
+            assetSurfaceBake: target.assetSurfaceBake ?? null
           },
           this.getOrCreateParameterUniformCache(surfaceBinding.shaderDefinitionId),
           this.sunDirectionUniform,

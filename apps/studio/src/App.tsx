@@ -3070,7 +3070,12 @@ export function App() {
                   >
                     <Menu.Item
                       onClick={handleSave}
-                      disabled={!isDirty}
+                      // Always available: not every mutation flips the
+                      // dirty flag (painted-mask strokes are the known
+                      // gap), and a save that finds nothing changed is
+                      // harmless. Better to always let the author save
+                      // than to silently strand real changes behind a
+                      // grayed-out menu (2026-07-13).
                       rightSection={
                         <Text size="xs" c="var(--sm-color-overlay0)">
                           ⌘S

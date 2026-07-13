@@ -379,6 +379,22 @@ the toolbar thumbnail never adequately covered.
   UVs made in-viewport painting unusable, and nikki called no more
   half measures.
 
+### Save-UX papercuts (backlog, do at epic wrap; nikki 2026-07-13)
+
+Surfaced after making Save Game always-available (not every mutation
+flips the dirty flag -- painted-mask strokes are the known gap):
+
+- **Unsaved-changes indicator** in the bottom system-message strip
+  (where "build workspace ready" shows): a small persistent hint like
+  "Unsaved changes..." reflecting save state, since the menu item no
+  longer conveys it by graying out. Also worth: fix the underlying
+  dirty-flag gaps (painted-mask strokes, likely others) so the
+  indicator is truthful rather than always-on.
+- **Save-in-progress spinner**: saving is slow enough now
+  (managed-file reconciliation + mask sweep + region writes) that it
+  reads as unresponsive. Show a spinner / progress affordance in the
+  system strip or menu while the save runs.
+
 ## Not in this epic
 
 - New surface/shader authoring capabilities (Plan 065 owns that
