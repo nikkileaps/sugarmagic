@@ -232,7 +232,7 @@ if the pattern earns it.
 OUTCOME (2026-07-12): shipped; kills the vanishing-popover class of
 bugs and stays the right home for gradients / blend / scatter
 settings. Verdict from nikki: still not a sufficient PAINTING
-cockpit — combined with the UV wall (068.4 outcome), the decision is
+environment — combined with the UV wall (068.4 outcome), the decision is
 no more half measures: a dedicated Paint Studio (068.9/068.10) with
 engine-generated paint UVs (068.8) underneath.
 
@@ -364,7 +364,7 @@ ADR 026). Findings, all confirmed:
   available as a future lever.
 
 So 068.9/068.10 re-scope from "a paint-mask studio" to the SURFACE
-BRUSH plus a details cockpit. 068.6/068.7 still hold. 068.11 is done
+BRUSH plus the Surface Studio. 068.6/068.7 still hold. 068.11 is done
 and SET DOWN -- scatter-color inheritance works; do not extend it
 (overhangs etc.) until the Surface Brush is proven.
 
@@ -400,11 +400,11 @@ cleanest, mirrors Substance fill-with-material) or flatten the
 surface's top appearance into an appearance layer (simpler, v1)? Pick
 during implementation; the decomposition holds either way.
 
-### 068.10 — Details cockpit (layers + UV)
+### 068.10 — Surface Studio (layers + UV)
 
 The "open the actual UV and masks to adjust" half of nikki's vision.
-From the Surface Brush (or the Appearance section), a Details view
-exposes the instance slot's inline layer stack (the existing
+From the Surface Brush (or the Appearance section), the Surface
+Studio exposes the instance slot's inline layer stack (the existing
 master-detail LayerStackView, 068.5) alongside a UV VIEW: the mask
 texture with the paint-UV island wireframe drawn over it, pan/zoom,
 direct 2D painting into the same canvas, live-synced with the 3D

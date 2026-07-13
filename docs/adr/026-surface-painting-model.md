@@ -88,16 +88,16 @@ paint-UV footprints, value from real world distance). A texture-space
 stamp is only correct for the landscape (a flat plane whose UV is
 world XZ).
 
-### 4. Paint in context; expose the details for tuning
+### 4. Paint in context; the Surface Studio is for tuning
 
 The primary interaction is painting on the placed asset IN the Layout
 viewport (in the real scene, with neighbors and lighting), not in an
 isolated window -- matching how Substance and Blender paint in the
-main 3D view. The layer stack + a UV view (mask + island wireframe)
-are a DETAILS surface opened for hand-tuning what the brush created
-(reorder layers, swap the surface, adjust masks, spot seams). A
-dedicated full-screen window is only warranted if in-context proves
-cramped.
+main 3D view. The **Surface Studio** (Plan 068.10) -- the layer stack
+plus a UV view (mask + island wireframe) -- is opened for hand-tuning
+what the brush created (reorder layers, swap the surface, adjust
+masks, spot seams). A dedicated full-screen window is only warranted
+if in-context proves cramped.
 
 ### 5. Scatter color inheritance is an advanced sub-feature, set down
 
@@ -119,7 +119,7 @@ block or complicate the core "paint a surface" path.
   painter. No new domain types.
 - The manual flow (slot -> Inline Surface -> add layer -> set mask
   Painted -> paint) is demoted from primary to ADVANCED; the brush
-  hides it, the details cockpit (Plan 068.10) exposes it.
+  hides it, the Surface Studio (Plan 068.10) exposes it.
 - Painting stays world-space projection for meshes, texture-circle
   for the flat landscape.
 - Vertex-color painting is not built now; revisit only if texture
