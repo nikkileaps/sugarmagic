@@ -55,6 +55,17 @@ export type PaintedMaskTargetAddress =
       assetDefinitionId: string;
       slotName: string;
       layerId: string;
+    }
+  /** Plan 068.4 — a painted layer living on a PLACED INSTANCE's
+   *  surface override (base instance, scene-contained instance, or a
+   *  Scene's restyle record). Strokes hit-test against this instance
+   *  only. */
+  | {
+      scope: "instance-slot";
+      instanceId: string;
+      assetDefinitionId: string;
+      slotName: string;
+      layerId: string;
     };
 
 export function cloneMask(mask: Mask): Mask {

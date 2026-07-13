@@ -16,7 +16,15 @@
  */
 
 import { useMemo, useState } from "react";
-import { Anchor, Group, SegmentedControl, Stack, Text } from "@mantine/core";
+import {
+  Anchor,
+  Box,
+  ColorSwatch,
+  Group,
+  SegmentedControl,
+  Stack,
+  Text
+} from "@mantine/core";
 import type {
   AssetDefinition,
   PlacedAssetInstance,
@@ -30,10 +38,10 @@ import {
   createEmptyShaderSlotBindingMap,
   mergeAppearanceOverrideTiers
 } from "@sugarmagic/domain";
-import { MaterialSlotBindingsEditor } from "../MaterialSlotBindingsEditor";
 import { ShaderSlotEditor } from "../ShaderSlotEditor";
 import { ScopeBadge, type AppearanceProvenance } from "../ScopeBadge";
-import { useSurfaceAuthoring } from "../surfaces";
+import { SurfaceBindingEditor, useSurfaceAuthoring } from "../surfaces";
+import { previewColorForBinding } from "../surfaces/utils";
 
 export interface AssetAppearanceSectionProps {
   instance: PlacedAssetInstance;
@@ -117,6 +125,12 @@ export function AssetAppearanceSection({
       return { ...slot, surface, tier };
     });
   }, [assetDefinition, merged, knownSurfaceDefinitionIds, isSceneContained]);
+
+  const [selectedSlotName, setSelectedSlotName] = useState<string | null>(null);
+  const selectedSlot =
+    slotViews.find((slot) => slot.slotName === selectedSlotName) ??
+    slotViews[0] ??
+    null;
 
   function shaderTier(slot: ShaderSlotKind): {
     shaderDefinitionId: string | null;
@@ -228,20 +242,79 @@ export function AssetAppearanceSection({
           ]}
         />
       )}
-      <MaterialSlotBindingsEditor
-        bindings={slotViews}
-        assetDefinitionId={assetDefinition.definitionId}
-        onChangeBinding={(slotName, _slotIndex, surface) =>
-          dispatchSurfaceOverride(slotName, surface)
-        }
-        renderSlotBadge={(slotName) => {
-          const view = slotViews.find((slot) => slot.slotName === slotName);
-          // "Default" is the normal state -- a chip only appears when
-          // an override (or a broken reference) is in play.
-          if (!view || view.tier === "definition") return null;
-          return <ScopeBadge tier={view.tier} />;
-        }}
-      />
+      {/* Master-detail (Plan 068.5, the Blender slot pattern): the
+          slot list stays visible; the SELECTED slot's surface editor
+          renders below it in the same panel. No popovers. */}
+      <Stack gap={4}>
+        {slotViews.map((slot) => {
+          const isSelected = slot.slotName === selectedSlot?.slotName;
+          return (
+            <Box
+              key={`${slot.slotIndex}:${slot.slotName}`}
+              onClick={() => setSelectedSlotName(slot.slotName)}
+              style={{
+                cursor: "pointer",
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1px solid ${
+                  isSelected
+                    ? "var(--sm-accent-blue)"
+                    : "var(--sm-panel-border)"
+                }`,
+                background: isSelected
+                  ? "var(--sm-active-bg)"
+                  : "var(--sm-color-surface0)"
+              }}
+            >
+              <Group gap="sm" wrap="nowrap">
+                <ColorSwatch
+                  color={previewColorForBinding(slot.surface, surfaceDefinitions)}
+                  size={18}
+                  style={{ flexShrink: 0 }}
+                />
+                <Text
+                  size="sm"
+                  fw={500}
+                  truncate
+                  style={{ flex: 1, minWidth: 0 }}
+                >
+                  {slot.slotName}
+                </Text>
+                {slot.tier !== "definition" ? (
+                  <ScopeBadge tier={slot.tier} />
+                ) : null}
+              </Group>
+            </Box>
+          );
+        })}
+        {slotViews.length === 0 ? (
+          <Text size="xs" c="var(--sm-color-overlay0)">
+            This asset does not declare any authored material slots in its
+            source mesh.
+          </Text>
+        ) : null}
+      </Stack>
+      {selectedSlot ? (
+        <Stack gap="xs">
+          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+            Surface: {selectedSlot.slotName}
+          </Text>
+          <SurfaceBindingEditor
+            value={selectedSlot.surface}
+            allowedContext="universal"
+            layerStackVariant="inline"
+            paintOwner={{
+              scope: "instance-slot",
+              instanceId: instance.instanceId,
+              assetDefinitionId: assetDefinition.definitionId,
+              slotName: selectedSlot.slotName
+            }}
+            onChange={(surface) =>
+              dispatchSurfaceOverride(selectedSlot.slotName, surface)
+            }
+          />
+        </Stack>
+      ) : null}
       <ShaderSlotEditor
         renderSlotBadge={(slot) => {
           const tier = slot === "deform" ? deform.tier : effect.tier;

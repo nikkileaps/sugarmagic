@@ -26,6 +26,7 @@ export interface LayerMaskPopoverProps {
   paintOwner:
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "instance-slot" }>, "layerId">
     | null;
   layerId: string;
   onApply: (nextMask: Mask) => void;
@@ -98,6 +99,10 @@ export function LayerMaskPopover({
                 : null
             }
             onChange={setDraftMask}
+            onCommitPainted={(nextMask) => {
+              onApply(cloneMask(nextMask));
+              setOpened(false);
+            }}
           />
           <Button
             size="compact-sm"

@@ -42,6 +42,11 @@ export interface MaskEditorProps {
   allowPainted?: boolean;
   paintTarget?: PaintedMaskTargetAddress | null;
   onChange: (next: Mask) => void;
+  /** Plan 068.4 — commit the mask THROUGH the host's apply path and
+   *  enter paint mode. Draft-buffered hosts (LayerMaskPopover) must
+   *  persist before arming: arming closes the popover chain, and a
+   *  draft dies with it (shipped bug, 2026-07-12). */
+  onCommitPainted?: (next: Mask) => void;
 }
 
 export function MaskEditor({
@@ -50,7 +55,8 @@ export function MaskEditor({
   allowedContext,
   allowPainted = false,
   paintTarget = null,
-  onChange
+  onChange,
+  onCommitPainted
 }: MaskEditorProps) {
   const {
     textureDefinitions,
@@ -77,7 +83,12 @@ export function MaskEditor({
           activeMaskPaintTarget.assetDefinitionId === paintTarget.assetDefinitionId &&
           activeMaskPaintTarget.slotName === paintTarget.slotName &&
           activeMaskPaintTarget.layerId === paintTarget.layerId
-        : false;
+        : paintTarget?.scope === "instance-slot"
+          ? activeMaskPaintTarget?.scope === "instance-slot" &&
+            activeMaskPaintTarget.instanceId === paintTarget.instanceId &&
+            activeMaskPaintTarget.slotName === paintTarget.slotName &&
+            activeMaskPaintTarget.layerId === paintTarget.layerId
+          : false;
 
   return (
     <Stack gap="xs">
@@ -106,10 +117,29 @@ export function MaskEditor({
                 });
                 break;
               case "painted":
-                onChange({
-                  kind: "painted",
-                  maskTextureId: null
-                });
+                // First pick = straight into painting (decided
+                // 2026-07-12): create the mask texture, COMMIT the
+                // mask, then enter paint mode. Commit must precede
+                // arming -- arming closes the popover chain, and a
+                // draft-buffered mask dies unapplied with it.
+                void (async () => {
+                  const created = await onCreateMaskTextureDefinition?.();
+                  const nextMask: Mask = {
+                    kind: "painted",
+                    maskTextureId: created?.definitionId ?? null
+                  };
+                  if (
+                    created &&
+                    paintTarget &&
+                    onSetMaskPaintTarget &&
+                    onCommitPainted
+                  ) {
+                    onCommitPainted(nextMask);
+                    onSetMaskPaintTarget(paintTarget);
+                    return;
+                  }
+                  onChange(nextMask);
+                })();
                 break;
               case "splatmap-channel":
                 onChange({ kind: "splatmap-channel", channelIndex: 0 });

@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
+import type { MaskTextureDefinition, SurfaceBinding } from "@sugarmagic/domain";
 import {
   createAppearanceLayer,
   createColorAppearanceContent,
   createDefaultRegion,
+  createDefaultScene,
   createDefaultSurfaceDefinition,
   createEmptyContentLibrarySnapshot,
   createInlineSurfaceBinding,
+  createPlacedAssetInstance,
+  createRegionSceneOverlay,
   createSurface,
   normalizeContentLibrarySnapshot
 } from "@sugarmagic/domain";
 import { reconcilePaintedMaskDefinitionsForSave } from "@sugarmagic/io";
 
-function createPaintedInlineSurface(maskTextureId: string) {
+function createPaintedInlineSurface(maskTextureId: string): SurfaceBinding<"universal"> {
   return createInlineSurfaceBinding(
     createSurface([
       createAppearanceLayer(createColorAppearanceContent(0x88aa66), {
@@ -23,7 +27,7 @@ function createPaintedInlineSurface(maskTextureId: string) {
         }
       })
     ])
-  );
+  ) as SurfaceBinding<"universal">;
 }
 
 describe("painted masks", () => {
@@ -89,7 +93,11 @@ describe("painted masks", () => {
       surface: createPaintedInlineSurface("little-world:mask-texture:kept")
     };
 
-    const reconciled = reconcilePaintedMaskDefinitionsForSave(contentLibrary, [region]);
+    const reconciled = reconcilePaintedMaskDefinitionsForSave(
+      contentLibrary,
+      [region],
+      []
+    );
 
     expect(
       (reconciled.contentLibrary.maskTextureDefinitions ?? []).map(
@@ -97,5 +105,97 @@ describe("painted masks", () => {
       )
     ).toEqual(["little-world:mask-texture:kept"]);
     expect(reconciled.orphanedMaskPaths).toEqual(["masks/orphaned.png"]);
+  });
+
+  it("keeps masks referenced ONLY by instance overrides and Scene records (Plan 068)", () => {
+    // Regression: pre-068 the save sweep scanned only definition
+    // slots + landscape, so a mask painted on an instance override
+    // was DELETED (definition + png) at the next save.
+    const contentLibrary = createEmptyContentLibrarySnapshot("little-world");
+    const maskDefinition = (suffix: string): MaskTextureDefinition => ({
+      definitionId: `little-world:mask-texture:${suffix}`,
+      definitionKind: "mask-texture",
+      displayName: suffix,
+      source: {
+        relativeAssetPath: `masks/${suffix}.png`,
+        fileName: `${suffix}.png`,
+        mimeType: "image/png"
+      },
+      format: "r8",
+      resolution: [512, 512]
+    });
+    contentLibrary.maskTextureDefinitions = [
+      maskDefinition("base-instance"),
+      maskDefinition("scene-instance"),
+      maskDefinition("scene-record")
+    ];
+
+    const region = createDefaultRegion({
+      regionId: "glade",
+      displayName: "Glade"
+    });
+    region.placedAssets.push(
+      createPlacedAssetInstance({
+        assetDefinitionId: "asset:outcrop",
+        surfaceSlotOverrides: [
+          {
+            slotName: "stone",
+            surface: createPaintedInlineSurface(
+              "little-world:mask-texture:base-instance"
+            )
+          }
+        ]
+      })
+    );
+
+    const scene = createDefaultScene({
+      sceneId: "scene:snowy",
+      regionOverlays: {
+        glade: createRegionSceneOverlay({
+          placedAssets: [
+            createPlacedAssetInstance({
+              assetDefinitionId: "asset:bench",
+              surfaceSlotOverrides: [
+                {
+                  slotName: "wood",
+                  surface: createPaintedInlineSurface(
+                    "little-world:mask-texture:scene-instance"
+                  )
+                }
+              ]
+            })
+          ],
+          assetAppearanceOverrides: {
+            "some-base-instance": {
+              surfaceSlotOverrides: [
+                {
+                  slotName: "roof",
+                  surface: createPaintedInlineSurface(
+                    "little-world:mask-texture:scene-record"
+                  )
+                }
+              ]
+            }
+          }
+        })
+      }
+    });
+
+    const reconciled = reconcilePaintedMaskDefinitionsForSave(
+      contentLibrary,
+      [region],
+      [scene]
+    );
+
+    expect(
+      (reconciled.contentLibrary.maskTextureDefinitions ?? [])
+        .map((definition) => definition.definitionId)
+        .sort()
+    ).toEqual([
+      "little-world:mask-texture:base-instance",
+      "little-world:mask-texture:scene-instance",
+      "little-world:mask-texture:scene-record"
+    ]);
+    expect(reconciled.orphanedMaskPaths).toEqual([]);
   });
 });

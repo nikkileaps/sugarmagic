@@ -9,6 +9,7 @@ import type {
   ContentLibrarySnapshot,
   GameProject,
   RegionDocument,
+  Scene,
   Surface,
   SurfaceBinding
 } from "@sugarmagic/domain";
@@ -116,9 +117,27 @@ function collectPaintedMaskTextureIdsFromBinding(
   }
 }
 
+function collectPaintedMaskTextureIdsFromInstances(
+  instances: Array<{
+    surfaceSlotOverrides?: Array<{ surface: SurfaceBinding }> | undefined;
+  }>,
+  destination: Set<string>
+): void {
+  for (const instance of instances) {
+    for (const slotOverride of instance.surfaceSlotOverrides ?? []) {
+      collectPaintedMaskTextureIdsFromBinding(slotOverride.surface, destination);
+    }
+  }
+}
+
 export function reconcilePaintedMaskDefinitionsForSave(
   contentLibrary: ContentLibrarySnapshot,
-  regions: RegionDocument[]
+  regions: RegionDocument[],
+  /** Plan 068 — scenes carry painted masks too (scene-contained
+   *  instances' inline surfaces and per-Scene appearance override
+   *  records). Omitting them here DELETED still-referenced masks at
+   *  save; every caller must pass the project's scenes. */
+  scenes: Scene[]
 ): PaintedMaskSaveReconciliationResult {
   for (const definition of contentLibrary.surfaceDefinitions ?? []) {
     assertReusableSurfaceHasNoPaintedMasks(
@@ -137,6 +156,30 @@ export function reconcilePaintedMaskDefinitionsForSave(
   for (const region of regions) {
     for (const slot of region.landscape.surfaceSlots) {
       collectPaintedMaskTextureIdsFromBinding(slot.surface, referencedMaskTextureIds);
+    }
+    // Plan 068.1 -- per-instance surface overrides on base placements.
+    collectPaintedMaskTextureIdsFromInstances(
+      region.placedAssets,
+      referencedMaskTextureIds
+    );
+  }
+
+  for (const scene of scenes) {
+    for (const overlay of Object.values(scene.regionOverlays)) {
+      // Scene-contained instances' own overrides...
+      collectPaintedMaskTextureIdsFromInstances(
+        overlay.placedAssets,
+        referencedMaskTextureIds
+      );
+      // ...and per-Scene restyles of base placements (Plan 068.2).
+      for (const record of Object.values(overlay.assetAppearanceOverrides ?? {})) {
+        for (const slotOverride of record.surfaceSlotOverrides ?? []) {
+          collectPaintedMaskTextureIdsFromBinding(
+            slotOverride.surface,
+            referencedMaskTextureIds
+          );
+        }
+      }
     }
   }
 
@@ -334,7 +377,8 @@ export async function saveProjectWithManagedFiles(
 ): Promise<SaveProjectResult> {
   const reconciliation = reconcilePaintedMaskDefinitionsForSave(
     active.contentLibrary,
-    active.regions
+    active.regions,
+    active.gameProject.scenes ?? []
   );
 
   await writeJsonFile(active.handle, [PROJECT_FILE], active.gameProject);

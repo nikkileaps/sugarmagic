@@ -9,14 +9,18 @@ import { ActionIcon, Group, Menu, Stack, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import type {
   Layer,
+  Mask,
   PaintedMaskTargetAddress,
   Surface,
   SurfaceContext
 } from "@sugarmagic/domain";
-import { SortableList } from "@sugarmagic/ui";
+import { MaskPreview, SortableList } from "@sugarmagic/ui";
+import { LayerDetailPanel } from "./LayerDetailPanel";
 import { LayerMaskPopover } from "./LayerMaskPopover";
 import { LayerSettingsPopover } from "./LayerSettingsPopover";
+import { MaskEditor } from "./MaskEditor";
 import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
+import { sampleMask } from "./maskSampling";
 import { cloneLayer, createDefaultLayer } from "./utils";
 
 export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> {
@@ -26,8 +30,14 @@ export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> 
   paintOwner:
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "instance-slot" }>, "layerId">
     | null;
   onChangeSurface: (surface: Surface<C>) => void;
+  /** "popover" (default) = the legacy per-row settings/mask popovers.
+   *  "inline" = master-detail (Plan 068.5): the SELECTED layer's
+   *  settings and mask render below the list, accordion-style; no
+   *  popovers, edits commit live. */
+  variant?: "popover" | "inline";
 }
 
 export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
@@ -35,7 +45,8 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   allowedContext,
   allowPainted,
   paintOwner,
-  onChangeSurface
+  onChangeSurface,
+  variant = "popover"
 }: LayerStackViewProps<C>) {
   const { grassTypeDefinitions, flowerTypeDefinitions, rockTypeDefinitions } =
     useSurfaceAuthoring();
@@ -186,44 +197,51 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
               </Text>
             )
           }
-          renderLeading={(item) => (
-            <Group gap="xs" wrap="nowrap">
-              <LayerMaskPopover
-                value={item.layer.mask}
-                allowedContext={allowedContext}
-                allowPainted={allowPainted}
-                paintOwner={paintOwner}
-                layerId={item.layer.layerId}
-                onActivate={() => setSelectedLayerId(item.id)}
-                onApply={(nextMask) =>
-                  commitLayers(
-                    surface.layers.map((layer) =>
-                      layer.layerId === item.id
-                        ? {
-                            ...cloneLayer(layer),
-                            mask: nextMask
-                          }
-                        : cloneLayer(layer)
-                    )
-                  )
-                }
+          renderLeading={(item) =>
+            variant === "inline" ? (
+              <MaskPreview
+                size={24}
+                sample={(u, v) => sampleMask(item.layer.mask, u, v)}
               />
-              <LayerSettingsPopover
-                layer={item.layer}
-                isBaseLayer={surface.layers[0]?.layerId === item.id}
-                onActivate={() => setSelectedLayerId(item.id)}
-                onChange={(nextLayer) =>
-                  commitLayers(
-                    surface.layers.map((layer) =>
-                      layer.layerId === nextLayer.layerId
-                        ? cloneLayer(nextLayer)
-                        : cloneLayer(layer)
+            ) : (
+              <Group gap="xs" wrap="nowrap">
+                <LayerMaskPopover
+                  value={item.layer.mask}
+                  allowedContext={allowedContext}
+                  allowPainted={allowPainted}
+                  paintOwner={paintOwner}
+                  layerId={item.layer.layerId}
+                  onActivate={() => setSelectedLayerId(item.id)}
+                  onApply={(nextMask) =>
+                    commitLayers(
+                      surface.layers.map((layer) =>
+                        layer.layerId === item.id
+                          ? {
+                              ...cloneLayer(layer),
+                              mask: nextMask
+                            }
+                          : cloneLayer(layer)
+                      )
                     )
-                  )
-                }
-              />
-            </Group>
-          )}
+                  }
+                />
+                <LayerSettingsPopover
+                  layer={item.layer}
+                  isBaseLayer={surface.layers[0]?.layerId === item.id}
+                  onActivate={() => setSelectedLayerId(item.id)}
+                  onChange={(nextLayer) =>
+                    commitLayers(
+                      surface.layers.map((layer) =>
+                        layer.layerId === nextLayer.layerId
+                          ? cloneLayer(nextLayer)
+                          : cloneLayer(layer)
+                      )
+                    )
+                  }
+                />
+              </Group>
+            )
+          }
           canReorderItem={(_, index) => index > 0}
           canDeleteItem={(_, index) => index > 0 && surface.layers.length > 1}
           onToggle={(id, enabled) => {
@@ -285,6 +303,66 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
           }}
         />
       </Stack>
+      {variant === "inline"
+        ? (() => {
+            const selectedLayer = surface.layers.find(
+              (layer) => layer.layerId === effectiveSelectedLayerId
+            );
+            if (!selectedLayer) return null;
+            const commitMask = (nextMask: Mask) =>
+              commitLayers(
+                surface.layers.map((layer) =>
+                  layer.layerId === selectedLayer.layerId
+                    ? { ...cloneLayer(layer), mask: nextMask }
+                    : cloneLayer(layer)
+                )
+              );
+            return (
+              <Stack
+                gap="sm"
+                p="xs"
+                style={{
+                  border: "1px solid var(--sm-panel-border)",
+                  borderRadius: 8,
+                  background: "var(--sm-color-surface0)"
+                }}
+              >
+                <Text size="xs" fw={600} c="var(--sm-color-subtext)" truncate>
+                  {selectedLayer.displayName}
+                </Text>
+                <LayerDetailPanel
+                  layer={selectedLayer}
+                  isBaseLayer={
+                    surface.layers[0]?.layerId === selectedLayer.layerId
+                  }
+                  onChange={(nextLayer) =>
+                    commitLayers(
+                      surface.layers.map((layer) =>
+                        layer.layerId === nextLayer.layerId
+                          ? cloneLayer(nextLayer)
+                          : cloneLayer(layer)
+                      )
+                    )
+                  }
+                />
+                <MaskEditor
+                  value={selectedLayer.mask}
+                  allowedContext={allowedContext}
+                  allowPainted={allowPainted}
+                  paintTarget={
+                    paintOwner
+                      ? { ...paintOwner, layerId: selectedLayer.layerId }
+                      : null
+                  }
+                  // Live-commit: no draft buffer to lose (the popover
+                  // draft died with a shipped bug; see 068.5).
+                  onChange={commitMask}
+                  onCommitPainted={commitMask}
+                />
+              </Stack>
+            );
+          })()
+        : null}
     </Stack>
   );
 }

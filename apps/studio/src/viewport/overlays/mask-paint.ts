@@ -10,18 +10,25 @@
 
 import * as THREE from "three";
 import {
+  getActiveScene,
   getAssetDefinition,
   getMaskTextureDefinition,
   type AuthoringSession,
   type Layer,
   type MaskTextureDefinition,
   type PaintedMaskTargetAddress,
+  type PlacedAssetInstance,
   type RegionDocument,
   type RegionLandscapeState,
   type SurfaceBinding
 } from "@sugarmagic/domain";
 import { shallowEqual } from "@sugarmagic/shell";
-import { SCENE_OBJECT_MARKER_KEY } from "@sugarmagic/workspaces";
+import {
+  getLayoutWorkspaceForViewport,
+  SCENE_OBJECT_MARKER_KEY,
+  type InteractionController,
+  type NormalizedPointerEvent
+} from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "../overlay-context";
 
 interface MaskPaintBrushSettings {
@@ -73,12 +80,38 @@ function resolvePaintTarget(
       (candidate) => candidate.channelId === target.channelKey
     );
     layer = resolveInlinePaintLayer(slot?.surface, target.layerId);
-  } else {
+  } else if (target.scope === "asset-slot") {
     const assetDefinition = getAssetDefinition(session.contentLibrary, target.assetDefinitionId);
     const slot = assetDefinition?.surfaceSlots.find(
       (candidate) => candidate.slotName === target.slotName
     );
     layer = resolveInlinePaintLayer(slot?.surface, target.layerId);
+  } else {
+    // Plan 068.4 -- the painted layer lives on a PLACED INSTANCE's
+    // override: the Scene restyle record, a scene-contained
+    // instance, or a base instance. layerIds are unique, so search
+    // every tier that can own an inline surface for this instance.
+    const activeScene = getActiveScene(session);
+    const overlay = activeScene?.regionOverlays[region.identity.id] ?? null;
+    const instance: PlacedAssetInstance | null =
+      region.placedAssets.find(
+        (candidate) => candidate.instanceId === target.instanceId
+      ) ??
+      overlay?.placedAssets.find(
+        (candidate) => candidate.instanceId === target.instanceId
+      ) ??
+      null;
+    const sceneRecordOverride = overlay?.assetAppearanceOverrides[
+      target.instanceId
+    ]?.surfaceSlotOverrides?.find(
+      (candidate) => candidate.slotName === target.slotName
+    );
+    const instanceOverride = instance?.surfaceSlotOverrides?.find(
+      (candidate) => candidate.slotName === target.slotName
+    );
+    layer =
+      resolveInlinePaintLayer(sceneRecordOverride?.surface, target.layerId) ??
+      resolveInlinePaintLayer(instanceOverride?.surface, target.layerId);
   }
 
   if (!layer || layer.mask.kind !== "painted" || !layer.mask.maskTextureId) {
@@ -179,13 +212,21 @@ function findSceneObjectMetadata(object: THREE.Object3D): {
 
 function matchesAssetSlotHit(
   hit: THREE.Intersection<THREE.Object3D>,
-  target: Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>
+  target: Extract<
+    PaintedMaskTargetAddress,
+    { scope: "asset-slot" } | { scope: "instance-slot" }
+  >
 ): THREE.Vector2 | null {
   if (!(hit.object instanceof THREE.Mesh) || !hit.uv) {
     return null;
   }
   const metadata = findSceneObjectMetadata(hit.object);
   if (!metadata || metadata.assetDefinitionId !== target.assetDefinitionId) {
+    return null;
+  }
+  // Instance-owned layers paint THIS placement only -- strokes on a
+  // sibling of the same asset must not land (Plan 068.4).
+  if (target.scope === "instance-slot" && metadata.instanceId !== target.instanceId) {
     return null;
   }
   const slotMetadata = hit.object.userData.sugarmagicMaterialSlots as
@@ -220,16 +261,43 @@ function findLandscapeHit(
 function findAssetSlotHit(
   root: THREE.Object3D,
   raycaster: THREE.Raycaster,
-  target: Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>
-): THREE.Vector2 | null {
+  target: Extract<
+    PaintedMaskTargetAddress,
+    { scope: "asset-slot" } | { scope: "instance-slot" }
+  >
+): { uv: THREE.Vector2; hit: THREE.Intersection<THREE.Object3D> } | null {
   const hits = raycaster.intersectObject(root, true);
   for (const hit of hits) {
     const uv = matchesAssetSlotHit(hit, target);
     if (uv) {
-      return uv;
+      return { uv, hit };
     }
   }
   return null;
+}
+
+/** Brush affordance: a ring hugging the painted surface. World size
+ *  is an APPROXIMATION of the texture-space brush (texel density per
+ *  mesh is unknowable cheaply); it signals where, not exactly how
+ *  wide. */
+function createPaintBrushRing(): THREE.Mesh {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 1, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0xf9e2af,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    })
+  );
+  ring.renderOrder = 1001;
+  ring.visible = false;
+  ring.name = "mask-paint-brush-ring";
+  ring.raycast = () => {};
+  return ring;
 }
 
 export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
@@ -306,11 +374,12 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
         uv = pointerUvOnLandscape(landscapeHit.point, currentTarget.landscape);
       }
     } else {
-      uv = findAssetSlotHit(
-        context.authoredRoot,
-        raycaster,
-        currentTarget.address
-      );
+      uv =
+        findAssetSlotHit(
+          context.authoredRoot,
+          raycaster,
+          currentTarget.address
+        )?.uv ?? null;
     }
 
     if (!uv) {
@@ -323,6 +392,123 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
     return true;
   }
 
+  // Plan 068.4 -- in the LAYOUT workspace, painting joins the layout
+  // InputRouter as a controller (top controller wins: click-select,
+  // gizmo, and scatter brush are suspended while the brush is armed).
+  // The raw DOM listeners below remain ONLY for the Landscape
+  // workspace, which has no router; they no-op while the controller
+  // is pushed.
+  const brushRing = createPaintBrushRing();
+  context.overlayRoot.add(brushRing);
+  let controllerPushed = false;
+  let strokeActive = false;
+  let activeBuildWorkspaceKind: string | null = null;
+
+  function updateBrushRing(clientX: number, clientY: number): void {
+    if (
+      !currentTarget ||
+      currentTarget.address.scope === "landscape-channel"
+    ) {
+      brushRing.visible = false;
+      return;
+    }
+    const bounds = context.domElement.getBoundingClientRect();
+    pointer.x = ((clientX - bounds.left) / bounds.width) * 2 - 1;
+    pointer.y = -(((clientY - bounds.top) / bounds.height) * 2 - 1);
+    raycaster.setFromCamera(pointer, context.getCamera());
+    const result = findAssetSlotHit(
+      context.authoredRoot,
+      raycaster,
+      currentTarget.address
+    );
+    if (!result) {
+      brushRing.visible = false;
+      return;
+    }
+    const worldNormal = result.hit.face
+      ? result.hit.face.normal
+          .clone()
+          .transformDirection(result.hit.object.matrixWorld)
+      : new THREE.Vector3(0, 1, 0);
+    brushRing.visible = true;
+    brushRing.position
+      .copy(result.hit.point)
+      .addScaledVector(worldNormal, 0.02);
+    brushRing.lookAt(result.hit.point.clone().add(worldNormal));
+    const ringScale = Math.max(0.08, currentBrushSettings.radius * 0.09);
+    brushRing.scale.setScalar(ringScale);
+  }
+
+  const paintController: InteractionController = {
+    id: "mask-paint-controller",
+    onPointerDown(event: NormalizedPointerEvent): boolean {
+      if (event.button !== 0) {
+        return false;
+      }
+      // Swallow every left press while the brush is armed -- a miss
+      // must not fall through to click-select/deselect underneath.
+      strokeActive = paintAtClientPosition(
+        event.screenX,
+        event.screenY,
+        currentBrushSettings
+      );
+      return true;
+    },
+    onPointerMove(event: NormalizedPointerEvent): void {
+      if (!strokeActive) {
+        return;
+      }
+      paintAtClientPosition(event.screenX, event.screenY, currentBrushSettings);
+      updateBrushRing(event.screenX, event.screenY);
+    },
+    onPointerUp(): void {
+      strokeActive = false;
+      void commitPaintIfNeeded();
+    },
+    onHoverMove(event: NormalizedPointerEvent): void {
+      updateBrushRing(event.screenX, event.screenY);
+    },
+    onHoverLeave(): void {
+      brushRing.visible = false;
+    },
+    onCancel(): void {
+      strokeActive = false;
+      void commitPaintIfNeeded();
+    }
+  };
+
+  function syncControllerForTarget(): void {
+    // Controller mode is a LAYOUT-workspace arrangement; other build
+    // workspaces (Landscape) keep the raw-listener path. Without this
+    // gate, switching workspaces mid-paint stranded the controller in
+    // the router and suppressed landscape strokes until Done.
+    const wantsController =
+      Boolean(currentTarget) &&
+      currentTarget!.address.scope !== "landscape-channel" &&
+      activeBuildWorkspaceKind === "layout";
+    const layout = getLayoutWorkspaceForViewport(context.domElement);
+    if (wantsController && layout && !controllerPushed) {
+      layout.inputRouter.pushController(paintController);
+      controllerPushed = true;
+    } else if (!wantsController && controllerPushed) {
+      layout?.inputRouter.popController(paintController.id);
+      controllerPushed = false;
+      brushRing.visible = false;
+      strokeActive = false;
+    }
+  }
+
+  // Escape exits paint mode (Done button's keyboard sibling). The
+  // router only routes Escape mid-gesture, so this listens directly.
+  function handlePaintModeKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || !controllerPushed) {
+      return;
+    }
+    void commitPaintIfNeeded();
+    context.stateAccess.setActiveMaskPaintTarget(null);
+  }
+  window.addEventListener("keydown", handlePaintModeKeydown);
+
   const unsubscribeProjection = context.subscribeToProjection(
     ({ project, shell, viewport }) => ({
       activeProductMode: shell.activeProductMode,
@@ -333,6 +519,7 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
       activeRegion: project.session ? context.stateAccess.getActiveRegion() : null
     }),
     (slice) => {
+      activeBuildWorkspaceKind = slice.activeBuildWorkspaceKind ?? null;
       // Mask painting has no sketch concept; the pencil coerces to
       // paint so a stale mask target can't erase by accident.
       currentBrushSettings = {
@@ -348,6 +535,7 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
         paintCanvas = null;
         paintDirty = false;
         pointerId = null;
+        syncControllerForTarget();
         return;
       }
 
@@ -361,6 +549,7 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
         currentTarget = null;
         paintCanvas = null;
         paintDirty = false;
+        syncControllerForTarget();
         return;
       }
 
@@ -385,7 +574,10 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
         )
       ) {
         void loadCanvasForTarget(resolvedTarget);
+      } else {
+        currentTarget = resolvedTarget;
       }
+      syncControllerForTarget();
     },
     { equalityFn: shallowEqual }
   );
@@ -399,6 +591,11 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
   }
 
   function handlePointerDown(event: PointerEvent) {
+    if (controllerPushed) {
+      // Layout painting rides the InputRouter controller; the raw
+      // path would double-paint every stroke.
+      return;
+    }
     if (!paintAtClientPosition(event.clientX, event.clientY, currentBrushSettings)) {
       return;
     }
@@ -408,7 +605,7 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
   }
 
   function handlePointerMove(event: PointerEvent) {
-    if (pointerId !== event.pointerId) {
+    if (controllerPushed || pointerId !== event.pointerId) {
       return;
     }
     paintAtClientPosition(event.clientX, event.clientY, currentBrushSettings);
@@ -421,6 +618,16 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
 
   return () => {
     unsubscribeProjection();
+    if (controllerPushed) {
+      getLayoutWorkspaceForViewport(context.domElement)?.inputRouter.popController(
+        paintController.id
+      );
+      controllerPushed = false;
+    }
+    window.removeEventListener("keydown", handlePaintModeKeydown);
+    context.overlayRoot.remove(brushRing);
+    brushRing.geometry.dispose();
+    (brushRing.material as THREE.Material).dispose();
     context.domElement.removeEventListener("pointerdown", handlePointerDown);
     context.domElement.removeEventListener("pointermove", handlePointerMove);
     context.domElement.removeEventListener("pointerup", finishPointer);

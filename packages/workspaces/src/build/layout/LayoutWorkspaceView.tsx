@@ -25,6 +25,7 @@ import {
   Menu,
   Modal,
   NumberInput,
+  SegmentedControl,
   Select,
   Stack,
   Text,
@@ -383,6 +384,17 @@ export function useLayoutWorkspaceView(
   const scatterBrushSettings = useVanillaStoreSelector(
     viewportStore,
     (state) => state.scatterBrushSettings
+  );
+  // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
+  // layer is armed; the mask-paint overlay owns the strokes, this
+  // view owns the toolbar.
+  const maskPaintTarget = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.activeMaskPaintTarget
+  );
+  const maskBrushSettings = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.brushSettings
   );
   // Settings survive disarm/re-arm within the session (palette and
   // sliders come back as you left them).
@@ -1917,7 +1929,85 @@ export function useLayoutWorkspaceView(
             }}
           />
         </Box>
-        {scatterBrushSettings ? (
+        {maskPaintTarget ? (
+          <Box style={{ pointerEvents: "auto" }}>
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                Paint Mask
+              </Text>
+              <SegmentedControl
+                size="xs"
+                value={maskBrushSettings?.mode === "erase" ? "erase" : "paint"}
+                onChange={(mode) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: maskBrushSettings?.radius ?? 4,
+                    strength: maskBrushSettings?.strength ?? 0.25,
+                    falloff: maskBrushSettings?.falloff ?? 0.7,
+                    mode: mode === "erase" ? "erase" : "paint"
+                  })
+                }
+                data={[
+                  { value: "paint", label: "Paint" },
+                  { value: "erase", label: "Erase" }
+                ]}
+              />
+              <ToolOptionSlider
+                label="Radius"
+                min={0.5}
+                max={16}
+                step={0.5}
+                value={maskBrushSettings?.radius ?? 4}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: value,
+                    strength: maskBrushSettings?.strength ?? 0.25,
+                    falloff: maskBrushSettings?.falloff ?? 0.7,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Strength"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={maskBrushSettings?.strength ?? 0.25}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: maskBrushSettings?.radius ?? 4,
+                    strength: value,
+                    falloff: maskBrushSettings?.falloff ?? 0.7,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Falloff"
+                min={0}
+                max={1}
+                step={0.05}
+                value={maskBrushSettings?.falloff ?? 0.7}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: maskBrushSettings?.radius ?? 4,
+                    strength: maskBrushSettings?.strength ?? 0.25,
+                    falloff: value,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <Button
+                size="compact-xs"
+                variant="filled"
+                onClick={() =>
+                  viewportStore.getState().setActiveMaskPaintTarget(null)
+                }
+              >
+                Done
+              </Button>
+            </ToolOptionsBar>
+          </Box>
+        ) : scatterBrushSettings ? (
           <Box style={{ pointerEvents: "auto" }}>
             <ToolOptionsBar>
               <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
