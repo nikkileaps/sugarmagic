@@ -9,6 +9,12 @@
 export * from "./ShaderRuntime";
 export * from "./applyShaderToRenderable";
 export * from "./asset-scatter";
+export { sampleMeshTrianglesForDensity } from "./mesh-triangle-sampler";
+export {
+  registerLivePaintedMask,
+  sampleLivePaintedMask,
+  clearLivePaintedMasks
+} from "./painted-mask-live";
 export * from "./authoredAssetResolver";
 export * from "./billboard";
 export * from "./captureFrame";

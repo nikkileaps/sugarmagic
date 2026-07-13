@@ -20,8 +20,14 @@ import { LayerMaskPopover } from "./LayerMaskPopover";
 import { LayerSettingsPopover } from "./LayerSettingsPopover";
 import { MaskEditor } from "./MaskEditor";
 import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
-import { sampleMask } from "./maskSampling";
+import { useMaskPreviewSampler } from "./maskSampling";
 import { cloneLayer, createDefaultLayer } from "./utils";
+
+/** Hook-per-row wrapper: painted masks preview their real pixels. */
+function LayerMaskThumbnail({ mask, size }: { mask: Mask; size: number }) {
+  const sample = useMaskPreviewSampler(mask);
+  return <MaskPreview size={size} sample={sample} />;
+}
 
 export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> {
   surface: Surface<C>;
@@ -199,10 +205,7 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
           }
           renderLeading={(item) =>
             variant === "inline" ? (
-              <MaskPreview
-                size={24}
-                sample={(u, v) => sampleMask(item.layer.mask, u, v)}
-              />
+              <LayerMaskThumbnail mask={item.layer.mask} size={24} />
             ) : (
               <Group gap="xs" wrap="nowrap">
                 <LayerMaskPopover

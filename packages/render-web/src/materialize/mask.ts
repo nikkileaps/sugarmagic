@@ -30,6 +30,11 @@ export interface LayerMaskMaterializeContext {
   contentLibrary: ContentLibrarySnapshot;
   assetResolver: AuthoredAssetResolver;
   uvNode: unknown;
+  /** Plan 068.8 -- painted masks sample the PAINT UV channel
+   *  (TEXCOORD_1) when the geometry carries one; authored UVs on
+   *  real assets overlap and are unpaintable. Falls back to uvNode
+   *  when absent. Only the painted kind uses this. */
+  paintUvNode?: unknown;
   splatmapWeightNode?: (channelIndex: number) => unknown | null;
 }
 
@@ -66,7 +71,10 @@ export function evaluateLayerMask(
       const resolvedTexture = context.assetResolver.resolveMaskTextureDefinition(
         definition
       );
-      const textureObject = texture(resolvedTexture, context.uvNode as never);
+      const textureObject = texture(
+        resolvedTexture,
+        (context.paintUvNode ?? context.uvNode) as never
+      );
       return textureObject.r;
     }
     case "splatmap-channel":

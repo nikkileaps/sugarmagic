@@ -53,6 +53,8 @@ export interface AssetAppearanceSectionProps {
   onCommand: (command: SemanticCommand) => void;
   onEditAssetDefinition?: (definitionId: string) => void;
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
+  /** Plan 068.8 -- bake a paint UV channel into the asset's GLB. */
+  onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
 }
 
 type EditScope = "base" | "scene";
@@ -76,7 +78,8 @@ export function AssetAppearanceSection({
   isSceneContained,
   onCommand,
   onEditAssetDefinition,
-  onEditShaderGraph
+  onEditShaderGraph,
+  onGenerateAssetPaintUvs
 }: AssetAppearanceSectionProps) {
   const { surfaceDefinitions, shaderDefinitions } = useSurfaceAuthoring();
   const [editScope, setEditScope] = useState<EditScope>("base");
@@ -127,6 +130,7 @@ export function AssetAppearanceSection({
   }, [assetDefinition, merged, knownSurfaceDefinitionIds, isSceneContained]);
 
   const [selectedSlotName, setSelectedSlotName] = useState<string | null>(null);
+  const [generatingPaintUvs, setGeneratingPaintUvs] = useState(false);
   const selectedSlot =
     slotViews.find((slot) => slot.slotName === selectedSlotName) ??
     slotViews[0] ??
@@ -216,14 +220,32 @@ export function AssetAppearanceSection({
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Appearance
         </Text>
-        {onEditAssetDefinition ? (
-          <Anchor
-            size="xs"
-            onClick={() => onEditAssetDefinition(assetDefinition.definitionId)}
-          >
-            Edit asset
-          </Anchor>
-        ) : null}
+        <Group gap="xs">
+          {onGenerateAssetPaintUvs ? (
+            <Anchor
+              size="xs"
+              c={generatingPaintUvs ? "dimmed" : undefined}
+              title="Generate a unique, non-overlapping UV channel for painting (rewrites the imported GLB; authored UVs untouched)"
+              onClick={() => {
+                if (generatingPaintUvs) return;
+                setGeneratingPaintUvs(true);
+                void onGenerateAssetPaintUvs(assetDefinition.definitionId).finally(
+                  () => setGeneratingPaintUvs(false)
+                );
+              }}
+            >
+              {generatingPaintUvs ? "Generating..." : "Generate Paint UVs"}
+            </Anchor>
+          ) : null}
+          {onEditAssetDefinition ? (
+            <Anchor
+              size="xs"
+              onClick={() => onEditAssetDefinition(assetDefinition.definitionId)}
+            >
+              Edit asset
+            </Anchor>
+          ) : null}
+        </Group>
       </Group>
       {isSceneContained ? (
         <Text size="xs" c="var(--sm-color-overlay0)">

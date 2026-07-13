@@ -144,7 +144,8 @@ function createPaintCanvas(definition: MaskTextureDefinition): HTMLCanvasElement
 function paintBrush(
   canvas: HTMLCanvasElement,
   uv: THREE.Vector2,
-  settings: MaskPaintBrushSettings
+  settings: MaskPaintBrushSettings,
+  radiusPx: number
 ): void {
   const context = canvas.getContext("2d", {
     willReadFrequently: true
@@ -155,7 +156,7 @@ function paintBrush(
 
   const x = uv.x * canvas.width;
   const y = (1 - uv.y) * canvas.height;
-  const brushRadius = Math.max(1, settings.radius * 12);
+  const brushRadius = Math.max(1, radiusPx);
   const gradient = context.createRadialGradient(x, y, 0, x, y, brushRadius);
   const strength = Math.max(0, Math.min(1, settings.strength));
   const edgeAlpha = Math.max(0, Math.min(1, strength * (1 - settings.falloff)));
@@ -210,6 +211,50 @@ function findSceneObjectMetadata(object: THREE.Object3D): {
   return null;
 }
 
+/** UV units per world meter at one hit triangle, measured on the
+ *  SAME uv attribute painting samples. This is what makes the brush
+ *  radius mean meters-on-the-surface: xatlas packs meshes into
+ *  hundreds of tiny islands (the outcrop: 923, median 0.013 uv), so
+ *  a fixed pixel stamp covers dozens of islands and paints confetti
+ *  no matter how correct the UVs are. */
+function uvPerMeterAtHit(
+  hit: THREE.Intersection<THREE.Object3D>
+): number | null {
+  const face = hit.face;
+  const mesh = hit.object as THREE.Mesh;
+  if (!face || !(mesh.geometry instanceof THREE.BufferGeometry)) {
+    return null;
+  }
+  const geometry = mesh.geometry;
+  const position = geometry.getAttribute("position");
+  const uvAttribute = geometry.getAttribute("uv1") ?? geometry.getAttribute("uv");
+  if (!position || !uvAttribute) {
+    return null;
+  }
+  const a = new THREE.Vector3()
+    .fromBufferAttribute(position, face.a)
+    .applyMatrix4(mesh.matrixWorld);
+  const b = new THREE.Vector3()
+    .fromBufferAttribute(position, face.b)
+    .applyMatrix4(mesh.matrixWorld);
+  const c = new THREE.Vector3()
+    .fromBufferAttribute(position, face.c)
+    .applyMatrix4(mesh.matrixWorld);
+  const worldArea =
+    new THREE.Vector3().crossVectors(b.sub(a), c.sub(a)).length() / 2;
+  const ua = new THREE.Vector2(uvAttribute.getX(face.a), uvAttribute.getY(face.a));
+  const ub = new THREE.Vector2(uvAttribute.getX(face.b), uvAttribute.getY(face.b));
+  const uc = new THREE.Vector2(uvAttribute.getX(face.c), uvAttribute.getY(face.c));
+  const uvArea =
+    Math.abs(
+      (ub.x - ua.x) * (uc.y - ua.y) - (uc.x - ua.x) * (ub.y - ua.y)
+    ) / 2;
+  if (worldArea < 1e-10 || uvArea < 1e-12) {
+    return null;
+  }
+  return Math.sqrt(uvArea / worldArea);
+}
+
 function matchesAssetSlotHit(
   hit: THREE.Intersection<THREE.Object3D>,
   target: Extract<
@@ -217,7 +262,10 @@ function matchesAssetSlotHit(
     { scope: "asset-slot" } | { scope: "instance-slot" }
   >
 ): THREE.Vector2 | null {
-  if (!(hit.object instanceof THREE.Mesh) || !hit.uv) {
+  // Paint UV channel first (Plan 068.8): three populates hit.uv1
+  // from the TEXCOORD_1 attribute when the geometry carries it.
+  const paintUv = hit.uv1 ?? hit.uv;
+  if (!(hit.object instanceof THREE.Mesh) || !paintUv) {
     return null;
   }
   const metadata = findSceneObjectMetadata(hit.object);
@@ -243,7 +291,7 @@ function matchesAssetSlotHit(
   if (!slot || slot.slotName !== target.slotName) {
     return null;
   }
-  return hit.uv;
+  return paintUv;
 }
 
 function findLandscapeHit(
@@ -342,15 +390,48 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
       return;
     }
     writeInFlight = true;
+    const committedTarget = currentTarget;
     try {
       await context.writeMaskTexture(
-        currentTarget.maskTextureId,
+        committedTarget.maskTextureId,
         context2d.getImageData(0, 0, paintCanvas.width, paintCanvas.height)
       );
       paintDirty = false;
+      // Scatter layers gated by this mask are CPU-built: force the
+      // owning renderable's shader application to re-run so grass
+      // reflects the stroke (appearance layers update via the live
+      // texture and don't need this).
+      if (committedTarget.address.scope === "instance-slot") {
+        context.stateAccess.invalidateRenderableShaders({
+          instanceId: committedTarget.address.instanceId
+        });
+      } else if (committedTarget.address.scope === "asset-slot") {
+        context.stateAccess.invalidateRenderableShaders({
+          assetDefinitionId: committedTarget.address.assetDefinitionId
+        });
+      }
     } finally {
       writeInFlight = false;
     }
+  }
+
+  function fillMask(mode: "paint" | "erase"): void {
+    if (!currentTarget || !paintCanvas) {
+      return;
+    }
+    const context2d = paintCanvas.getContext("2d", {
+      willReadFrequently: true
+    });
+    if (!context2d) {
+      return;
+    }
+    context2d.save();
+    context2d.fillStyle = mode === "erase" ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)";
+    context2d.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+    context2d.restore();
+    paintDirty = true;
+    context.previewMaskTexture(currentTarget.maskTextureId, paintCanvas);
+    void commitPaintIfNeeded();
   }
 
   function paintAtClientPosition(
@@ -368,25 +449,36 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
     raycaster.setFromCamera(pointer, context.getCamera());
 
     let uv: THREE.Vector2 | null = null;
+    let radiusPx = Math.max(1, brushSettings.radius * 12);
     if (currentTarget.address.scope === "landscape-channel") {
       const landscapeHit = findLandscapeHit(context.surfaceRoot, raycaster);
       if (landscapeHit && currentTarget.landscape) {
         uv = pointerUvOnLandscape(landscapeHit.point, currentTarget.landscape);
       }
     } else {
-      uv =
-        findAssetSlotHit(
-          context.authoredRoot,
-          raycaster,
-          currentTarget.address
-        )?.uv ?? null;
+      const result = findAssetSlotHit(
+        context.authoredRoot,
+        raycaster,
+        currentTarget.address
+      );
+      uv = result?.uv ?? null;
+      // Brush radius means METERS ON THE SURFACE for assets: map
+      // through the hit triangle's texel density so the stamp only
+      // reaches what the cursor actually covers.
+      const uvPerMeter = result ? uvPerMeterAtHit(result.hit) : null;
+      if (uvPerMeter) {
+        radiusPx = Math.min(
+          paintCanvas.width / 4,
+          Math.max(1, brushSettings.radius * uvPerMeter * paintCanvas.width)
+        );
+      }
     }
 
     if (!uv) {
       return false;
     }
 
-    paintBrush(paintCanvas, uv, brushSettings);
+    paintBrush(paintCanvas, uv, brushSettings, radiusPx);
     paintDirty = true;
     context.previewMaskTexture(currentTarget.maskTextureId, paintCanvas);
     return true;
@@ -435,8 +527,9 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
       .copy(result.hit.point)
       .addScaledVector(worldNormal, 0.02);
     brushRing.lookAt(result.hit.point.clone().add(worldNormal));
-    const ringScale = Math.max(0.08, currentBrushSettings.radius * 0.09);
-    brushRing.scale.setScalar(ringScale);
+    // Radius is world meters on the surface; ring geometry has unit
+    // outer radius, so scale IS the radius.
+    brushRing.scale.setScalar(Math.max(0.03, currentBrushSettings.radius));
   }
 
   const paintController: InteractionController = {
@@ -514,6 +607,7 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
       activeProductMode: shell.activeProductMode,
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       target: viewport.activeMaskPaintTarget,
+      fillRequest: viewport.maskPaintFillRequest,
       brushSettings: viewport.brushSettings ?? DEFAULT_BRUSH_SETTINGS,
       session: project.session,
       activeRegion: project.session ? context.stateAccess.getActiveRegion() : null
@@ -573,14 +667,29 @@ export const mountMaskPaintOverlay: ViewportOverlayFactory = (context) => {
                   : "")
         )
       ) {
-        void loadCanvasForTarget(resolvedTarget);
+        void loadCanvasForTarget(resolvedTarget).then(() => {
+          consumeFillRequest(slice.fillRequest);
+        });
       } else {
         currentTarget = resolvedTarget;
+        consumeFillRequest(slice.fillRequest);
       }
       syncControllerForTarget();
     },
     { equalityFn: shallowEqual }
   );
+
+  let consumedFillNonce = 0;
+  function consumeFillRequest(
+    request: { mode: "paint" | "erase"; nonce: number } | null
+  ): void {
+    if (!request || request.nonce === consumedFillNonce) {
+      return;
+    }
+    consumedFillNonce = request.nonce;
+    fillMask(request.mode);
+    context.stateAccess.clearMaskPaintFillRequest();
+  }
 
   async function finishPointer(event: PointerEvent) {
     if (pointerId !== event.pointerId) {

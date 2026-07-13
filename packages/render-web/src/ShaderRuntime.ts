@@ -1233,6 +1233,26 @@ function applyIRToPostProcess(
 }
 
 export class ShaderRuntime {
+  /**
+   * The landscape's baked ground-color map (stable texture identity;
+   * content refreshes per bake). Asset-slot scatter blades inherit
+   * their root color from this exactly like landscape blades do --
+   * without it, Card Foliage on a placed asset went dark (no floor
+   * to inherit; 2026-07-12). Registered by the landscape controller.
+   */
+  private ambientGroundColorMap: { texture: unknown; size: number } | null =
+    null;
+
+  setAmbientGroundColorMap(
+    map: { texture: unknown; size: number } | null
+  ): void {
+    this.ambientGroundColorMap = map;
+  }
+
+  getAmbientGroundColorMap(): { texture: unknown; size: number } | null {
+    return this.ambientGroundColorMap;
+  }
+
   private static readonly DEFAULT_MATERIAL_DISPOSAL_GRACE_MS = 2000;
   private contentLibrary: ContentLibrarySnapshot;
   private readonly compileProfile: RuntimeCompileProfile;
@@ -1594,6 +1614,12 @@ export class ShaderRuntime {
         contentLibrary: this.contentLibrary,
         assetResolver: this.assetResolver,
         uvNode: options.uvOverride ?? uv(),
+        // Paint UV channel (Plan 068.8): only offered when THIS
+        // geometry carries it; painted masks fall back to authored
+        // UVs otherwise.
+        paintUvNode: geometry.getAttribute("uv1")
+          ? tslAttribute("uv1", "vec2")
+          : undefined,
         splatmapWeightNode: options.splatmapWeightNode
       });
       const layerAlpha = (maskNode as { mul: (other: unknown) => unknown }).mul(

@@ -3,11 +3,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   createCapsuleFallback,
+  registerLivePaintedMask,
   createFallbackMesh,
   createRenderView,
   createRenderableShaderApplicationState,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
+  sanitizeRenderableVertexFormats,
   ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
   type RenderableShaderApplicationState,
@@ -267,6 +269,9 @@ async function createRenderableRoot(
   // propagate. Required for any rigged glTF (Player + NPC character
   // models post-Plan-038); harmless for static-mesh assets.
   const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
+  // No file on disk may crash the render loop (WebGPU rejects
+  // normalized float vertex formats; see renderableFallbacks).
+  sanitizeRenderableVertexFormats(renderable);
   // Populate matrixWorld for every node BEFORE measuring the bbox in
   // normalizeModelScale. SkinnedMesh.computeBoundingBox uses bone
   // matrixWorlds; without this update they're identity and the bbox
@@ -674,6 +679,23 @@ export function createAuthoringViewport(
           setActiveMaskPaintTarget(target) {
             options.stores.viewportStore.getState().setActiveMaskPaintTarget(target);
           },
+          clearMaskPaintFillRequest() {
+            options.stores.viewportStore.getState().clearMaskPaintFillRequest();
+          },
+          invalidateRenderableShaders(filter) {
+            for (const entry of objectMap.values()) {
+              const matches =
+                (filter.instanceId &&
+                  entry.object.instanceId === filter.instanceId) ||
+                (filter.assetDefinitionId &&
+                  entry.object.assetDefinitionId === filter.assetDefinitionId);
+              if (!matches) {
+                continue;
+              }
+              entry.shaderApplication.appliedShaderSignature = null;
+              entry.shaderApplication.appliedFileSources = null;
+            }
+          },
           setCameraQuaternion(quaternion: [number, number, number, number]) {
             options.stores.viewportStore.getState().setCameraQuaternion(quaternion);
           }
@@ -703,6 +725,8 @@ export function createAuthoringViewport(
           return options.writeMaskTexture(maskTextureId, imageData);
         },
         previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement) {
+          // Live pixels for CPU scatter placement (painted-mask-live).
+          registerLivePaintedMask(maskTextureId, canvas);
           const session = options.stores.projectStore.getState().session;
           if (!session) {
             return;
@@ -760,6 +784,21 @@ export function createAuthoringViewport(
 
     render() {
       renderView.render();
+    },
+
+    reloadAssetRenderables(assetDefinitionId) {
+      // Dropping the entries is enough: the next applyProjection pass
+      // (any store tick -- the caller's assetSources refresh provides
+      // one) finds no entry, no pending load, and re-schedules with
+      // the fresh source. Same convergence path as first load.
+      for (const [instanceId, entry] of [...objectMap.entries()]) {
+        if (entry.object.assetDefinitionId !== assetDefinitionId) {
+          continue;
+        }
+        authoredRoot.remove(entry.root);
+        disposeRenderableObject(entry.root);
+        objectMap.delete(instanceId);
+      }
     },
 
     subscribeFrame(listener) {

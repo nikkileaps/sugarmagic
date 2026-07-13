@@ -1,0 +1,8 @@
+xatlas.js / xatlas.wasm
+Vendored from the xatlasjs npm package (v0.2.0), MIT license.
+https://github.com/repalash/xatlas.js -- a WASM build of xatlas
+(https://github.com/jpcy/xatlas, MIT), the mesh parameterization
+library. Used by sugarmagic to generate the PAINT UV channel
+(TEXCOORD_1) for imported assets (Plan 068.8). Loaded at runtime by
+the xatlas-three UVUnwrapper worker; update by re-copying from the
+xatlasjs dist after a version bump.

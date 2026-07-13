@@ -279,6 +279,68 @@ authored UVs and sample a dedicated PAINT UV channel instead:
 - Third-party notice entry for xatlas; license-check the specific
   WASM wrapper before it lands.
 
+OUTCOME (2026-07-12, the long night): shipped and field-verified end
+to end — painted grass on the outcrop, one dot per click. Five
+distinct bugs wore one confetti-shaped symptom on the way:
+1. Blob-worker fetch: root-relative wasm URLs cannot resolve in a
+   blob worker; absolute URLs required.
+2. The xatlas wrapper marks float attributes `normalized`
+   (glTF-invalid); WebGPU has no normalized float vertex formats and
+   crashed createRenderPipeline. Bake sanitizes; the LOADER also
+   sanitizes every renderable (no file on disk may crash the render
+   loop).
+3. Brush scale: a fixed pixel stamp covered dozens of atlas islands
+   (outcrop: 923 islands, median 6px). Brush radius now means METERS
+   ON THE SURFACE via per-hit texel density.
+4. Split-brain mask sampling: GPU saw live paint, CPU scatter
+   placement raced the async resolver reload and read stale pixels.
+   Live painted-mask pixel registry; placement samples it first.
+   Stroke/fill commits explicitly invalidate the owning renderable
+   (deterministic rebuild, no emergent refresh chains).
+5. A zombie scatter build for a DELETED layer survived lease
+   bookkeeping (129k blades with a released material). The apply path
+   now name-sweeps every `asset-scatter:*` group before building —
+   orphans cannot survive an apply.
+Also shipped: Fill button (always black) in the Paint/Erase group,
+and TRUTHFUL mask thumbnails (real pixels, live-updating; the flat
+placeholder had made a black mask indistinguishable from white).
+Interim: asset blades inherit the LANDSCAPE ground bake (068.11
+replaces this with the asset's own compiled surface).
+
+### 068.11 — Asset surface bake: blades inherit the mesh's own compiled surface
+
+Nikki's correction (2026-07-12): grass painted on the outcrop must
+inherit the color of the ROCK'S OWN composited surface under each
+blade — her deliberately-painted green layer, gradients, scuffs, all
+compiled together — NOT the terrain. This is the landscape's
+ground-bake pattern generalized to arbitrary meshes, enabled by the
+paint UV atlas:
+
+- **Texture-space bake**: render each scatter-bearing slot's meshes
+  once with an UNLIT bake material — colorNode = the slot surface's
+  composited color (evaluateLayerStackToNodeSet, same nodes the real
+  material uses; no second compositor), vertexNode = paint UV
+  remapped to clip space. Ground-bake lessons apply verbatim:
+  readback + row-flip into a plain DataTexture (NEVER sample RTs from
+  scatter shaders), stable texture identity, content refreshes per
+  bake.
+- **Bake queue**: applies register bake requests; RenderView executes
+  them in the pre-render pass (the ground-bake slot) since the apply
+  path has no renderer.
+- **Blades sample the bake at their paint UV**: samples already carry
+  paintUv; pack it through the compute pipeline into an instanced
+  attribute (READ IN THE VERTEX STAGE — the instanced-attribute
+  fragment-stage lesson), card root color samples the bake DataTexture
+  with it. Terrain-bake inheritance remains the fallback when a slot
+  has no bake (first frames / no scatter).
+- **Refresh**: the same stroke-commit invalidation that rebuilds
+  scatter re-registers the bake, so painting the rock retints its
+  grass.
+
+Executes BEFORE 068.9/068.10 (the Paint Studio's 3D pane wants this
+bake anyway, and the parked Surfaces-preview mini-bake is the same
+machinery).
+
 ### 068.9 — Paint Studio: window + 3D view
 
 Full-screen paint editor, entered from a layer's Paint button (the

@@ -14,6 +14,11 @@ export interface WorkspaceViewport {
   resize: (width: number, height: number) => void;
   render: () => void;
   subscribeFrame: (listener: () => void) => () => void;
+  /** Plan 068.8 -- drop every renderable built from this asset
+   *  definition so the next projection pass reloads them (used after
+   *  the asset's source GLB is rewritten, e.g. paint-UV baking).
+   *  Optional: only the authoring viewport implements it. */
+  reloadAssetRenderables?: (assetDefinitionId: string) => void;
 }
 
 export type PlayerWorkspaceViewport = WorkspaceViewport;

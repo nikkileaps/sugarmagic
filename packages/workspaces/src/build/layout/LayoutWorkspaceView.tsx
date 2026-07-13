@@ -139,6 +139,8 @@ export interface LayoutWorkspaceViewProps {
   soundCueDefinitions: SoundCueDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
+  /** Plan 068.8 -- generate the paint UV channel for an asset. */
+  onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
   renderInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
   }) => ReactNode;
@@ -352,6 +354,7 @@ export function useLayoutWorkspaceView(
     soundCueDefinitions,
     onEditAssetDefinition,
     onImportAsset,
+    onGenerateAssetPaintUvs,
     renderInspectorSections
   } = props;
 
@@ -1648,6 +1651,7 @@ export function useLayoutWorkspaceView(
                 isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
                 onCommand={onCommand}
                 onEditAssetDefinition={onEditAssetDefinition}
+                onGenerateAssetPaintUvs={onGenerateAssetPaintUvs}
               />
             ) : null}
             <Stack gap="xs">
@@ -1935,27 +1939,48 @@ export function useLayoutWorkspaceView(
               <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
                 Paint Mask
               </Text>
-              <SegmentedControl
-                size="xs"
-                value={maskBrushSettings?.mode === "erase" ? "erase" : "paint"}
-                onChange={(mode) =>
-                  viewportStore.getState().setBrushSettings({
-                    radius: maskBrushSettings?.radius ?? 4,
-                    strength: maskBrushSettings?.strength ?? 0.25,
-                    falloff: maskBrushSettings?.falloff ?? 0.7,
-                    mode: mode === "erase" ? "erase" : "paint"
-                  })
-                }
-                data={[
-                  { value: "paint", label: "Paint" },
-                  { value: "erase", label: "Erase" }
-                ]}
-              />
+              {/* One group: Paint/Erase are exclusive brush modes,
+                  Fill is the bucket action living beside them
+                  (always floods BLACK -- "hide everywhere, then
+                  paint back what shows"). */}
+              <Button.Group>
+                {(["paint", "erase"] as const).map((mode) => (
+                  <Button
+                    key={mode}
+                    size="compact-xs"
+                    variant={
+                      (maskBrushSettings?.mode ?? "paint") === mode
+                        ? "filled"
+                        : "default"
+                    }
+                    onClick={() =>
+                      viewportStore.getState().setBrushSettings({
+                        radius: maskBrushSettings?.radius ?? 4,
+                        strength: maskBrushSettings?.strength ?? 0.25,
+                        falloff: maskBrushSettings?.falloff ?? 0.7,
+                        mode
+                      })
+                    }
+                  >
+                    {mode === "paint" ? "Paint" : "Erase"}
+                  </Button>
+                ))}
+                <Button
+                  size="compact-xs"
+                  variant="default"
+                  title="Fill the whole mask with black, then paint back what should show"
+                  onClick={() =>
+                    viewportStore.getState().requestMaskPaintFill("erase")
+                  }
+                >
+                  Fill
+                </Button>
+              </Button.Group>
               <ToolOptionSlider
                 label="Radius"
-                min={0.5}
-                max={16}
-                step={0.5}
+                min={0.1}
+                max={8}
+                step={0.1}
                 value={maskBrushSettings?.radius ?? 4}
                 onChange={(value) =>
                   viewportStore.getState().setBrushSettings({

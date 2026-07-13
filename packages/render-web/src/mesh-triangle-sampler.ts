@@ -69,6 +69,9 @@ export function sampleMeshTrianglesForDensity(options: {
   const positionAttribute = geometry.getAttribute("position");
   const normalAttribute = geometry.getAttribute("normal");
   const uvAttribute = geometry.getAttribute("uv");
+  // Paint UV channel (Plan 068.8) -- painted scatter masks sample
+  // this instead of authored UVs when the mesh carries it.
+  const paintUvAttribute = geometry.getAttribute("uv1");
   const colorAttribute = geometry.getAttribute("color");
   if (!positionAttribute || !normalAttribute || !uvAttribute) {
     return [];
@@ -212,6 +215,18 @@ export function sampleMeshTrianglesForDensity(options: {
       .add(uvB.clone().multiplyScalar(baryB))
       .add(uvC.clone().multiplyScalar(baryC));
 
+    let samplePaintUv: [number, number] | null = null;
+    if (paintUvAttribute) {
+      readUv(paintUvAttribute, record.aIndex, uvA);
+      readUv(paintUvAttribute, record.bIndex, uvB);
+      readUv(paintUvAttribute, record.cIndex, uvC);
+      const paintU =
+        uvA.x * baryA + uvB.x * baryB + uvC.x * baryC;
+      const paintV =
+        uvA.y * baryA + uvB.y * baryB + uvC.y * baryC;
+      samplePaintUv = [paintU, paintV];
+    }
+
     const vertexColorA = readVertexColor(colorAttribute, record.aIndex);
     const vertexColorB = readVertexColor(colorAttribute, record.bIndex);
     const vertexColorC = readVertexColor(colorAttribute, record.cIndex);
@@ -230,6 +245,7 @@ export function sampleMeshTrianglesForDensity(options: {
       position: transformedPosition.toArray() as [number, number, number],
       normal: transformedNormal.toArray() as [number, number, number],
       uv: [sampleUv.x, sampleUv.y],
+      paintUv: samplePaintUv,
       height: worldPosition.y,
       vertexColor:
         vertexColorA && vertexColorB && vertexColorC

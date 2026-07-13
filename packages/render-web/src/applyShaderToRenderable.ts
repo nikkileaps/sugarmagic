@@ -111,6 +111,38 @@ export function applyShaderToRenderable(
   }
 
   releaseShadersFromRenderable(renderable);
+  // Belt and braces (2026-07-12): scatter builds are ALSO swept by
+  // NAME. Lease bookkeeping lost a build once (a layer deleted while
+  // its build lived left 129k orphaned blades rendering with a
+  // released material); after this sweep, the only asset-scatter
+  // groups under a renderable are the ones this apply creates.
+  const orphanedScatterRoots: THREE.Object3D[] = [];
+  renderable.traverse((node) => {
+    if (node.name.startsWith("asset-scatter:")) {
+      orphanedScatterRoots.push(node);
+    }
+  });
+  for (const orphan of orphanedScatterRoots) {
+    orphan.parent?.remove(orphan);
+    orphan.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.geometry?.dispose();
+        const material = mesh.material;
+        if (Array.isArray(material)) {
+          material.forEach((entry) => entry.dispose());
+        } else {
+          material?.dispose();
+        }
+      }
+    });
+  }
+  if (orphanedScatterRoots.length > 0) {
+    console.warn("[render-web] swept orphaned asset-scatter builds", {
+      renderable: renderable.name,
+      count: orphanedScatterRoots.length
+    });
+  }
   const nextLeases: ShaderMaterialLease[] = [];
   const nextScatterBuilds: SurfaceScatterBuildResult[] = [];
   let meshCount = 0;

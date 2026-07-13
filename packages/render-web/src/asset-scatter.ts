@@ -91,6 +91,11 @@ export function buildScatterInstancesForAssetSlot(
       contentLibrary: options.contentLibrary,
       assetResolver: options.assetResolver,
       shaderRuntime: options.shaderRuntime,
+      // Blades on assets inherit the landscape floor color, same as
+      // field grass -- the runtime carries the bake (world-space
+      // instance origins make the shader's uv sampling line up).
+      groundColorMap:
+        options.shaderRuntime.getAmbientGroundColorMap?.() ?? null,
       enableGpuCompute: true,
       logger: options.logger
     });

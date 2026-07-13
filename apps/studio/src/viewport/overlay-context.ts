@@ -69,6 +69,16 @@ export interface ViewportOverlayStateAccess {
   ): boolean;
   clearLandscapeDraft(): void;
   setActiveMaskPaintTarget(target: PaintedMaskTargetAddress | null): void;
+  clearMaskPaintFillRequest(): void;
+  /** Plan 068.8 -- force a shader re-apply (and with it the CPU
+   *  scatter rebuild) for renderables matching the filter. Painted
+   *  scatter masks need this after stroke/fill commits: appearance
+   *  masks update through the live texture, but scatter instances
+   *  are CPU-built and only change when application re-runs. */
+  invalidateRenderableShaders(filter: {
+    instanceId?: string;
+    assetDefinitionId?: string;
+  }): void;
   setCameraQuaternion(
     quaternion: [number, number, number, number]
   ): void;

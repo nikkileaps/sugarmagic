@@ -20,7 +20,7 @@ import type {
 } from "@sugarmagic/domain";
 import { LabeledSlider, MaskPreview } from "@sugarmagic/ui";
 import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
-import { sampleMask } from "./maskSampling";
+import { useMaskPreviewSampler } from "./maskSampling";
 
 const MASK_KIND_OPTIONS = [
   { value: "always", label: "Always" },
@@ -58,6 +58,7 @@ export function MaskEditor({
   onChange,
   onCommitPainted
 }: MaskEditorProps) {
+  const maskPreviewSample = useMaskPreviewSampler(value);
   const {
     textureDefinitions,
     maskTextureDefinitions,
@@ -182,7 +183,7 @@ export function MaskEditor({
           }}
         />
         <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <MaskPreview sample={(u, v) => sampleMask(value, u, v)} />
+          <MaskPreview sample={maskPreviewSample} />
           <Stack gap={4} style={{ flex: 1 }}>
             {value.kind === "always" ? (
                   <Text size="xs" c="var(--sm-color-overlay0)">

@@ -7,6 +7,7 @@
  */
 
 import * as THREE from "three";
+import { sampleLivePaintedMask } from "../painted-mask-live";
 import { transformNormalToView, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import type {
@@ -46,6 +47,9 @@ export interface SurfaceScatterSample {
   position: [number, number, number];
   normal: [number, number, number];
   uv: [number, number];
+  /** Paint UV channel (Plan 068.8); null when the mesh has none.
+   *  Painted masks sample this, never the authored uv. */
+  paintUv?: [number, number] | null;
   height: number;
   coverageWeight?: number;
   splatmapWeights?: readonly number[] | null;
@@ -423,8 +427,18 @@ function samplePaintedMask(
   sample: SurfaceScatterSample,
   options: SurfaceScatterBuildOptions
 ): number | null {
+  // Painted masks live in the PAINT UV channel when the mesh has one
+  // (Plan 068.8); authored UVs on real assets overlap.
+  const uv = sample.paintUv ?? sample.uv;
+  // Live paint pixels first: the resolver texture's image swaps
+  // asynchronously on file refresh, and placement rebuilds raced it
+  // (filled-black masks still placed full grass off stale pixels).
+  const live = sampleLivePaintedMask(definition.definitionId, uv);
+  if (live !== null) {
+    return live;
+  }
   const texture = options.assetResolver.resolveMaskTextureDefinition(definition);
-  return sampleTextureChannel(texture, sample.uv, "r");
+  return sampleTextureChannel(texture, uv, "r");
 }
 
 function evaluateScatterMask(

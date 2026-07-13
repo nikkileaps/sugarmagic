@@ -41,6 +41,8 @@ import type {
   SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
+  getAssetDefinition,
+  getMaskTextureDefinition,
   createAuthoringSession,
   applyCommand,
   undoSession,
@@ -141,7 +143,9 @@ import {
   importCharacterAnimationDefinition,
   importCharacterModelDefinition,
   importAudioClipDefinition,
+  readBlobFile,
   readMaskFile,
+  writeBlobFile,
   reloadProject,
   importSourceAsset,
   createBlankMaskFile,
@@ -167,6 +171,7 @@ import {
 } from "@sugarmagic/shell";
 import {
   SurfaceAuthoringProvider,
+  type WorkspaceViewport,
   useBuildProductModeView,
   useDesignProductModeView,
   usePublishProductModeView,
@@ -187,6 +192,7 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import { LibraryPopover } from "./library/LibraryPopover";
@@ -1874,6 +1880,108 @@ export function App() {
     return readMaskFile(handle, definition.source.relativeAssetPath);
   }, []);
 
+  // Painted-mask preview cache (Plan 068.8 QoL): live pixels behind
+  // the inspector thumbnails. Filled lazily from disk, updated on
+  // every stroke/fill commit via handleWriteMaskTexture.
+  const paintedMaskPreviewCanvases = useRef(
+    new Map<string, HTMLCanvasElement>()
+  );
+  const paintedMaskPreviewLoads = useRef(new Set<string>());
+  const [paintedMaskPreviewVersion, setPaintedMaskPreviewVersion] =
+    useState(0);
+
+  const getPaintedMaskPreviewCanvas = useCallback(
+    (maskTextureId: string): HTMLCanvasElement | null => {
+      const cached = paintedMaskPreviewCanvases.current.get(maskTextureId);
+      if (cached) {
+        return cached;
+      }
+      if (!paintedMaskPreviewLoads.current.has(maskTextureId)) {
+        paintedMaskPreviewLoads.current.add(maskTextureId);
+        void (async () => {
+          const imageData = await handleReadMaskTexture(maskTextureId);
+          const { session: currentSession } = projectStore.getState();
+          const definition = currentSession
+            ? getMaskTextureDefinition(
+                currentSession.contentLibrary,
+                maskTextureId
+              )
+            : null;
+          const canvas = document.createElement("canvas");
+          canvas.width = imageData?.width ?? definition?.resolution[0] ?? 512;
+          canvas.height = imageData?.height ?? definition?.resolution[1] ?? 512;
+          const context2d = canvas.getContext("2d");
+          if (context2d && imageData) {
+            context2d.putImageData(imageData, 0, 0);
+          }
+          paintedMaskPreviewCanvases.current.set(maskTextureId, canvas);
+          paintedMaskPreviewLoads.current.delete(maskTextureId);
+          setPaintedMaskPreviewVersion((version) => version + 1);
+        })();
+      }
+      return null;
+    },
+    [handleReadMaskTexture]
+  );
+
+  const handleGenerateAssetPaintUvs = useCallback(
+    async (assetDefinitionId: string) => {
+      const { handle, session: currentSession } = projectStore.getState();
+      if (!handle || !currentSession) {
+        return;
+      }
+      const definition = getAssetDefinition(
+        currentSession.contentLibrary,
+        assetDefinitionId
+      );
+      if (!definition) {
+        window.alert(`Missing asset definition "${assetDefinitionId}".`);
+        return;
+      }
+      const pathSegments = definition.source.relativeAssetPath
+        .split("/")
+        .filter(Boolean);
+      const blob = await readBlobFile(handle, ...pathSegments);
+      if (!blob) {
+        window.alert(
+          `Asset file "${definition.source.relativeAssetPath}" was not found.`
+        );
+        return;
+      }
+      try {
+        const result = await bakePaintUvsIntoGlb(await blob.arrayBuffer());
+        await writeBlobFile(
+          handle,
+          pathSegments,
+          new Blob([result.glb], { type: "model/gltf-binary" })
+        );
+        // Drop the renderables FIRST: the refreshPaths store tick is
+        // what triggers the projection pass that re-schedules their
+        // loads. The reverse order rebuilt before dropping and left
+        // the asset invisible until some unrelated store tick.
+        workspaceViewportRef.current?.reloadAssetRenderables?.(
+          assetDefinitionId
+        );
+        await assetSourceStore
+          .getState()
+          .refreshPaths([definition.source.relativeAssetPath]);
+        if (result.unwrappedMeshCount === 0) {
+          window.alert(
+            "All meshes in this asset already carry paint UVs; nothing was regenerated."
+          );
+        }
+      } catch (error) {
+        console.error("[paint-uvs] generation failed", error);
+        window.alert(
+          `Paint UV generation failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    },
+    []
+  );
+
   const handleWriteMaskTexture = useCallback(
     async (maskTextureId: string, imageData: ImageData) => {
       const { handle, session: currentSession } = projectStore.getState();
@@ -1892,6 +2000,15 @@ export function App() {
         definition.source.relativeAssetPath,
         imageData
       );
+      // Keep the preview cache truthful on every commit.
+      const previewCanvas =
+        paintedMaskPreviewCanvases.current.get(maskTextureId) ??
+        document.createElement("canvas");
+      previewCanvas.width = imageData.width;
+      previewCanvas.height = imageData.height;
+      previewCanvas.getContext("2d")?.putImageData(imageData, 0, 0);
+      paintedMaskPreviewCanvases.current.set(maskTextureId, previewCanvas);
+      setPaintedMaskPreviewVersion((version) => version + 1);
       await assetSourceStore
         .getState()
         .refreshPaths([definition.source.relativeAssetPath]);
@@ -2097,6 +2214,10 @@ export function App() {
 
   // --- Viewport lifecycle (tied to the shared center viewport DOM) ---
   const viewportRef = useRef<HTMLDivElement>(null);
+  // The mounted WorkspaceViewport instance (Plan 068.8: paint-UV
+  // baking asks it to reload an asset's renderables after the source
+  // GLB is rewritten).
+  const workspaceViewportRef = useRef<WorkspaceViewport | null>(null);
 
   // --- Active region remains shell/project truth; the authoring viewport now
   // observes it directly via shell-store projection instead of a React effect.
@@ -2182,6 +2303,7 @@ export function App() {
           })
         );
     },
+    onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
     onOpenAssetsLibrary: (definitionId) => {
       setAssetsLibraryPreselectId(definitionId);
       shellStore.getState().setActiveLibrary("assets");
@@ -2563,6 +2685,7 @@ export function App() {
             ]
           });
     viewport.mount(viewportRef.current);
+    workspaceViewportRef.current = viewport;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         viewport.resize(entry.contentRect.width, entry.contentRect.height);
@@ -2572,6 +2695,7 @@ export function App() {
 
     return () => {
       observer.disconnect();
+      workspaceViewportRef.current = null;
       viewport.unmount();
     };
   }, [
@@ -2614,7 +2738,9 @@ export function App() {
       onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
       activeMaskPaintTarget,
       onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) =>
-        viewportStore.getState().setActiveMaskPaintTarget(target)
+        viewportStore.getState().setActiveMaskPaintTarget(target),
+      getPaintedMaskPreviewCanvas,
+      paintedMaskPreviewVersion
     }),
     [
       surfaceDefinitions,
@@ -2627,7 +2753,9 @@ export function App() {
       rockTypeDefinitions,
       handleCreateMaskTextureDefinition,
       handleImportMaskTextureDefinition,
-      activeMaskPaintTarget
+      activeMaskPaintTarget,
+      getPaintedMaskPreviewCanvas,
+      paintedMaskPreviewVersion
     ]
   );
 
