@@ -175,6 +175,11 @@ export const mountSurfaceBrushOverlay: ViewportOverlayFactory = (context) => {
       return { maskTextureId: existing.maskTextureId };
     }
 
+    // Ensure the asset has a paint UV channel before we create the mask
+    // (idempotent -- no-ops if it already does). A never-painted asset
+    // gets one baked automatically on this first stroke.
+    await context.ensureAssetPaintUvs(disc.assetDefinitionId);
+
     // Mint a blank painted mask (creates the backing PNG + registers the
     // definition in the session synchronously before we reference it).
     const definition = await context.createMaskTextureDefinition();

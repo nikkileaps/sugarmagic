@@ -63,6 +63,11 @@ export interface AssetSourceActions {
     projectStore: ProjectStore
   ) => void;
   refreshPaths: (relativeAssetPaths: string[]) => Promise<void>;
+  /** Publish a blob directly as the source for a path, bypassing the
+   *  disk re-read. Used right after writing a file whose bytes we still
+   *  hold in memory (painted masks), because the directory-handle read
+   *  can transiently miss a just-written file. */
+  setSource: (relativeAssetPath: string, blob: Blob) => void;
   stop: () => void;
 }
 
@@ -168,9 +173,26 @@ export function createAssetSourceStore() {
       }));
     }
 
+    function setSource(relativeAssetPath: string, blob: Blob) {
+      const path = relativeAssetPath.trim();
+      if (!path) {
+        return;
+      }
+      const previousUrl = get().sources[path];
+      const nextUrl = URL.createObjectURL(blob);
+      set((state) => ({
+        sources: { ...state.sources, [path]: nextUrl },
+        syncCount: state.syncCount + 1
+      }));
+      if (previousUrl && previousUrl !== nextUrl) {
+        URL.revokeObjectURL(previousUrl);
+      }
+    }
+
     return {
       sources: {},
       syncCount: 0,
+      setSource,
       start(handle, projectStore) {
         if (unsubscribeProject) {
           unsubscribeProject();

@@ -189,6 +189,7 @@ import {
   ModeBar,
   ProjectManagerDialog,
   ShellFrame,
+  ProgressToast,
   StatusBar,
   ViewportFrame,
   shellIcons,
@@ -1832,7 +1833,35 @@ export function App() {
     if (!definition) {
       return null;
     }
-    return readMaskFile(handle, definition.source.relativeAssetPath);
+    const relativeAssetPath = definition.source.relativeAssetPath;
+    // Prefer the asset-source blob -- the same source the renderer reads,
+    // and reliable. The raw directory-handle read (readMaskFile)
+    // intermittently returns null for files that DO exist (a
+    // FileSystemAccess handle-staleness quirk; the asset-source map reads
+    // the same file fine). Fall back to it only if there is no blob yet.
+    let result: ImageData | null = null;
+    const blobUrl = assetSourceStore.getState().sources[relativeAssetPath];
+    if (blobUrl) {
+      try {
+        const blob = await (await fetch(blobUrl)).blob();
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context2d = canvas.getContext("2d", { willReadFrequently: true });
+        if (context2d && bitmap.width > 0 && bitmap.height > 0) {
+          context2d.drawImage(bitmap, 0, 0);
+          result = context2d.getImageData(0, 0, bitmap.width, bitmap.height);
+        }
+        bitmap.close();
+      } catch {
+        result = null;
+      }
+    }
+    if (!result) {
+      result = await readMaskFile(handle, relativeAssetPath);
+    }
+    return result;
   }, []);
 
   // Painted-mask preview cache (Plan 068.8 QoL): live pixels behind
@@ -1937,6 +1966,20 @@ export function App() {
     []
   );
 
+  // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
+  // doesn't already have them. Wired into both the Surface Brush's
+  // first-touch setup and the Open-in-Studio entry so painting always
+  // has a paint channel without a manual step.
+  const handleEnsureAssetPaintUvs = useCallback(
+    async (assetDefinitionId: string) => {
+      if (workspaceViewportRef.current?.assetHasPaintUvs?.(assetDefinitionId)) {
+        return;
+      }
+      await handleGenerateAssetPaintUvs(assetDefinitionId);
+    },
+    [handleGenerateAssetPaintUvs]
+  );
+
   const handleWriteMaskTexture = useCallback(
     async (maskTextureId: string, imageData: ImageData) => {
       const { handle, session: currentSession } = projectStore.getState();
@@ -1964,9 +2007,22 @@ export function App() {
       previewCanvas.getContext("2d")?.putImageData(imageData, 0, 0);
       paintedMaskPreviewCanvases.current.set(maskTextureId, previewCanvas);
       setPaintedMaskPreviewVersion((version) => version + 1);
-      await assetSourceStore
-        .getState()
-        .refreshPaths([definition.source.relativeAssetPath]);
+      // Publish the just-painted pixels to the renderer DIRECTLY from
+      // memory instead of re-reading the file off the directory handle:
+      // that read transiently returns null for a just-written file, which
+      // left the mask texture blank on reload (the paint-persist bug).
+      const pngBlob = await new Promise<Blob | null>((resolve) =>
+        previewCanvas.toBlob((blob) => resolve(blob), "image/png")
+      );
+      if (pngBlob) {
+        assetSourceStore
+          .getState()
+          .setSource(definition.source.relativeAssetPath, pngBlob);
+      } else {
+        await assetSourceStore
+          .getState()
+          .refreshPaths([definition.source.relativeAssetPath]);
+      }
     },
     []
   );
@@ -2181,6 +2237,17 @@ export function App() {
   // --- Surface Studio (Plan 068.10) ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =
     useState<SurfaceStudioTarget | null>(null);
+  // Transient progress toast (Plan 068) -- e.g. while the scene reloads
+  // after the Surface Studio closes, so it doesn't read as a hang.
+  const [busyToast, setBusyToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!busyToast) {
+      return;
+    }
+    // Safety dismiss so a missed settle signal can't strand the toast.
+    const timeout = setTimeout(() => setBusyToast(null), 12000);
+    return () => clearTimeout(timeout);
+  }, [busyToast]);
   const surfaceStudioSurface = useMemo<Surface<"universal"> | null>(() => {
     if (!session || !surfaceStudioTarget) {
       return null;
@@ -2339,7 +2406,12 @@ export function App() {
         );
     },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
-    onOpenSurfaceStudio: setSurfaceStudioTarget,
+    onOpenSurfaceStudio: async (target) => {
+      // Ensure paint UVs exist BEFORE the Studio loads the asset (it
+      // loads its own GLB copy, so the bake must land first).
+      await handleEnsureAssetPaintUvs(target.assetDefinitionId);
+      setSurfaceStudioTarget(target);
+    },
     onOpenAssetsLibrary: (definitionId) => {
       setAssetsLibraryPreselectId(definitionId);
       shellStore.getState().setActiveLibrary("assets");
@@ -2719,6 +2791,8 @@ export function App() {
             readMaskTexture: handleReadMaskTexture,
             writeMaskTexture: handleWriteMaskTexture,
             createMaskTextureDefinition: handleCreateMaskTextureDefinition,
+            ensureAssetPaintUvs: handleEnsureAssetPaintUvs,
+            onRenderablesSettled: () => setBusyToast(null),
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
@@ -3497,7 +3571,13 @@ export function App() {
       />
       <SurfaceStudioModal
         opened={surfaceStudioTarget !== null}
-        onClose={() => setSurfaceStudioTarget(null)}
+        onClose={() => {
+          // Closing remounts the scene viewport (it was unmounted while
+          // the Studio owned the render) -- show progress until it
+          // settles so the reload doesn't read as a hang.
+          setBusyToast("Updating scene...");
+          setSurfaceStudioTarget(null);
+        }}
         engine={studioRenderEngine}
         session={session}
         surface={surfaceStudioSurface}
@@ -3520,7 +3600,9 @@ export function App() {
         }
         readMaskTexture={handleReadMaskTexture}
         writeMaskTexture={handleWriteMaskTexture}
+        getMaskPreviewCanvas={getPaintedMaskPreviewCanvas}
       />
+      {busyToast ? <ProgressToast message={busyToast} /> : null}
     </SurfaceAuthoringProvider>
   );
 }

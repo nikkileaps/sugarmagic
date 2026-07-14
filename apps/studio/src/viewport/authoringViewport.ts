@@ -77,6 +77,11 @@ interface AuthoringViewportOptions {
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
   createMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
+  ensureAssetPaintUvs: (assetDefinitionId: string) => Promise<void>;
+  /** Fires when in-flight renderable loads drain to zero -- used to
+   *  dismiss the "updating scene" toast after a reload (e.g. remount
+   *  when the Surface Studio closes). */
+  onRenderablesSettled?: () => void;
   overlays?: ViewportOverlayFactory[];
 }
 
@@ -413,6 +418,9 @@ export function createAuthoringViewport(
     void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
+        if (pendingRenderableLoads.size === 0) {
+          options.onRenderablesSettled?.();
+        }
         // Judge this load against the CURRENT desired set (see
         // renderable-lifecycle.ts for why not a per-update counter):
         // discarded on teardown or removal, re-scheduled when the
@@ -756,6 +764,9 @@ export function createAuthoringViewport(
         createMaskTextureDefinition() {
           return options.createMaskTextureDefinition();
         },
+        ensureAssetPaintUvs(assetDefinitionId: string) {
+          return options.ensureAssetPaintUvs(assetDefinitionId);
+        },
         previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement) {
           // Live pixels for CPU scatter placement (painted-mask-live).
           registerLivePaintedMask(maskTextureId, canvas);
@@ -833,6 +844,32 @@ export function createAuthoringViewport(
         disposeRenderableObject(entry.root);
         objectMap.delete(instanceId);
       }
+    },
+
+    assetHasPaintUvs(assetDefinitionId) {
+      // True only if a loaded renderable for this asset exists and every
+      // one of its meshes carries uv1. Any mesh without it -> needs a
+      // bake -> return false.
+      for (const entry of objectMap.values()) {
+        if (entry.object.assetDefinitionId !== assetDefinitionId) {
+          continue;
+        }
+        let allMeshesHaveUv1 = true;
+        entry.root.traverse((child) => {
+          if (
+            child instanceof THREE.Mesh &&
+            !child.geometry.getAttribute("uv1")
+          ) {
+            allMeshesHaveUv1 = false;
+          }
+        });
+        if (allMeshesHaveUv1) {
+          return true;
+        }
+      }
+      // Loaded but missing uv1, or not loaded at all -> false. The ensure
+      // op then attempts a bake, which no-ops per mesh already unwrapped.
+      return false;
     },
 
     subscribeFrame(listener) {

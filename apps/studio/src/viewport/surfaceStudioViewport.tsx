@@ -32,6 +32,7 @@ import {
   createRenderView,
   createRenderableShaderApplicationState,
   ensureShaderSetAppliedToRenderable,
+  registerLivePaintedMask,
   type RenderView,
   type WebRenderEngine
 } from "@sugarmagic/render-web";
@@ -60,6 +61,11 @@ export interface SurfaceStudioViewportProps {
   brushSettings: ProjectionBrushSettings;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  /** Live in-memory pixels of a painted mask (kept current on every
+   *  commit, Layout or Studio). Preferred over the disk read so the
+   *  paint canvas always starts from the CURRENT mask -- painting is
+   *  additive and never wipes existing coverage (Plan 068). */
+  getMaskPreviewCanvas: (maskTextureId: string) => HTMLCanvasElement | null;
 }
 
 export function SurfaceStudioViewport({
@@ -69,7 +75,8 @@ export function SurfaceStudioViewport({
   paintMaskId,
   brushSettings,
   readMaskTexture,
-  writeMaskTexture
+  writeMaskTexture,
+  getMaskPreviewCanvas
 }: SurfaceStudioViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const renderViewRef = useRef<RenderView | null>(null);
@@ -150,6 +157,11 @@ export function SurfaceStudioViewport({
       texture.image = canvas;
       texture.needsUpdate = true;
       renderViewNow.markSceneMaterialsDirty();
+      // CPU scatter placement samples the live painted-mask registry
+      // first, so the Studio must push its pixels there too -- otherwise
+      // the scene's grass rebuilds from the stale Layout snapshot on
+      // close and the Studio painting doesn't show (Plan 068).
+      registerLivePaintedMask(maskId, canvas);
     }
 
     function raycastStudioHit(
@@ -438,6 +450,23 @@ export function SurfaceStudioViewport({
       if (!context2d) {
         return;
       }
+      // Prefer the LIVE preview canvas (what the scene currently shows)
+      // over the disk read, so the paint canvas starts from the current
+      // mask and painting stays additive. Fall back to disk only when the
+      // preview isn't cached yet.
+      const previewCanvas = getMaskPreviewCanvas(maskId);
+      if (
+        previewCanvas &&
+        previewCanvas.width > 0 &&
+        previewCanvas.height > 0
+      ) {
+        canvas.width = previewCanvas.width;
+        canvas.height = previewCanvas.height;
+        context2d.drawImage(previewCanvas, 0, 0);
+        paintCanvasRef.current = canvas;
+        activeMaskIdRef.current = maskId;
+        return;
+      }
       const imageData = await readMaskTexture(maskId);
       if (cancelled) {
         return;
@@ -453,7 +482,7 @@ export function SurfaceStudioViewport({
     return () => {
       cancelled = true;
     };
-  }, [session, paintMaskId, readMaskTexture]);
+  }, [session, paintMaskId, readMaskTexture, getMaskPreviewCanvas]);
 
   return <Box ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

@@ -43,6 +43,7 @@ export interface SurfaceStudioModalProps {
   onChangeBrushSettings: (settings: ProjectionBrushSettings) => void;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  getMaskPreviewCanvas: (maskTextureId: string) => HTMLCanvasElement | null;
 }
 
 export function SurfaceStudioModal({
@@ -57,7 +58,8 @@ export function SurfaceStudioModal({
   brushSettings,
   onChangeBrushSettings,
   readMaskTexture,
-  writeMaskTexture
+  writeMaskTexture,
+  getMaskPreviewCanvas
 }: SurfaceStudioModalProps) {
   // The always-on brush paints the SELECTED layer's mask. The toolbar is
   // always shown but greys out when the selected layer has no painted
@@ -109,6 +111,7 @@ export function SurfaceStudioModal({
               brushSettings={brushSettings}
               readMaskTexture={readMaskTexture}
               writeMaskTexture={writeMaskTexture}
+              getMaskPreviewCanvas={getMaskPreviewCanvas}
             />
           ) : null}
           {/* Brush options bar: the shared viewport chrome positions this

@@ -100,6 +100,10 @@ export interface ViewportOverlayContext {
    *  the backing PNG + registers it in the session). The Surface Brush
    *  uses this to set up a slot's painted mask on first touch. */
   createMaskTextureDefinition(): Promise<MaskTextureDefinition | null>;
+  /** Plan 068 -- idempotent paint-UV ensure (generate only if the asset
+   *  lacks them). The Surface Brush calls this in its first-touch setup
+   *  so a never-painted asset gets a paint channel automatically. */
+  ensureAssetPaintUvs(assetDefinitionId: string): Promise<void>;
   subscribeToProjection<T>(
     selector: (state: StoreBundleState) => T,
     listener: (next: T) => void,

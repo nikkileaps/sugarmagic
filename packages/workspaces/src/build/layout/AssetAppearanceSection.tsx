@@ -17,9 +17,9 @@
 
 import { useMemo, useState } from "react";
 import {
+  ActionIcon,
   Anchor,
   Box,
-  Button,
   ColorSwatch,
   Group,
   SegmentedControl,
@@ -221,6 +221,27 @@ export function AssetAppearanceSection({
                 {slot.tier !== "definition" ? (
                   <ScopeBadge tier={slot.tier} />
                 ) : null}
+                {onOpenSurfaceStudio ? (
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    color="grape"
+                    title="Open in Surface Studio"
+                    aria-label="Open in Surface Studio"
+                    style={{ flexShrink: 0 }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenSurfaceStudio({
+                        instanceId: instance.instanceId,
+                        assetDefinitionId: assetDefinition.definitionId,
+                        slotName: slot.slotName,
+                        scope: effectiveScope
+                      });
+                    }}
+                  >
+                    🖌
+                  </ActionIcon>
+                ) : null}
               </Group>
             </Box>
           );
@@ -232,23 +253,6 @@ export function AssetAppearanceSection({
           </Text>
         ) : null}
       </Stack>
-      {selectedSlot && onOpenSurfaceStudio ? (
-        <Button
-          size="xs"
-          variant="light"
-          fullWidth
-          onClick={() =>
-            onOpenSurfaceStudio({
-              instanceId: instance.instanceId,
-              assetDefinitionId: assetDefinition.definitionId,
-              slotName: selectedSlot.slotName,
-              scope: effectiveScope
-            })
-          }
-        >
-          Open Surface Studio
-        </Button>
-      ) : null}
     </Stack>
   );
 }
