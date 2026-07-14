@@ -5,7 +5,13 @@
  * its own RenderView on the shared WebRenderEngine (same GPU device,
  * ShaderRuntime, asset resolver as the rest of Studio), loads just the
  * selected asset's GLB, and applies its resolved surface (including the
- * Studio's live layer edits). Orbit controls let you spin the asset.
+ * Studio's live layer edits). Orbit controls spin the asset.
+ *
+ * Painting (068.10b): when a layer's painted mask is armed
+ * (`maskPaintTarget`), left-drag paints that mask on the asset via the
+ * shared world-space projection brush -- live-updating the Studio's own
+ * material and persisting on release. Orbit is suppressed while painting
+ * (capture-phase) and resumes when nothing is armed.
  *
  * While the Studio is open the main scene viewport is unmounted, so only
  * this one render loop runs.
@@ -18,6 +24,7 @@ import { Box } from "@mantine/core";
 import {
   getActiveRegion,
   getActiveScene,
+  getMaskTextureDefinition,
   type AuthoringSession
 } from "@sugarmagic/domain";
 import { resolveSceneObjects } from "@sugarmagic/runtime-core";
@@ -29,6 +36,11 @@ import {
   type WebRenderEngine
 } from "@sugarmagic/render-web";
 import { createItemCameraController } from "@sugarmagic/workspaces";
+import {
+  createPaintBrushRing,
+  stampWorldSpaceBrush,
+  type ProjectionBrushSettings
+} from "./overlays/projection-paint";
 
 const gltfLoader = new GLTFLoader();
 
@@ -42,12 +54,22 @@ export interface SurfaceStudioViewportProps {
   engine: WebRenderEngine;
   session: AuthoringSession | null;
   target: SurfaceStudioViewportTarget | null;
+  /** The selected layer's painted-mask texture id, or null. When set,
+   *  left-drag paints it (the always-on Studio brush, Plan 068.10b). */
+  paintMaskId: string | null;
+  brushSettings: ProjectionBrushSettings;
+  readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
+  writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
 }
 
 export function SurfaceStudioViewport({
   engine,
   session,
-  target
+  target,
+  paintMaskId,
+  brushSettings,
+  readMaskTexture,
+  writeMaskTexture
 }: SurfaceStudioViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const renderViewRef = useRef<RenderView | null>(null);
@@ -60,7 +82,22 @@ export function SurfaceStudioViewport({
   const loadedInstanceRef = useRef<string | null>(null);
   const shaderApplicationRef = useRef(createRenderableShaderApplicationState());
 
-  // Lifecycle: scene, camera, lights, render view, orbit controls.
+  // Paint state (read by pointer handlers attached once at mount).
+  const sessionRef = useRef(session);
+  const brushSettingsRef = useRef(brushSettings);
+  const writeMaskRef = useRef(writeMaskTexture);
+  const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const activeMaskIdRef = useRef<string | null>(null);
+  const paintingRef = useRef(false);
+  const paintDirtyRef = useRef(false);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const pointerRef = useRef(new THREE.Vector2());
+
+  sessionRef.current = session;
+  brushSettingsRef.current = brushSettings;
+  writeMaskRef.current = writeMaskTexture;
+
+  // Lifecycle: scene, camera, lights, render view, orbit, paint handlers.
   useEffect(() => {
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -77,6 +114,9 @@ export function SurfaceStudioViewport({
     scene.add(fillLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
+    const brushRing = createPaintBrushRing(0xf9e2af);
+    scene.add(brushRing);
+
     const renderView = createRenderView({
       engine,
       scene,
@@ -89,6 +129,143 @@ export function SurfaceStudioViewport({
     cameraControllerRef.current = cameraController;
 
     const element = containerRef.current;
+
+    function updateMaskTextureLive(maskId: string, canvas: HTMLCanvasElement) {
+      const renderViewNow = renderViewRef.current;
+      const sessionNow = sessionRef.current;
+      if (!renderViewNow || !sessionNow) {
+        return;
+      }
+      const definition = getMaskTextureDefinition(
+        sessionNow.contentLibrary,
+        maskId
+      );
+      if (!definition) {
+        return;
+      }
+      const texture = renderViewNow.assetResolver.resolveMaskTextureDefinition(
+        definition
+      );
+      texture.dispose();
+      texture.image = canvas;
+      texture.needsUpdate = true;
+      renderViewNow.markSceneMaterialsDirty();
+    }
+
+    function raycastStudioHit(
+      clientX: number,
+      clientY: number
+    ): THREE.Intersection<THREE.Object3D> | null {
+      const camera2 = cameraRef.current;
+      const modelRoot = modelRootRef.current;
+      if (!camera2 || !modelRoot || !element) {
+        return null;
+      }
+      const bounds = element.getBoundingClientRect();
+      pointerRef.current.x =
+        ((clientX - bounds.left) / bounds.width) * 2 - 1;
+      pointerRef.current.y =
+        -(((clientY - bounds.top) / bounds.height) * 2 - 1);
+      raycasterRef.current.setFromCamera(pointerRef.current, camera2);
+      const hits = raycasterRef.current.intersectObject(modelRoot, true);
+      // Single focused asset -- take the nearest hit that carries a paint
+      // UV. (Slot matching is unnecessary here; multi-slot atlases share
+      // uv1, refine later if a slot needs isolating.)
+      for (const hit of hits) {
+        if (!(hit.object instanceof THREE.Mesh)) {
+          continue;
+        }
+        const geometry = hit.object.geometry;
+        if (
+          geometry instanceof THREE.BufferGeometry &&
+          (geometry.getAttribute("uv1") || geometry.getAttribute("uv"))
+        ) {
+          return hit;
+        }
+      }
+      return null;
+    }
+
+    function paintAt(clientX: number, clientY: number): boolean {
+      const canvas = paintCanvasRef.current;
+      const maskId = activeMaskIdRef.current;
+      if (!canvas || !maskId) {
+        return false;
+      }
+      const hit = raycastStudioHit(clientX, clientY);
+      if (!hit) {
+        return false;
+      }
+      stampWorldSpaceBrush(canvas, hit, brushSettingsRef.current);
+      updateMaskTextureLive(maskId, canvas);
+      paintDirtyRef.current = true;
+      return true;
+    }
+
+    function updateBrushRing(clientX: number, clientY: number) {
+      if (!activeMaskIdRef.current) {
+        brushRing.visible = false;
+        return;
+      }
+      const hit = raycastStudioHit(clientX, clientY);
+      if (!hit) {
+        brushRing.visible = false;
+        return;
+      }
+      const worldNormal = hit.face
+        ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+        : new THREE.Vector3(0, 1, 0);
+      brushRing.visible = true;
+      brushRing.position.copy(hit.point).addScaledVector(worldNormal, 0.02);
+      brushRing.lookAt(hit.point.clone().add(worldNormal));
+      brushRing.scale.setScalar(Math.max(0.03, brushSettingsRef.current.radius));
+    }
+
+    async function commitPaint() {
+      const canvas = paintCanvasRef.current;
+      const maskId = activeMaskIdRef.current;
+      if (!paintDirtyRef.current || !canvas || !maskId) {
+        return;
+      }
+      const context2d = canvas.getContext("2d");
+      if (!context2d) {
+        return;
+      }
+      paintDirtyRef.current = false;
+      await writeMaskRef.current(
+        maskId,
+        context2d.getImageData(0, 0, canvas.width, canvas.height)
+      );
+    }
+
+    // Capture phase so a paint stroke can suppress OrbitControls' rotate.
+    function onPointerDownCapture(event: PointerEvent) {
+      if (event.button !== 0 || !activeMaskIdRef.current) {
+        return;
+      }
+      if (paintAt(event.clientX, event.clientY)) {
+        paintingRef.current = true;
+        event.stopPropagation();
+        event.preventDefault();
+        element?.setPointerCapture(event.pointerId);
+      }
+    }
+    function onPointerMove(event: PointerEvent) {
+      if (paintingRef.current) {
+        paintAt(event.clientX, event.clientY);
+      }
+      updateBrushRing(event.clientX, event.clientY);
+    }
+    function onPointerUp() {
+      if (paintingRef.current) {
+        paintingRef.current = false;
+        void commitPaint();
+      }
+    }
+    function onPointerLeave() {
+      brushRing.visible = false;
+    }
+
     if (element) {
       renderView.mount(element);
       renderView.startRenderLoop();
@@ -98,6 +275,11 @@ export function SurfaceStudioViewport({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       cameraController.attach(camera, element, renderView.subscribeFrame, 0.4);
+      element.addEventListener("pointerdown", onPointerDownCapture, true);
+      element.addEventListener("pointermove", onPointerMove);
+      element.addEventListener("pointerup", onPointerUp);
+      element.addEventListener("pointercancel", onPointerUp);
+      element.addEventListener("pointerleave", onPointerLeave);
     }
 
     const observer =
@@ -120,6 +302,16 @@ export function SurfaceStudioViewport({
 
     return () => {
       observer?.disconnect();
+      if (element) {
+        element.removeEventListener("pointerdown", onPointerDownCapture, true);
+        element.removeEventListener("pointermove", onPointerMove);
+        element.removeEventListener("pointerup", onPointerUp);
+        element.removeEventListener("pointercancel", onPointerUp);
+        element.removeEventListener("pointerleave", onPointerLeave);
+      }
+      scene.remove(brushRing);
+      brushRing.geometry.dispose();
+      (brushRing.material as THREE.Material).dispose();
       cameraController.detach();
       if (modelRootRef.current) {
         scene.remove(modelRootRef.current);
@@ -166,7 +358,6 @@ export function SurfaceStudioViewport({
         loadedInstanceRef.current === target!.instanceId &&
         modelRootRef.current
       ) {
-        // Same asset: just re-apply the (possibly edited) surface.
         ensureShaderSetAppliedToRenderable(
           modelRootRef.current,
           sceneObject!,
@@ -196,7 +387,6 @@ export function SurfaceStudioViewport({
       modelRootRef.current = modelRoot;
       loadedInstanceRef.current = target!.instanceId;
 
-      // Frame the camera on the asset's bounds.
       const box = new THREE.Box3().setFromObject(modelRoot);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -225,6 +415,45 @@ export function SurfaceStudioViewport({
       cancelled = true;
     };
   }, [engine, session, target]);
+
+  // Load the selected layer's mask into a paint canvas (or clear when
+  // the selected layer has no painted mask).
+  useEffect(() => {
+    let cancelled = false;
+    const maskId = paintMaskId;
+    if (!maskId) {
+      paintCanvasRef.current = null;
+      activeMaskIdRef.current = null;
+      return;
+    }
+    void (async () => {
+      const definition = session
+        ? getMaskTextureDefinition(session.contentLibrary, maskId)
+        : null;
+      const [width, height] = definition?.resolution ?? [512, 512];
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context2d = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context2d) {
+        return;
+      }
+      const imageData = await readMaskTexture(maskId);
+      if (cancelled) {
+        return;
+      }
+      if (imageData) {
+        context2d.putImageData(imageData, 0, 0);
+      } else {
+        context2d.clearRect(0, 0, width, height);
+      }
+      paintCanvasRef.current = canvas;
+      activeMaskIdRef.current = maskId;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, paintMaskId, readMaskTexture]);
 
   return <Box ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

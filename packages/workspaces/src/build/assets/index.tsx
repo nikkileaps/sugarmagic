@@ -2,28 +2,23 @@
  * Asset definition inspector.
  *
  * The Assets library modal's right-hand panel (Game > Libraries >
- * Assets): rename, source info, per-slot surface bindings, and
- * default deform/effect shaders for one imported asset definition.
+ * Assets): rename and source info for one imported asset definition.
  *
  * History: this used to be a whole Build workspace ("Assets" tab)
  * because assets predate the library pattern. The workspace is gone
  * (2026-07-09) — assets are ordinary library content now; only this
  * inspector survived the move.
+ *
+ * Plan 068.6: surface + deform/effect editing moved OUT of here. Styling
+ * a placed asset lives in the Layout inspector (per-instance / per-Scene,
+ * plus the Surface Brush and Surface Studio) — one place to style, one
+ * place to manage. Definition defaults still resolve at render; only the
+ * duplicate editing UI was removed.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Stack, Text, Button, TextInput } from "@mantine/core";
-import type {
-  AssetDefinition,
-  ContentLibrarySnapshot,
-  SurfaceBinding,
-  ShaderSlotKind
-} from "@sugarmagic/domain";
-import { createEmptyShaderSlotBindingMap } from "@sugarmagic/domain";
-import { resolveAssetDefinitionShaderBindings } from "@sugarmagic/runtime-core";
-import { MaterialSlotBindingsEditor } from "../MaterialSlotBindingsEditor";
-import { ShaderSlotEditor } from "../ShaderSlotEditor";
-import { useSurfaceAuthoring } from "../surfaces";
+import type { AssetDefinition } from "@sugarmagic/domain";
 
 function getAssetKindLabel(assetDefinition: AssetDefinition): string {
   return assetDefinition.assetKind === "foliage" ? "Foliage" : "Model";
@@ -31,37 +26,15 @@ function getAssetKindLabel(assetDefinition: AssetDefinition): string {
 
 export interface AssetDefinitionInspectorProps {
   assetDefinition: AssetDefinition;
-  contentLibrary: ContentLibrarySnapshot;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
-  onSetAssetMaterialSlotBinding: (
-    definitionId: string,
-    slotName: string,
-    slotIndex: number,
-    surface: SurfaceBinding<"universal"> | null
-  ) => void;
-  onSetAssetDefaultShader: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    shaderDefinitionId: string | null
-  ) => void;
-  onEditShaderGraph?: (shaderDefinitionId: string) => void;
 }
 
 export function AssetDefinitionInspector({
   assetDefinition,
-  contentLibrary,
-  onUpdateAssetDefinition,
-  onSetAssetMaterialSlotBinding,
-  onSetAssetDefaultShader,
-  onEditShaderGraph
+  onUpdateAssetDefinition
 }: AssetDefinitionInspectorProps) {
-  const { shaderDefinitions } = useSurfaceAuthoring();
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
-  );
-  const shaderResolution = useMemo(
-    () => resolveAssetDefinitionShaderBindings(assetDefinition, contentLibrary),
-    [assetDefinition, contentLibrary]
   );
 
   return (
@@ -123,50 +96,13 @@ export function AssetDefinitionInspector({
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
           Surfaces
         </Text>
-        <MaterialSlotBindingsEditor
-          bindings={assetDefinition.surfaceSlots}
-          assetDefinitionId={assetDefinition.definitionId}
-          onChangeBinding={(slotName, slotIndex, surface) =>
-            onSetAssetMaterialSlotBinding(
-              assetDefinition.definitionId,
-              slotName,
-              slotIndex,
-              surface
-            )
-          }
-        />
+        <Text size="xs" c="var(--sm-color-overlay0)">
+          Style placed instances in the Layout inspector — select an asset in
+          the scene and use its Appearance section, the Surface Brush, or the
+          Surface Studio. Deform / effect defaults resolve from the imported
+          asset.
+        </Text>
       </Stack>
-      <ShaderSlotEditor
-        bindings={{
-          ...createEmptyShaderSlotBindingMap(),
-          deform:
-            assetDefinition.deform?.kind === "shader"
-              ? assetDefinition.deform.shaderDefinitionId
-              : null,
-          effect:
-            assetDefinition.effect?.kind === "shader"
-              ? assetDefinition.effect.shaderDefinitionId
-              : null
-        }}
-        shaderDefinitions={shaderDefinitions.filter(
-          (definition) =>
-            definition.targetKind === "mesh-deform" ||
-            definition.targetKind === "mesh-effect"
-        )}
-        slots={["deform", "effect"]}
-        onChangeBinding={(slot, shaderDefinitionId) =>
-          onSetAssetDefaultShader(
-            assetDefinition.definitionId,
-            slot,
-            shaderDefinitionId
-          )
-        }
-        parameterOverrides={[]}
-        diagnostics={shaderResolution.diagnostics}
-        onChangeParameterOverride={undefined}
-        onClearParameterOverride={undefined}
-        onEditShaderGraph={onEditShaderGraph}
-      />
     </Stack>
   );
 }

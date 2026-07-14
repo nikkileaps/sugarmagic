@@ -6,7 +6,7 @@
  */
 
 import { ActionIcon, Group, Menu, Stack, Text, TextInput } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   Layer,
   Mask,
@@ -45,6 +45,14 @@ export interface LayerStackViewProps<C extends SurfaceContext = SurfaceContext> 
    *  settings and mask render below the list, accordion-style; no
    *  popovers, edits commit live. */
   variant?: "popover" | "inline";
+  /** Fires when the selected (detail) layer changes (inline variant).
+   *  The Surface Studio uses this to keep its always-on brush pointed at
+   *  the selected layer's mask (Plan 068.10b). */
+  onSelectedLayerChange?: (layerId: string | null) => void;
+  /** Hide the mask editor's "Paint in Viewport" arming button. The
+   *  Surface Studio paints the selected layer directly, so the arm step
+   *  is redundant there; the Layout inspector still shows it. */
+  hidePaintInViewport?: boolean;
 }
 
 export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
@@ -53,7 +61,9 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   allowPainted,
   paintOwner,
   onChangeSurface,
-  variant = "popover"
+  variant = "popover",
+  onSelectedLayerChange,
+  hidePaintInViewport
 }: LayerStackViewProps<C>) {
   const {
     surfaceDefinitions,
@@ -71,6 +81,10 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
     surface.layers.some((layer) => layer.layerId === selectedLayerId)
       ? selectedLayerId
       : surface.layers[0]?.layerId ?? null;
+
+  useEffect(() => {
+    onSelectedLayerChange?.(effectiveSelectedLayerId);
+  }, [effectiveSelectedLayerId, onSelectedLayerChange]);
 
   function commitLayers(nextLayers: Layer[]): void {
     onChangeSurface({
@@ -380,6 +394,7 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
                   value={selectedLayer.mask}
                   allowedContext={allowedContext}
                   allowPainted={allowPainted}
+                  hidePaintButton={hidePaintInViewport}
                   paintTarget={
                     paintOwner
                       ? { ...paintOwner, layerId: selectedLayer.layerId }

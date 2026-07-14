@@ -41,6 +41,9 @@ export interface MaskEditorProps {
   allowedContext: SurfaceContext;
   allowPainted?: boolean;
   paintTarget?: PaintedMaskTargetAddress | null;
+  /** Hide the "Paint in Viewport" arming button (Plan 068.10b -- the
+   *  Surface Studio paints the selected layer directly, no arm step). */
+  hidePaintButton?: boolean;
   onChange: (next: Mask) => void;
   /** Plan 068.4 — commit the mask THROUGH the host's apply path and
    *  enter paint mode. Draft-buffered hosts (LayerMaskPopover) must
@@ -55,6 +58,7 @@ export function MaskEditor({
   allowedContext,
   allowPainted = false,
   paintTarget = null,
+  hidePaintButton = false,
   onChange,
   onCommitPainted
 }: MaskEditorProps) {
@@ -275,7 +279,10 @@ export function MaskEditor({
                       >
                         Import PNG
                       </Button>
-                      {value.maskTextureId && paintTarget && onSetMaskPaintTarget ? (
+                      {!hidePaintButton &&
+                      value.maskTextureId &&
+                      paintTarget &&
+                      onSetMaskPaintTarget ? (
                         <Button
                           size="compact-xs"
                           variant={

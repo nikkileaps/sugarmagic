@@ -927,6 +927,10 @@ export function App() {
     viewportStore,
     (state) => state.activeMaskPaintTarget
   );
+  const activeBrushSettings = useStore(
+    viewportStore,
+    (state) => state.brushSettings
+  );
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -1301,69 +1305,11 @@ export function App() {
     []
   );
 
-  const handleSetAssetMaterialSlotBinding = useCallback(
-    (
-      definitionId: string,
-      slotName: string,
-      slotIndex: number,
-      surface: SurfaceBinding<"universal"> | null
-    ) => {
-      const { session: currentSession } = projectStore.getState();
-      if (!currentSession) return;
-      const assetDefinition =
-        currentSession.contentLibrary.assetDefinitions.find(
-          (definition) => definition.definitionId === definitionId
-        ) ?? null;
-      if (!assetDefinition) return;
-
-      const nextSurfaceSlots = assetDefinition.surfaceSlots.map((slot) =>
-        slot.slotName === slotName && slot.slotIndex === slotIndex
-          ? {
-              ...slot,
-              surface
-            }
-          : slot
-      );
-
-      projectStore.getState().updateSession(
-        updateAssetDefinitionInSession(currentSession, definitionId, {
-          surfaceSlots: nextSurfaceSlots
-        })
-      );
-    },
-    []
-  );
-
   // Assets library modal (Game > Libraries > Assets): when opened
   // from a placed instance's "Edit definition", preselect that asset.
   const [assetsLibraryPreselectId, setAssetsLibraryPreselectId] = useState<
     string | null
   >(null);
-
-  const handleSetAssetDefaultShader = useCallback(
-    (
-      definitionId: string,
-      slot: "surface" | "deform" | "effect",
-      shaderDefinitionId: string | null
-    ) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShader",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          shaderDefinitionId: shaderDefinitionId ?? null
-        }
-      }),
-    []
-  );
 
   const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
@@ -2898,8 +2844,6 @@ export function App() {
         assetsPreselectId={assetsLibraryPreselectId}
         onImportAssetDefinition={handleImportAsset}
         onUpdateAssetDefinition={handleUpdateAssetDefinition}
-        onSetAssetMaterialSlotBinding={handleSetAssetMaterialSlotBinding}
-        onSetAssetDefaultShader={handleSetAssetDefaultShader}
         onRemoveAssetDefinition={handleRemoveAssetDefinition}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
@@ -3560,6 +3504,22 @@ export function App() {
         target={surfaceStudioTarget}
         slotLabel={surfaceStudioTarget?.slotName ?? ""}
         onChangeSurface={handleSurfaceStudioChange}
+        brushSettings={{
+          radius: activeBrushSettings?.radius ?? 2,
+          strength: activeBrushSettings?.strength ?? 0.6,
+          falloff: activeBrushSettings?.falloff ?? 0.7,
+          mode: activeBrushSettings?.mode === "erase" ? "erase" : "paint"
+        }}
+        onChangeBrushSettings={(next) =>
+          viewportStore.getState().setBrushSettings({
+            radius: next.radius,
+            strength: next.strength,
+            falloff: next.falloff,
+            mode: next.mode
+          })
+        }
+        readMaskTexture={handleReadMaskTexture}
+        writeMaskTexture={handleWriteMaskTexture}
       />
     </SurfaceAuthoringProvider>
   );
