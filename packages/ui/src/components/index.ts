@@ -66,6 +66,11 @@ export { ShellFrame, type ShellFrameProps } from "./ShellFrame";
 export { StatusBar, type StatusBarProps } from "./StatusBar";
 export { ProgressToast, type ProgressToastProps } from "./ProgressToast";
 export {
+  ScopeChip,
+  type ScopeChipProps,
+  type ScopeChipOption
+} from "./ScopeChip";
+export {
   TransformInspector,
   type TransformInspectorProps
 } from "./TransformInspector";

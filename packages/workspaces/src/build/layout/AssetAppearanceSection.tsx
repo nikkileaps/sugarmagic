@@ -18,11 +18,9 @@
 import { useMemo, useState } from "react";
 import {
   ActionIcon,
-  Anchor,
   Box,
   ColorSwatch,
   Group,
-  SegmentedControl,
   Stack,
   Text
 } from "@mantine/core";
@@ -34,6 +32,7 @@ import type {
   SurfaceBinding
 } from "@sugarmagic/domain";
 import { mergeAppearanceOverrideTiers } from "@sugarmagic/domain";
+import { ScopeChip } from "@sugarmagic/ui";
 import { ScopeBadge, type AppearanceProvenance } from "../ScopeBadge";
 import { useSurfaceAuthoring } from "../surfaces";
 import { previewColorForBinding } from "../surfaces/utils";
@@ -45,7 +44,6 @@ export interface AssetAppearanceSectionProps {
   activeScene: Scene | null;
   /** True when the instance lives in the active Scene's overlay. */
   isSceneContained: boolean;
-  onEditAssetDefinition?: (definitionId: string) => void;
   /** Plan 068.10 -- open the Surface Studio for this instance slot, at
    *  the chosen scope tier (Base instance vs the active Scene restyle). */
   onOpenSurfaceStudio?: (target: {
@@ -75,7 +73,6 @@ export function AssetAppearanceSection({
   regionId,
   activeScene,
   isSceneContained,
-  onEditAssetDefinition,
   onOpenSurfaceStudio
 }: AssetAppearanceSectionProps) {
   const { surfaceDefinitions } = useSurfaceAuthoring();
@@ -152,34 +149,23 @@ export function AssetAppearanceSection({
         <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
           Appearance
         </Text>
-        <Group gap="xs">
-          {onEditAssetDefinition ? (
-            <Anchor
-              size="xs"
-              onClick={() => onEditAssetDefinition(assetDefinition.definitionId)}
-            >
-              Edit asset
-            </Anchor>
-          ) : null}
-        </Group>
-      </Group>
-      {isSceneContained ? (
-        <Text size="xs" c="var(--sm-color-overlay0)">
-          Scene-scoped placement: appearance edits stay in{" "}
-          {activeScene?.displayName ?? "this Scene"}.
-        </Text>
-      ) : (
-        <SegmentedControl
-          size="xs"
-          fullWidth
-          value={editScope}
-          onChange={(value) => setEditScope(value as EditScope)}
-          data={[
+        <ScopeChip
+          value={isSceneContained ? "scene" : editScope}
+          options={[
             { value: "base", label: "Base" },
-            { value: "scene", label: "Scene", disabled: !activeScene }
+            { value: "scene", label: "Scene" }
           ]}
+          onChange={(value) => setEditScope(value as EditScope)}
+          disabled={isSceneContained || !activeScene}
+          disabledReason={
+            isSceneContained
+              ? `This placement lives only in ${
+                  activeScene?.displayName ?? "this Scene"
+                }, so its appearance edits stay in the Scene.`
+              : "Open a Scene to scope edits to it -- only Base is available otherwise."
+          }
         />
-      )}
+      </Group>
       {/* Master-detail (Plan 068.5, the Blender slot pattern): the
           slot list stays visible; the SELECTED slot's surface editor
           renders below it in the same panel. No popovers. */}

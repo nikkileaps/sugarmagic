@@ -1696,7 +1696,6 @@ export function useLayoutWorkspaceView(
                 regionId={region.identity.id}
                 activeScene={activeScene}
                 isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
-                onEditAssetDefinition={onEditAssetDefinition}
                 onOpenSurfaceStudio={onOpenSurfaceStudio}
               />
             ) : null}
