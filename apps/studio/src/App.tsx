@@ -203,6 +203,7 @@ import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProje
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
 import { mountScatterBrushOverlay } from "./viewport/overlays/scatter-brush";
+import { mountSurfaceBrushOverlay } from "./viewport/overlays/surface-brush";
 import { mountMaskPaintOverlay } from "./viewport/overlays/mask-paint";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
 import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
@@ -2675,10 +2676,12 @@ export function App() {
             },
             readMaskTexture: handleReadMaskTexture,
             writeMaskTexture: handleWriteMaskTexture,
+            createMaskTextureDefinition: handleCreateMaskTextureDefinition,
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
               mountScatterBrushOverlay,
+              mountSurfaceBrushOverlay,
               mountMaskPaintOverlay,
               mountTransformGizmoOverlay,
               mountSpatialAuthoringOverlay

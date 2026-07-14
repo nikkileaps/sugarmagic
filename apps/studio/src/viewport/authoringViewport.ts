@@ -23,6 +23,7 @@ import {
   type AuthoringSession,
   getActiveRegion,
   getMaskTextureDefinition,
+  type MaskTextureDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -75,6 +76,7 @@ interface AuthoringViewportOptions {
   stores: ProjectionStores;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  createMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
   overlays?: ViewportOverlayFactory[];
 }
 
@@ -750,6 +752,9 @@ export function createAuthoringViewport(
         },
         writeMaskTexture(maskTextureId: string, imageData: ImageData) {
           return options.writeMaskTexture(maskTextureId, imageData);
+        },
+        createMaskTextureDefinition() {
+          return options.createMaskTextureDefinition();
         },
         previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement) {
           // Live pixels for CPU scatter placement (painted-mask-live).

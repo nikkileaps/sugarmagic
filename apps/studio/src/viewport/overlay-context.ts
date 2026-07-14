@@ -15,6 +15,7 @@ import type {
 } from "@sugarmagic/shell";
 import type {
   AuthoringSession,
+  MaskTextureDefinition,
   PaintedMaskTargetAddress,
   RegionDocument,
   RegionLandscapeState
@@ -95,6 +96,10 @@ export interface ViewportOverlayContext {
   readMaskTexture(maskTextureId: string): Promise<ImageData | null>;
   writeMaskTexture(maskTextureId: string, imageData: ImageData): Promise<void>;
   previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement): void;
+  /** Plan 068.9 -- mint a fresh blank painted-mask definition (creates
+   *  the backing PNG + registers it in the session). The Surface Brush
+   *  uses this to set up a slot's painted mask on first touch. */
+  createMaskTextureDefinition(): Promise<MaskTextureDefinition | null>;
   subscribeToProjection<T>(
     selector: (state: StoreBundleState) => T,
     listener: (next: T) => void,
