@@ -270,6 +270,7 @@ export function useBuildProductModeView(
     onConvertAssetScope: props.onConvertAssetScope,
     onCopyEntryToScene: props.onCopyEntryToScene,
     assetDefinitions,
+    surfaceDefinitions,
     playerDefinition: session?.gameProject.playerDefinition ?? null,
     itemDefinitions: session?.gameProject.itemDefinitions ?? [],
     documentDefinitions,

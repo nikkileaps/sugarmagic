@@ -96,6 +96,25 @@ export interface ScatterBrushSettings {
   mode: "paint" | "erase";
 }
 
+/**
+ * Plan 068.9 -- Surface Brush tool state. Arms a library surface and
+ * paints it onto a placed asset's surface slot (fork-to-inline + a
+ * masked surface-ref layer, painted via the world-space projection
+ * brush). Transient UI state; the painted mask + inline override are
+ * the canonical persisted result.
+ */
+export interface SurfaceBrushSettings {
+  /** The library SurfaceDefinition to paint (null until picked). */
+  surfaceDefinitionId: string | null;
+  /** Brush radius in world meters. */
+  radius: number;
+  /** Paint strength 0..1. */
+  strength: number;
+  /** Edge falloff 0..1. */
+  falloff: number;
+  mode: "paint" | "erase";
+}
+
 export interface ViewportState {
   landscapeDraft: RegionLandscapeState | null;
   transformDrafts: Record<string, TransformDraft>;
@@ -113,6 +132,8 @@ export interface ViewportState {
   sketchSettings: LandscapeSketchSettings;
   /** Non-null while the Layout scatter brush tool is active. */
   scatterBrushSettings: ScatterBrushSettings | null;
+  /** Non-null while the Layout Surface Brush tool is active (Plan 068.9). */
+  surfaceBrushSettings: SurfaceBrushSettings | null;
 }
 
 export interface ViewportActions {
@@ -138,6 +159,7 @@ export interface ViewportActions {
   ) => void;
   setSketchSettings: (settings: LandscapeSketchSettings) => void;
   setScatterBrushSettings: (settings: ScatterBrushSettings | null) => void;
+  setSurfaceBrushSettings: (settings: SurfaceBrushSettings | null) => void;
 }
 
 function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
@@ -203,6 +225,7 @@ export function createViewportStore() {
     cameraQuaternion: [0, 0, 0, 1],
     sketchSettings: DEFAULT_SKETCH_SETTINGS,
     scatterBrushSettings: null,
+    surfaceBrushSettings: null,
     setLandscapeDraft(landscape) {
       set({ landscapeDraft: landscape });
     },
@@ -273,6 +296,9 @@ export function createViewportStore() {
     },
     setScatterBrushSettings(settings) {
       set({ scatterBrushSettings: settings });
+    },
+    setSurfaceBrushSettings(settings) {
+      set({ surfaceBrushSettings: settings });
     },
     setSketchSettings(settings) {
       set({ sketchSettings: settings });
