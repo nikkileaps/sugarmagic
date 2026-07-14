@@ -3601,6 +3601,7 @@ export function App() {
         readMaskTexture={handleReadMaskTexture}
         writeMaskTexture={handleWriteMaskTexture}
         getMaskPreviewCanvas={getPaintedMaskPreviewCanvas}
+        maskPreviewVersion={paintedMaskPreviewVersion}
       />
       {busyToast ? <ProgressToast message={busyToast} /> : null}
     </SurfaceAuthoringProvider>

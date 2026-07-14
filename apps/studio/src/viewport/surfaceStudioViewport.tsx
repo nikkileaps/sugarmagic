@@ -61,6 +61,10 @@ export interface SurfaceStudioViewportProps {
   brushSettings: ProjectionBrushSettings;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  /** Reports the loaded asset's paint-UV triangles (flattened
+   *  [u0,v0,u1,v1,u2,v2, ...]) for the UV panel wireframe (Plan
+   *  068.10c). Null when the asset has no paint UVs. */
+  onPaintUvTriangles?: (triangles: number[] | null) => void;
   /** Live in-memory pixels of a painted mask (kept current on every
    *  commit, Layout or Studio). Preferred over the disk read so the
    *  paint canvas always starts from the CURRENT mask -- painting is
@@ -76,8 +80,11 @@ export function SurfaceStudioViewport({
   brushSettings,
   readMaskTexture,
   writeMaskTexture,
-  getMaskPreviewCanvas
+  getMaskPreviewCanvas,
+  onPaintUvTriangles
 }: SurfaceStudioViewportProps) {
+  const onPaintUvTrianglesRef = useRef(onPaintUvTriangles);
+  onPaintUvTrianglesRef.current = onPaintUvTriangles;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const renderViewRef = useRef<RenderView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -398,6 +405,35 @@ export function SurfaceStudioViewport({
       scene!.add(modelRoot);
       modelRootRef.current = modelRoot;
       loadedInstanceRef.current = target!.instanceId;
+
+      // Extract paint-UV (uv1) triangles for the UV panel wireframe.
+      const triangles: number[] = [];
+      modelRoot.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) {
+          return;
+        }
+        const geometry = child.geometry;
+        const uv = geometry.getAttribute("uv1");
+        if (!uv) {
+          return;
+        }
+        const index = geometry.index;
+        const triangleCount = index ? index.count / 3 : uv.count / 3;
+        for (let t = 0; t < triangleCount; t += 1) {
+          const ia = index ? index.getX(t * 3) : t * 3;
+          const ib = index ? index.getX(t * 3 + 1) : t * 3 + 1;
+          const ic = index ? index.getX(t * 3 + 2) : t * 3 + 2;
+          triangles.push(
+            uv.getX(ia),
+            uv.getY(ia),
+            uv.getX(ib),
+            uv.getY(ib),
+            uv.getX(ic),
+            uv.getY(ic)
+          );
+        }
+      });
+      onPaintUvTrianglesRef.current?.(triangles.length > 0 ? triangles : null);
 
       const box = new THREE.Box3().setFromObject(modelRoot);
       const center = box.getCenter(new THREE.Vector3());

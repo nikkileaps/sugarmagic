@@ -20,6 +20,7 @@ import { LayerStackView } from "@sugarmagic/workspaces";
 import { ToolOptionSlider, ToolOptionsBar } from "@sugarmagic/ui";
 import type { WebRenderEngine } from "@sugarmagic/render-web";
 import { SurfaceStudioViewport } from "./viewport/surfaceStudioViewport";
+import { SurfaceStudioUvPanel } from "./SurfaceStudioUvPanel";
 import type { ProjectionBrushSettings } from "./viewport/overlays/projection-paint";
 
 export interface SurfaceStudioTarget {
@@ -44,6 +45,8 @@ export interface SurfaceStudioModalProps {
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
   getMaskPreviewCanvas: (maskTextureId: string) => HTMLCanvasElement | null;
+  /** Bumps when any painted mask's pixels change (repaints the UV panel). */
+  maskPreviewVersion: number;
 }
 
 export function SurfaceStudioModal({
@@ -59,12 +62,14 @@ export function SurfaceStudioModal({
   onChangeBrushSettings,
   readMaskTexture,
   writeMaskTexture,
-  getMaskPreviewCanvas
+  getMaskPreviewCanvas,
+  maskPreviewVersion
 }: SurfaceStudioModalProps) {
   // The always-on brush paints the SELECTED layer's mask. The toolbar is
   // always shown but greys out when the selected layer has no painted
   // mask (Plan 068.10b).
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [uvTriangles, setUvTriangles] = useState<number[] | null>(null);
   const paintMaskId = useMemo(() => {
     const layer = surface?.layers.find(
       (candidate) => candidate.layerId === selectedLayerId
@@ -112,6 +117,7 @@ export function SurfaceStudioModal({
               readMaskTexture={readMaskTexture}
               writeMaskTexture={writeMaskTexture}
               getMaskPreviewCanvas={getMaskPreviewCanvas}
+              onPaintUvTriangles={setUvTriangles}
             />
           ) : null}
           {/* Brush options bar: the shared viewport chrome positions this
@@ -212,21 +218,11 @@ export function SurfaceStudioModal({
             >
               UV / Mask
             </Text>
-            <Box
-              style={{
-                aspectRatio: "1 / 1",
-                width: "100%",
-                borderRadius: "var(--sm-radius-sm)",
-                border: "1px dashed var(--sm-panel-border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              <Text size="xs" c="var(--sm-color-overlay0)">
-                UV canvas (10c)
-              </Text>
-            </Box>
+            <SurfaceStudioUvPanel
+              maskCanvas={paintMaskId ? getMaskPreviewCanvas(paintMaskId) : null}
+              uvTriangles={uvTriangles}
+              maskVersion={maskPreviewVersion}
+            />
           </Box>
 
           <Box style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
