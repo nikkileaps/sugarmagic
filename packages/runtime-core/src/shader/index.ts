@@ -8,3 +8,4 @@
 export * from "./bindings";
 export * from "./compiler";
 export * from "./ir";
+export * from "./scatter-contributions";

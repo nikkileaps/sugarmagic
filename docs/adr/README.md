@@ -30,3 +30,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 024: Procedural Animation Generation](/Users/nikki/projects/sugarmagic/docs/adr/024-procedural-animation-generation.md)
 - [ADR 025: Shader Color Space and Semantics Rules](/Users/nikki/projects/sugarmagic/docs/adr/025-shader-color-space-and-semantics.md)
 - [ADR 026: Surface Painting Model (the Surface Brush)](/Users/nikki/projects/sugarmagic/docs/adr/026-surface-painting-model.md)
+- [ADR 027: Surface Resolution and Material-Cache Semantics](/Users/nikki/projects/sugarmagic/docs/adr/027-surface-resolution-and-material-cache.md)
