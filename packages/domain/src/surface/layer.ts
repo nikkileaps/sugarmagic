@@ -57,7 +57,15 @@ export type AppearanceContent =
    * library. Resolution recurses into the referenced surface (cycle-
    * guarded); render composites it and blends with the mask.
    */
-  | { kind: "surface"; surfaceDefinitionId: string };
+  | { kind: "surface"; surfaceDefinitionId: string }
+  /**
+   * Plan 068.12 -- a procedural UV test grid drawn from the mesh's
+   * PAINT UVs (uv1), the Blender-style debug checker. Shipped as a
+   * built-in "UV Test Grid" surface to visualize how the paint atlas
+   * lands on a mesh (island seams, stretching, flips). Rendered
+   * directly by the runtime; carries no shader/texture reference.
+   */
+  | { kind: "uv-grid" };
 
 export type ScatterContent =
   | { kind: "grass"; grassTypeId: string }
@@ -156,6 +164,8 @@ function appearanceLayerName(content: AppearanceContent): string {
       return "Shader";
     case "surface":
       return "Surface";
+    case "uv-grid":
+      return "UV Test Grid";
   }
 }
 

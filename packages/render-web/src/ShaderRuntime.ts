@@ -374,6 +374,64 @@ function blendSurfaceNodeSets(
   };
 }
 
+/** Minimal chainable-node surface for the TSL math used by the grid. */
+interface GridMathNode {
+  add(other: unknown): GridMathNode;
+  mul(other: unknown): GridMathNode;
+  mod(other: unknown): GridMathNode;
+  min(other: unknown): GridMathNode;
+  oneMinus(): GridMathNode;
+  floor(): GridMathNode;
+  fract(): GridMathNode;
+  greaterThan(other: unknown): { select(a: unknown, b: unknown): GridMathNode };
+  x: GridMathNode;
+  y: GridMathNode;
+}
+
+const UV_GRID_CELLS = 16;
+
+/**
+ * Plan 068.12 -- procedural UV test grid (Blender-style checker). Drawn
+ * from the mesh's PAINT UVs (uv1) so it visualizes the xatlas atlas the
+ * brush and scatter actually sample; falls back to authored uv0 for
+ * meshes without a paint channel. Alternating checker cells reveal
+ * island flips/mirrors (parity jumps at a bad seam); non-square cells
+ * on the mesh reveal stretching; thin dark grid lines mark cell edges.
+ */
+function buildUvGridNodeSet(
+  geometry: THREE.BufferGeometry
+): ShaderSurfaceNodeSet {
+  const source = (
+    geometry.getAttribute("uv1") ? tslAttribute("uv1", "vec2") : uv()
+  ) as unknown as GridMathNode;
+  const scaled = source.mul(float(UV_GRID_CELLS));
+  const cell = scaled.floor();
+  const frac = scaled.fract();
+
+  const parity = cell.x.add(cell.y).mod(float(2));
+  const colorA = vec3(0.82, 0.22, 0.24); // warm red
+  const colorB = vec3(0.95, 0.95, 0.97); // near-white
+  const checker = parity.greaterThan(float(0.5)).select(colorB, colorA);
+
+  // Distance to the nearest cell edge along each axis; on a grid line
+  // when the closest edge is within lineHalf.
+  const edgeX = frac.x.min(frac.x.oneMinus());
+  const edgeY = frac.y.min(frac.y.oneMinus());
+  const nearestEdge = edgeX.min(edgeY);
+  const notLine = nearestEdge.greaterThan(float(0.03)).select(float(1), float(0.12));
+
+  return {
+    colorNode: (checker as unknown as GridMathNode).mul(notLine),
+    alphaNode: float(1),
+    normalNode: null,
+    roughnessNode: float(0.85),
+    metalnessNode: float(0),
+    aoNode: null,
+    emissiveNode: null,
+    vertexNode: null
+  };
+}
+
 function materialCarrierSignature(
   material: THREE.Material,
   geometry: THREE.BufferGeometry | null
@@ -1724,6 +1782,18 @@ export class ShaderRuntime {
       }
 
       if (layer.kind === "scatter") {
+        continue;
+      }
+
+      if (layer.kind === "appearance" && layer.contentKind === "uv-grid") {
+        // Plan 068.12 -- procedural UV test grid drawn from the mesh's
+        // paint UVs (uv1). Bypasses evaluateMeshSurfaceBinding (there is
+        // no shader) and composites like any other appearance layer.
+        const gridSet = withSurfaceNodeDefaults(buildUvGridNodeSet(geometry));
+        accumulator =
+          !accumulator || layer.blendMode === "base"
+            ? gridSet
+            : blendSurfaceNodeSets(accumulator, gridSet, layer.blendMode, layerAlpha);
         continue;
       }
 

@@ -560,6 +560,29 @@ export function resolveAppearanceLayer(
     };
   }
 
+  if (surface.kind === "uv-grid") {
+    // Plan 068.12 -- the UV test grid is drawn procedurally by the
+    // render layer (ShaderRuntime intercepts by contentKind "uv-grid").
+    // It still needs a VALID appearance binding to satisfy resolution;
+    // flat-color (mid gray) is a harmless placeholder that only shows
+    // if the render interception is ever bypassed (e.g. a deform slot).
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic(expectedTargetKind, null, 'Missing built-in "flat-color" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(
+        contentLibrary,
+        "surface",
+        shaderDefinitionId,
+        parameterOverrides,
+        [],
+        { baseParameterValues: { color: [0.5, 0.5, 0.5] } }
+      ),
+      expectedTargetKind
+    );
+  }
+
   if (surface.kind === "surface") {
     // Surface-ref layers (Plan 068.9) are composited by the stack
     // resolver (resolveSurfaceBinding), never as a single binding --

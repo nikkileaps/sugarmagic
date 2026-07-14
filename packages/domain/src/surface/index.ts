@@ -158,6 +158,14 @@ export function createSurfaceRefAppearanceContent(
   return { kind: "surface", surfaceDefinitionId };
 }
 
+/**
+ * Plan 068.12 -- a procedural UV test grid appearance (drawn from the
+ * mesh's paint UVs). Used by the built-in "UV Test Grid" surface.
+ */
+export function createUvGridAppearanceContent(): AppearanceContent {
+  return { kind: "uv-grid" };
+}
+
 export function createTextureAppearanceContent(
   textureDefinitionId: string,
   tiling: [number, number] = [1, 1]

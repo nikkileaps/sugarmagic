@@ -117,6 +117,9 @@ export function describeAppearanceContent(
     // fallback for content-only descriptions.
     return "Surface";
   }
+  if (content.kind === "uv-grid") {
+    return "UV Test Grid";
+  }
   return (
     shaders.find((shader) => shader.shaderDefinitionId === content.shaderDefinitionId)
       ?.displayName ?? "Missing Shader"
@@ -156,6 +159,9 @@ export function previewColorForBinding(
         { kind: "reference", surfaceDefinitionId: baseLayer.content.surfaceDefinitionId },
         surfaceDefinitions
       );
+    case "uv-grid":
+      // Plan 068.12 -- procedural checker debug surface.
+      return "#cc3333";
   }
 }
 
