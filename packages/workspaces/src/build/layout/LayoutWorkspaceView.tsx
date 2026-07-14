@@ -165,6 +165,7 @@ export interface LayoutWorkspaceViewProps {
     instanceId: string;
     assetDefinitionId: string;
     slotName: string;
+    scope: "base" | "scene";
   }) => void;
   renderInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
@@ -1695,9 +1696,7 @@ export function useLayoutWorkspaceView(
                 regionId={region.identity.id}
                 activeScene={activeScene}
                 isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
-                onCommand={onCommand}
                 onEditAssetDefinition={onEditAssetDefinition}
-                onGenerateAssetPaintUvs={onGenerateAssetPaintUvs}
                 onOpenSurfaceStudio={onOpenSurfaceStudio}
               />
             ) : null}

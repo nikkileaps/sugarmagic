@@ -26,6 +26,7 @@ export interface SurfaceStudioTarget {
   instanceId: string;
   assetDefinitionId: string;
   slotName: string;
+  scope: "base" | "scene";
 }
 
 export interface SurfaceStudioModalProps {

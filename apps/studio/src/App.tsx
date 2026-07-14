@@ -2251,7 +2251,7 @@ export function App() {
           instanceId: surfaceStudioTarget.instanceId,
           slotName: surfaceStudioTarget.slotName,
           surface: { kind: "inline", surface: nextSurface },
-          scope: "base"
+          scope: surfaceStudioTarget.scope
         }
       });
     },

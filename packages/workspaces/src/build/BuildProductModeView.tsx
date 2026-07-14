@@ -128,6 +128,7 @@ export interface BuildProductModeViewProps {
     instanceId: string;
     assetDefinitionId: string;
     slotName: string;
+    scope: "base" | "scene";
   }) => void;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;

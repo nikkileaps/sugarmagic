@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 import {
   Anchor,
   Box,
+  Button,
   ColorSwatch,
   Group,
   SegmentedControl,
@@ -30,17 +31,11 @@ import type {
   PlacedAssetInstance,
   Scene,
   SceneAssetAppearanceOverride,
-  SemanticCommand,
-  ShaderSlotKind,
   SurfaceBinding
 } from "@sugarmagic/domain";
-import {
-  createEmptyShaderSlotBindingMap,
-  mergeAppearanceOverrideTiers
-} from "@sugarmagic/domain";
-import { ShaderSlotEditor } from "../ShaderSlotEditor";
+import { mergeAppearanceOverrideTiers } from "@sugarmagic/domain";
 import { ScopeBadge, type AppearanceProvenance } from "../ScopeBadge";
-import { SurfaceBindingEditor, useSurfaceAuthoring } from "../surfaces";
+import { useSurfaceAuthoring } from "../surfaces";
 import { previewColorForBinding } from "../surfaces/utils";
 
 export interface AssetAppearanceSectionProps {
@@ -50,16 +45,14 @@ export interface AssetAppearanceSectionProps {
   activeScene: Scene | null;
   /** True when the instance lives in the active Scene's overlay. */
   isSceneContained: boolean;
-  onCommand: (command: SemanticCommand) => void;
   onEditAssetDefinition?: (definitionId: string) => void;
-  onEditShaderGraph?: (shaderDefinitionId: string) => void;
-  /** Plan 068.8 -- bake a paint UV channel into the asset's GLB. */
-  onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
-  /** Plan 068.10 -- open the Surface Studio for this instance slot. */
+  /** Plan 068.10 -- open the Surface Studio for this instance slot, at
+   *  the chosen scope tier (Base instance vs the active Scene restyle). */
   onOpenSurfaceStudio?: (target: {
     instanceId: string;
     assetDefinitionId: string;
     slotName: string;
+    scope: "base" | "scene";
   }) => void;
 }
 
@@ -82,13 +75,10 @@ export function AssetAppearanceSection({
   regionId,
   activeScene,
   isSceneContained,
-  onCommand,
   onEditAssetDefinition,
-  onEditShaderGraph,
-  onGenerateAssetPaintUvs,
   onOpenSurfaceStudio
 }: AssetAppearanceSectionProps) {
-  const { surfaceDefinitions, shaderDefinitions } = useSurfaceAuthoring();
+  const { surfaceDefinitions } = useSurfaceAuthoring();
   const [editScope, setEditScope] = useState<EditScope>("base");
   // Scene-contained instances are scene-scoped by containment; the
   // executor routes their writes to the instance either way.
@@ -137,75 +127,10 @@ export function AssetAppearanceSection({
   }, [assetDefinition, merged, knownSurfaceDefinitionIds, isSceneContained]);
 
   const [selectedSlotName, setSelectedSlotName] = useState<string | null>(null);
-  const [generatingPaintUvs, setGeneratingPaintUvs] = useState(false);
   const selectedSlot =
     slotViews.find((slot) => slot.slotName === selectedSlotName) ??
     slotViews[0] ??
     null;
-
-  function shaderTier(slot: ShaderSlotKind): {
-    shaderDefinitionId: string | null;
-    tier: AppearanceProvenance;
-  } {
-    const entry = merged.shaderOverrides.find(
-      (candidate) => candidate.slot === slot
-    );
-    if (entry) {
-      return {
-        shaderDefinitionId: entry.shaderDefinitionId,
-        tier: isSceneContained ? "scene" : entry.tier
-      };
-    }
-    const reference =
-      slot === "deform" ? assetDefinition?.deform : assetDefinition?.effect;
-    return {
-      shaderDefinitionId: reference?.shaderDefinitionId ?? null,
-      tier: "definition"
-    };
-  }
-
-  const deform = shaderTier("deform");
-  const effect = shaderTier("effect");
-
-  function dispatchSurfaceOverride(
-    slotName: string,
-    surface: SurfaceBinding<"universal"> | null
-  ) {
-    onCommand({
-      kind: "SetPlacedAssetSurfaceSlotOverride",
-      target: { aggregateKind: "region-document", aggregateId: regionId },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: instance.instanceId
-      },
-      payload: {
-        instanceId: instance.instanceId,
-        slotName,
-        surface,
-        scope: effectiveScope
-      }
-    });
-  }
-
-  function dispatchShaderOverride(
-    slot: ShaderSlotKind,
-    shaderDefinitionId: string | null
-  ) {
-    onCommand({
-      kind: "SetPlacedAssetShaderOverride",
-      target: { aggregateKind: "region-document", aggregateId: regionId },
-      subject: {
-        subjectKind: "placed-asset",
-        subjectId: instance.instanceId
-      },
-      payload: {
-        instanceId: instance.instanceId,
-        slot,
-        shaderDefinitionId,
-        scope: effectiveScope
-      }
-    });
-  }
 
   if (!assetDefinition) {
     return (
@@ -228,22 +153,6 @@ export function AssetAppearanceSection({
           Appearance
         </Text>
         <Group gap="xs">
-          {onGenerateAssetPaintUvs ? (
-            <Anchor
-              size="xs"
-              c={generatingPaintUvs ? "dimmed" : undefined}
-              title="Generate a unique, non-overlapping UV channel for painting (rewrites the imported GLB; authored UVs untouched)"
-              onClick={() => {
-                if (generatingPaintUvs) return;
-                setGeneratingPaintUvs(true);
-                void onGenerateAssetPaintUvs(assetDefinition.definitionId).finally(
-                  () => setGeneratingPaintUvs(false)
-                );
-              }}
-            >
-              {generatingPaintUvs ? "Generating..." : "Generate Paint UVs"}
-            </Anchor>
-          ) : null}
           {onEditAssetDefinition ? (
             <Anchor
               size="xs"
@@ -323,84 +232,23 @@ export function AssetAppearanceSection({
           </Text>
         ) : null}
       </Stack>
-      {selectedSlot ? (
-        <Stack gap="xs">
-          <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-            Surface: {selectedSlot.slotName}
-          </Text>
-          <SurfaceBindingEditor
-            value={selectedSlot.surface}
-            allowedContext="universal"
-            layerStackVariant="inline"
-            paintOwner={{
-              scope: "instance-slot",
+      {selectedSlot && onOpenSurfaceStudio ? (
+        <Button
+          size="xs"
+          variant="light"
+          fullWidth
+          onClick={() =>
+            onOpenSurfaceStudio({
               instanceId: instance.instanceId,
               assetDefinitionId: assetDefinition.definitionId,
-              slotName: selectedSlot.slotName
-            }}
-            onChange={(surface) =>
-              dispatchSurfaceOverride(selectedSlot.slotName, surface)
-            }
-          />
-          {onOpenSurfaceStudio ? (
-            <Anchor
-              size="xs"
-              onClick={() =>
-                onOpenSurfaceStudio({
-                  instanceId: instance.instanceId,
-                  assetDefinitionId: assetDefinition.definitionId,
-                  slotName: selectedSlot.slotName
-                })
-              }
-            >
-              Open Surface Studio
-            </Anchor>
-          ) : null}
-        </Stack>
+              slotName: selectedSlot.slotName,
+              scope: effectiveScope
+            })
+          }
+        >
+          Open Surface Studio
+        </Button>
       ) : null}
-      <ShaderSlotEditor
-        renderSlotBadge={(slot) => {
-          const tier = slot === "deform" ? deform.tier : effect.tier;
-          if (tier === "definition") return null;
-          return <ScopeBadge tier={tier} />;
-        }}
-        bindings={{
-          ...createEmptyShaderSlotBindingMap(),
-          deform: deform.shaderDefinitionId,
-          effect: effect.shaderDefinitionId
-        }}
-        shaderDefinitions={shaderDefinitions.filter(
-          (definition) =>
-            definition.targetKind === "mesh-deform" ||
-            definition.targetKind === "mesh-effect"
-        )}
-        slots={["deform", "effect"]}
-        parameterOverrides={instance.shaderParameterOverrides}
-        onChangeBinding={dispatchShaderOverride}
-        onChangeParameterOverride={(slot, override) =>
-          onCommand({
-            kind: "SetPlacedAssetShaderParameterOverride",
-            target: { aggregateKind: "region-document", aggregateId: regionId },
-            subject: {
-              subjectKind: "placed-asset",
-              subjectId: instance.instanceId
-            },
-            payload: { instanceId: instance.instanceId, slot, override }
-          })
-        }
-        onClearParameterOverride={(slot, parameterId) =>
-          onCommand({
-            kind: "ClearPlacedAssetShaderParameterOverride",
-            target: { aggregateKind: "region-document", aggregateId: regionId },
-            subject: {
-              subjectKind: "placed-asset",
-              subjectId: instance.instanceId
-            },
-            payload: { instanceId: instance.instanceId, slot, parameterId }
-          })
-        }
-        onEditShaderGraph={onEditShaderGraph}
-      />
     </Stack>
   );
 }
