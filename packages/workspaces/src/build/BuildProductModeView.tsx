@@ -124,6 +124,11 @@ export interface BuildProductModeViewProps {
   /** Plan 068.8 -- rewrite the asset's GLB with a generated paint UV
    *  channel (xatlas); studio-owned side effect. */
   onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
+  onOpenSurfaceStudio?: (target: {
+    instanceId: string;
+    assetDefinitionId: string;
+    slotName: string;
+  }) => void;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -278,6 +283,7 @@ export function useBuildProductModeView(
     soundCueDefinitions,
     onImportAsset,
     onGenerateAssetPaintUvs: props.onGenerateAssetPaintUvs,
+    onOpenSurfaceStudio: props.onOpenSurfaceStudio,
     renderInspectorSections: renderLayoutInspectorSections,
     // Assets are library content (2026-07-09); "edit definition"
     // opens the Assets library modal instead of a workspace tab.

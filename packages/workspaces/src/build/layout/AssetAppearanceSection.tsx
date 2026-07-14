@@ -55,6 +55,12 @@ export interface AssetAppearanceSectionProps {
   onEditShaderGraph?: (shaderDefinitionId: string) => void;
   /** Plan 068.8 -- bake a paint UV channel into the asset's GLB. */
   onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
+  /** Plan 068.10 -- open the Surface Studio for this instance slot. */
+  onOpenSurfaceStudio?: (target: {
+    instanceId: string;
+    assetDefinitionId: string;
+    slotName: string;
+  }) => void;
 }
 
 type EditScope = "base" | "scene";
@@ -79,7 +85,8 @@ export function AssetAppearanceSection({
   onCommand,
   onEditAssetDefinition,
   onEditShaderGraph,
-  onGenerateAssetPaintUvs
+  onGenerateAssetPaintUvs,
+  onOpenSurfaceStudio
 }: AssetAppearanceSectionProps) {
   const { surfaceDefinitions, shaderDefinitions } = useSurfaceAuthoring();
   const [editScope, setEditScope] = useState<EditScope>("base");
@@ -335,6 +342,20 @@ export function AssetAppearanceSection({
               dispatchSurfaceOverride(selectedSlot.slotName, surface)
             }
           />
+          {onOpenSurfaceStudio ? (
+            <Anchor
+              size="xs"
+              onClick={() =>
+                onOpenSurfaceStudio({
+                  instanceId: instance.instanceId,
+                  assetDefinitionId: assetDefinition.definitionId,
+                  slotName: selectedSlot.slotName
+                })
+              }
+            >
+              Open Surface Studio
+            </Anchor>
+          ) : null}
         </Stack>
       ) : null}
       <ShaderSlotEditor

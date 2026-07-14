@@ -161,6 +161,11 @@ export interface LayoutWorkspaceViewProps {
   onImportAsset: () => Promise<AssetDefinition | null>;
   /** Plan 068.8 -- generate the paint UV channel for an asset. */
   onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
+  onOpenSurfaceStudio?: (target: {
+    instanceId: string;
+    assetDefinitionId: string;
+    slotName: string;
+  }) => void;
   renderInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
   }) => ReactNode;
@@ -376,6 +381,7 @@ export function useLayoutWorkspaceView(
     onEditAssetDefinition,
     onImportAsset,
     onGenerateAssetPaintUvs,
+    onOpenSurfaceStudio,
     renderInspectorSections
   } = props;
 
@@ -1692,6 +1698,7 @@ export function useLayoutWorkspaceView(
                 onCommand={onCommand}
                 onEditAssetDefinition={onEditAssetDefinition}
                 onGenerateAssetPaintUvs={onGenerateAssetPaintUvs}
+                onOpenSurfaceStudio={onOpenSurfaceStudio}
               />
             ) : null}
             <Stack gap="xs">

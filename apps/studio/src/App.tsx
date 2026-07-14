@@ -43,6 +43,10 @@ import type {
 import {
   getAssetDefinition,
   getMaskTextureDefinition,
+  getSurfaceDefinition,
+  cloneSurface,
+  createDefaultSurface,
+  type Surface,
   createAuthoringSession,
   applyCommand,
   undoSession,
@@ -195,6 +199,10 @@ import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
+import {
+  SurfaceStudioModal,
+  type SurfaceStudioTarget
+} from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 import { createWebRenderEngine } from "@sugarmagic/render-web";
@@ -2224,6 +2232,86 @@ export function App() {
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
 
+  // --- Surface Studio (Plan 068.10) ---
+  const [surfaceStudioTarget, setSurfaceStudioTarget] =
+    useState<SurfaceStudioTarget | null>(null);
+  const surfaceStudioSurface = useMemo<Surface<"universal"> | null>(() => {
+    if (!session || !surfaceStudioTarget) {
+      return null;
+    }
+    const region = getActiveRegion(session);
+    if (!region) {
+      return null;
+    }
+    const overlay =
+      getActiveScene(session)?.regionOverlays[region.identity.id] ?? null;
+    const instance =
+      region.placedAssets.find(
+        (asset) => asset.instanceId === surfaceStudioTarget.instanceId
+      ) ??
+      overlay?.placedAssets.find(
+        (asset) => asset.instanceId === surfaceStudioTarget.instanceId
+      ) ??
+      null;
+    const override =
+      instance?.surfaceSlotOverrides?.find(
+        (candidate) => candidate.slotName === surfaceStudioTarget.slotName
+      )?.surface ?? null;
+    const assetDefinition = getAssetDefinition(
+      session.contentLibrary,
+      surfaceStudioTarget.assetDefinitionId
+    );
+    const slotBinding =
+      assetDefinition?.surfaceSlots.find(
+        (candidate) => candidate.slotName === surfaceStudioTarget.slotName
+      )?.surface ?? null;
+    const binding = override ?? slotBinding;
+    if (binding?.kind === "inline") {
+      return binding.surface as Surface<"universal">;
+    }
+    if (binding?.kind === "reference") {
+      const definition = getSurfaceDefinition(
+        session.contentLibrary,
+        binding.surfaceDefinitionId
+      );
+      if (definition) {
+        return cloneSurface(definition.surface) as Surface<"universal">;
+      }
+    }
+    return createDefaultSurface();
+  }, [session, surfaceStudioTarget]);
+
+  const handleSurfaceStudioChange = useCallback(
+    (nextSurface: Surface<"universal">) => {
+      const currentSession = projectStore.getState().session;
+      if (!surfaceStudioTarget || !currentSession) {
+        return;
+      }
+      const region = getActiveRegion(currentSession);
+      if (!region) {
+        return;
+      }
+      dispatchCommand({
+        kind: "SetPlacedAssetSurfaceSlotOverride",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: surfaceStudioTarget.instanceId
+        },
+        payload: {
+          instanceId: surfaceStudioTarget.instanceId,
+          slotName: surfaceStudioTarget.slotName,
+          surface: { kind: "inline", surface: nextSurface },
+          scope: "base"
+        }
+      });
+    },
+    [surfaceStudioTarget]
+  );
+
   useEffect(() => {
     const nextSurfaceDefinitionId =
       editedSurfaceDefinitionId &&
@@ -2305,6 +2393,7 @@ export function App() {
         );
     },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
+    onOpenSurfaceStudio: setSurfaceStudioTarget,
     onOpenAssetsLibrary: (definitionId) => {
       setAssetsLibraryPreselectId(definitionId);
       shellStore.getState().setActiveLibrary("assets");
@@ -2641,9 +2730,16 @@ export function App() {
     if (!shouldRenderSharedViewport) {
       return;
     }
+    // Plan 068.10 -- the Surface Studio mounts its own focused render
+    // view for the selected asset; unmount the main scene viewport
+    // while it is open so only one render loop runs on the engine.
+    if (surfaceStudioTarget) {
+      return;
+    }
     if (!viewportRef.current) {
       return;
     }
+    const viewportContainer = viewportRef.current;
     // Player + NPC now provide a self-contained `centerPanel`
     // (CharacterPreview), so the shared 3D viewport is only mounted
     // for design > items. Other design kinds (spells, documents,
@@ -2687,14 +2783,14 @@ export function App() {
               mountSpatialAuthoringOverlay
             ]
           });
-    viewport.mount(viewportRef.current);
+    viewport.mount(viewportContainer);
     workspaceViewportRef.current = viewport;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         viewport.resize(entry.contentRect.width, entry.contentRect.height);
       }
     });
-    observer.observe(viewportRef.current);
+    observer.observe(viewportContainer);
 
     return () => {
       observer.disconnect();
@@ -2706,7 +2802,9 @@ export function App() {
     activeProductMode,
     handleReadMaskTexture,
     handleWriteMaskTexture,
-    shouldRenderSharedViewport
+    shouldRenderSharedViewport,
+    // Unmount/remount the main viewport as the Surface Studio opens/closes.
+    surfaceStudioTarget
   ]);
 
   const handleUndo = useCallback(() => {
@@ -3452,6 +3550,16 @@ export function App() {
             </ViewportFrame>
           )
         }
+      />
+      <SurfaceStudioModal
+        opened={surfaceStudioTarget !== null}
+        onClose={() => setSurfaceStudioTarget(null)}
+        engine={studioRenderEngine}
+        session={session}
+        surface={surfaceStudioSurface}
+        target={surfaceStudioTarget}
+        slotLabel={surfaceStudioTarget?.slotName ?? ""}
+        onChangeSurface={handleSurfaceStudioChange}
       />
     </SurfaceAuthoringProvider>
   );
