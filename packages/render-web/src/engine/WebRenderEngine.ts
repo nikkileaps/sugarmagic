@@ -148,15 +148,14 @@ export function createWebRenderEngine(
     onTextureUpdated() {
       for (const view of attachedViews) {
         view.markSceneMaterialsDirty();
-        // The identity re-apply below early-returns (same landscape
-        // ref); the bake snapshot still needs the freshly loaded
-        // texture, so request it explicitly (065.6).
+        // Refresh the ground-color bake so it re-samples the freshly
+        // decoded texture (065.6). We deliberately do NOT re-apply the
+        // landscape here: for a region viewport the landscape ref is
+        // unchanged, so a re-apply early-returns and does nothing (the
+        // bake-dirty above is the real refresh) -- and for a FOCUSED
+        // view (Surface Studio) it would BUILD the whole terrain into an
+        // asset-only scene that never had landscape at all (Plan 068.10).
         view.landscapeController.markGroundBakeDirty();
-        view.landscapeController.applyLandscape(
-          currentRegion?.landscape ?? null,
-          currentContentLibrary,
-          currentAssetSources
-        );
         // Asset renderables (host-owned) rebuild their scatter here:
         // grass gated by a painted mask needs a rebuild once the mask
         // PNG decodes (Plan 068.11).
