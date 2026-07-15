@@ -1753,6 +1753,22 @@ export function createWebRuntimeHost(
       }
     });
 
+    // Dev-only debug handle. Lets perf/debug tooling (the perf-harness
+    // CDP drivers) attach to a running preview and inspect the live
+    // scene/engine without any app spelunking. Dev build only -- never
+    // present in a published artifact. See packages/perf-harness.
+    if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      (globalThis as { __sugarmagicDebug?: unknown }).__sugarmagicDebug = {
+        engine,
+        get renderView() {
+          return renderView;
+        },
+        get scene() {
+          return renderView?.scene ?? null;
+        }
+      };
+    }
+
     // Painted-mask grass on assets is placed at build time from the
     // mask PIXELS; the PNG decodes async, so the first build sees an
     // empty mask. When a texture loads, invalidate scatter-bearing
