@@ -234,6 +234,18 @@ function shaderSlotRepresentation(
   return `${slotLabel}:${binding.shaderDefinitionId}[${serializedParams}]`;
 }
 
+// Plan 068.13a (Gate 2) -- the layer MASK is part of a layer's render
+// identity: two placed instances that share a library surface but carry
+// different per-instance PAINTED masks (Plan 068.9 mints a fresh
+// maskTextureId per instance) must NOT collapse to one representationKey,
+// or the instancing builder would batch them under one material and they
+// would share (cross-contaminate) a single mask texture. The mask id is
+// stable across paint strokes (only the pixels change, via the live
+// registry), so folding it in does not churn the staleness key.
+function maskRepresentation(mask: unknown): string {
+  return JSON.stringify(mask ?? null);
+}
+
 function surfaceStackRepresentation(
   binding: ResolvedSurfaceStack | null
 ): string {
@@ -242,19 +254,20 @@ function surfaceStackRepresentation(
   }
   return binding.layers
     .map((layer) => {
+      const mask = maskRepresentation((layer as { mask?: unknown }).mask);
       if (layer.kind === "scatter") {
-        return `${layer.kind}:${layer.contentKind}:${layer.definitionId}`;
+        return `${layer.kind}:${layer.contentKind}:${layer.definitionId}#${mask}`;
       }
       if (layer.kind === "surface-ref") {
         // Plan 068.9 -- recurse the nested surface so a library edit
         // (or a painted-mask change gating it) reshapes the key.
-        return `surface-ref(${surfaceStackRepresentation(layer.nested)})`;
+        return `surface-ref#${mask}(${surfaceStackRepresentation(layer.nested)})`;
       }
       const serializedParams = Object.keys(layer.binding.parameterValues)
         .sort()
         .map((key) => `${key}=${JSON.stringify(layer.binding.parameterValues[key])}`)
         .join("|");
-      return `${layer.kind}:${layer.binding.shaderDefinitionId}[${serializedParams}]`;
+      return `${layer.kind}:${layer.binding.shaderDefinitionId}[${serializedParams}]#${mask}`;
     })
     .join(";");
 }
