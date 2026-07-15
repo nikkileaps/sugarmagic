@@ -435,6 +435,87 @@ currently only sample uv0, so this wires the grid node to read uv1 the
 way painted masks already do. A uv0 variant/toggle is a later add if
 authored-UV inspection is ever wanted.
 
+### 068.13 — Instance scatter-brushed placed assets
+
+The Scatter Brush (Plan 065.2) commits one `PlacedAssetInstance` per
+stamp, and each renders as a full GLB clone. Painting ~99 lavender
+plants -- each a 4-submesh GLB (`foliage`/`stems`/`blooms`/`blooms-deep`,
+all `castShadow`) -- produced ~396 draw calls plus ~396 shadow-pass
+draws, none instanced, halving the preview from ~60 to ~30fps. (Grass
+scatter is unaffected: 107k blades in 6 GPU-instanced draws.) Found via
+the perf-harness live scene inventory (the dev-only `__sugarmagicDebug`
+handle + `inventory.mjs`), after a static sweep produced three
+confidently-wrong guesses -- the tooling detour paid for itself.
+
+Decision recorded in **ADR 028** (Accepted), hardened by THREE rounds of
+adversarial code review. Round 3 converged and made the case -- accepted --
+to **default to `InstancedMesh`-per-submesh and treat `BatchedMesh` as a
+deferred culling optimization**: both hit the perf goal identically (~4
+material batches, state-change collapse), but InstancedMesh clears the
+integration risks at lower cost. Points shaping the tasks:
+- **Primitive: `InstancedMesh`-per-submesh** (one per submesh material,
+  per-instance matrix = `instanceTransform * submeshLocalMatrix`). The repo
+  already ships an InstancedMesh node-material path (grass scatter), so the
+  material-apply path is near-zero risk. `BatchedMesh` (per-instance
+  culling, `addInstance`/`deleteInstance`) is the deferred upgrade; its
+  costs (up-front capacity, `_validateGeometry` invariant, GPU-texture
+  disposal, `batchId` picking) are NOT paid now.
+- **Gate 2 (painted-mask keying) -- still required:** `representationKey` /
+  `surfaceStackRepresentation` (`scene/index.ts:237-259`) omits
+  `layer.mask`, so two Surface-Brush-painted instances sharing one library
+  surface collide to one key -> one InstancedMesh -> they'd share one mask
+  texture and cross-contaminate. Extend `surfaceStackRepresentation` to
+  include `painted.maskTextureId` so painted instances split out. This only
+  widens the SCENE staleness key (`appliedShaderSignature`/`computeSceneDelta`,
+  benign -- the id is stable, only pixels change via the live registry); it
+  does NOT touch the material cache, which already keys on the full mask.
+- Grouping key is (asset + surface), NOT height (`targetModelHeight` is
+  `null`). Builder is shared and CALLED by both hosts -- lifecycle
+  unification out of scope. Verify on the pinned 99-lavender scene.
+
+**068.13a — Shared InstancedMesh builder + game runtime.** Build the shared
+builder realizing a group of `SceneObject`s sharing the (extended) surface
+key as one `InstancedMesh` per submesh material (per-instance world matrix
+= `instanceTransform * submeshLocalMatrix`, flattening nested submesh
+transforms + `normalizeModelScale`). Route the game runtime
+(`runtimeHost.ts`) build loop through it; chars/NPCs/items, skinned,
+per-instance-surfaced, and scatter/surface-ref stay per-object. Two
+implementation steps to prove (now low-risk, not existential): (1) a node
+surface material applied via the existing traverse path renders per-instance
+correctly on the builder-built `InstancedMesh` -- verify with a PAINTED
+surface (uv1 sampling on the shared geometry); (2) extend
+`surfaceStackRepresentation` with `painted.maskTextureId`. Resolve the
+ensure-loop / lease / painted-mask-invalidation mapping onto a group root
+shared by N instances. _Verify_ on the pinned scene: main AND **shadow**
+pass collapse (confirm what `inventory.mjs` counts -- the WebGPU backend
+loops `drawIndexed` per visible instance, so the win is state-change
+collapse, not a literal "~4 calls"); correct surface/appearance/position;
+painting one grouped instance re-surfaces only it, siblings untouched.
+
+**068.13b — Studio viewport adopts the builder + instanced picking/edit.**
+Route `authoringViewport.ts` through the same builder, and rewrite the
+`createLayoutWorkspace` hit-test (`hit-test-service.ts:110-123`, currently
+reads `intersect.object`) to read **`intersect.instanceId`** (InstancedMesh's
+raycast property) and map it to a `PlacedAssetInstance` for selection;
+gizmo edits that instance via `InstancedMesh.setMatrixAt` + `needsUpdate`;
+delete via instance-buffer compaction/rebuild. The builder retains the
+per-InstancedMesh `instanceId -> PlacedAssetInstance` map. _Verify:_ Layout
+fps on the pinned scene; hover-outline + click select the correct plant;
+gizmo moves only that instance; delete removes only that instance;
+`inventory.mjs` (studio viewport) shows instanced draws.
+
+**068.13c — Declared scatter groups (data model).** The Scatter Brush
+records a `scatterGroupId` on the instances it stamps (source of truth);
+the builder keys on the declared group instead of inferring by
+`representationKey`; migrate existing scenes (ungrouped instances fall
+back to the extended-key inference so nothing regresses pre-migration).
+Split semantics (relies on Gate 2): a grouped instance that gains a
+per-instance painted surface leaves its group and renders individually
+while keeping its tag. _Verify:_ new strokes carry a `scatterGroupId` and
+instance by it; the existing 99-flower scene still instances after
+migration; surfacing one instance in a declared group splits it out with
+its own mask texture (no cross-contamination) and re-surfaces correctly.
+
 ## Deferred
 
 - "Set as default for this asset" action promoting an instance's
@@ -454,6 +535,15 @@ authored-UV inspection is ever wanted.
   (2026-07-12): the trigger fired on the first real asset -- authored
   UVs made in-viewport painting unusable, and nikki called no more
   half measures.
+- Unified model-scatter through the grass GPU scatter pipeline (068.13
+  follow-up): route GLB-model scatter through the same mark/scan/compact
+  + LOD-bin pipeline the grass cards use, so it inherits HISM-style
+  per-instance frustum/distance culling + LOD, and declare the scatter
+  group in the data model instead of the interim asset+surface
+  inference. Deferred (nikki 2026-07-15) to avoid risking the fussy
+  compaction pipeline. Trigger: the next vertical pass, AFTER the
+  sandbox is deployed. Sharp edge: binding N GLB submeshes (multi-
+  material) to one per-instance transform+visibility set.
 
 ### Save-UX papercuts (backlog, do at epic wrap; nikki 2026-07-13)
 
