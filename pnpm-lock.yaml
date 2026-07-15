@@ -153,6 +153,22 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/perf-harness:
+    dependencies:
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../render-web
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
+    devDependencies:
+      playwright-core:
+        specifier: ^1.49.0
+        version: 1.61.1
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(tsx@4.21.0)
+
   packages/plugins:
     dependencies:
       '@mantine/core':
@@ -1539,6 +1555,11 @@ packages:
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
+
+  playwright-core@1.61.1:
+    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   postcss@8.5.8:
     resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
@@ -2987,6 +3008,8 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@4.0.4: {}
+
+  playwright-core@1.61.1: {}
 
   postcss@8.5.8:
     dependencies:
