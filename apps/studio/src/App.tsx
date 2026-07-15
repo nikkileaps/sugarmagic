@@ -1034,11 +1034,21 @@ export function App() {
       selectedEntityIds: selectedIds
     };
 
+    // Read the latest asset sources imperatively rather than triggering
+    // on them. The asset-source store settles its async disk read ~1-2s
+    // after a preview boots, churning `sources` to a NEW reference (fresh
+    // blob URLs, same files). With `assetSources` in the dep array that
+    // spurious change re-posted PREVIEW_BOOT, and since host.start() is
+    // not idempotent (preview.tsx re-invokes it, tearing the runtime
+    // down and back up) the running game hard-restarted -- landing on the
+    // Start menu because the fresh-start flag was already consumed. Only
+    // genuine authoring context / session changes should re-boot a live
+    // preview; a background source refresh must not.
     void postPreviewBootMessage(
       previewWindow,
       session,
       snapshot,
-      assetSources,
+      assetSourceStore.getState().sources,
       installedPluginIds
     );
   }, [
@@ -1049,7 +1059,6 @@ export function App() {
     activeRegionId,
     activeRenderKind,
     activeWorkspaceId,
-    assetSources,
     installedPluginIds,
     isPreviewRunning,
     previewWindow,
