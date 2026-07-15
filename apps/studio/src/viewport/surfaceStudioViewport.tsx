@@ -293,7 +293,13 @@ export function SurfaceStudioViewport({
       renderView.resize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      cameraController.attach(camera, element, renderView.subscribeFrame, 0.4);
+      // Generous zoom range so large assets (e.g. the outcrop) can be
+      // framed and pulled back far enough; the default item range (max 8)
+      // is too tight for arbitrary meshes.
+      cameraController.attach(camera, element, renderView.subscribeFrame, 0.4, {
+        min: 0.05,
+        max: 2000
+      });
       element.addEventListener("pointerdown", onPointerDownCapture, true);
       element.addEventListener("pointermove", onPointerMove);
       element.addEventListener("pointerup", onPointerUp);
@@ -402,6 +408,27 @@ export function SurfaceStudioViewport({
         return;
       }
       const modelRoot = gltf.scene.clone(true);
+      // Apply the instance's placed transform so the Studio matches the
+      // Layout in WORLD space -- world-position masks (Height / Gradient)
+      // and world-XZ effects ramp identically instead of over the
+      // unscaled GLB at the origin (Plan 068.10).
+      const transform = sceneObject!.transform;
+      modelRoot.position.set(
+        transform.position[0],
+        transform.position[1],
+        transform.position[2]
+      );
+      modelRoot.rotation.set(
+        transform.rotation[0],
+        transform.rotation[1],
+        transform.rotation[2]
+      );
+      modelRoot.scale.set(
+        transform.scale[0],
+        transform.scale[1],
+        transform.scale[2]
+      );
+      modelRoot.updateMatrixWorld(true);
       scene!.add(modelRoot);
       modelRootRef.current = modelRoot;
       loadedInstanceRef.current = target!.instanceId;

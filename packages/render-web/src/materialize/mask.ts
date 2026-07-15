@@ -12,6 +12,7 @@ import {
   float,
   min,
   normalWorld,
+  positionLocal,
   positionViewDirection,
   positionWorld,
   pow,
@@ -36,6 +37,45 @@ export interface LayerMaskMaterializeContext {
    *  when absent. Only the painted kind uses this. */
   paintUvNode?: unknown;
   splatmapWeightNode?: (channelIndex: number) => unknown | null;
+  /** Local (object-space) bounding box of the geometry the mask is
+   *  materialized against (Plan 068.10). Height / Gradient masks in
+   *  "local" space normalize the ramp to these bounds so a per-asset
+   *  gradient is placement/scale independent. Absent -> those masks
+   *  fall back to world space. */
+  localBounds?: {
+    min: [number, number, number];
+    size: [number, number, number];
+  } | null;
+}
+
+/** Normalized 0..1 coordinate along `axis` of the mesh's LOCAL bounds,
+ *  or raw world position when local bounds are unavailable / the mask
+ *  opted into world space. Missing `space` defaults to "local". */
+function gradientAxisNode(
+  axis: "x" | "y" | "z",
+  space: "world" | "local" | undefined,
+  bounds: LayerMaskMaterializeContext["localBounds"]
+): unknown {
+  const axisIndex = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+  const worldNode =
+    axis === "x"
+      ? positionWorld.x
+      : axis === "y"
+        ? positionWorld.y
+        : positionWorld.z;
+  if (space === "world" || !bounds) {
+    return worldNode;
+  }
+  const localNode =
+    axis === "x"
+      ? positionLocal.x
+      : axis === "y"
+        ? positionLocal.y
+        : positionLocal.z;
+  const extent = Math.max(bounds.size[axisIndex], 0.0001);
+  return (localNode as { sub: (o: unknown) => { div: (o: unknown) => unknown } })
+    .sub(float(bounds.min[axisIndex]))
+    .div(float(extent));
 }
 
 export function evaluateLayerMask(
@@ -93,7 +133,7 @@ export function evaluateLayerMask(
       return smoothstep(
         float(mask.min - fade),
         float(mask.max + fade),
-        positionWorld.y
+        gradientAxisNode("y", mask.space, context.localBounds) as never
       );
     }
     case "perlin-noise": {
@@ -124,16 +164,15 @@ export function evaluateLayerMask(
       );
     }
     case "world-position-gradient": {
-      const axisNode =
-        mask.axis === "x"
-          ? positionWorld.x
-          : mask.axis === "y"
-            ? positionWorld.y
-            : positionWorld.z;
+      const axisNode = gradientAxisNode(
+        mask.axis,
+        mask.space,
+        context.localBounds
+      );
       return smoothstep(
         float(mask.min - mask.fade),
         float(mask.max + mask.fade),
-        axisNode
+        axisNode as never
       );
     }
   }

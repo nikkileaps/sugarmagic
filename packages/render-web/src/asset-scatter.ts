@@ -53,9 +53,13 @@ export function buildScatterInstancesForAssetSlot(
     };
   }
 ): SurfaceScatterBuildResult[] {
-  const scatterLayers = slot.surface
-    ? resolveScatterContributions(slot.surface)
-    : [];
+  // Only layer-stack surfaces realize scatter. A material-slot-only
+  // binding (a bare shader binding, no layer stack) carries no scatter
+  // layers -- guard so the shared collector never sees a non-stack.
+  const scatterLayers =
+    slot.surface && Array.isArray(slot.surface.layers)
+      ? resolveScatterContributions(slot.surface)
+      : [];
   if (scatterLayers.length === 0) {
     return [];
   }

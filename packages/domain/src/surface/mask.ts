@@ -23,7 +23,18 @@ export type Mask =
       kind: "vertex-color-channel";
       channel: "r" | "g" | "b" | "a";
     }
-  | { kind: "height"; min: number; max: number; fade: number }
+  | {
+      kind: "height";
+      min: number;
+      max: number;
+      fade: number;
+      /** Coordinate space for the ramp (Plan 068.10). "local" (the
+       *  default) normalizes the Y axis to the mesh's local bounding
+       *  box -- 0 = bottom, 1 = top -- so a per-asset gradient is
+       *  placement/scale independent and matches the mask preview.
+       *  "world" ramps over raw world Y (terrain-scale height bands). */
+      space?: "world" | "local";
+    }
   | {
       kind: "perlin-noise";
       scale: number;
@@ -42,6 +53,10 @@ export type Mask =
       min: number;
       max: number;
       fade: number;
+      /** See height.space. "local" (default) normalizes the chosen
+       *  axis to the mesh's local bounds; "world" ramps over raw
+       *  world coordinates. */
+      space?: "world" | "local";
     };
 
 export type PaintedMaskTargetAddress =

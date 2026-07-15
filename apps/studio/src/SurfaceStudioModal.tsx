@@ -13,7 +13,7 @@
  * mask directly on the asset. 10c makes the UV/Mask panel a real canvas.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ActionIcon, Box, Group, Modal, Stack, Text } from "@mantine/core";
 import type { AuthoringSession, Surface } from "@sugarmagic/domain";
 import { LayerStackView } from "@sugarmagic/workspaces";
@@ -70,6 +70,9 @@ export function SurfaceStudioModal({
   // mask (Plan 068.10b).
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [uvTriangles, setUvTriangles] = useState<number[] | null>(null);
+  // Drag-resizable right panel (UV/Mask + Layers).
+  const [panelWidth, setPanelWidth] = useState(360);
+  const resizingRef = useRef(false);
   const paintMaskId = useMemo(() => {
     const layer = surface?.layers.find(
       (candidate) => candidate.layerId === selectedLayerId
@@ -193,11 +196,39 @@ export function SurfaceStudioModal({
           </div>
         </Box>
 
+        {/* Drag handle to resize the right panel wider/narrower. */}
+        <Box
+          onPointerDown={(event) => {
+            resizingRef.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!resizingRef.current) {
+              return;
+            }
+            const next = Math.min(
+              Math.max(window.innerWidth - event.clientX, 280),
+              window.innerWidth - 360
+            );
+            setPanelWidth(next);
+          }}
+          onPointerUp={(event) => {
+            resizingRef.current = false;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          style={{
+            width: 6,
+            flexShrink: 0,
+            cursor: "col-resize",
+            background: "var(--sm-panel-border)"
+          }}
+        />
+
         {/* Right: UV/Mask mini-view above the layer stack. */}
         <Stack
           gap={0}
           style={{
-            width: 340,
+            width: panelWidth,
             flexShrink: 0,
             borderLeft: "1px solid var(--sm-panel-border)",
             background: "var(--sm-color-surface0)"

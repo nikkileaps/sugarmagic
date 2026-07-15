@@ -51,7 +51,8 @@ describe("content-library built-ins", () => {
       "Mossy Bark",
       "Manicured Lawn",
       "Clover Patch",
-      "Painterly Grass"
+      "Painterly Grass",
+      "UV Test Grid"
     ]);
     expect(
       shaderDefinitions
@@ -100,6 +101,6 @@ describe("content-library built-ins", () => {
     expect(normalized.grassTypeDefinitions).toHaveLength(6);
     expect(normalized.flowerTypeDefinitions).toHaveLength(3);
     expect(normalized.rockTypeDefinitions).toHaveLength(1);
-    expect(normalized.surfaceDefinitions).toHaveLength(6);
+    expect(normalized.surfaceDefinitions).toHaveLength(7);
   });
 });

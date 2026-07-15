@@ -470,6 +470,12 @@ function evaluateScatterMask(
   options: SurfaceScatterBuildOptions,
   warnedMaskKinds?: Set<Mask["kind"]>
 ): number {
+  // NOTE (Plan 068.10): the Height / Gradient masks carry a `space`
+  // ("local" | "world"); scatter GATING here evaluates them in world
+  // space only. Local-space scatter gating would need per-sample local
+  // bounds threaded through the sampler -- deferred until a real
+  // gradient-gated-scatter case appears (revisit trigger). The shader
+  // COLOR path (materialize/mask.ts) honors `space` fully.
   switch (mask.kind) {
     case "always":
       return 1;

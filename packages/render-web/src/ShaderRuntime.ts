@@ -327,6 +327,51 @@ function surfaceStackSignature(
   });
 }
 
+/** Does the stack (or any nested surface-ref) carry a Height / Gradient
+ *  mask in "local" space? Those bake the geometry's local bounds into
+ *  the node graph, so the material cache must key on those bounds --
+ *  otherwise two different-sized assets sharing a library surface would
+ *  reuse the first one's baked bounds (Plan 068.10). */
+function stackUsesLocalGradientBounds(
+  surface: ResolvedSurfaceStack | null
+): boolean {
+  if (!surface) {
+    return false;
+  }
+  return surface.layers.some((layer) => {
+    const mask = layer.mask;
+    if (
+      (mask.kind === "height" || mask.kind === "world-position-gradient") &&
+      mask.space !== "world"
+    ) {
+      return true;
+    }
+    return layer.kind === "surface-ref"
+      ? stackUsesLocalGradientBounds(layer.nested)
+      : false;
+  });
+}
+
+/** Compact, rounded local-bounds token for the material cache key. */
+function geometryLocalBoundsToken(
+  geometry: THREE.BufferGeometry | null
+): string {
+  if (!geometry) {
+    return "nb";
+  }
+  if (!geometry.boundingBox && geometry.getAttribute("position")) {
+    geometry.computeBoundingBox();
+  }
+  const bounds = geometry.boundingBox;
+  if (!bounds) {
+    return "nb";
+  }
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+  return `${round(bounds.min.x)},${round(bounds.min.y)},${round(
+    bounds.min.z
+  )}:${round(bounds.max.x)},${round(bounds.max.y)},${round(bounds.max.z)}`;
+}
+
 function isResolvedSurfaceStack(
   value: EffectiveShaderBinding | ResolvedSurfaceStack | null
 ): value is ResolvedSurfaceStack {
@@ -1733,6 +1778,28 @@ export class ShaderRuntime {
     let accumulator: ShaderSurfaceNodeSet | null = null;
     const geometry = options.geometry ?? new THREE.BufferGeometry();
 
+    // Local (object-space) bounds power the "local" Height / Gradient
+    // masks -- normalizing the ramp to the mesh so a per-asset gradient
+    // is placement/scale independent (Plan 068.10).
+    if (!geometry.boundingBox && geometry.getAttribute("position")) {
+      geometry.computeBoundingBox();
+    }
+    const bbox = geometry.boundingBox;
+    const localBounds = bbox
+      ? {
+          min: [bbox.min.x, bbox.min.y, bbox.min.z] as [
+            number,
+            number,
+            number
+          ],
+          size: [
+            bbox.max.x - bbox.min.x,
+            bbox.max.y - bbox.min.y,
+            bbox.max.z - bbox.min.z
+          ] as [number, number, number]
+        }
+      : null;
+
     for (const layer of surface.layers) {
       if (!layer.enabled) {
         continue;
@@ -1741,6 +1808,7 @@ export class ShaderRuntime {
       const maskNode = evaluateLayerMask(layer.mask, {
         contentLibrary: this.contentLibrary,
         assetResolver: this.assetResolver,
+        localBounds,
         uvNode: options.uvOverride ?? uv(),
         // Paint UV channel (Plan 068.8): only offered when THIS
         // geometry carries it; painted masks fall back to authored
@@ -1946,7 +2014,13 @@ export class ShaderRuntime {
         : "no-ground",
       target.assetSurfaceBake
         ? `bake:${(target.assetSurfaceBake.texture as THREE.Texture).uuid}`
-        : "no-bake"
+        : "no-bake",
+      // Local-space Height / Gradient masks bake geometry bounds into
+      // the graph; key on them so different-sized assets don't share a
+      // stale material (Plan 068.10). Only pays cost when actually used.
+      stackUsesLocalGradientBounds(surfaceStack ?? null)
+        ? `lbounds:${geometryLocalBoundsToken(target.geometry)}`
+        : "no-lbounds"
     ].join("|");
 
     return this.acquireMaterial(

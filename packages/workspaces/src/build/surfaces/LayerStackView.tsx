@@ -5,7 +5,17 @@
  * currently selected layer.
  */
 
-import { ActionIcon, Group, Menu, Stack, Text, TextInput } from "@mantine/core";
+import {
+  ActionIcon,
+  Group,
+  Menu,
+  Modal,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  UnstyledButton
+} from "@mantine/core";
 import { useEffect, useState } from "react";
 import type {
   Layer,
@@ -76,6 +86,9 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
   );
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  // Searchable surface picker (the raw "list them all" menu doesn't scale).
+  const [surfacePickerOpen, setSurfacePickerOpen] = useState(false);
+  const [surfaceQuery, setSurfaceQuery] = useState("");
   const effectiveSelectedLayerId =
     selectedLayerId &&
     surface.layers.some((layer) => layer.layerId === selectedLayerId)
@@ -170,28 +183,77 @@ export function LayerStackView<C extends SurfaceContext = SurfaceContext>({
             {surfaceDefinitions.length > 0 ? (
               <>
                 <Menu.Divider />
-                <Menu.Label>Add Surface Layer</Menu.Label>
-                {surfaceDefinitions.map((definition) => (
-                  <Menu.Item
+                <Menu.Item
+                  onClick={() => {
+                    setSurfaceQuery("");
+                    setSurfacePickerOpen(true);
+                  }}
+                >
+                  Add Surface Layer...
+                </Menu.Item>
+              </>
+            ) : null}
+          </Menu.Dropdown>
+        </Menu>
+        <Modal
+          opened={surfacePickerOpen}
+          onClose={() => setSurfacePickerOpen(false)}
+          title="Add Surface Layer"
+          size="sm"
+          withinPortal
+        >
+          <TextInput
+            data-autofocus
+            placeholder="Search surfaces..."
+            value={surfaceQuery}
+            onChange={(event) => setSurfaceQuery(event.currentTarget.value)}
+            mb="xs"
+          />
+          <ScrollArea.Autosize mah={340}>
+            <Stack gap={2}>
+              {surfaceDefinitions
+                .filter((definition) =>
+                  definition.displayName
+                    .toLowerCase()
+                    .includes(surfaceQuery.trim().toLowerCase())
+                )
+                .map((definition) => (
+                  <UnstyledButton
                     key={definition.definitionId}
                     onClick={() => {
-                      // Plan 068.9 -- a masked layer that IS this
-                      // library surface, composited + blended.
+                      // Plan 068.9 -- a masked layer that IS this library
+                      // surface, composited + blended.
                       const layer = createSurfaceRefLayer(
                         definition.definitionId,
                         { displayName: definition.displayName }
                       );
                       commitLayers([...surface.layers.map(cloneLayer), layer]);
                       setSelectedLayerId(layer.layerId);
+                      setSurfacePickerOpen(false);
+                    }}
+                    styles={{
+                      root: {
+                        padding: "6px 10px",
+                        borderRadius: "var(--sm-radius-sm)",
+                        "&:hover": { background: "var(--sm-active-bg)" }
+                      }
                     }}
                   >
-                    {definition.displayName}
-                  </Menu.Item>
+                    <Text size="sm">{definition.displayName}</Text>
+                  </UnstyledButton>
                 ))}
-              </>
-            ) : null}
-          </Menu.Dropdown>
-        </Menu>
+              {surfaceDefinitions.filter((definition) =>
+                definition.displayName
+                  .toLowerCase()
+                  .includes(surfaceQuery.trim().toLowerCase())
+              ).length === 0 ? (
+                <Text size="xs" c="var(--sm-color-overlay0)" p="xs">
+                  No surfaces match "{surfaceQuery}".
+                </Text>
+              ) : null}
+            </Stack>
+          </ScrollArea.Autosize>
+        </Modal>
         <SortableList
           items={surface.layers.map((layer) => ({
             id: layer.layerId,
