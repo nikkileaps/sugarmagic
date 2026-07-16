@@ -1,6 +1,6 @@
 # Plan 069 — Collision + Navigation (blocking, triggers, NPC pathfinding)
 
-Status: Locked (epic-review passed 2026-07-16, 2 rounds) — the DESIGN is locked; this is still the summary/sketch stage, so story decomposition is the next step and stories are written to this locked design.
+Status: Locked (epic-review passed 2026-07-16, 3 rounds) — the DESIGN is locked; this is still the summary/sketch stage, so story decomposition is the next step and stories are written to this locked design.
 Owner: nikki + claude
 Date: 2026-07-16
 
@@ -30,7 +30,7 @@ They are **related** (both spatial, both regenerate when the scene changes) but 
 ## What we're starting from (grounded)
 
 Reuse anchors already in the tree:
-- **`RegionAreaDefinition`** (`packages/domain/src/region-authoring/index.ts:181-194`) — authored box volumes (center + size), hierarchical, 8 semantic kinds. Already the "authored spatial volume" primitive.
+- **`RegionAreaDefinition`** (`packages/domain/src/region-authoring/index.ts:181-194`) — authored box volumes (center + size), hierarchical, 7 semantic kinds. Already the "authored spatial volume" primitive.
 - **`RegionAmbienceZone`** (`:157-165`) — box **trigger** volumes (on-enter / always). The seed of a general trigger/overlap system.
 - **Spatial workspace ALREADY EXISTS** (`packages/workspaces/src/build/spatial/SpatialWorkspaceView.tsx`) — Build > Spatial, with an area list, Select + **Draw-Area** rectangle tools, and viewport overlay. Nikki's imagined UX ("go into Build > Spatial and define areas") is already the shipping pattern.
 - **NPC locomotion exists** (`behavior/system.ts`) — has target resolution + stepping + stuck-detection; needs its straight-line step swapped for a pathfollow.
@@ -43,7 +43,8 @@ Absent (the epic's actual work): runtime collision, a `Collider` ECS component, 
 **Pillar A — Collision (player + NPC blocking + triggers).**
 - Give each asset an optional **collider** (default: auto-fitted box from its local bounds via `Box3.setFromObject` — the exact math `correctAssetOriginToBottomCenter` uses, `apps/studio/src/asset-pipeline/origin-correct.ts:68`; authorable to sphere/capsule/convex, or "none" for decor). **Instanced repeats (068.13a) share one geometry**, so each instance needs its **own world-space collider** derived from its instance matrix (`packages/render-web/src/instanced-group.ts` already builds those per-instance transforms) — a broadphase reads those, not one shared local box.
 - Resolve collision on the **moving bodies**, which today take TWO different paths (a real integration constraint): the **player** is advanced by `MovementSystem` inside `world.update(delta)` (`targets/web/src/runtimeHost.ts:1496`; system registered `:2489`) — a `CollisionSystem` after it is a clean seam. **NPCs** are moved by direct `Position` writes in the behavior system via `gameplaySession.update(delta)` (`runtimeHost.ts:1497`), which **bypasses the ECS system array entirely**. So collision resolution must span both paths (and cover NPC-vs-NPC / NPC-vs-player), not live solely in a post-`MovementSystem` step. A simple broadphase (grid/AABB) over instanced + singleton colliders keeps it cheap.
-- **Trigger volumes** (fire quest/dialogue/audio on enter/exit) are **greenfield**, not a generalization: the ambience-zone type has an `on-enter` field but the runtime implements only `"always"` (`packages/runtime-core/src/audio/index.ts:250-251`), so there is no working enter/exit machinery to reuse. Reuse `containsPoint` / `findRegionAreaById` (`packages/runtime-core/src/spatial/index.ts`) for the point-in-box test and build enter/exit edge-detection (a per-frame previous-inside set) fresh.
+- **Resolution model: collide-and-slide** (the kinematic character-controller pattern every engine uses — PhysX CCT `move`, Godot `move_and_slide`): a blocked move deflects along the obstacle surface instead of dead-stopping, so hitting a wall at a shallow angle glides rather than sticks. This is the single biggest "feel" decision in Pillar A and is the named standard, not an implementation detail. Collision is **discrete** (no swept/CCD): player speed ~5 m/s with delta capped at 0.1s = max ~0.5 m/frame, so tunneling needs blockers/triggers thinner than ~0.5 m — keep authored volumes at >= ~0.5 m thickness (or clamp per-frame step) and defer CCD to a future fast-projectile need.
+- **Trigger volumes** (fire quest/dialogue/audio on enter/exit): the runtime **already has a containment enforcer to extend** — `createSpatialAreaTracker` (`packages/runtime-core/src/spatial/index.ts:130`) does per-entity, per-frame area containment with hysteresis (`confirmationFrames`, default 3) and a `changed` edge flag, run by `createRuntimeSpatialResolverSystem` and already feeding quest/dialogue blackboard facts. Per the single-enforcer rule, trigger enter/exit EXTENDS this tracker rather than building a second previous-inside implementation. Real extension work: the tracker resolves ONE current area per entity, while overlapping trigger volumes need per-volume inside sets; and decide whether triggers share the 3-frame hysteresis or fire edge-exact. (The ambience-zone `on-enter` stub, `packages/runtime-core/src/audio/index.ts:250-251`, is dead code today and becomes a consumer of this. `containsPoint` in `spatial/index.ts:19` is module-private — reuse needs an export.)
 
 **Pillar B — Navigation (NPC pathfinding).**
 - Bake a **navmesh** from the region's collision geometry inside authored **nav-bounds volumes**, eroded by agent radius, using **`recast-navigation`** (npm package; `@recast-navigation/three` for the three.js helpers) — the same Recast/Detour library Unreal ships, as WASM. Industry-standard, not hand-rolled.
@@ -76,17 +77,36 @@ Volumes **nest** for free — `RegionAreaDefinition` already carries `parentArea
 - **Domain:** extend `AssetDefinition` with an optional collider (non-breaking, like `deform`/`effect`); the unified `Volume` type (below) rather than parallel typed volumes; a baked-navmesh artifact reference on the region/scene doc pointing at the blob store.
 - **Authoring:** reuse the Spatial workspace + box-volume/gizmo tooling (new dispatch command for Volumes), `Box3.setFromObject` (`origin-correct.ts:68`) for auto-collider bounds, `containsPoint` / `findRegionAreaById` (`spatial/index.ts`) for containment tests, and the bake-action pattern (`paint-uvs` / `origin-correct`, invoked from `App.tsx`) for the navmesh bake.
 - **Runtime:** `recast-navigation` (`@recast-navigation/three`) for bake + query; the NPC stepper becomes a path-follower (or a recast `Crowd` agent).
+- **Where the collision world lives (layering):** in **runtime-core**, derived from **baked `AssetDefinition` bounds + `SceneObject` transforms** — the same inputs both hosts already consume. The `render-web` files cited above (`instanced-group.ts` matrices, `Box3.setFromObject`) are *bake-time / authoring-side* anchors, NOT runtime dependencies: runtime-core depends only on domain + three and must never read render-web. Collider bounds are computed once at import/bake and stored on the definition; per-instance world colliders come from `SceneObject.transform`. (No visual-drift hazard: `normalizeModelScale` applies only to player/NPC — `targetModelHeight` is null for placed assets, `runtimeHost.ts:2180` — and those agents collide via their **authored capsules**, which `SceneObject.capsule` already carries, `runtime-core/src/scene/index.ts:34`, not via mesh bounds.)
+- **Single-enforcer invariant (locked, not open):** exactly ONE collision-resolution implementation exists, and BOTH movement paths (player `MovementSystem`, NPC behavior stepper) route through it; likewise exactly ONE containment/enter-exit enforcer (the extended `createSpatialAreaTracker`). Open question 7 below is only about *plumbing* (where the shared pass is called from), never about whether a second implementation may exist.
 
 ## New domain pieces (to be designed in stories, not here)
 
-- **Object collider** on `AssetDefinition` (auto-box default; per-instance override, base/scene scoped) and agent **capsule** params (radius/height) on player + NPC.
+- **Object collider** on `AssetDefinition` (auto-box default; per-instance override, base/scene scoped). Agent radius/height need NOT be invented: `SceneObject.capsule` (`runtime-core/src/scene/index.ts:34`) already carries authored capsule specs for player + NPC — the collision layer consumes it.
 - **Unified `Volume`** primitive with attachable **roles** (label / trigger / blocker / containment-boundary / nav-bounds / non-walkable), a **direction** flag on blocker/boundary roles (block-in / block-out / both), and an optional **condition** binding reusing `RegionBehaviorWorldFlagCondition` + `RegionBehaviorQuestBinding`. Nesting via the existing `parentAreaId`. **Migration:** fold today's `RegionAreaDefinition` (label role) and `RegionAmbienceZone` (trigger role) into this — a non-trivial part of the epic.
-- **Collision response model** (block/overlap/ignore, scaled to our needs); **dynamic bodies** — the player AND NPCs are moving colliders (NPC-vs-NPC / NPC-vs-player), not just player-vs-static props; and a runtime **trigger** enter/exit event stream (built fresh — see Pillar A).
+- **Collision response model** (block/overlap/ignore, scaled to our needs); **dynamic bodies** — the player AND NPCs are moving colliders (NPC-vs-NPC / NPC-vs-player), not just player-vs-static props; and a runtime **trigger** enter/exit event stream (extending the spatial-area tracker — see Pillar A).
 - **Baked navmesh artifact** — a binary blob in the asset-source store referenced from the region/scene doc (authored build artifact, NOT a runtime SaveParticipant) + **path / nav-agent** runtime state; the NPC stepper becomes a path-follower (or a recast `Crowd` agent).
 
 ## Scope boundaries (and the terrain seam)
 
 069 targets **flat ground** (the current `PlaneGeometry` at Y≈0). On flat ground it delivers real value: the player is blocked by props/walls, triggers fire, and NPCs path around obstacles. What it explicitly does NOT do — and what belongs to the **deferred terrain/gravity epic** — is the *vertical* dimension: ground-height sampling, walking up stairs/slopes, gravity, uneven terrain. The seam: collision resolution and navmesh both currently assume Y is flat; when the terrain epic lands, collision gains ground-follow + gravity and the navmesh bakes over 3D terrain (Recast already handles slopes/steps, so the nav side extends cleanly). 069 should leave those seams clean, not hard-code Y=0 assumptions that the terrain epic must rip out. **Agent shape:** on flat ground an XZ circle/AABB is sufficient; a full **capsule**'s vertical half-height is dead weight until the terrain epic adds gravity/ground-follow — so decide capsule-now vs. XZ-circle-now (open question) rather than assuming capsules.
+
+Also explicitly deferred:
+- **Camera collision** (camera clipping through walls): out of scope. The camera is a pure-math high-orbit rig (pitch 35-55 deg, distance 15-40), not an over-the-shoulder camera — wall clipping is rare at that framing. Revisit inside the authored-camera epic (task #357), where close shots make it real.
+- **Projectiles / spell collision:** `CastableExecutor` is pure stat mutation today (no spatial casting exists); swept/CCD collision for fast movers is deferred until spells become spatial.
+- **Navmesh bake staleness:** moving/adding a prop AFTER baking leaves a stale navmesh. 069 ships with a bake-invalidation warn (dirty flag on scene edits that touch colliders) — the authoring analog of the paint-UV bake staleness we already tolerate. RUNTIME dynamic obstacles (recast `TileCache` carving, which requires a **tiled** navmesh — so the solo-vs-tiled bake choice gates this) are deferred until something actually moves at runtime.
+
+## Primary use cases (the epic must serve all of these)
+
+1. The player is **blocked by placed props/walls** and **slides** along them at shallow angles (collide-and-slide).
+2. **Invisible out-of-bounds walls** where no mesh exists (drawn blocker volumes, directional).
+3. **Triggers** fire quest/dialogue/audio on enter/exit of a drawn volume.
+4. **Conditional containment**: "can't leave this volume until X and Y" (block-exit + condition), e.g. a gated arena.
+5. **NPCs path around obstacles** to their task areas instead of walking through/into props.
+6. Authors **see and adjust** every collider and volume in the studio (auto-colliders on assets; drawn volumes in Build > Spatial; show-colliders/navmesh toggles).
+7. **Bake + visualize the navmesh** with a manual action, like the other bakes.
+
+Explicitly served by the existing proximity model, no new work: E-interact prompts and item pickups (both are radius-based, not raycast — colliders must merely not hold the player outside interaction radius, a story-level tuning note).
 
 ## Open questions (for /epic-review)
 
@@ -96,9 +116,10 @@ Volumes **nest** for free — `RegionAreaDefinition` already carries `parentArea
 4. Navmesh bake trigger: manual "Bake" button (like our other bakes) vs. auto-on-save — and where the artifact reference lives (region doc vs. scene overlay), pointing at a blob in the asset-source store (authored build artifact, not runtime save state).
 5. How much of the deferred terrain epic must land first for navmesh to be worth it (flat-ground navmesh is real, but modest)?
 6. **Migration:** the unified `Volume` model (proposed above) subsumes today's `RegionAreaDefinition` + `RegionAmbienceZone`. Auto-upgrade existing regions on load via the established `normalizeRegionDocumentForLoad` / `@deprecated`-field pattern (`packages/domain/src/io`, `scenes/migrate.ts`), or keep the old types alongside the new roles? This is the biggest correctness risk in the epic — existing authored regions must not break.
-7. **Two movement paths:** collision must cover the player (`MovementSystem` in `world.update`) and NPCs (direct `Position` writes in the behavior system, bypassing the ECS array). Resolve in a single shared collision pass, or unify the two movement paths first?
-8. **Agent shape:** capsule now vs. flat XZ-circle until the terrain epic (see Scope boundaries).
+7. **Two movement paths (plumbing only — the invariant is locked):** exactly one collision-resolution implementation, both paths route through it (see Architecture & reuse). Open: is the shared pass called from each path, or do we unify the player + NPC movement paths first?
+8. **Agent shape:** capsule now vs. flat XZ-circle until the terrain epic (see Scope boundaries). Note `SceneObject.capsule` already carries authored radius/height either way.
 9. **NPC locomotion:** recast `Crowd` (built-in avoidance + path-following) vs. manual `NavMeshQuery.computePath` + custom stepper.
+10. **Trigger timing:** do trigger volumes share the spatial-area tracker's 3-frame hysteresis (debounced, quest-safe) or fire edge-exact (audio/VFX-safe)? Possibly per-role.
 
 ## Sources
 
@@ -106,6 +127,7 @@ Volumes **nest** for free — `RegionAreaDefinition` already carries `parentArea
 - [UE — Basic Navigation (Recast, NavMeshBoundsVolume, Nav Modifiers)](https://dev.epicgames.com/documentation/unreal-engine/basic-navigation-in-unreal-engine)
 - [Mesh vs Primitive Colliders](https://www.sloyd.ai/blog/mesh-colliders-vs-primitive-colliders)
 - `recast-navigation` (npm; `@recast-navigation/three` for three.js helpers) — WASM Recast/Detour, the web equivalent of UE's Recast. Verified against npm: latest 0.43.1, browser/ESM, `generateSoloNavMesh` / `generateTiledNavMesh`, `NavMeshQuery.computePath`, `Crowd`, `TileCache` box/cylinder obstacles.
+- Cross-engine common-denominator check (round 3): [Unity — Building a NavMesh (agent-radius erosion)](https://docs.unity3d.com/2017.1/Documentation/Manual/nav-BuildingNavMesh.html), [Unity — NavMesh Obstacle (carving)](https://docs.unity3d.com/530/Documentation/Manual/class-NavMeshObstacle.html), [Unity — NavMesh Agent (avoidance)](https://docs.unity3d.com/530/Documentation/Manual/class-NavMeshAgent.html), [Godot 4 — NavigationServer](https://godotengine.org/article/navigation-server-godot-4-0/), [Godot — agent avoidance](https://docs.godotengine.org/en/4.0/tutorials/navigation/navigation_using_agent_avoidance.html), [NVIDIA PhysX — Character Controllers (collide-and-slide)](https://nvidia-omniverse.github.io/PhysX/physx/5.3.1/docs/CharacterControllers.html), [Godot — move_and_slide](https://docs.godotengine.org/en/2.1/learning/features/physics/kinematic_character_2d.html), [Unity — Continuous Collision Detection (CCD reserved for fast movers)](https://docs.unity3d.com/2020.1/Documentation/Manual/ContinuousCollisionDetection.html). The design (bake-inside-bounds, radius erosion, modifier areas, agents query nav + collision does final clip, collide-and-slide controller, discrete collision at walking speed) is the shared core of UE, Unity, and Godot — not engine-specific cherry-picking.
 
 ---
 
