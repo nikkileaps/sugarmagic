@@ -47,3 +47,16 @@
 **Root cause:** `sugardeploy-tag-patch-version` endpoint (`packages/plugins/src/catalog/sugardeploy/host/middleware.ts:3058`) validates that HEAD is a descendant of the base tag but doesn't check whether HEAD is EXACTLY AT an existing `v*.*.*` tag. When HEAD is on an existing tag, a patch bump is meaningless — the new tag can't produce a distinguishable `git describe` output because both tags are 0 commits away from HEAD.
 
 **Action:** In the endpoint, after the base-tag ancestor check, run `git tag --points-at HEAD --list 'v*.*.*'`. If it returns any tag, refuse with a message explaining that the author needs at least one commit past the existing tag before Tag Patch Version means anything. The Deploy auto-sync usually creates that commit; if the author hasn't deployed since the last tag, nothing has changed and the patch bump would be spurious anyway.
+
+### 5. Camera stutters/jitters when turning LEFT but not RIGHT (asymmetric)
+
+**Severity:** Medium (persistent visual jank during normal play; pre-existing, NOT introduced by epic 068)
+
+**Symptom:** nikki (2026-07-16), playing the sandbox region: holding `A` and turning the camera left produces a visible bouncy/jittery stutter. Holding `D` and turning right is smooth. The asymmetry is reproducible -- left jitters, right does not. First surfaced while chasing an unrelated instancing perf regression (068.13a shadow-cast, since fixed at ~60fps); once fps was restored this jitter remained, confirming it is independent of the instancing/shadow work. Has "existed for a long time."
+
+**Root cause (UNKNOWN -- needs investigation):** An adversarial code read of the camera path found the math is clean and direction-symmetric: `updateCameraFollow` damps with `1 - Math.exp(-strength*delta)` (`packages/runtime-core/src/camera/index.ts:79,90,105-106`), `delta` is clamped to 0.1 (`targets/web/src/runtimeHost.ts:1494`), and `computeCameraPosition` is pure trig (`camera/index.ts:171-186`) with no yaw-direction branch. So a pure camera-transform bug does NOT explain a left-vs-right asymmetry -- something else is asymmetric. Candidate directions to probe:
+- **Input path:** how the `A`/`D` (or left/right yaw) inputs feed the camera/player yaw -- is one direction accumulating differently (sign wrap, angle normalization crossing +/-PI, or one key updating at a different cadence)? Check the input manager -> yaw application.
+- **Frame-pacing hitch:** the jitter may be a per-frame CPU/GPU spike that only manifests when the view sweeps in one direction (e.g. streaming/culling/shadow work concentrated on one side of the region because the authored content is spatially lopsided). Log per-frame `delta`/RAF interval while turning each way; spiky deltas on left-turn only => pacing, not math.
+- **Angle wrap:** if yaw is stored unwrapped and normalized only on one branch, crossing the wrap boundary while turning one direction could produce a single-frame snap that reads as a bounce.
+
+**Action:** Reproduce with per-frame `delta` logging (or the debug perf handle's frame-time readout) turning each direction; that alone will tell you pacing-hitch vs. transform-snap and halve the search. Then follow the input->yaw path for an asymmetry. Do NOT re-touch the camera damping math -- it's symmetric and not the cause.
