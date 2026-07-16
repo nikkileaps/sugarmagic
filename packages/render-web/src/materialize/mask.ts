@@ -50,7 +50,14 @@ export interface LayerMaskMaterializeContext {
 
 /** Normalized 0..1 coordinate along `axis` of the mesh's LOCAL bounds,
  *  or raw world position when local bounds are unavailable / the mask
- *  opted into world space. Missing `space` defaults to "local". */
+ *  is in world space. Missing `space` defaults to "world" -- ONLY an
+ *  explicitly-authored "local" normalizes to bounds. This preserves the
+ *  pre-068.10 behavior for legacy masks (which have no `space` and always
+ *  ramped over world position); the MaskEditor writes `space: "local"`
+ *  explicitly on new masks, so per-asset gradients still default local
+ *  for new content. Defaulting undefined->local silently reinterpreted
+ *  legacy height/gradient masks (e.g. the flat landscape plane, local-Y
+ *  extent ~0) into degenerate output. */
 function gradientAxisNode(
   axis: "x" | "y" | "z",
   space: "world" | "local" | undefined,
@@ -63,7 +70,7 @@ function gradientAxisNode(
       : axis === "y"
         ? positionWorld.y
         : positionWorld.z;
-  if (space === "world" || !bounds) {
+  if (space !== "local" || !bounds) {
     return worldNode;
   }
   const localNode =
