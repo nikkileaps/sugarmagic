@@ -928,9 +928,9 @@ export function App() {
     viewportStore,
     (state) => state.activeMaskPaintTarget
   );
-  const activeBrushSettings = useStore(
+  const surfaceBrushSettings = useStore(
     viewportStore,
-    (state) => state.brushSettings
+    (state) => state.surfaceBrushSettings
   );
 
   const environmentDefinitions = useMemo(() => {
@@ -3594,13 +3594,15 @@ export function App() {
         slotLabel={surfaceStudioTarget?.slotName ?? ""}
         onChangeSurface={handleSurfaceStudioChange}
         brushSettings={{
-          radius: activeBrushSettings?.radius ?? 2,
-          strength: activeBrushSettings?.strength ?? 0.6,
-          falloff: activeBrushSettings?.falloff ?? 0.7,
-          mode: activeBrushSettings?.mode === "erase" ? "erase" : "paint"
+          radius: surfaceBrushSettings?.radius ?? 2,
+          strength: surfaceBrushSettings?.strength ?? 0.6,
+          falloff: surfaceBrushSettings?.falloff ?? 0.7,
+          mode: surfaceBrushSettings?.mode ?? "paint"
         }}
         onChangeBrushSettings={(next) =>
-          viewportStore.getState().setBrushSettings({
+          viewportStore.getState().setSurfaceBrushSettings({
+            surfaceDefinitionId:
+              surfaceBrushSettings?.surfaceDefinitionId ?? null,
             radius: next.radius,
             strength: next.strength,
             falloff: next.falloff,
