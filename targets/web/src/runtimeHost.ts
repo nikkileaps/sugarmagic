@@ -2057,16 +2057,32 @@ export function createWebRuntimeHost(
           continue;
         }
         const groupKey = `instanced:${representative.representationKey}`;
+        // Capture the live scene: a dispose() + start() that runs WHILE
+        // this GLB is loading reassigns `scene` to a fresh THREE.Scene, so
+        // a plain `if (!scene)` guard would pass and attach a stale batch
+        // (built from the OLD start's SceneObjects) to the NEW scene, and
+        // could clobber a groupKey the new start already populated
+        // (068.13 mini-review). Comparing the captured reference bails.
+        const groupScene = scene;
         void gltfLoader
           .loadAsync(groupUrl)
           .then((gltf) => {
-            if (!scene) return;
+            if (!scene || scene !== groupScene) return;
             const built = buildInstancedAssetGroup({
               group: groupMembers,
               sourceScene: gltf.scene,
               shaderRuntime: renderView?.shaderRuntime ?? null,
               assetSources: state.assetSources,
-              enableShadows: (r) => renderView?.enableShadowsOnObject(r)
+              // Instanced scatter fields do NOT cast shadows. One
+              // InstancedMesh has a single field-spanning bounding sphere,
+              // so it survives every CSM cascade's cull and re-renders all
+              // instances into all (up to 4) cascades -- ~3-4x shadow-pass
+              // geometry vs the pre-instancing per-clone culling, which
+              // tanks fps and makes cascade re-splits jitter on camera turn.
+              // Small foliage shadows are low-value; skip them until the
+              // field is spatially chunked (deferred #347 HISM). To cast
+              // shadows again, restore enableShadowsOnObject here.
+              enableShadows: undefined
             });
             if (!built) {
               // Skinned model slipped through (rare -- asset-kind is meant
