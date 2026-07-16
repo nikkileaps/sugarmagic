@@ -106,6 +106,8 @@ export function AssetDefinitionInspector({
           Re-pivots the asset to its bottom-center so the move gizmo sits on
           it. Use this if an imported model's gizmo lands off to the side
           (its Blender object was away from the world origin on export).
+          Heads up: any instances of this asset already placed in a scene
+          will shift by the correction and may need repositioning.
         </Text>
         <Button
           size="xs"

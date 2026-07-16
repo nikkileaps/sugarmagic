@@ -76,6 +76,38 @@ async function loadWorldBounds(glb: ArrayBuffer): Promise<THREE.Box3> {
   return new THREE.Box3().setFromObject(gltf.scene);
 }
 
+/** A GLB with no mesh geometry (only a light) -- the degenerate input. */
+async function makeLightsOnlyGlb(): Promise<ArrayBuffer> {
+  const scene = new THREE.Scene();
+  const light = new THREE.PointLight(0xffffff, 1);
+  light.position.set(1, 2, 3);
+  scene.add(light);
+  const exporter = new GLTFExporter();
+  return (await exporter.parseAsync(scene, { binary: true })) as ArrayBuffer;
+}
+
+/** A GLB carrying an animation clip (a moving box). */
+async function makeAnimatedGlb(): Promise<ArrayBuffer> {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial()
+  );
+  mesh.name = "anim-box";
+  const scene = new THREE.Scene();
+  scene.add(mesh);
+  const track = new THREE.VectorKeyframeTrack(
+    "anim-box.position",
+    [0, 1],
+    [0, 0, 0, 1, 0, 0]
+  );
+  const clip = new THREE.AnimationClip("move", 1, [track]);
+  const exporter = new GLTFExporter();
+  return (await exporter.parseAsync(scene, {
+    binary: true,
+    animations: [clip]
+  })) as ArrayBuffer;
+}
+
 describe("correctAssetOriginToBottomCenter", () => {
   it("re-pivots an off-origin asset to bottom-center", async () => {
     // Unit box centered at world (5, 2, -3): bounds y in [1.5, 2.5].
@@ -106,11 +138,27 @@ describe("correctAssetOriginToBottomCenter", () => {
     expect(twice.offset[2]).toBeCloseTo(0, 3);
   });
 
-  it("treats an already bottom-centered asset as a no-op", async () => {
+  it("treats an already bottom-centered asset as a no-op, returning the input unchanged", async () => {
     // Unit box whose floor is already at y=0 and centered on XZ.
     const source = await makeBoxesGlb([[0, 0.5, 0]]);
     const result = await correctAssetOriginToBottomCenter(source);
     expect(result.changed).toBe(false);
+    // Contract: the no-op path returns the input buffer, not a re-emit.
+    expect(result.glb).toBe(source);
+  });
+
+  it("throws on an asset with no measurable geometry", async () => {
+    const glb = await makeLightsOnlyGlb();
+    await expect(correctAssetOriginToBottomCenter(glb)).rejects.toThrow(
+      /no measurable geometry/
+    );
+  });
+
+  it("refuses an animated asset rather than silently stripping its clips", async () => {
+    const glb = await makeAnimatedGlb();
+    await expect(correctAssetOriginToBottomCenter(glb)).rejects.toThrow(
+      /animation clip/
+    );
   });
 
   it("re-pivots a multi-mesh asset as a single unit", async () => {

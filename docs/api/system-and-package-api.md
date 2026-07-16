@@ -230,6 +230,7 @@ The Sugarmagic host app.
 - authoring viewport wiring
 - preview lifecycle orchestration
 - preview window launch and stop wiring
+- asset-transform pipeline (glTF re-emit helpers)
 
 ### Should not expose as canonical APIs
 
@@ -271,7 +272,26 @@ invariants keep that safe:
   region cleared) -- the moments when every in-flight load must be
   discarded and disposed.
 
-## `/targets/web` API
+### Asset-transform pipeline
+
+`apps/studio/src/asset-pipeline/` holds the studio's glTF re-emit
+helpers -- the exceptions to "should not expose file-format logic",
+exported from the package barrel because tests import them across the
+package boundary:
+
+- `bakePaintUvsIntoGlb` (`asset-pipeline/paint-uvs.ts`): bakes a
+  TEXCOORD_1 paint-UV channel (xatlas) into an imported GLB.
+- `correctAssetOriginToBottomCenter` (`asset-pipeline/origin-correct.ts`):
+  re-pivots an imported GLB to bottom-center so a placement's gizmo sits
+  on the mesh. Refuses animated GLBs (the re-emit would drop their
+  clips).
+
+Both share the load (`GLTFLoader`) -> transform -> re-emit
+(`GLTFExporter`) -> `writeBlobFile` shape and are driven from the asset
+library UI. A GLTFExporter round-trip does not preserve everything it is
+handed (animation clips need explicit `options.animations`; the paint-UV
+path additionally sanitizes normalized-float attributes WebGPU rejects),
+so any new pipeline step must audit what its re-emit drops.
 
 ### Purpose
 
