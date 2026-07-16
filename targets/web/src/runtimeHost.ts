@@ -2464,6 +2464,17 @@ export function createWebRuntimeHost(
     playerEyeHeight = playerSpawn.eyeHeight;
 
     playerVisualController = createPlayerVisualController(scene);
+    // Face the model in the authored spawn direction. Facing is purely
+    // visual here -- the per-frame velocity heading writes
+    // root.rotation.y, and only while moving, so a standing player keeps
+    // its last yaw. Without seeding it the player ignores its authored
+    // spawn rotation and stands at yaw 0 until it first moves. Only yaw
+    // matters for an upright character, matching the velocity heading.
+    const authoredSpawnRotation =
+      activeRegionContents?.playerPresence?.transform.rotation;
+    if (authoredSpawnRotation) {
+      playerVisualController.root.rotation.y = authoredSpawnRotation[1];
+    }
     void playerVisualController.apply({
       playerDefinition: state.playerDefinition,
       contentLibrary: state.contentLibrary,
