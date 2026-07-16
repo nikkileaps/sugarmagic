@@ -78,6 +78,11 @@ export type ShaderApplyTarget =
       geometry: THREE.BufferGeometry;
       materialTextures?: Record<string, THREE.Texture | null>;
       groundColorMap?: { texture: unknown; size: number } | null;
+      assetSurfaceBake?: {
+        texture: unknown;
+        offset: [number, number];
+        size: [number, number];
+      } | null;
     }
   | {
       targetKind: "billboard-surface";
@@ -179,6 +184,19 @@ interface FinalizationContext {
    * carries `instanceOrigin` (see MeshShaderSetApplyTarget).
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /**
+   * Plan 068.11 -- the owning ASSET's compiled-surface bake in
+   * paint-UV space. When set AND the geometry carries the per-instance
+   * `scatterPaintUv` attribute, inheritSource "baseLayerColor" params
+   * sample THIS (the mesh's own layers under each blade) and it takes
+   * precedence over the landscape groundColorMap. Gated: landscape
+   * grass never sets it, so this branch is dead for the landscape.
+   */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
   sunDirectionUniform: UniformNodeLike;
   /**
    * Per-binding cache of effect nodes whose wrapped Three helpers take JS
@@ -217,6 +235,12 @@ interface MeshShaderSetApplyTarget {
    * blade -- instead of the resolver-seeded flat literal.
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /** Plan 068.11 -- see FinalizationContext.assetSurfaceBake. */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
 }
 
 function stableStringify(value: unknown): string {
@@ -277,6 +301,18 @@ function surfaceStackSignature(
           mask: layer.mask
         };
       }
+      if (layer.kind === "surface-ref") {
+        // Plan 068.9 -- recurse the referenced surface into the key so
+        // library edits invalidate the material cache.
+        return {
+          kind: layer.kind,
+          blendMode: layer.blendMode,
+          enabled: layer.enabled,
+          opacity: layer.opacity,
+          mask: layer.mask,
+          nested: surfaceStackSignature(layer.nested)
+        };
+      }
       return {
         kind: layer.kind,
         contentKind: layer.contentKind,
@@ -289,6 +325,51 @@ function surfaceStackSignature(
       };
     })
   });
+}
+
+/** Does the stack (or any nested surface-ref) carry a Height / Gradient
+ *  mask in "local" space? Those bake the geometry's local bounds into
+ *  the node graph, so the material cache must key on those bounds --
+ *  otherwise two different-sized assets sharing a library surface would
+ *  reuse the first one's baked bounds (Plan 068.10). */
+function stackUsesLocalGradientBounds(
+  surface: ResolvedSurfaceStack | null
+): boolean {
+  if (!surface) {
+    return false;
+  }
+  return surface.layers.some((layer) => {
+    const mask = layer.mask;
+    if (
+      (mask.kind === "height" || mask.kind === "world-position-gradient") &&
+      mask.space !== "world"
+    ) {
+      return true;
+    }
+    return layer.kind === "surface-ref"
+      ? stackUsesLocalGradientBounds(layer.nested)
+      : false;
+  });
+}
+
+/** Compact, rounded local-bounds token for the material cache key. */
+function geometryLocalBoundsToken(
+  geometry: THREE.BufferGeometry | null
+): string {
+  if (!geometry) {
+    return "nb";
+  }
+  if (!geometry.boundingBox && geometry.getAttribute("position")) {
+    geometry.computeBoundingBox();
+  }
+  const bounds = geometry.boundingBox;
+  if (!bounds) {
+    return "nb";
+  }
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+  return `${round(bounds.min.x)},${round(bounds.min.y)},${round(
+    bounds.min.z
+  )}:${round(bounds.max.x)},${round(bounds.max.y)},${round(bounds.max.z)}`;
 }
 
 function isResolvedSurfaceStack(
@@ -335,6 +416,64 @@ function blendSurfaceNodeSets(
       (layer.emissiveNode as { mul: (other: unknown) => unknown }).mul(alpha)
     ),
     vertexNode: layer.vertexNode ?? base.vertexNode
+  };
+}
+
+/** Minimal chainable-node surface for the TSL math used by the grid. */
+interface GridMathNode {
+  add(other: unknown): GridMathNode;
+  mul(other: unknown): GridMathNode;
+  mod(other: unknown): GridMathNode;
+  min(other: unknown): GridMathNode;
+  oneMinus(): GridMathNode;
+  floor(): GridMathNode;
+  fract(): GridMathNode;
+  greaterThan(other: unknown): { select(a: unknown, b: unknown): GridMathNode };
+  x: GridMathNode;
+  y: GridMathNode;
+}
+
+const UV_GRID_CELLS = 16;
+
+/**
+ * Plan 068.12 -- procedural UV test grid (Blender-style checker). Drawn
+ * from the mesh's PAINT UVs (uv1) so it visualizes the xatlas atlas the
+ * brush and scatter actually sample; falls back to authored uv0 for
+ * meshes without a paint channel. Alternating checker cells reveal
+ * island flips/mirrors (parity jumps at a bad seam); non-square cells
+ * on the mesh reveal stretching; thin dark grid lines mark cell edges.
+ */
+function buildUvGridNodeSet(
+  geometry: THREE.BufferGeometry
+): ShaderSurfaceNodeSet {
+  const source = (
+    geometry.getAttribute("uv1") ? tslAttribute("uv1", "vec2") : uv()
+  ) as unknown as GridMathNode;
+  const scaled = source.mul(float(UV_GRID_CELLS));
+  const cell = scaled.floor();
+  const frac = scaled.fract();
+
+  const parity = cell.x.add(cell.y).mod(float(2));
+  const colorA = vec3(0.82, 0.22, 0.24); // warm red
+  const colorB = vec3(0.95, 0.95, 0.97); // near-white
+  const checker = parity.greaterThan(float(0.5)).select(colorB, colorA);
+
+  // Distance to the nearest cell edge along each axis; on a grid line
+  // when the closest edge is within lineHalf.
+  const edgeX = frac.x.min(frac.x.oneMinus());
+  const edgeY = frac.y.min(frac.y.oneMinus());
+  const nearestEdge = edgeX.min(edgeY);
+  const notLine = nearestEdge.greaterThan(float(0.03)).select(float(1), float(0.12));
+
+  return {
+    colorNode: (checker as unknown as GridMathNode).mul(notLine),
+    alphaNode: float(1),
+    normalNode: null,
+    roughnessNode: float(0.85),
+    metalnessNode: float(0),
+    aoNode: null,
+    emissiveNode: null,
+    vertexNode: null
   };
 }
 
@@ -869,6 +1008,37 @@ function uniformForParameter(
   // every blade takes the floor color underneath it (splat blends,
   // dirt boundaries and all) instead of one flat color per surface.
   // The bake stores LINEAR values, so no sRGB conversion applies.
+  // Plan 068.11: blades on a placed asset inherit the ASSET'S OWN
+  // compiled surface (the slot's layers baked to paint-UV space), not
+  // the terrain. Same discipline as the ground map: instanced
+  // attribute read in the VERTEX stage; plain DataTexture only. Gated
+  // on assetSurfaceBake, which only asset scatter sets -- landscape
+  // never reaches this branch.
+  if (
+    isColorParameter &&
+    context.assetSurfaceBake &&
+    declaration?.inheritSource === "baseLayerColor"
+  ) {
+    // Same mechanism as the landscape ground map (below), just over
+    // the ASSET's world-XZ bounds instead of the terrain: sample the
+    // top-down surface bake at the blade's world XZ. instanceOrigin
+    // (world XZ, VERTEX stage) is populated by both scatter paths, so
+    // this needs no new attribute and the GPU pipeline is untouched.
+    const bake = context.assetSurfaceBake;
+    const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
+      sub: (value: unknown) => { div: (value: unknown) => unknown };
+    };
+    const bakeUv = vertexStage(
+      origin
+        .sub(vec2(bake.offset[0], bake.offset[1]))
+        .div(vec2(bake.size[0], bake.size[1])) as never
+    );
+    const bakeSample = textureNode(
+      bake.texture as THREE.Texture,
+      bakeUv as never
+    ) as unknown as { rgb: unknown };
+    return bakeSample.rgb;
+  }
   if (isColorParameter && context.groundColorMap) {
     if (declaration?.inheritSource === "baseLayerColor") {
       const origin = tslAttribute("instanceOrigin", "vec2") as unknown as {
@@ -976,6 +1146,8 @@ function evaluateIRToSurfaceNodes(
   // a groundColorMap and keep the literal fallback.
   const groundColorMap =
     ("groundColorMap" in target ? target.groundColorMap : null) ?? null;
+  const assetSurfaceBake =
+    ("assetSurfaceBake" in target ? target.assetSurfaceBake : null) ?? null;
   const context: FinalizationContext = {
     ir,
     target,
@@ -986,6 +1158,7 @@ function evaluateIRToSurfaceNodes(
     builtinSceneDepthNode: null,
     parameterUniforms,
     groundColorMap,
+    assetSurfaceBake,
     sunDirectionUniform,
     effectNodes,
     uvOverride,
@@ -1233,6 +1406,26 @@ function applyIRToPostProcess(
 }
 
 export class ShaderRuntime {
+  /**
+   * The landscape's baked ground-color map (stable texture identity;
+   * content refreshes per bake). Asset-slot scatter blades inherit
+   * their root color from this exactly like landscape blades do --
+   * without it, Card Foliage on a placed asset went dark (no floor
+   * to inherit; 2026-07-12). Registered by the landscape controller.
+   */
+  private ambientGroundColorMap: { texture: unknown; size: number } | null =
+    null;
+
+  setAmbientGroundColorMap(
+    map: { texture: unknown; size: number } | null
+  ): void {
+    this.ambientGroundColorMap = map;
+  }
+
+  getAmbientGroundColorMap(): { texture: unknown; size: number } | null {
+    return this.ambientGroundColorMap;
+  }
+
   private static readonly DEFAULT_MATERIAL_DISPOSAL_GRACE_MS = 2000;
   private contentLibrary: ContentLibrarySnapshot;
   private readonly compileProfile: RuntimeCompileProfile;
@@ -1585,6 +1778,28 @@ export class ShaderRuntime {
     let accumulator: ShaderSurfaceNodeSet | null = null;
     const geometry = options.geometry ?? new THREE.BufferGeometry();
 
+    // Local (object-space) bounds power the "local" Height / Gradient
+    // masks -- normalizing the ramp to the mesh so a per-asset gradient
+    // is placement/scale independent (Plan 068.10).
+    if (!geometry.boundingBox && geometry.getAttribute("position")) {
+      geometry.computeBoundingBox();
+    }
+    const bbox = geometry.boundingBox;
+    const localBounds = bbox
+      ? {
+          min: [bbox.min.x, bbox.min.y, bbox.min.z] as [
+            number,
+            number,
+            number
+          ],
+          size: [
+            bbox.max.x - bbox.min.x,
+            bbox.max.y - bbox.min.y,
+            bbox.max.z - bbox.min.z
+          ] as [number, number, number]
+        }
+      : null;
+
     for (const layer of surface.layers) {
       if (!layer.enabled) {
         continue;
@@ -1593,14 +1808,60 @@ export class ShaderRuntime {
       const maskNode = evaluateLayerMask(layer.mask, {
         contentLibrary: this.contentLibrary,
         assetResolver: this.assetResolver,
+        localBounds,
         uvNode: options.uvOverride ?? uv(),
+        // Paint UV channel (Plan 068.8): only offered when THIS
+        // geometry carries it; painted masks fall back to authored
+        // UVs otherwise.
+        paintUvNode: geometry.getAttribute("uv1")
+          ? tslAttribute("uv1", "vec2")
+          : undefined,
         splatmapWeightNode: options.splatmapWeightNode
       });
       const layerAlpha = (maskNode as { mul: (other: unknown) => unknown }).mul(
         float(layer.opacity)
       );
 
+      if (layer.kind === "surface-ref") {
+        // Plan 068.9 -- composite the referenced library surface and
+        // blend it as this layer's appearance, gated by this layer's
+        // mask. Resolution already flattened/cycle-guarded the nested
+        // stack, so this recursion is finite.
+        const nested = this.evaluateLayerStackToNodeSet(layer.nested, {
+          geometry: options.geometry,
+          carrierMaterial: options.carrierMaterial,
+          uvOverride: options.uvOverride,
+          splatmapWeightNode: options.splatmapWeightNode
+        });
+        if (!nested) {
+          continue;
+        }
+        const normalizedNested = withSurfaceNodeDefaults(nested);
+        accumulator =
+          !accumulator || layer.blendMode === "base"
+            ? normalizedNested
+            : blendSurfaceNodeSets(
+                accumulator,
+                normalizedNested,
+                layer.blendMode,
+                layerAlpha
+              );
+        continue;
+      }
+
       if (layer.kind === "scatter") {
+        continue;
+      }
+
+      if (layer.kind === "appearance" && layer.contentKind === "uv-grid") {
+        // Plan 068.12 -- procedural UV test grid drawn from the mesh's
+        // paint UVs (uv1). Bypasses evaluateMeshSurfaceBinding (there is
+        // no shader) and composites like any other appearance layer.
+        const gridSet = withSurfaceNodeDefaults(buildUvGridNodeSet(geometry));
+        accumulator =
+          !accumulator || layer.blendMode === "base"
+            ? gridSet
+            : blendSurfaceNodeSets(accumulator, gridSet, layer.blendMode, layerAlpha);
         continue;
       }
 
@@ -1750,7 +2011,16 @@ export class ShaderRuntime {
       materialCarrierSignature(target.material, target.geometry),
       target.groundColorMap
         ? `ground:${(target.groundColorMap.texture as THREE.Texture).uuid}`
-        : "no-ground"
+        : "no-ground",
+      target.assetSurfaceBake
+        ? `bake:${(target.assetSurfaceBake.texture as THREE.Texture).uuid}`
+        : "no-bake",
+      // Local-space Height / Gradient masks bake geometry bounds into
+      // the graph; key on them so different-sized assets don't share a
+      // stale material (Plan 068.10). Only pays cost when actually used.
+      stackUsesLocalGradientBounds(surfaceStack ?? null)
+        ? `lbounds:${geometryLocalBoundsToken(target.geometry)}`
+        : "no-lbounds"
     ].join("|");
 
     return this.acquireMaterial(
@@ -1772,7 +2042,8 @@ export class ShaderRuntime {
             material,
             geometry: target.geometry,
             materialTextures: surfaceTextures,
-            groundColorMap: target.groundColorMap ?? null
+            groundColorMap: target.groundColorMap ?? null,
+            assetSurfaceBake: target.assetSurfaceBake ?? null
           },
           this.getOrCreateParameterUniformCache(surfaceBinding.shaderDefinitionId),
           this.sunDirectionUniform,

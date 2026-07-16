@@ -48,7 +48,24 @@ export type AppearanceContent =
       shaderDefinitionId: string;
       parameterValues: Record<string, unknown>;
       textureBindings: Record<string, string>;
-    };
+    }
+  /**
+   * Plan 068.9 (ADR 026) -- a layer that IS a referenced library
+   * SurfaceDefinition, composited as this layer's appearance and
+   * gated by this layer's mask. The Surface Brush creates these: one
+   * painted surface = one clean masked layer, live-linked to the
+   * library. Resolution recurses into the referenced surface (cycle-
+   * guarded); render composites it and blends with the mask.
+   */
+  | { kind: "surface"; surfaceDefinitionId: string }
+  /**
+   * Plan 068.12 -- a procedural UV test grid drawn from the mesh's
+   * PAINT UVs (uv1), the Blender-style debug checker. Shipped as a
+   * built-in "UV Test Grid" surface to visualize how the paint atlas
+   * lands on a mesh (island seams, stretching, flips). Rendered
+   * directly by the runtime; carries no shader/texture reference.
+   */
+  | { kind: "uv-grid" };
 
 export type ScatterContent =
   | { kind: "grass"; grassTypeId: string }
@@ -145,6 +162,10 @@ function appearanceLayerName(content: AppearanceContent): string {
       return "Material";
     case "shader":
       return "Shader";
+    case "surface":
+      return "Surface";
+    case "uv-grid":
+      return "UV Test Grid";
   }
 }
 
@@ -183,6 +204,25 @@ export function createAppearanceLayer(
     displayName: overrides.displayName ?? appearanceLayerName(content),
     blendMode: overrides.blendMode ?? "mix",
     content
+  };
+}
+
+/**
+ * Plan 068.9 -- a layer that IS a referenced library surface. Defaults
+ * to a full "mix" so the surface shows across the slot until masked;
+ * the Surface Brush / mask editor then restricts coverage.
+ */
+export function createSurfaceRefLayer(
+  surfaceDefinitionId: string,
+  overrides: LayerFactoryOverrides & { blendMode?: BlendMode } = {}
+): AppearanceLayer {
+  const common = createLayerCommon(overrides);
+  return {
+    ...common,
+    kind: "appearance",
+    displayName: overrides.displayName ?? "Surface",
+    blendMode: overrides.blendMode ?? "mix",
+    content: { kind: "surface", surfaceDefinitionId }
   };
 }
 

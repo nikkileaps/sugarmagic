@@ -111,6 +111,15 @@ export function describeAppearanceContent(
         ?.displayName ?? "Missing Material"
     );
   }
+  if (content.kind === "surface") {
+    // Plan 068.9 -- a referenced library surface. The layer's own
+    // displayName carries the surface name; this generic label is a
+    // fallback for content-only descriptions.
+    return "Surface";
+  }
+  if (content.kind === "uv-grid") {
+    return "UV Test Grid";
+  }
   return (
     shaders.find((shader) => shader.shaderDefinitionId === content.shaderDefinitionId)
       ?.displayName ?? "Missing Shader"
@@ -143,6 +152,16 @@ export function previewColorForBinding(
       return "#a6e3a1";
     case "shader":
       return "#f9e2af";
+    case "surface":
+      // Plan 068.9 -- referenced library surface; recurse for its
+      // base color, else a distinct surface-ref swatch.
+      return previewColorForBinding(
+        { kind: "reference", surfaceDefinitionId: baseLayer.content.surfaceDefinitionId },
+        surfaceDefinitions
+      );
+    case "uv-grid":
+      // Plan 068.12 -- procedural checker debug surface.
+      return "#cc3333";
   }
 }
 

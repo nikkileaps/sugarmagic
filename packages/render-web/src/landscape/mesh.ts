@@ -213,7 +213,11 @@ export class RuntimeLandscapeMesh {
    * every bake; the texture object identity never changes.
    */
   getGroundColorMap(): { texture: THREE.Texture; size: number } {
-    return { texture: this.groundColorTexture, size: this.size };
+    const map = { texture: this.groundColorTexture, size: this.size };
+    // Keep the runtime's ambient copy fresh so ASSET scatter builds
+    // (which have no landscape reference) inherit the same floor.
+    this.getShaderRuntime()?.setAmbientGroundColorMap(map);
+    return map;
   }
 
   /**

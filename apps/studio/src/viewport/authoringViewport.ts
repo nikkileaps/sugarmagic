@@ -3,11 +3,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   createCapsuleFallback,
+  registerLivePaintedMask,
   createFallbackMesh,
   createRenderView,
   createRenderableShaderApplicationState,
   disposeRenderableObject,
   ensureShaderSetAppliedToRenderable,
+  sanitizeRenderableVertexFormats,
   ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
   type RenderableShaderApplicationState,
@@ -21,6 +23,7 @@ import {
   type AuthoringSession,
   getActiveRegion,
   getMaskTextureDefinition,
+  type MaskTextureDefinition,
   type RegionDocument,
   type RegionLandscapeState
 } from "@sugarmagic/domain";
@@ -73,6 +76,12 @@ interface AuthoringViewportOptions {
   stores: ProjectionStores;
   readMaskTexture: (maskTextureId: string) => Promise<ImageData | null>;
   writeMaskTexture: (maskTextureId: string, imageData: ImageData) => Promise<void>;
+  createMaskTextureDefinition: () => Promise<MaskTextureDefinition | null>;
+  ensureAssetPaintUvs: (assetDefinitionId: string) => Promise<void>;
+  /** Fires when in-flight renderable loads drain to zero -- used to
+   *  dismiss the "updating scene" toast after a reload (e.g. remount
+   *  when the Surface Studio closes). */
+  onRenderablesSettled?: () => void;
   overlays?: ViewportOverlayFactory[];
 }
 
@@ -267,6 +276,9 @@ async function createRenderableRoot(
   // propagate. Required for any rigged glTF (Player + NPC character
   // models post-Plan-038); harmless for static-mesh assets.
   const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
+  // No file on disk may crash the render loop (WebGPU rejects
+  // normalized float vertex formats; see renderableFallbacks).
+  sanitizeRenderableVertexFormats(renderable);
   // Populate matrixWorld for every node BEFORE measuring the bbox in
   // normalizeModelScale. SkinnedMesh.computeBoundingBox uses bone
   // matrixWorlds; without this update they're identity and the bbox
@@ -286,6 +298,13 @@ async function createRenderableRoot(
   });
   renderView.enableShadowsOnObject(renderable);
   const shaderApplication = createRenderableShaderApplicationState();
+  // Parent BEFORE building shaders: the asset-surface bake frames the
+  // mesh in WORLD XZ and blades sample it by world XZ, so the mesh
+  // world matrix must include the instance transform at build time.
+  // Building first (unparented) baked in local space -> blades
+  // sampled outside the map -> black grass (Plan 068.11, 2026-07-13).
+  root.add(renderable);
+  root.updateMatrixWorld(true);
   try {
     ensureShaderSetAppliedToRenderable(
       renderable,
@@ -305,7 +324,6 @@ async function createRenderableRoot(
       shaderApplication: createRenderableShaderApplicationState()
     };
   }
-  root.add(renderable);
   return {
     root,
     object,
@@ -383,6 +401,7 @@ export function createAuthoringViewport(
   let renderGeneration = 0;
   let unsubscribeProjection: (() => void) | null = null;
   let unsubscribeShaderEnsureFrame: (() => void) | null = null;
+  let unsubscribeTexturesUpdated: (() => void) | null = null;
   let overlayTeardowns: Array<() => void> = [];
 
   function scheduleRenderableLoad(
@@ -399,6 +418,9 @@ export function createAuthoringViewport(
     void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
       .then((entry) => {
         pendingRenderableLoads.delete(object.instanceId);
+        if (pendingRenderableLoads.size === 0) {
+          options.onRenderablesSettled?.();
+        }
         // Judge this load against the CURRENT desired set (see
         // renderable-lifecycle.ts for why not a per-update counter):
         // discarded on teardown or removal, re-scheduled when the
@@ -623,6 +645,26 @@ export function createAuthoringViewport(
           currentAssetSources
         );
       });
+      // Painted-mask grass on assets is placed at build time from the
+      // mask PIXELS; on fresh load the PNG decodes async, so the first
+      // build sees an empty mask. When a texture finishes loading,
+      // invalidate scatter-bearing renderables so the ensure loop
+      // above rebuilds their grass with the now-ready mask (Plan
+      // 068.11). Per-frame debounced: the ensure pass runs once next
+      // frame regardless of how many textures resolved.
+      unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
+        for (const entry of objectMap.values()) {
+          const hasScatter = (entry.object.effectiveMaterialSlots ?? []).some(
+            (slot) =>
+              slot.surface?.layers?.some((layer) => layer.kind === "scatter")
+          );
+          if (!hasScatter) {
+            continue;
+          }
+          entry.shaderApplication.appliedShaderSignature = null;
+          entry.shaderApplication.appliedFileSources = null;
+        }
+      });
       const width = element.clientWidth || 1;
       const height = element.clientHeight || 1;
       syncCameraProjection(width, height);
@@ -674,6 +716,23 @@ export function createAuthoringViewport(
           setActiveMaskPaintTarget(target) {
             options.stores.viewportStore.getState().setActiveMaskPaintTarget(target);
           },
+          clearMaskPaintFillRequest() {
+            options.stores.viewportStore.getState().clearMaskPaintFillRequest();
+          },
+          invalidateRenderableShaders(filter) {
+            for (const entry of objectMap.values()) {
+              const matches =
+                (filter.instanceId &&
+                  entry.object.instanceId === filter.instanceId) ||
+                (filter.assetDefinitionId &&
+                  entry.object.assetDefinitionId === filter.assetDefinitionId);
+              if (!matches) {
+                continue;
+              }
+              entry.shaderApplication.appliedShaderSignature = null;
+              entry.shaderApplication.appliedFileSources = null;
+            }
+          },
           setCameraQuaternion(quaternion: [number, number, number, number]) {
             options.stores.viewportStore.getState().setCameraQuaternion(quaternion);
           }
@@ -702,7 +761,15 @@ export function createAuthoringViewport(
         writeMaskTexture(maskTextureId: string, imageData: ImageData) {
           return options.writeMaskTexture(maskTextureId, imageData);
         },
+        createMaskTextureDefinition() {
+          return options.createMaskTextureDefinition();
+        },
+        ensureAssetPaintUvs(assetDefinitionId: string) {
+          return options.ensureAssetPaintUvs(assetDefinitionId);
+        },
         previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement) {
+          // Live pixels for CPU scatter placement (painted-mask-live).
+          registerLivePaintedMask(maskTextureId, canvas);
           const session = options.stores.projectStore.getState().session;
           if (!session) {
             return;
@@ -747,6 +814,8 @@ export function createAuthoringViewport(
       overlayTeardowns = [];
       unsubscribeShaderEnsureFrame?.();
       unsubscribeShaderEnsureFrame = null;
+      unsubscribeTexturesUpdated?.();
+      unsubscribeTexturesUpdated = null;
       unsubscribeProjection?.();
       unsubscribeProjection = null;
       renderView.unmount();
@@ -760,6 +829,47 @@ export function createAuthoringViewport(
 
     render() {
       renderView.render();
+    },
+
+    reloadAssetRenderables(assetDefinitionId) {
+      // Dropping the entries is enough: the next applyProjection pass
+      // (any store tick -- the caller's assetSources refresh provides
+      // one) finds no entry, no pending load, and re-schedules with
+      // the fresh source. Same convergence path as first load.
+      for (const [instanceId, entry] of [...objectMap.entries()]) {
+        if (entry.object.assetDefinitionId !== assetDefinitionId) {
+          continue;
+        }
+        authoredRoot.remove(entry.root);
+        disposeRenderableObject(entry.root);
+        objectMap.delete(instanceId);
+      }
+    },
+
+    assetHasPaintUvs(assetDefinitionId) {
+      // True only if a loaded renderable for this asset exists and every
+      // one of its meshes carries uv1. Any mesh without it -> needs a
+      // bake -> return false.
+      for (const entry of objectMap.values()) {
+        if (entry.object.assetDefinitionId !== assetDefinitionId) {
+          continue;
+        }
+        let allMeshesHaveUv1 = true;
+        entry.root.traverse((child) => {
+          if (
+            child instanceof THREE.Mesh &&
+            !child.geometry.getAttribute("uv1")
+          ) {
+            allMeshesHaveUv1 = false;
+          }
+        });
+        if (allMeshesHaveUv1) {
+          return true;
+        }
+      }
+      // Loaded but missing uv1, or not loaded at all -> false. The ensure
+      // op then attempts a bake, which no-ops per mesh already unwrapped.
+      return false;
     },
 
     subscribeFrame(listener) {

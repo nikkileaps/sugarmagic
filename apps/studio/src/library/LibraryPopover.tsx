@@ -34,8 +34,6 @@ import type {
   ContentLibrarySnapshot,
   MaterialDefinition,
   ShaderGraphDocument,
-  ShaderSlotKind,
-  SurfaceBinding,
   TextureDefinition
 } from "@sugarmagic/domain";
 import type { AuthoredAssetResolver } from "@sugarmagic/render-web";
@@ -73,17 +71,6 @@ export interface LibraryPopoverProps {
   onImportAudioClipDefinition: () => Promise<AudioClipDefinition | null>;
   onImportAssetDefinition: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
-  onSetAssetMaterialSlotBinding: (
-    definitionId: string,
-    slotName: string,
-    slotIndex: number,
-    surface: SurfaceBinding<"universal"> | null
-  ) => void;
-  onSetAssetDefaultShader: (
-    definitionId: string,
-    slot: ShaderSlotKind,
-    shaderDefinitionId: string | null
-  ) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   onUpdateAudioClipDefinition: (
     definitionId: string,
@@ -175,8 +162,6 @@ export function LibraryPopover({
   onImportAudioClipDefinition,
   onImportAssetDefinition,
   onUpdateAssetDefinition,
-  onSetAssetMaterialSlotBinding,
-  onSetAssetDefaultShader,
   onRemoveAssetDefinition,
   onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
@@ -476,11 +461,7 @@ export function LibraryPopover({
                   <AssetDefinitionInspector
                     key={selectedAsset.definitionId}
                     assetDefinition={selectedAsset}
-                    contentLibrary={contentLibrary}
                     onUpdateAssetDefinition={onUpdateAssetDefinition}
-                    onSetAssetMaterialSlotBinding={onSetAssetMaterialSlotBinding}
-                    onSetAssetDefaultShader={onSetAssetDefaultShader}
-                    onEditShaderGraph={onEditShaderInGraph}
                   />
                 </Stack>
               </ScrollArea>

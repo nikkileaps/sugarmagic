@@ -17,7 +17,7 @@ import { cloneMask } from "@sugarmagic/domain";
 import { MaskPreview } from "@sugarmagic/ui";
 import { useState } from "react";
 import { MaskEditor } from "./MaskEditor";
-import { sampleMask } from "./maskSampling";
+import { useMaskPreviewSampler } from "./maskSampling";
 
 export interface LayerMaskPopoverProps {
   value: Mask;
@@ -26,6 +26,7 @@ export interface LayerMaskPopoverProps {
   paintOwner:
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "instance-slot" }>, "layerId">
     | null;
   layerId: string;
   onApply: (nextMask: Mask) => void;
@@ -43,6 +44,7 @@ export function LayerMaskPopover({
 }: LayerMaskPopoverProps) {
   const [opened, setOpened] = useState(false);
   const [draftMask, setDraftMask] = useState<Mask>(() => cloneMask(value));
+  const previewSample = useMaskPreviewSampler(value);
 
   function openPopover(): void {
     onActivate?.();
@@ -76,10 +78,7 @@ export function LayerMaskPopover({
             openPopover();
           }}
         >
-          <MaskPreview
-            size={40}
-            sample={(u, v) => sampleMask(value, u, v)}
-          />
+          <MaskPreview size={40} sample={previewSample} />
         </UnstyledButton>
       </Popover.Target>
       <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
@@ -98,6 +97,10 @@ export function LayerMaskPopover({
                 : null
             }
             onChange={setDraftMask}
+            onCommitPainted={(nextMask) => {
+              onApply(cloneMask(nextMask));
+              setOpened(false);
+            }}
           />
           <Button
             size="compact-sm"

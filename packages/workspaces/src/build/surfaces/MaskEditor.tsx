@@ -12,7 +12,15 @@
  * candidates, but re-derive from the field first).
  */
 
-import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import {
+  Button,
+  Group,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  Stack,
+  Text
+} from "@mantine/core";
 import type {
   Mask,
   PaintedMaskTargetAddress,
@@ -20,7 +28,7 @@ import type {
 } from "@sugarmagic/domain";
 import { LabeledSlider, MaskPreview } from "@sugarmagic/ui";
 import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
-import { sampleMask } from "./maskSampling";
+import { useMaskPreviewSampler } from "./maskSampling";
 
 const MASK_KIND_OPTIONS = [
   { value: "always", label: "Always" },
@@ -41,7 +49,15 @@ export interface MaskEditorProps {
   allowedContext: SurfaceContext;
   allowPainted?: boolean;
   paintTarget?: PaintedMaskTargetAddress | null;
+  /** Hide the "Paint in Viewport" arming button (Plan 068.10b -- the
+   *  Surface Studio paints the selected layer directly, no arm step). */
+  hidePaintButton?: boolean;
   onChange: (next: Mask) => void;
+  /** Plan 068.4 — commit the mask THROUGH the host's apply path and
+   *  enter paint mode. Draft-buffered hosts (LayerMaskPopover) must
+   *  persist before arming: arming closes the popover chain, and a
+   *  draft dies with it (shipped bug, 2026-07-12). */
+  onCommitPainted?: (next: Mask) => void;
 }
 
 export function MaskEditor({
@@ -50,8 +66,11 @@ export function MaskEditor({
   allowedContext,
   allowPainted = false,
   paintTarget = null,
-  onChange
+  hidePaintButton = false,
+  onChange,
+  onCommitPainted
 }: MaskEditorProps) {
+  const maskPreviewSample = useMaskPreviewSampler(value);
   const {
     textureDefinitions,
     maskTextureDefinitions,
@@ -77,7 +96,12 @@ export function MaskEditor({
           activeMaskPaintTarget.assetDefinitionId === paintTarget.assetDefinitionId &&
           activeMaskPaintTarget.slotName === paintTarget.slotName &&
           activeMaskPaintTarget.layerId === paintTarget.layerId
-        : false;
+        : paintTarget?.scope === "instance-slot"
+          ? activeMaskPaintTarget?.scope === "instance-slot" &&
+            activeMaskPaintTarget.instanceId === paintTarget.instanceId &&
+            activeMaskPaintTarget.slotName === paintTarget.slotName &&
+            activeMaskPaintTarget.layerId === paintTarget.layerId
+          : false;
 
   return (
     <Stack gap="xs">
@@ -106,10 +130,29 @@ export function MaskEditor({
                 });
                 break;
               case "painted":
-                onChange({
-                  kind: "painted",
-                  maskTextureId: null
-                });
+                // First pick = straight into painting (decided
+                // 2026-07-12): create the mask texture, COMMIT the
+                // mask, then enter paint mode. Commit must precede
+                // arming -- arming closes the popover chain, and a
+                // draft-buffered mask dies unapplied with it.
+                void (async () => {
+                  const created = await onCreateMaskTextureDefinition?.();
+                  const nextMask: Mask = {
+                    kind: "painted",
+                    maskTextureId: created?.definitionId ?? null
+                  };
+                  if (
+                    created &&
+                    paintTarget &&
+                    onSetMaskPaintTarget &&
+                    onCommitPainted
+                  ) {
+                    onCommitPainted(nextMask);
+                    onSetMaskPaintTarget(paintTarget);
+                    return;
+                  }
+                  onChange(nextMask);
+                })();
                 break;
               case "splatmap-channel":
                 onChange({ kind: "splatmap-channel", channelIndex: 0 });
@@ -121,7 +164,13 @@ export function MaskEditor({
                 onChange({ kind: "vertex-color-channel", channel: "r" });
                 break;
               case "height":
-                onChange({ kind: "height", min: 0.2, max: 0.8, fade: 0.2 });
+                onChange({
+                  kind: "height",
+                  min: 0.2,
+                  max: 0.8,
+                  fade: 0.2,
+                  space: "local"
+                });
                 break;
               case "perlin-noise":
                 onChange({
@@ -145,14 +194,15 @@ export function MaskEditor({
                   axis: "y",
                   min: 0.2,
                   max: 0.8,
-                  fade: 0.15
+                  fade: 0.15,
+                  space: "local"
                 });
                 break;
             }
           }}
         />
         <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <MaskPreview sample={(u, v) => sampleMask(value, u, v)} />
+          <MaskPreview sample={maskPreviewSample} />
           <Stack gap={4} style={{ flex: 1 }}>
             {value.kind === "always" ? (
                   <Text size="xs" c="var(--sm-color-overlay0)">
@@ -244,7 +294,10 @@ export function MaskEditor({
                       >
                         Import PNG
                       </Button>
-                      {value.maskTextureId && paintTarget && onSetMaskPaintTarget ? (
+                      {!hidePaintButton &&
+                      value.maskTextureId &&
+                      paintTarget &&
+                      onSetMaskPaintTarget ? (
                         <Button
                           size="compact-xs"
                           variant={
@@ -324,24 +377,44 @@ export function MaskEditor({
                 ) : null}
                 {value.kind === "height" ? (
                   <>
+                    <SegmentedControl
+                      size="xs"
+                      fullWidth
+                      data={[
+                        { value: "local", label: "Local" },
+                        { value: "world", label: "World" }
+                      ]}
+                      value={value.space === "world" ? "world" : "local"}
+                      onChange={(next) =>
+                        onChange({
+                          ...value,
+                          space: next === "world" ? "world" : "local"
+                        })
+                      }
+                    />
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      {value.space === "world"
+                        ? "Ramps over world Y (meters)."
+                        : "0 = bottom of the asset, 1 = top."}
+                    </Text>
                     <LabeledSlider
                       label="Min"
-                      min={0}
-                      max={1}
+                      min={value.space === "world" ? -20 : 0}
+                      max={value.space === "world" ? 40 : 1}
                       value={value.min}
                       onChange={(next) => onChange({ ...value, min: next })}
                     />
                     <LabeledSlider
                       label="Max"
-                      min={0}
-                      max={1}
+                      min={value.space === "world" ? -20 : 0}
+                      max={value.space === "world" ? 40 : 1}
                       value={value.max}
                       onChange={(next) => onChange({ ...value, max: next })}
                     />
                     <LabeledSlider
                       label="Fade"
                       min={0.01}
-                      max={1}
+                      max={value.space === "world" ? 10 : 1}
                       value={value.fade}
                       onChange={(next) => onChange({ ...value, fade: next })}
                     />
@@ -408,24 +481,44 @@ export function MaskEditor({
                         }
                       }}
                     />
+                    <SegmentedControl
+                      size="xs"
+                      fullWidth
+                      data={[
+                        { value: "local", label: "Local" },
+                        { value: "world", label: "World" }
+                      ]}
+                      value={value.space === "world" ? "world" : "local"}
+                      onChange={(next) =>
+                        onChange({
+                          ...value,
+                          space: next === "world" ? "world" : "local"
+                        })
+                      }
+                    />
+                    <Text size="xs" c="var(--sm-color-overlay0)">
+                      {value.space === "world"
+                        ? "Ramps over world position (meters)."
+                        : "0 = one end of the asset, 1 = the other."}
+                    </Text>
                     <LabeledSlider
                       label="Min"
-                      min={-1}
-                      max={1}
+                      min={value.space === "world" ? -20 : 0}
+                      max={value.space === "world" ? 40 : 1}
                       value={value.min}
                       onChange={(next) => onChange({ ...value, min: next })}
                     />
                     <LabeledSlider
                       label="Max"
-                      min={-1}
-                      max={1}
+                      min={value.space === "world" ? -20 : 0}
+                      max={value.space === "world" ? 40 : 1}
                       value={value.max}
                       onChange={(next) => onChange({ ...value, max: next })}
                     />
                     <LabeledSlider
                       label="Fade"
                       min={0.01}
-                      max={1}
+                      max={value.space === "world" ? 10 : 1}
                       value={value.fade}
                       onChange={(next) => onChange({ ...value, fade: next })}
                     />

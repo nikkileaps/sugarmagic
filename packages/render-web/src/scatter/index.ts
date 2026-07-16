@@ -7,6 +7,7 @@
  */
 
 import * as THREE from "three";
+import { sampleLivePaintedMask } from "../painted-mask-live";
 import { transformNormalToView, vec3 } from "three/tsl";
 import { MeshStandardNodeMaterial, WebGPURenderer } from "three/webgpu";
 import type {
@@ -46,6 +47,9 @@ export interface SurfaceScatterSample {
   position: [number, number, number];
   normal: [number, number, number];
   uv: [number, number];
+  /** Paint UV channel (Plan 068.8); null when the mesh has none.
+   *  Painted masks sample this, never the authored uv. */
+  paintUv?: [number, number] | null;
   height: number;
   coverageWeight?: number;
   splatmapWeights?: readonly number[] | null;
@@ -64,6 +68,28 @@ export interface SurfaceScatterBuildOptions {
    * (no landscape there) -- the literal fallback keeps working.
    */
   groundColorMap?: { texture: unknown; size: number } | null;
+  /**
+   * Plan 068.11 -- the owning ASSET's compiled-surface bake (paint-UV
+   * space DataTexture). When set, blades whose card param declares
+   * inheritSource "baseLayerColor" sample THIS (a top-down world-XZ
+   * bake of the mesh's own layers) at their world XZ, taking
+   * precedence over groundColorMap. World-XZ sampling reuses the
+   * existing instanceOrigin attribute, so the shared GPU pipeline is
+   * untouched (a paint-UV attempt broke landscape grass, 2026-07-13).
+   */
+  assetSurfaceBake?: {
+    texture: unknown;
+    offset: [number, number];
+    size: [number, number];
+  } | null;
+  /**
+   * Plan 068.11 -- multiply blade scale by this so grass on a SCALED
+   * asset renders at world size (landscape sits at world-scale 1; a
+   * rock scaled up would otherwise render giant blades because they
+   * inherit the asset root's scale). 1/assetWorldScale; default 1
+   * (landscape and the surface preview are unscaled).
+   */
+  instanceWorldScaleCompensation?: number;
   enableGpuCompute?: boolean;
   logger?: {
     warn: (message: string, payload?: Record<string, unknown>) => void;
@@ -250,7 +276,8 @@ function createScatterMaterialForGeometry(
       {
         material,
         geometry,
-        groundColorMap: options.groundColorMap ?? null
+        groundColorMap: options.groundColorMap ?? null,
+        assetSurfaceBake: options.assetSurfaceBake ?? null
       }
     );
   }
@@ -423,8 +450,18 @@ function samplePaintedMask(
   sample: SurfaceScatterSample,
   options: SurfaceScatterBuildOptions
 ): number | null {
+  // Painted masks live in the PAINT UV channel when the mesh has one
+  // (Plan 068.8); authored UVs on real assets overlap.
+  const uv = sample.paintUv ?? sample.uv;
+  // Live paint pixels first: the resolver texture's image swaps
+  // asynchronously on file refresh, and placement rebuilds raced it
+  // (filled-black masks still placed full grass off stale pixels).
+  const live = sampleLivePaintedMask(definition.definitionId, uv);
+  if (live !== null) {
+    return live;
+  }
   const texture = options.assetResolver.resolveMaskTextureDefinition(definition);
-  return sampleTextureChannel(texture, sample.uv, "r");
+  return sampleTextureChannel(texture, uv, "r");
 }
 
 function evaluateScatterMask(
@@ -433,6 +470,12 @@ function evaluateScatterMask(
   options: SurfaceScatterBuildOptions,
   warnedMaskKinds?: Set<Mask["kind"]>
 ): number {
+  // NOTE (Plan 068.10): the Height / Gradient masks carry a `space`
+  // ("local" | "world"); scatter GATING here evaluates them in world
+  // space only. Local-space scatter gating would need per-sample local
+  // bounds threaded through the sampler -- deferred until a real
+  // gradient-gated-scatter case appears (revisit trigger). The shader
+  // COLOR path (materialize/mask.ts) honors `space` fully.
   switch (mask.kind) {
     case "always":
       return 1;
@@ -620,6 +663,21 @@ export function buildSurfaceScatterLayer(
       });
     }
 
+    const computeParams = createScatterComputeLayerParams(
+      layer,
+      gpuBinInputs[0]!.geometry,
+      { maxDrawDistance: lodParams.maxDrawDistance }
+    );
+    // World-size compensation (Plan 068.11): scale blade size by the
+    // inverse of the asset's world scale. Mutating params.scaleJitter
+    // (not the compute pipeline) keeps the shared GPU kernel untouched.
+    const scaleComp = options.instanceWorldScaleCompensation ?? 1;
+    if (scaleComp !== 1) {
+      computeParams.scaleJitter = [
+        computeParams.scaleJitter[0] * scaleComp,
+        computeParams.scaleJitter[1] * scaleComp
+      ];
+    }
     const sharedComputePipeline = createScatterComputePipeline({
       bins: gpuBinInputs.map((bin) => ({
         bin: bin.bin,
@@ -628,9 +686,7 @@ export function buildSurfaceScatterLayer(
       })),
       samples,
       densityWeights,
-      params: createScatterComputeLayerParams(layer, gpuBinInputs[0]!.geometry, {
-        maxDrawDistance: lodParams.maxDrawDistance
-      })
+      params: computeParams
     });
 
     if (sharedComputePipeline && sharedComputePipeline.bins.length > 0) {
@@ -793,7 +849,8 @@ export function buildSurfaceScatterLayer(
     const colorSeed = hashVectorSeed(layer.layerId, sample, 5);
     const scaleRange = layer.definition.scaleJitter;
     const baseScale =
-      scaleRange[0] + (scaleRange[1] - scaleRange[0]) * hash01(scaleSeed);
+      (scaleRange[0] + (scaleRange[1] - scaleRange[0]) * hash01(scaleSeed)) *
+      (options.instanceWorldScaleCompensation ?? 1);
     const verticalScale =
       layer.contentKind === "grass"
         ? baseScale *

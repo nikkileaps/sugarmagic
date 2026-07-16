@@ -126,6 +126,12 @@ importers:
       three:
         specifier: ^0.183.2
         version: 0.183.2
+      xatlas-three:
+        specifier: ^0.2.1
+        version: 0.2.1
+      xatlasjs:
+        specifier: ^0.2.0
+        version: 0.2.0
       zustand:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.4)
@@ -146,6 +152,22 @@ importers:
       '@sugarmagic/domain':
         specifier: workspace:*
         version: link:../domain
+
+  packages/perf-harness:
+    dependencies:
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../render-web
+      three:
+        specifier: ^0.183.2
+        version: 0.183.2
+    devDependencies:
+      playwright-core:
+        specifier: ^1.49.0
+        version: 1.61.1
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(tsx@4.21.0)
 
   packages/plugins:
     dependencies:
@@ -1109,6 +1131,9 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
+
   concat-map@0.0.1:
     resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
@@ -1531,6 +1556,11 @@ packages:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
 
+  playwright-core@1.61.1:
+    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   postcss@8.5.8:
     resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
     engines: {node: ^10 || ^12 || >=14}
@@ -1852,6 +1882,12 @@ packages:
   word@0.3.0:
     resolution: {integrity: sha512-OELeY0Q61OXpdUfTp+oweA/vtLVg5VDOXh+3he3PNzLGG/y0oylSOC1xRVj0+l4vQ3tj/bB1HVHv1ocXkQceFA==}
     engines: {node: '>=0.8'}
+
+  xatlas-three@0.2.1:
+    resolution: {integrity: sha512-lSdakwxt2AzGmEP2dnYqmS8KqM8ErxBzwAwuEtrbOLxVpWaSJZB5FAUZ4+cT/kKSLlyHZVm866rTCtT+9RjJgg==}
+
+  xatlasjs@0.2.0:
+    resolution: {integrity: sha512-3YxdpuDY4X2Kjn/Zm2c5648x/hYAP/X5YIx7nc1ify65kroSX+CFyzkhbBkIq9RDpjhA2prPRyhJZzYPUE1WgQ==}
 
   xlsx@0.18.5:
     resolution: {integrity: sha512-dmg3LCjBPHZnQp5/F/+nnTa+miPJxUXB6vtk42YjBBKayDNagxGEeIdWApkYPOf3Z3pm3k62Knjzp7lMeTEtFQ==}
@@ -2593,6 +2629,9 @@ snapshots:
 
   color-name@1.1.4: {}
 
+  comlink@4.4.2:
+    optional: true
+
   concat-map@0.0.1: {}
 
   convert-source-map@2.0.0: {}
@@ -2970,6 +3009,8 @@ snapshots:
 
   picomatch@4.0.4: {}
 
+  playwright-core@1.61.1: {}
+
   postcss@8.5.8:
     dependencies:
       nanoid: 3.3.11
@@ -3231,6 +3272,12 @@ snapshots:
   word-wrap@1.2.5: {}
 
   word@0.3.0: {}
+
+  xatlas-three@0.2.1: {}
+
+  xatlasjs@0.2.0:
+    optionalDependencies:
+      comlink: 4.4.2
 
   xlsx@0.18.5:
     dependencies:

@@ -96,12 +96,35 @@ export interface ScatterBrushSettings {
   mode: "paint" | "erase";
 }
 
+/**
+ * Plan 068.9 -- Surface Brush tool state. Arms a library surface and
+ * paints it onto a placed asset's surface slot (fork-to-inline + a
+ * masked surface-ref layer, painted via the world-space projection
+ * brush). Transient UI state; the painted mask + inline override are
+ * the canonical persisted result.
+ */
+export interface SurfaceBrushSettings {
+  /** The library SurfaceDefinition to paint (null until picked). */
+  surfaceDefinitionId: string | null;
+  /** Brush radius in world meters. */
+  radius: number;
+  /** Paint strength 0..1. */
+  strength: number;
+  /** Edge falloff 0..1. */
+  falloff: number;
+  mode: "paint" | "erase";
+}
+
 export interface ViewportState {
   landscapeDraft: RegionLandscapeState | null;
   transformDrafts: Record<string, TransformDraft>;
   activeToolCursor: LandscapeCursor | null;
   brushSettings: LandscapeBrushSettings | null;
   activeMaskPaintTarget: PaintedMaskTargetAddress | null;
+  /** Plan 068.8 QoL -- one-shot flood-fill request for the armed
+   *  painted mask ("paint" = white, "erase" = black). The mask-paint
+   *  overlay consumes and clears it; nonce distinguishes repeats. */
+  maskPaintFillRequest: { mode: "paint" | "erase"; nonce: number } | null;
   activeLandscapeChannelIndex: number;
   activeTransformTool: TransformTool;
   activeSpatialTool: "select" | "draw-rect";
@@ -109,6 +132,8 @@ export interface ViewportState {
   sketchSettings: LandscapeSketchSettings;
   /** Non-null while the Layout scatter brush tool is active. */
   scatterBrushSettings: ScatterBrushSettings | null;
+  /** Non-null while the Layout Surface Brush tool is active (Plan 068.9). */
+  surfaceBrushSettings: SurfaceBrushSettings | null;
 }
 
 export interface ViewportActions {
@@ -124,6 +149,8 @@ export interface ViewportActions {
   setActiveToolCursor: (cursor: LandscapeCursor | null) => void;
   setBrushSettings: (settings: LandscapeBrushSettings | null) => void;
   setActiveMaskPaintTarget: (target: PaintedMaskTargetAddress | null) => void;
+  requestMaskPaintFill: (mode: "paint" | "erase") => void;
+  clearMaskPaintFillRequest: () => void;
   setActiveLandscapeChannelIndex: (channelIndex: number) => void;
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
@@ -132,6 +159,7 @@ export interface ViewportActions {
   ) => void;
   setSketchSettings: (settings: LandscapeSketchSettings) => void;
   setScatterBrushSettings: (settings: ScatterBrushSettings | null) => void;
+  setSurfaceBrushSettings: (settings: SurfaceBrushSettings | null) => void;
 }
 
 function cloneLandscape(landscape: RegionLandscapeState): RegionLandscapeState {
@@ -190,12 +218,14 @@ export function createViewportStore() {
       mode: "paint"
     },
     activeMaskPaintTarget: null,
+    maskPaintFillRequest: null,
     activeLandscapeChannelIndex: 1,
     activeTransformTool: "move",
     activeSpatialTool: "select",
     cameraQuaternion: [0, 0, 0, 1],
     sketchSettings: DEFAULT_SKETCH_SETTINGS,
     scatterBrushSettings: null,
+    surfaceBrushSettings: null,
     setLandscapeDraft(landscape) {
       set({ landscapeDraft: landscape });
     },
@@ -241,6 +271,17 @@ export function createViewportStore() {
     setActiveMaskPaintTarget(target) {
       set({ activeMaskPaintTarget: target });
     },
+    requestMaskPaintFill(mode) {
+      set((state) => ({
+        maskPaintFillRequest: {
+          mode,
+          nonce: (state.maskPaintFillRequest?.nonce ?? 0) + 1
+        }
+      }));
+    },
+    clearMaskPaintFillRequest() {
+      set({ maskPaintFillRequest: null });
+    },
     setActiveLandscapeChannelIndex(channelIndex) {
       set({ activeLandscapeChannelIndex: channelIndex });
     },
@@ -255,6 +296,9 @@ export function createViewportStore() {
     },
     setScatterBrushSettings(settings) {
       set({ scatterBrushSettings: settings });
+    },
+    setSurfaceBrushSettings(settings) {
+      set({ surfaceBrushSettings: settings });
     },
     setSketchSettings(settings) {
       set({ sketchSettings: settings });

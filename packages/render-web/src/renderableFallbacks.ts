@@ -13,6 +13,33 @@ import { releaseShadersFromObjectTree } from "./applyShaderToRenderable";
 
 const DEFAULT_FALLBACK_COLOR = 0x89b4fa;
 
+/**
+ * Strip glTF-invalid `normalized` flags from float vertex attributes
+ * across a loaded renderable tree. WebGPU has NO normalized float
+ * vertex formats -- one poisoned attribute (a paint-UV bake once
+ * shipped `NORMAL normalized=true`) made createRenderPipeline throw
+ * and killed the whole render loop. Defense at the consumer: no file
+ * on disk may crash the viewport.
+ */
+export function sanitizeRenderableVertexFormats(root: THREE.Object3D): void {
+  root.traverse((child) => {
+    if (!(child as THREE.Mesh).isMesh) return;
+    const geometry = (child as THREE.Mesh).geometry;
+    if (!(geometry instanceof THREE.BufferGeometry)) return;
+    for (const name of Object.keys(geometry.attributes)) {
+      const attribute = geometry.getAttribute(name);
+      if (
+        attribute instanceof THREE.BufferAttribute &&
+        (attribute.array instanceof Float32Array ||
+          attribute.array instanceof Float64Array) &&
+        attribute.normalized
+      ) {
+        attribute.normalized = false;
+      }
+    }
+  });
+}
+
 export function createFallbackMesh(options?: { color?: number }): THREE.Mesh {
   return new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),

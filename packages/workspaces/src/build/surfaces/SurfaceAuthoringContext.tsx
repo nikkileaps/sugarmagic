@@ -43,6 +43,15 @@ export interface SurfaceAuthoringCatalog {
   onImportMaskTextureDefinition?: () => Promise<MaskTextureDefinition | null>;
   activeMaskPaintTarget: PaintedMaskTargetAddress | null;
   onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) => void;
+  /** Plan 068.8 QoL -- live pixels of a painted mask for previews
+   *  (null while loading / unknown id). Studio backs this with a
+   *  canvas cache updated on every stroke commit. */
+  getPaintedMaskPreviewCanvas?: (
+    maskTextureId: string
+  ) => HTMLCanvasElement | null;
+  /** Bumps when any painted mask's pixels change, so previews
+   *  re-render. */
+  paintedMaskPreviewVersion?: number;
 }
 
 const SurfaceAuthoringContext = createContext<SurfaceAuthoringCatalog | null>(

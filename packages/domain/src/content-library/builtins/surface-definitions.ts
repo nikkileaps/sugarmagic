@@ -17,7 +17,8 @@ import {
   createColorEmissionContent,
   createEmissionLayer,
   createScatterLayer,
-  createSurface
+  createSurface,
+  createUvGridAppearanceContent
 } from "../../surface";
 
 function getBuiltInGrassSurface4ShaderId(projectId: string): string {
@@ -172,6 +173,21 @@ export function createBuiltInSurfaceDefinitions(
         createEmissionLayer(createColorEmissionContent(0xf4d37d, 0.08), {
           displayName: "Warm Lift",
           opacity: 0.35
+        })
+      ])
+    },
+    {
+      // Plan 068.12 -- a Blender-style UV test grid, drawn from the
+      // mesh's paint UVs (uv1). Apply it to any asset slot to see how
+      // the paint atlas lands: island seams, stretching, flips.
+      definitionId: `${projectId}:surface:uv-test-grid`,
+      metadata: { builtIn: true, builtInKey: "uv-test-grid" },
+      definitionKind: "surface",
+      displayName: "UV Test Grid",
+      surface: createSurface([
+        createAppearanceLayer(createUvGridAppearanceContent(), {
+          displayName: "UV Grid",
+          blendMode: "base"
         })
       ])
     }

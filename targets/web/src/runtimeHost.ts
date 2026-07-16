@@ -64,6 +64,7 @@ import {
   normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
+  buildInstancedAssetGroup,
   createCapsuleFallback,
   createRenderView,
   createWebRenderEngine,
@@ -73,6 +74,7 @@ import {
   ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
+  sanitizeRenderableVertexFormats,
   type RenderableShaderApplicationState,
   type RenderView,
   type WebRenderEngine
@@ -558,6 +560,37 @@ interface SceneObjectEntry {
    * NPCs without animations leave this null.
    */
   mixer: THREE.AnimationMixer | null;
+}
+
+/** Plan 068.13a -- a placed asset is instanceable if it is a static model
+ *  with no per-instance scatter / surface-ref surface (those realize
+ *  grass/foliage per instance and need the per-object build). Painted-mask
+ *  and scene-scoped surface differences are handled by the grouping key
+ *  (`representationKey` folds in the mask, ADR 028 Gate 2), so they simply
+ *  land in different groups rather than being excluded here. Skinned models
+ *  are `npc`/`player` kind and never reach here; the builder also guards. */
+function objectSurfaceHasScatter(object: SceneObject): boolean {
+  const slots = (
+    object as {
+      effectiveMaterialSlots?: Array<{
+        surface?: { layers?: Array<{ kind?: string }> } | null;
+      }>;
+    }
+  ).effectiveMaterialSlots;
+  if (!slots) return false;
+  return slots.some((slot) =>
+    (slot.surface?.layers ?? []).some(
+      (layer) => layer.kind === "scatter" || layer.kind === "surface-ref"
+    )
+  );
+}
+
+function assetObjectIsInstanceable(object: SceneObject): boolean {
+  return (
+    object.kind === "asset" &&
+    Boolean((object as { modelSourcePath?: string | null }).modelSourcePath) &&
+    !objectSurfaceHasScatter(object)
+  );
 }
 
 function createCameraSnapshot(
@@ -1184,6 +1217,7 @@ export function createWebRuntimeHost(
   });
   const renderEngineProjector = createRuntimeRenderEngineProjector(engine);
   let renderView: RenderView | null = null;
+  let unsubscribeTexturesUpdated: (() => void) | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
@@ -1370,6 +1404,8 @@ export function createWebRuntimeHost(
       disposeRenderableObject(scene);
     }
 
+    unsubscribeTexturesUpdated?.();
+    unsubscribeTexturesUpdated = null;
     renderView?.unmount();
     renderView = null;
 
@@ -1750,6 +1786,43 @@ export function createWebRuntimeHost(
       }
     });
 
+    // Dev-only debug handle. Lets perf/debug tooling (the perf-harness
+    // CDP drivers) attach to a running preview and inspect the live
+    // scene/engine without any app spelunking. Dev build only -- never
+    // present in a published artifact. See packages/perf-harness.
+    if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      (globalThis as { __sugarmagicDebug?: unknown }).__sugarmagicDebug = {
+        engine,
+        get renderView() {
+          return renderView;
+        },
+        get scene() {
+          return renderView?.scene ?? null;
+        }
+      };
+    }
+
+    // Painted-mask grass on assets is placed at build time from the
+    // mask PIXELS; the PNG decodes async, so the first build sees an
+    // empty mask. When a texture loads, invalidate scatter-bearing
+    // renderables so the per-frame ensure pass rebuilds their grass
+    // with the now-ready mask (Plan 068.11).
+    unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
+      for (const entry of sceneObjectEntries.values()) {
+        // Surface-brushed grass lives in a surface-ref layer's NESTED
+        // scatter, not a bare `scatter` layer, so use the same detector
+        // the instancing partition uses (checks scatter AND surface-ref).
+        // The old inline scatter-only check missed the Surface Brush --
+        // the headline feature -- so its painted-mask grass never
+        // rebuilt when the PNG decoded and stayed empty on fresh load.
+        if (!objectSurfaceHasScatter(entry.object)) {
+          continue;
+        }
+        entry.shaderApplication.appliedShaderSignature = null;
+        entry.shaderApplication.appliedFileSources = null;
+      }
+    });
+
     // Plan 055 §055.3 — spawn state hydrates through the
     // participant pipeline. Seed precedence: real save wins,
     // then the project's `defaultGameSavePayload` (a fresh-start
@@ -1939,7 +2012,106 @@ export function createWebRuntimeHost(
           activeItemPresenceIds.add(presence.presenceId);
         }
       );
+      // Plan 068.13a / ADR 028 -- instance repeated scatter-brushed placed
+      // assets. Group instanceable static placements by representationKey
+      // (which folds in asset + surface + mask, ADR 028 Gate 2) and render
+      // each group of >=2 as one InstancedMesh per submesh via the shared
+      // builder, instead of N full GLB clones. Singletons + everything
+      // non-instanceable (characters/NPCs/items, skinned, scatter/
+      // surface-ref surfaces) keep the per-object path below unchanged.
+      const singletonObjects: SceneObject[] = [];
+      const instanceGroups = new Map<string, SceneObject[]>();
       for (const object of objects) {
+        if (
+          object.kind === "item" &&
+          !activeItemPresenceIds.has(object.instanceId)
+        ) {
+          continue;
+        }
+        if (assetObjectIsInstanceable(object)) {
+          const existing = instanceGroups.get(object.representationKey);
+          if (existing) {
+            existing.push(object);
+          } else {
+            instanceGroups.set(object.representationKey, [object]);
+          }
+        } else {
+          singletonObjects.push(object);
+        }
+      }
+
+      for (const groupMembers of instanceGroups.values()) {
+        if (groupMembers.length < 2) {
+          singletonObjects.push(...groupMembers);
+          continue;
+        }
+        const representative = groupMembers[0]!;
+        const modelPath = (
+          representative as { modelSourcePath?: string | null }
+        ).modelSourcePath;
+        const groupUrl = modelPath
+          ? renderView.assetResolver.resolveAssetUrl(modelPath)
+          : null;
+        if (!groupUrl) {
+          singletonObjects.push(...groupMembers);
+          continue;
+        }
+        const groupKey = `instanced:${representative.representationKey}`;
+        // Capture the live scene: a dispose() + start() that runs WHILE
+        // this GLB is loading reassigns `scene` to a fresh THREE.Scene, so
+        // a plain `if (!scene)` guard would pass and attach a stale batch
+        // (built from the OLD start's SceneObjects) to the NEW scene, and
+        // could clobber a groupKey the new start already populated
+        // (068.13 mini-review). Comparing the captured reference bails.
+        const groupScene = scene;
+        void gltfLoader
+          .loadAsync(groupUrl)
+          .then((gltf) => {
+            if (!scene || scene !== groupScene) return;
+            const built = buildInstancedAssetGroup({
+              group: groupMembers,
+              sourceScene: gltf.scene,
+              shaderRuntime: renderView?.shaderRuntime ?? null,
+              assetSources: state.assetSources,
+              // Instanced scatter fields do NOT cast shadows. One
+              // InstancedMesh has a single field-spanning bounding sphere,
+              // so it survives every CSM cascade's cull and re-renders all
+              // instances into all (up to 4) cascades -- ~3-4x shadow-pass
+              // geometry vs the pre-instancing per-clone culling, which
+              // tanks fps and makes cascade re-splits jitter on camera turn.
+              // Small foliage shadows are low-value; skip them until the
+              // field is spatially chunked (deferred #347 HISM). To cast
+              // shadows again, restore enableShadowsOnObject here.
+              enableShadows: undefined
+            });
+            if (!built) {
+              // Skinned model slipped through (rare -- asset-kind is meant
+              // to be static). Skip rather than mis-render; log it.
+              console.warn("[web-runtime] instanced-group-skipped", {
+                representationKey: representative.representationKey,
+                modelSourcePath: modelPath,
+                count: groupMembers.length
+              });
+              return;
+            }
+            scene.add(built.root);
+            sceneObjectEntries.set(groupKey, {
+              root: built.root,
+              object: built.representative,
+              shaderApplication: built.shaderApplication,
+              mixer: null
+            });
+          })
+          .catch((error) => {
+            console.error("[web-runtime] instanced-group-load-failed", {
+              representationKey: representative.representationKey,
+              modelSourcePath: modelPath,
+              error
+            });
+          });
+      }
+
+      for (const object of singletonObjects) {
         // For kind "item" the SceneObject's `instanceId` equals
         // the presenceId — see scene/index.ts:createItemSceneObject.
         // If the filter pass didn't include this presence,
@@ -1979,6 +2151,12 @@ export function createWebRuntimeHost(
               const renderable = cloneSkinnedObject(
                 gltf.scene
               ) as THREE.Object3D;
+              // Defend the runtime render loop the same way the studio
+              // viewport does: a poisoned normalized-float vertex format
+              // (e.g. from a paint-UV bake) crashes createRenderPipeline
+              // and kills the loop. The sanitize belongs at every load
+              // boundary, not just the editor's (068.13 mini-review).
+              sanitizeRenderableVertexFormats(renderable);
               const validationError = validateRenderableAsset(
                 object,
                 renderable
@@ -2011,6 +2189,14 @@ export function createWebRuntimeHost(
                 }
               });
               renderView?.enableShadowsOnObject(renderable);
+              // Parent BEFORE building shaders: the asset-surface bake
+              // frames the mesh in WORLD XZ and blades sample it by
+              // world XZ, so the mesh world matrix must include the
+              // instance transform at build time. Building first
+              // (unparented) baked in local space -> black grass
+              // (Plan 068.11, 2026-07-13).
+              rootObject.add(renderable);
+              rootObject.updateMatrixWorld(true);
               ensureShaderSetAppliedToRenderable(
                 renderable,
                 object,
@@ -2018,7 +2204,6 @@ export function createWebRuntimeHost(
                 shaderApplication,
                 state.assetSources
               );
-              rootObject.add(renderable);
 
               // For NPCs with bound animations, load the idle clip and
               // attach an AnimationMixer so the runtime frame loop can

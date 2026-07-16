@@ -148,15 +148,18 @@ export function createWebRenderEngine(
     onTextureUpdated() {
       for (const view of attachedViews) {
         view.markSceneMaterialsDirty();
-        // The identity re-apply below early-returns (same landscape
-        // ref); the bake snapshot still needs the freshly loaded
-        // texture, so request it explicitly (065.6).
+        // Refresh the ground-color bake so it re-samples the freshly
+        // decoded texture (065.6). We deliberately do NOT re-apply the
+        // landscape here: for a region viewport the landscape ref is
+        // unchanged, so a re-apply early-returns and does nothing (the
+        // bake-dirty above is the real refresh) -- and for a FOCUSED
+        // view (Surface Studio) it would BUILD the whole terrain into an
+        // asset-only scene that never had landscape at all (Plan 068.10).
         view.landscapeController.markGroundBakeDirty();
-        view.landscapeController.applyLandscape(
-          currentRegion?.landscape ?? null,
-          currentContentLibrary,
-          currentAssetSources
-        );
+        // Asset renderables (host-owned) rebuild their scatter here:
+        // grass gated by a painted mask needs a rebuild once the mask
+        // PNG decodes (Plan 068.11).
+        view.notifyTexturesUpdated();
       }
     }
   });
@@ -167,6 +170,21 @@ export function createWebRenderEngine(
     logger,
     assetResolver
   });
+
+  /**
+   * Plan 068.11 -- eagerly kick off loading every painted mask so the
+   * CPU scatter density sampler (which places grass at build time from
+   * the mask PIXELS) has them. Without this the mask only loaded lazily
+   * when a scatter build resolved it -- but that build produced empty
+   * grass because the mask wasn't loaded yet, a deadlock on fresh load.
+   * Resolving here starts the image load; completion fires
+   * onTextureUpdated -> notifyTexturesUpdated -> host scatter rebuild.
+   */
+  function preloadMaskTextures(): void {
+    for (const definition of currentContentLibrary.maskTextureDefinitions ?? []) {
+      assetResolver.resolveMaskTextureDefinition(definition);
+    }
+  }
 
   let environmentState: WebRenderEnvironmentState = {
     version: environmentVersion,
@@ -256,6 +274,7 @@ export function createWebRenderEngine(
       currentContentLibrary = library;
       shaderRuntime.setContentLibrary(library);
       assetResolver.sync(library, currentAssetSources);
+      preloadMaskTextures();
       recomputeEnvironmentState();
       notifyViews();
     },
@@ -263,6 +282,7 @@ export function createWebRenderEngine(
       ensureNotDisposed();
       currentAssetSources = sources;
       assetResolver.sync(currentContentLibrary, currentAssetSources);
+      preloadMaskTextures();
       recomputeEnvironmentState();
       notifyViews();
     },

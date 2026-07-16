@@ -13,3 +13,8 @@ export {
   resolveRenderableCompletion,
   type RenderableCompletionDecision
 } from "./viewport/renderable-lifecycle";
+export {
+  bakePaintUvsIntoGlb,
+  type PaintUvBakeOptions,
+  type PaintUvBakeResult
+} from "./asset-pipeline/paint-uvs";

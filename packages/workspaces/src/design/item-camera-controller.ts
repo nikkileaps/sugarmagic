@@ -9,7 +9,11 @@ export interface ItemCameraController {
     camera: THREE.PerspectiveCamera,
     domElement: HTMLElement,
     subscribeFrame: (listener: () => void) => () => void,
-    targetY: number
+    targetY: number,
+    /** Override the default zoom (dolly) distance range -- e.g. the
+     *  Surface Studio scales it to the asset so large meshes can zoom
+     *  out far enough. */
+    distanceRange?: { min: number; max: number }
   ) => void;
   updateTarget: (targetY: number) => void;
   detach: () => void;
@@ -36,7 +40,7 @@ export function createItemCameraController(): ItemCameraController {
   }
 
   return {
-    attach(camera, domElement, subscribeFrame, targetY) {
+    attach(camera, domElement, subscribeFrame, targetY, distanceRange) {
       if (controls) return;
 
       attachedElement = domElement;
@@ -44,8 +48,8 @@ export function createItemCameraController(): ItemCameraController {
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
       controls.screenSpacePanning = false;
-      controls.minDistance = MIN_DISTANCE;
-      controls.maxDistance = MAX_DISTANCE;
+      controls.minDistance = distanceRange?.min ?? MIN_DISTANCE;
+      controls.maxDistance = distanceRange?.max ?? MAX_DISTANCE;
       controls.maxPolarAngle = Math.PI / 2;
       controls.mouseButtons = {
         LEFT: null as unknown as THREE.MOUSE,

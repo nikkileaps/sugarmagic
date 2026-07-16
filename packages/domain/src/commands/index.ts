@@ -454,6 +454,24 @@ export type SetPlacedAssetShaderOverrideCommand = SemanticCommandBase<
     instanceId: string;
     slot: ShaderSlotKind;
     shaderDefinitionId: string | null;
+    /** Plan 068.2 — "scene" writes a Scene restyle of a BASE
+     *  placement into the active Scene's overlay record instead of
+     *  the instance. Omitted/"base" writes the instance itself. */
+    scope?: "base" | "scene";
+  }
+>;
+
+/** Plan 068.1 — per-material-slot surface override on one instance.
+ *  `surface: null` clears the slot's override (falls back to the
+ *  definition's slot surface). */
+export type SetPlacedAssetSurfaceSlotOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetSurfaceSlotOverride",
+  {
+    instanceId: string;
+    slotName: string;
+    surface: SurfaceBinding<"universal"> | null;
+    /** Plan 068.2 — see SetPlacedAssetShaderOverrideCommand.scope. */
+    scope?: "base" | "scene";
   }
 >;
 
@@ -1016,6 +1034,7 @@ export type SemanticCommand =
   | SetAssetDefaultShaderParameterOverrideCommand
   | ClearAssetDefaultShaderParameterOverrideCommand
   | SetPlacedAssetShaderOverrideCommand
+  | SetPlacedAssetSurfaceSlotOverrideCommand
   | SetNPCPresenceShaderOverrideCommand
   | SetItemPresenceShaderOverrideCommand
   | SetPlacedAssetShaderParameterOverrideCommand

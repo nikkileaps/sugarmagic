@@ -6,8 +6,10 @@
  * same visual approximation.
  */
 
+import { useMemo } from "react";
 import type { Mask } from "@sugarmagic/domain";
 import { samplePerlinNoise2d } from "@sugarmagic/domain";
+import { useSurfaceAuthoring } from "./SurfaceAuthoringContext";
 
 export function sampleMask(mask: Mask, u: number, v: number): number {
   switch (mask.kind) {
@@ -71,4 +73,50 @@ export function sampleMask(mask: Mask, u: number, v: number): number {
       return (axisValue - (mask.min - mask.fade)) / Math.max(mask.max - mask.min + mask.fade * 2, 0.001);
     }
   }
+}
+
+
+/**
+ * Preview sampler that shows REAL pixels for painted masks (Plan
+ * 068.8 QoL -- the flat 0.75 placeholder made every painted mask
+ * preview a lie; a black-filled mask looked identical to a white
+ * one). Procedural masks keep the approximation from sampleMask.
+ */
+export function useMaskPreviewSampler(
+  mask: Mask
+): (u: number, v: number) => number {
+  const { getPaintedMaskPreviewCanvas, paintedMaskPreviewVersion } =
+    useSurfaceAuthoring();
+  const maskTextureId = mask.kind === "painted" ? mask.maskTextureId : null;
+
+  return useMemo(() => {
+    if (mask.kind !== "painted" || !maskTextureId) {
+      return (u: number, v: number) => sampleMask(mask, u, v);
+    }
+    const canvas = getPaintedMaskPreviewCanvas?.(maskTextureId) ?? null;
+    const context = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !context) {
+      return (u: number, v: number) => sampleMask(mask, u, v);
+    }
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    return (u: number, v: number) => {
+      const x = Math.min(
+        image.width - 1,
+        Math.max(0, Math.floor(u * image.width))
+      );
+      const y = Math.min(
+        image.height - 1,
+        Math.max(0, Math.floor((1 - v) * image.height))
+      );
+      return image.data[(y * image.width + x) * 4] / 255;
+    };
+    // paintedMaskPreviewVersion invalidates the pixel snapshot after
+    // strokes/fills commit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mask,
+    maskTextureId,
+    getPaintedMaskPreviewCanvas,
+    paintedMaskPreviewVersion
+  ]);
 }

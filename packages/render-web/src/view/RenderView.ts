@@ -42,6 +42,13 @@ export interface RenderView {
   resize(width: number, height: number): void;
   setCamera(camera: THREE.Camera): void;
   subscribeFrame(listener: () => void): () => void;
+  /** Fires when any resolver texture (incl. painted masks) finishes
+   *  loading. Hosts rebuild scatter-bearing renderables here so grass
+   *  gated by a painted mask appears once the PNG decodes -- on fresh
+   *  load the scatter build ran against an empty mask (Plan 068.11). */
+  subscribeTexturesUpdated(listener: () => void): () => void;
+  /** Engine-facing: notify subscribers a texture updated. */
+  notifyTexturesUpdated(): void;
   enableShadowsOnObject(root: THREE.Object3D): void;
   requestEngineStateSync(): void;
   markSceneMaterialsDirty(): void;
@@ -53,12 +60,6 @@ function configureRenderer(next: WebGPURenderer): void {
   next.toneMapping = THREE.ACESFilmicToneMapping;
   next.toneMappingExposure = 1;
   next.outputColorSpace = THREE.SRGBColorSpace;
-  // TEMP DEBUG: enable WebGPU timestamp queries so renderer.info.render.timestamp
-  // and renderer.info.compute.timestamp report real GPU time per frame.
-  const backend = (next as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
-  if (backend) {
-    backend.trackTimestamp = true;
-  }
 }
 
 export function createRenderView(options: RenderViewOptions): RenderView {
@@ -72,6 +73,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
   );
 
   const frameListeners = new Set<() => void>();
+  const textureUpdatedListeners = new Set<() => void>();
   let activeCamera = options.camera;
   let renderer: WebGPURenderer | null = null;
   let renderPipeline: RuntimeRenderPipeline | null = null;
@@ -124,31 +126,8 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     applyEnvironmentState(state);
   }
 
-  // TEMP DEBUG: per-frame timing breakdown.
-  // CPU: performance.now() around sync / listeners / render call.
-  // GPU: WebGPU timestamp queries — drained each frame via
-  // renderer.resolveTimestampsAsync; renderer.info.render.timestamp /
-  // .compute.timestamp expose the resolved per-frame GPU ms.
-  // info.render.calls is cumulative across the renderer's lifetime, so we
-  // sample by delta between frames; info.render.triangles is per-frame.
-  const frameTimings = {
-    cpuSync: 0,
-    cpuListeners: 0,
-    cpuRenderCall: 0,
-    gpuRender: 0,
-    gpuCompute: 0,
-    total: 0,
-    drawCalls: 0,
-    triangles: 0,
-    samples: 0,
-    lastCallsCumulative: 0
-  };
-  let timestampResolveInFlight = false;
-
   function renderOnce(): void {
-    const t0 = performance.now();
     syncEnvironmentFromEngine();
-    const t1 = performance.now();
     for (const listener of frameListeners) {
       listener();
     }
@@ -176,60 +155,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
         }
       });
     }
-    const t2 = performance.now();
     renderPipeline?.render();
-    const t3 = performance.now();
-
-    frameTimings.cpuSync += t1 - t0;
-    frameTimings.cpuListeners += t2 - t1;
-    frameTimings.cpuRenderCall += t3 - t2;
-    frameTimings.total += t3 - t0;
-
-    if (renderer) {
-      const rendererAny = renderer as unknown as {
-        info: {
-          render: { timestamp?: number; calls?: number; triangles?: number };
-          compute: { timestamp?: number };
-        };
-        resolveTimestampsAsync?: (type?: unknown) => Promise<unknown>;
-      };
-      const info = rendererAny.info;
-      frameTimings.gpuRender += info.render.timestamp ?? 0;
-      frameTimings.gpuCompute += info.compute.timestamp ?? 0;
-      const callsNow = info.render.calls ?? 0;
-      const callsDelta = Math.max(0, callsNow - frameTimings.lastCallsCumulative);
-      frameTimings.lastCallsCumulative = callsNow;
-      frameTimings.drawCalls += callsDelta;
-      frameTimings.triangles += info.render.triangles ?? 0;
-
-      // Drain BOTH timestamp queues — render and compute have separate
-      // pools in three's WebGPU backend. resolveTimestampsAsync defaults
-      // to 'render' only; compute scatter dispatches multiple compute
-      // passes per frame and saturates the compute pool quickly if not
-      // drained too. Fire-and-forget; flight flag avoids stacking.
-      if (rendererAny.resolveTimestampsAsync && !timestampResolveInFlight) {
-        timestampResolveInFlight = true;
-        Promise.all([
-          rendererAny.resolveTimestampsAsync("render").catch(() => undefined),
-          rendererAny.resolveTimestampsAsync("compute").catch(() => undefined)
-        ]).finally(() => {
-          timestampResolveInFlight = false;
-        });
-      }
-    }
-    frameTimings.samples += 1;
-
-    if (frameTimings.samples >= 60) {
-      frameTimings.cpuSync = 0;
-      frameTimings.cpuListeners = 0;
-      frameTimings.cpuRenderCall = 0;
-      frameTimings.gpuRender = 0;
-      frameTimings.gpuCompute = 0;
-      frameTimings.total = 0;
-      frameTimings.drawCalls = 0;
-      frameTimings.triangles = 0;
-      frameTimings.samples = 0;
-    }
   }
 
   function renderLoopTick(): void {
@@ -343,6 +269,7 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       renderPipeline = null;
       appliedEnvironmentVersion = -1;
       frameListeners.clear();
+      textureUpdatedListeners.clear();
 
       if (renderer && container && renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -382,6 +309,17 @@ export function createRenderView(options: RenderViewOptions): RenderView {
       return () => {
         frameListeners.delete(listener);
       };
+    },
+    subscribeTexturesUpdated(listener) {
+      textureUpdatedListeners.add(listener);
+      return () => {
+        textureUpdatedListeners.delete(listener);
+      };
+    },
+    notifyTexturesUpdated() {
+      for (const listener of textureUpdatedListeners) {
+        listener();
+      }
     },
     enableShadowsOnObject(root) {
       root.traverse((child) => {

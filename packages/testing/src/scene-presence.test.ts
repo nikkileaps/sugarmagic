@@ -137,6 +137,7 @@ describe("layout scene presences", () => {
       sceneId: "scene:test",
       regionOverlays: {
         [region.identity.id]: {
+          assetAppearanceOverrides: {},
           folders: [],
           placedAssets: [],
           playerPresence: {

@@ -1,0 +1,20 @@
+{
+  "name": "@sugarmagic/perf-harness",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Standalone GPU perf rig: drives the real RenderView loop over a tunable plain-three load in a headed real-Chrome Playwright session. QA tooling only -- never shipped in the app.",
+  "scripts": {
+    "dev": "vite",
+    "measure:load": "node driver/measure-load.mjs",
+    "measure:live": "node driver/measure-live.mjs"
+  },
+  "dependencies": {
+    "@sugarmagic/render-web": "workspace:*",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.0",
+    "vite": "^8.0.3"
+  }
+}

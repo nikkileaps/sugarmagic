@@ -28,6 +28,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.183.2",
+    "xatlas-three": "^0.2.1",
+    "xatlasjs": "^0.2.0",
     "zustand": "^5.0.12"
   }
 }

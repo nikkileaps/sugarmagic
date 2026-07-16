@@ -25,6 +25,7 @@ import {
   Menu,
   Modal,
   NumberInput,
+  SegmentedControl,
   Select,
   Stack,
   Text,
@@ -39,7 +40,8 @@ import type {
   PlayerDefinition,
   SemanticCommand,
   RegionDocument,
-  SoundCueDefinition
+  SoundCueDefinition,
+  SurfaceDefinition
 } from "@sugarmagic/domain";
 import {
   createInspectableBehaviorId,
@@ -63,10 +65,16 @@ import {
   type SceneExplorerNode,
   type ToolRailItem
 } from "@sugarmagic/ui";
-import type { ScatterBrushSettings, ViewportStore } from "@sugarmagic/shell";
+import type {
+  ScatterBrushSettings,
+  SurfaceBrushSettings,
+  ViewportStore
+} from "@sugarmagic/shell";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
+import { AssetAppearanceSection } from "./AssetAppearanceSection";
+import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
 import { getLayoutWorkspaceForViewport } from "./layout-interaction-access";
@@ -82,7 +90,11 @@ const layoutTools: ToolRailItem[] = [
   // Plan 065.2 -- scatter/prop paint brush. Arming it swallows
   // viewport pointer input (top of the layout input-router stack);
   // switching back to a transform tool disarms it.
-  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", color: "green" }
+  { id: "scatter-brush", label: "Scatter Brush", icon: "🌿", color: "green" },
+  // Plan 068.9 -- Surface Brush. Arm a library surface, paint it onto a
+  // placed asset's surface slot. Mutually exclusive with the other
+  // brushes/tools (arming one disarms the rest).
+  { id: "surface-brush", label: "Surface Brush", icon: "🖌", color: "grape" }
 ];
 
 const DEFAULT_SCATTER_BRUSH_SETTINGS: ScatterBrushSettings = {
@@ -91,6 +103,14 @@ const DEFAULT_SCATTER_BRUSH_SETTINGS: ScatterBrushSettings = {
   paletteAssetDefinitionIds: [],
   scaleJitter: [0.8, 1.25],
   rotationJitter: 1,
+  mode: "paint"
+};
+
+const DEFAULT_SURFACE_BRUSH_SETTINGS: SurfaceBrushSettings = {
+  surfaceDefinitionId: null,
+  radius: 2,
+  strength: 0.6,
+  falloff: 0.7,
   mode: "paint"
 };
 
@@ -130,6 +150,8 @@ export interface LayoutWorkspaceViewProps {
     id: string;
   }) => void;
   assetDefinitions: AssetDefinition[];
+  /** Library surfaces for the Surface Brush palette (Plan 068.9). */
+  surfaceDefinitions: SurfaceDefinition[];
   playerDefinition: PlayerDefinition | null;
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -137,6 +159,14 @@ export interface LayoutWorkspaceViewProps {
   soundCueDefinitions: SoundCueDefinition[];
   onEditAssetDefinition: (definitionId: string) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
+  /** Plan 068.8 -- generate the paint UV channel for an asset. */
+  onGenerateAssetPaintUvs?: (assetDefinitionId: string) => Promise<void>;
+  onOpenSurfaceStudio?: (target: {
+    instanceId: string;
+    assetDefinitionId: string;
+    slotName: string;
+    scope: "base" | "scene";
+  }) => void;
   renderInspectorSections?: (context: {
     activeRegion: RegionDocument | null;
   }) => ReactNode;
@@ -343,6 +373,7 @@ export function useLayoutWorkspaceView(
     onConvertAssetScope,
     onCopyEntryToScene,
     assetDefinitions,
+    surfaceDefinitions,
     playerDefinition,
     itemDefinitions,
     documentDefinitions,
@@ -350,6 +381,8 @@ export function useLayoutWorkspaceView(
     soundCueDefinitions,
     onEditAssetDefinition,
     onImportAsset,
+    onGenerateAssetPaintUvs,
+    onOpenSurfaceStudio,
     renderInspectorSections
   } = props;
 
@@ -383,6 +416,17 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.scatterBrushSettings
   );
+  // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
+  // layer is armed; the mask-paint overlay owns the strokes, this
+  // view owns the toolbar.
+  const maskPaintTarget = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.activeMaskPaintTarget
+  );
+  const maskBrushSettings = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.brushSettings
+  );
   // Settings survive disarm/re-arm within the session (palette and
   // sliders come back as you left them).
   const lastScatterBrushSettingsRef = useRef<ScatterBrushSettings>(
@@ -396,6 +440,25 @@ export function useLayoutWorkspaceView(
     lastScatterBrushSettingsRef.current = next;
     viewportStore.getState().setScatterBrushSettings(next);
   };
+  // Plan 068.9 -- Surface Brush arming state + library surface palette.
+  const surfaceBrushSettings = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.surfaceBrushSettings
+  );
+  const lastSurfaceBrushSettingsRef = useRef<SurfaceBrushSettings>(
+    DEFAULT_SURFACE_BRUSH_SETTINGS
+  );
+  const updateSurfaceBrush = (patch: Partial<SurfaceBrushSettings>) => {
+    const current =
+      viewportStore.getState().surfaceBrushSettings ??
+      lastSurfaceBrushSettingsRef.current;
+    const next = { ...current, ...patch };
+    lastSurfaceBrushSettingsRef.current = next;
+    viewportStore.getState().setSurfaceBrushSettings(next);
+  };
+  const paintableSurfaceDefinitions = surfaceDefinitions.filter((definition) =>
+    surfaceDefinitionMatchesContext(definition, "universal")
+  );
   const cameraQuaternion = useVanillaStoreSelector(
     viewportStore,
     (state) => state.cameraQuaternion
@@ -1621,6 +1684,21 @@ export function useLayoutWorkspaceView(
                 )
               }
             />
+            {region ? (
+              <AssetAppearanceSection
+                instance={selectedAsset}
+                assetDefinition={
+                  assetDefinitions.find(
+                    (definition) =>
+                      definition.definitionId === selectedAsset.assetDefinitionId
+                  ) ?? null
+                }
+                regionId={region.identity.id}
+                activeScene={activeScene}
+                isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
+                onOpenSurfaceStudio={onOpenSurfaceStudio}
+              />
+            ) : null}
             <Stack gap="xs">
               <Text
                 size="xs"
@@ -1886,21 +1964,135 @@ export function useLayoutWorkspaceView(
         <Box style={{ pointerEvents: "auto" }}>
           <ToolRail
             tools={layoutTools}
-            activeToolId={scatterBrushSettings ? "scatter-brush" : activeTool}
+            activeToolId={
+              surfaceBrushSettings
+                ? "surface-brush"
+                : scatterBrushSettings
+                  ? "scatter-brush"
+                  : activeTool
+            }
             onSelect={(id) => {
               if (id === "scatter-brush") {
+                viewportStore.getState().setSurfaceBrushSettings(null);
                 viewportStore
                   .getState()
                   .setScatterBrushSettings(lastScatterBrushSettingsRef.current);
                 return;
               }
+              if (id === "surface-brush") {
+                viewportStore.getState().setScatterBrushSettings(null);
+                viewportStore
+                  .getState()
+                  .setSurfaceBrushSettings(lastSurfaceBrushSettingsRef.current);
+                return;
+              }
               viewportStore.getState().setScatterBrushSettings(null);
+              viewportStore.getState().setSurfaceBrushSettings(null);
               const tool = id as TransformTool;
               viewportStore.getState().setActiveTransformTool(tool);
             }}
           />
         </Box>
-        {scatterBrushSettings ? (
+        {maskPaintTarget ? (
+          <Box style={{ pointerEvents: "auto" }}>
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                Paint Mask
+              </Text>
+              {/* One group: Paint/Erase are exclusive brush modes,
+                  Fill is the bucket action living beside them
+                  (always floods BLACK -- "hide everywhere, then
+                  paint back what shows"). */}
+              <Button.Group>
+                {(["paint", "erase"] as const).map((mode) => (
+                  <Button
+                    key={mode}
+                    size="compact-xs"
+                    variant={
+                      (maskBrushSettings?.mode ?? "paint") === mode
+                        ? "filled"
+                        : "default"
+                    }
+                    onClick={() =>
+                      viewportStore.getState().setBrushSettings({
+                        radius: maskBrushSettings?.radius ?? 4,
+                        strength: maskBrushSettings?.strength ?? 0.25,
+                        falloff: maskBrushSettings?.falloff ?? 0.7,
+                        mode
+                      })
+                    }
+                  >
+                    {mode === "paint" ? "Paint" : "Erase"}
+                  </Button>
+                ))}
+                <Button
+                  size="compact-xs"
+                  variant="default"
+                  title="Fill the whole mask with black, then paint back what should show"
+                  onClick={() =>
+                    viewportStore.getState().requestMaskPaintFill("erase")
+                  }
+                >
+                  Fill
+                </Button>
+              </Button.Group>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.1}
+                max={8}
+                step={0.1}
+                value={maskBrushSettings?.radius ?? 4}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: value,
+                    strength: maskBrushSettings?.strength ?? 0.25,
+                    falloff: maskBrushSettings?.falloff ?? 0.7,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Strength"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={maskBrushSettings?.strength ?? 0.25}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: maskBrushSettings?.radius ?? 4,
+                    strength: value,
+                    falloff: maskBrushSettings?.falloff ?? 0.7,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <ToolOptionSlider
+                label="Falloff"
+                min={0}
+                max={1}
+                step={0.05}
+                value={maskBrushSettings?.falloff ?? 0.7}
+                onChange={(value) =>
+                  viewportStore.getState().setBrushSettings({
+                    radius: maskBrushSettings?.radius ?? 4,
+                    strength: maskBrushSettings?.strength ?? 0.25,
+                    falloff: value,
+                    mode: maskBrushSettings?.mode ?? "paint"
+                  })
+                }
+              />
+              <Button
+                size="compact-xs"
+                variant="filled"
+                onClick={() =>
+                  viewportStore.getState().setActiveMaskPaintTarget(null)
+                }
+              >
+                Done
+              </Button>
+            </ToolOptionsBar>
+          </Box>
+        ) : scatterBrushSettings ? (
           <Box style={{ pointerEvents: "auto" }}>
             <ToolOptionsBar>
               <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
@@ -2032,6 +2224,77 @@ export function useLayoutWorkspaceView(
                   </Group>
                 </>
               ) : null}
+            </ToolOptionsBar>
+          </Box>
+        ) : surfaceBrushSettings ? (
+          <Box style={{ pointerEvents: "auto" }}>
+            <ToolOptionsBar>
+              <Text size="xs" fw={700} c="var(--sm-color-subtext)" tt="uppercase">
+                Surface Brush
+              </Text>
+              <Select
+                size="xs"
+                w={180}
+                searchable
+                placeholder="Pick a surface..."
+                comboboxProps={{ withinPortal: true }}
+                value={surfaceBrushSettings.surfaceDefinitionId}
+                data={paintableSurfaceDefinitions.map((definition) => ({
+                  value: definition.definitionId,
+                  label: definition.displayName
+                }))}
+                onChange={(definitionId) =>
+                  updateSurfaceBrush({ surfaceDefinitionId: definitionId })
+                }
+              />
+              <ActionIcon
+                variant={surfaceBrushSettings.mode === "erase" ? "filled" : "subtle"}
+                color={surfaceBrushSettings.mode === "erase" ? "red" : "gray"}
+                size="sm"
+                title="Erase painted surface"
+                aria-label="Erase painted surface"
+                onClick={() =>
+                  updateSurfaceBrush({
+                    mode: surfaceBrushSettings.mode === "erase" ? "paint" : "erase"
+                  })
+                }
+              >
+                🧽
+              </ActionIcon>
+              <ToolOptionSlider
+                label="Radius"
+                min={0.25}
+                max={8}
+                step={0.25}
+                value={surfaceBrushSettings.radius}
+                format={(value) => `${value.toFixed(2)}m`}
+                onChange={(value) => updateSurfaceBrush({ radius: value })}
+              />
+              <ToolOptionSlider
+                label="Strength"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={surfaceBrushSettings.strength}
+                onChange={(value) => updateSurfaceBrush({ strength: value })}
+              />
+              <ToolOptionSlider
+                label="Falloff"
+                min={0}
+                max={1}
+                step={0.05}
+                value={surfaceBrushSettings.falloff}
+                onChange={(value) => updateSurfaceBrush({ falloff: value })}
+              />
+              <Button
+                size="compact-xs"
+                variant="filled"
+                onClick={() =>
+                  viewportStore.getState().setSurfaceBrushSettings(null)
+                }
+              >
+                Done
+              </Button>
             </ToolOptionsBar>
           </Box>
         ) : null}

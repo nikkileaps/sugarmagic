@@ -235,6 +235,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
               playerPresence: null,
@@ -293,6 +294,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
               playerPresence: {
@@ -349,6 +351,7 @@ describe("cross-Scene copy", () => {
           ...scene,
           regionOverlays: {
             "region:town": {
+              assetAppearanceOverrides: {},
               folders: [],
               placedAssets: [],
               playerPresence: null,

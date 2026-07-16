@@ -1,6 +1,10 @@
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
-import type { LandscapeSurfaceSlot, ShaderReference } from "../surface";
+import type {
+  LandscapeSurfaceSlot,
+  ShaderReference,
+  SurfaceBinding
+} from "../surface";
 import { createDefaultSurface, createInlineSurfaceBinding } from "../surface";
 import type {
   ShaderBindingOverride,
@@ -21,6 +25,18 @@ export interface RegionSceneFolder {
   parentFolderId: string | null;
 }
 
+/**
+ * Per-MATERIAL-slot surface override on one placed instance
+ * (Plan 068.1). Keyed by the mesh's material slot name (the same key
+ * the definition's `surfaceSlots` use); an entry beats the
+ * definition's slot surface for this instance only. Slots without an
+ * entry fall through to the definition.
+ */
+export interface PlacedAssetSurfaceSlotOverride {
+  slotName: string;
+  surface: SurfaceBinding<"universal">;
+}
+
 export interface PlacedAssetInstance {
   instanceId: string;
   assetDefinitionId: string;
@@ -28,6 +44,8 @@ export interface PlacedAssetInstance {
   parentFolderId: string | null;
   inspectable: RegionInspectableBehavior | null;
   shaderOverrides?: ShaderBindingOverride[];
+  /** Plan 068.1 — per-material-slot surface overrides; see the type. */
+  surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
   /**
    * @deprecated Legacy single-binding field. Normalization upgrades this into
    * shaderOverrides; new code should only use shaderOverrides.
@@ -446,6 +464,9 @@ export function createPlacedAssetInstance(
     parentFolderId: overrides.parentFolderId ?? null,
     inspectable: overrides.inspectable ?? null,
     shaderOverrides: [...(overrides.shaderOverrides ?? [])],
+    surfaceSlotOverrides: overrides.surfaceSlotOverrides
+      ? overrides.surfaceSlotOverrides.map((slotOverride) => ({ ...slotOverride }))
+      : undefined,
     shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
     transform: {

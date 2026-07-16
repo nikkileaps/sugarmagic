@@ -29,11 +29,13 @@ import {
   createRegionNPCPresence,
   createRegionPlayerPresence,
   type PlacedAssetInstance,
+  type PlacedAssetSurfaceSlotOverride,
   type RegionItemPresence,
   type RegionNPCPresence,
   type RegionPlayerPresence,
   type RegionSceneFolder
 } from "../region-authoring";
+import type { ShaderBindingOverride } from "../shader-graph";
 
 /**
  * Stable id for the Scene that the 058.1 load-time migration
@@ -111,12 +113,78 @@ export interface SceneTransitionConfig {
  * layer (the always-visible ones live on the Region base as
  * `region.placedAssets` / `region.folders`).
  */
+/**
+ * Plan 068.2 — a Scene's restyle of ONE base placement's appearance
+ * (per-material-slot surfaces and/or deform/effect shaders). Applies
+ * ON TOP of the instance's own overrides while this Scene is active:
+ * scene > instance > definition. Only meaningful for BASE-scope
+ * instances — a scene-contained instance's own override fields are
+ * already scene-scoped by containment, and the command executor
+ * routes scene-scope writes for those to the instance itself.
+ */
+export interface SceneAssetAppearanceOverride {
+  surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
+  shaderOverrides?: ShaderBindingOverride[];
+}
+
+/** Which tier supplied a merged appearance entry (Plan 068.3
+ *  provenance chips read this; "definition" is the absence of any
+ *  entry). */
+export type AppearanceOverrideTier = "base" | "scene";
+
+export interface MergedAppearanceOverrides {
+  shaderOverrides: (ShaderBindingOverride & { tier: AppearanceOverrideTier })[];
+  surfaceSlotOverrides: (PlacedAssetSurfaceSlotOverride & {
+    tier: AppearanceOverrideTier;
+  })[];
+}
+
+/**
+ * THE merge of the two override tiers (Plan 068.2/068.3): scene
+ * entries win per material-slot name and per shader-slot kind;
+ * instance ("base") entries survive for everything the Scene doesn't
+ * touch. Runtime resolution AND the inspector's provenance display
+ * both consume this -- precedence order lives here and nowhere else.
+ */
+export function mergeAppearanceOverrideTiers(
+  instanceFields: Pick<
+    PlacedAssetInstance,
+    "shaderOverrides" | "surfaceSlotOverrides"
+  >,
+  sceneOverride: SceneAssetAppearanceOverride | null | undefined
+): MergedAppearanceOverrides {
+  const shaderBySlot = new Map(
+    (instanceFields.shaderOverrides ?? []).map((entry) => [
+      entry.slot,
+      { ...entry, tier: "base" as AppearanceOverrideTier }
+    ])
+  );
+  const surfaceBySlotName = new Map(
+    (instanceFields.surfaceSlotOverrides ?? []).map((entry) => [
+      entry.slotName,
+      { ...entry, tier: "base" as AppearanceOverrideTier }
+    ])
+  );
+  for (const entry of sceneOverride?.shaderOverrides ?? []) {
+    shaderBySlot.set(entry.slot, { ...entry, tier: "scene" });
+  }
+  for (const entry of sceneOverride?.surfaceSlotOverrides ?? []) {
+    surfaceBySlotName.set(entry.slotName, { ...entry, tier: "scene" });
+  }
+  return {
+    shaderOverrides: [...shaderBySlot.values()],
+    surfaceSlotOverrides: [...surfaceBySlotName.values()]
+  };
+}
+
 export interface RegionSceneOverlay {
   itemPresences: RegionItemPresence[];
   npcPresences: RegionNPCPresence[];
   playerPresence: RegionPlayerPresence | null;
   placedAssets: PlacedAssetInstance[];
   folders: RegionSceneFolder[];
+  /** Plan 068.2 — Scene restyles of base placements, by instanceId. */
+  assetAppearanceOverrides: Record<string, SceneAssetAppearanceOverride>;
 }
 
 export interface Scene {
@@ -151,7 +219,22 @@ export function createRegionSceneOverlay(
     npcPresences: [...(overrides.npcPresences ?? [])],
     playerPresence: overrides.playerPresence ?? null,
     placedAssets: [...(overrides.placedAssets ?? [])],
-    folders: [...(overrides.folders ?? [])]
+    folders: [...(overrides.folders ?? [])],
+    assetAppearanceOverrides: Object.fromEntries(
+      Object.entries(overrides.assetAppearanceOverrides ?? {}).map(
+        ([instanceId, override]) => [
+          instanceId,
+          {
+            surfaceSlotOverrides: override.surfaceSlotOverrides
+              ? override.surfaceSlotOverrides.map((entry) => ({ ...entry }))
+              : undefined,
+            shaderOverrides: override.shaderOverrides
+              ? override.shaderOverrides.map((entry) => ({ ...entry }))
+              : undefined
+          }
+        ]
+      )
+    )
   };
 }
 
@@ -264,6 +347,40 @@ function normalizeTransitionConfig(
   };
 }
 
+function normalizeSceneAssetAppearanceOverrides(
+  input: Record<string, SceneAssetAppearanceOverride> | undefined
+): Record<string, SceneAssetAppearanceOverride> {
+  const normalized: Record<string, SceneAssetAppearanceOverride> = {};
+  for (const [instanceId, override] of Object.entries(input ?? {})) {
+    if (!instanceId || !override || typeof override !== "object") continue;
+    const bySlotName = new Map<string, PlacedAssetSurfaceSlotOverride>();
+    for (const entry of override.surfaceSlotOverrides ?? []) {
+      if (typeof entry?.slotName !== "string" || !entry.slotName || !entry.surface) {
+        continue;
+      }
+      bySlotName.set(entry.slotName, {
+        slotName: entry.slotName,
+        surface: entry.surface
+      });
+    }
+    const bySlotKind = new Map<string, ShaderBindingOverride>();
+    for (const entry of override.shaderOverrides ?? []) {
+      if (!entry?.shaderDefinitionId || !entry.slot) continue;
+      bySlotKind.set(entry.slot, {
+        shaderDefinitionId: entry.shaderDefinitionId,
+        slot: entry.slot
+      });
+    }
+    if (bySlotName.size === 0 && bySlotKind.size === 0) continue;
+    normalized[instanceId] = {
+      surfaceSlotOverrides:
+        bySlotName.size > 0 ? [...bySlotName.values()] : undefined,
+      shaderOverrides: bySlotKind.size > 0 ? [...bySlotKind.values()] : undefined
+    };
+  }
+  return normalized;
+}
+
 function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
   if (!input || typeof input !== "object") return createRegionSceneOverlay();
   const record = input as Partial<RegionSceneOverlay>;
@@ -280,7 +397,10 @@ function normalizeRegionSceneOverlay(input: unknown): RegionSceneOverlay {
     placedAssets: (record.placedAssets ?? []).map((asset) =>
       createPlacedAssetInstance(asset)
     ),
-    folders: [...(record.folders ?? [])]
+    folders: [...(record.folders ?? [])],
+    assetAppearanceOverrides: normalizeSceneAssetAppearanceOverrides(
+      record.assetAppearanceOverrides
+    )
   };
 }
 

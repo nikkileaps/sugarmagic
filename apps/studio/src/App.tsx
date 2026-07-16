@@ -41,6 +41,12 @@ import type {
   SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
+  getAssetDefinition,
+  getMaskTextureDefinition,
+  getSurfaceDefinition,
+  cloneSurface,
+  createDefaultSurface,
+  type Surface,
   createAuthoringSession,
   applyCommand,
   undoSession,
@@ -141,7 +147,9 @@ import {
   importCharacterAnimationDefinition,
   importCharacterModelDefinition,
   importAudioClipDefinition,
+  readBlobFile,
   readMaskFile,
+  writeBlobFile,
   reloadProject,
   importSourceAsset,
   createBlankMaskFile,
@@ -167,6 +175,7 @@ import {
 } from "@sugarmagic/shell";
 import {
   SurfaceAuthoringProvider,
+  type WorkspaceViewport,
   useBuildProductModeView,
   useDesignProductModeView,
   usePublishProductModeView,
@@ -180,6 +189,7 @@ import {
   ModeBar,
   ProjectManagerDialog,
   ShellFrame,
+  ProgressToast,
   StatusBar,
   ViewportFrame,
   shellIcons,
@@ -187,16 +197,25 @@ import {
 } from "@sugarmagic/ui";
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
+import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
+import {
+  SurfaceStudioModal,
+  type SurfaceStudioTarget
+} from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
-import { createWebRenderEngine } from "@sugarmagic/render-web";
+import {
+  clearLivePaintedMasks,
+  createWebRenderEngine
+} from "@sugarmagic/render-web";
 import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
 import { mountLandscapeAuthoringOverlay } from "./viewport/overlays/landscape-authoring";
 import { mountScatterBrushOverlay } from "./viewport/overlays/scatter-brush";
+import { mountSurfaceBrushOverlay } from "./viewport/overlays/surface-brush";
 import { mountMaskPaintOverlay } from "./viewport/overlays/mask-paint";
 import { mountTransformGizmoOverlay } from "./viewport/overlays/layout-transform";
 import { mountSpatialAuthoringOverlay } from "./viewport/overlays/spatial-authoring";
@@ -274,6 +293,10 @@ async function handleOpenProject() {
       active.regions,
       active.contentLibrary
     );
+    // Drop the previous project's live painted-mask pixels on switch --
+    // the registry is module-scope in render-web, so stale masks would
+    // otherwise bleed into scatter sampling (068.13 mini-review).
+    clearLivePaintedMasks();
     projectStore
       .getState()
       .setActive(active.handle, active.descriptor, session);
@@ -303,6 +326,10 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
       active.regions,
       active.contentLibrary
     );
+    // Drop the previous project's live painted-mask pixels on switch --
+    // the registry is module-scope in render-web, so stale masks would
+    // otherwise bleed into scatter sampling (068.13 mini-review).
+    clearLivePaintedMasks();
     projectStore
       .getState()
       .setActive(active.handle, active.descriptor, session);
@@ -510,6 +537,8 @@ async function handleReload() {
     reloaded.regions,
     reloaded.contentLibrary
   );
+  // Same on reload -- drop the old live painted-mask pixels (068.13 review).
+  clearLivePaintedMasks();
   projectStore
     .getState()
     .setActive(reloaded.handle, reloaded.descriptor, newSession);
@@ -912,6 +941,10 @@ export function App() {
     viewportStore,
     (state) => state.activeMaskPaintTarget
   );
+  const surfaceBrushSettings = useStore(
+    viewportStore,
+    (state) => state.surfaceBrushSettings
+  );
 
   const environmentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -1014,11 +1047,21 @@ export function App() {
       selectedEntityIds: selectedIds
     };
 
+    // Read the latest asset sources imperatively rather than triggering
+    // on them. The asset-source store settles its async disk read ~1-2s
+    // after a preview boots, churning `sources` to a NEW reference (fresh
+    // blob URLs, same files). With `assetSources` in the dep array that
+    // spurious change re-posted PREVIEW_BOOT, and since host.start() is
+    // not idempotent (preview.tsx re-invokes it, tearing the runtime
+    // down and back up) the running game hard-restarted -- landing on the
+    // Start menu because the fresh-start flag was already consumed. Only
+    // genuine authoring context / session changes should re-boot a live
+    // preview; a background source refresh must not.
     void postPreviewBootMessage(
       previewWindow,
       session,
       snapshot,
-      assetSources,
+      assetSourceStore.getState().sources,
       installedPluginIds
     );
   }, [
@@ -1029,7 +1072,6 @@ export function App() {
     activeRegionId,
     activeRenderKind,
     activeWorkspaceId,
-    assetSources,
     installedPluginIds,
     isPreviewRunning,
     previewWindow,
@@ -1286,69 +1328,11 @@ export function App() {
     []
   );
 
-  const handleSetAssetMaterialSlotBinding = useCallback(
-    (
-      definitionId: string,
-      slotName: string,
-      slotIndex: number,
-      surface: SurfaceBinding<"universal"> | null
-    ) => {
-      const { session: currentSession } = projectStore.getState();
-      if (!currentSession) return;
-      const assetDefinition =
-        currentSession.contentLibrary.assetDefinitions.find(
-          (definition) => definition.definitionId === definitionId
-        ) ?? null;
-      if (!assetDefinition) return;
-
-      const nextSurfaceSlots = assetDefinition.surfaceSlots.map((slot) =>
-        slot.slotName === slotName && slot.slotIndex === slotIndex
-          ? {
-              ...slot,
-              surface
-            }
-          : slot
-      );
-
-      projectStore.getState().updateSession(
-        updateAssetDefinitionInSession(currentSession, definitionId, {
-          surfaceSlots: nextSurfaceSlots
-        })
-      );
-    },
-    []
-  );
-
   // Assets library modal (Game > Libraries > Assets): when opened
   // from a placed instance's "Edit definition", preselect that asset.
   const [assetsLibraryPreselectId, setAssetsLibraryPreselectId] = useState<
     string | null
   >(null);
-
-  const handleSetAssetDefaultShader = useCallback(
-    (
-      definitionId: string,
-      slot: "surface" | "deform" | "effect",
-      shaderDefinitionId: string | null
-    ) =>
-      dispatchCommand({
-        kind: "SetAssetDefaultShader",
-        target: {
-          aggregateKind: "content-definition",
-          aggregateId: definitionId
-        },
-        subject: {
-          subjectKind: "asset-definition",
-          subjectId: definitionId
-        },
-        payload: {
-          definitionId,
-          slot,
-          shaderDefinitionId: shaderDefinitionId ?? null
-        }
-      }),
-    []
-  );
 
   const handleRemoveAssetDefinition = useCallback((definitionId: string) => {
     const { session: currentSession } = projectStore.getState();
@@ -1871,8 +1855,152 @@ export function App() {
     if (!definition) {
       return null;
     }
-    return readMaskFile(handle, definition.source.relativeAssetPath);
+    const relativeAssetPath = definition.source.relativeAssetPath;
+    // Prefer the asset-source blob -- the same source the renderer reads,
+    // and reliable. The raw directory-handle read (readMaskFile)
+    // intermittently returns null for files that DO exist (a
+    // FileSystemAccess handle-staleness quirk; the asset-source map reads
+    // the same file fine). Fall back to it only if there is no blob yet.
+    let result: ImageData | null = null;
+    const blobUrl = assetSourceStore.getState().sources[relativeAssetPath];
+    if (blobUrl) {
+      try {
+        const blob = await (await fetch(blobUrl)).blob();
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context2d = canvas.getContext("2d", { willReadFrequently: true });
+        if (context2d && bitmap.width > 0 && bitmap.height > 0) {
+          context2d.drawImage(bitmap, 0, 0);
+          result = context2d.getImageData(0, 0, bitmap.width, bitmap.height);
+        }
+        bitmap.close();
+      } catch {
+        result = null;
+      }
+    }
+    if (!result) {
+      result = await readMaskFile(handle, relativeAssetPath);
+    }
+    return result;
   }, []);
+
+  // Painted-mask preview cache (Plan 068.8 QoL): live pixels behind
+  // the inspector thumbnails. Filled lazily from disk, updated on
+  // every stroke/fill commit via handleWriteMaskTexture.
+  const paintedMaskPreviewCanvases = useRef(
+    new Map<string, HTMLCanvasElement>()
+  );
+  const paintedMaskPreviewLoads = useRef(new Set<string>());
+  const [paintedMaskPreviewVersion, setPaintedMaskPreviewVersion] =
+    useState(0);
+
+  const getPaintedMaskPreviewCanvas = useCallback(
+    (maskTextureId: string): HTMLCanvasElement | null => {
+      const cached = paintedMaskPreviewCanvases.current.get(maskTextureId);
+      if (cached) {
+        return cached;
+      }
+      if (!paintedMaskPreviewLoads.current.has(maskTextureId)) {
+        paintedMaskPreviewLoads.current.add(maskTextureId);
+        void (async () => {
+          const imageData = await handleReadMaskTexture(maskTextureId);
+          const { session: currentSession } = projectStore.getState();
+          const definition = currentSession
+            ? getMaskTextureDefinition(
+                currentSession.contentLibrary,
+                maskTextureId
+              )
+            : null;
+          const canvas = document.createElement("canvas");
+          canvas.width = imageData?.width ?? definition?.resolution[0] ?? 512;
+          canvas.height = imageData?.height ?? definition?.resolution[1] ?? 512;
+          const context2d = canvas.getContext("2d");
+          if (context2d && imageData) {
+            context2d.putImageData(imageData, 0, 0);
+          }
+          paintedMaskPreviewCanvases.current.set(maskTextureId, canvas);
+          paintedMaskPreviewLoads.current.delete(maskTextureId);
+          setPaintedMaskPreviewVersion((version) => version + 1);
+        })();
+      }
+      return null;
+    },
+    [handleReadMaskTexture]
+  );
+
+  const handleGenerateAssetPaintUvs = useCallback(
+    async (assetDefinitionId: string) => {
+      const { handle, session: currentSession } = projectStore.getState();
+      if (!handle || !currentSession) {
+        return;
+      }
+      const definition = getAssetDefinition(
+        currentSession.contentLibrary,
+        assetDefinitionId
+      );
+      if (!definition) {
+        window.alert(`Missing asset definition "${assetDefinitionId}".`);
+        return;
+      }
+      const pathSegments = definition.source.relativeAssetPath
+        .split("/")
+        .filter(Boolean);
+      const blob = await readBlobFile(handle, ...pathSegments);
+      if (!blob) {
+        window.alert(
+          `Asset file "${definition.source.relativeAssetPath}" was not found.`
+        );
+        return;
+      }
+      try {
+        const result = await bakePaintUvsIntoGlb(await blob.arrayBuffer());
+        await writeBlobFile(
+          handle,
+          pathSegments,
+          new Blob([result.glb], { type: "model/gltf-binary" })
+        );
+        // Drop the renderables FIRST: the refreshPaths store tick is
+        // what triggers the projection pass that re-schedules their
+        // loads. The reverse order rebuilt before dropping and left
+        // the asset invisible until some unrelated store tick.
+        workspaceViewportRef.current?.reloadAssetRenderables?.(
+          assetDefinitionId
+        );
+        await assetSourceStore
+          .getState()
+          .refreshPaths([definition.source.relativeAssetPath]);
+        if (result.unwrappedMeshCount === 0) {
+          window.alert(
+            "All meshes in this asset already carry paint UVs; nothing was regenerated."
+          );
+        }
+      } catch (error) {
+        console.error("[paint-uvs] generation failed", error);
+        window.alert(
+          `Paint UV generation failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    },
+    []
+  );
+
+  // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
+  // doesn't already have them. Wired into both the Surface Brush's
+  // first-touch setup and the Open-in-Studio entry so painting always
+  // has a paint channel without a manual step.
+  const handleEnsureAssetPaintUvs = useCallback(
+    async (assetDefinitionId: string) => {
+      if (workspaceViewportRef.current?.assetHasPaintUvs?.(assetDefinitionId)) {
+        return;
+      }
+      await handleGenerateAssetPaintUvs(assetDefinitionId);
+    },
+    [handleGenerateAssetPaintUvs]
+  );
 
   const handleWriteMaskTexture = useCallback(
     async (maskTextureId: string, imageData: ImageData) => {
@@ -1892,9 +2020,31 @@ export function App() {
         definition.source.relativeAssetPath,
         imageData
       );
-      await assetSourceStore
-        .getState()
-        .refreshPaths([definition.source.relativeAssetPath]);
+      // Keep the preview cache truthful on every commit.
+      const previewCanvas =
+        paintedMaskPreviewCanvases.current.get(maskTextureId) ??
+        document.createElement("canvas");
+      previewCanvas.width = imageData.width;
+      previewCanvas.height = imageData.height;
+      previewCanvas.getContext("2d")?.putImageData(imageData, 0, 0);
+      paintedMaskPreviewCanvases.current.set(maskTextureId, previewCanvas);
+      setPaintedMaskPreviewVersion((version) => version + 1);
+      // Publish the just-painted pixels to the renderer DIRECTLY from
+      // memory instead of re-reading the file off the directory handle:
+      // that read transiently returns null for a just-written file, which
+      // left the mask texture blank on reload (the paint-persist bug).
+      const pngBlob = await new Promise<Blob | null>((resolve) =>
+        previewCanvas.toBlob((blob) => resolve(blob), "image/png")
+      );
+      if (pngBlob) {
+        assetSourceStore
+          .getState()
+          .setSource(definition.source.relativeAssetPath, pngBlob);
+      } else {
+        await assetSourceStore
+          .getState()
+          .refreshPaths([definition.source.relativeAssetPath]);
+      }
     },
     []
   );
@@ -2097,10 +2247,105 @@ export function App() {
 
   // --- Viewport lifecycle (tied to the shared center viewport DOM) ---
   const viewportRef = useRef<HTMLDivElement>(null);
+  // The mounted WorkspaceViewport instance (Plan 068.8: paint-UV
+  // baking asks it to reload an asset's renderables after the source
+  // GLB is rewritten).
+  const workspaceViewportRef = useRef<WorkspaceViewport | null>(null);
 
   // --- Active region remains shell/project truth; the authoring viewport now
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
+
+  // --- Surface Studio (Plan 068.10) ---
+  const [surfaceStudioTarget, setSurfaceStudioTarget] =
+    useState<SurfaceStudioTarget | null>(null);
+  // Transient progress toast (Plan 068) -- e.g. while the scene reloads
+  // after the Surface Studio closes, so it doesn't read as a hang.
+  const [busyToast, setBusyToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!busyToast) {
+      return;
+    }
+    // Safety dismiss so a missed settle signal can't strand the toast.
+    const timeout = setTimeout(() => setBusyToast(null), 12000);
+    return () => clearTimeout(timeout);
+  }, [busyToast]);
+  const surfaceStudioSurface = useMemo<Surface<"universal"> | null>(() => {
+    if (!session || !surfaceStudioTarget) {
+      return null;
+    }
+    const region = getActiveRegion(session);
+    if (!region) {
+      return null;
+    }
+    const overlay =
+      getActiveScene(session)?.regionOverlays[region.identity.id] ?? null;
+    const instance =
+      region.placedAssets.find(
+        (asset) => asset.instanceId === surfaceStudioTarget.instanceId
+      ) ??
+      overlay?.placedAssets.find(
+        (asset) => asset.instanceId === surfaceStudioTarget.instanceId
+      ) ??
+      null;
+    const override =
+      instance?.surfaceSlotOverrides?.find(
+        (candidate) => candidate.slotName === surfaceStudioTarget.slotName
+      )?.surface ?? null;
+    const assetDefinition = getAssetDefinition(
+      session.contentLibrary,
+      surfaceStudioTarget.assetDefinitionId
+    );
+    const slotBinding =
+      assetDefinition?.surfaceSlots.find(
+        (candidate) => candidate.slotName === surfaceStudioTarget.slotName
+      )?.surface ?? null;
+    const binding = override ?? slotBinding;
+    if (binding?.kind === "inline") {
+      return binding.surface as Surface<"universal">;
+    }
+    if (binding?.kind === "reference") {
+      const definition = getSurfaceDefinition(
+        session.contentLibrary,
+        binding.surfaceDefinitionId
+      );
+      if (definition) {
+        return cloneSurface(definition.surface) as Surface<"universal">;
+      }
+    }
+    return createDefaultSurface();
+  }, [session, surfaceStudioTarget]);
+
+  const handleSurfaceStudioChange = useCallback(
+    (nextSurface: Surface<"universal">) => {
+      const currentSession = projectStore.getState().session;
+      if (!surfaceStudioTarget || !currentSession) {
+        return;
+      }
+      const region = getActiveRegion(currentSession);
+      if (!region) {
+        return;
+      }
+      dispatchCommand({
+        kind: "SetPlacedAssetSurfaceSlotOverride",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "placed-asset",
+          subjectId: surfaceStudioTarget.instanceId
+        },
+        payload: {
+          instanceId: surfaceStudioTarget.instanceId,
+          slotName: surfaceStudioTarget.slotName,
+          surface: { kind: "inline", surface: nextSurface },
+          scope: surfaceStudioTarget.scope
+        }
+      });
+    },
+    [surfaceStudioTarget]
+  );
 
   useEffect(() => {
     const nextSurfaceDefinitionId =
@@ -2181,6 +2426,13 @@ export function App() {
             ...options
           })
         );
+    },
+    onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
+    onOpenSurfaceStudio: async (target) => {
+      // Ensure paint UVs exist BEFORE the Studio loads the asset (it
+      // loads its own GLB copy, so the bake must land first).
+      await handleEnsureAssetPaintUvs(target.assetDefinitionId);
+      setSurfaceStudioTarget(target);
     },
     onOpenAssetsLibrary: (definitionId) => {
       setAssetsLibraryPreselectId(definitionId);
@@ -2518,9 +2770,16 @@ export function App() {
     if (!shouldRenderSharedViewport) {
       return;
     }
+    // Plan 068.10 -- the Surface Studio mounts its own focused render
+    // view for the selected asset; unmount the main scene viewport
+    // while it is open so only one render loop runs on the engine.
+    if (surfaceStudioTarget) {
+      return;
+    }
     if (!viewportRef.current) {
       return;
     }
+    const viewportContainer = viewportRef.current;
     // Player + NPC now provide a self-contained `centerPanel`
     // (CharacterPreview), so the shared 3D viewport is only mounted
     // for design > items. Other design kinds (spells, documents,
@@ -2553,25 +2812,31 @@ export function App() {
             },
             readMaskTexture: handleReadMaskTexture,
             writeMaskTexture: handleWriteMaskTexture,
+            createMaskTextureDefinition: handleCreateMaskTextureDefinition,
+            ensureAssetPaintUvs: handleEnsureAssetPaintUvs,
+            onRenderablesSettled: () => setBusyToast(null),
             overlays: [
               mountAuthoringCameraOverlay,
               mountLandscapeAuthoringOverlay,
               mountScatterBrushOverlay,
+              mountSurfaceBrushOverlay,
               mountMaskPaintOverlay,
               mountTransformGizmoOverlay,
               mountSpatialAuthoringOverlay
             ]
           });
-    viewport.mount(viewportRef.current);
+    viewport.mount(viewportContainer);
+    workspaceViewportRef.current = viewport;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         viewport.resize(entry.contentRect.width, entry.contentRect.height);
       }
     });
-    observer.observe(viewportRef.current);
+    observer.observe(viewportContainer);
 
     return () => {
       observer.disconnect();
+      workspaceViewportRef.current = null;
       viewport.unmount();
     };
   }, [
@@ -2579,7 +2844,9 @@ export function App() {
     activeProductMode,
     handleReadMaskTexture,
     handleWriteMaskTexture,
-    shouldRenderSharedViewport
+    shouldRenderSharedViewport,
+    // Unmount/remount the main viewport as the Surface Studio opens/closes.
+    surfaceStudioTarget
   ]);
 
   const handleUndo = useCallback(() => {
@@ -2614,7 +2881,9 @@ export function App() {
       onImportMaskTextureDefinition: handleImportMaskTextureDefinition,
       activeMaskPaintTarget,
       onSetMaskPaintTarget: (target: PaintedMaskTargetAddress | null) =>
-        viewportStore.getState().setActiveMaskPaintTarget(target)
+        viewportStore.getState().setActiveMaskPaintTarget(target),
+      getPaintedMaskPreviewCanvas,
+      paintedMaskPreviewVersion
     }),
     [
       surfaceDefinitions,
@@ -2627,7 +2896,9 @@ export function App() {
       rockTypeDefinitions,
       handleCreateMaskTextureDefinition,
       handleImportMaskTextureDefinition,
-      activeMaskPaintTarget
+      activeMaskPaintTarget,
+      getPaintedMaskPreviewCanvas,
+      paintedMaskPreviewVersion
     ]
   );
 
@@ -2669,8 +2940,6 @@ export function App() {
         assetsPreselectId={assetsLibraryPreselectId}
         onImportAssetDefinition={handleImportAsset}
         onUpdateAssetDefinition={handleUpdateAssetDefinition}
-        onSetAssetMaterialSlotBinding={handleSetAssetMaterialSlotBinding}
-        onSetAssetDefaultShader={handleSetAssetDefaultShader}
         onRemoveAssetDefinition={handleRemoveAssetDefinition}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
@@ -2942,7 +3211,12 @@ export function App() {
                   >
                     <Menu.Item
                       onClick={handleSave}
-                      disabled={!isDirty}
+                      // Always available: not every mutation flips the
+                      // dirty flag (painted-mask strokes are the known
+                      // gap), and a save that finds nothing changed is
+                      // harmless. Better to always let the author save
+                      // than to silently strand real changes behind a
+                      // grayed-out menu (2026-07-13).
                       rightSection={
                         <Text size="xs" c="var(--sm-color-overlay0)">
                           ⌘S
@@ -3317,6 +3591,43 @@ export function App() {
           )
         }
       />
+      <SurfaceStudioModal
+        opened={surfaceStudioTarget !== null}
+        onClose={() => {
+          // Closing remounts the scene viewport (it was unmounted while
+          // the Studio owned the render) -- show progress until it
+          // settles so the reload doesn't read as a hang.
+          setBusyToast("Updating scene...");
+          setSurfaceStudioTarget(null);
+        }}
+        engine={studioRenderEngine}
+        session={session}
+        surface={surfaceStudioSurface}
+        target={surfaceStudioTarget}
+        slotLabel={surfaceStudioTarget?.slotName ?? ""}
+        onChangeSurface={handleSurfaceStudioChange}
+        brushSettings={{
+          radius: surfaceBrushSettings?.radius ?? 2,
+          strength: surfaceBrushSettings?.strength ?? 0.6,
+          falloff: surfaceBrushSettings?.falloff ?? 0.7,
+          mode: surfaceBrushSettings?.mode ?? "paint"
+        }}
+        onChangeBrushSettings={(next) =>
+          viewportStore.getState().setSurfaceBrushSettings({
+            surfaceDefinitionId:
+              surfaceBrushSettings?.surfaceDefinitionId ?? null,
+            radius: next.radius,
+            strength: next.strength,
+            falloff: next.falloff,
+            mode: next.mode
+          })
+        }
+        readMaskTexture={handleReadMaskTexture}
+        writeMaskTexture={handleWriteMaskTexture}
+        getMaskPreviewCanvas={getPaintedMaskPreviewCanvas}
+        maskPreviewVersion={paintedMaskPreviewVersion}
+      />
+      {busyToast ? <ProgressToast message={busyToast} /> : null}
     </SurfaceAuthoringProvider>
   );
 }

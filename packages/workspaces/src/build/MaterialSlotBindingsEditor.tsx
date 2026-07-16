@@ -6,7 +6,7 @@
  * not create or delete slots inside Sugarmagic.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, ColorSwatch, Group, Popover, Stack, Text } from "@mantine/core";
 import type { AssetSurfaceSlot, SurfaceBinding } from "@sugarmagic/domain";
 import { SurfaceBindingEditor, useSurfaceAuthoring } from "./surfaces";
@@ -31,8 +31,16 @@ export function MaterialSlotBindingsEditor({
   assetDefinitionId,
   onChangeBinding
 }: MaterialSlotBindingsEditorProps) {
-  const { surfaceDefinitions } = useSurfaceAuthoring();
+  const { surfaceDefinitions, activeMaskPaintTarget } = useSurfaceAuthoring();
   const [openSlotKey, setOpenSlotKey] = useState<string | null>(null);
+
+  // Entering paint mode closes the editor popover so the author sees
+  // the object, not the panel (Plan 068.4 paint-mode flow).
+  useEffect(() => {
+    if (activeMaskPaintTarget) {
+      setOpenSlotKey(null);
+    }
+  }, [activeMaskPaintTarget]);
 
   if (bindings.length === 0) {
     return (
@@ -55,7 +63,16 @@ export function MaterialSlotBindingsEditor({
               onChange={(opened) => setOpenSlotKey(opened ? slotKey : null)}
               position="bottom-start"
               shadow="md"
-              withinPortal={false}
+              // Portal: this editor renders inside overflow
+              // containers now (Layout inspector aside) -- a
+              // non-portal dropdown clips (the options-bar lesson).
+              withinPortal
+              // The layer settings/mask popovers nested inside are
+              // PORTALED to document.body, so their clicks read as
+              // "outside" this popover and closed the entire chain
+              // mid-edit (2026-07-12). Explicit closes only: click
+              // the slot row again, Escape, or entering paint mode.
+              closeOnClickOutside={false}
             >
               <Popover.Target>
                 {/* Whole row is the popover trigger — matches the

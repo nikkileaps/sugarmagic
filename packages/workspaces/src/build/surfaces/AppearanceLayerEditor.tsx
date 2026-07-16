@@ -32,36 +32,75 @@ export function AppearanceLayerEditor({
   isBaseLayer,
   onChange
 }: AppearanceLayerEditorProps) {
-  const { textureDefinitions, materialDefinitions, shaderDefinitions } =
-    useSurfaceAuthoring();
+  const {
+    surfaceDefinitions,
+    textureDefinitions,
+    materialDefinitions,
+    shaderDefinitions
+  } = useSurfaceAuthoring();
   const surfaceShaders = shaderDefinitions.filter(
     (shader) => shader.targetKind === "mesh-surface"
   );
 
+  const blendModeSelect = (
+    <Select
+      size="xs"
+      label="Blend Mode"
+      data={[
+        { value: "base", label: "Base" },
+        { value: "mix", label: "Mix" },
+        { value: "multiply", label: "Multiply" },
+        { value: "add", label: "Add" },
+        { value: "overlay", label: "Overlay" }
+      ]}
+      value={layer.blendMode}
+      disabled={isBaseLayer}
+      onChange={(next) => {
+        if (!next) {
+          return;
+        }
+        onChange({
+          ...layer,
+          blendMode: isBaseLayer ? "base" : (next as AppearanceLayer["blendMode"])
+        });
+      }}
+    />
+  );
+
+  // Plan 068.9 -- a surface-ref layer IS a referenced library
+  // surface. Edit which surface (and blend); the surface's own layers
+  // are edited in the library, not here.
+  if (layer.content.kind === "surface") {
+    const content = layer.content;
+    return (
+      <Stack gap="xs">
+        {blendModeSelect}
+        <Select
+          size="xs"
+          label="Surface"
+          searchable
+          data={surfaceDefinitions.map((definition) => ({
+            value: definition.definitionId,
+            label: definition.displayName
+          }))}
+          value={content.surfaceDefinitionId}
+          onChange={(next) => {
+            if (!next) {
+              return;
+            }
+            onChange({
+              ...layer,
+              content: { kind: "surface", surfaceDefinitionId: next }
+            });
+          }}
+        />
+      </Stack>
+    );
+  }
+
   return (
     <Stack gap="xs">
-      <Select
-        size="xs"
-        label="Blend Mode"
-        data={[
-          { value: "base", label: "Base" },
-          { value: "mix", label: "Mix" },
-          { value: "multiply", label: "Multiply" },
-          { value: "add", label: "Add" },
-          { value: "overlay", label: "Overlay" }
-        ]}
-        value={layer.blendMode}
-        disabled={isBaseLayer}
-        onChange={(next) => {
-          if (!next) {
-            return;
-          }
-          onChange({
-            ...layer,
-            blendMode: isBaseLayer ? "base" : (next as AppearanceLayer["blendMode"])
-          });
-        }}
-      />
+      {blendModeSelect}
       <KindTabs
         value={layer.content.kind}
         options={[

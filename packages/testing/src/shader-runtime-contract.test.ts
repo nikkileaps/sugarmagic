@@ -230,7 +230,11 @@ describe("shader runtime contracts", () => {
       const resolution = resolveAssetDefinitionShaderBindings(brokenAsset, contentLibrary);
 
       expect(resolution.bindings.surface).toBeNull();
-      expect(resolution.materialSlots[0]?.surface).toBeNull();
+      // Broken slot bindings resolve to the loud magenta error
+      // surface (2026-07-12) -- silence was the old behavior.
+      expect(
+        JSON.stringify(resolution.materialSlots[0]?.surface)
+      ).toContain("Broken surface reference");
       expect(resolution.diagnostics).toEqual([
         expect.objectContaining({
           severity: "error",

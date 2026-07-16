@@ -18,6 +18,8 @@ import type {
   Layer,
   Mask,
   PlacedAssetInstance,
+  PlacedAssetSurfaceSlotOverride,
+  SceneAssetAppearanceOverride,
   PostProcessShaderBinding,
   RockTypeDefinition,
   RegionItemPresence,
@@ -31,6 +33,11 @@ import type {
   ShaderSlotKind
 } from "@sugarmagic/domain";
 import {
+  mergeAppearanceOverrideTiers,
+  createAppearanceLayer,
+  createColorAppearanceContent,
+  createInlineSurfaceBinding,
+  createSurface,
   getAssetDefinition,
   getFlowerTypeDefinition,
   getGrassTypeDefinition,
@@ -90,10 +97,19 @@ export interface ResolvedScatterLayer extends ResolvedSurfaceLayerCommon {
   wind: EffectiveShaderBinding | null;
 }
 
+export interface ResolvedSurfaceRefLayer extends ResolvedSurfaceLayerCommon {
+  kind: "surface-ref";
+  blendMode: BlendMode;
+  /** The referenced library surface, resolved (cycle-guarded). Render
+   *  composites this and blends the result with this layer's mask. */
+  nested: ResolvedSurfaceStack;
+}
+
 export type ResolvedSurfaceLayer =
   | ResolvedAppearanceLayer
   | ResolvedEmissionLayer
-  | ResolvedScatterLayer;
+  | ResolvedScatterLayer
+  | ResolvedSurfaceRefLayer;
 
 export interface ResolvedSurfaceStack<
   C extends SurfaceContext = SurfaceContext
@@ -544,6 +560,42 @@ export function resolveAppearanceLayer(
     };
   }
 
+  if (surface.kind === "uv-grid") {
+    // Plan 068.12 -- the UV test grid is drawn procedurally by the
+    // render layer (ShaderRuntime intercepts by contentKind "uv-grid").
+    // It still needs a VALID appearance binding to satisfy resolution;
+    // flat-color (mid gray) is a harmless placeholder that only shows
+    // if the render interception is ever bypassed (e.g. a deform slot).
+    const shaderDefinitionId = builtInShaderIdForKey(contentLibrary, "flat-color");
+    if (!shaderDefinitionId) {
+      return surfaceDiagnostic(expectedTargetKind, null, 'Missing built-in "flat-color" shader.');
+    }
+    return validateResolvedSurfaceTarget(
+      resolveSlotBinding(
+        contentLibrary,
+        "surface",
+        shaderDefinitionId,
+        parameterOverrides,
+        [],
+        { baseParameterValues: { color: [0.5, 0.5, 0.5] } }
+      ),
+      expectedTargetKind
+    );
+  }
+
+  if (surface.kind === "surface") {
+    // Surface-ref layers (Plan 068.9) are composited by the stack
+    // resolver (resolveSurfaceBinding), never as a single binding --
+    // a surface is a whole stack, not one shader. Reaching here means
+    // a surface-ref was used somewhere a single appearance binding is
+    // required (deform/effect slot), which is invalid.
+    return surfaceDiagnostic(
+      expectedTargetKind,
+      null,
+      "A surface-reference layer is only valid as a mesh-surface appearance layer, not as a deform/effect binding."
+    );
+  }
+
   if (!getShaderDefinition(contentLibrary, surface.shaderDefinitionId)) {
     return surfaceDiagnostic(
       expectedTargetKind,
@@ -877,7 +929,10 @@ export function resolveSurfaceBinding(
   binding: SurfaceBinding,
   contentLibrary: ContentLibrarySnapshot,
   callerContext: SurfaceContext,
-  parameterOverrides: ShaderParameterOverride[] = []
+  parameterOverrides: ShaderParameterOverride[] = [],
+  /** Plan 068.9 -- surface-ref layers recurse into referenced
+   *  surfaces; this tracks the chain to reject cycles. Internal. */
+  visitedSurfaceDefinitionIds: ReadonlySet<string> = new Set()
 ): ResolveSurfaceBindingResult {
   const surface =
     binding.kind === "reference"
@@ -911,6 +966,41 @@ export function resolveSurfaceBinding(
 
   for (const layer of surface.layers) {
     const effectiveLayer = layer;
+
+    if (
+      effectiveLayer.kind === "appearance" &&
+      effectiveLayer.content.kind === "surface"
+    ) {
+      // Surface-ref layer (Plan 068.9): recurse into the referenced
+      // library surface, cycle-guarded, and carry the resolved stack.
+      const refId = effectiveLayer.content.surfaceDefinitionId;
+      if (visitedSurfaceDefinitionIds.has(refId)) {
+        return resolvedSurfaceDiagnostic(
+          `Surface-reference cycle: "${refId}" references itself (directly or transitively).`
+        );
+      }
+      const nested = resolveSurfaceBinding(
+        { kind: "reference", surfaceDefinitionId: refId },
+        contentLibrary,
+        callerContext,
+        parameterOverrides,
+        new Set([...visitedSurfaceDefinitionIds, refId])
+      );
+      if (!nested.ok) {
+        return nested;
+      }
+      resolvedLayers.push({
+        kind: "surface-ref",
+        layerId: effectiveLayer.layerId,
+        displayName: effectiveLayer.displayName,
+        enabled: effectiveLayer.enabled,
+        opacity: effectiveLayer.opacity,
+        mask: effectiveLayer.mask,
+        blendMode: effectiveLayer.blendMode,
+        nested: nested.binding
+      });
+      continue;
+    }
 
     if (effectiveLayer.kind === "appearance") {
       const result = resolveAppearanceLayer(
@@ -1160,6 +1250,8 @@ function resolveBindingSetForOwner(
   overrides: {
     shaderOverrides: { shaderDefinitionId: string; slot: ShaderSlotKind }[];
     shaderParameterOverrides: ShaderParameterOverride[];
+    /** Plan 068.1 — per-material-slot surface overrides (instances). */
+    surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
   }
 ): EffectiveShaderBindingResolution {
   const bindingSet = createEmptyEffectiveShaderBindingSet();
@@ -1210,9 +1302,9 @@ function resolveBindingSetForOwner(
   const materialSlots = resolveSurfaceSlotBindings(
     contentLibrary,
     ownerAssetDefinition?.surfaceSlots ?? [],
-    bindingSet.surface,
     overrides.shaderParameterOverrides,
-    diagnostics
+    diagnostics,
+    overrides.surfaceSlotOverrides ?? []
   );
 
   return {
@@ -1222,20 +1314,62 @@ function resolveBindingSetForOwner(
   };
 }
 
+/** Loud error appearance for a slot whose surface reference is
+ *  broken -- the surface-slot sibling of the magenta error mesh.
+ *  A broken reference must be VISIBLE, never silently absorbed
+ *  (decided 2026-07-12; the old whole-owner fallback tier was
+ *  deleted -- nothing in UI or shipped data ever produced it). */
+const BROKEN_SURFACE_ERROR_COLOR = 0xff00ff;
+
+function resolveBrokenSurfaceErrorStack(
+  contentLibrary: ContentLibrarySnapshot
+): ResolvedSurfaceStack | null {
+  const errorBinding = createInlineSurfaceBinding(
+    createSurface([
+      createAppearanceLayer(
+        createColorAppearanceContent(BROKEN_SURFACE_ERROR_COLOR),
+        { displayName: "Broken surface reference", blendMode: "base" }
+      )
+    ])
+  );
+  const result = resolveSurfaceBinding(
+    errorBinding,
+    contentLibrary,
+    "universal",
+    []
+  );
+  return result.ok ? result.binding : null;
+}
+
 function resolveSurfaceSlotBindings(
   contentLibrary: ContentLibrarySnapshot,
   slotBindings: AssetSurfaceSlot[],
-  fallbackSurface: EffectiveShaderBinding | null,
   parameterOverrides: ShaderParameterOverride[],
-  diagnostics: ShaderBindingResolutionDiagnostic[]
+  diagnostics: ShaderBindingResolutionDiagnostic[],
+  slotOverrides: PlacedAssetSurfaceSlotOverride[] = []
 ): EffectiveMaterialSlotBinding[] {
-  return slotBindings.map((slotBinding) => {
+  // Per-slot precedence (Plan 068.1): instance slot override >
+  // definition slot surface. NO fallback tier below that -- an
+  // unassigned slot keeps the imported model material (surface:
+  // null, a defined default), and a BROKEN reference resolves to
+  // the loud error surface plus a diagnostic.
+  const overrideBySlotName = new Map(
+    slotOverrides.map((slotOverride) => [
+      slotOverride.slotName,
+      slotOverride.surface
+    ])
+  );
+  return slotBindings.map((rawSlotBinding) => {
+    const overrideSurface = overrideBySlotName.get(rawSlotBinding.slotName);
+    const slotBinding: AssetSurfaceSlot = overrideSurface
+      ? { ...rawSlotBinding, surface: overrideSurface }
+      : rawSlotBinding;
     if (!slotBinding.surface) {
       return {
         slotName: slotBinding.slotName,
         slotIndex: slotBinding.slotIndex,
         materialDefinitionId: null,
-        surface: fallbackSurface ? surfaceStackFromBinding(fallbackSurface) : null
+        surface: null
       };
     }
     const result = resolveSurfaceBinding(
@@ -1267,12 +1401,9 @@ function resolveSurfaceSlotBindings(
                 } => layer.kind === "appearance" && layer.content.kind === "material"
               )?.content.materialDefinitionId ?? null
             ),
-      surface:
-        result.ok
-          ? result.binding
-          : fallbackSurface
-            ? surfaceStackFromBinding(fallbackSurface)
-            : null
+      surface: result.ok
+        ? result.binding
+        : resolveBrokenSurfaceErrorStack(contentLibrary)
     };
   });
 }
@@ -1289,23 +1420,29 @@ export function resolveAssetDefinitionShaderBindings(
 
 export function resolveEffectiveAssetShaderBindings(
   asset: PlacedAssetInstance,
-  contentLibrary: ContentLibrarySnapshot
+  contentLibrary: ContentLibrarySnapshot,
+  sceneOverride?: SceneAssetAppearanceOverride | null
 ): EffectiveShaderBindingSet {
   const definition = getAssetDefinition(contentLibrary, asset.assetDefinitionId);
+  const merged = mergeAppearanceOverrideTiers(asset, sceneOverride);
   return resolveBindingSetForOwner(contentLibrary, definition, {
-    shaderOverrides: asset.shaderOverrides ?? [],
-    shaderParameterOverrides: asset.shaderParameterOverrides
+    shaderOverrides: merged.shaderOverrides,
+    shaderParameterOverrides: asset.shaderParameterOverrides,
+    surfaceSlotOverrides: merged.surfaceSlotOverrides
   }).bindings;
 }
 
 export function resolveEffectiveAssetMaterialSlotBindings(
   asset: PlacedAssetInstance,
-  contentLibrary: ContentLibrarySnapshot
+  contentLibrary: ContentLibrarySnapshot,
+  sceneOverride?: SceneAssetAppearanceOverride | null
 ): EffectiveMaterialSlotBinding[] {
   const definition = getAssetDefinition(contentLibrary, asset.assetDefinitionId);
+  const merged = mergeAppearanceOverrideTiers(asset, sceneOverride);
   return resolveBindingSetForOwner(contentLibrary, definition, {
-    shaderOverrides: asset.shaderOverrides ?? [],
-    shaderParameterOverrides: asset.shaderParameterOverrides
+    shaderOverrides: merged.shaderOverrides,
+    shaderParameterOverrides: asset.shaderParameterOverrides,
+    surfaceSlotOverrides: merged.surfaceSlotOverrides
   }).materialSlots;
 }
 

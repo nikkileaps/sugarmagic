@@ -148,6 +148,24 @@ export function createColorAppearanceContent(color: number): AppearanceContent {
   return { kind: "color", color };
 }
 
+/**
+ * Plan 068.9 -- an appearance layer that IS a referenced library
+ * surface (composited + masked). The Surface Brush creates these.
+ */
+export function createSurfaceRefAppearanceContent(
+  surfaceDefinitionId: string
+): AppearanceContent {
+  return { kind: "surface", surfaceDefinitionId };
+}
+
+/**
+ * Plan 068.12 -- a procedural UV test grid appearance (drawn from the
+ * mesh's paint UVs). Used by the built-in "UV Test Grid" surface.
+ */
+export function createUvGridAppearanceContent(): AppearanceContent {
+  return { kind: "uv-grid" };
+}
+
 export function createTextureAppearanceContent(
   textureDefinitionId: string,
   tiling: [number, number] = [1, 1]

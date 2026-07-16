@@ -15,6 +15,7 @@ import type {
 } from "@sugarmagic/shell";
 import type {
   AuthoringSession,
+  MaskTextureDefinition,
   PaintedMaskTargetAddress,
   RegionDocument,
   RegionLandscapeState
@@ -69,6 +70,16 @@ export interface ViewportOverlayStateAccess {
   ): boolean;
   clearLandscapeDraft(): void;
   setActiveMaskPaintTarget(target: PaintedMaskTargetAddress | null): void;
+  clearMaskPaintFillRequest(): void;
+  /** Plan 068.8 -- force a shader re-apply (and with it the CPU
+   *  scatter rebuild) for renderables matching the filter. Painted
+   *  scatter masks need this after stroke/fill commits: appearance
+   *  masks update through the live texture, but scatter instances
+   *  are CPU-built and only change when application re-runs. */
+  invalidateRenderableShaders(filter: {
+    instanceId?: string;
+    assetDefinitionId?: string;
+  }): void;
   setCameraQuaternion(
     quaternion: [number, number, number, number]
   ): void;
@@ -85,6 +96,14 @@ export interface ViewportOverlayContext {
   readMaskTexture(maskTextureId: string): Promise<ImageData | null>;
   writeMaskTexture(maskTextureId: string, imageData: ImageData): Promise<void>;
   previewMaskTexture(maskTextureId: string, canvas: HTMLCanvasElement): void;
+  /** Plan 068.9 -- mint a fresh blank painted-mask definition (creates
+   *  the backing PNG + registers it in the session). The Surface Brush
+   *  uses this to set up a slot's painted mask on first touch. */
+  createMaskTextureDefinition(): Promise<MaskTextureDefinition | null>;
+  /** Plan 068 -- idempotent paint-UV ensure (generate only if the asset
+   *  lacks them). The Surface Brush calls this in its first-touch setup
+   *  so a never-painted asset gets a paint channel automatically. */
+  ensureAssetPaintUvs(assetDefinitionId: string): Promise<void>;
   subscribeToProjection<T>(
     selector: (state: StoreBundleState) => T,
     listener: (next: T) => void,

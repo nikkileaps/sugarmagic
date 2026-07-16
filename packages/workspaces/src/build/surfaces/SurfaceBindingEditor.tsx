@@ -5,7 +5,7 @@
  * or a reference to a reusable `SurfaceDefinition`.
  */
 
-import { Button, Select, Stack, Text } from "@mantine/core";
+import { Select, Stack, Text } from "@mantine/core";
 import type {
   PaintedMaskTargetAddress,
   SurfaceBinding,
@@ -27,15 +27,19 @@ export interface SurfaceBindingEditorProps<C extends SurfaceContext = SurfaceCon
   paintOwner:
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "landscape-channel" }>, "layerId">
     | Omit<Extract<PaintedMaskTargetAddress, { scope: "asset-slot" }>, "layerId">
+    | Omit<Extract<PaintedMaskTargetAddress, { scope: "instance-slot" }>, "layerId">
     | null;
   onChange: (next: SurfaceBinding<C> | null) => void;
+  /** See LayerStackView.variant (Plan 068.5 master-detail). */
+  layerStackVariant?: "popover" | "inline";
 }
 
 export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>({
   value,
   allowedContext,
   paintOwner,
-  onChange
+  onChange,
+  layerStackVariant = "popover"
 }: SurfaceBindingEditorProps<C>) {
   const { surfaceDefinitions } = useSurfaceAuthoring();
   const compatibleSurfaceDefinitions = surfaceDefinitions.filter((definition) =>
@@ -102,17 +106,6 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
               }
             }}
           />
-          {selectedReferenceSurface ? (
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              onClick={() =>
-                onChange(makeBindingLocal<C>(selectedReferenceSurface))
-              }
-            >
-              Make Local
-            </Button>
-          ) : null}
         </>
       ) : null}
 
@@ -122,6 +115,7 @@ export function SurfaceBindingEditor<C extends SurfaceContext = SurfaceContext>(
           allowedContext={allowedContext}
           allowPainted={paintOwner !== null}
           paintOwner={paintOwner}
+          variant={layerStackVariant}
           onChangeSurface={(surface) => {
             onChange({
               kind: "inline",
