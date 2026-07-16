@@ -198,6 +198,7 @@ import {
 import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
+import { correctAssetOriginToBottomCenter } from "./asset-pipeline/origin-correct";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import {
@@ -1988,6 +1989,70 @@ export function App() {
     []
   );
 
+  // #358 -- re-pivot an imported asset's GLB to bottom-center so the move
+  // gizmo sits on it. Same read -> transform -> write-back -> reload glue
+  // as handleGenerateAssetPaintUvs. Manual, per-asset (Auto Correct
+  // Origin button in the asset detail panel), not automatic on import.
+  const handleCorrectAssetOrigin = useCallback(
+    async (assetDefinitionId: string) => {
+      const { handle, session: currentSession } = projectStore.getState();
+      if (!handle || !currentSession) {
+        return;
+      }
+      const definition = getAssetDefinition(
+        currentSession.contentLibrary,
+        assetDefinitionId
+      );
+      if (!definition) {
+        window.alert(`Missing asset definition "${assetDefinitionId}".`);
+        return;
+      }
+      const pathSegments = definition.source.relativeAssetPath
+        .split("/")
+        .filter(Boolean);
+      const blob = await readBlobFile(handle, ...pathSegments);
+      if (!blob) {
+        window.alert(
+          `Asset file "${definition.source.relativeAssetPath}" was not found.`
+        );
+        return;
+      }
+      try {
+        const result = await correctAssetOriginToBottomCenter(
+          await blob.arrayBuffer()
+        );
+        if (!result.changed) {
+          window.alert(
+            "This asset's origin is already at its bottom-center; nothing to correct."
+          );
+          return;
+        }
+        await writeBlobFile(
+          handle,
+          pathSegments,
+          new Blob([result.glb], { type: "model/gltf-binary" })
+        );
+        // Same ordering as paint-UV regen: drop the renderables first so
+        // the refreshPaths tick re-schedules their loads from the
+        // rewritten file.
+        workspaceViewportRef.current?.reloadAssetRenderables?.(
+          assetDefinitionId
+        );
+        await assetSourceStore
+          .getState()
+          .refreshPaths([definition.source.relativeAssetPath]);
+      } catch (error) {
+        console.error("[origin-correct] correction failed", error);
+        window.alert(
+          `Origin correction failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    },
+    []
+  );
+
   // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
   // doesn't already have them. Wired into both the Surface Brush's
   // first-touch setup and the Open-in-Studio entry so painting always
@@ -2941,6 +3006,7 @@ export function App() {
         onImportAssetDefinition={handleImportAsset}
         onUpdateAssetDefinition={handleUpdateAssetDefinition}
         onRemoveAssetDefinition={handleRemoveAssetDefinition}
+        onCorrectAssetOrigin={handleCorrectAssetOrigin}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
           if (!currentSession) return;

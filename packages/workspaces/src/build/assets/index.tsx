@@ -27,15 +27,21 @@ function getAssetKindLabel(assetDefinition: AssetDefinition): string {
 export interface AssetDefinitionInspectorProps {
   assetDefinition: AssetDefinition;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
+  /** #358 -- re-pivot this asset's GLB to bottom-center so the move
+   *  gizmo sits on it. For imports whose Blender object sat off world
+   *  origin (baked node translation puts the gizmo meters away). */
+  onCorrectOrigin: (definitionId: string) => void | Promise<void>;
 }
 
 export function AssetDefinitionInspector({
   assetDefinition,
-  onUpdateAssetDefinition
+  onUpdateAssetDefinition,
+  onCorrectOrigin
 }: AssetDefinitionInspectorProps) {
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
   );
+  const [correctingOrigin, setCorrectingOrigin] = useState(false);
 
   return (
     <Stack gap="md">
@@ -91,6 +97,33 @@ export function AssetDefinitionInspector({
         <Text size="xs" c="var(--sm-color-overlay0)">
           {assetDefinition.source.relativeAssetPath}
         </Text>
+      </Stack>
+      <Stack gap={4}>
+        <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+          Origin
+        </Text>
+        <Text size="xs" c="var(--sm-color-overlay0)">
+          Re-pivots the asset to its bottom-center so the move gizmo sits on
+          it. Use this if an imported model's gizmo lands off to the side
+          (its Blender object was away from the world origin on export).
+          Heads up: any instances of this asset already placed in a scene
+          will shift by the correction and may need repositioning.
+        </Text>
+        <Button
+          size="xs"
+          variant="light"
+          loading={correctingOrigin}
+          onClick={async () => {
+            setCorrectingOrigin(true);
+            try {
+              await onCorrectOrigin(assetDefinition.definitionId);
+            } finally {
+              setCorrectingOrigin(false);
+            }
+          }}
+        >
+          Auto Correct Origin
+        </Button>
       </Stack>
       <Stack gap={4}>
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
