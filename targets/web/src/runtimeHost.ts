@@ -74,6 +74,7 @@ import {
   ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
   normalizeModelScale,
+  sanitizeRenderableVertexFormats,
   type RenderableShaderApplicationState,
   type RenderView,
   type WebRenderEngine
@@ -2134,6 +2135,12 @@ export function createWebRuntimeHost(
               const renderable = cloneSkinnedObject(
                 gltf.scene
               ) as THREE.Object3D;
+              // Defend the runtime render loop the same way the studio
+              // viewport does: a poisoned normalized-float vertex format
+              // (e.g. from a paint-UV bake) crashes createRenderPipeline
+              // and kills the loop. The sanitize belongs at every load
+              // boundary, not just the editor's (068.13 mini-review).
+              sanitizeRenderableVertexFormats(renderable);
               const validationError = validateRenderableAsset(
                 object,
                 renderable

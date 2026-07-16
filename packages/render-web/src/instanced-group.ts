@@ -23,6 +23,7 @@ import * as THREE from "three";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { SceneObject } from "@sugarmagic/runtime-core";
 import { normalizeModelScale } from "./renderableTransforms";
+import { sanitizeRenderableVertexFormats } from "./renderableFallbacks";
 import {
   createRenderableShaderApplicationState,
   ensureShaderSetAppliedToRenderable,
@@ -57,6 +58,11 @@ export function buildInstancedAssetGroup(options: {
   const representative = group[0]!;
 
   const template = cloneSkinnedObject(sourceScene) as THREE.Object3D;
+  // Same defense the studio viewport applies: a poisoned vertex format
+  // (e.g. a paint-UV bake that shipped a normalized-float attribute)
+  // crashes createRenderPipeline and kills the whole WebGPU loop. Sanitize
+  // at every load boundary, not just the editor's (068.13 mini-review).
+  sanitizeRenderableVertexFormats(template);
   let skinned = false;
   template.traverse((child) => {
     if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
