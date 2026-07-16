@@ -72,6 +72,9 @@ export interface LibraryPopoverProps {
   onImportAssetDefinition: () => Promise<AssetDefinition | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
+  /** #358 -- re-pivot the asset's GLB to bottom-center (Auto Correct
+   *  Origin button in the asset detail panel). */
+  onCorrectAssetOrigin: (definitionId: string) => void | Promise<void>;
   onUpdateAudioClipDefinition: (
     definitionId: string,
     patch: Partial<AudioClipDefinition>
@@ -163,6 +166,7 @@ export function LibraryPopover({
   onImportAssetDefinition,
   onUpdateAssetDefinition,
   onRemoveAssetDefinition,
+  onCorrectAssetOrigin,
   onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
   onRemoveAudioClipDefinition,
@@ -462,6 +466,7 @@ export function LibraryPopover({
                     key={selectedAsset.definitionId}
                     assetDefinition={selectedAsset}
                     onUpdateAssetDefinition={onUpdateAssetDefinition}
+                    onCorrectOrigin={onCorrectAssetOrigin}
                   />
                 </Stack>
               </ScrollArea>

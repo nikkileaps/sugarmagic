@@ -18,3 +18,7 @@ export {
   type PaintUvBakeOptions,
   type PaintUvBakeResult
 } from "./asset-pipeline/paint-uvs";
+export {
+  correctAssetOriginToBottomCenter,
+  type OriginCorrectResult
+} from "./asset-pipeline/origin-correct";
