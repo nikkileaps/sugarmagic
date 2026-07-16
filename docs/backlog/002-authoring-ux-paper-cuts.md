@@ -116,3 +116,17 @@ but the two-path split is the disease.
 - Include redo, and define undo scope boundaries (per-region?
   per-workspace? global?) explicitly instead of inheriting them
   from implementation accident.
+
+**Concrete instance -- Surface Studio paint (nikki, 2026-07-16):** the
+Surface Studio's structural edits ARE undoable (each dispatches
+`SetPlacedAssetSurfaceSlotOverride` -> a transaction), but **brush
+strokes are not** -- `handleWriteMaskTexture` (`apps/studio/src/App.tsx`)
+calls `writeMaskFile(...)` and writes the mask PNG **directly to the
+file**, bypassing even `updateSession`. So paint is a THIRD mutation path
+(direct file write), not just the two above -- reinforcing option (b):
+history must capture mask-file state (a snapshot per paint session is the
+right granularity), not only region-document snapshots. User-facing
+symptom: authors press the Studio's `X` expecting Cancel; it just closes
+and everything was already live, with no way to revert the paint. Quick
+mitigation available now without the full fix: relabel the `X` to a plain
+"Done" (changes are live) so it stops reading as Cancel.
