@@ -60,6 +60,20 @@ async function stubUnwrap(geometry: THREE.BufferGeometry): Promise<void> {
   geometry.setAttribute("uv1", new THREE.BufferAttribute(painted, 2));
 }
 
+/** Unwrap that tolerates a missing authored uv0: derive the paint
+ *  channel from uv when present, else from position count (xatlas
+ *  unwraps from geometry alone when handed no input UV). */
+async function stubUnwrapFromGeometry(geometry: THREE.BufferGeometry): Promise<void> {
+  const uv = geometry.getAttribute("uv");
+  const position = geometry.getAttribute("position");
+  const painted = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i += 1) {
+    painted[i * 2] = uv ? uv.getX(i) * 0.5 : (i % 4) / 4;
+    painted[i * 2 + 1] = uv ? uv.getY(i) * 0.5 : (i % 3) / 3;
+  }
+  geometry.setAttribute("uv1", new THREE.BufferAttribute(painted, 2));
+}
+
 async function makeGlb(withPaintUvs: boolean): Promise<ArrayBuffer> {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   if (withPaintUvs) {
@@ -74,6 +88,51 @@ async function makeGlb(withPaintUvs: boolean): Promise<ArrayBuffer> {
   scene.add(mesh);
   const exporter = new GLTFExporter();
   return (await exporter.parseAsync(scene, { binary: true })) as ArrayBuffer;
+}
+
+/** A GLB whose sole mesh has NO authored uv0 (deleted before export). */
+async function makeGlbWithoutUv0(): Promise<ArrayBuffer> {
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  geometry.deleteAttribute("uv");
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({ name: "stone" })
+  );
+  mesh.name = "no-uv-mesh";
+  const scene = new THREE.Scene();
+  scene.add(mesh);
+  const exporter = new GLTFExporter();
+  return (await exporter.parseAsync(scene, { binary: true })) as ArrayBuffer;
+}
+
+/** A GLB with two mesh nodes that SHARE one geometry instance. */
+async function makeGlbWithSharedGeometry(): Promise<ArrayBuffer> {
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+  const material = new THREE.MeshStandardMaterial({ name: "stone" });
+  const a = new THREE.Mesh(geometry, material);
+  a.name = "share-a";
+  a.position.x = -2;
+  const b = new THREE.Mesh(geometry, material);
+  b.name = "share-b";
+  b.position.x = 2;
+  const scene = new THREE.Scene();
+  scene.add(a);
+  scene.add(b);
+  const exporter = new GLTFExporter();
+  return (await exporter.parseAsync(scene, { binary: true })) as ArrayBuffer;
+}
+
+async function loadAllMeshGeometries(
+  glb: ArrayBuffer
+): Promise<THREE.BufferGeometry[]> {
+  const gltf = await new GLTFLoader().parseAsync(glb, "");
+  const geometries: THREE.BufferGeometry[] = [];
+  gltf.scene.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      geometries.push(child.geometry as THREE.BufferGeometry);
+    }
+  });
+  return geometries;
 }
 
 async function loadFirstGeometry(glb: ArrayBuffer): Promise<THREE.BufferGeometry> {
@@ -130,5 +189,39 @@ describe("paint UV bake", () => {
     expect(result.skippedExistingCount).toBe(1);
     const geometry = await loadFirstGeometry(result.glb);
     expect(geometry.getAttribute("uv1")).toBeTruthy();
+  });
+
+  it("bakes a paint channel for a mesh that has NO authored uv0", async () => {
+    const source = await makeGlbWithoutUv0();
+    const result = await bakePaintUvsIntoGlb(source, {}, stubUnwrapFromGeometry);
+
+    expect(result.unwrappedMeshCount).toBe(1);
+    expect(result.skippedExistingCount).toBe(0);
+
+    const geometry = await loadFirstGeometry(result.glb);
+    // No authored uv0 survives (there was none)...
+    expect(geometry.getAttribute("uv")).toBeUndefined();
+    // ...but the paint channel was still generated from geometry.
+    expect(geometry.getAttribute("uv1")).toBeTruthy();
+  });
+
+  it("unwraps a shared geometry once and both instances carry the paint channel", async () => {
+    const source = await makeGlbWithSharedGeometry();
+    let unwrapCalls = 0;
+    const result = await bakePaintUvsIntoGlb(source, {}, async (geometry) => {
+      unwrapCalls += 1;
+      await stubUnwrapFromGeometry(geometry);
+    });
+
+    // The `seen` set dedups by geometry instance: one shared geometry ->
+    // one unwrap, even though two meshes reference it.
+    expect(unwrapCalls).toBe(1);
+    expect(result.unwrappedMeshCount).toBe(1);
+
+    const geometries = await loadAllMeshGeometries(result.glb);
+    expect(geometries).toHaveLength(2);
+    for (const geometry of geometries) {
+      expect(geometry.getAttribute("uv1")).toBeTruthy();
+    }
   });
 });
