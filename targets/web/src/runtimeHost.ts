@@ -1808,11 +1808,13 @@ export function createWebRuntimeHost(
     // with the now-ready mask (Plan 068.11).
     unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
       for (const entry of sceneObjectEntries.values()) {
-        const hasScatter = (entry.object.effectiveMaterialSlots ?? []).some(
-          (slot) =>
-            slot.surface?.layers?.some((layer) => layer.kind === "scatter")
-        );
-        if (!hasScatter) {
+        // Surface-brushed grass lives in a surface-ref layer's NESTED
+        // scatter, not a bare `scatter` layer, so use the same detector
+        // the instancing partition uses (checks scatter AND surface-ref).
+        // The old inline scatter-only check missed the Surface Brush --
+        // the headline feature -- so its painted-mask grass never
+        // rebuilt when the PNG decoded and stayed empty on fresh load.
+        if (!objectSurfaceHasScatter(entry.object)) {
           continue;
         }
         entry.shaderApplication.appliedShaderSignature = null;
