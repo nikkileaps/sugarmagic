@@ -1,6 +1,6 @@
 # Plan 069 — Collision + Navigation (blocking, triggers, NPC pathfinding)
 
-Status: Locked (epic-review passed 2026-07-16, 3 rounds) — the DESIGN is locked; this is still the summary/sketch stage, so story decomposition is the next step and stories are written to this locked design.
+Status: Locked (epic-review passed 2026-07-16, 3 rounds) — design locked; stories below are written TO the locked design (deviations need STOP + amendment + re-gate). Decision: ONE epic (nikki 2026-07-16), collision stories first, navigation after.
 Owner: nikki + claude
 Date: 2026-07-16
 
@@ -121,7 +121,67 @@ Explicitly served by the existing proximity model, no new work: E-interact promp
 9. **NPC locomotion:** recast `Crowd` (built-in avoidance + path-following) vs. manual `NavMeshQuery.computePath` + custom stepper.
 10. **Trigger timing:** do trigger volumes share the spatial-area tracker's 3-frame hysteresis (debounced, quest-safe) or fire edge-exact (audio/VFX-safe)? Possibly per-role.
 
-## Sources
+## Stories
+
+Ordering: player-visible collision value first (069.1-069.3), the migration-risk story isolated mid-epic (069.4-069.5), studio authoring surface (069.6-069.7), then navigation (069.8-069.10). Each story ends with a nikki-verify recipe; nothing merges without it.
+
+Story-level answers to the open questions (consistent with the locked design; revisit = STOP + amend):
+- q2 collider default -> **auto-box on every asset**, "none" opt-out (locked doc, Bucket 1).
+- q3 response fidelity -> **blocker / trigger / none** + per-role direction; no full channel matrix.
+- q4 bake trigger -> **manual "Bake NavMesh" button** + dirty-flag staleness warn.
+- q8 agent shape -> **XZ circle now**, radius read from the existing `SceneObject.capsule`; vertical half-height activates in the terrain epic.
+- q9 NPC locomotion -> decided inside 069.9 (default lean: recast `Crowd` — avoidance comes free); a deviation from Crowd needs only story-level justification, not re-gate.
+- q10 trigger timing -> **per-role**: quest/dialogue triggers debounced via the tracker's hysteresis; audio/VFX edge-exact. Decided concretely in 069.5.
+
+### 069.1 — Collider domain: `AssetDefinition.collider` + import-time bounds bake
+
+Auto-box collider metadata on every model asset. Add optional `collider` to `AssetDefinition` (non-breaking, like `deform`): `{ shape: "auto-box" | "sphere" | "capsule" | "convex" | "none", localBounds }`, `localBounds` computed at import via `Box3.setFromObject` (the origin-correct math). Backfill existing assets via the normalize-on-load pattern with a studio-side lazy bounds bake (bounds need the GLB, so the backfill runs where the file is readable — same seam as the other bakes). Surface collider (definition + future per-instance override slot) on `SceneObject`. Unit tests: import bake, backfill, normalize round-trip.
+**Verify:** import a fresh GLB -> its definition carries bounds; open an old project -> existing assets gain bounds without visual change; nothing renders differently.
+
+### 069.2 — Runtime collision world + collide-and-slide (player)
+
+The single collision enforcer, in runtime-core: a collision module holding a grid/AABB broadphase over per-instance world colliders (from `SceneObject.transform` x `localBounds`; instanced + singleton identical here), and a pure `resolveMove(body, proposedDelta) -> resolvedDelta` implementing **collide-and-slide** for an XZ-circle agent (radius from `SceneObject.capsule`). A `CollisionSystem` registered after `MovementSystem` routes the player's proposed move through it. Frame-rate independent (delta-scaled, positional push-out). Unit tests per the packages/testing pattern: head-on block, shallow-angle slide, corner, "none" collider pass-through, determinism across delta splits.
+**Verify:** in preview, walk into the statue — blocked; walk at it diagonally — slide along it, no dead-stop, no jitter; walk through grass decor (collider none) freely; 60fps holds.
+
+### 069.3 — NPCs route through the same enforcer (dynamic bodies)
+
+The behavior system's `stepToward` routes its proposed step through the SAME `resolveMove` (invariant: one implementation, both movement paths). NPC-vs-static, NPC-vs-NPC, NPC-vs-player as moving circles. Tune the stuck-detector so a collision-deflected NPC doesn't false-trip it (or trips it usefully — sliding along a wall toward the target is progress; pinned-in-a-corner is stuck).
+**Verify:** an NPC walking its task path can't pass through props or through you; two NPCs crossing paths don't interpenetrate; no NPC freezes mid-route against a prop edge (watch the stuck warning).
+
+### 069.4 — Unified `Volume` domain + migration (THE risk story)
+
+The unified drawn-volume primitive: `RegionVolumeDefinition` with roles (label / trigger / blocker / containment-boundary / nav-bounds / non-walkable), direction flag on blocker/boundary, optional condition binding (`RegionBehaviorWorldFlagCondition` + `RegionBehaviorQuestBinding`), nesting via parent id. Migration inside `normalizeRegionDocumentForLoad`: `RegionAreaDefinition` -> Volume(label), `RegionAmbienceZone` -> Volume(trigger + audio payload); all consumers (spatial tracker, NPC task target areas, quest bindings, audio) read Volumes; old types become `@deprecated` normalize-fed aliases. Exhaustive migration tests: every existing authored region loads, round-trips, and behaves identically (NPC tasks still find their areas, ambience still plays).
+**Verify:** open the sandbox project — every area still listed in Spatial, NPCs still walk their tasks, ambient audio unchanged, save + reload clean. This story changes ZERO gameplay; its success is invisibility.
+
+### 069.5 — Volume roles at runtime: blockers, triggers, containment
+
+Blocker volumes join the collision world (directional: block-in / block-out / both). Trigger enter/exit extends `createSpatialAreaTracker` to per-volume inside sets (the second enforcer rule: extend, don't fork; export `containsPoint`); emits a trigger event stream consumed by quest/dialogue/audio — the ambience `on-enter` stub becomes a real consumer. Containment boundary = block-exit + condition, evaluated with the same flag/quest grammar the behavior system uses; per-role timing per q10. Unit tests: enter/exit edges, overlapping volumes, hysteresis vs edge-exact, conditional gate opens when flags flip.
+**Verify:** draw an out-of-bounds blocker — can't cross it; draw a trigger wired to a sound/flag — fires on enter, again only after exit+re-enter; draw a containment volume conditioned on a flag — walled in until you set the flag (via a quest/dialogue), then walk out.
+
+### 069.6 — Studio: Collision inspector + show-colliders
+
+Layout inspector **Collision** section on the selected placed asset (shape picker incl. "none", size/offset nudge; per-instance override, base/scene scoped like 068 appearance). Spatial workspace "show colliders" viewport toggle rendering every collider (auto + volume blockers) as wireframes.
+**Verify:** select the statue — see its auto-box; set a bush to "none" — walk through it in preview; resize a collider — blocking matches the wireframe; toggle shows all colliders greyed by type.
+
+### 069.7 — Studio: Volume authoring in Spatial (roles UI)
+
+The Spatial workspace draws unified Volumes: new `CreateRegionVolume` / `UpdateRegionVolume` commands behind the existing draw gesture; inspector = role checkboxes + per-role config (direction, condition picker reusing the quest/flag pickers, audio cue for trigger). Migrated label-Volumes appear exactly where Areas were. Nesting via parent select (existing pattern).
+**Verify:** draw one volume, check blocker + trigger + label together — all three behaviors work in preview from the single box; old areas fully editable as label-Volumes.
+
+### 069.8 — NavMesh bake + artifact + staleness
+
+`recast-navigation` integration: bake (solo navmesh now; note tiled gates future TileCache) from the collision world's geometry inside nav-bounds Volumes, eroded by agent radius; non-walkable Volumes carve. "Bake NavMesh" studio action (bake-action pattern); artifact = binary blob in the asset-source store, referenced from the region/scene doc (NOT a SaveParticipant); dirty-flag warn when collider-touching edits postdate the bake. Navmesh viewport visualization toggle.
+**Verify:** draw nav-bounds over the ground, bake, toggle the viz — walkable surface hugs the ground minus prop cutouts and carve-outs; move a prop — staleness warning appears; rebake clears it.
+
+### 069.9 — NPC pathfinding (replace the straight-line step)
+
+NPCs consume the baked navmesh: the behavior stepper's straight-line `stepToward` is replaced by recast path-following (default: `Crowd` agents — avoidance included; fall back to `NavMeshQuery.computePath` + manual stepper only with story-level justification). Task target resolution unchanged (same areas/Volumes); only locomotion changes. Collision remains the final clip (069.3 stays active). Stuck-detection re-tuned for path-following.
+**Verify:** place a prop wall between an NPC and its task area — it walks AROUND, arrives, idles; no orbiting, no wall-hugging jitter; with no baked navmesh, NPCs fall back to the old straight-line behavior (regions without bakes keep working).
+
+### 069.10 — Epic close: perf pass, docs, deferred triggers
+
+Perf harness pass with collision + nav live (broadphase budget, Crowd tick cost at NPC count); docs/api update (runtime collision + navigation surface, Volume model); code comments at every deferred seam (terrain Y, camera collision, TileCache/tiled bake, CCD) naming their revisit triggers; sweep the deferred list into the backlog.
+**Verify:** 60fps holds in the sandbox with everything enabled; docs read true against the code.
 
 - [UE — Collision Overview](https://dev.epicgames.com/documentation/unreal-engine/collision-in-unreal-engine---overview?lang=en-US), [UE — Collision Filtering (channels/responses)](https://www.unrealengine.com/en-US/blog/collision-filtering)
 - [UE — Basic Navigation (Recast, NavMeshBoundsVolume, Nav Modifiers)](https://dev.epicgames.com/documentation/unreal-engine/basic-navigation-in-unreal-engine)
