@@ -206,7 +206,10 @@ import {
 } from "./SurfaceStudioModal";
 import { LibraryPopover } from "./library/LibraryPopover";
 import { shouldShowSharedViewport } from "./viewport/viewportVisibility";
-import { createWebRenderEngine } from "@sugarmagic/render-web";
+import {
+  clearLivePaintedMasks,
+  createWebRenderEngine
+} from "@sugarmagic/render-web";
 import { captureItemThumbnail } from "./thumbnail/captureItemThumbnail";
 import { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProjector";
 import { mountAuthoringCameraOverlay } from "./viewport/overlays/authoring-camera";
@@ -290,6 +293,10 @@ async function handleOpenProject() {
       active.regions,
       active.contentLibrary
     );
+    // Drop the previous project's live painted-mask pixels on switch --
+    // the registry is module-scope in render-web, so stale masks would
+    // otherwise bleed into scatter sampling (068.13 mini-review).
+    clearLivePaintedMasks();
     projectStore
       .getState()
       .setActive(active.handle, active.descriptor, session);
@@ -319,6 +326,10 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
       active.regions,
       active.contentLibrary
     );
+    // Drop the previous project's live painted-mask pixels on switch --
+    // the registry is module-scope in render-web, so stale masks would
+    // otherwise bleed into scatter sampling (068.13 mini-review).
+    clearLivePaintedMasks();
     projectStore
       .getState()
       .setActive(active.handle, active.descriptor, session);
@@ -526,6 +537,8 @@ async function handleReload() {
     reloaded.regions,
     reloaded.contentLibrary
   );
+  // Same on reload -- drop the old live painted-mask pixels (068.13 review).
+  clearLivePaintedMasks();
   projectStore
     .getState()
     .setActive(reloaded.handle, reloaded.descriptor, newSession);
