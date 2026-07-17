@@ -10,6 +10,7 @@ import type {
   ShaderBindingOverride,
   ShaderParameterOverride
 } from "../shader-graph";
+import { cloneAssetCollider, type AssetCollider } from "../content-library";
 
 export interface RegionPlacement {
   gridPosition: {
@@ -46,6 +47,15 @@ export interface PlacedAssetInstance {
   shaderOverrides?: ShaderBindingOverride[];
   /** Plan 068.1 — per-material-slot surface overrides; see the type. */
   surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
+  /**
+   * Plan 069.6 — per-instance collider override. Beats the asset
+   * definition's collider (069.1) for this placement only: `shape: "none"`
+   * marks a walk-on/non-blocking prop; a set `localBounds` resizes/offsets
+   * the box. Absent => inherit the definition. Scene-scoped restyles live in
+   * `SceneAssetAppearanceOverride.colliderOverride`; resolution precedence is
+   * scene > instance > definition (see `resolveEffectiveInstanceCollider`).
+   */
+  colliderOverride?: AssetCollider;
   /**
    * @deprecated Legacy single-binding field. Normalization upgrades this into
    * shaderOverrides; new code should only use shaderOverrides.
@@ -798,6 +808,9 @@ export function createPlacedAssetInstance(
     shaderOverrides: [...(overrides.shaderOverrides ?? [])],
     surfaceSlotOverrides: overrides.surfaceSlotOverrides
       ? overrides.surfaceSlotOverrides.map((slotOverride) => ({ ...slotOverride }))
+      : undefined,
+    colliderOverride: overrides.colliderOverride
+      ? cloneAssetCollider(overrides.colliderOverride)
       : undefined,
     shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],

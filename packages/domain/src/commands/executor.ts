@@ -78,6 +78,7 @@ import type {
   UpdateRegionMetadataCommand,
   SetPlacedAssetShaderOverrideCommand,
   SetPlacedAssetSurfaceSlotOverrideCommand,
+  SetPlacedAssetColliderOverrideCommand,
   SetPlacedAssetShaderParameterOverrideCommand,
   ClearPlacedAssetShaderParameterOverrideCommand,
   SetNPCPresenceShaderOverrideCommand,
@@ -98,6 +99,7 @@ import {
   type Scene,
   type SceneAssetAppearanceOverride
 } from "../scenes";
+import { cloneAssetCollider } from "../content-library";
 
 /**
  * Plan 058 §058.1 — commands execute against the Base + Overlay
@@ -710,7 +712,8 @@ function mutateSceneAppearanceOverride(
     const next = mutate(current);
     const isEmpty =
       (next.surfaceSlotOverrides?.length ?? 0) === 0 &&
-      (next.shaderOverrides?.length ?? 0) === 0;
+      (next.shaderOverrides?.length ?? 0) === 0 &&
+      !next.colliderOverride;
     const assetAppearanceOverrides = { ...overlay.assetAppearanceOverrides };
     if (isEmpty) {
       delete assetAppearanceOverrides[instanceId];
@@ -817,6 +820,36 @@ function applySetPlacedAssetSurfaceSlotOverride(
         surfaceSlotOverrides: next.length > 0 ? next : undefined
       };
     })
+  );
+}
+
+function applySetPlacedAssetColliderOverride(
+  context: CommandExecutionContext,
+  command: SetPlacedAssetColliderOverrideCommand
+): { region: RegionDocument; scene: Scene } {
+  const { instanceId, collider } = command.payload;
+  // Scene-scope write on a base instance -> the Scene overlay's restyle bag.
+  if (
+    command.payload.scope === "scene" &&
+    !isSceneContainedInstance(context, instanceId)
+  ) {
+    return mutateSceneAppearanceOverride(context, instanceId, (current) => ({
+      ...current,
+      colliderOverride: collider ? cloneAssetCollider(collider) : undefined
+    }));
+  }
+  // Base scope (or a scene-contained instance): the instance's own field.
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === instanceId
+        ? {
+            ...asset,
+            colliderOverride: collider
+              ? cloneAssetCollider(collider)
+              : undefined
+          }
+        : asset
+    )
   );
 }
 
@@ -1653,6 +1686,10 @@ export function executeCommand(
     case "SetPlacedAssetSurfaceSlotOverride":
       ({ region: updatedRegion, scene: updatedScene } =
         applySetPlacedAssetSurfaceSlotOverride(context, command));
+      break;
+    case "SetPlacedAssetColliderOverride":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetPlacedAssetColliderOverride(context, command));
       break;
     case "SetPlacedAssetShaderParameterOverride":
       ({ region: updatedRegion, scene: updatedScene } =

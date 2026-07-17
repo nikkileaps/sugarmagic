@@ -2,6 +2,7 @@ import {
   composeRegionContents,
   getAssetDefinition,
   getCharacterModelDefinition,
+  resolveEffectiveInstanceCollider,
   type AssetKind,
   type AssetCollider,
   type ContentLibrarySnapshot,
@@ -321,8 +322,13 @@ function createPlacedAssetSceneObject(
     },
     representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, asset.shaderParameterOverrides)}`,
     capsule: null,
-    // Plan 069.1 — definition-tier collider surfaced from the asset.
-    collider: assetDescriptor.definition?.collider ?? null
+    // Plan 069.6 — resolve the collider across tiers (scene > instance >
+    // definition); 069.1 shipped only the definition tier.
+    collider: resolveEffectiveInstanceCollider(
+      assetDescriptor.definition?.collider,
+      asset.colliderOverride,
+      sceneAppearanceOverride?.colliderOverride
+    ).collider
   };
 }
 

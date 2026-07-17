@@ -161,6 +161,28 @@ export function defaultAssetColliderForKind(
   };
 }
 
+/** Deep-clone a collider (Plan 069.6) — a fresh `localBounds` tuple pair so
+ *  per-instance override edits never alias the definition's baked bounds. */
+export function cloneAssetCollider(collider: AssetCollider): AssetCollider {
+  return {
+    shape: collider.shape,
+    localBounds: collider.localBounds
+      ? {
+          min: [
+            collider.localBounds.min[0],
+            collider.localBounds.min[1],
+            collider.localBounds.min[2]
+          ],
+          max: [
+            collider.localBounds.max[0],
+            collider.localBounds.max[1],
+            collider.localBounds.max[2]
+          ]
+        }
+      : null
+  };
+}
+
 /** Normalize (backfill) an asset's collider on load — absent gets the
  *  kind-aware default; present is preserved (bounds may still be `null`
  *  awaiting the studio bake). */

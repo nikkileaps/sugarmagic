@@ -6,7 +6,7 @@ import type {
   RegionAmbienceZone,
   RegionSoundEmitter
 } from "../region-authoring";
-import type { EnvironmentDefinition } from "../content-library";
+import type { AssetCollider, EnvironmentDefinition } from "../content-library";
 import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
@@ -499,6 +499,19 @@ export type SetPlacedAssetSurfaceSlotOverrideCommand = SemanticCommandBase<
     slotName: string;
     surface: SurfaceBinding<"universal"> | null;
     /** Plan 068.2 — see SetPlacedAssetShaderOverrideCommand.scope. */
+    scope?: "base" | "scene";
+  }
+>;
+
+/** Plan 069.6 — per-instance collider override. `collider: null` clears the
+ *  override (falls back to the asset definition's collider). `scope` routes
+ *  base (the instance) vs scene (the active Scene overlay), exactly like the
+ *  surface-slot command. */
+export type SetPlacedAssetColliderOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetColliderOverride",
+  {
+    instanceId: string;
+    collider: AssetCollider | null;
     scope?: "base" | "scene";
   }
 >;
@@ -1066,6 +1079,7 @@ export type SemanticCommand =
   | ClearAssetDefaultShaderParameterOverrideCommand
   | SetPlacedAssetShaderOverrideCommand
   | SetPlacedAssetSurfaceSlotOverrideCommand
+  | SetPlacedAssetColliderOverrideCommand
   | SetNPCPresenceShaderOverrideCommand
   | SetItemPresenceShaderOverrideCommand
   | SetPlacedAssetShaderParameterOverrideCommand
