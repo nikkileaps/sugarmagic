@@ -7,6 +7,8 @@
 
 import {
   createRegionAreaDefinition,
+  reconcileRegionVolumesFromAreas,
+  reconcileRegionVolumesFromAmbienceZones,
   createRegionNPCBehaviorDefinition,
   MAX_REGION_LANDSCAPE_CHANNELS
 } from "../region-authoring";
@@ -1222,51 +1224,49 @@ function applyCreateRegionArea(
   region: RegionDocument,
   command: CreateRegionAreaCommand
 ): RegionDocument {
-  return {
-    ...region,
-    areas: [
-      ...region.areas,
-      createRegionAreaDefinition({
-        areaId: command.payload.areaId,
-        displayName: command.payload.displayName,
-        lorePageId: command.payload.lorePageId,
-        parentAreaId: command.payload.parentAreaId,
-        kind: command.payload.kind,
-        bounds: command.payload.bounds
-      })
-    ]
-  };
+  // Plan 069.4 — compute the intended area list, then reconcile it into the
+  // canonical `volumes` (which re-derives the area/ambience aliases).
+  const nextAreas = [
+    ...region.areas,
+    createRegionAreaDefinition({
+      areaId: command.payload.areaId,
+      displayName: command.payload.displayName,
+      lorePageId: command.payload.lorePageId,
+      parentAreaId: command.payload.parentAreaId,
+      kind: command.payload.kind,
+      bounds: command.payload.bounds
+    })
+  ];
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
 function applyUpdateRegionArea(
   region: RegionDocument,
   command: UpdateRegionAreaCommand
 ): RegionDocument {
-  return {
-    ...region,
-    areas: region.areas.map((area) =>
-      area.areaId !== command.payload.areaId
-        ? area
-        : createRegionAreaDefinition({
-            ...area,
-            ...(command.payload.displayName === undefined
-              ? {}
-              : { displayName: command.payload.displayName }),
-            ...(command.payload.lorePageId === undefined
-              ? {}
-              : { lorePageId: command.payload.lorePageId }),
-            ...(command.payload.parentAreaId === undefined
-              ? {}
-              : { parentAreaId: command.payload.parentAreaId }),
-            ...(command.payload.kind === undefined
-              ? {}
-              : { kind: command.payload.kind }),
-            ...(command.payload.bounds === undefined
-              ? {}
-              : { bounds: command.payload.bounds })
-          })
-    )
-  };
+  const nextAreas = region.areas.map((area) =>
+    area.areaId !== command.payload.areaId
+      ? area
+      : createRegionAreaDefinition({
+          ...area,
+          ...(command.payload.displayName === undefined
+            ? {}
+            : { displayName: command.payload.displayName }),
+          ...(command.payload.lorePageId === undefined
+            ? {}
+            : { lorePageId: command.payload.lorePageId }),
+          ...(command.payload.parentAreaId === undefined
+            ? {}
+            : { parentAreaId: command.payload.parentAreaId }),
+          ...(command.payload.kind === undefined
+            ? {}
+            : { kind: command.payload.kind }),
+          ...(command.payload.bounds === undefined
+            ? {}
+            : { bounds: command.payload.bounds })
+        })
+  );
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
 function applyDeleteRegionArea(
@@ -1274,19 +1274,14 @@ function applyDeleteRegionArea(
   command: DeleteRegionAreaCommand
 ): RegionDocument {
   const deletedAreaId = command.payload.areaId;
-  return {
-    ...region,
-    areas: region.areas
-      .filter((area) => area.areaId !== deletedAreaId)
-      .map((area) =>
-        area.parentAreaId === deletedAreaId
-          ? {
-              ...area,
-              parentAreaId: null
-            }
-          : area
-      )
-  };
+  const nextAreas = region.areas
+    .filter((area) => area.areaId !== deletedAreaId)
+    .map((area) =>
+      area.parentAreaId === deletedAreaId
+        ? { ...area, parentAreaId: null }
+        : area
+    );
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
 function applyCreateRegionNPCBehavior(
@@ -1506,51 +1501,35 @@ function applyCreateRegionAmbienceZone(
   region: RegionDocument,
   command: CreateRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: [
-        ...(region.audio?.ambienceZones ?? []),
-        command.payload.zone
-      ]
-    }
-  };
+  // Plan 069.4 — reconcile the trigger-role volumes from the intended zone
+  // list (re-derives the ambience alias; preserves emitters).
+  const nextZones = [
+    ...(region.audio?.ambienceZones ?? []),
+    command.payload.zone
+  ];
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 function applyUpdateRegionAmbienceZone(
   region: RegionDocument,
   command: UpdateRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: (region.audio?.ambienceZones ?? []).map((zone) =>
-        zone.zoneId === command.payload.zoneId
-          ? { ...zone, ...command.payload.patch }
-          : zone
-      )
-    }
-  };
+  const nextZones = (region.audio?.ambienceZones ?? []).map((zone) =>
+    zone.zoneId === command.payload.zoneId
+      ? { ...zone, ...command.payload.patch }
+      : zone
+  );
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 function applyDeleteRegionAmbienceZone(
   region: RegionDocument,
   command: DeleteRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: (region.audio?.ambienceZones ?? []).filter(
-        (zone) => zone.zoneId !== command.payload.zoneId
-      )
-    }
-  };
+  const nextZones = (region.audio?.ambienceZones ?? []).filter(
+    (zone) => zone.zoneId !== command.payload.zoneId
+  );
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 export function executeCommand(

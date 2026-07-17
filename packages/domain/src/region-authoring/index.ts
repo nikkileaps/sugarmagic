@@ -586,6 +586,127 @@ export function resolveRegionVolumes(
   );
 }
 
+/** Return a region with canonical `volumes` set and the `@deprecated`
+ *  area/ambience aliases re-derived. Plan 069.4 — command executors call
+ *  this because commands do NOT re-normalize, and live in-session readers
+ *  consume the aliases between saves. */
+export function withDerivedRegionAliases(
+  region: RegionDocument,
+  volumes: RegionVolumeDefinition[]
+): RegionDocument {
+  const ambienceZones = deriveRegionAmbienceZonesFromVolumes(volumes);
+  // Preserve any existing audio (emitters); create it only when a trigger
+  // volume needs an ambience alias and there's no audio state yet.
+  const audio = region.audio
+    ? { ...region.audio, ambienceZones }
+    : ambienceZones.length > 0
+      ? { emitters: [], ambienceZones }
+      : region.audio;
+  return {
+    ...region,
+    volumes,
+    areas: deriveRegionAreasFromVolumes(volumes),
+    audio
+  };
+}
+
+/** Reconcile the canonical volumes so their `label`-role set matches
+ *  `nextAreas` (add / update / drop), preserving every non-label volume
+ *  and any extra roles on a label volume. Plan 069.4 — the area command
+ *  executors compute their intended `areas` list and route it through
+ *  here so `volumes` stays the source of truth. */
+export function reconcileRegionVolumesFromAreas(
+  region: RegionDocument,
+  nextAreas: readonly RegionAreaDefinition[]
+): RegionDocument {
+  const canonical = resolveRegionVolumes(region);
+  const nextById = new Map(nextAreas.map((area) => [area.areaId, area]));
+  const seen = new Set<string>();
+  const volumes: RegionVolumeDefinition[] = [];
+  for (const volume of canonical) {
+    if (!volume.roles.includes("label")) {
+      volumes.push(volume);
+      continue;
+    }
+    const area = nextById.get(volume.volumeId);
+    if (!area) {
+      // Area deleted: drop the label role (+ its config); keep the volume
+      // only if other roles remain.
+      const remaining = volume.roles.filter((role) => role !== "label");
+      if (remaining.length > 0) {
+        volumes.push({
+          ...volume,
+          roles: remaining,
+          labelKind: null,
+          lorePageId: null
+        });
+      }
+      continue;
+    }
+    seen.add(area.areaId);
+    volumes.push({
+      ...volume,
+      displayName: area.displayName,
+      parentVolumeId: area.parentAreaId,
+      bounds: area.bounds,
+      labelKind: area.kind,
+      lorePageId: area.lorePageId
+    });
+  }
+  for (const area of nextAreas) {
+    if (!seen.has(area.areaId)) {
+      volumes.push(regionAreaToVolume(area));
+    }
+  }
+  return withDerivedRegionAliases(region, volumes);
+}
+
+/** As `reconcileRegionVolumesFromAreas`, but for the `trigger`-role set
+ *  driven by the ambience-zone command executors. */
+export function reconcileRegionVolumesFromAmbienceZones(
+  region: RegionDocument,
+  nextZones: readonly RegionAmbienceZone[]
+): RegionDocument {
+  const canonical = resolveRegionVolumes(region);
+  const nextById = new Map(nextZones.map((zone) => [zone.zoneId, zone]));
+  const seen = new Set<string>();
+  const volumes: RegionVolumeDefinition[] = [];
+  for (const volume of canonical) {
+    if (!volume.roles.includes("trigger")) {
+      volumes.push(volume);
+      continue;
+    }
+    const zone = nextById.get(volume.volumeId);
+    if (!zone) {
+      const remaining = volume.roles.filter((role) => role !== "trigger");
+      if (remaining.length > 0) {
+        volumes.push({ ...volume, roles: remaining, trigger: null });
+      }
+      continue;
+    }
+    seen.add(zone.zoneId);
+    volumes.push({
+      ...volume,
+      displayName: zone.displayName,
+      enabled: zone.enabled,
+      bounds: { kind: "box", center: zone.center, size: zone.size },
+      trigger: {
+        timing: zone.trigger,
+        action: {
+          audioCueId: zone.cueDefinitionId,
+          setWorldFlag: volume.trigger?.action.setWorldFlag ?? null
+        }
+      }
+    });
+  }
+  for (const zone of nextZones) {
+    if (!seen.has(zone.zoneId)) {
+      volumes.push(regionAmbienceZoneToVolume(zone));
+    }
+  }
+  return withDerivedRegionAliases(region, volumes);
+}
+
 export function createRegionBehaviorQuestBinding(
   overrides: Partial<RegionBehaviorQuestBinding> = {}
 ): RegionBehaviorQuestBinding {

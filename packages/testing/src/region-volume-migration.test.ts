@@ -13,6 +13,8 @@ import {
   createDefaultRegionLandscapeState,
   createEmptyContentLibrarySnapshot,
   normalizeRegionDocumentForLoad,
+  reconcileRegionVolumesFromAreas,
+  reconcileRegionVolumesFromAmbienceZones,
   type RegionAmbienceZone,
   type RegionAreaDefinition,
   type RegionDocument,
@@ -164,5 +166,91 @@ describe("unified Volume migration — invisibility", () => {
       "area:market",
       "area:stall"
     ]);
+  });
+});
+
+describe("unified Volume — write path (069.4)", () => {
+  it("edits an area after migration and the edit survives a reload", () => {
+    const migrated = normalize(legacyRegion());
+    const movedBounds = {
+      kind: "box" as const,
+      center: [9, 0, 9] as [number, number, number],
+      size: [10, 4, 10] as [number, number, number]
+    };
+    const editedAreas = migrated.areas.map((area) =>
+      area.areaId === "area:market" ? { ...area, bounds: movedBounds } : area
+    );
+    const written = reconcileRegionVolumesFromAreas(migrated, editedAreas);
+
+    // Both the canonical volume and the derived alias reflect the move.
+    expect(
+      written.volumes?.find((v) => v.volumeId === "area:market")?.bounds
+    ).toEqual(movedBounds);
+    expect(
+      written.areas.find((a) => a.areaId === "area:market")?.bounds
+    ).toEqual(movedBounds);
+
+    // Reload (normalize) — the edit persists (volumes is canonical).
+    const reloaded = normalize(written);
+    expect(
+      reloaded.areas.find((a) => a.areaId === "area:market")?.bounds
+    ).toEqual(movedBounds);
+  });
+
+  it("creates a new area as a label volume + alias", () => {
+    const migrated = normalize(legacyRegion());
+    const newArea: RegionAreaDefinition = {
+      areaId: "area:dock",
+      displayName: "Dock",
+      lorePageId: null,
+      parentAreaId: null,
+      kind: "platform",
+      bounds: { kind: "box", center: [0, 0, -5], size: [6, 2, 12] }
+    };
+    const written = reconcileRegionVolumesFromAreas(migrated, [
+      ...migrated.areas,
+      newArea
+    ]);
+    expect(
+      written.volumes?.find((v) => v.volumeId === "area:dock")?.roles
+    ).toEqual(["label"]);
+    expect(written.areas).toContainEqual(newArea);
+  });
+
+  it("deletes an area from both volumes and the alias", () => {
+    const migrated = normalize(legacyRegion());
+    const written = reconcileRegionVolumesFromAreas(
+      migrated,
+      migrated.areas.filter((a) => a.areaId !== "area:stall")
+    );
+    expect(written.areas.some((a) => a.areaId === "area:stall")).toBe(false);
+    expect(written.volumes?.some((v) => v.volumeId === "area:stall")).toBe(
+      false
+    );
+    expect(written.areas.some((a) => a.areaId === "area:market")).toBe(true);
+  });
+
+  it("creates the first ambience zone (creating audio) via the trigger role", () => {
+    // Region with NO audio at all.
+    const region = legacyRegion();
+    delete region.audio;
+    region.areas = [];
+    const migrated = normalize(region);
+    expect(migrated.audio?.ambienceZones ?? []).toHaveLength(0);
+
+    const zone: RegionAmbienceZone = {
+      zoneId: "zone:wind",
+      displayName: "Wind",
+      cueDefinitionId: "cue:wind",
+      center: [0, 0, 0],
+      size: [20, 4, 20],
+      trigger: "always",
+      enabled: true
+    };
+    const written = reconcileRegionVolumesFromAmbienceZones(migrated, [zone]);
+    expect(written.audio?.ambienceZones).toContainEqual(zone);
+    expect(
+      written.volumes?.find((v) => v.volumeId === "zone:wind")?.roles
+    ).toEqual(["trigger"]);
   });
 });
