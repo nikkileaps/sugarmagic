@@ -40,6 +40,7 @@ import {
 import {
   resolveSceneObjects,
   computeSceneDelta,
+  loadNavMeshDebugGeometry,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import {
@@ -405,6 +406,98 @@ export function createAuthoringViewport(
   const _wireEuler = new THREE.Euler();
   const _wireScale = new THREE.Vector3();
 
+  // Plan 069.8 — the baked navmesh walkable surface, toggled by
+  // `showNavMesh`. Loaded async from the artifact blob (asset-source store)
+  // and cached by the bake's input hash so it only reloads on a fresh bake.
+  const navMeshVizRoot = new THREE.Group();
+  navMeshVizRoot.name = "navmesh-viz";
+  scene.add(navMeshVizRoot);
+  const NAVMESH_VIZ_COLOR = 0x89dceb;
+  let navMeshVizHash: string | null = null;
+  let navMeshVizToken = 0;
+
+  function clearNavMeshViz() {
+    navMeshVizHash = null;
+    for (let i = navMeshVizRoot.children.length - 1; i >= 0; i -= 1) {
+      const child = navMeshVizRoot.children[i]!;
+      navMeshVizRoot.remove(child);
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+  }
+
+  function buildNavMeshVizMesh(positions: number[], indices: number[]) {
+    clearNavMeshViz();
+    if (positions.length === 0 || indices.length === 0) {
+      return;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
+    geometry.setIndex(indices);
+    const fill = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: NAVMESH_VIZ_COLOR,
+        transparent: true,
+        opacity: 0.25,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false
+      })
+    );
+    // Hover just above the ground plane to avoid z-fighting the grid.
+    fill.position.y = 0.05;
+    navMeshVizRoot.add(fill);
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geometry),
+      new THREE.LineBasicMaterial({
+        color: NAVMESH_VIZ_COLOR,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        toneMapped: false
+      })
+    );
+    wire.position.y = 0.05;
+    navMeshVizRoot.add(wire);
+  }
+
+  async function syncNavMeshViz(projection: ViewportProjection) {
+    const artifact = projection.region?.navMesh ?? null;
+    const url = artifact
+      ? projection.assetSources[artifact.assetPath]
+      : undefined;
+    if (!projection.showNavMesh || !artifact || !url) {
+      clearNavMeshViz();
+      return;
+    }
+    if (navMeshVizHash === artifact.inputHash) {
+      return; // already showing this bake
+    }
+    navMeshVizHash = artifact.inputHash;
+    const token = navMeshVizToken + 1;
+    navMeshVizToken = token;
+    try {
+      const response = await fetch(url);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const geometry = await loadNavMeshDebugGeometry(bytes);
+      if (token !== navMeshVizToken) {
+        return; // a newer request superseded this one
+      }
+      buildNavMeshVizMesh(geometry.positions, geometry.indices);
+    } catch (error) {
+      console.warn("[navmesh-viz] load failed", error);
+      if (token === navMeshVizToken) {
+        clearNavMeshViz();
+      }
+    }
+  }
+
   function clearColliderWireframes() {
     for (let i = colliderWireframeRoot.children.length - 1; i >= 0; i -= 1) {
       const child = colliderWireframeRoot.children[i]!;
@@ -604,6 +697,7 @@ export function createAuthoringViewport(
 
   function applyProjection(projection: ViewportProjection) {
     currentAssetSources = projection.assetSources;
+    void syncNavMeshViz(projection);
 
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;

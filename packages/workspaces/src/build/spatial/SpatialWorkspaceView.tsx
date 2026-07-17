@@ -138,6 +138,10 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showColliders
   );
+  const showNavMesh = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showNavMesh
+  );
   const [baking, setBaking] = useState(false);
 
   const volumes = useMemo(
@@ -717,6 +721,14 @@ export function useSpatialWorkspaceView(
               active: showColliders,
               onToggle: () =>
                 viewportStore.getState().setShowColliders(!showColliders)
+            },
+            {
+              id: "show-navmesh",
+              label: `${showNavMesh ? "Hide" : "Show"} navmesh`,
+              icon: "🧭",
+              active: showNavMesh,
+              onToggle: () =>
+                viewportStore.getState().setShowNavMesh(!showNavMesh)
             }
           ]}
         />

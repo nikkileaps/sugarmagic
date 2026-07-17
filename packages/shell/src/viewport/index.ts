@@ -130,6 +130,8 @@ export interface ViewportState {
   activeSpatialTool: "select" | "draw-rect";
   /** Plan 069.6 — show collider + volume-blocker wireframes in the viewport. */
   showColliders: boolean;
+  /** Plan 069.8 — show the baked navmesh walkable surface in the viewport. */
+  showNavMesh: boolean;
   cameraQuaternion: [number, number, number, number];
   sketchSettings: LandscapeSketchSettings;
   /** Non-null while the Layout scatter brush tool is active. */
@@ -157,6 +159,7 @@ export interface ViewportActions {
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
   setShowColliders: (showColliders: boolean) => void;
+  setShowNavMesh: (showNavMesh: boolean) => void;
   setCameraQuaternion: (
     quaternion: [number, number, number, number]
   ) => void;
@@ -226,6 +229,7 @@ export function createViewportStore() {
     activeTransformTool: "move",
     activeSpatialTool: "select",
     showColliders: false,
+    showNavMesh: false,
     cameraQuaternion: [0, 0, 0, 1],
     sketchSettings: DEFAULT_SKETCH_SETTINGS,
     scatterBrushSettings: null,
@@ -297,6 +301,9 @@ export function createViewportStore() {
     },
     setShowColliders(showColliders) {
       set({ showColliders });
+    },
+    setShowNavMesh(showNavMesh) {
+      set({ showNavMesh });
     },
     setCameraQuaternion(quaternion) {
       set({ cameraQuaternion: quaternion });

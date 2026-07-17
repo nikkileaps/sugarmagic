@@ -14,7 +14,13 @@
  * and each nav-bounds volume contributes a ground quad.
  */
 
-import { exportNavMesh, importNavMesh, init, type NavMesh } from "@recast-navigation/core";
+import {
+  exportNavMesh,
+  getNavMeshPositionsAndIndices,
+  importNavMesh,
+  init,
+  type NavMesh
+} from "@recast-navigation/core";
 import { generateSoloNavMesh } from "@recast-navigation/generators";
 import {
   resolveRegionVolumes,
@@ -204,6 +210,21 @@ export async function bakeNavMesh(
 export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
   await ensureRecastInit();
   return importNavMesh(bytes).navMesh;
+}
+
+/**
+ * Extract the walkable-surface triangles from a baked artifact for
+ * visualization (Plan 069.8 "show navmesh" toggle). Self-contained: loads,
+ * reads positions/indices, frees the WASM NavMesh — the caller just draws.
+ */
+export async function loadNavMeshDebugGeometry(
+  bytes: Uint8Array
+): Promise<{ positions: number[]; indices: number[] }> {
+  await ensureRecastInit();
+  const navMesh = importNavMesh(bytes).navMesh;
+  const [positions, indices] = getNavMeshPositionsAndIndices(navMesh);
+  navMesh.destroy();
+  return { positions, indices };
 }
 
 export interface RegionNavMeshInputOptions {

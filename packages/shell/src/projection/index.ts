@@ -48,6 +48,8 @@ export interface ViewportProjection {
   cursor: ViewportState["activeToolCursor"];
   /** Plan 069.6 — draw collider + volume-blocker wireframes in the viewport. */
   showColliders: ViewportState["showColliders"];
+  /** Plan 069.8 — draw the baked navmesh walkable surface. */
+  showNavMesh: ViewportState["showNavMesh"];
 }
 
 export interface PlayerPreviewProjection {
@@ -160,7 +162,8 @@ export function selectViewportProjection(
     landscapeOverride: viewport.landscapeDraft,
     transformOverrides: viewport.transformDrafts,
     cursor: viewport.activeToolCursor,
-    showColliders: viewport.showColliders
+    showColliders: viewport.showColliders,
+    showNavMesh: viewport.showNavMesh
   };
 }
 

@@ -422,6 +422,10 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.showColliders
   );
+  const showNavMesh = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showNavMesh
+  );
   // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
   // layer is armed; the mask-paint overlay owns the strokes, this
   // view owns the toolbar.
@@ -2328,6 +2332,14 @@ export function useLayoutWorkspaceView(
               active: showColliders,
               onToggle: () =>
                 viewportStore.getState().setShowColliders(!showColliders)
+            },
+            {
+              id: "show-navmesh",
+              icon: "🧭",
+              label: `${showNavMesh ? "Hide" : "Show"} navmesh`,
+              active: showNavMesh,
+              onToggle: () =>
+                viewportStore.getState().setShowNavMesh(!showNavMesh)
             }
           ]}
         />
