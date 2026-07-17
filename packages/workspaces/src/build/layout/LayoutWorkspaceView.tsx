@@ -74,6 +74,7 @@ import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
 import { AssetAppearanceSection } from "./AssetAppearanceSection";
+import { AssetCollisionSection } from "./AssetCollisionSection";
 import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
@@ -1697,6 +1698,21 @@ export function useLayoutWorkspaceView(
                 activeScene={activeScene}
                 isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
                 onOpenSurfaceStudio={onOpenSurfaceStudio}
+              />
+            ) : null}
+            {region ? (
+              <AssetCollisionSection
+                instance={selectedAsset}
+                assetDefinition={
+                  assetDefinitions.find(
+                    (definition) =>
+                      definition.definitionId === selectedAsset.assetDefinitionId
+                  ) ?? null
+                }
+                regionId={region.identity.id}
+                activeScene={activeScene}
+                isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
+                onCommand={onCommand}
               />
             ) : null}
             <Stack gap="xs">
