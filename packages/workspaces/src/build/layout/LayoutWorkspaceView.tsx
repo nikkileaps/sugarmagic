@@ -417,6 +417,10 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.scatterBrushSettings
   );
+  const showColliders = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showColliders
+  );
   // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
   // layer is armed; the mask-paint overlay owns the strokes, this
   // view owns the toolbar.
@@ -2007,6 +2011,16 @@ export function useLayoutWorkspaceView(
               const tool = id as TransformTool;
               viewportStore.getState().setActiveTransformTool(tool);
             }}
+            toggles={[
+              {
+                id: "show-colliders",
+                icon: "▨",
+                label: `${showColliders ? "Hide" : "Show"} colliders`,
+                active: showColliders,
+                onToggle: () =>
+                  viewportStore.getState().setShowColliders(!showColliders)
+              }
+            ]}
           />
         </Box>
         {maskPaintTarget ? (
