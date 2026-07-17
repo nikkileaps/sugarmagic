@@ -3,6 +3,7 @@ import {
   getAssetDefinition,
   getCharacterModelDefinition,
   type AssetKind,
+  type AssetCollider,
   type ContentLibrarySnapshot,
   type ItemDefinition,
   type NPCDefinition,
@@ -81,6 +82,12 @@ export interface SceneObject {
   transform: SceneObjectTransform;
   representationKey: string;
   capsule: SceneObjectCapsuleSpec | null;
+  /** Plan 069.1 — definition-tier collider from the asset (null for
+   *  agents, which collide via `capsule`, and for items). The per-instance
+   *  override tier is 069.6. Not part of `representationKey`: collision is
+   *  a separate axis from rendering, so distinct colliders still instance
+   *  together for draw. */
+  collider: AssetCollider | null;
 }
 
 export interface SceneDelta {
@@ -313,7 +320,9 @@ function createPlacedAssetSceneObject(
       scale: asset.transform.scale
     },
     representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, asset.shaderParameterOverrides)}`,
-    capsule: null
+    capsule: null,
+    // Plan 069.1 — definition-tier collider surfaced from the asset.
+    collider: assetDescriptor.definition?.collider ?? null
   };
 }
 
@@ -372,7 +381,9 @@ function createPlayerSceneObject(
       height,
       radius,
       color: PLAYER_CAPSULE_COLOR
-    }
+    },
+    // Plan 069.1 — agents collide via `capsule`, not a mesh collider.
+    collider: null
   };
 }
 
@@ -422,7 +433,9 @@ function createNPCSceneObject(
       height,
       radius,
       color: NPC_CAPSULE_COLOR
-    }
+    },
+    // Plan 069.1 — agents collide via `capsule`, not a mesh collider.
+    collider: null
   };
 }
 
@@ -464,7 +477,9 @@ export function createItemSceneObject(
       scale: presence.transform.scale
     },
     representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
-    capsule: null
+    capsule: null,
+    // Plan 069.1 — items are pickups (proximity), not collision bodies.
+    collider: null
   };
 }
 

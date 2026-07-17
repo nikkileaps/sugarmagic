@@ -199,6 +199,7 @@ import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { correctAssetOriginToBottomCenter } from "./asset-pipeline/origin-correct";
+import { computeAssetColliderBounds } from "./asset-pipeline/collider-bounds";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import {
@@ -1280,10 +1281,31 @@ export function App() {
           materialDefinition
         );
       }
-      nextSession = addAssetDefinitionToSession(
-        nextSession,
-        result.assetDefinition
-      );
+      // Plan 069.1 — bake the collider's localBounds in-memory from the
+      // imported bytes (Box3.setFromObject), never re-reading the just-
+      // written file (the FSAccess read-after-write flake). io set the
+      // kind-aware shape; "none" colliders need no bounds.
+      let importedAsset = result.assetDefinition;
+      if (
+        importedAsset.collider &&
+        importedAsset.collider.shape !== "none" &&
+        result.sourceBuffer
+      ) {
+        try {
+          const localBounds = await computeAssetColliderBounds(
+            result.sourceBuffer
+          );
+          if (localBounds) {
+            importedAsset = {
+              ...importedAsset,
+              collider: { ...importedAsset.collider, localBounds }
+            };
+          }
+        } catch (error) {
+          console.warn("[collider-bounds] import bake failed", error);
+        }
+      }
+      nextSession = addAssetDefinitionToSession(nextSession, importedAsset);
       projectStore.getState().updateSession(nextSession);
       // The import wrote new files; without refreshing their blob
       // URLs the Layout viewport can't render the asset until the
@@ -1962,6 +1984,10 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
+        // Plan 069.1 — the paint-UV bake is geometry-neutral (it appends a
+        // uv1 channel; vertex positions don't move), so the collider's
+        // localBounds stay valid — no rebake needed here (unlike origin
+        // correction, which shifts geometry).
         // Drop the renderables FIRST: the refreshPaths store tick is
         // what triggers the projection pass that re-schedules their
         // loads. The reverse order rebuilt before dropping and left
@@ -2032,6 +2058,28 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
+        // Plan 069.1 — origin correction shifted geometry relative to the
+        // origin, so the collider's localBounds are now stale; recompute
+        // from the in-memory corrected GLB and patch the definition.
+        if (definition.collider && definition.collider.shape !== "none") {
+          try {
+            const localBounds = await computeAssetColliderBounds(result.glb);
+            const { session: latestSession } = projectStore.getState();
+            if (localBounds && latestSession) {
+              projectStore
+                .getState()
+                .updateSession(
+                  updateAssetDefinitionInSession(
+                    latestSession,
+                    assetDefinitionId,
+                    { collider: { ...definition.collider, localBounds } }
+                  )
+                );
+            }
+          } catch (error) {
+            console.warn("[collider-bounds] origin-correct rebake failed", error);
+          }
+        }
         // Same ordering as paint-UV regen: drop the renderables first so
         // the refreshPaths tick re-schedules their loads from the
         // rewritten file.
@@ -2335,6 +2383,75 @@ export function App() {
     const timeout = setTimeout(() => setBusyToast(null), 12000);
     return () => clearTimeout(timeout);
   }, [busyToast]);
+
+  // Plan 069.1 — backfill collider localBounds for projects created before
+  // colliders existed. The domain normalize sets the SHAPE on load; bounds
+  // need the GLB, so fill them here, once per opened project (they persist
+  // after save). Best-effort + sequential; skips "none" and already-baked.
+  // Keyed on the project identity (not `session`) so an edit doesn't re-run
+  // it; reads the LATEST session from the store to dodge stale closures.
+  useEffect(() => {
+    const projectId = session?.gameProject.identity.id;
+    if (!projectId || !projectHandle) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { session: current, handle } = projectStore.getState();
+      if (!current || !handle) {
+        return;
+      }
+      const pending = current.contentLibrary.assetDefinitions.filter(
+        (def) =>
+          def.collider &&
+          def.collider.shape !== "none" &&
+          !def.collider.localBounds
+      );
+      for (const def of pending) {
+        if (cancelled) {
+          return;
+        }
+        try {
+          const pathSegments = def.source.relativeAssetPath
+            .split("/")
+            .filter(Boolean);
+          const blob = await readBlobFile(handle, ...pathSegments);
+          if (!blob || cancelled) {
+            continue;
+          }
+          const localBounds = await computeAssetColliderBounds(
+            await blob.arrayBuffer()
+          );
+          if (!localBounds || cancelled) {
+            continue;
+          }
+          const { session: latest } = projectStore.getState();
+          const target = latest
+            ? getAssetDefinition(latest.contentLibrary, def.definitionId)
+            : null;
+          // Re-check: still needs bounds, and nothing raced us to it.
+          if (!latest || !target?.collider || target.collider.localBounds) {
+            continue;
+          }
+          projectStore.getState().updateSession(
+            updateAssetDefinitionInSession(latest, def.definitionId, {
+              collider: { ...target.collider, localBounds }
+            })
+          );
+        } catch (error) {
+          console.warn(
+            "[collider-bounds] backfill failed",
+            def.definitionId,
+            error
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.gameProject.identity.id, projectHandle]);
   const surfaceStudioSurface = useMemo<Surface<"universal"> | null>(() => {
     if (!session || !surfaceStudioTarget) {
       return null;
