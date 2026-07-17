@@ -19,6 +19,7 @@ import {
   getNavMeshPositionsAndIndices,
   importNavMesh,
   init,
+  NavMeshQuery,
   type NavMesh
 } from "@recast-navigation/core";
 import { generateSoloNavMesh } from "@recast-navigation/generators";
@@ -210,6 +211,55 @@ export async function bakeNavMesh(
 export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
   await ensureRecastInit();
   return importNavMesh(bytes).navMesh;
+}
+
+export interface NavPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * NPC pathfinding over a baked navmesh (Plan 069.9). Wraps a recast
+ * `NavMeshQuery`: `findPath` snaps the endpoints onto the mesh and returns
+ * the straight-path waypoints (empty when off-mesh or unreachable). The
+ * behavior stepper follows these waypoints instead of a straight line;
+ * resolveMove (069.3) stays the final collision clip. Owns the NavMesh —
+ * `destroy()` frees both.
+ */
+export interface NavMeshPathfinder {
+  findPath(from: NavPoint, to: NavPoint): NavPoint[];
+  destroy(): void;
+}
+
+export function createNavMeshPathfinder(navMesh: NavMesh): NavMeshPathfinder {
+  const query = new NavMeshQuery(navMesh);
+  return {
+    findPath(from, to) {
+      const start = query.findClosestPoint(from);
+      const end = query.findClosestPoint(to);
+      if (!start.success || !end.success) {
+        return [];
+      }
+      const result = query.computePath(start.point, end.point);
+      if (!result.success) {
+        return [];
+      }
+      return result.path.map((p) => ({ x: p.x, y: p.y, z: p.z }));
+    },
+    destroy() {
+      query.destroy();
+      navMesh.destroy();
+    }
+  };
+}
+
+/** Load a baked artifact directly into a pathfinder (runtime host). */
+export async function loadNavMeshPathfinder(
+  bytes: Uint8Array
+): Promise<NavMeshPathfinder> {
+  await ensureRecastInit();
+  return createNavMeshPathfinder(importNavMesh(bytes).navMesh);
 }
 
 /**

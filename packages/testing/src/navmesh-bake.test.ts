@@ -11,6 +11,7 @@ import {
   bakeNavMesh,
   computeNavMeshInputHash,
   loadNavMesh,
+  loadNavMeshPathfinder,
   type NavMeshBakeInput,
   type WorldColliderAabb
 } from "@sugarmagic/runtime-core";
@@ -67,6 +68,45 @@ describe("069.8 — navmesh bake", () => {
       agentRadius: 0.35
     });
     expect(bytes).toBeNull();
+  });
+});
+
+describe("069.9 — navmesh pathfinding", () => {
+  it("routes AROUND a wall (path bends) and direct across open ground", async () => {
+    // A wall spanning most of the width, with a gap forcing a detour.
+    const wall: WorldColliderAabb = { minX: -8, maxX: 6, minZ: -0.5, maxZ: 0.5 };
+    const bytes = await bakeNavMesh({
+      colliders: [wall],
+      navBounds: [navBounds],
+      nonWalkable: [],
+      agentRadius: 0.35
+    });
+    expect(bytes).not.toBeNull();
+    const pathfinder = await loadNavMeshPathfinder(bytes!);
+
+    // From below the wall to above it — must detour through the gap (>2 pts).
+    const around = pathfinder.findPath({ x: 0, y: 0, z: -6 }, { x: 0, y: 0, z: 6 });
+    expect(around.length).toBeGreaterThan(0);
+    const arrived = around[around.length - 1]!;
+    expect(Math.hypot(arrived.x - 0, arrived.z - 6)).toBeLessThan(1.5);
+    // The route bows toward the gap (max |x| along the path clears the wall end).
+    const maxX = Math.max(...around.map((p) => p.x));
+    expect(maxX).toBeGreaterThan(5);
+
+    pathfinder.destroy();
+  });
+
+  it("returns a path across open ground with no obstacles", async () => {
+    const bytes = await bakeNavMesh({
+      colliders: [],
+      navBounds: [navBounds],
+      nonWalkable: [],
+      agentRadius: 0.35
+    });
+    const pathfinder = await loadNavMeshPathfinder(bytes!);
+    const path = pathfinder.findPath({ x: -6, y: 0, z: -6 }, { x: 6, y: 0, z: 6 });
+    expect(path.length).toBeGreaterThanOrEqual(2);
+    pathfinder.destroy();
   });
 });
 
