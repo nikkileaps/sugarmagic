@@ -8,7 +8,8 @@
 import {
   applyCommand,
   createRegionAreaBounds,
-  getActiveRegion
+  getActiveRegion,
+  resolveRegionVolumes
 } from "@sugarmagic/domain";
 import {
   createSpatialWorkspace,
@@ -20,28 +21,36 @@ import type { ViewportOverlayFactory } from "../overlay-context";
 
 export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) => {
   const workspace = createSpatialWorkspace({
-    getAreas() {
-      return context.stateAccess.getActiveRegion()?.areas ?? [];
+    // Plan 069.7 — draw all unified Volumes, not just areas.
+    getRects() {
+      const region = context.stateAccess.getActiveRegion();
+      if (!region) {
+        return [];
+      }
+      return resolveRegionVolumes(region).map((volume) => ({
+        id: volume.volumeId,
+        bounds: volume.bounds
+      }));
     },
-    getSelectedAreaId() {
+    getSelectedId() {
       return context.stateAccess.getSelectionIds()[0] ?? null;
     },
-    onCreateAreaRectangle({
+    onCreateRectangle({
       minX,
       minZ,
       maxX,
       maxZ
-    }: Parameters<SpatialWorkspaceConfig["onCreateAreaRectangle"]>[0]) {
+    }: Parameters<SpatialWorkspaceConfig["onCreateRectangle"]>[0]) {
       const session = context.stateAccess.getSession();
       const region = context.stateAccess.getActiveRegion();
-      const selectedAreaId = context.stateAccess.getSelectionIds()[0] ?? null;
-      if (!session || !region || !selectedAreaId) {
+      const selectedId = context.stateAccess.getSelectionIds()[0] ?? null;
+      if (!session || !region || !selectedId) {
         return;
       }
-      const selectedArea = region.areas.find(
-        (area) => area.areaId === selectedAreaId
+      const selectedVolume = resolveRegionVolumes(region).find(
+        (volume) => volume.volumeId === selectedId
       );
-      if (!selectedArea) {
+      if (!selectedVolume) {
         return;
       }
       const width = maxX - minX;
@@ -50,21 +59,23 @@ export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) =>
       const centerZ = minZ + depth / 2;
       context.stateAccess.updateSession(
         applyCommand(session, {
-          kind: "UpdateRegionArea",
+          kind: "UpdateRegionVolume",
           target: {
             aggregateKind: "region-document",
             aggregateId: region.identity.id
           },
           subject: {
-            subjectKind: "region-area",
-            subjectId: selectedAreaId
+            subjectKind: "region-volume",
+            subjectId: selectedId
           },
           payload: {
-            areaId: selectedAreaId,
-            bounds: createRegionAreaBounds({
-              center: [centerX, selectedArea.bounds.center[1], centerZ],
-              size: [width, selectedArea.bounds.size[1], depth]
-            })
+            volumeId: selectedId,
+            patch: {
+              bounds: createRegionAreaBounds({
+                center: [centerX, selectedVolume.bounds.center[1], centerZ],
+                size: [width, selectedVolume.bounds.size[1], depth]
+              })
+            }
           }
         })
       );

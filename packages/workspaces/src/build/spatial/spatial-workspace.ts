@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { RegionAreaDefinition } from "@sugarmagic/domain";
+import type { RegionAreaBounds } from "@sugarmagic/domain";
 import {
   createHitTestService,
   createInputRouter,
@@ -9,10 +9,17 @@ import {
   type NormalizedPointerEvent
 } from "../../interaction";
 
+/** Plan 069.7 — the workspace draws any bounded thing (unified Volumes),
+ *  not just areas: it only needs an id (for selection/hit-test) + bounds. */
+export interface SpatialRect {
+  id: string;
+  bounds: RegionAreaBounds;
+}
+
 export interface SpatialWorkspaceConfig {
-  getAreas: () => RegionAreaDefinition[];
-  getSelectedAreaId: () => string | null;
-  onCreateAreaRectangle: (bounds: { minX: number; minZ: number; maxX: number; maxZ: number }) => void;
+  getRects: () => SpatialRect[];
+  getSelectedId: () => string | null;
+  onCreateRectangle: (bounds: { minX: number; minZ: number; maxX: number; maxZ: number }) => void;
 }
 
 export interface SpatialWorkspaceInstance {
@@ -107,14 +114,14 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
-function buildAreaVisual(area: RegionAreaDefinition, isSelected: boolean): THREE.Group {
-  const width = area.bounds.size[0];
-  const depth = area.bounds.size[2];
+function buildAreaVisual(rect: SpatialRect, isSelected: boolean): THREE.Group {
+  const width = rect.bounds.size[0];
+  const depth = rect.bounds.size[2];
   const color = isSelected ? 0x89b4fa : 0x74c7ec;
   const fillOpacity = isSelected ? 0.22 : 0.12;
   const root = new THREE.Group();
-  root.name = area.areaId;
-  root.position.set(area.bounds.center[0], 0, area.bounds.center[2]);
+  root.name = rect.id;
+  root.position.set(rect.bounds.center[0], 0, rect.bounds.center[2]);
 
   const fill = createAreaFill(width, depth, color, fillOpacity);
   fill.position.y = AREA_FILL_Y;
@@ -180,9 +187,9 @@ export function createSpatialWorkspace(config: SpatialWorkspaceConfig): SpatialW
       disposeObject(child);
     }
 
-    const selectedAreaId = config.getSelectedAreaId();
-    for (const area of config.getAreas()) {
-      areasRoot.add(buildAreaVisual(area, area.areaId === selectedAreaId));
+    const selectedId = config.getSelectedId();
+    for (const rect of config.getRects()) {
+      areasRoot.add(buildAreaVisual(rect, rect.id === selectedId));
     }
   }
 
@@ -239,7 +246,7 @@ export function createSpatialWorkspace(config: SpatialWorkspaceConfig): SpatialW
         return;
       }
 
-      config.onCreateAreaRectangle(rect);
+      config.onCreateRectangle(rect);
     },
     onCancel() {
       dragStart = null;
