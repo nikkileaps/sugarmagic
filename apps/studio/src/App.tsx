@@ -2195,7 +2195,9 @@ export function App() {
       );
       return;
     }
-    const assetPath = `navmesh/${region.identity.id}.navmesh.bin`;
+    // Under assets/ so the deploy workflow ships it (it copies only assets/)
+    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
+    const assetPath = `assets/navmesh/${region.identity.id}.navmesh.bin`;
     const blob = new Blob([new Uint8Array(bytes)], {
       type: "application/octet-stream"
     });

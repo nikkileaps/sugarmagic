@@ -23,11 +23,17 @@
 import type { ContentLibrarySnapshot } from "./content-library";
 import type { DocumentDefinition } from "./document-definition";
 import type { ItemDefinition } from "./item-definition";
+import type { RegionDocument } from "./region-authoring";
 
 export function collectFileBackedAssetPaths(input: {
   contentLibrary: ContentLibrarySnapshot;
   itemDefinitions?: ItemDefinition[];
   documentDefinitions?: DocumentDefinition[];
+  /** Plan 069.8 — baked navmesh artifacts (`region.navMesh.assetPath`) are
+   *  file-backed too; without them the asset-source store never re-loads the
+   *  `.bin` on project open, so NPC pathfinding silently falls back to
+   *  straight-line after a restart (and deployed games ship no navmesh). */
+  regions?: RegionDocument[];
 }): string[] {
   const sources = [
     ...(input.contentLibrary.assetDefinitions ?? []).map(
@@ -59,6 +65,11 @@ export function collectFileBackedAssetPaths(input: {
   for (const documentDefinition of input.documentDefinitions ?? []) {
     for (const pagePath of documentDefinition.imagePages) {
       paths.push(pagePath);
+    }
+  }
+  for (const region of input.regions ?? []) {
+    if (region.navMesh?.assetPath) {
+      paths.push(region.navMesh.assetPath);
     }
   }
   return paths.sort();

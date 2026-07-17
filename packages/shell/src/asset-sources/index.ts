@@ -30,7 +30,10 @@ function collectRelativeAssetPaths(projectStore: ProjectStore): string[] {
   return collectFileBackedAssetPaths({
     contentLibrary: session.contentLibrary,
     itemDefinitions: session.gameProject?.itemDefinitions,
-    documentDefinitions: session.gameProject?.documentDefinitions
+    documentDefinitions: session.gameProject?.documentDefinitions,
+    // Plan 069.8 — baked navmesh artifacts must re-load on project open, else
+    // NPC pathfinding falls back to straight-line after a restart.
+    regions: session.regions ? Array.from(session.regions.values()) : []
   });
 }
 
