@@ -1,6 +1,5 @@
 import type {
   RegionDocument,
-  RegionBehaviorWorldFlagCondition,
   RegionNPCBehaviorDefinition,
   RegionNPCBehaviorTask,
   SaveSlice
@@ -18,6 +17,7 @@ import {
   type CircleObstacle,
   type CollisionWorld
 } from "../collision";
+import { evaluateRegionQuestBinding } from "../region-conditions";
 
 /** One dynamic agent (NPC/player) the NPC mover must not interpenetrate
  *  (Plan 069.3). `id` is the presenceId, used to exclude self. */
@@ -193,46 +193,16 @@ function resolveTaskTargetPoint(
   };
 }
 
-function coerceWorldFlagValue(
-  condition: RegionBehaviorWorldFlagCondition
-): string | boolean | number | undefined {
-  if (condition.valueType === "boolean") {
-    if (condition.value === null) {
-      return true;
-    }
-    return condition.value.toLowerCase() === "true";
-  }
-  if (condition.valueType === "number") {
-    if (condition.value === null) {
-      return undefined;
-    }
-    const parsed = Number(condition.value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return condition.value ?? undefined;
-}
-
 function taskMatchesActivation(
   task: RegionNPCBehaviorTask,
   activeQuest: RuntimeBehaviorQuestState | null,
   hasWorldFlag?: (key: string, value?: unknown) => boolean
 ): boolean {
-  if (task.activation.questDefinitionId && activeQuest?.questDefinitionId !== task.activation.questDefinitionId) {
-    return false;
-  }
-  if (task.activation.questStageId && activeQuest?.stageId !== task.activation.questStageId) {
-    return false;
-  }
-  if (task.activation.worldFlagEquals?.key) {
-    if (!hasWorldFlag) {
-      return false;
-    }
-    const expectedValue = coerceWorldFlagValue(task.activation.worldFlagEquals);
-    if (!hasWorldFlag(task.activation.worldFlagEquals.key, expectedValue)) {
-      return false;
-    }
-  }
-  return true;
+  // Plan 069.5 — one grammar evaluator, shared with the containment gate.
+  return evaluateRegionQuestBinding(task.activation, {
+    activeQuest,
+    hasWorldFlag
+  });
 }
 
 function resolveBehaviorTask(

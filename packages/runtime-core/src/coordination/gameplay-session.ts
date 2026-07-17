@@ -36,6 +36,7 @@ import {
   type Scene,
   type SpellDefinition,
   type RegionDocument,
+  type RegionVolumeDefinition,
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
 import {
@@ -95,9 +96,11 @@ import {
   computeNpcAgentDimensions
 } from "../scene";
 import {
+  applyVolumeColliderGates,
   createEmptyCollisionWorld,
   type CollisionWorld
 } from "../collision";
+import { coerceWorldFlagValue } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -570,6 +573,38 @@ export function createRuntimeGameplaySessionController(
   const debugBillboardWarningKeys = new Set<string>();
   let debugBillboardsInitialized = false;
   let debugBillboardsEnabled = false;
+  // Plan 069.5 — the static collision world, shared by reference with the
+  // player CollisionSystem (host) and the NPC collision context below, so a
+  // single per-frame containment-gate refresh reaches both resolve paths.
+  const sharedCollisionWorld = collisionWorld ?? createEmptyCollisionWorld();
+
+  // Plan 069.5 — fire an authored on-enter trigger action: play (enter) /
+  // stop (exit) the cue and, on enter, set the world flag. Player-only.
+  function fireTriggerAction(volume: RegionVolumeDefinition, kind: "enter" | "exit") {
+    const trigger = volume.trigger;
+    if (!trigger) {
+      return;
+    }
+    const instanceKey = `region:${activeRegion?.identity.id ?? "region"}:trigger:${volume.volumeId}`;
+    if (kind === "exit") {
+      if (trigger.action.audioCueId) {
+        audioController.stopInstance(instanceKey);
+      }
+      return;
+    }
+    if (trigger.action.audioCueId) {
+      audioController.playCue({
+        cueDefinitionId: trigger.action.audioCueId,
+        instanceKey,
+        position: volume.bounds.center
+      });
+    }
+    const flag = trigger.action.setWorldFlag;
+    if (flag?.key) {
+      questManager.setFlag(flag.key, coerceWorldFlagValue(flag) ?? true);
+    }
+  }
+
   const spatialResolverSystem = activeRegion
     ? createRuntimeSpatialResolverSystem({
         blackboard,
@@ -578,6 +613,9 @@ export function createRuntimeGameplaySessionController(
         confirmationFrames: SPATIAL_AREA_CONFIRMATION_FRAMES,
         logDebug(event, payload) {
           console.info(`[runtime-core] ${event}`, payload ?? {});
+        },
+        onTriggerEvent({ volume, kind }) {
+          fireTriggerAction(volume, kind);
         }
       })
     : null;
@@ -1878,7 +1916,6 @@ export function createRuntimeGameplaySessionController(
   if (activeRegion) {
     // Plan 069.3 — agent radii are stable; precompute once. Player id is a
     // sentinel that can't collide with an NPC presenceId.
-    const staticCollisionWorld = collisionWorld ?? createEmptyCollisionWorld();
     const playerAgentRadius =
       computePlayerAgentDimensions(playerDefinition).radius;
     const npcAgentRadiusById = new Map(
@@ -1931,7 +1968,7 @@ export function createRuntimeGameplaySessionController(
               DEFAULT_AGENT_RADIUS
           });
         }
-        return { world: staticCollisionWorld, agents };
+        return { world: sharedCollisionWorld, agents };
       },
       logDebug(event, payload) {
         console.info(`[runtime-core] ${event}`, payload ?? {});
@@ -1976,6 +2013,20 @@ export function createRuntimeGameplaySessionController(
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
       const trackedQuest = questManager.getTrackedQuest();
+      // Plan 069.5 — re-evaluate conditional containment gates against the
+      // current quest/flag state BEFORE any move resolves this frame (NPC
+      // sync here; the player CollisionSystem reads the same world next tick).
+      if (sharedCollisionWorld.gates.length > 0) {
+        applyVolumeColliderGates(sharedCollisionWorld, {
+          activeQuest: trackedQuest
+            ? {
+                questDefinitionId: trackedQuest.questDefinitionId,
+                stageId: trackedQuest.stageId
+              }
+            : null,
+          hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
+        });
+      }
       npcBehaviorSystem?.sync({
         deltaSeconds,
         activeQuest: trackedQuest

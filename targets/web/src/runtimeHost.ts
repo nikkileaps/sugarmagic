@@ -51,6 +51,7 @@ import {
   type UITheme,
   composeRegionContents,
   migrateToScenes,
+  resolveRegionVolumes,
   resolveActiveScene,
   resolveUnlockedSceneIds,
   type CreditsDefinition,
@@ -1998,7 +1999,10 @@ export function createWebRuntimeHost(
         includePlayerPresence: false,
         activeScene
       });
-      collisionWorld = buildCollisionWorld(objects);
+      // Plan 069.5 — blocker / containment volumes join the collision world
+      // alongside the prop colliders (conditional gates refreshed per frame
+      // by the gameplay session, which holds the same world by reference).
+      collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New

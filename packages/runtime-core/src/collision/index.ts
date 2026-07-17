@@ -11,8 +11,18 @@
  */
 
 import * as THREE from "three";
-import type { AssetColliderBounds } from "@sugarmagic/domain";
+import type {
+  AssetColliderBounds,
+  RegionAreaBounds,
+  RegionBehaviorQuestBinding,
+  RegionVolumeBlockDirection,
+  RegionVolumeDefinition
+} from "@sugarmagic/domain";
 import type { SceneObject, SceneObjectTransform } from "../scene";
+import {
+  evaluateRegionQuestBinding,
+  type RegionConditionContext
+} from "../region-conditions";
 
 /** World-space XZ axis-aligned box (Y dropped per flat-ground scope). */
 export interface WorldColliderAabb {
@@ -20,6 +30,30 @@ export interface WorldColliderAabb {
   maxX: number;
   minZ: number;
   maxZ: number;
+  /**
+   * Plan 069.5 — which boundary crossings block. `undefined` == `"in"`:
+   * solid props (069.2) and out-of-bounds blockers keep you OUT (push-out).
+   * `"out"` is a containment boundary — keeps an inside body IN. `"both"`
+   * is an impermeable membrane (stay on whichever side you started).
+   */
+  block?: RegionVolumeBlockDirection;
+  /**
+   * Plan 069.5 — `false` disables the collider without removing it from the
+   * grid. A conditional containment gate toggles this (see `gates` +
+   * `applyVolumeColliderGates`). `undefined`/`true` == active.
+   */
+  active?: boolean;
+}
+
+/**
+ * Plan 069.5 — a conditional collider (containment gate). While the bound
+ * condition is NOT satisfied the collider blocks; once satisfied it opens
+ * (`active = false`). Re-evaluated per frame via `applyVolumeColliderGates`.
+ */
+export interface VolumeColliderGate {
+  colliderIndex: number;
+  volumeId: string;
+  condition: RegionBehaviorQuestBinding;
 }
 
 export interface CollisionWorld {
@@ -27,6 +61,8 @@ export interface CollisionWorld {
   /** Uniform-grid broadphase: cell key -> indices into `colliders`. */
   readonly cellSize: number;
   readonly grid: Map<string, number[]>;
+  /** Plan 069.5 — conditional colliders re-evaluated per frame. */
+  gates: VolumeColliderGate[];
 }
 
 export interface CircleBody {
@@ -53,7 +89,12 @@ const MAX_ITERATIONS = 4;
 const EPSILON = 1e-6;
 
 export function createEmptyCollisionWorld(): CollisionWorld {
-  return { colliders: [], cellSize: DEFAULT_CELL_SIZE, grid: new Map() };
+  return {
+    colliders: [],
+    cellSize: DEFAULT_CELL_SIZE,
+    grid: new Map(),
+    gates: []
+  };
 }
 
 const cellKey = (cx: number, cz: number): string => `${cx},${cz}`;
@@ -132,7 +173,8 @@ export function worldColliderAabb(
  * placements are identical here (both read `SceneObject.transform`).
  */
 export function buildCollisionWorld(
-  sceneObjects: readonly SceneObject[]
+  sceneObjects: readonly SceneObject[],
+  regionVolumes: readonly RegionVolumeDefinition[] = []
 ): CollisionWorld {
   const world = createEmptyCollisionWorld();
   for (const object of sceneObjects) {
@@ -145,7 +187,75 @@ export function buildCollisionWorld(
     world.colliders.push(aabb);
     insertIntoGrid(world, index, aabb);
   }
+  addVolumeColliders(world, regionVolumes);
   return world;
+}
+
+/** World XZ AABB from a region volume's (already world-space) box bounds. */
+export function volumeBoundsAabb(bounds: RegionAreaBounds): WorldColliderAabb {
+  const [cx, , cz] = bounds.center;
+  const [sx, , sz] = bounds.size;
+  const hx = Math.abs(sx) / 2;
+  const hz = Math.abs(sz) / 2;
+  return { minX: cx - hx, maxX: cx + hx, minZ: cz - hz, maxZ: cz + hz };
+}
+
+/**
+ * Plan 069.5 — fold `blocker` / `containment-boundary` volumes into the
+ * collision world. A blocker keeps you OUT (`block` defaults `"in"`); a
+ * containment boundary keeps you IN (`block` defaults `"out"`); the authored
+ * `blockDirection` overrides either. A volume with a `condition` becomes a
+ * gate (initially blocking) toggled per frame by `applyVolumeColliderGates`.
+ */
+export function addVolumeColliders(
+  world: CollisionWorld,
+  regionVolumes: readonly RegionVolumeDefinition[]
+): void {
+  for (const volume of regionVolumes) {
+    if (!volume.enabled) {
+      continue;
+    }
+    const isBlocker = volume.roles.includes("blocker");
+    const isContainment = volume.roles.includes("containment-boundary");
+    if (!isBlocker && !isContainment) {
+      continue;
+    }
+    const block: RegionVolumeBlockDirection =
+      volume.blockDirection ?? (isContainment ? "out" : "in");
+    const aabb = volumeBoundsAabb(volume.bounds);
+    aabb.block = block;
+    aabb.active = true;
+    const index = world.colliders.length;
+    world.colliders.push(aabb);
+    insertIntoGrid(world, index, aabb);
+    if (volume.condition) {
+      world.gates.push({
+        colliderIndex: index,
+        volumeId: volume.volumeId,
+        condition: volume.condition
+      });
+    }
+  }
+}
+
+/**
+ * Plan 069.5 — re-evaluate every conditional collider against the current
+ * quest/flag state. A gate BLOCKS while its condition is unmet and OPENS
+ * (deactivates) once satisfied — "walled in until you set the flag". Called
+ * per frame on the shared world so the player and NPC resolve paths (which
+ * hold the same world reference) both see the current gate state.
+ */
+export function applyVolumeColliderGates(
+  world: CollisionWorld,
+  context: RegionConditionContext
+): void {
+  for (const gate of world.gates) {
+    const collider = world.colliders[gate.colliderIndex];
+    if (!collider) {
+      continue;
+    }
+    collider.active = !evaluateRegionQuestBinding(gate.condition, context);
+  }
 }
 
 function queryColliders(
@@ -229,8 +339,49 @@ export function resolveMove(
       resolvedAny = true;
     }
 
-    queryColliders(world, x - r, x + r, z - r, z + r, candidates, seen);
+    // Query the swept range (start .. current), not just the post-move
+    // point — a containment box the body is LEAVING sits back at the start
+    // position, which a point query around an overshooting delta would miss
+    // (and this also curbs prop tunneling on a fast move). The per-collider
+    // distance/side tests below discard anything not actually touched.
+    const qMinX = Math.min(from.x, x) - r;
+    const qMaxX = Math.max(from.x, x) + r;
+    const qMinZ = Math.min(from.z, z) - r;
+    const qMaxZ = Math.max(from.z, z) + r;
+    queryColliders(world, qMinX, qMaxX, qMinZ, qMaxZ, candidates, seen);
     for (const c of candidates) {
+      if (c.active === false) {
+        continue;
+      }
+      const block = c.block ?? "in";
+      const fromInside =
+        from.x >= c.minX &&
+        from.x <= c.maxX &&
+        from.z >= c.minZ &&
+        from.z <= c.maxZ;
+
+      // Plan 069.5 — containment: a body that STARTED inside is kept inside
+      // (clamp its center to the box shrunk by the radius). "out" only ever
+      // retains; "both" retains an inside body and (below) walls out an
+      // outside one. A body already outside an "out" box is unconstrained.
+      if (block === "out" || (block === "both" && fromInside)) {
+        if (fromInside) {
+          const loX = c.minX + r;
+          const hiX = c.maxX - r;
+          const loZ = c.minZ + r;
+          const hiZ = c.maxZ - r;
+          const nextX = loX <= hiX ? clamp(x, loX, hiX) : (c.minX + c.maxX) / 2;
+          const nextZ = loZ <= hiZ ? clamp(z, loZ, hiZ) : (c.minZ + c.maxZ) / 2;
+          if (nextX !== x || nextZ !== z) {
+            x = nextX;
+            z = nextZ;
+            resolvedAny = true;
+          }
+        }
+        continue;
+      }
+
+      // block === "in", or "both" from outside — solid: push the circle OUT.
       const closestX = clamp(x, c.minX, c.maxX);
       const closestZ = clamp(z, c.minZ, c.maxZ);
       const dx = x - closestX;

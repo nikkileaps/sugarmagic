@@ -1,4 +1,7 @@
-import type { RegionDocument } from "@sugarmagic/domain";
+import type {
+  RegionDocument,
+  RegionVolumeDefinition
+} from "@sugarmagic/domain";
 import {
   getEntityPlayerSpatialRelation,
   setEntityCurrentArea,
@@ -21,12 +24,23 @@ interface SpatialDebugSnapshot {
   proximityBand?: string | null;
 }
 
+/** Plan 069.5 — an `on-enter` trigger volume the player crossed a boundary
+ *  of. Fired for the player only; NPC trigger firing is deferred. */
+export interface SpatialTriggerEvent {
+  entityId: string;
+  volume: RegionVolumeDefinition;
+  kind: "enter" | "exit";
+}
+
 export interface RuntimeSpatialResolverSystemOptions {
   blackboard: RuntimeBlackboard;
   region: RegionDocument;
   playerEntityId: string;
   confirmationFrames?: number;
   logDebug?: (event: string, payload?: Record<string, unknown>) => void;
+  /** Plan 069.5 — player enter/exit of on-enter trigger volumes. The
+   *  session consumer fires the authored action (audio cue + world flag). */
+  onTriggerEvent?: (event: SpatialTriggerEvent) => void;
 }
 
 export interface RuntimeSpatialResolverSystemSyncInput {
@@ -59,7 +73,8 @@ export function createRuntimeSpatialResolverSystem(
     region,
     playerEntityId,
     confirmationFrames,
-    logDebug
+    logDebug,
+    onTriggerEvent
   } = options;
   const spatialAreaTracker = createSpatialAreaTracker(region, {
     confirmationFrames
@@ -80,6 +95,16 @@ export function createRuntimeSpatialResolverSystem(
     const { entityId, entityKind, position } = options;
     const resolution = spatialAreaTracker.resolve(entityId, position);
     const area = resolution.area;
+
+    // Plan 069.5 — fire on-enter trigger edges for the player only.
+    if (entityKind === "player" && onTriggerEvent) {
+      for (const volume of resolution.triggersEntered) {
+        onTriggerEvent({ entityId, volume, kind: "enter" });
+      }
+      for (const volume of resolution.triggersExited) {
+        onTriggerEvent({ entityId, volume, kind: "exit" });
+      }
+    }
 
     setEntityPosition(blackboard, {
       entityId,
