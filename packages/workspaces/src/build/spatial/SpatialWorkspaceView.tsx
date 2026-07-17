@@ -8,7 +8,7 @@
  * is authoring only.
  */
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import {
   ActionIcon,
   Button,
@@ -100,6 +100,10 @@ export interface SpatialWorkspaceViewProps {
   onSelect: (ids: string[]) => void;
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
+  /** Plan 069.8 — bake the region navmesh (studio host action). */
+  onBakeNavMesh?: () => void | Promise<void>;
+  /** Plan 069.8 — a collider/nav-volume edit postdates the bake. */
+  navMeshStale?: boolean;
 }
 
 type VolumePatch = Partial<Omit<RegionVolumeDefinition, "volumeId">>;
@@ -118,7 +122,9 @@ export function useSpatialWorkspaceView(
     selectedIds,
     onSelect,
     region,
-    onCommand
+    onCommand,
+    onBakeNavMesh,
+    navMeshStale
   } = props;
   const activeTool = useVanillaStoreSelector(
     viewportStore,
@@ -132,6 +138,7 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showColliders
   );
+  const [baking, setBaking] = useState(false);
 
   const volumes = useMemo(
     () => (region ? volumesOf(region) : []),
@@ -235,6 +242,7 @@ export function useSpatialWorkspaceView(
 
   return {
     leftPanel: region ? (
+      <>
       <PanelSection
         title="Volumes"
         icon="🗺️"
@@ -296,6 +304,45 @@ export function useSpatialWorkspaceView(
           )}
         </Stack>
       </PanelSection>
+      {onBakeNavMesh ? (
+        <PanelSection title="NavMesh" icon="🧭">
+          <Stack gap="xs">
+            <Text
+              size="xs"
+              c={
+                !region.navMesh
+                  ? "var(--sm-color-overlay0)"
+                  : navMeshStale
+                    ? "var(--sm-accent-yellow, #f9e2af)"
+                    : "var(--sm-accent-green, #a6e3a1)"
+              }
+            >
+              {!region.navMesh
+                ? "Not baked"
+                : navMeshStale
+                  ? "Stale — edits postdate the bake"
+                  : "Baked"}
+            </Text>
+            <Button
+              size="xs"
+              variant={navMeshStale ? "filled" : "light"}
+              color={navMeshStale ? "yellow" : undefined}
+              loading={baking}
+              onClick={async () => {
+                setBaking(true);
+                try {
+                  await onBakeNavMesh();
+                } finally {
+                  setBaking(false);
+                }
+              }}
+            >
+              {region.navMesh ? "Rebake NavMesh" : "Bake NavMesh"}
+            </Button>
+          </Stack>
+        </PanelSection>
+      ) : null}
+      </>
     ) : null,
     rightPanel: region ? (
       <Inspector

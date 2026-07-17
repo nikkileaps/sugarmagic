@@ -16,8 +16,22 @@
 
 import { exportNavMesh, importNavMesh, init, type NavMesh } from "@recast-navigation/core";
 import { generateSoloNavMesh } from "@recast-navigation/generators";
-import type { RegionAreaBounds } from "@sugarmagic/domain";
-import type { WorldColliderAabb } from "../collision";
+import {
+  resolveRegionVolumes,
+  type ContentLibrarySnapshot,
+  type ItemDefinition,
+  type NPCDefinition,
+  type PlayerDefinition,
+  type RegionAreaBounds,
+  type RegionDocument,
+  type Scene
+} from "@sugarmagic/domain";
+import {
+  volumeBoundsAabb,
+  worldColliderAabb,
+  type WorldColliderAabb
+} from "../collision";
+import { computePlayerAgentDimensions, resolveSceneObjects } from "../scene";
 
 let recastReady: Promise<void> | null = null;
 
@@ -190,6 +204,62 @@ export async function bakeNavMesh(
 export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
   await ensureRecastInit();
   return importNavMesh(bytes).navMesh;
+}
+
+export interface RegionNavMeshInputOptions {
+  region: RegionDocument;
+  contentLibrary: ContentLibrarySnapshot;
+  playerDefinition: PlayerDefinition | null;
+  itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
+  activeScene?: Scene | null;
+  cellSize?: number;
+}
+
+/**
+ * Derive the navmesh bake inputs from a region (Plan 069.8). Obstacles are
+ * the prop colliders + `blocker` volumes — NOT `containment-boundary`
+ * volumes (those bound the play area you navigate INSIDE, so they must not
+ * carve). `nav-bounds` volumes are the walkable ground; `non-walkable`
+ * volumes carve. Shared by the studio bake action AND its staleness check so
+ * both hash the exact same inputs.
+ */
+export function buildRegionNavMeshInput(
+  options: RegionNavMeshInputOptions
+): NavMeshBakeInput {
+  const objects = resolveSceneObjects(options.region, {
+    contentLibrary: options.contentLibrary,
+    playerDefinition: options.playerDefinition ?? undefined,
+    itemDefinitions: options.itemDefinitions,
+    npcDefinitions: options.npcDefinitions,
+    includePlayerPresence: false,
+    activeScene: options.activeScene ?? null
+  });
+  const colliders: WorldColliderAabb[] = [];
+  for (const object of objects) {
+    const collider = object.collider;
+    if (!collider || collider.shape === "none" || !collider.localBounds) {
+      continue;
+    }
+    colliders.push(worldColliderAabb(object.transform, collider.localBounds));
+  }
+  const volumes = resolveRegionVolumes(options.region).filter((v) => v.enabled);
+  for (const volume of volumes) {
+    if (volume.roles.includes("blocker")) {
+      colliders.push(volumeBoundsAabb(volume.bounds));
+    }
+  }
+  return {
+    colliders,
+    navBounds: volumes
+      .filter((v) => v.roles.includes("nav-bounds"))
+      .map((v) => v.bounds),
+    nonWalkable: volumes
+      .filter((v) => v.roles.includes("non-walkable"))
+      .map((v) => v.bounds),
+    agentRadius: computePlayerAgentDimensions(options.playerDefinition).radius,
+    cellSize: options.cellSize
+  };
 }
 
 const round = (v: number): number => Math.round(v * 1000) / 1000;

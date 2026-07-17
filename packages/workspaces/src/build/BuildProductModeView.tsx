@@ -130,6 +130,10 @@ export interface BuildProductModeViewProps {
     slotName: string;
     scope: "base" | "scene";
   }) => void;
+  /** Plan 069.8 -- bake the active region's navmesh (studio host action). */
+  onBakeNavMesh?: () => void | Promise<void>;
+  /** Plan 069.8 -- true when a collider/nav-volume edit postdates the bake. */
+  navMeshStale?: boolean;
   onCreateMaterialDefinition: () => MaterialDefinition | null;
   onImportPbrMaterial: () => Promise<MaterialDefinition | null>;
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
@@ -448,7 +452,9 @@ export function useBuildProductModeView(
     selectedIds,
     onSelect,
     region: activeRegion,
-    onCommand
+    onCommand,
+    onBakeNavMesh: props.onBakeNavMesh,
+    navMeshStale: props.navMeshStale
   });
 
   const behaviorView = useBehaviorWorkspaceView({

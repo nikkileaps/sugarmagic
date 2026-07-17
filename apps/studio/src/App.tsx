@@ -161,7 +161,10 @@ import {
 } from "@sugarmagic/io";
 import {
   collectMechanicsConsumerInvocations,
-  validateMechanicsDefinition
+  validateMechanicsDefinition,
+  bakeNavMesh,
+  buildRegionNavMeshInput,
+  computeNavMeshInputHash
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -2164,6 +2167,62 @@ export function App() {
     []
   );
 
+  // Plan 069.8 -- bake the region navmesh from the collision geometry inside
+  // nav-bounds volumes, write the artifact + publish the in-memory blob to
+  // the asset-source store (never read-after-write, per the FSAccess flake),
+  // and record the reference (+ input hash for staleness) on the region.
+  const handleBakeNavMesh = useCallback(async () => {
+    const { session, handle } = projectStore.getState();
+    if (!session || !handle) {
+      return;
+    }
+    const region = getActiveRegion(session);
+    if (!region) {
+      return;
+    }
+    const input = buildRegionNavMeshInput({
+      region,
+      contentLibrary: session.contentLibrary,
+      playerDefinition: getPlayerDefinition(session),
+      itemDefinitions: getAllItemDefinitions(session),
+      npcDefinitions: getAllNPCDefinitions(session),
+      activeScene: getActiveScene(session)
+    });
+    const bytes = await bakeNavMesh(input);
+    if (!bytes) {
+      window.alert(
+        "Draw a nav-bounds volume over the walkable ground first, then bake."
+      );
+      return;
+    }
+    const assetPath = `navmesh/${region.identity.id}.navmesh.bin`;
+    const blob = new Blob([new Uint8Array(bytes)], {
+      type: "application/octet-stream"
+    });
+    await writeBlobFile(handle, assetPath.split("/"), blob);
+    // Publish the in-memory blob so the runtime resolves it without a
+    // read-after-write (the known FSAccess flake).
+    assetSourceStore.getState().setSource(assetPath, blob);
+    dispatchCommand({
+      kind: "SetRegionNavMesh",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: {
+        subjectKind: "region-document",
+        subjectId: region.identity.id
+      },
+      payload: {
+        navMesh: {
+          assetPath,
+          inputHash: computeNavMeshInputHash(input),
+          agentRadius: input.agentRadius
+        }
+      }
+    });
+  }, []);
+
   // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
   // doesn't already have them. Wired into both the Surface Brush's
   // first-touch setup and the Open-in-Studio entry so painting always
@@ -2432,6 +2491,24 @@ export function App() {
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
 
+  // Plan 069.8 -- navmesh staleness: re-derive the bake input hash and
+  // compare to the baked one; a collider/nav-volume edit postdating the bake
+  // flips this true (drives the "rebake" warning in the Spatial workspace).
+  const navMeshStale = useMemo(() => {
+    if (!session || !activeRegion?.navMesh) {
+      return false;
+    }
+    const input = buildRegionNavMeshInput({
+      region: activeRegion,
+      contentLibrary: session.contentLibrary,
+      playerDefinition: getPlayerDefinition(session),
+      itemDefinitions: getAllItemDefinitions(session),
+      npcDefinitions: getAllNPCDefinitions(session),
+      activeScene: getActiveScene(session)
+    });
+    return computeNavMeshInputHash(input) !== activeRegion.navMesh.inputHash;
+  }, [session, activeRegion]);
+
   // --- Surface Studio (Plan 068.10) ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =
     useState<SurfaceStudioTarget | null>(null);
@@ -2673,6 +2750,8 @@ export function App() {
         );
     },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
+    onBakeNavMesh: handleBakeNavMesh,
+    navMeshStale,
     onOpenSurfaceStudio: async (target) => {
       // Ensure paint UVs exist BEFORE the Studio loads the asset (it
       // loads its own GLB copy, so the bake must land first).
