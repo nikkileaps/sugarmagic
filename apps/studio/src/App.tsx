@@ -41,6 +41,7 @@ import type {
   SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
+  type AssetColliderShape,
   getAssetDefinition,
   getMaskTextureDefinition,
   getSurfaceDefinition,
@@ -2101,6 +2102,68 @@ export function App() {
     []
   );
 
+  // Plan 069.6 -- set an asset's DEFINITION collider shape (the type-level
+  // default every placed / scattered instance inherits). "none" is the
+  // walk-through decor answer for scattered foliage. Switching to a solid
+  // shape bakes bounds from the GLB (reusing any already-baked bounds).
+  const handleSetAssetColliderShape = useCallback(
+    async (assetDefinitionId: string, shape: AssetColliderShape) => {
+      const { session } = projectStore.getState();
+      if (!session) {
+        return;
+      }
+      const definition = getAssetDefinition(
+        session.contentLibrary,
+        assetDefinitionId
+      );
+      if (!definition) {
+        return;
+      }
+      const current = definition.collider ?? null;
+
+      if (shape === "none") {
+        projectStore.getState().updateSession(
+          updateAssetDefinitionInSession(session, assetDefinitionId, {
+            collider: { shape: "none", localBounds: current?.localBounds ?? null }
+          })
+        );
+        return;
+      }
+
+      // Solid shape needs local bounds; reuse the baked ones or measure the
+      // GLB (same read as the origin bake). "none"-default foliage has none.
+      let localBounds = current?.localBounds ?? null;
+      if (!localBounds) {
+        const { handle } = projectStore.getState();
+        if (handle) {
+          const pathSegments = definition.source.relativeAssetPath
+            .split("/")
+            .filter(Boolean);
+          const blob = await readBlobFile(handle, ...pathSegments);
+          if (blob) {
+            try {
+              localBounds = await computeAssetColliderBounds(
+                await blob.arrayBuffer()
+              );
+            } catch (error) {
+              console.warn("[collider-bounds] shape-change bake failed", error);
+            }
+          }
+        }
+      }
+      const { session: latest } = projectStore.getState();
+      if (!latest) {
+        return;
+      }
+      projectStore.getState().updateSession(
+        updateAssetDefinitionInSession(latest, assetDefinitionId, {
+          collider: { shape, localBounds }
+        })
+      );
+    },
+    []
+  );
+
   // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
   // doesn't already have them. Wired into both the Surface Brush's
   // first-touch setup and the Open-in-Studio entry so painting always
@@ -3124,6 +3187,7 @@ export function App() {
         onUpdateAssetDefinition={handleUpdateAssetDefinition}
         onRemoveAssetDefinition={handleRemoveAssetDefinition}
         onCorrectAssetOrigin={handleCorrectAssetOrigin}
+        onSetAssetColliderShape={handleSetAssetColliderShape}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
           if (!currentSession) return;
