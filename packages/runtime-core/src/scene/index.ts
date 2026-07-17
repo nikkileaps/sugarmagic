@@ -326,6 +326,23 @@ function createPlacedAssetSceneObject(
   };
 }
 
+/**
+ * Player/NPC agent capsule dimensions from a definition's physical
+ * profile. Plan 069.2 — the collision layer reads the SAME radius from
+ * this helper (the player is excluded from `resolveSceneObjects`, so it
+ * has no live SceneObject to read a capsule off of).
+ */
+export function computePlayerAgentDimensions(
+  playerDefinition: PlayerDefinition | null | undefined
+): { height: number; radius: number } {
+  const height = Math.max(playerDefinition?.physicalProfile.height ?? 1.8, 0.5);
+  const radius = Math.max(
+    playerDefinition?.physicalProfile.radius ?? 0.35,
+    Math.min(0.45, height * 0.45)
+  );
+  return { height, radius };
+}
+
 function createPlayerSceneObject(
   presence: RegionPlayerPresence,
   playerDefinition: PlayerDefinition | null,
@@ -338,11 +355,7 @@ function createPlayerSceneObject(
     modelAssetDefinitionId,
     contentLibrary
   );
-  const height = Math.max(playerDefinition?.physicalProfile.height ?? 1.8, 0.5);
-  const radius = Math.max(
-    playerDefinition?.physicalProfile.radius ?? 0.35,
-    Math.min(0.45, height * 0.45)
-  );
+  const { height, radius } = computePlayerAgentDimensions(playerDefinition);
 
   return {
     instanceId: presence.presenceId,

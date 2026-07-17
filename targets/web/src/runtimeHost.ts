@@ -84,6 +84,10 @@ import {
   type CameraSnapshot,
   World,
   MovementSystem,
+  CollisionSystem,
+  buildCollisionWorld,
+  createEmptyCollisionWorld,
+  computePlayerAgentDimensions,
   PlayerControlled,
   Position,
   Velocity,
@@ -1979,6 +1983,11 @@ export function createWebRuntimeHost(
       console.warn("[web-runtime] landscape-apply warning", warning);
     }
 
+    // Plan 069.2 — the collision world, built once per start from the
+    // resolved scene objects (rebuild-on-start covers region/scene switches
+    // and preview live edits). Populated inside the activeRegion block
+    // below; consumed by the CollisionSystem registered after MovementSystem.
+    let collisionWorld = createEmptyCollisionWorld();
     if (activeRegion) {
       const region = activeRegion;
       const objects = resolveSceneObjects(region, {
@@ -1989,6 +1998,7 @@ export function createWebRuntimeHost(
         includePlayerPresence: false,
         activeScene
       });
+      collisionWorld = buildCollisionWorld(objects);
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
@@ -2488,6 +2498,16 @@ export function createWebRuntimeHost(
 
     const movementSystem = new MovementSystem();
     world.addSystem(movementSystem);
+
+    // Plan 069.2 — resolve the player's move against the collision world
+    // AFTER MovementSystem integrates it. Player radius from the shared
+    // agent-dimensions helper (the player has no live SceneObject here).
+    const collisionSystem = new CollisionSystem();
+    collisionSystem.setCollisionWorld(collisionWorld);
+    collisionSystem.setPlayerRadius(
+      computePlayerAgentDimensions(state.playerDefinition).radius
+    );
+    world.addSystem(collisionSystem);
 
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);

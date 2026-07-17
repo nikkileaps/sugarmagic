@@ -5,6 +5,11 @@
 
 import { System, World } from "../core";
 import { Position, Velocity, PlayerControlled } from "../components";
+import {
+  createEmptyCollisionWorld,
+  resolveMove,
+  type CollisionWorld
+} from "../../collision";
 
 export interface InputState {
   moveX: number;
@@ -71,6 +76,49 @@ export class MovementSystem extends System {
 
       pos.x += vel.x * delta;
       pos.z += vel.z * delta;
+    }
+  }
+}
+
+/**
+ * CollisionSystem (Plan 069.2): routes the player's proposed move through
+ * the shared `resolveMove` (collide-and-slide). Registered AFTER
+ * MovementSystem — which already committed `pos += vel*delta` this frame —
+ * so it reconstructs the pre-move position (`pos - vel*delta`), resolves,
+ * and re-commits. Single enforcer: NPCs (069.3) call the same `resolveMove`
+ * from their own path, so this must stay a thin adapter over that function.
+ */
+export class CollisionSystem extends System {
+  private collisionWorld: CollisionWorld = createEmptyCollisionWorld();
+  private playerRadius = 0.35;
+
+  setCollisionWorld(world: CollisionWorld): void {
+    this.collisionWorld = world;
+  }
+
+  setPlayerRadius(radius: number): void {
+    this.playerRadius = radius;
+  }
+
+  update(world: World, delta: number): void {
+    if (this.collisionWorld.colliders.length === 0) {
+      return;
+    }
+    for (const entity of world.query(PlayerControlled, Position, Velocity)) {
+      const pos = world.getComponent(entity, Position)!;
+      const vel = world.getComponent(entity, Velocity)!;
+      const proposedX = vel.x * delta;
+      const proposedZ = vel.z * delta;
+      // Reconstruct the pre-move position MovementSystem started from.
+      const fromX = pos.x - proposedX;
+      const fromZ = pos.z - proposedZ;
+      const resolved = resolveMove(
+        { x: fromX, z: fromZ, radius: this.playerRadius },
+        { x: proposedX, z: proposedZ },
+        this.collisionWorld
+      );
+      pos.x = fromX + resolved.x;
+      pos.z = fromZ + resolved.z;
     }
   }
 }

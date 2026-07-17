@@ -30,6 +30,7 @@ export * from "./quest";
 export * from "./game-state";
 export * from "./save";
 export * from "./scene";
+export * from "./collision";
 export * from "./state";
 export * from "./spatial";
 export * from "./streaming";
