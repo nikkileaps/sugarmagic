@@ -1321,6 +1321,10 @@ export function createWebRuntimeHost(
   // Plan 069.9 — outer-scoped so teardown frees the WASM navmesh across
   // region/scene restarts (holds a recast NavMesh); `getPathfinder` reads it.
   let navMeshPathfinder: NavMeshPathfinder | null = null;
+  // Bumped every start(); the async navmesh load bails (and frees its result)
+  // when a newer start() has superseded it — else a late load would overwrite
+  // the current region's pathfinder with a stale mesh AND leak the WASM one.
+  let navMeshLoadEpoch = 0;
   let playerEyeHeight = 1.62;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let pluginBannerHost: RuntimePluginBannerHost | null = null;
@@ -2034,6 +2038,7 @@ export function createWebRuntimeHost(
     // forever in unbaked regions). Outer-scoped so teardown frees it.
     navMeshPathfinder?.destroy();
     navMeshPathfinder = null;
+    const navMeshEpoch = ++navMeshLoadEpoch;
     if (activeRegion) {
       const region = activeRegion;
       const objects = resolveSceneObjects(region, {
@@ -2058,7 +2063,14 @@ export function createWebRuntimeHost(
           try {
             const response = await fetch(navMeshUrl);
             const bytes = new Uint8Array(await response.arrayBuffer());
-            navMeshPathfinder = await loadNavMeshPathfinder(bytes);
+            const pathfinder = await loadNavMeshPathfinder(bytes);
+            // A newer start() superseded this load — free it, don't assign
+            // (else we'd overwrite the current mesh + leak the new one).
+            if (navMeshEpoch !== navMeshLoadEpoch) {
+              pathfinder.destroy();
+              return;
+            }
+            navMeshPathfinder = pathfinder;
           } catch (error) {
             console.warn("[web-runtime] navmesh load failed", error);
           }

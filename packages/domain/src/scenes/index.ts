@@ -36,7 +36,11 @@ import {
   type RegionSceneFolder
 } from "../region-authoring";
 import type { ShaderBindingOverride } from "../shader-graph";
-import { cloneAssetCollider, type AssetCollider } from "../content-library";
+import {
+  cloneAssetCollider,
+  isValidColliderShape,
+  type AssetCollider
+} from "../content-library";
 
 /**
  * Stable id for the Scene that the 058.1 load-time migration
@@ -155,7 +159,12 @@ export function resolveEffectiveInstanceCollider(
 ): ResolvedInstanceCollider {
   const active = sceneOverride ?? instanceOverride ?? null;
   if (!active) {
-    return { collider: definitionCollider ?? null, tier: "definition" };
+    // Clone so a resolved SceneObject never aliases the library definition's
+    // live collider (matches the clone discipline every other handoff uses).
+    return {
+      collider: definitionCollider ? cloneAssetCollider(definitionCollider) : null,
+      tier: "definition"
+    };
   }
   return {
     collider: {
@@ -390,18 +399,10 @@ function normalizeTransitionConfig(
   };
 }
 
-const VALID_COLLIDER_SHAPES = new Set([
-  "auto-box",
-  "sphere",
-  "capsule",
-  "convex",
-  "none"
-]);
-
 function isValidColliderOverride(
   collider: AssetCollider | undefined
 ): collider is AssetCollider {
-  return Boolean(collider && VALID_COLLIDER_SHAPES.has(collider.shape));
+  return Boolean(collider && isValidColliderShape(collider.shape));
 }
 
 function normalizeSceneAssetAppearanceOverrides(

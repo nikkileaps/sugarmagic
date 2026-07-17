@@ -174,7 +174,12 @@ export function createSpatialAreaTracker(
     if (triggerVolumes.length === 0) {
       return { entered, exited };
     }
-    const previous = insideTriggerIdsByEntity.get(entityId) ?? new Set<string>();
+    const previous = insideTriggerIdsByEntity.get(entityId);
+    // First resolve for this entity: PRIME the inside-set (record where it
+    // already is) without emitting edges — spawning INSIDE an on-enter trigger
+    // is not a crossing, so it must not fire the cue / set the world flag on
+    // load. Only genuine enter/exit crossings on later frames fire.
+    const isFirstResolve = previous === undefined;
     const current = new Set<string>();
     for (const volume of triggerVolumes) {
       const inside = containsPoint(
@@ -185,10 +190,10 @@ export function createSpatialAreaTracker(
       );
       if (inside) {
         current.add(volume.volumeId);
-        if (!previous.has(volume.volumeId)) {
+        if (!isFirstResolve && !previous.has(volume.volumeId)) {
           entered.push(volume);
         }
-      } else if (previous.has(volume.volumeId)) {
+      } else if (!isFirstResolve && previous.has(volume.volumeId)) {
         exited.push(volume);
       }
     }

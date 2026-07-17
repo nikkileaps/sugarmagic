@@ -110,6 +110,24 @@ describe("069.5 — directional blocker volumes join the collision world", () =>
     expect(0 + fromInside.x).toBeCloseTo(1.5, 5);
   });
 
+  it("containment box narrower than the agent snaps the agent to center", () => {
+    // Box X-size 0.4 < 2*radius(1.0): the safe interior [minX+r, maxX-r]
+    // inverts, so the clamp falls back to the box center on that axis.
+    const world = buildCollisionWorld(
+      [],
+      [
+        createRegionVolumeDefinition({
+          volumeId: "vol:thin",
+          roles: ["containment-boundary"],
+          blockDirection: "out",
+          bounds: { kind: "box", center: [0, 0, 0], size: [0.4, 4, 4] }
+        })
+      ]
+    );
+    const resolved = resolveMove({ x: 0, z: 0, radius: R }, { x: 5, z: 0 }, world);
+    expect(0 + resolved.x).toBeCloseTo(0, 5); // pinned to center X, not out at 5
+  });
+
   it("slides along a blocker face (tangential motion survives)", () => {
     const world = buildCollisionWorld(
       [],

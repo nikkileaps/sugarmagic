@@ -186,4 +186,22 @@ describe("resolveMove with circle obstacles (agent-vs-agent, 069.3)", () => {
     expect(world.colliders).toHaveLength(1);
     expect(Math.hypot(fx - 3, 0)).toBeGreaterThanOrEqual(0.8 - 1e-3);
   });
+
+  it("ejects an EXACTLY coincident agent so it separates", () => {
+    // Two agents at the identical point (distSq == 0): the resolver ejects
+    // along +X by the combined radius so the mover ends up non-overlapping
+    // with the obstacle it shared a position with.
+    const world = createEmptyCollisionWorld();
+    const other: CircleObstacle[] = [{ x: 0, z: 0, radius: 0.5 }];
+    const resolved = resolveMove(
+      { x: 0, z: 0, radius: 0.5 },
+      { x: 0, z: 0 },
+      world,
+      other
+    );
+    const fx = 0 + resolved.x;
+    const fz = 0 + resolved.z;
+    // Separated: at least the combined radius away (touching, not overlapping).
+    expect(Math.hypot(fx, fz)).toBeGreaterThanOrEqual(1.0 - 1e-6);
+  });
 });

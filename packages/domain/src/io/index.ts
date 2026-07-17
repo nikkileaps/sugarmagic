@@ -10,6 +10,7 @@
 
 import {
   cloneAssetCollider,
+  isValidColliderShape,
   type AssetCollider,
   type ContentLibrarySnapshot
 } from "../content-library";
@@ -88,21 +89,13 @@ function normalizeSurfaceSlotOverrides(asset: {
   return bySlotName.size > 0 ? [...bySlotName.values()] : undefined;
 }
 
-const VALID_COLLIDER_OVERRIDE_SHAPES = new Set([
-  "auto-box",
-  "sphere",
-  "capsule",
-  "convex",
-  "none"
-]);
-
 /** Plan 069.6 — validate + clone a per-instance collider override on load;
  *  an unknown shape drops the override (falls back to the definition). */
 function normalizeInstanceColliderOverride(asset: {
   colliderOverride?: AssetCollider;
 }): AssetCollider | undefined {
   const override = asset.colliderOverride;
-  if (!override || !VALID_COLLIDER_OVERRIDE_SHAPES.has(override.shape)) {
+  if (!override || !isValidColliderShape(override.shape)) {
     return undefined;
   }
   return cloneAssetCollider(override);

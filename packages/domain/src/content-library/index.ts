@@ -183,9 +183,25 @@ export function cloneAssetCollider(collider: AssetCollider): AssetCollider {
   };
 }
 
+/** The single source of truth for a valid collider shape — all three tiers
+ *  (definition here, per-instance override in `io`, scene override in
+ *  `scenes`) validate against this, so shape validity lives in one place. */
+export const VALID_COLLIDER_SHAPES: ReadonlySet<AssetColliderShape> = new Set([
+  "auto-box",
+  "sphere",
+  "capsule",
+  "convex",
+  "none"
+]);
+
+export function isValidColliderShape(shape: unknown): shape is AssetColliderShape {
+  return typeof shape === "string" && VALID_COLLIDER_SHAPES.has(shape as AssetColliderShape);
+}
+
 /** Normalize (backfill) an asset's collider on load — absent gets the
  *  kind-aware default; present is preserved (bounds may still be `null`
- *  awaiting the studio bake). */
+ *  awaiting the studio bake). An out-of-set `shape` (corrupt / hand-edited
+ *  file) fails closed to the kind default, matching the override tiers. */
 export function normalizeAssetCollider(
   collider: AssetCollider | null | undefined,
   assetKind: AssetKind
@@ -194,7 +210,9 @@ export function normalizeAssetCollider(
     return defaultAssetColliderForKind(assetKind);
   }
   return {
-    shape: collider.shape,
+    shape: isValidColliderShape(collider.shape)
+      ? collider.shape
+      : defaultAssetColliderForKind(assetKind).shape,
     localBounds: collider.localBounds ?? null
   };
 }
