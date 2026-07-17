@@ -127,6 +127,10 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.cameraQuaternion
   );
+  const showColliders = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showColliders
+  );
 
   const volumes = useMemo(
     () => (region ? volumesOf(region) : []),
@@ -655,6 +659,16 @@ export function useSpatialWorkspaceView(
           onSelect={(id) =>
             viewportStore.getState().setActiveSpatialTool(id as SpatialTool)
           }
+          toggles={[
+            {
+              id: "show-colliders",
+              label: `${showColliders ? "Hide" : "Show"} colliders`,
+              icon: "▨",
+              active: showColliders,
+              onToggle: () =>
+                viewportStore.getState().setShowColliders(!showColliders)
+            }
+          ]}
         />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
       </>

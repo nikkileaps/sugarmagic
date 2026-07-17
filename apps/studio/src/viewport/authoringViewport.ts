@@ -23,6 +23,7 @@ import {
   type AuthoringSession,
   getActiveRegion,
   getMaskTextureDefinition,
+  resolveRegionVolumes,
   type MaskTextureDefinition,
   type RegionDocument,
   type RegionLandscapeState
@@ -386,6 +387,106 @@ export function createAuthoringViewport(
   authoredRoot.name = "authoring-authored-root";
   scene.add(authoredRoot);
 
+  // Plan 069.6 — collider + volume-blocker wireframes, toggled by
+  // `showColliders`. World space (colliders resolve to world AABBs), so it
+  // sits directly under the scene, rebuilt whenever the projection changes.
+  const colliderWireframeRoot = new THREE.Group();
+  colliderWireframeRoot.name = "collider-wireframes";
+  scene.add(colliderWireframeRoot);
+  const COLLIDER_WIRE_COLOR = 0x89b4fa; // asset collider (blue)
+  const BLOCKER_WIRE_COLOR = 0xf38ba8; // volume blocker (red)
+  const CONTAINMENT_WIRE_COLOR = 0xf9a825; // containment boundary (amber)
+  const _wireBox = new THREE.Box3();
+  const _wireMin = new THREE.Vector3();
+  const _wireMax = new THREE.Vector3();
+  const _wireMat = new THREE.Matrix4();
+  const _wirePos = new THREE.Vector3();
+  const _wireQuat = new THREE.Quaternion();
+  const _wireEuler = new THREE.Euler();
+  const _wireScale = new THREE.Vector3();
+
+  function clearColliderWireframes() {
+    for (let i = colliderWireframeRoot.children.length - 1; i >= 0; i -= 1) {
+      const child = colliderWireframeRoot.children[i]!;
+      colliderWireframeRoot.remove(child);
+      if (child instanceof THREE.Box3Helper) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+  }
+
+  function addWireBox(box: THREE.Box3, color: number) {
+    colliderWireframeRoot.add(new THREE.Box3Helper(box.clone(), color));
+  }
+
+  function syncColliderWireframes(
+    objects: readonly SceneObject[],
+    region: RegionDocument,
+    show: boolean
+  ) {
+    clearColliderWireframes();
+    if (!show) {
+      return;
+    }
+    // Asset colliders (definition/instance/scene-resolved, matches the
+    // collision world's single source of truth).
+    for (const object of objects) {
+      const collider = object.collider;
+      if (!collider || collider.shape === "none" || !collider.localBounds) {
+        continue;
+      }
+      _wirePos.set(
+        object.transform.position[0],
+        object.transform.position[1],
+        object.transform.position[2]
+      );
+      _wireEuler.set(
+        object.transform.rotation[0],
+        object.transform.rotation[1],
+        object.transform.rotation[2]
+      );
+      _wireQuat.setFromEuler(_wireEuler);
+      _wireScale.set(
+        object.transform.scale[0],
+        object.transform.scale[1],
+        object.transform.scale[2]
+      );
+      _wireMat.compose(_wirePos, _wireQuat, _wireScale);
+      _wireMin.set(
+        collider.localBounds.min[0],
+        collider.localBounds.min[1],
+        collider.localBounds.min[2]
+      );
+      _wireMax.set(
+        collider.localBounds.max[0],
+        collider.localBounds.max[1],
+        collider.localBounds.max[2]
+      );
+      _wireBox.set(_wireMin, _wireMax).applyMatrix4(_wireMat);
+      addWireBox(_wireBox, COLLIDER_WIRE_COLOR);
+    }
+    // Volume blockers / containment boundaries (already world-space boxes).
+    for (const volume of resolveRegionVolumes(region)) {
+      if (!volume.enabled) {
+        continue;
+      }
+      const isBlocker = volume.roles.includes("blocker");
+      const isContainment = volume.roles.includes("containment-boundary");
+      if (!isBlocker && !isContainment) {
+        continue;
+      }
+      const [cx, cy, cz] = volume.bounds.center;
+      const [sx, sy, sz] = volume.bounds.size;
+      _wireBox.min.set(cx - sx / 2, cy - sy / 2, cz - sz / 2);
+      _wireBox.max.set(cx + sx / 2, cy + sy / 2, cz + sz / 2);
+      addWireBox(
+        _wireBox,
+        isContainment ? CONTAINMENT_WIRE_COLOR : BLOCKER_WIRE_COLOR
+      );
+    }
+  }
+
   const overlayRoot = asOverlayViewportRoot(new THREE.Group());
   overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
@@ -506,6 +607,7 @@ export function createAuthoringViewport(
 
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;
+      clearColliderWireframes();
       desiredObjects.clear();
       previousObjects = [];
       for (const entry of objectMap.values()) {
@@ -543,6 +645,7 @@ export function createAuthoringViewport(
         projection.transformOverrides[object.instanceId]
       )
     );
+    syncColliderWireframes(currentObjects, region, projection.showColliders);
     const delta = computeSceneDelta(previousObjects, currentObjects);
     // NOT incremented here: bumping per call raced in-flight loads
     // (see scheduleRenderableLoad). Teardown paths own the bump.
