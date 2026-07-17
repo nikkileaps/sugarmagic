@@ -7,6 +7,9 @@
 
 import {
   createRegionAreaDefinition,
+  createRegionVolumeDefinition,
+  resolveRegionVolumes,
+  withDerivedRegionAliases,
   reconcileRegionVolumesFromAreas,
   reconcileRegionVolumesFromAmbienceZones,
   createRegionNPCBehaviorDefinition,
@@ -41,6 +44,9 @@ import type {
   CreateRegionAreaCommand,
   UpdateRegionAreaCommand,
   DeleteRegionAreaCommand,
+  CreateRegionVolumeCommand,
+  UpdateRegionVolumeCommand,
+  DeleteRegionVolumeCommand,
   CreateRegionNPCBehaviorCommand,
   UpdateRegionNPCBehaviorCommand,
   DeleteRegionNPCBehaviorCommand,
@@ -1284,6 +1290,51 @@ function applyDeleteRegionArea(
   return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
+// Plan 069.7 — direct Volume authoring. Operate on the canonical volumes
+// and re-derive the `@deprecated` area/ambience aliases (commands don't
+// re-normalize).
+function applyCreateRegionVolume(
+  region: RegionDocument,
+  command: CreateRegionVolumeCommand
+): RegionDocument {
+  const volumes = [
+    ...resolveRegionVolumes(region),
+    createRegionVolumeDefinition(command.payload.volume)
+  ];
+  return withDerivedRegionAliases(region, volumes);
+}
+
+function applyUpdateRegionVolume(
+  region: RegionDocument,
+  command: UpdateRegionVolumeCommand
+): RegionDocument {
+  const volumes = resolveRegionVolumes(region).map((volume) =>
+    volume.volumeId !== command.payload.volumeId
+      ? volume
+      : createRegionVolumeDefinition({
+          ...volume,
+          ...command.payload.patch,
+          volumeId: volume.volumeId
+        })
+  );
+  return withDerivedRegionAliases(region, volumes);
+}
+
+function applyDeleteRegionVolume(
+  region: RegionDocument,
+  command: DeleteRegionVolumeCommand
+): RegionDocument {
+  const deletedId = command.payload.volumeId;
+  const volumes = resolveRegionVolumes(region)
+    .filter((volume) => volume.volumeId !== deletedId)
+    .map((volume) =>
+      volume.parentVolumeId === deletedId
+        ? { ...volume, parentVolumeId: null }
+        : volume
+    );
+  return withDerivedRegionAliases(region, volumes);
+}
+
 function applyCreateRegionNPCBehavior(
   region: RegionDocument,
   command: CreateRegionNPCBehaviorCommand
@@ -1634,6 +1685,15 @@ export function executeCommand(
       break;
     case "DeleteRegionArea":
       updatedRegion = applyDeleteRegionArea(region, command);
+      break;
+    case "CreateRegionVolume":
+      updatedRegion = applyCreateRegionVolume(region, command);
+      break;
+    case "UpdateRegionVolume":
+      updatedRegion = applyUpdateRegionVolume(region, command);
+      break;
+    case "DeleteRegionVolume":
+      updatedRegion = applyDeleteRegionVolume(region, command);
       break;
     case "CreateRegionNPCBehavior":
       updatedRegion = applyCreateRegionNPCBehavior(region, command);

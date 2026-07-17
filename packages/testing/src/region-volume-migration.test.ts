@@ -11,14 +11,18 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultRegionLandscapeState,
+  createDefaultScene,
   createEmptyContentLibrarySnapshot,
+  createRegionVolumeDefinition,
+  executeCommand,
   normalizeRegionDocumentForLoad,
   reconcileRegionVolumesFromAreas,
   reconcileRegionVolumesFromAmbienceZones,
   type RegionAmbienceZone,
   type RegionAreaDefinition,
   type RegionDocument,
-  type RegionVolumeDefinition
+  type RegionVolumeDefinition,
+  type SemanticCommand
 } from "@sugarmagic/domain";
 
 const AREAS: RegionAreaDefinition[] = [
@@ -252,5 +256,78 @@ describe("unified Volume — write path (069.4)", () => {
     expect(
       written.volumes?.find((v) => v.volumeId === "zone:wind")?.roles
     ).toEqual(["trigger"]);
+  });
+});
+
+describe("unified Volume — authoring commands (069.7)", () => {
+  const scene = createDefaultScene({ sceneId: "scene:test" });
+
+  function run(region: RegionDocument, command: SemanticCommand): RegionDocument {
+    return executeCommand({ region, scene }, command).region;
+  }
+  function cmd(
+    region: RegionDocument,
+    kind: SemanticCommand["kind"],
+    subjectId: string,
+    payload: unknown
+  ): SemanticCommand {
+    return {
+      kind,
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: { subjectKind: "region-volume", subjectId },
+      payload
+    } as SemanticCommand;
+  }
+
+  it("CreateRegionVolume adds a blocker (no area alias — no label role)", () => {
+    const region = normalize(legacyRegion());
+    const blocker = createRegionVolumeDefinition({
+      volumeId: "vol:wall",
+      displayName: "Wall",
+      roles: ["blocker"],
+      blockDirection: "both",
+      bounds: { kind: "box", center: [0, 0, 0], size: [1, 4, 8] }
+    });
+    const next = run(
+      region,
+      cmd(region, "CreateRegionVolume", blocker.volumeId, { volume: blocker })
+    );
+    expect(next.volumes?.some((v) => v.volumeId === "vol:wall")).toBe(true);
+    expect(next.areas.some((a) => a.areaId === "vol:wall")).toBe(false);
+  });
+
+  it("UpdateRegionVolume adds a blocker role to a label volume (area alias kept)", () => {
+    const region = normalize(legacyRegion());
+    const next = run(
+      region,
+      cmd(region, "UpdateRegionVolume", "area:market", {
+        volumeId: "area:market",
+        patch: { roles: ["label", "blocker"], blockDirection: "in" }
+      })
+    );
+    const volume = next.volumes?.find((v) => v.volumeId === "area:market");
+    expect(volume?.roles).toEqual(["label", "blocker"]);
+    expect(volume?.blockDirection).toBe("in");
+    // Still a label -> still an area alias.
+    expect(next.areas.some((a) => a.areaId === "area:market")).toBe(true);
+  });
+
+  it("DeleteRegionVolume removes it from volumes + alias + reparents children", () => {
+    const region = normalize(legacyRegion());
+    const next = run(
+      region,
+      cmd(region, "DeleteRegionVolume", "area:market", {
+        volumeId: "area:market"
+      })
+    );
+    expect(next.volumes?.some((v) => v.volumeId === "area:market")).toBe(false);
+    expect(next.areas.some((a) => a.areaId === "area:market")).toBe(false);
+    // area:stall was nested under market -> reparented to null.
+    expect(
+      next.volumes?.find((v) => v.volumeId === "area:stall")?.parentVolumeId
+    ).toBeNull();
   });
 });

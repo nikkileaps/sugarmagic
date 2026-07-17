@@ -217,6 +217,34 @@ export type DeleteRegionAreaCommand = SemanticCommandBase<
   }
 >;
 
+// Plan 069.7 — unified Volume authoring commands. The area/ambience
+// commands stay as the legacy label/trigger authoring surface (they
+// reconcile into the same volumes); these author volumes directly with
+// any role set.
+export type CreateRegionVolumeCommand = SemanticCommandBase<
+  "CreateRegionVolume",
+  {
+    volume: import("../region-authoring").RegionVolumeDefinition;
+  }
+>;
+
+export type UpdateRegionVolumeCommand = SemanticCommandBase<
+  "UpdateRegionVolume",
+  {
+    volumeId: string;
+    patch: Partial<
+      Omit<import("../region-authoring").RegionVolumeDefinition, "volumeId">
+    >;
+  }
+>;
+
+export type DeleteRegionVolumeCommand = SemanticCommandBase<
+  "DeleteRegionVolume",
+  {
+    volumeId: string;
+  }
+>;
+
 export type CreateRegionNPCBehaviorCommand = SemanticCommandBase<
   "CreateRegionNPCBehavior",
   {
@@ -1004,6 +1032,9 @@ export type SemanticCommand =
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand
+  | CreateRegionVolumeCommand
+  | UpdateRegionVolumeCommand
+  | DeleteRegionVolumeCommand
   | CreateRegionNPCBehaviorCommand
   | UpdateRegionNPCBehaviorCommand
   | DeleteRegionNPCBehaviorCommand
