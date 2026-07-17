@@ -20,6 +20,9 @@ import { shallowEqual } from "@sugarmagic/shell";
 import type { ViewportOverlayFactory } from "../overlay-context";
 
 export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) => {
+  // Plan 069.8 — per-volume authoring visibility (eye toggle in the list);
+  // updated from the projection subscription below, read by getRects.
+  let hiddenVolumeIds: string[] = [];
   const workspace = createSpatialWorkspace({
     // Plan 069.7 — draw all unified Volumes, not just areas.
     getRects() {
@@ -27,10 +30,12 @@ export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) =>
       if (!region) {
         return [];
       }
-      return resolveRegionVolumes(region).map((volume) => ({
-        id: volume.volumeId,
-        bounds: volume.bounds
-      }));
+      return resolveRegionVolumes(region)
+        .filter((volume) => !hiddenVolumeIds.includes(volume.volumeId))
+        .map((volume) => ({
+          id: volume.volumeId,
+          bounds: volume.bounds
+        }));
     },
     getSelectedId() {
       return context.stateAccess.getSelectionIds()[0] ?? null;
@@ -121,13 +126,16 @@ export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) =>
       activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
       selectionIds: shell.selection.entityIds,
       regionId: project.session ? getActiveRegion(project.session)?.identity.id ?? null : null,
-      activeTool: viewport.activeSpatialTool
+      activeTool: viewport.activeSpatialTool,
+      hiddenVolumeIds: viewport.hiddenVolumeIds
     }),
     ({
       activeProductMode,
       activeBuildWorkspaceKind,
-      activeTool
+      activeTool,
+      hiddenVolumeIds: nextHiddenVolumeIds
     }) => {
+      hiddenVolumeIds = nextHiddenVolumeIds;
       const isActive =
         activeProductMode === "build" && activeBuildWorkspaceKind === "spatial";
       if (!isActive) {

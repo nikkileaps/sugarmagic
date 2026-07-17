@@ -142,6 +142,10 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showNavMesh
   );
+  const hiddenVolumeIds = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.hiddenVolumeIds
+  );
   const [baking, setBaking] = useState(false);
 
   const volumes = useMemo(
@@ -276,33 +280,58 @@ export function useSpatialWorkspaceView(
           ) : (
             volumes.map((volume) => {
               const isSelected = volume.volumeId === effectiveSelectedId;
+              const isHidden = hiddenVolumeIds.includes(volume.volumeId);
               return (
-                <UnstyledButton
+                <Group
                   key={volume.volumeId}
-                  onClick={() => onSelect([volume.volumeId])}
+                  gap={4}
+                  wrap="nowrap"
                   style={{
                     border: "1px solid var(--sm-panel-border)",
                     borderRadius: "var(--sm-radius-sm)",
-                    padding: "8px 10px",
+                    padding: "4px 6px 4px 10px",
                     background: isSelected
                       ? "var(--sm-active-bg)"
-                      : "var(--sm-color-surface0)",
-                    color: isSelected
-                      ? "var(--sm-accent-blue)"
-                      : "var(--sm-color-text)"
+                      : "var(--sm-color-surface0)"
                   }}
                 >
-                  <Stack gap={2}>
-                    <Text size="sm" fw={isSelected ? 600 : 500}>
-                      {volume.displayName}
-                    </Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {volume.roles.length > 0
-                        ? volume.roles.join(" · ")
-                        : "no roles"}
-                    </Text>
-                  </Stack>
-                </UnstyledButton>
+                  <UnstyledButton
+                    onClick={() => onSelect([volume.volumeId])}
+                    style={{ flex: 1, minWidth: 0, padding: "4px 0" }}
+                  >
+                    <Stack gap={2}>
+                      <Text
+                        size="sm"
+                        fw={isSelected ? 600 : 500}
+                        c={
+                          isSelected
+                            ? "var(--sm-accent-blue)"
+                            : "var(--sm-color-text)"
+                        }
+                        truncate
+                      >
+                        {volume.displayName}
+                      </Text>
+                      <Text size="xs" c="var(--sm-color-overlay0)" truncate>
+                        {volume.roles.length > 0
+                          ? volume.roles.join(" · ")
+                          : "no roles"}
+                      </Text>
+                    </Stack>
+                  </UnstyledButton>
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    color="gray"
+                    aria-label={isHidden ? "Show volume" : "Hide volume"}
+                    style={{ flexShrink: 0, opacity: isHidden ? 0.4 : 1 }}
+                    onClick={() =>
+                      viewportStore.getState().toggleVolumeHidden(volume.volumeId)
+                    }
+                  >
+                    {isHidden ? "🙈" : "👁"}
+                  </ActionIcon>
+                </Group>
               );
             })
           )}

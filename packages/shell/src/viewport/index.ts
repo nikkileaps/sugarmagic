@@ -128,6 +128,10 @@ export interface ViewportState {
   activeLandscapeChannelIndex: number;
   activeTransformTool: TransformTool;
   activeSpatialTool: "select" | "draw-rect";
+  /** Plan 069.8 — per-volume authoring visibility (ephemeral, NOT the saved
+   *  `enabled` flag): volumeIds hidden from the Spatial viewport overlay so a
+   *  busy region stays legible. */
+  hiddenVolumeIds: string[];
   /** Plan 069.6 — show collider + volume-blocker wireframes in the viewport. */
   showColliders: boolean;
   /** Plan 069.8 — show the baked navmesh walkable surface in the viewport. */
@@ -158,6 +162,7 @@ export interface ViewportActions {
   setActiveLandscapeChannelIndex: (channelIndex: number) => void;
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
+  toggleVolumeHidden: (volumeId: string) => void;
   setShowColliders: (showColliders: boolean) => void;
   setShowNavMesh: (showNavMesh: boolean) => void;
   setCameraQuaternion: (
@@ -228,6 +233,7 @@ export function createViewportStore() {
     activeLandscapeChannelIndex: 1,
     activeTransformTool: "move",
     activeSpatialTool: "select",
+    hiddenVolumeIds: [],
     showColliders: false,
     showNavMesh: false,
     cameraQuaternion: [0, 0, 0, 1],
@@ -298,6 +304,13 @@ export function createViewportStore() {
     },
     setActiveSpatialTool(tool) {
       set({ activeSpatialTool: tool });
+    },
+    toggleVolumeHidden(volumeId) {
+      set((state) => ({
+        hiddenVolumeIds: state.hiddenVolumeIds.includes(volumeId)
+          ? state.hiddenVolumeIds.filter((id) => id !== volumeId)
+          : [...state.hiddenVolumeIds, volumeId]
+      }));
     },
     setShowColliders(showColliders) {
       set({ showColliders });
