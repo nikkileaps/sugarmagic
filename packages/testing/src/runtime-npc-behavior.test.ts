@@ -6,7 +6,8 @@ import {
   createRuntimeNpcBehaviorSystem,
   getEntityCurrentActivity,
   getEntityCurrentGoal,
-  getEntityMovement
+  getEntityMovement,
+  type NavMeshPathfinder
 } from "@sugarmagic/runtime-core";
 
 function makeRegion(): RegionDocument {
@@ -458,5 +459,73 @@ describe("runtime NPC behavior system", () => {
     });
 
     expect(result.snapshots).toHaveLength(2);
+  });
+
+  it("follows navmesh waypoints (069.9) instead of heading straight to the target", () => {
+    const region = makeRegion(); // dock target at +X (10, _, 0)
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    // A detour route that first heads +Z (a wall between the NPC and the dock).
+    const detourPathfinder: NavMeshPathfinder = {
+      findPath: () => [
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 8 },
+        { x: 10, y: 0, z: 0 }
+      ],
+      destroy: () => {}
+    };
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      getPathfinder: () => detourPathfinder,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({
+      deltaSeconds: 1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+    });
+
+    const position = world.getComponent(entity, Position);
+    // Took the +Z detour toward the first waypoint, not a straight +X beeline.
+    expect(position!.z).toBeGreaterThan(1);
+    expect(position!.x).toBeLessThan(1);
+  });
+
+  it("falls back to a straight line when there is no pathfinder (unbaked regions)", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      // no getPathfinder
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({
+      deltaSeconds: 1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+    });
+
+    const position = world.getComponent(entity, Position);
+    // Straight beeline toward the dock (+X), no lateral detour.
+    expect(position!.x).toBeGreaterThan(1);
+    expect(Math.abs(position!.z)).toBeLessThan(1);
   });
 });

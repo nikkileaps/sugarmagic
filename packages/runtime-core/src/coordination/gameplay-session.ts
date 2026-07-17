@@ -100,6 +100,7 @@ import {
   createEmptyCollisionWorld,
   type CollisionWorld
 } from "../collision";
+import type { NavMeshPathfinder } from "../navmesh";
 import { coerceWorldFlagValue } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
@@ -208,6 +209,10 @@ export interface RuntimeGameplaySessionControllerOptions {
    *  scene objects) so NPC movement resolves against props via the shared
    *  `resolveMove`. Absent => empty world (agent-vs-agent still applies). */
   collisionWorld?: CollisionWorld;
+  /** Plan 069.9 — supplies the baked navmesh pathfinder (the host loads it
+   *  async from the artifact blob). NPCs follow navmesh paths when present,
+   *  straight-line otherwise. */
+  getPathfinder?: () => NavMeshPathfinder | null;
   onItemPresenceCollected?: (presenceId: string) => void;
   /**
    * Plan 055 §055.6 — the host consults its WorldPresenceTracker
@@ -437,6 +442,7 @@ export function createRuntimeGameplaySessionController(
     mechanics,
     contentLibrary,
     collisionWorld,
+    getPathfinder,
     soundEventBindings,
     audioMixer,
     pluginManager,
@@ -1937,6 +1943,8 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
+      getPathfinder,
       // Plan 069.3 — per-sync snapshot of the collision world + every agent
       // circle (player + NPCs), so NPC moves resolve against props and each
       // other through the shared resolveMove.

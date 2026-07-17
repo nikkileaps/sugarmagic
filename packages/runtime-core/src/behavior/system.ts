@@ -18,6 +18,7 @@ import {
   type CollisionWorld
 } from "../collision";
 import { evaluateRegionQuestBinding } from "../region-conditions";
+import type { NavMeshPathfinder } from "../navmesh";
 
 /** One dynamic agent (NPC/player) the NPC mover must not interpenetrate
  *  (Plan 069.3). `id` is the presenceId, used to exclude self. */
@@ -65,6 +66,10 @@ export interface RuntimeNpcBehaviorSystemOptions {
    *  so NPC moves route through the SAME `resolveMove` as the player
    *  (single enforcer). Absent => NPCs move without collision (V1 / tests). */
   getCollisionContext?: () => NpcMovementCollisionContext | null;
+  /** Plan 069.9 — the baked navmesh pathfinder. When present, NPCs follow
+   *  navmesh waypoints to the task target (routing around props); absent =>
+   *  straight-line locomotion (069.3), so unbaked regions keep working. */
+  getPathfinder?: () => NavMeshPathfinder | null;
 }
 
 export interface RuntimeNpcBehaviorSyncResult {
@@ -149,6 +154,10 @@ const DEFAULT_MOVEMENT_SPEED_METERS_PER_SECOND = 2.5;
 const DEFAULT_STUCK_TIMEOUT_MS = 2500;
 const DEFAULT_ARRIVAL_THRESHOLD_METERS = 0.4;
 const MOVEMENT_PROGRESS_THRESHOLD_METERS = 0.05;
+// Plan 069.9 — path-following tuning.
+const WAYPOINT_ARRIVAL_METERS = 0.6; // advance to the next corner within this
+const REPATH_TARGET_MOVE_METERS = 1.0; // re-path when the final target shifts
+const REPATH_DRIFT_METERS = 2.5; // re-path when collision shoved us off route
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -351,9 +360,17 @@ export function createRuntimeNpcBehaviorSystem(
     arrivalThresholdMeters = DEFAULT_ARRIVAL_THRESHOLD_METERS,
     now = () => Date.now(),
     logDebug,
-    getCollisionContext
+    getCollisionContext,
+    getPathfinder
   } = options;
   const movementStateByNpcId = new Map<string, MovementState>();
+  // Plan 069.9 — ephemeral (not persisted) navmesh route per NPC: the
+  // waypoint list + which one we're heading to + the final target it was
+  // computed for (to detect a target change and re-path).
+  const navPathByNpcId = new Map<
+    string,
+    { waypoints: { x: number; z: number }[]; index: number; targetX: number; targetZ: number }
+  >();
   const currentTaskByNpcId = new Map<string, RuntimeNpcCurrentTask>();
   const behaviorByNpcId = new Map(
     region.behaviors.map((behavior) => [behavior.npcDefinitionId, behavior])
@@ -362,6 +379,75 @@ export function createRuntimeNpcBehaviorSystem(
   // against the same agent positions (last-frame snapshot, standard).
   let currentCollisionContext: NpcMovementCollisionContext | null = null;
   const otherAgentCircles: CircleObstacle[] = [];
+
+  /**
+   * Plan 069.9 — the immediate step target: the current navmesh waypoint
+   * toward `finalTarget`, or `finalTarget` itself when there is no pathfinder
+   * or no route (straight-line fallback — unbaked regions keep working). Re-
+   * paths when the target shifts, the route is exhausted, or collision shoved
+   * the NPC off it. The stepper still measures ARRIVAL against `finalTarget`.
+   */
+  function resolveStepTarget(
+    npcId: string,
+    position: { x: number; y: number; z: number },
+    finalTarget: { x: number; z: number }
+  ): { x: number; z: number } {
+    const pathfinder = getPathfinder?.() ?? null;
+    if (!pathfinder) {
+      navPathByNpcId.delete(npcId);
+      return finalTarget;
+    }
+    let path = navPathByNpcId.get(npcId);
+    const targetMoved =
+      !!path &&
+      distance2d({ x: path.targetX, z: path.targetZ }, finalTarget) >
+        REPATH_TARGET_MOVE_METERS;
+    const currentWaypoint = path?.waypoints[path.index] ?? null;
+    const drifted =
+      !!currentWaypoint &&
+      distance2d(position, currentWaypoint) > REPATH_DRIFT_METERS;
+    const exhausted = !!path && path.index >= path.waypoints.length;
+
+    if (!path || targetMoved || drifted || exhausted) {
+      const waypoints = pathfinder
+        .findPath(
+          { x: position.x, y: position.y, z: position.z },
+          { x: finalTarget.x, y: position.y, z: finalTarget.z }
+        )
+        .map((p) => ({ x: p.x, z: p.z }));
+      if (waypoints.length === 0) {
+        navPathByNpcId.delete(npcId); // off-mesh / unreachable -> straight-line
+        return finalTarget;
+      }
+      path = {
+        waypoints,
+        // Skip the first corner when it's just the snapped start position.
+        index:
+          waypoints.length > 1 &&
+          distance2d(position, waypoints[0]!) < WAYPOINT_ARRIVAL_METERS
+            ? 1
+            : 0,
+        targetX: finalTarget.x,
+        targetZ: finalTarget.z
+      };
+      navPathByNpcId.set(npcId, path);
+    }
+    return path.waypoints[path.index] ?? finalTarget;
+  }
+
+  /** Advance past every waypoint the NPC has reached this frame. */
+  function advanceWaypoints(npcId: string, position: { x: number; z: number }) {
+    const path = navPathByNpcId.get(npcId);
+    if (!path) {
+      return;
+    }
+    while (
+      path.index < path.waypoints.length - 1 &&
+      distance2d(position, path.waypoints[path.index]!) <= WAYPOINT_ARRIVAL_METERS
+    ) {
+      path.index += 1;
+    }
+  }
 
   /**
    * Commit an NPC's proposed step. Plan 069.3 — routes through the SAME
@@ -517,29 +603,37 @@ export function createRuntimeNpcBehaviorSystem(
         });
       }
 
-      const stepResult = stepToward({
-        position,
-        target: targetPoint,
-        movementSpeedMetersPerSecond,
-        deltaSeconds,
-        arrivalThresholdMeters
-      });
-      distanceToTargetMeters = stepResult.distanceToTargetMeters;
+      // Plan 069.9 — arrival is measured against the FINAL authored point;
+      // locomotion heads to the current navmesh waypoint toward it (or
+      // straight there when unbaked). V1 stays planar x/z; vertical is the
+      // later terrain layer.
+      const distanceToFinal = distance2d(position, targetPoint);
+      distanceToTargetMeters = distanceToFinal;
 
-      if (stepResult.status === "at_target") {
-        // V1 movement is position-based. Planar x/z travel toward a sampled
-        // point in the authored area; vertical traversal belongs to the
-        // later terrain layer. Plan 069.3 — routed through the shared
-        // collision resolver (no-op when no context is wired).
-        commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
+      if (distanceToFinal <= arrivalThresholdMeters) {
+        commitNpcMove(position, npc.presenceId, targetPoint.x, targetPoint.z);
         state.status = "at_target";
         state.lastProgressAtMs = now();
         state.blockedAtMs = null;
+        navPathByNpcId.delete(npc.npcDefinitionId);
       } else if (state.status !== "blocked") {
+        const stepTarget = resolveStepTarget(
+          npc.npcDefinitionId,
+          position,
+          targetPoint
+        );
+        const stepResult = stepToward({
+          position,
+          target: stepTarget,
+          movementSpeedMetersPerSecond,
+          deltaSeconds,
+          arrivalThresholdMeters
+        });
         // Plan 069.3 — resolved move (collide-and-slide + agent push-out);
         // the RESOLVED position feeds stuck-detection below.
         commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
         state.status = "en_route";
+        advanceWaypoints(npc.npcDefinitionId, position);
 
         const stuckResult = detectStuck({
           position,
@@ -560,6 +654,8 @@ export function createRuntimeNpcBehaviorSystem(
           state.status = "blocked";
           state.blockedAtMs = now();
           failureReason = "stuck";
+          // Plan 069.9 — drop the stale route so a retry re-paths.
+          navPathByNpcId.delete(npc.npcDefinitionId);
           emitDebug("npc-movement-blocked", {
             npcDefinitionId: npc.npcDefinitionId,
             targetAreaId: directive.targetAreaId,
@@ -620,6 +716,7 @@ export function createRuntimeNpcBehaviorSystem(
         }
         movementStateByNpcId.delete(npcDefinitionId);
         currentTaskByNpcId.delete(npcDefinitionId);
+        navPathByNpcId.delete(npcDefinitionId);
       }
 
       const snapshots = currentNpcEntities
@@ -634,6 +731,7 @@ export function createRuntimeNpcBehaviorSystem(
     reset() {
       movementStateByNpcId.clear();
       currentTaskByNpcId.clear();
+      navPathByNpcId.clear();
     },
     // ---- Plan 056 §056.2 — save participation ------------------------
     serializeSaveSlice(): NpcBehaviorSlice {
