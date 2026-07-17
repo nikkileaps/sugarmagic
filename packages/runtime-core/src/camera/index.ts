@@ -160,6 +160,13 @@ export function applyCameraZoom(
  *   camY = target.y + distance * sin(pitchRad)
  *   camZ = target.z + distance * cos(yaw) * cos(pitchRad)
  */
+/**
+ * DEFERRED SEAM (epic 069.10): this places the camera on its orbit boom with
+ * NO collision check, so it can clip through walls/props. Camera collision
+ * (sphere-cast the boom against the collision world and pull in on a hit) is
+ * deferred — see backlog "Camera collision". Revisit trigger: first enclosed
+ * space (indoor room / canyon) where the camera visibly clips.
+ */
 export function computeCameraPosition(state: GameCameraState): {
   x: number;
   y: number;

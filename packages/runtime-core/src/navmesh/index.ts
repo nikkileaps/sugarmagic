@@ -12,6 +12,16 @@
  * erodes the walkable area by the agent radius). Recast consumes triangle
  * SOUP (flat positions + indices), so every box becomes its 12 triangles
  * and each nav-bounds volume contributes a ground quad.
+ *
+ * DEFERRED SEAMS (revisit triggers, epic 069.10):
+ * - Tiled bake + `TileCache`: this is a SOLO navmesh (one tile). Revisit when
+ *   (a) a region gets big enough that a single-tile bake is too coarse/slow,
+ *   or (b) we need RUNTIME dynamic obstacles (recast `TileCache` box/cylinder
+ *   carving requires a TILED navmesh). Swap `generateSoloNavMesh` for
+ *   `generateTiledNavMesh` / `generateTileCache` at that point.
+ * - 3D terrain bake: the soup is flat (ground quad at `groundY`). When the
+ *   terrain epic lands, feed the actual terrain triangles instead — recast
+ *   already handles slopes/steps, so `walkableSlopeAngle` starts mattering.
  */
 
 import {

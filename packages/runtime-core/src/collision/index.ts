@@ -8,6 +8,17 @@
  * Flat-ground scope (epic 069): agents are XZ circles, colliders are
  * world-space XZ AABBs (Y ignored). Gravity / ground-follow / slopes are
  * the deferred terrain epic.
+ *
+ * DEFERRED SEAMS (revisit triggers, epic 069.10):
+ * - Vertical / terrain (the TERRAIN EPIC): the moment the ground stops being
+ *   the flat `PlaneGeometry` at Y≈0 — i.e. when authors get height/slopes —
+ *   `resolveMove` needs ground-follow + gravity + a real capsule half-height,
+ *   and `WorldColliderAabb` must stop dropping Y. Do NOT bake more Y=0
+ *   assumptions in here than already exist.
+ * - CCD / swept collision: this resolver is DISCRETE (post-move push-out),
+ *   correct at walking speed. Revisit when something moves fast enough to
+ *   tunnel a collider in one frame — projectiles / dashes / spatial spells
+ *   (none exist today; `CastableExecutor` is pure stat mutation).
  */
 
 import * as THREE from "three";

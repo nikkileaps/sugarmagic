@@ -1,6 +1,8 @@
 # Plan 069 — Collision + Navigation (blocking, triggers, NPC pathfinding)
 
 Status: Locked (epic-review passed 2026-07-16 — design 3 rounds, stories 2 further rounds, 5 total) — design AND story decomposition locked; stories execute as written in the stated EXECUTION ORDER (deviations need STOP + amendment + re-gate). Decision: ONE epic (nikki 2026-07-16), collision stories first, navigation after.
+
+Status: COMPLETE (2026-07-17) — all 10 stories built + verified. Deferred seams commented in-code (`DEFERRED SEAM`) and swept to backlog: #376 terrain/gravity epic, #377 tiled navmesh + TileCache + Crowd, #378 CCD/spatial-spell collision, #379 camera collision. API doc: `docs/api/collision-and-navigation.md`. In-story additions beyond the locked plan: definition-tier collider control (Bucket 1), per-instance override slice (069.6), per-volume authoring color + visibility eye (Spatial QoL). Follow-up spike #374 (unimplemented quest actions). Perf: collision uses a uniform-grid broadphase; nav paths are computed on demand (target move / drift / stuck), not per frame; no `Crowd` per-frame tick — cheap by construction (sandbox 60fps check is the QA verify).
 Owner: nikki + claude
 Date: 2026-07-16
 
