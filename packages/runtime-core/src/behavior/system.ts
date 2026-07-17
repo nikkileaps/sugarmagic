@@ -13,6 +13,30 @@ import {
   type RuntimeBlackboard
 } from "../state";
 import { findRegionAreaById } from "../spatial";
+import {
+  resolveMove,
+  type CircleObstacle,
+  type CollisionWorld
+} from "../collision";
+
+/** One dynamic agent (NPC/player) the NPC mover must not interpenetrate
+ *  (Plan 069.3). `id` is the presenceId, used to exclude self. */
+export interface NpcCollisionAgent {
+  id: string;
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** Per-frame collision context for NPC movement (Plan 069.3): the static
+ *  collision world + every agent circle (built by the caller). */
+export interface NpcMovementCollisionContext {
+  world: CollisionWorld;
+  agents: readonly NpcCollisionAgent[];
+}
+
+/** Fallback NPC radius when an NPC is absent from the agent snapshot. */
+const DEFAULT_NPC_AGENT_RADIUS = 0.35;
 
 export interface RuntimeBehaviorQuestState {
   questDefinitionId: string;
@@ -37,6 +61,10 @@ export interface RuntimeNpcBehaviorSystemOptions {
   arrivalThresholdMeters?: number;
   now?: () => number;
   logDebug?: (event: string, payload?: Record<string, unknown>) => void;
+  /** Plan 069.3 — supplies the collision world + agent circles each sync
+   *  so NPC moves route through the SAME `resolveMove` as the player
+   *  (single enforcer). Absent => NPCs move without collision (V1 / tests). */
+  getCollisionContext?: () => NpcMovementCollisionContext | null;
 }
 
 export interface RuntimeNpcBehaviorSyncResult {
@@ -352,13 +380,61 @@ export function createRuntimeNpcBehaviorSystem(
     stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
     arrivalThresholdMeters = DEFAULT_ARRIVAL_THRESHOLD_METERS,
     now = () => Date.now(),
-    logDebug
+    logDebug,
+    getCollisionContext
   } = options;
   const movementStateByNpcId = new Map<string, MovementState>();
   const currentTaskByNpcId = new Map<string, RuntimeNpcCurrentTask>();
   const behaviorByNpcId = new Map(
     region.behaviors.map((behavior) => [behavior.npcDefinitionId, behavior])
   );
+  // Plan 069.3 — snapshotted once per sync so every NPC this frame resolves
+  // against the same agent positions (last-frame snapshot, standard).
+  let currentCollisionContext: NpcMovementCollisionContext | null = null;
+  const otherAgentCircles: CircleObstacle[] = [];
+
+  /**
+   * Commit an NPC's proposed step. Plan 069.3 — routes through the SAME
+   * `resolveMove` as the player (collide-and-slide vs static boxes + push-
+   * out vs other agents). Without a collision context (V1 / tests) it
+   * writes the proposed position directly, preserving old behavior. The
+   * RESOLVED position flows into stuck-detection: a slide makes progress
+   * (not stuck), a pinned NPC makes none (stuck) — no separate tuning.
+   */
+  function commitNpcMove(
+    position: { x: number; z: number },
+    presenceId: string,
+    proposedX: number,
+    proposedZ: number
+  ): void {
+    const context = currentCollisionContext;
+    if (!context) {
+      position.x = proposedX;
+      position.z = proposedZ;
+      return;
+    }
+    let selfRadius = DEFAULT_NPC_AGENT_RADIUS;
+    otherAgentCircles.length = 0;
+    for (const agent of context.agents) {
+      if (agent.id === presenceId) {
+        selfRadius = agent.radius;
+        continue;
+      }
+      otherAgentCircles.push({
+        x: agent.x,
+        z: agent.z,
+        radius: agent.radius
+      });
+    }
+    const resolved = resolveMove(
+      { x: position.x, z: position.z, radius: selfRadius },
+      { x: proposedX - position.x, z: proposedZ - position.z },
+      context.world,
+      otherAgentCircles
+    );
+    position.x += resolved.x;
+    position.z += resolved.z;
+  }
 
   function emitDebug(event: string, payload?: Record<string, unknown>) {
     logDebug?.(event, payload);
@@ -481,20 +557,18 @@ export function createRuntimeNpcBehaviorSystem(
       distanceToTargetMeters = stepResult.distanceToTargetMeters;
 
       if (stepResult.status === "at_target") {
-        // V1 movement is position-based and writes directly to the Position component.
-        // That keeps NPC behavior deterministic, but it also means this path does not
-        // emit a separate "moved" event for other ECS systems and only resolves planar
-        // x/z travel toward a sampled point inside the authored area. Vertical traversal
-        // and richer movement signaling belong in a later locomotion/pathfinding layer.
-        position.x = stepResult.x;
-        position.z = stepResult.z;
+        // V1 movement is position-based. Planar x/z travel toward a sampled
+        // point in the authored area; vertical traversal belongs to the
+        // later terrain layer. Plan 069.3 — routed through the shared
+        // collision resolver (no-op when no context is wired).
+        commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
         state.status = "at_target";
         state.lastProgressAtMs = now();
         state.blockedAtMs = null;
       } else if (state.status !== "blocked") {
-        // See note above: this mutates Position in place for V1 behavior movement.
-        position.x = stepResult.x;
-        position.z = stepResult.z;
+        // Plan 069.3 — resolved move (collide-and-slide + agent push-out);
+        // the RESOLVED position feeds stuck-detection below.
+        commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
         state.status = "en_route";
 
         const stuckResult = detectStuck({
@@ -563,6 +637,9 @@ export function createRuntimeNpcBehaviorSystem(
 
   return {
     sync(input) {
+      // Plan 069.3 — snapshot the collision world + agent circles once for
+      // the whole sync; every NPC's move this frame resolves against it.
+      currentCollisionContext = getCollisionContext?.() ?? null;
       const currentNpcEntities = resolveNpcEntities();
       const activeNpcIds = new Set(
         currentNpcEntities.map((npc) => npc.npcDefinitionId)

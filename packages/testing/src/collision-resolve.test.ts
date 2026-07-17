@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import type { AssetColliderShape } from "@sugarmagic/domain";
 import {
   buildCollisionWorld,
+  createEmptyCollisionWorld,
   resolveMove,
+  type CircleObstacle,
   type SceneObject,
   type WorldColliderAabb
 } from "@sugarmagic/runtime-core";
@@ -136,5 +138,52 @@ describe("resolveMove", () => {
 
     expect(splitX).toBeCloseTo(fullX, 2);
     expect(splitZ).toBeCloseTo(fullZ, 2);
+  });
+});
+
+describe("resolveMove with circle obstacles (agent-vs-agent, 069.3)", () => {
+  const empty = createEmptyCollisionWorld();
+
+  it("pushes the mover out of an overlapping agent circle", () => {
+    const other: CircleObstacle[] = [{ x: 0, z: 0, radius: 0.5 }];
+    // Move toward (-0.3, 0), overlapping the other agent (combined r = 1.0).
+    const resolved = resolveMove(
+      { x: -2, z: 0, radius: 0.5 },
+      { x: 1.7, z: 0 },
+      empty,
+      other
+    );
+    const fx = -2 + resolved.x;
+    const fz = 0 + resolved.z;
+    // Ends no closer than the combined radius (1.0) from the other agent.
+    expect(Math.hypot(fx - 0, fz - 0)).toBeGreaterThanOrEqual(1.0 - 1e-3);
+  });
+
+  it("does not interpenetrate another agent on a head-on approach", () => {
+    const other: CircleObstacle[] = [{ x: 3, z: 0, radius: 0.4 }];
+    const resolved = resolveMove(
+      { x: 0, z: 0, radius: 0.4 },
+      { x: 3, z: 0 }, // would land on top of the other agent
+      empty,
+      other
+    );
+    const fx = 0 + resolved.x;
+    expect(Math.hypot(fx - 3, 0)).toBeGreaterThanOrEqual(0.8 - 1e-3); // combined
+  });
+
+  it("resolves agent circles alongside a populated static world", () => {
+    // A box exists (grid populated) but isn't in the mover's path; the
+    // circle push-out still applies — the two paths coexist.
+    const world = buildCollisionWorld([boxObject([10, 0, 10], [2, 2, 2])]);
+    const other: CircleObstacle[] = [{ x: 3, z: 0, radius: 0.4 }];
+    const resolved = resolveMove(
+      { x: 0, z: 0, radius: 0.4 },
+      { x: 3, z: 0 },
+      world,
+      other
+    );
+    const fx = 0 + resolved.x;
+    expect(world.colliders).toHaveLength(1);
+    expect(Math.hypot(fx - 3, 0)).toBeGreaterThanOrEqual(0.8 - 1e-3);
   });
 });

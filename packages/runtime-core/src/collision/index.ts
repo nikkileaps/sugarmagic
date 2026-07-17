@@ -35,6 +35,14 @@ export interface CircleBody {
   radius: number;
 }
 
+/** A dynamic circle obstacle (Plan 069.3) — another agent (NPC/player)
+ *  the mover must not interpenetrate. */
+export interface CircleObstacle {
+  x: number;
+  z: number;
+  radius: number;
+}
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -188,7 +196,8 @@ function queryColliders(
 export function resolveMove(
   from: CircleBody,
   delta: Vec2,
-  world: CollisionWorld
+  world: CollisionWorld,
+  circleObstacles: readonly CircleObstacle[] = []
 ): Vec2 {
   let x = from.x + delta.x;
   let z = from.z + delta.z;
@@ -197,8 +206,30 @@ export function resolveMove(
   const seen = new Set<number>();
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-    queryColliders(world, x - r, x + r, z - r, z + r, candidates, seen);
     let resolvedAny = false;
+
+    // Dynamic circle obstacles (other agents) — push apart on overlap.
+    for (const o of circleObstacles) {
+      const dx = x - o.x;
+      const dz = z - o.z;
+      const combined = r + o.radius;
+      const distSq = dx * dx + dz * dz;
+      if (distSq >= combined * combined) {
+        continue;
+      }
+      if (distSq > EPSILON) {
+        const dist = Math.sqrt(distSq);
+        const push = (combined - dist) / dist;
+        x += dx * push;
+        z += dz * push;
+      } else {
+        // Exactly coincident: eject along +X so two agents separate.
+        x += combined;
+      }
+      resolvedAny = true;
+    }
+
+    queryColliders(world, x - r, x + r, z - r, z + r, candidates, seen);
     for (const c of candidates) {
       const closestX = clamp(x, c.minX, c.maxX);
       const closestZ = clamp(z, c.minZ, c.maxZ);

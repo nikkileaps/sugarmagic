@@ -343,6 +343,16 @@ export function computePlayerAgentDimensions(
   return { height, radius };
 }
 
+/** NPC agent capsule dimensions (Plan 069.3 — the collision layer reads
+ *  the SAME radius from here for NPC-vs-NPC / NPC-vs-player push-out). */
+export function computeNpcAgentDimensions(
+  npcDefinition: NPCDefinition | null | undefined
+): { height: number; radius: number } {
+  const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
+  const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
+  return { height, radius };
+}
+
 function createPlayerSceneObject(
   presence: RegionPlayerPresence,
   playerDefinition: PlayerDefinition | null,
@@ -412,8 +422,7 @@ function createNPCSceneObject(
     modelAssetDefinitionId,
     contentLibrary
   );
-  const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
-  const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
+  const { height, radius } = computeNpcAgentDimensions(npcDefinition);
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
     : { surface: null, deform: null, effect: null };

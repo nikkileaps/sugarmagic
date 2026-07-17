@@ -89,7 +89,15 @@ import {
   Interactable,
   InteractionSystem
 } from "../interaction";
-import { iterateActiveItemPresences } from "../scene";
+import {
+  iterateActiveItemPresences,
+  computePlayerAgentDimensions,
+  computeNpcAgentDimensions
+} from "../scene";
+import {
+  createEmptyCollisionWorld,
+  type CollisionWorld
+} from "../collision";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -110,7 +118,8 @@ import type {
 import { RuntimePluginSystem } from "../plugins";
 import {
   createRuntimeNpcBehaviorSystem,
-  type RuntimeNpcBehaviorSystem
+  type RuntimeNpcBehaviorSystem,
+  type NpcCollisionAgent
 } from "../behavior";
 import {
   clearActiveQuestObjectives,
@@ -192,6 +201,10 @@ export interface RuntimeGameplaySessionControllerOptions {
   soundEventBindings?: SoundEventBindingMap;
   audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
+  /** Plan 069.3 — the static collision world (built by the host from the
+   *  scene objects) so NPC movement resolves against props via the shared
+   *  `resolveMove`. Absent => empty world (agent-vs-agent still applies). */
+  collisionWorld?: CollisionWorld;
   onItemPresenceCollected?: (presenceId: string) => void;
   /**
    * Plan 055 §055.6 — the host consults its WorldPresenceTracker
@@ -293,6 +306,11 @@ export interface RuntimeGameplayAssembly {
   readonly gameplaySession: RuntimeGameplaySessionController;
   dispose: () => Promise<void>;
 }
+
+/** Plan 069.3 — sentinel agent id for the player in NPC collision (can't
+ *  clash with an NPC presenceId). */
+const PLAYER_COLLISION_AGENT_ID = "__player__";
+const DEFAULT_AGENT_RADIUS = 0.35;
 
 const DIALOGUE_LOCK_ID = "runtime-dialogue";
 const JOURNAL_LOCK_ID = "runtime-quest-journal";
@@ -415,6 +433,7 @@ export function createRuntimeGameplaySessionController(
     questDefinitions,
     mechanics,
     contentLibrary,
+    collisionWorld,
     soundEventBindings,
     audioMixer,
     pluginManager,
@@ -1857,6 +1876,17 @@ export function createRuntimeGameplaySessionController(
   });
   registerNpcInteractables();
   if (activeRegion) {
+    // Plan 069.3 — agent radii are stable; precompute once. Player id is a
+    // sentinel that can't collide with an NPC presenceId.
+    const staticCollisionWorld = collisionWorld ?? createEmptyCollisionWorld();
+    const playerAgentRadius =
+      computePlayerAgentDimensions(playerDefinition).radius;
+    const npcAgentRadiusById = new Map(
+      npcDefinitions.map((definition) => [
+        definition.definitionId,
+        computeNpcAgentDimensions(definition).radius
+      ])
+    );
     npcBehaviorSystem = createRuntimeNpcBehaviorSystem({
       region: activeRegion,
       world,
@@ -1870,6 +1900,39 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      // Plan 069.3 — per-sync snapshot of the collision world + every agent
+      // circle (player + NPCs), so NPC moves resolve against props and each
+      // other through the shared resolveMove.
+      getCollisionContext: () => {
+        const agents: NpcCollisionAgent[] = [];
+        const playerEntity = resolvePlayerEntity();
+        if (playerEntity !== null) {
+          const playerPos = world.getComponent(playerEntity, Position);
+          if (playerPos) {
+            agents.push({
+              id: PLAYER_COLLISION_AGENT_ID,
+              x: playerPos.x,
+              z: playerPos.z,
+              radius: playerAgentRadius
+            });
+          }
+        }
+        for (const [presenceId, entry] of npcInteractableEntities.entries()) {
+          const npcPos = world.getComponent(entry.entity, Position);
+          if (!npcPos) {
+            continue;
+          }
+          agents.push({
+            id: presenceId,
+            x: npcPos.x,
+            z: npcPos.z,
+            radius:
+              npcAgentRadiusById.get(entry.npcDefinitionId) ??
+              DEFAULT_AGENT_RADIUS
+          });
+        }
+        return { world: staticCollisionWorld, agents };
+      },
       logDebug(event, payload) {
         console.info(`[runtime-core] ${event}`, payload ?? {});
       }

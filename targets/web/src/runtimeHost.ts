@@ -2523,6 +2523,8 @@ export function createWebRuntimeHost(
       inputManager,
       activeRegion,
       activeScene,
+      // Plan 069.3 — NPC movement resolves against the same static world.
+      collisionWorld,
       onSceneAction: hostHandleSceneAction,
       // Initial track by boot lifecycle: menu theme while the
       // start menu is up, else the in-game track (usually null).
