@@ -1341,6 +1341,16 @@ export function createWebRuntimeHost(
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
+  // Plan 069.10 perf probe (dev-only, gated by `window.__smperf`): isolates
+  // the CPU update path (where all of epic 069's collision/nav work lives)
+  // from render. Set `window.__smperf = true` in the preview to log a 1Hz
+  // line; the update ms vs frame ms tells us CPU-bound (dig into systems) vs
+  // GPU/render-bound (069 is not the cost). Cheap + off by default.
+  let perfWorldMs = 0;
+  let perfSessionMs = 0;
+  let perfFrameMs = 0;
+  let perfFrames = 0;
+  let perfLastLogMs = 0;
   let started = false;
   const sceneObjectEntries = new Map<string, SceneObjectEntry>();
 
@@ -1506,8 +1516,30 @@ export function createWebRuntimeHost(
 
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
+
+    const perfOn = (globalThis as { __smperf?: boolean }).__smperf === true;
+    const pWorldStart = perfOn ? performance.now() : 0;
     world.update(delta);
+    const pSessionStart = perfOn ? performance.now() : 0;
     gameplaySession?.update(delta);
+    if (perfOn) {
+      const pEnd = performance.now();
+      perfWorldMs += pSessionStart - pWorldStart;
+      perfSessionMs += pEnd - pSessionStart;
+      perfFrameMs += delta * 1000;
+      perfFrames += 1;
+      if (now - perfLastLogMs > 1000) {
+        const n = Math.max(perfFrames, 1);
+        console.info(
+          `[smperf] frame ${(perfFrameMs / n).toFixed(1)}ms (~${(1000 / (perfFrameMs / n)).toFixed(0)}fps) | world.update ${(perfWorldMs / n).toFixed(2)}ms | session.update ${(perfSessionMs / n).toFixed(2)}ms | rest(render) ${((perfFrameMs - perfWorldMs - perfSessionMs) / n).toFixed(1)}ms`
+        );
+        perfWorldMs = 0;
+        perfSessionMs = 0;
+        perfFrameMs = 0;
+        perfFrames = 0;
+        perfLastLogMs = now;
+      }
+    }
 
     for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
       const entry = sceneObjectEntries.get(snapshot.presenceId);
