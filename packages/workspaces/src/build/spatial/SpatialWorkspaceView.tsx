@@ -266,13 +266,6 @@ export function useSpatialWorkspaceView(
         }
       >
         <Stack gap="xs">
-          {activeTool === "draw-rect" ? (
-            <Text size="xs" c="var(--sm-color-overlay0)">
-              {selectedVolume
-                ? "Drag in the viewport to define its rectangle."
-                : "Select a volume first, then drag to define it."}
-            </Text>
-          ) : null}
           {volumes.length === 0 ? (
             <Text size="xs" c="var(--sm-color-overlay0)">
               No volumes yet.
