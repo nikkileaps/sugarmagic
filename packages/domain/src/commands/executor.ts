@@ -76,6 +76,7 @@ import type {
   UpdatePlacedAssetInspectableCommand,
   RemovePlacedAssetInspectableCommand,
   UpdateRegionMetadataCommand,
+  SetRegionNavMeshCommand,
   SetPlacedAssetShaderOverrideCommand,
   SetPlacedAssetSurfaceSlotOverrideCommand,
   SetPlacedAssetColliderOverrideCommand,
@@ -1713,6 +1714,9 @@ export function executeCommand(
       break;
     case "UpdateRegionMetadata":
       updatedRegion = applyUpdateRegionMetadata(region, command);
+      break;
+    case "SetRegionNavMesh":
+      updatedRegion = { ...region, navMesh: command.payload.navMesh };
       break;
     case "CreateRegionArea":
       updatedRegion = applyCreateRegionArea(region, command);

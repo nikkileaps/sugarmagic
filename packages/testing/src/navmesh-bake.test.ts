@@ -9,7 +9,9 @@
 import { describe, expect, it } from "vitest";
 import {
   bakeNavMesh,
+  computeNavMeshInputHash,
   loadNavMesh,
+  type NavMeshBakeInput,
   type WorldColliderAabb
 } from "@sugarmagic/runtime-core";
 import type { RegionAreaBounds } from "@sugarmagic/domain";
@@ -65,5 +67,36 @@ describe("069.8 — navmesh bake", () => {
       agentRadius: 0.35
     });
     expect(bytes).toBeNull();
+  });
+});
+
+describe("069.8 — navmesh staleness hash", () => {
+  const base: NavMeshBakeInput = {
+    colliders: [propCollider, { minX: 4, maxX: 6, minZ: 4, maxZ: 6 }],
+    navBounds: [navBounds],
+    nonWalkable: [],
+    agentRadius: 0.35
+  };
+
+  it("is stable + order-independent over the collider list", () => {
+    const reordered: NavMeshBakeInput = {
+      ...base,
+      colliders: [...base.colliders].reverse()
+    };
+    expect(computeNavMeshInputHash(base)).toBe(computeNavMeshInputHash(reordered));
+  });
+
+  it("changes when a collider moves (edit postdates the bake)", () => {
+    const moved: NavMeshBakeInput = {
+      ...base,
+      colliders: [{ minX: 0, maxX: 2, minZ: 0, maxZ: 2 }, base.colliders[1]!]
+    };
+    expect(computeNavMeshInputHash(moved)).not.toBe(computeNavMeshInputHash(base));
+  });
+
+  it("changes when the agent radius changes", () => {
+    expect(
+      computeNavMeshInputHash({ ...base, agentRadius: 0.5 })
+    ).not.toBe(computeNavMeshInputHash(base));
   });
 });

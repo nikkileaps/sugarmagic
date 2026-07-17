@@ -334,6 +334,18 @@ export interface RegionNPCBehaviorDefinition {
  * accept the legacy shape on disk and lift it into this shape +
  * the project's default Scene.
  */
+/**
+ * Plan 069.8 — a baked navmesh artifact reference on the region. The binary
+ * lives in the asset-source store at `assetPath`; the doc only points at it
+ * (kept out of the save payload — it's derived content, rebakeable). Staleness
+ * is `inputHash` vs a freshly-derived hash of the collider + nav-volume inputs.
+ */
+export interface RegionNavMeshArtifact {
+  assetPath: string;
+  inputHash: string;
+  agentRadius: number;
+}
+
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
@@ -360,6 +372,11 @@ export interface RegionDocument {
   audio?: RegionAudioState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
+  /** Plan 069.8 — the baked navmesh artifact reference (NOT a
+   *  SaveParticipant). Null/absent = not baked. `inputHash` drives the
+   *  staleness warning: re-derive it from current colliders/nav-volumes and
+   *  compare. */
+  navMesh?: RegionNavMeshArtifact | null;
   /**
    * Plan 065 §065.1 — Layout Sketch: authoring-only blockout ink
    * drawn on the landscape plane in Studio. The RUNTIME NEVER
@@ -1021,6 +1038,7 @@ export function createDefaultRegion(options: {
     landscape: createDefaultRegionLandscapeState(),
     audio: createRegionAudioState(),
     markers: [],
-    gameplayPlacements: []
+    gameplayPlacements: [],
+    navMesh: null
   };
 }

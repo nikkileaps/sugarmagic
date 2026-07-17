@@ -191,3 +191,36 @@ export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
   await ensureRecastInit();
   return importNavMesh(bytes).navMesh;
 }
+
+const round = (v: number): number => Math.round(v * 1000) / 1000;
+
+/**
+ * Deterministic hash of the bake INPUTS (Plan 069.8 staleness). The studio
+ * stores this in the artifact at bake time and re-derives it from the
+ * current colliders + nav volumes; a mismatch means a collider-touching edit
+ * postdates the bake -> show the "rebake" warning. Order-independent (sorted)
+ * so re-ordering collider lists doesn't falsely invalidate.
+ */
+export function computeNavMeshInputHash(input: NavMeshBakeInput): string {
+  const colliderKeys = input.colliders
+    .map((c) => `${round(c.minX)},${round(c.maxX)},${round(c.minZ)},${round(c.maxZ)}`)
+    .sort();
+  const boundsKey = (b: RegionAreaBounds): string =>
+    `${round(b.center[0])},${round(b.center[1])},${round(b.center[2])}|${round(b.size[0])},${round(b.size[1])},${round(b.size[2])}`;
+  const navKeys = input.navBounds.map(boundsKey).sort();
+  const carveKeys = input.nonWalkable.map(boundsKey).sort();
+  const payload = JSON.stringify({
+    c: colliderKeys,
+    n: navKeys,
+    x: carveKeys,
+    r: round(input.agentRadius),
+    s: round(input.cellSize ?? DEFAULT_CELL_SIZE),
+    g: round(input.groundY ?? 0)
+  });
+  // djb2
+  let hash = 5381;
+  for (let i = 0; i < payload.length; i += 1) {
+    hash = ((hash << 5) + hash + payload.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}

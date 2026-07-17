@@ -186,6 +186,15 @@ export type UpdateRegionMetadataCommand = SemanticCommandBase<
   }
 >;
 
+/** Plan 069.8 — set (or clear) the region's baked navmesh artifact
+ *  reference. `null` clears it (e.g. nav-bounds removed). */
+export type SetRegionNavMeshCommand = SemanticCommandBase<
+  "SetRegionNavMesh",
+  {
+    navMesh: import("../region-authoring").RegionNavMeshArtifact | null;
+  }
+>;
+
 export type CreateRegionAreaCommand = SemanticCommandBase<
   "CreateRegionArea",
   {
@@ -1042,6 +1051,7 @@ export type SemanticCommand =
   | RenameSceneFolderCommand
   | DeleteSceneFolderCommand
   | UpdateRegionMetadataCommand
+  | SetRegionNavMeshCommand
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand
