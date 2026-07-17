@@ -34,7 +34,8 @@ export const mountSpatialAuthoringOverlay: ViewportOverlayFactory = (context) =>
         .filter((volume) => !hiddenVolumeIds.includes(volume.volumeId))
         .map((volume) => ({
           id: volume.volumeId,
-          bounds: volume.bounds
+          bounds: volume.bounds,
+          color: volume.color
         }));
     },
     getSelectedId() {

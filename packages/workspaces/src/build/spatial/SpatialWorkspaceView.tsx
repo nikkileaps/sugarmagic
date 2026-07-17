@@ -13,8 +13,11 @@ import {
   ActionIcon,
   Button,
   Checkbox,
+  ColorPicker,
+  ColorSwatch,
   Group,
   NumberInput,
+  Popover,
   Select,
   Stack,
   Text,
@@ -112,6 +115,65 @@ function volumesOf(region: RegionDocument): RegionVolumeDefinition[] {
   return resolveRegionVolumes(region);
 }
 
+const DEFAULT_VOLUME_COLOR = "#74c7ec";
+const VOLUME_COLOR_SWATCHES = [
+  "#f38ba8",
+  "#fab387",
+  "#f9e2af",
+  "#a6e3a1",
+  "#94e2d5",
+  "#74c7ec",
+  "#89b4fa",
+  "#cba6f7",
+  "#f5c2e7"
+];
+
+/** Plan 069.8 QoL — swatch + popover picker for a volume's viewport tint.
+ *  Local draft for smooth dragging; commits on change-end. */
+function VolumeColorControl(props: {
+  value: string | null;
+  onChange: (color: string | null) => void;
+}) {
+  const [draft, setDraft] = useState(props.value ?? DEFAULT_VOLUME_COLOR);
+  useEffect(() => {
+    setDraft(props.value ?? DEFAULT_VOLUME_COLOR);
+  }, [props.value]);
+  return (
+    <Popover position="bottom-end" withinPortal shadow="md">
+      <Popover.Target>
+        <ColorSwatch
+          component="button"
+          color={props.value ?? DEFAULT_VOLUME_COLOR}
+          size={16}
+          aria-label="Volume color"
+          style={{ cursor: "pointer", flexShrink: 0 }}
+          onClick={(event) => event.stopPropagation()}
+        />
+      </Popover.Target>
+      <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
+        <Stack gap="xs">
+          <ColorPicker
+            format="hex"
+            size="xs"
+            value={draft}
+            onChange={setDraft}
+            onChangeEnd={(color) => props.onChange(color)}
+            swatches={VOLUME_COLOR_SWATCHES}
+          />
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={() => props.onChange(null)}
+          >
+            Default color
+          </Button>
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
 export function useSpatialWorkspaceView(
   props: SpatialWorkspaceViewProps
 ): WorkspaceViewContribution {
@@ -196,6 +258,24 @@ export function useSpatialWorkspaceView(
       });
     },
     [onCommand, region, selectedVolume]
+  );
+
+  // Plan 069.8 QoL — set any volume's authoring tint by id (not just the
+  // selected one), so the color swatch works straight from the list row.
+  const setVolumeColor = useCallback(
+    (volumeId: string, color: string | null) => {
+      if (!region) return;
+      onCommand({
+        kind: "UpdateRegionVolume",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "region-volume", subjectId: volumeId },
+        payload: { volumeId, patch: { color } }
+      });
+    },
+    [onCommand, region]
   );
 
   const createVolume = useCallback(() => {
@@ -312,6 +392,10 @@ export function useSpatialWorkspaceView(
                       </Text>
                     </Stack>
                   </UnstyledButton>
+                  <VolumeColorControl
+                    value={volume.color}
+                    onChange={(color) => setVolumeColor(volume.volumeId, color)}
+                  />
                   <ActionIcon
                     variant="subtle"
                     size="sm"

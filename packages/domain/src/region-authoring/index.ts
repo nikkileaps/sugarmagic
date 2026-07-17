@@ -276,6 +276,10 @@ export interface RegionVolumeDefinition {
   trigger: RegionVolumeTriggerConfig | null;
   /** `non-walkable` / cost role: extra nav path cost. */
   navCost: number | null;
+  /** Plan 069.8 QoL — authoring-only viewport tint (hex, e.g. "#f38ba8") so
+   *  authors can tell volumes apart in the Spatial overlay. `null` = the
+   *  default blue. The runtime ignores it. */
+  color: string | null;
 }
 
 export interface RegionNPCBehaviorTask {
@@ -497,7 +501,8 @@ export function createRegionVolumeDefinition(
     blockDirection: overrides.blockDirection ?? null,
     condition: overrides.condition ?? null,
     trigger: overrides.trigger ?? null,
-    navCost: overrides.navCost ?? null
+    navCost: overrides.navCost ?? null,
+    color: overrides.color ?? null
   };
 }
 

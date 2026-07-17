@@ -10,10 +10,22 @@ import {
 } from "../../interaction";
 
 /** Plan 069.7 — the workspace draws any bounded thing (unified Volumes),
- *  not just areas: it only needs an id (for selection/hit-test) + bounds. */
+ *  not just areas: it only needs an id (for selection/hit-test) + bounds.
+ *  Plan 069.8 QoL — an optional authoring tint (hex) to tell volumes apart. */
 export interface SpatialRect {
   id: string;
   bounds: RegionAreaBounds;
+  color?: string | null;
+}
+
+const DEFAULT_RECT_COLOR = 0x74c7ec;
+const SELECTED_RECT_COLOR = 0x89b4fa;
+
+function resolveRectColor(rect: SpatialRect): number {
+  if (rect.color && /^#[0-9a-fA-F]{6}$/.test(rect.color)) {
+    return parseInt(rect.color.slice(1), 16);
+  }
+  return DEFAULT_RECT_COLOR;
 }
 
 export interface SpatialWorkspaceConfig {
@@ -117,17 +129,21 @@ function disposeObject(root: THREE.Object3D) {
 function buildAreaVisual(rect: SpatialRect, isSelected: boolean): THREE.Group {
   const width = rect.bounds.size[0];
   const depth = rect.bounds.size[2];
-  const color = isSelected ? 0x89b4fa : 0x74c7ec;
-  const fillOpacity = isSelected ? 0.22 : 0.12;
+  // Plan 069.8 QoL — the fill keeps the volume's authoring tint (or the
+  // default blue); selection reads via a heavier fill + the accent-blue
+  // outline, so it stays visible on top of any custom color.
+  const baseColor = resolveRectColor(rect);
+  const outlineColor = isSelected ? SELECTED_RECT_COLOR : baseColor;
+  const fillOpacity = isSelected ? 0.28 : 0.14;
   const root = new THREE.Group();
   root.name = rect.id;
   root.position.set(rect.bounds.center[0], 0, rect.bounds.center[2]);
 
-  const fill = createAreaFill(width, depth, color, fillOpacity);
+  const fill = createAreaFill(width, depth, baseColor, fillOpacity);
   fill.position.y = AREA_FILL_Y;
   root.add(fill);
 
-  const outline = createAreaOutline(width, depth, color);
+  const outline = createAreaOutline(width, depth, outlineColor);
   outline.position.y = AREA_OUTLINE_Y;
   root.add(outline);
 

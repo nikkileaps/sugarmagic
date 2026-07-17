@@ -143,7 +143,8 @@ describe("unified Volume migration — invisibility", () => {
       blockDirection: "both",
       condition: null,
       trigger: null,
-      navCost: null
+      navCost: null,
+      color: null
     };
     const region = legacyRegion();
     region.volumes = [...AREAS.map((a) => ({
@@ -158,7 +159,8 @@ describe("unified Volume migration — invisibility", () => {
       blockDirection: null,
       condition: null,
       trigger: null,
-      navCost: null
+      navCost: null,
+      color: null
     })), blocker];
     // Legacy areas/ambience present too, but volumes is canonical.
     const normalized = normalize(region);
