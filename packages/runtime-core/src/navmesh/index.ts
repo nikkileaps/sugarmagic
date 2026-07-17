@@ -1,0 +1,193 @@
+/**
+ * NavMesh bake + artifact round-trip (Plan 069.8).
+ *
+ * The SINGLE navmesh enforcer: the studio bakes from the collision world's
+ * geometry (this module, exported bytes -> asset-source store), and the
+ * runtime imports the same bytes here for pathfinding (069.9). Built on
+ * `recast-navigation` (solo navmesh; tiled/TileCache is a future gate).
+ *
+ * Flat-ground scope (epic 069): the walkable surface is the ground plane
+ * inside the `nav-bounds` volumes; collider boxes + `non-walkable` volumes
+ * are obstacle boxes that carve the ground (recast rasterizes them and
+ * erodes the walkable area by the agent radius). Recast consumes triangle
+ * SOUP (flat positions + indices), so every box becomes its 12 triangles
+ * and each nav-bounds volume contributes a ground quad.
+ */
+
+import { exportNavMesh, importNavMesh, init, type NavMesh } from "@recast-navigation/core";
+import { generateSoloNavMesh } from "@recast-navigation/generators";
+import type { RegionAreaBounds } from "@sugarmagic/domain";
+import type { WorldColliderAabb } from "../collision";
+
+let recastReady: Promise<void> | null = null;
+
+/** Initialize the recast WASM once (idempotent); every bake/load awaits it. */
+export function ensureRecastInit(): Promise<void> {
+  if (!recastReady) {
+    recastReady = init();
+  }
+  return recastReady;
+}
+
+export interface NavMeshBakeInput {
+  /** Static world colliders (props + blocker volumes) — obstacle boxes. */
+  colliders: readonly WorldColliderAabb[];
+  /** `nav-bounds` volume footprints — where the ground is walkable. */
+  navBounds: readonly RegionAreaBounds[];
+  /** `non-walkable` volume footprints — carve-outs (obstacle boxes). */
+  nonWalkable: readonly RegionAreaBounds[];
+  /** Agent radius (world units) — recast erodes the walkable area by it. */
+  agentRadius: number;
+  /** Ground plane height (flat-ground scope; defaults to 0). */
+  groundY?: number;
+  /** Voxel cell size (world units); smaller = finer + slower. */
+  cellSize?: number;
+  /** Obstacle box height above the ground (must exceed agent height so
+   *  recast treats footprints as walls, not step-overs). */
+  obstacleHeight?: number;
+}
+
+const DEFAULT_CELL_SIZE = 0.3;
+const DEFAULT_OBSTACLE_HEIGHT = 3;
+
+interface TriangleSoup {
+  positions: number[];
+  indices: number[];
+  boundsMin: [number, number, number];
+  boundsMax: [number, number, number];
+}
+
+/** Up-facing quad (normal +Y so recast marks it walkable). */
+function addGroundQuad(
+  soup: TriangleSoup,
+  bounds: RegionAreaBounds,
+  y: number
+): void {
+  const [cx, , cz] = bounds.center;
+  const [sx, , sz] = bounds.size;
+  const x0 = cx - Math.abs(sx) / 2;
+  const x1 = cx + Math.abs(sx) / 2;
+  const z0 = cz - Math.abs(sz) / 2;
+  const z1 = cz + Math.abs(sz) / 2;
+  const b = soup.positions.length / 3;
+  // A(x0,z0) B(x1,z0) C(x1,z1) D(x0,z1)
+  soup.positions.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
+  // Winding (A,D,C)+(A,C,B) => +Y normal.
+  soup.indices.push(b, b + 3, b + 2, b, b + 2, b + 1);
+}
+
+/** All 12 triangles of an axis-aligned box (obstacle geometry). */
+function addBox(
+  soup: TriangleSoup,
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+  minZ: number,
+  maxZ: number
+): void {
+  const b = soup.positions.length / 3;
+  soup.positions.push(
+    minX, minY, minZ, // 0
+    maxX, minY, minZ, // 1
+    maxX, minY, maxZ, // 2
+    minX, minY, maxZ, // 3
+    minX, maxY, minZ, // 4
+    maxX, maxY, minZ, // 5
+    maxX, maxY, maxZ, // 6
+    minX, maxY, maxZ // 7
+  );
+  const q = (a: number, c: number, d: number, e: number) => {
+    soup.indices.push(b + a, b + c, b + d, b + a, b + d, b + e);
+  };
+  q(4, 5, 6, 7); // top (+Y)
+  q(0, 3, 2, 1); // bottom (-Y)
+  q(0, 1, 5, 4); // -Z
+  q(2, 3, 7, 6); // +Z
+  q(1, 2, 6, 5); // +X
+  q(3, 0, 4, 7); // -X
+}
+
+function buildTriangleSoup(input: NavMeshBakeInput): TriangleSoup | null {
+  const groundY = input.groundY ?? 0;
+  const obstacleTop = groundY + (input.obstacleHeight ?? DEFAULT_OBSTACLE_HEIGHT);
+  const soup: TriangleSoup = {
+    positions: [],
+    indices: [],
+    boundsMin: [Infinity, Infinity, Infinity],
+    boundsMax: [-Infinity, -Infinity, -Infinity]
+  };
+
+  if (input.navBounds.length === 0) {
+    return null; // nothing to walk on
+  }
+  for (const bounds of input.navBounds) {
+    addGroundQuad(soup, bounds, groundY);
+  }
+  for (const c of input.colliders) {
+    addBox(soup, c.minX, c.maxX, groundY, obstacleTop, c.minZ, c.maxZ);
+  }
+  for (const nw of input.nonWalkable) {
+    const [cx, , cz] = nw.center;
+    const [sx, , sz] = nw.size;
+    addBox(
+      soup,
+      cx - Math.abs(sx) / 2,
+      cx + Math.abs(sx) / 2,
+      groundY,
+      obstacleTop,
+      cz - Math.abs(sz) / 2,
+      cz + Math.abs(sz) / 2
+    );
+  }
+
+  for (let i = 0; i < soup.positions.length; i += 3) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const v = soup.positions[i + axis]!;
+      if (v < soup.boundsMin[axis]) soup.boundsMin[axis] = v;
+      if (v > soup.boundsMax[axis]) soup.boundsMax[axis] = v;
+    }
+  }
+  return soup;
+}
+
+/**
+ * Bake a solo navmesh from the collision geometry and return the exported
+ * bytes (the artifact the studio publishes / the runtime imports). Returns
+ * `null` when there is nothing walkable or recast fails (logged).
+ */
+export async function bakeNavMesh(
+  input: NavMeshBakeInput
+): Promise<Uint8Array | null> {
+  await ensureRecastInit();
+  const soup = buildTriangleSoup(input);
+  if (!soup || soup.indices.length === 0) {
+    return null;
+  }
+  const cs = input.cellSize ?? DEFAULT_CELL_SIZE;
+  const ch = cs / 2;
+  // recast walkableRadius/Height are in VOXELS, not world units.
+  const walkableRadius = Math.max(1, Math.ceil(input.agentRadius / cs));
+  const result = generateSoloNavMesh(soup.positions, soup.indices, {
+    cs,
+    ch,
+    walkableRadius,
+    walkableHeight: Math.max(1, Math.ceil(2 / ch)),
+    walkableClimb: Math.max(0, Math.floor(0.3 / ch)),
+    walkableSlopeAngle: 45,
+    bounds: [soup.boundsMin, soup.boundsMax]
+  });
+  if (!result.success) {
+    console.warn("[navmesh] bake failed", result.error);
+    return null;
+  }
+  const bytes = exportNavMesh(result.navMesh);
+  result.navMesh.destroy();
+  return bytes;
+}
+
+/** Import a baked navmesh artifact for runtime queries (069.9). */
+export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
+  await ensureRecastInit();
+  return importNavMesh(bytes).navMesh;
+}

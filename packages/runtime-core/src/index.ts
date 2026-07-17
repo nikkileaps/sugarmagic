@@ -31,6 +31,7 @@ export * from "./game-state";
 export * from "./save";
 export * from "./scene";
 export * from "./collision";
+export * from "./navmesh";
 export * from "./region-conditions";
 export * from "./state";
 export * from "./spatial";
