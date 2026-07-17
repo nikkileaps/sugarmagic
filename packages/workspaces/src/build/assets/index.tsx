@@ -146,11 +146,6 @@ export function AssetDefinitionInspector({
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
           Collision
         </Text>
-        <Text size="xs" c="var(--sm-color-overlay0)">
-          The collider every placed / scattered instance of this asset
-          inherits. Set foliage and decor to <b>None</b> so it never blocks;
-          override a single instance in the Layout inspector for exceptions.
-        </Text>
         <Select
           size="xs"
           data={COLLIDER_SHAPE_OPTIONS}
