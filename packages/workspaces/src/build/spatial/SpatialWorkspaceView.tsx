@@ -40,6 +40,7 @@ import {
   Inspector,
   PanelSection,
   ViewportToolbar,
+  ViewportViewToggleBar,
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
 import type { ViewportStore } from "@sugarmagic/shell";
@@ -659,6 +660,8 @@ export function useSpatialWorkspaceView(
           onSelect={(id) =>
             viewportStore.getState().setActiveSpatialTool(id as SpatialTool)
           }
+        />
+        <ViewportViewToggleBar
           toggles={[
             {
               id: "show-colliders",

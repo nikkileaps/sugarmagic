@@ -20,7 +20,7 @@
  */
 
 import type { ReactNode } from "react";
-import { ActionIcon, Box, Group, Slider, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Group, Slider, Stack, Text, Tooltip } from "@mantine/core";
 
 /** Shared chrome offsets — rail sits below the options bar. */
 export const TOOL_OPTIONS_BAR_INSET = 10;
@@ -42,27 +42,14 @@ export interface ToolRailItem {
   color?: string;
 }
 
-/** An independent on/off switch rendered below the radio tools. */
-export interface ToolRailToggle {
-  id: string;
-  icon: ReactNode;
-  label: string;
-  active: boolean;
-  color?: string;
-  onToggle: () => void;
-}
-
 export interface ToolRailProps {
   tools: ToolRailItem[];
   activeToolId: string;
   onSelect: (toolId: string) => void;
-  /** Independent toggles (e.g. "show colliders") after a divider. */
-  toggles?: ToolRailToggle[];
 }
 
-/** Vertical, icon-only tool column: mutually exclusive tools, then any
- *  independent toggles below a divider. */
-export function ToolRail({ tools, activeToolId, onSelect, toggles }: ToolRailProps) {
+/** Vertical, icon-only, mutually exclusive tool column. */
+export function ToolRail({ tools, activeToolId, onSelect }: ToolRailProps) {
   return (
     <Stack
       gap={4}
@@ -83,28 +70,6 @@ export function ToolRail({ tools, activeToolId, onSelect, toggles }: ToolRailPro
             aria-label={tool.label}
           >
             {tool.icon}
-          </ActionIcon>
-        </Tooltip>
-      ))}
-      {toggles && toggles.length > 0 ? (
-        <Box
-          style={{
-            height: 1,
-            alignSelf: "stretch",
-            margin: "2px 4px",
-            background: "var(--sm-panel-border)"
-          }}
-        />
-      ) : null}
-      {(toggles ?? []).map((toggle) => (
-        <Tooltip key={toggle.id} label={toggle.label} position="right">
-          <ActionIcon
-            variant={toggle.active ? "filled" : "subtle"}
-            color={toggle.active ? (toggle.color ?? "blue") : "gray"}
-            onClick={toggle.onToggle}
-            aria-label={toggle.label}
-          >
-            {toggle.icon}
           </ActionIcon>
         </Tooltip>
       ))}

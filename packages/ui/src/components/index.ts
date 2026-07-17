@@ -80,5 +80,10 @@ export {
   type ViewportToolbarItem,
   type ViewportToolbarProps
 } from "./ViewportToolbar";
+export {
+  ViewportViewToggleBar,
+  type ViewportViewToggle,
+  type ViewportViewToggleBarProps
+} from "./ViewportViewToggleBar";
 export { WorkspaceHeader, type WorkspaceHeaderProps } from "./WorkspaceHeader";
 export * from "./WizardDialog";

@@ -62,6 +62,7 @@ import {
   ToolOptionSlider,
   ToolOptionsBar,
   ToolRail,
+  ViewportViewToggleBar,
   type SceneExplorerNode,
   type ToolRailItem
 } from "@sugarmagic/ui";
@@ -2011,16 +2012,6 @@ export function useLayoutWorkspaceView(
               const tool = id as TransformTool;
               viewportStore.getState().setActiveTransformTool(tool);
             }}
-            toggles={[
-              {
-                id: "show-colliders",
-                icon: "▨",
-                label: `${showColliders ? "Hide" : "Show"} colliders`,
-                active: showColliders,
-                onToggle: () =>
-                  viewportStore.getState().setShowColliders(!showColliders)
-              }
-            ]}
           />
         </Box>
         {maskPaintTarget ? (
@@ -2328,6 +2319,18 @@ export function useLayoutWorkspaceView(
             </ToolOptionsBar>
           </Box>
         ) : null}
+        <ViewportViewToggleBar
+          toggles={[
+            {
+              id: "show-colliders",
+              icon: "▨",
+              label: `${showColliders ? "Hide" : "Show"} colliders`,
+              active: showColliders,
+              onToggle: () =>
+                viewportStore.getState().setShowColliders(!showColliders)
+            }
+          ]}
+        />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
         {contextMenu && (
           <Box
