@@ -55,6 +55,27 @@ export function coerceWorldFlagValue(
 }
 
 /**
+ * The value to WRITE when SETTING a world flag (Plan 069.5 trigger action).
+ * Unlike `coerceWorldFlagValue` (a read-side coercion that returns `undefined`
+ * for a valueless number/string), this always yields a value of the declared
+ * type — so a number flag never gets stored as boolean `true`. A valueless
+ * declaration falls back to the type's zero (`0` / `""` / `true`).
+ */
+export function resolveWorldFlagWriteValue(
+  condition: RegionBehaviorWorldFlagCondition
+): string | number | boolean {
+  const coerced = coerceWorldFlagValue(condition);
+  if (coerced !== undefined) {
+    return coerced;
+  }
+  return condition.valueType === "number"
+    ? 0
+    : condition.valueType === "string"
+      ? ""
+      : true;
+}
+
+/**
  * True when every populated clause of the binding is satisfied. An
  * all-null binding is vacuously satisfied (the behavior system's "default
  * task" fallback relies on this). Missing quest / flag predicate => the

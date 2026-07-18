@@ -248,6 +248,27 @@ function distance2d(
   return Math.sqrt(dx * dx + dz * dz);
 }
 
+/** Perpendicular XZ distance from `p` to the segment `a`->`b` (Plan 069.9
+ *  drift detection). Heading toward a FAR waypoint is normal; being far off
+ *  the path LINE (e.g. shoved by another agent) is drift. */
+function distanceToSegment2d(
+  p: { x: number; z: number },
+  a: { x: number; z: number },
+  b: { x: number; z: number }
+): number {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const lenSq = abx * abx + abz * abz;
+  if (lenSq === 0) {
+    return distance2d(p, a);
+  }
+  const t = Math.max(
+    0,
+    Math.min(1, ((p.x - a.x) * abx + (p.z - a.z) * abz) / lenSq)
+  );
+  return distance2d(p, { x: a.x + t * abx, z: a.z + t * abz });
+}
+
 function createInitialMovementState(
   position: { x: number; z: number },
   nowMs: number
@@ -402,10 +423,18 @@ export function createRuntimeNpcBehaviorSystem(
       !!path &&
       distance2d({ x: path.targetX, z: path.targetZ }, finalTarget) >
         REPATH_TARGET_MOVE_METERS;
-    const currentWaypoint = path?.waypoints[path.index] ?? null;
+    // Drift = shoved off the path LINE, not merely far from a distant next
+    // corner (that's normal). Measure perpendicular distance from the segment
+    // the NPC is currently traversing (prev corner -> current corner).
+    const currentWaypoint = path ? path.waypoints[path.index] ?? null : null;
+    const prevWaypoint = path
+      ? path.waypoints[Math.max(0, path.index - 1)] ?? null
+      : null;
     const drifted =
       !!currentWaypoint &&
-      distance2d(position, currentWaypoint) > REPATH_DRIFT_METERS;
+      !!prevWaypoint &&
+      distanceToSegment2d(position, prevWaypoint, currentWaypoint) >
+        REPATH_DRIFT_METERS;
     const exhausted = !!path && path.index >= path.waypoints.length;
 
     if (!path || targetMoved || drifted || exhausted) {
@@ -479,11 +508,14 @@ export function createRuntimeNpcBehaviorSystem(
       otherAgentCircles.push({
         x: agent.x,
         z: agent.z,
-        radius: agent.radius
+        radius: agent.radius,
+        id: agent.id
       });
     }
     const resolved = resolveMove(
-      { x: position.x, z: position.z, radius: selfRadius },
+      // `id` = presenceId so an exact-coincidence tie ejects deterministically
+      // opposite the other agent (069.9 mini-review fix).
+      { x: position.x, z: position.z, radius: selfRadius, id: presenceId },
       { x: proposedX - position.x, z: proposedZ - position.z },
       context.world,
       otherAgentCircles

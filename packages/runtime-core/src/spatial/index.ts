@@ -1,5 +1,6 @@
 import {
   resolveRegionVolumes,
+  volumeToRegionArea,
   type RegionAreaBounds,
   type RegionAreaDefinition,
   type RegionDocument,
@@ -52,7 +53,18 @@ export function buildAreaIndex(region: RegionDocument): Map<string, RegionAreaDe
     return cached;
   }
 
-  const index = new Map(region.areas.map((area) => [area.areaId, area]));
+  // Plan 069.4 — source from the CANONICAL `label`-role volumes, not the
+  // `@deprecated region.areas` alias, so this has zero live readers of the
+  // alias and can't drift if a future write path forgets to re-derive it.
+  // (`volumeToRegionArea` is exactly what derives the alias, so results are
+  // identical to the old `region.areas`.)
+  const index = new Map<string, RegionAreaDefinition>();
+  for (const volume of resolveRegionVolumes(region)) {
+    const area = volumeToRegionArea(volume);
+    if (area) {
+      index.set(area.areaId, area);
+    }
+  }
   regionAreaIndexCache.set(region, index);
   return index;
 }
@@ -101,7 +113,9 @@ export function resolveRegionAreaAtPosition(
   region: RegionDocument,
   position: { x: number; y: number; z: number }
 ): RegionAreaDefinition | null {
-  const containingAreas = region.areas.filter((area) =>
+  // Plan 069.4 — canonical label volumes (via `buildAreaIndex`), not the
+  // `@deprecated region.areas` alias.
+  const containingAreas = [...buildAreaIndex(region).values()].filter((area) =>
     containsPoint(area.bounds, position.x, position.y, position.z)
   );
   if (containingAreas.length === 0) {

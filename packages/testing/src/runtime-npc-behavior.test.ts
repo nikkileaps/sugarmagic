@@ -529,3 +529,89 @@ describe("runtime NPC behavior system", () => {
     expect(Math.abs(position!.z)).toBeLessThan(1);
   });
 });
+
+describe("069.9 — path-following state machine across frames", () => {
+  /** A spy-able fake mesh: a detour that always ENDS at the requested target,
+   *  so the follower advances corners then arrives at the final point. */
+  function detourPathfinder(): { pf: NavMeshPathfinder; calls: () => number } {
+    let calls = 0;
+    const pf: NavMeshPathfinder = {
+      findPath: (from, to) => {
+        calls += 1;
+        return [
+          { x: from.x, y: 0, z: from.z },
+          { x: from.x, y: 0, z: from.z + 5 }, // a corner to advance past
+          { x: to.x, y: 0, z: to.z }
+        ];
+      },
+      destroy: () => {}
+    };
+    return { pf, calls: () => calls };
+  }
+
+  function makeSystem(pf: NavMeshPathfinder) {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      getPathfinder: () => pf,
+      npcEntities: [
+        { presenceId: "p:rick", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+    return { system, world, blackboard, entity };
+  }
+
+  const arrival = {
+    questDefinitionId: "quest:find-suitcase",
+    stageId: "stage:arrival"
+  };
+
+  it("advances corners across ticks and arrives at the final target", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, blackboard } = makeSystem(pf);
+    for (let i = 0; i < 30; i += 1) {
+      system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    }
+    // Reached the authored area via the mesh, and the route was computed ONCE
+    // (followed, not re-pathed every frame).
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe(
+      "at_target"
+    );
+    expect(calls()).toBe(1);
+  });
+
+  it("re-paths when collision shoves the NPC off its route (drift)", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, world, entity } = makeSystem(pf);
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    expect(calls()).toBe(1);
+    // Teleport far off the current waypoint (> REPATH_DRIFT_METERS).
+    const pos = world.getComponent(entity, Position)!;
+    pos.z = 60;
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    expect(calls()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("re-paths when the task target moves (arrival stage -> search stage)", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, blackboard } = makeSystem(pf);
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival }); // -> dock
+    expect(calls()).toBe(1);
+    // stage:search activates task:shop -> target area changes to "shop".
+    system.sync({
+      deltaSeconds: 0.1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:search" }
+    });
+    expect(calls()).toBeGreaterThanOrEqual(2);
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.targetAreaId).toBe(
+      "shop"
+    );
+  });
+});

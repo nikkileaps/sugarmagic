@@ -204,4 +204,26 @@ describe("resolveMove with circle obstacles (agent-vs-agent, 069.3)", () => {
     // Separated: at least the combined radius away (touching, not overlapping).
     expect(Math.hypot(fx, fz)).toBeGreaterThanOrEqual(1.0 - 1e-6);
   });
+
+  it("ejects two coincident AGENTS in opposite directions (id tiebreak)", () => {
+    // Both resolve against the other's frame-start (still coincident) position.
+    // Without the id tiebreak both pick +X and drift together forever; with it
+    // the lower id goes -X and the higher +X, so they actually separate.
+    const world = createEmptyCollisionWorld();
+    const a = resolveMove(
+      { x: 0, z: 0, radius: 0.5, id: "a" },
+      { x: 0, z: 0 },
+      world,
+      [{ x: 0, z: 0, radius: 0.5, id: "b" }]
+    );
+    const b = resolveMove(
+      { x: 0, z: 0, radius: 0.5, id: "b" },
+      { x: 0, z: 0 },
+      world,
+      [{ x: 0, z: 0, radius: 0.5, id: "a" }]
+    );
+    expect(a.x).toBeLessThan(0); // "a" < "b" -> ejects -X
+    expect(b.x).toBeGreaterThan(0); // "b" -> ejects +X
+    expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual(2.0 - 1e-6); // separated
+  });
 });

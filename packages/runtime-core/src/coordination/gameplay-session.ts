@@ -101,7 +101,7 @@ import {
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
-import { coerceWorldFlagValue } from "../region-conditions";
+import { resolveWorldFlagWriteValue } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -607,7 +607,7 @@ export function createRuntimeGameplaySessionController(
     }
     const flag = trigger.action.setWorldFlag;
     if (flag?.key) {
-      questManager.setFlag(flag.key, coerceWorldFlagValue(flag) ?? true);
+      questManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
     }
   }
 

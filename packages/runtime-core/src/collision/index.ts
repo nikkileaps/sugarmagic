@@ -80,6 +80,9 @@ export interface CircleBody {
   x: number;
   z: number;
   radius: number;
+  /** Agent id (069.9) — breaks the tie when two agents are EXACTLY coincident
+   *  so they eject in opposite directions instead of drifting together. */
+  id?: string;
 }
 
 /** A dynamic circle obstacle (Plan 069.3) — another agent (NPC/player)
@@ -88,6 +91,7 @@ export interface CircleObstacle {
   x: number;
   z: number;
   radius: number;
+  id?: string;
 }
 
 export interface Vec2 {
@@ -344,8 +348,12 @@ export function resolveMove(
         x += dx * push;
         z += dz * push;
       } else {
-        // Exactly coincident: eject along +X so two agents separate.
-        x += combined;
+        // Exactly coincident (distSq ~ 0): eject along X, but pick the
+        // direction from the id order so the OTHER agent (resolving against
+        // this one's frame-start position) ejects the opposite way — else
+        // both pick +X and drift together forever. No ids => +X.
+        const dir = from.id && o.id && from.id < o.id ? -1 : 1;
+        x += dir * combined;
       }
       resolvedAny = true;
     }

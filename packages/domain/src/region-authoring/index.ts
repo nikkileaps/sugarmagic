@@ -340,9 +340,13 @@ export interface RegionNPCBehaviorDefinition {
  */
 /**
  * Plan 069.8 — a baked navmesh artifact reference on the region. The binary
- * lives in the asset-source store at `assetPath`; the doc only points at it
- * (kept out of the save payload — it's derived content, rebakeable). Staleness
- * is `inputHash` vs a freshly-derived hash of the collider + nav-volume inputs.
+ * lives at `assetPath` (an `assets/…` file); the doc only points at it. It is
+ * NOT a player-save (`GameSavePayload`) slice — it's derived, rebakeable
+ * content — but it DOES persist in the authored region document, and
+ * `collectFileBackedAssetPaths` deliberately includes `assetPath` so deploy
+ * ships the `.bin` and reload restores this pointer (fix 7cc3005). Do NOT strip
+ * it on save. Staleness is `inputHash` vs a freshly-derived hash of the
+ * collider + nav-volume inputs.
  */
 export interface RegionNavMeshArtifact {
   assetPath: string;
@@ -376,10 +380,10 @@ export interface RegionDocument {
   audio?: RegionAudioState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
-  /** Plan 069.8 — the baked navmesh artifact reference (NOT a
-   *  SaveParticipant). Null/absent = not baked. `inputHash` drives the
-   *  staleness warning: re-derive it from current colliders/nav-volumes and
-   *  compare. */
+  /** Plan 069.8 — the baked navmesh artifact reference. NOT a player-save
+   *  (`GameSavePayload`) slice, but it DOES persist in this region document
+   *  (so deploy/reload restore it — see `RegionNavMeshArtifact`). Null/absent
+   *  = not baked. `inputHash` drives the staleness warning. */
   navMesh?: RegionNavMeshArtifact | null;
   /**
    * Plan 065 §065.1 — Layout Sketch: authoring-only blockout ink
