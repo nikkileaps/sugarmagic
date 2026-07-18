@@ -560,6 +560,11 @@ export function useSpatialWorkspaceView(
                     })
                   }
                 />
+                {/* Flag assignment fires only on the on-enter edge; "always"
+                    is the continuous ambient bed and runs no actions — hide
+                    the fields so an inert flag can't be authored. */}
+                {(selectedVolume.trigger?.timing ?? "on-enter") ===
+                  "on-enter" && (
                 <Group grow>
                   <TextInput
                     label="Set Flag Key"
@@ -619,6 +624,7 @@ export function useSpatialWorkspaceView(
                     }
                   />
                 </Group>
+                )}
               </Stack>
             )}
 
@@ -632,7 +638,15 @@ export function useSpatialWorkspaceView(
                   label="Direction"
                   size="xs"
                   data={BLOCK_DIRECTION_OPTIONS}
-                  value={selectedVolume.blockDirection ?? "both"}
+                  // Display fallback MUST match the runtime default for a
+                  // null blockDirection (collision addVolumeColliders):
+                  // containment retains ("out"), blocker repels ("in").
+                  value={
+                    selectedVolume.blockDirection ??
+                    (selectedVolume.roles.includes("containment-boundary")
+                      ? "out"
+                      : "in")
+                  }
                   onChange={(value) =>
                     value &&
                     updateVolume({

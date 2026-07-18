@@ -194,6 +194,12 @@ export function buildCollisionWorld(
   const world = createEmptyCollisionWorld();
   for (const object of sceneObjects) {
     const collider = object.collider;
+    // DEFERRED SEAM (069.10): shape is binary here — "none" vs solid. The
+    // bounded variants (sphere/capsule/convex) are authorable but ALL
+    // collide as this enclosing XZ AABB for now. Revisit trigger: an author
+    // reports a round/organic prop whose square footprint blocks visibly
+    // wrong (e.g. sliding around a tree trunk feels boxy) — then implement
+    // circle-vs-sphere here (cheap) before capsule/convex.
     if (!collider || collider.shape === "none" || !collider.localBounds) {
       continue;
     }

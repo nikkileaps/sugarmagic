@@ -20,7 +20,8 @@ import {
   coerceWorldFlagValue,
   createSpatialAreaTracker,
   evaluateRegionQuestBinding,
-  resolveMove
+  resolveMove,
+  resolveWorldFlagWriteValue
 } from "@sugarmagic/runtime-core";
 
 // A 4x4 box centered at the origin: interior x,z in [-2, 2].
@@ -234,6 +235,22 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       coerceWorldFlagValue({ key: "k", valueType: "number", value: "3" })
     ).toBe(3);
   });
+
+  it("write value is always the declared type (never boolean into a number slot)", () => {
+    expect(
+      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: "7" })
+    ).toBe(7);
+    // Valueless declarations fall back to the TYPE's zero, not `true`.
+    expect(
+      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: null })
+    ).toBe(0);
+    expect(
+      resolveWorldFlagWriteValue({ key: "k", valueType: "string", value: null })
+    ).toBe("");
+    expect(
+      resolveWorldFlagWriteValue({ key: "k", valueType: "boolean", value: null })
+    ).toBe(true);
+  });
 });
 
 function regionWithVolumes(
@@ -300,6 +317,23 @@ describe("069.5 — on-enter trigger tracker (extends the area tracker)", () => 
       "trig:bell",
       "trig:echo"
     ]);
+  });
+
+  it("does NOT fire when the entity SPAWNS inside a trigger (prime-on-first-resolve)", () => {
+    // Regression (mini-review r2 #2): the first resolve primes the inside-set
+    // without emitting edges — a spawn inside an on-enter trigger must not
+    // play the cue / set the flag on load. Only a genuine crossing fires.
+    const tracker = createSpatialAreaTracker(regionWithVolumes([trigger]));
+    const first = tracker.resolve("player", { x: 10, y: 0, z: 0 }); // spawn INSIDE
+    expect(first.triggersEntered).toHaveLength(0);
+    expect(first.triggersExited).toHaveLength(0);
+    // Walking out then back in fires normally (primed, not suppressed).
+    expect(
+      tracker.resolve("player", { x: 0, y: 0, z: 0 }).triggersExited
+    ).toHaveLength(1);
+    expect(
+      tracker.resolve("player", { x: 10, y: 0, z: 0 }).triggersEntered
+    ).toHaveLength(1);
   });
 
   it("ignores 'always' triggers (those are the continuous ambient bed)", () => {

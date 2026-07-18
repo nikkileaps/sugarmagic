@@ -425,11 +425,13 @@ export function createRuntimeNpcBehaviorSystem(
         REPATH_TARGET_MOVE_METERS;
     // Drift = shoved off the path LINE, not merely far from a distant next
     // corner (that's normal). Measure perpendicular distance from the segment
-    // the NPC is currently traversing (prev corner -> current corner).
+    // the NPC is currently traversing (prev corner -> current corner). At
+    // index 0 there is no traversed segment yet (heading to the snapped
+    // start) -- skip the check, else an off-mesh NPC whose snap point is
+    // beyond the threshold would re-path (WASM findPath) EVERY frame.
     const currentWaypoint = path ? path.waypoints[path.index] ?? null : null;
-    const prevWaypoint = path
-      ? path.waypoints[Math.max(0, path.index - 1)] ?? null
-      : null;
+    const prevWaypoint =
+      path && path.index >= 1 ? path.waypoints[path.index - 1] ?? null : null;
     const drifted =
       !!currentWaypoint &&
       !!prevWaypoint &&

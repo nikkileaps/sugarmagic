@@ -86,9 +86,18 @@ Conditional containment gates re-evaluate per frame:
   clip. `Crowd` was deliberately not used (single movement authority — see the
   069 plan's q9 decision).
 
+Note: the bake composes ONE Scene's overlay (the studio's active Scene at bake
+time; recorded as `sceneId` on the artifact), but the artifact is
+region-global — a runtime playing a different Scene paths against the baked
+Scene's obstacle set. Rebake per Scene as needed; per-Scene artifacts are a
+deferred seam.
+
 ## Deferred seams
 
 Commented in-code with revisit triggers (grep `DEFERRED SEAM`): vertical/terrain
-(`collision/`), CCD for fast movers (`collision/`), tiled bake + `TileCache`
-dynamic obstacles + `Crowd` (`navmesh/`), camera collision (`camera/`). Backlog
-tasks track each.
+(`collision/`), CCD for fast movers (`collision/`), bounded collider shapes
+(sphere/capsule/convex currently collide as their AABB — `collision/`
+`buildCollisionWorld`), Scene-composed bake vs region-global artifact
+(`navmesh/` `buildRegionNavMeshInput`), tiled bake + `TileCache` dynamic
+obstacles + `Crowd` (`navmesh/`), camera collision (`camera/`). Backlog tasks
+track each.

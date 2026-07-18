@@ -11,8 +11,10 @@ import { describe, expect, it } from "vitest";
 import {
   createDefaultRegionLandscapeState,
   createDefaultScene,
+  createEmptyContentLibrarySnapshot,
   createPlacedAssetInstance,
   executeCommand,
+  normalizeRegionDocumentForLoad,
   resolveEffectiveInstanceCollider,
   type AssetCollider,
   type RegionDocument,
@@ -134,6 +136,33 @@ describe("SetPlacedAssetColliderOverride — scope routing", () => {
     expect(
       overlay?.assetAppearanceOverrides["inst:rock"]?.colliderOverride?.shape
     ).toBe("none");
+  });
+
+  it("load drops an invalid-shape override and keeps a valid one", () => {
+    const { region } = fixture();
+    const library = createEmptyContentLibrarySnapshot("test");
+    const corrupt = {
+      ...region,
+      placedAssets: region.placedAssets.map((asset) => ({
+        ...asset,
+        colliderOverride: {
+          shape: "garbage" as never,
+          localBounds: null
+        }
+      }))
+    };
+    const normalized = normalizeRegionDocumentForLoad(corrupt, library);
+    expect(normalized.placedAssets[0]?.colliderOverride).toBeUndefined();
+
+    const valid = {
+      ...region,
+      placedAssets: region.placedAssets.map((asset) => ({
+        ...asset,
+        colliderOverride: { shape: "none" as const, localBounds: null }
+      }))
+    };
+    const normalizedValid = normalizeRegionDocumentForLoad(valid, library);
+    expect(normalizedValid.placedAssets[0]?.colliderOverride?.shape).toBe("none");
   });
 
   it("scene scope with null removes the overlay entry", () => {

@@ -416,8 +416,8 @@ export function createAuthoringViewport(
   let navMeshVizHash: string | null = null;
   let navMeshVizToken = 0;
 
-  function clearNavMeshViz() {
-    navMeshVizHash = null;
+  /** Dispose the drawn mesh only — does NOT touch the hash cache. */
+  function disposeNavMeshVizChildren() {
     for (let i = navMeshVizRoot.children.length - 1; i >= 0; i -= 1) {
       const child = navMeshVizRoot.children[i]!;
       navMeshVizRoot.remove(child);
@@ -428,8 +428,18 @@ export function createAuthoringViewport(
     }
   }
 
+  /** Full reset: drop the mesh AND the cache key, and supersede any
+   *  in-flight load (else a toggled-off load would still draw late). */
+  function clearNavMeshViz() {
+    navMeshVizHash = null;
+    navMeshVizToken += 1;
+    disposeNavMeshVizChildren();
+  }
+
   function buildNavMeshVizMesh(positions: number[], indices: number[]) {
-    clearNavMeshViz();
+    // Children only — clearing the hash here would defeat the cache and
+    // refetch + WASM-reimport on every projection tick (mini-review r3 #1).
+    disposeNavMeshVizChildren();
     if (positions.length === 0 || indices.length === 0) {
       return;
     }

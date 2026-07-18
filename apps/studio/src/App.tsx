@@ -2219,7 +2219,9 @@ export function App() {
         navMesh: {
           assetPath,
           inputHash: computeNavMeshInputHash(input),
-          agentRadius: input.agentRadius
+          agentRadius: input.agentRadius,
+          // Scene provenance — the bake composed THIS Scene's overlay.
+          sceneId: getActiveScene(session)?.sceneId ?? null
         }
       }
     });
@@ -2496,20 +2498,29 @@ export function App() {
   // Plan 069.8 -- navmesh staleness: re-derive the bake input hash and
   // compare to the baked one; a collider/nav-volume edit postdating the bake
   // flips this true (drives the "rebake" warning in the Spatial workspace).
+  // Deps are the ACTUAL hash inputs (region + library + scene + player), not
+  // `session` -- session identity changes on EVERY command, which made this
+  // re-resolve all scene objects on unrelated edits (mini-review r3).
+  const staleContentLibrary = session?.contentLibrary ?? null;
+  const staleActiveScene = session ? getActiveScene(session) : null;
+  const stalePlayerDefinition = session ? getPlayerDefinition(session) : null;
   const navMeshStale = useMemo(() => {
-    if (!session || !activeRegion?.navMesh) {
+    if (!session || !activeRegion?.navMesh || !staleContentLibrary) {
       return false;
     }
+    // Item/NPC definitions never contribute colliders (agents have null
+    // colliders), so they aren't recompute triggers -- read them lazily.
     const input = buildRegionNavMeshInput({
       region: activeRegion,
-      contentLibrary: session.contentLibrary,
-      playerDefinition: getPlayerDefinition(session),
+      contentLibrary: staleContentLibrary,
+      playerDefinition: stalePlayerDefinition,
       itemDefinitions: getAllItemDefinitions(session),
       npcDefinitions: getAllNPCDefinitions(session),
-      activeScene: getActiveScene(session)
+      activeScene: staleActiveScene
     });
     return computeNavMeshInputHash(input) !== activeRegion.navMesh.inputHash;
-  }, [session, activeRegion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRegion, staleContentLibrary, staleActiveScene, stalePlayerDefinition]);
 
   // --- Surface Studio (Plan 068.10) ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =

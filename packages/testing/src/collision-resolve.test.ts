@@ -7,11 +7,20 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { AssetColliderShape } from "@sugarmagic/domain";
+import {
+  createRegionVolumeDefinition,
+  type AssetColliderShape
+} from "@sugarmagic/domain";
 import {
   buildCollisionWorld,
   createEmptyCollisionWorld,
   resolveMove,
+  worldColliderAabb,
+  CollisionSystem,
+  World,
+  Position,
+  Velocity,
+  PlayerControlled,
   type CircleObstacle,
   type SceneObject,
   type WorldColliderAabb
@@ -225,5 +234,53 @@ describe("resolveMove with circle obstacles (agent-vs-agent, 069.3)", () => {
     expect(a.x).toBeLessThan(0); // "a" < "b" -> ejects -X
     expect(b.x).toBeGreaterThan(0); // "b" -> ejects +X
     expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual(2.0 - 1e-6); // separated
+  });
+
+  it("worldColliderAabb: rotation + scale yield the enclosing world box", () => {
+    // Local box x/z in [-1,1], scaled x2 on X, rotated 90deg about Y:
+    // scaled extents (±2, ·, ±1) rotate into (±1, ·, ±2), translated to (5,·,5).
+    const aabb = worldColliderAabb(
+      {
+        position: [5, 0, 5],
+        rotation: [0, Math.PI / 2, 0],
+        scale: [2, 1, 1]
+      },
+      { min: [-1, 0, -1], max: [1, 2, 1] }
+    );
+    expect(aabb.minX).toBeCloseTo(4, 5);
+    expect(aabb.maxX).toBeCloseTo(6, 5);
+    expect(aabb.minZ).toBeCloseTo(3, 5);
+    expect(aabb.maxZ).toBeCloseTo(7, 5);
+  });
+
+  it("CollisionSystem reconstructs the pre-move position and re-commits resolved", () => {
+    // MovementSystem already committed pos += vel*delta. The player ENDED at
+    // x=5, outside a containment box — but it STARTED inside (pre-move =
+    // 5 - 5*1 = 0). Containment's fromInside reads the PRE-MOVE position, so
+    // correct reconstruction clamps it back inside (2 - r). Resolving naively
+    // from the post-move point would see an outside body and let it escape.
+    const world = new World();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(5, 0, 0)); // post-move, escaped
+    world.addComponent(entity, new Velocity(5, 0, 0)); // pre-move = 0, inside
+    world.addComponent(entity, new PlayerControlled());
+    const system = new CollisionSystem();
+    system.setPlayerRadius(0.35);
+    system.setCollisionWorld(
+      buildCollisionWorld(
+        [],
+        [
+          createRegionVolumeDefinition({
+            volumeId: "vol:pen",
+            roles: ["containment-boundary"],
+            blockDirection: "out",
+            bounds: { kind: "box", center: [0, 0, 0], size: [4, 4, 4] }
+          })
+        ]
+      )
+    );
+    system.update(world, 1);
+    const pos = world.getComponent(entity, Position)!;
+    expect(pos.x).toBeCloseTo(2 - 0.35, 5); // held inside, not escaped at 5
   });
 });

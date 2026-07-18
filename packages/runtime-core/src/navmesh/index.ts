@@ -107,6 +107,30 @@ function addGroundQuad(
   soup.indices.push(b, b + 3, b + 2, b, b + 2, b + 1);
 }
 
+/**
+ * Down-facing quad just above the ground over an obstacle footprint. Recast
+ * rasterizes triangle SURFACES (boxes are hollow), so the ground inside a
+ * large box keeps full headroom to the box top and stays walkable — only the
+ * wall ring carved. This "kill ceiling" is slope-filtered (never walkable
+ * itself) and reduces the footprint's clearance below the agent height, so
+ * the ground beneath is culled — interiors carve, not just perimeters.
+ */
+function addKillCeiling(
+  soup: TriangleSoup,
+  minX: number,
+  maxX: number,
+  minZ: number,
+  maxZ: number,
+  y: number
+): void {
+  const b = soup.positions.length / 3;
+  soup.positions.push(minX, y, minZ, maxX, y, minZ, maxX, y, maxZ, minX, y, maxZ);
+  // Reverse winding vs addGroundQuad => -Y normal (never walkable).
+  soup.indices.push(b, b + 1, b + 2, b, b + 2, b + 3);
+}
+
+const KILL_CEILING_CLEARANCE = 0.5;
+
 /** All 12 triangles of an axis-aligned box (obstacle geometry). */
 function addBox(
   soup: TriangleSoup,
@@ -155,21 +179,20 @@ function buildTriangleSoup(input: NavMeshBakeInput): TriangleSoup | null {
   for (const bounds of input.navBounds) {
     addGroundQuad(soup, bounds, groundY);
   }
+  const killY = groundY + KILL_CEILING_CLEARANCE;
   for (const c of input.colliders) {
     addBox(soup, c.minX, c.maxX, groundY, obstacleTop, c.minZ, c.maxZ);
+    addKillCeiling(soup, c.minX, c.maxX, c.minZ, c.maxZ, killY);
   }
   for (const nw of input.nonWalkable) {
     const [cx, , cz] = nw.center;
     const [sx, , sz] = nw.size;
-    addBox(
-      soup,
-      cx - Math.abs(sx) / 2,
-      cx + Math.abs(sx) / 2,
-      groundY,
-      obstacleTop,
-      cz - Math.abs(sz) / 2,
-      cz + Math.abs(sz) / 2
-    );
+    const minX = cx - Math.abs(sx) / 2;
+    const maxX = cx + Math.abs(sx) / 2;
+    const minZ = cz - Math.abs(sz) / 2;
+    const maxZ = cz + Math.abs(sz) / 2;
+    addBox(soup, minX, maxX, groundY, obstacleTop, minZ, maxZ);
+    addKillCeiling(soup, minX, maxX, minZ, maxZ, killY);
   }
 
   for (let i = 0; i < soup.positions.length; i += 3) {
@@ -304,6 +327,14 @@ export interface RegionNavMeshInputOptions {
  * carve). `nav-bounds` volumes are the walkable ground; `non-walkable`
  * volumes carve. Shared by the studio bake action AND its staleness check so
  * both hash the exact same inputs.
+ *
+ * DEFERRED SEAM (069.10): `activeScene` composes ONE Scene's overlay into
+ * the obstacle set (scene collider overrides, scene-contained placements),
+ * but the resulting artifact is stored region-global — a runtime playing a
+ * DIFFERENT Scene paths against this Scene's geometry. The artifact records
+ * its `sceneId` for provenance. Revisit trigger: a Scene meaningfully alters
+ * collision (walls added/removed) and NPCs path wrong there → per-Scene
+ * artifacts keyed by scene id.
  */
 export function buildRegionNavMeshInput(
   options: RegionNavMeshInputOptions

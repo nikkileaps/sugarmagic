@@ -1381,7 +1381,9 @@ export function createWebRuntimeHost(
     void gameplayAssembly?.dispose();
     gameplayAssembly = null;
     gameplaySession = null;
-    // Plan 069.9 — free the recast navmesh (WASM) on teardown.
+    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
+    // epoch so an in-flight load can't resurrect (and leak) after dispose.
+    navMeshLoadEpoch += 1;
     navMeshPathfinder?.destroy();
     navMeshPathfinder = null;
     billboardRenderer?.dispose();

@@ -352,6 +352,14 @@ export interface RegionNavMeshArtifact {
   assetPath: string;
   inputHash: string;
   agentRadius: number;
+  /** DEFERRED SEAM (069.10): the bake composes ONE Scene's overlay (scene
+   *  collider overrides / scene-contained placements), but the artifact is
+   *  region-global — playing a different Scene paths against this Scene's
+   *  obstacle set. Recorded so a future per-Scene bake (or a runtime
+   *  mismatch warning) has the provenance. Null/absent = base-only or
+   *  pre-069.10 bake. Revisit trigger: a Scene meaningfully changes
+   *  collision geometry (adds/removes walls) and NPCs path wrong there. */
+  sceneId?: string | null;
 }
 
 export interface RegionDocument {
@@ -492,6 +500,13 @@ export function createRegionVolumeId(): string {
 export function createRegionVolumeDefinition(
   overrides: Partial<RegionVolumeDefinition> = {}
 ): RegionVolumeDefinition {
+  const roles = overrides.roles ? [...overrides.roles] : [];
+  // The interface invariant: role config is null unless the role is present.
+  // Enforced HERE (the single volume constructor — UpdateRegionVolume routes
+  // through it) so unchecking a role can't leave orphaned config behind.
+  const hasLabel = roles.includes("label");
+  const blocksAnything =
+    roles.includes("blocker") || roles.includes("containment-boundary");
   return {
     volumeId: overrides.volumeId ?? createRegionVolumeId(),
     displayName: overrides.displayName ?? "Volume",
@@ -499,13 +514,13 @@ export function createRegionVolumeDefinition(
       overrides.parentVolumeId === undefined ? null : overrides.parentVolumeId,
     enabled: overrides.enabled ?? true,
     bounds: createRegionAreaBounds(overrides.bounds),
-    roles: overrides.roles ? [...overrides.roles] : [],
-    labelKind: overrides.labelKind ?? null,
-    lorePageId: overrides.lorePageId ?? null,
-    blockDirection: overrides.blockDirection ?? null,
-    condition: overrides.condition ?? null,
-    trigger: overrides.trigger ?? null,
-    navCost: overrides.navCost ?? null,
+    roles,
+    labelKind: hasLabel ? overrides.labelKind ?? null : null,
+    lorePageId: hasLabel ? overrides.lorePageId ?? null : null,
+    blockDirection: blocksAnything ? overrides.blockDirection ?? null : null,
+    condition: blocksAnything ? overrides.condition ?? null : null,
+    trigger: roles.includes("trigger") ? overrides.trigger ?? null : null,
+    navCost: roles.includes("non-walkable") ? overrides.navCost ?? null : null,
     color: overrides.color ?? null
   };
 }

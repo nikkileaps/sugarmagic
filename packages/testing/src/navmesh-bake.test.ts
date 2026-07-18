@@ -11,6 +11,7 @@ import {
   bakeNavMesh,
   computeNavMeshInputHash,
   loadNavMesh,
+  loadNavMeshDebugGeometry,
   loadNavMeshPathfinder,
   type NavMeshBakeInput,
   type WorldColliderAabb
@@ -22,6 +23,41 @@ const navBounds: RegionAreaBounds = {
   center: [0, 0, 0],
   size: [20, 4, 20]
 };
+
+/** True when any GROUND-LEVEL walkable triangle covers (x, z). Obstacle box
+ *  TOPS are also walkable (disconnected islands at obstacleHeight, harmless
+ *  — paths can't reach them), so filter to y < 1 to test the ground layer. */
+function coversPointXZ(
+  positions: number[],
+  indices: number[],
+  x: number,
+  z: number
+): boolean {
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i]! * 3;
+    const b = indices[i + 1]! * 3;
+    const c = indices[i + 2]! * 3;
+    if (
+      positions[a + 1]! > 1 ||
+      positions[b + 1]! > 1 ||
+      positions[c + 1]! > 1
+    ) {
+      continue; // an obstacle-top island, not the ground layer
+    }
+    const ax = positions[a]!, az = positions[a + 2]!;
+    const bx = positions[b]!, bz = positions[b + 2]!;
+    const cx = positions[c]!, cz = positions[c + 2]!;
+    const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
+    const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
+    const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+    const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+    if (!(hasNeg && hasPos)) {
+      return true;
+    }
+  }
+  return false;
+}
 const propCollider: WorldColliderAabb = {
   minX: -1,
   maxX: 1,
@@ -53,11 +89,14 @@ describe("069.8 — navmesh bake", () => {
       nonWalkable: [{ kind: "box", center: [5, 0, 5], size: [4, 4, 4] }],
       agentRadius: 0.35
     });
-    // Still a valid mesh (the ground minus the carve).
     expect(bytes).not.toBeNull();
-    const navMesh = await loadNavMesh(bytes!);
-    expect(navMesh.getMaxTiles()).toBeGreaterThan(0);
-    navMesh.destroy();
+    // Assert the CARVE actually carved: the walkable triangles must cover an
+    // open-ground point but NOT the carve center (mini-review r3 tightening).
+    // Samples nudged off the voxel gridlines (axis-aligned triangle edges
+    // make exactly-on-line points ambiguous for the sign test).
+    const { positions, indices } = await loadNavMeshDebugGeometry(bytes!);
+    expect(coversPointXZ(positions, indices, -5.1, -5.1)).toBe(true); // open ground
+    expect(coversPointXZ(positions, indices, 5.1, 5.1)).toBe(false); // inside carve
   });
 
   it("returns null when there are no nav-bounds (nothing walkable)", async () => {
