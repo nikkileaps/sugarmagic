@@ -171,6 +171,33 @@ export function resolveSceneObjects(
   return sceneObjects;
 }
 
+/**
+ * A scene object realizes per-instance scatter/foliage (a `scatter` layer, or
+ * a `surface-ref` whose surface nests one) — so it must build per-object, NOT
+ * as a shared InstancedMesh. Plan 070.2/070.6: the single instanceability gate
+ * both hosts share (game host had a private copy pre-070.6).
+ */
+export function objectSurfaceHasScatter(object: SceneObject): boolean {
+  return (object.effectiveMaterialSlots ?? []).some((slot) =>
+    (slot.surface?.layers ?? []).some(
+      (layer) => layer.kind === "scatter" || layer.kind === "surface-ref"
+    )
+  );
+}
+
+/**
+ * A placed asset may be collapsed into a shared InstancedMesh iff it is a
+ * static model with no per-instance scatter/surface-ref surface. Characters
+ * (skinned), items, and scatter-bearing assets keep the per-object path.
+ */
+export function assetObjectIsInstanceable(object: SceneObject): boolean {
+  return (
+    object.kind === "asset" &&
+    Boolean(object.modelSourcePath) &&
+    !objectSurfaceHasScatter(object)
+  );
+}
+
 export function computeSceneDelta(
   previous: SceneObject[],
   current: SceneObject[]

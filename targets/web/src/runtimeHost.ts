@@ -93,6 +93,8 @@ import {
   Velocity,
   iterateActiveItemPresences,
   resolveSceneObjects,
+  assetObjectIsInstanceable,
+  objectSurfaceHasScatter,
   DEFAULT_CAMERA_CONFIG,
   createCameraState,
   updateCameraFollow,
@@ -567,29 +569,6 @@ interface HostEntryData {
  *  (`representationKey` folds in the mask, ADR 028 Gate 2), so they simply
  *  land in different groups rather than being excluded here. Skinned models
  *  are `npc`/`player` kind and never reach here; the builder also guards. */
-function objectSurfaceHasScatter(object: SceneObject): boolean {
-  const slots = (
-    object as {
-      effectiveMaterialSlots?: Array<{
-        surface?: { layers?: Array<{ kind?: string }> } | null;
-      }>;
-    }
-  ).effectiveMaterialSlots;
-  if (!slots) return false;
-  return slots.some((slot) =>
-    (slot.surface?.layers ?? []).some(
-      (layer) => layer.kind === "scatter" || layer.kind === "surface-ref"
-    )
-  );
-}
-
-function assetObjectIsInstanceable(object: SceneObject): boolean {
-  return (
-    object.kind === "asset" &&
-    Boolean((object as { modelSourcePath?: string | null }).modelSourcePath) &&
-    !objectSurfaceHasScatter(object)
-  );
-}
 
 function createCameraSnapshot(
   camera: THREE.PerspectiveCamera,
