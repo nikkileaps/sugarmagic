@@ -76,6 +76,12 @@ export interface RenderableReconcilerConfig {
   loadModel: (url: string) => Promise<THREE.Object3D>;
   /** Build the fallback subtree when there is no asset URL. */
   createFallback: (object: SceneObject) => THREE.Object3D;
+  /**
+   * Build the fallback subtree when a load / shader-apply ERRORS (distinct
+   * from the no-asset case). The studio shows a loud magenta mesh + alert
+   * here; the game just uses createFallback. Defaults to createFallback.
+   */
+  createErrorFallback?: (object: SceneObject, error: unknown) => THREE.Object3D;
   shaderRuntime: ShaderRuntime | null;
   /**
    * The asset-source map. MUST be reference-stable across reconciles
@@ -193,13 +199,26 @@ export function createRenderableReconciler(
     // local space -> blades sampled outside the map -> black grass).
     root.add(renderable);
     root.updateMatrixWorld(true);
-    ensureShaderSetAppliedToRenderable(
-      renderable,
-      object,
-      config.shaderRuntime,
-      shaderApplication,
-      config.getFileSources()
-    );
+    try {
+      ensureShaderSetAppliedToRenderable(
+        renderable,
+        object,
+        config.shaderRuntime,
+        shaderApplication,
+        config.getFileSources()
+      );
+    } catch (error) {
+      // Shader-apply blew up (bad graph / poisoned binding). Drop the
+      // partial renderable and show the error fallback.
+      root.remove(renderable);
+      disposeRenderableObject(renderable);
+      root.add(
+        config.createErrorFallback
+          ? config.createErrorFallback(object, error)
+          : config.createFallback(object)
+      );
+      return false;
+    }
     return true;
   }
 
@@ -273,7 +292,11 @@ export function createRenderableReconciler(
           error
         });
         if (root.children.length === 0) {
-          root.add(config.createFallback(object));
+          root.add(
+            config.createErrorFallback
+              ? config.createErrorFallback(object, error)
+              : config.createFallback(object)
+          );
         }
         commit({
           root,
