@@ -144,7 +144,7 @@ reboot (lastBootMs): 1005ms.
 
 #355 turn-stutter: _pending — compare turn-left vs turn-right in the slow viewpoint_
 
-### 070.2 — Shared renderable-lifecycle reconciler (#350)
+### 070.2 — Shared renderable-lifecycle reconciler (#350) — DONE (2026-07-18, verified: game host self-verified via auto-capture screenshot + nikki 60fps/grass eyeball; studio host approved)
 
 Extract ONE reconciler (desired SceneObjects in -> delta -> load/update/dispose renderables) that both the studio authoring viewport and the game runtime host consume. `computeSceneDelta` ALREADY lives in runtime-core (scene/index.ts) — the delta half of open question 2 is answered; the extraction is the realization layer (render-web). The studio's incremental machinery (objectMap/pending/generation, authoringViewport.ts) is the seed; the game host's wholesale `start()` build becomes "reconcile from empty". While extracting, CLEAN the studio's duplication rather than copying it: `applyProjection` currently does a full O(N) transform+ensure sweep every tick that subsumes its own delta.updated loop.
 
