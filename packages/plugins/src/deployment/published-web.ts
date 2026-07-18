@@ -164,7 +164,8 @@ function buildBootJsonPayload(
             collectFileBackedAssetPaths({
               contentLibrary: snapshot.contentLibrary,
               itemDefinitions: gameProject.itemDefinitions,
-              documentDefinitions: gameProject.documentDefinitions
+              documentDefinitions: gameProject.documentDefinitions,
+              regions: snapshot.regions
             }).map((path) => [path, `/${path}`])
           ),
     // Story 47.10.5 — authored fresh-start record. When a returning

@@ -36,6 +36,11 @@ import {
   type RegionSceneFolder
 } from "../region-authoring";
 import type { ShaderBindingOverride } from "../shader-graph";
+import {
+  cloneAssetCollider,
+  isValidColliderShape,
+  type AssetCollider
+} from "../content-library";
 
 /**
  * Stable id for the Scene that the 058.1 load-time migration
@@ -125,6 +130,50 @@ export interface SceneTransitionConfig {
 export interface SceneAssetAppearanceOverride {
   surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
   shaderOverrides?: ShaderBindingOverride[];
+  /** Plan 069.6 — a Scene's collider restyle of ONE base placement (a
+   *  wall/walk-on prop that differs per Scene). Precedence scene >
+   *  instance > definition; see `resolveEffectiveInstanceCollider`. */
+  colliderOverride?: AssetCollider;
+}
+
+/** Which tier supplied the resolved collider (Plan 069.6). */
+export type ColliderOverrideTier = "definition" | "base" | "scene";
+
+export interface ResolvedInstanceCollider {
+  collider: AssetCollider | null;
+  tier: ColliderOverrideTier;
+}
+
+/**
+ * THE per-instance collider precedence (Plan 069.6): scene override wins,
+ * else the instance's own override, else the asset definition (069.1).
+ * An override that only changes the SHAPE (bounds `null`) inherits the
+ * definition's baked `localBounds`, so "keep the auto-box, just mark it a
+ * blocker" doesn't drop the geometry. Runtime resolution AND the inspector
+ * provenance chip consume this — precedence lives here and nowhere else.
+ */
+export function resolveEffectiveInstanceCollider(
+  definitionCollider: AssetCollider | null | undefined,
+  instanceOverride: AssetCollider | null | undefined,
+  sceneOverride: AssetCollider | null | undefined
+): ResolvedInstanceCollider {
+  const active = sceneOverride ?? instanceOverride ?? null;
+  if (!active) {
+    // Clone so a resolved SceneObject never aliases the library definition's
+    // live collider (matches the clone discipline every other handoff uses).
+    return {
+      collider: definitionCollider ? cloneAssetCollider(definitionCollider) : null,
+      tier: "definition"
+    };
+  }
+  return {
+    collider: {
+      shape: active.shape,
+      localBounds:
+        active.localBounds ?? definitionCollider?.localBounds ?? null
+    },
+    tier: sceneOverride ? "scene" : "base"
+  };
 }
 
 /** Which tier supplied a merged appearance entry (Plan 068.3
@@ -230,6 +279,9 @@ export function createRegionSceneOverlay(
               : undefined,
             shaderOverrides: override.shaderOverrides
               ? override.shaderOverrides.map((entry) => ({ ...entry }))
+              : undefined,
+            colliderOverride: override.colliderOverride
+              ? cloneAssetCollider(override.colliderOverride)
               : undefined
           }
         ]
@@ -347,6 +399,12 @@ function normalizeTransitionConfig(
   };
 }
 
+function isValidColliderOverride(
+  collider: AssetCollider | undefined
+): collider is AssetCollider {
+  return Boolean(collider && isValidColliderShape(collider.shape));
+}
+
 function normalizeSceneAssetAppearanceOverrides(
   input: Record<string, SceneAssetAppearanceOverride> | undefined
 ): Record<string, SceneAssetAppearanceOverride> {
@@ -371,11 +429,18 @@ function normalizeSceneAssetAppearanceOverrides(
         slot: entry.slot
       });
     }
-    if (bySlotName.size === 0 && bySlotKind.size === 0) continue;
+    // Plan 069.6 — a collider-only Scene override is valid on its own.
+    const colliderOverride = isValidColliderOverride(override.colliderOverride)
+      ? cloneAssetCollider(override.colliderOverride)
+      : undefined;
+    if (bySlotName.size === 0 && bySlotKind.size === 0 && !colliderOverride) {
+      continue;
+    }
     normalized[instanceId] = {
       surfaceSlotOverrides:
         bySlotName.size > 0 ? [...bySlotName.values()] : undefined,
-      shaderOverrides: bySlotKind.size > 0 ? [...bySlotKind.values()] : undefined
+      shaderOverrides: bySlotKind.size > 0 ? [...bySlotKind.values()] : undefined,
+      colliderOverride
     };
   }
   return normalized;

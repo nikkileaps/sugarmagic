@@ -11,6 +11,7 @@ import {
   createDefaultAudioClipDefinition,
   createDefaultCharacterAnimationDefinition,
   createDefaultCharacterModelDefinition,
+  defaultAssetColliderForKind,
   type AssetDefinition,
   type AudioClipDefinition,
   type CharacterAnimationDefinition,
@@ -56,6 +57,11 @@ export interface ImportSourceAssetResult {
   assetDefinition: AssetDefinition;
   textureDefinitions: TextureDefinition[];
   materialDefinitions: MaterialDefinition[];
+  /** Plan 069.1 — the imported source bytes, handed back so the studio
+   *  can bake the collider's `localBounds` in-memory (Box3.setFromObject)
+   *  without re-reading the just-written file (the FSAccess read-after-
+   *  write flake). Null for non-GLB imports. */
+  sourceBuffer: ArrayBuffer | null;
   warnings: string[];
 }
 
@@ -812,6 +818,9 @@ export async function importSourceAsset(
       surfaceSlots: embeddedFoliageImport.surfaceSlots,
       deform: null,
       effect: null,
+      // Plan 069.1 — kind-aware collider SHAPE at import (foliage -> none,
+      // model -> auto-box); the studio fills localBounds from sourceBuffer.
+      collider: defaultAssetColliderForKind(analysis.assetKind),
       source: {
         relativeAssetPath,
         fileName: sourceFile.name,
@@ -820,6 +829,7 @@ export async function importSourceAsset(
     },
     textureDefinitions: embeddedFoliageImport.textureDefinitions,
     materialDefinitions: embeddedFoliageImport.materialDefinitions,
+    sourceBuffer: ext.toLowerCase() === ".glb" ? sourceBuffer : null,
     warnings
   };
 }

@@ -10,6 +10,7 @@ import type {
   ShaderBindingOverride,
   ShaderParameterOverride
 } from "../shader-graph";
+import { cloneAssetCollider, type AssetCollider } from "../content-library";
 
 export interface RegionPlacement {
   gridPosition: {
@@ -46,6 +47,15 @@ export interface PlacedAssetInstance {
   shaderOverrides?: ShaderBindingOverride[];
   /** Plan 068.1 — per-material-slot surface overrides; see the type. */
   surfaceSlotOverrides?: PlacedAssetSurfaceSlotOverride[];
+  /**
+   * Plan 069.6 — per-instance collider override. Beats the asset
+   * definition's collider (069.1) for this placement only: `shape: "none"`
+   * marks a walk-on/non-blocking prop; a set `localBounds` resizes/offsets
+   * the box. Absent => inherit the definition. Scene-scoped restyles live in
+   * `SceneAssetAppearanceOverride.colliderOverride`; resolution precedence is
+   * scene > instance > definition (see `resolveEffectiveInstanceCollider`).
+   */
+  colliderOverride?: AssetCollider;
   /**
    * @deprecated Legacy single-binding field. Normalization upgrades this into
    * shaderOverrides; new code should only use shaderOverrides.
@@ -205,6 +215,73 @@ export interface RegionBehaviorWorldFlagCondition {
   value: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Plan 069.4 — unified drawn Volume. ONE box primitive with attachable
+// roles, subsuming RegionAreaDefinition (label role) and RegionAmbienceZone
+// (trigger role). Areas/ambience zones remain as `@deprecated` aliases
+// derived from volumes (see the migration + derive helpers below). Only
+// `label` + `trigger` roles are produced by migration; the physical roles
+// (blocker / containment-boundary / nav-bounds / non-walkable) are authored
+// in 069.5 / 069.7. Keep `volumeId` identical to the old areaId/zoneId so
+// references (targetAreaId, parentAreaId, quest bindings) still resolve.
+// ---------------------------------------------------------------------------
+
+export type RegionVolumeRole =
+  | "label"
+  | "trigger"
+  | "blocker"
+  | "containment-boundary"
+  | "nav-bounds"
+  | "non-walkable";
+
+export type RegionVolumeBlockDirection = "in" | "out" | "both";
+
+export type RegionVolumeTriggerTiming = "on-enter" | "always";
+
+/** Flag written when a trigger fires (069.5); null for migrated ambience
+ *  triggers (which only played audio). Same shape as the flag condition. */
+export interface RegionVolumeFlagAssignment {
+  key: string | null;
+  valueType: "boolean" | "number" | "string";
+  value: string | null;
+}
+
+/** What firing a trigger DOES: an audio cue and/or a world-flag set. */
+export interface RegionVolumeTriggerAction {
+  audioCueId: string | null;
+  setWorldFlag: RegionVolumeFlagAssignment | null;
+}
+
+export interface RegionVolumeTriggerConfig {
+  timing: RegionVolumeTriggerTiming;
+  action: RegionVolumeTriggerAction;
+}
+
+export interface RegionVolumeDefinition {
+  volumeId: string;
+  displayName: string;
+  parentVolumeId: string | null;
+  enabled: boolean;
+  bounds: RegionAreaBounds;
+  roles: RegionVolumeRole[];
+  // --- role config (null / absent unless the corresponding role present) --
+  /** `label` role: the semantic kind + lore (from RegionAreaDefinition). */
+  labelKind: RegionAreaKind | null;
+  lorePageId: string | null;
+  /** `blocker` / `containment-boundary` role: which crossing directions
+   *  block, and (for containment) the condition under which it opens. */
+  blockDirection: RegionVolumeBlockDirection | null;
+  condition: RegionBehaviorQuestBinding | null;
+  /** `trigger` role (from RegionAmbienceZone). */
+  trigger: RegionVolumeTriggerConfig | null;
+  /** `non-walkable` / cost role: extra nav path cost. */
+  navCost: number | null;
+  /** Plan 069.8 QoL — authoring-only viewport tint (hex, e.g. "#f38ba8") so
+   *  authors can tell volumes apart in the Spatial overlay. `null` = the
+   *  default blue. The runtime ignores it. */
+  color: string | null;
+}
+
 export interface RegionNPCBehaviorTask {
   taskId: string;
   displayName: string;
@@ -261,6 +338,30 @@ export interface RegionNPCBehaviorDefinition {
  * accept the legacy shape on disk and lift it into this shape +
  * the project's default Scene.
  */
+/**
+ * Plan 069.8 — a baked navmesh artifact reference on the region. The binary
+ * lives at `assetPath` (an `assets/…` file); the doc only points at it. It is
+ * NOT a player-save (`GameSavePayload`) slice — it's derived, rebakeable
+ * content — but it DOES persist in the authored region document, and
+ * `collectFileBackedAssetPaths` deliberately includes `assetPath` so deploy
+ * ships the `.bin` and reload restores this pointer (fix 7cc3005). Do NOT strip
+ * it on save. Staleness is `inputHash` vs a freshly-derived hash of the
+ * collider + nav-volume inputs.
+ */
+export interface RegionNavMeshArtifact {
+  assetPath: string;
+  inputHash: string;
+  agentRadius: number;
+  /** DEFERRED SEAM (069.10): the bake composes ONE Scene's overlay (scene
+   *  collider overrides / scene-contained placements), but the artifact is
+   *  region-global — playing a different Scene paths against this Scene's
+   *  obstacle set. Recorded so a future per-Scene bake (or a runtime
+   *  mismatch warning) has the provenance. Null/absent = base-only or
+   *  pre-069.10 bake. Revisit trigger: a Scene meaningfully changes
+   *  collision geometry (adds/removes walls) and NPCs path wrong there. */
+  sceneId?: string | null;
+}
+
 export interface RegionDocument {
   identity: DocumentIdentity;
   displayName: string;
@@ -271,12 +372,27 @@ export interface RegionDocument {
   /** Folder tree grouping the base-scope placed assets. */
   folders: RegionSceneFolder[];
   environmentBinding: RegionEnvironmentBinding;
+  /**
+   * @deprecated Plan 069.4 — derived alias of the `label`-role volumes.
+   * The canonical store is `volumes`; `normalizeRegionDocumentForLoad` and
+   * the area command executors re-derive this so legacy readers keep
+   * working. New code should read `volumes`.
+   */
   areas: RegionAreaDefinition[];
+  /** Plan 069.4 — canonical unified drawn volumes (label / trigger /
+   *  blocker / containment / nav). Absent in pre-069.4 files; the loader
+   *  migrates areas + ambience zones into it. */
+  volumes?: RegionVolumeDefinition[];
   behaviors: RegionNPCBehaviorDefinition[];
   landscape: RegionLandscapeState;
   audio?: RegionAudioState;
   markers: RegionMarker[];
   gameplayPlacements: RegionGameplayPlacement[];
+  /** Plan 069.8 — the baked navmesh artifact reference. NOT a player-save
+   *  (`GameSavePayload`) slice, but it DOES persist in this region document
+   *  (so deploy/reload restore it — see `RegionNavMeshArtifact`). Null/absent
+   *  = not baked. `inputHash` drives the staleness warning. */
+  navMesh?: RegionNavMeshArtifact | null;
   /**
    * Plan 065 §065.1 — Layout Sketch: authoring-only blockout ink
    * drawn on the landscape plane in Studio. The RUNTIME NEVER
@@ -375,6 +491,273 @@ export function createRegionAreaDefinition(
   };
 }
 
+// --- Plan 069.4 — unified Volume factory + migration/alias helpers --------
+
+export function createRegionVolumeId(): string {
+  return createUuid();
+}
+
+export function createRegionVolumeDefinition(
+  overrides: Partial<RegionVolumeDefinition> = {}
+): RegionVolumeDefinition {
+  const roles = overrides.roles ? [...overrides.roles] : [];
+  // The interface invariant: role config is null unless the role is present.
+  // Enforced HERE (the single volume constructor — UpdateRegionVolume routes
+  // through it) so unchecking a role can't leave orphaned config behind.
+  const hasLabel = roles.includes("label");
+  const blocksAnything =
+    roles.includes("blocker") || roles.includes("containment-boundary");
+  return {
+    volumeId: overrides.volumeId ?? createRegionVolumeId(),
+    displayName: overrides.displayName ?? "Volume",
+    parentVolumeId:
+      overrides.parentVolumeId === undefined ? null : overrides.parentVolumeId,
+    enabled: overrides.enabled ?? true,
+    bounds: createRegionAreaBounds(overrides.bounds),
+    roles,
+    labelKind: hasLabel ? overrides.labelKind ?? null : null,
+    lorePageId: hasLabel ? overrides.lorePageId ?? null : null,
+    blockDirection: blocksAnything ? overrides.blockDirection ?? null : null,
+    condition: blocksAnything ? overrides.condition ?? null : null,
+    trigger: roles.includes("trigger") ? overrides.trigger ?? null : null,
+    navCost: roles.includes("non-walkable") ? overrides.navCost ?? null : null,
+    color: overrides.color ?? null
+  };
+}
+
+/** RegionAreaDefinition -> label-role Volume (id preserved). */
+export function regionAreaToVolume(
+  area: RegionAreaDefinition
+): RegionVolumeDefinition {
+  return createRegionVolumeDefinition({
+    volumeId: area.areaId,
+    displayName: area.displayName,
+    parentVolumeId: area.parentAreaId,
+    bounds: area.bounds,
+    roles: ["label"],
+    labelKind: area.kind,
+    lorePageId: area.lorePageId
+  });
+}
+
+/** RegionAmbienceZone -> trigger-role Volume (id preserved). */
+export function regionAmbienceZoneToVolume(
+  zone: RegionAmbienceZone
+): RegionVolumeDefinition {
+  return createRegionVolumeDefinition({
+    volumeId: zone.zoneId,
+    displayName: zone.displayName,
+    enabled: zone.enabled,
+    bounds: { kind: "box", center: zone.center, size: zone.size },
+    roles: ["trigger"],
+    trigger: {
+      timing: zone.trigger,
+      action: { audioCueId: zone.cueDefinitionId, setWorldFlag: null }
+    }
+  });
+}
+
+/** Derived `@deprecated` area alias — null unless the volume has the label
+ *  role. */
+export function volumeToRegionArea(
+  volume: RegionVolumeDefinition
+): RegionAreaDefinition | null {
+  if (!volume.roles.includes("label")) {
+    return null;
+  }
+  return {
+    areaId: volume.volumeId,
+    displayName: volume.displayName,
+    lorePageId: volume.lorePageId,
+    parentAreaId: volume.parentVolumeId,
+    kind: volume.labelKind ?? "zone",
+    bounds: volume.bounds
+  };
+}
+
+/** Derived `@deprecated` ambience-zone alias — null unless trigger role. */
+export function volumeToRegionAmbienceZone(
+  volume: RegionVolumeDefinition
+): RegionAmbienceZone | null {
+  if (!volume.roles.includes("trigger") || !volume.trigger) {
+    return null;
+  }
+  return {
+    zoneId: volume.volumeId,
+    displayName: volume.displayName,
+    cueDefinitionId: volume.trigger.action.audioCueId,
+    center: volume.bounds.center,
+    size: volume.bounds.size,
+    trigger: volume.trigger.timing,
+    enabled: volume.enabled
+  };
+}
+
+export function deriveRegionAreasFromVolumes(
+  volumes: readonly RegionVolumeDefinition[]
+): RegionAreaDefinition[] {
+  return volumes
+    .map(volumeToRegionArea)
+    .filter((area): area is RegionAreaDefinition => area !== null);
+}
+
+export function deriveRegionAmbienceZonesFromVolumes(
+  volumes: readonly RegionVolumeDefinition[]
+): RegionAmbienceZone[] {
+  return volumes
+    .map(volumeToRegionAmbienceZone)
+    .filter((zone): zone is RegionAmbienceZone => zone !== null);
+}
+
+/** Build volumes from the legacy area + ambience-zone stores (pre-069.4). */
+export function migrateRegionVolumesFromLegacy(
+  areas: readonly RegionAreaDefinition[],
+  ambienceZones: readonly RegionAmbienceZone[]
+): RegionVolumeDefinition[] {
+  return [
+    ...areas.map(regionAreaToVolume),
+    ...ambienceZones.map(regionAmbienceZoneToVolume)
+  ];
+}
+
+/** The canonical volume list for a region: the stored `volumes` when
+ *  present (post-069.4), else migrated from the legacy area/ambience
+ *  stores. */
+export function resolveRegionVolumes(
+  region: RegionDocument
+): RegionVolumeDefinition[] {
+  if (Array.isArray(region.volumes)) {
+    return region.volumes.map((volume) =>
+      createRegionVolumeDefinition(volume)
+    );
+  }
+  return migrateRegionVolumesFromLegacy(
+    region.areas ?? [],
+    region.audio?.ambienceZones ?? []
+  );
+}
+
+/** Return a region with canonical `volumes` set and the `@deprecated`
+ *  area/ambience aliases re-derived. Plan 069.4 — command executors call
+ *  this because commands do NOT re-normalize, and live in-session readers
+ *  consume the aliases between saves. */
+export function withDerivedRegionAliases(
+  region: RegionDocument,
+  volumes: RegionVolumeDefinition[]
+): RegionDocument {
+  const ambienceZones = deriveRegionAmbienceZonesFromVolumes(volumes);
+  // Preserve any existing audio (emitters); create it only when a trigger
+  // volume needs an ambience alias and there's no audio state yet.
+  const audio = region.audio
+    ? { ...region.audio, ambienceZones }
+    : ambienceZones.length > 0
+      ? { emitters: [], ambienceZones }
+      : region.audio;
+  return {
+    ...region,
+    volumes,
+    areas: deriveRegionAreasFromVolumes(volumes),
+    audio
+  };
+}
+
+/** Reconcile the canonical volumes so their `label`-role set matches
+ *  `nextAreas` (add / update / drop), preserving every non-label volume
+ *  and any extra roles on a label volume. Plan 069.4 — the area command
+ *  executors compute their intended `areas` list and route it through
+ *  here so `volumes` stays the source of truth. */
+export function reconcileRegionVolumesFromAreas(
+  region: RegionDocument,
+  nextAreas: readonly RegionAreaDefinition[]
+): RegionDocument {
+  const canonical = resolveRegionVolumes(region);
+  const nextById = new Map(nextAreas.map((area) => [area.areaId, area]));
+  const seen = new Set<string>();
+  const volumes: RegionVolumeDefinition[] = [];
+  for (const volume of canonical) {
+    if (!volume.roles.includes("label")) {
+      volumes.push(volume);
+      continue;
+    }
+    const area = nextById.get(volume.volumeId);
+    if (!area) {
+      // Area deleted: drop the label role (+ its config); keep the volume
+      // only if other roles remain.
+      const remaining = volume.roles.filter((role) => role !== "label");
+      if (remaining.length > 0) {
+        volumes.push({
+          ...volume,
+          roles: remaining,
+          labelKind: null,
+          lorePageId: null
+        });
+      }
+      continue;
+    }
+    seen.add(area.areaId);
+    volumes.push({
+      ...volume,
+      displayName: area.displayName,
+      parentVolumeId: area.parentAreaId,
+      bounds: area.bounds,
+      labelKind: area.kind,
+      lorePageId: area.lorePageId
+    });
+  }
+  for (const area of nextAreas) {
+    if (!seen.has(area.areaId)) {
+      volumes.push(regionAreaToVolume(area));
+    }
+  }
+  return withDerivedRegionAliases(region, volumes);
+}
+
+/** As `reconcileRegionVolumesFromAreas`, but for the `trigger`-role set
+ *  driven by the ambience-zone command executors. */
+export function reconcileRegionVolumesFromAmbienceZones(
+  region: RegionDocument,
+  nextZones: readonly RegionAmbienceZone[]
+): RegionDocument {
+  const canonical = resolveRegionVolumes(region);
+  const nextById = new Map(nextZones.map((zone) => [zone.zoneId, zone]));
+  const seen = new Set<string>();
+  const volumes: RegionVolumeDefinition[] = [];
+  for (const volume of canonical) {
+    if (!volume.roles.includes("trigger")) {
+      volumes.push(volume);
+      continue;
+    }
+    const zone = nextById.get(volume.volumeId);
+    if (!zone) {
+      const remaining = volume.roles.filter((role) => role !== "trigger");
+      if (remaining.length > 0) {
+        volumes.push({ ...volume, roles: remaining, trigger: null });
+      }
+      continue;
+    }
+    seen.add(zone.zoneId);
+    volumes.push({
+      ...volume,
+      displayName: zone.displayName,
+      enabled: zone.enabled,
+      bounds: { kind: "box", center: zone.center, size: zone.size },
+      trigger: {
+        timing: zone.trigger,
+        action: {
+          audioCueId: zone.cueDefinitionId,
+          setWorldFlag: volume.trigger?.action.setWorldFlag ?? null
+        }
+      }
+    });
+  }
+  for (const zone of nextZones) {
+    if (!seen.has(zone.zoneId)) {
+      volumes.push(regionAmbienceZoneToVolume(zone));
+    }
+  }
+  return withDerivedRegionAliases(region, volumes);
+}
+
 export function createRegionBehaviorQuestBinding(
   overrides: Partial<RegionBehaviorQuestBinding> = {}
 ): RegionBehaviorQuestBinding {
@@ -466,6 +849,9 @@ export function createPlacedAssetInstance(
     shaderOverrides: [...(overrides.shaderOverrides ?? [])],
     surfaceSlotOverrides: overrides.surfaceSlotOverrides
       ? overrides.surfaceSlotOverrides.map((slotOverride) => ({ ...slotOverride }))
+      : undefined,
+    colliderOverride: overrides.colliderOverride
+      ? cloneAssetCollider(overrides.colliderOverride)
       : undefined,
     shaderOverride: undefined,
     shaderParameterOverrides: [...(overrides.shaderParameterOverrides ?? [])],
@@ -671,10 +1057,12 @@ export function createDefaultRegion(options: {
       defaultEnvironmentId: options.defaultEnvironmentId ?? null
     },
     areas: [],
+    volumes: [],
     behaviors: [],
     landscape: createDefaultRegionLandscapeState(),
     audio: createRegionAudioState(),
     markers: [],
-    gameplayPlacements: []
+    gameplayPlacements: [],
+    navMesh: null
   };
 }

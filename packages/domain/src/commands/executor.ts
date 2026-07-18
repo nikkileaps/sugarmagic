@@ -7,6 +7,11 @@
 
 import {
   createRegionAreaDefinition,
+  createRegionVolumeDefinition,
+  resolveRegionVolumes,
+  withDerivedRegionAliases,
+  reconcileRegionVolumesFromAreas,
+  reconcileRegionVolumesFromAmbienceZones,
   createRegionNPCBehaviorDefinition,
   MAX_REGION_LANDSCAPE_CHANNELS
 } from "../region-authoring";
@@ -39,6 +44,9 @@ import type {
   CreateRegionAreaCommand,
   UpdateRegionAreaCommand,
   DeleteRegionAreaCommand,
+  CreateRegionVolumeCommand,
+  UpdateRegionVolumeCommand,
+  DeleteRegionVolumeCommand,
   CreateRegionNPCBehaviorCommand,
   UpdateRegionNPCBehaviorCommand,
   DeleteRegionNPCBehaviorCommand,
@@ -68,8 +76,10 @@ import type {
   UpdatePlacedAssetInspectableCommand,
   RemovePlacedAssetInspectableCommand,
   UpdateRegionMetadataCommand,
+  SetRegionNavMeshCommand,
   SetPlacedAssetShaderOverrideCommand,
   SetPlacedAssetSurfaceSlotOverrideCommand,
+  SetPlacedAssetColliderOverrideCommand,
   SetPlacedAssetShaderParameterOverrideCommand,
   ClearPlacedAssetShaderParameterOverrideCommand,
   SetNPCPresenceShaderOverrideCommand,
@@ -90,6 +100,7 @@ import {
   type Scene,
   type SceneAssetAppearanceOverride
 } from "../scenes";
+import { cloneAssetCollider } from "../content-library";
 
 /**
  * Plan 058 §058.1 — commands execute against the Base + Overlay
@@ -702,7 +713,8 @@ function mutateSceneAppearanceOverride(
     const next = mutate(current);
     const isEmpty =
       (next.surfaceSlotOverrides?.length ?? 0) === 0 &&
-      (next.shaderOverrides?.length ?? 0) === 0;
+      (next.shaderOverrides?.length ?? 0) === 0 &&
+      !next.colliderOverride;
     const assetAppearanceOverrides = { ...overlay.assetAppearanceOverrides };
     if (isEmpty) {
       delete assetAppearanceOverrides[instanceId];
@@ -809,6 +821,36 @@ function applySetPlacedAssetSurfaceSlotOverride(
         surfaceSlotOverrides: next.length > 0 ? next : undefined
       };
     })
+  );
+}
+
+function applySetPlacedAssetColliderOverride(
+  context: CommandExecutionContext,
+  command: SetPlacedAssetColliderOverrideCommand
+): { region: RegionDocument; scene: Scene } {
+  const { instanceId, collider } = command.payload;
+  // Scene-scope write on a base instance -> the Scene overlay's restyle bag.
+  if (
+    command.payload.scope === "scene" &&
+    !isSceneContainedInstance(context, instanceId)
+  ) {
+    return mutateSceneAppearanceOverride(context, instanceId, (current) => ({
+      ...current,
+      colliderOverride: collider ? cloneAssetCollider(collider) : undefined
+    }));
+  }
+  // Base scope (or a scene-contained instance): the instance's own field.
+  return mapPlacedAssetsEverywhere(context, (assets) =>
+    assets.map((asset) =>
+      asset.instanceId === instanceId
+        ? {
+            ...asset,
+            colliderOverride: collider
+              ? cloneAssetCollider(collider)
+              : undefined
+          }
+        : asset
+    )
   );
 }
 
@@ -1222,51 +1264,49 @@ function applyCreateRegionArea(
   region: RegionDocument,
   command: CreateRegionAreaCommand
 ): RegionDocument {
-  return {
-    ...region,
-    areas: [
-      ...region.areas,
-      createRegionAreaDefinition({
-        areaId: command.payload.areaId,
-        displayName: command.payload.displayName,
-        lorePageId: command.payload.lorePageId,
-        parentAreaId: command.payload.parentAreaId,
-        kind: command.payload.kind,
-        bounds: command.payload.bounds
-      })
-    ]
-  };
+  // Plan 069.4 — compute the intended area list, then reconcile it into the
+  // canonical `volumes` (which re-derives the area/ambience aliases).
+  const nextAreas = [
+    ...region.areas,
+    createRegionAreaDefinition({
+      areaId: command.payload.areaId,
+      displayName: command.payload.displayName,
+      lorePageId: command.payload.lorePageId,
+      parentAreaId: command.payload.parentAreaId,
+      kind: command.payload.kind,
+      bounds: command.payload.bounds
+    })
+  ];
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
 function applyUpdateRegionArea(
   region: RegionDocument,
   command: UpdateRegionAreaCommand
 ): RegionDocument {
-  return {
-    ...region,
-    areas: region.areas.map((area) =>
-      area.areaId !== command.payload.areaId
-        ? area
-        : createRegionAreaDefinition({
-            ...area,
-            ...(command.payload.displayName === undefined
-              ? {}
-              : { displayName: command.payload.displayName }),
-            ...(command.payload.lorePageId === undefined
-              ? {}
-              : { lorePageId: command.payload.lorePageId }),
-            ...(command.payload.parentAreaId === undefined
-              ? {}
-              : { parentAreaId: command.payload.parentAreaId }),
-            ...(command.payload.kind === undefined
-              ? {}
-              : { kind: command.payload.kind }),
-            ...(command.payload.bounds === undefined
-              ? {}
-              : { bounds: command.payload.bounds })
-          })
-    )
-  };
+  const nextAreas = region.areas.map((area) =>
+    area.areaId !== command.payload.areaId
+      ? area
+      : createRegionAreaDefinition({
+          ...area,
+          ...(command.payload.displayName === undefined
+            ? {}
+            : { displayName: command.payload.displayName }),
+          ...(command.payload.lorePageId === undefined
+            ? {}
+            : { lorePageId: command.payload.lorePageId }),
+          ...(command.payload.parentAreaId === undefined
+            ? {}
+            : { parentAreaId: command.payload.parentAreaId }),
+          ...(command.payload.kind === undefined
+            ? {}
+            : { kind: command.payload.kind }),
+          ...(command.payload.bounds === undefined
+            ? {}
+            : { bounds: command.payload.bounds })
+        })
+  );
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
 }
 
 function applyDeleteRegionArea(
@@ -1274,19 +1314,59 @@ function applyDeleteRegionArea(
   command: DeleteRegionAreaCommand
 ): RegionDocument {
   const deletedAreaId = command.payload.areaId;
-  return {
-    ...region,
-    areas: region.areas
-      .filter((area) => area.areaId !== deletedAreaId)
-      .map((area) =>
-        area.parentAreaId === deletedAreaId
-          ? {
-              ...area,
-              parentAreaId: null
-            }
-          : area
-      )
-  };
+  const nextAreas = region.areas
+    .filter((area) => area.areaId !== deletedAreaId)
+    .map((area) =>
+      area.parentAreaId === deletedAreaId
+        ? { ...area, parentAreaId: null }
+        : area
+    );
+  return reconcileRegionVolumesFromAreas(region, nextAreas);
+}
+
+// Plan 069.7 — direct Volume authoring. Operate on the canonical volumes
+// and re-derive the `@deprecated` area/ambience aliases (commands don't
+// re-normalize).
+function applyCreateRegionVolume(
+  region: RegionDocument,
+  command: CreateRegionVolumeCommand
+): RegionDocument {
+  const volumes = [
+    ...resolveRegionVolumes(region),
+    createRegionVolumeDefinition(command.payload.volume)
+  ];
+  return withDerivedRegionAliases(region, volumes);
+}
+
+function applyUpdateRegionVolume(
+  region: RegionDocument,
+  command: UpdateRegionVolumeCommand
+): RegionDocument {
+  const volumes = resolveRegionVolumes(region).map((volume) =>
+    volume.volumeId !== command.payload.volumeId
+      ? volume
+      : createRegionVolumeDefinition({
+          ...volume,
+          ...command.payload.patch,
+          volumeId: volume.volumeId
+        })
+  );
+  return withDerivedRegionAliases(region, volumes);
+}
+
+function applyDeleteRegionVolume(
+  region: RegionDocument,
+  command: DeleteRegionVolumeCommand
+): RegionDocument {
+  const deletedId = command.payload.volumeId;
+  const volumes = resolveRegionVolumes(region)
+    .filter((volume) => volume.volumeId !== deletedId)
+    .map((volume) =>
+      volume.parentVolumeId === deletedId
+        ? { ...volume, parentVolumeId: null }
+        : volume
+    );
+  return withDerivedRegionAliases(region, volumes);
 }
 
 function applyCreateRegionNPCBehavior(
@@ -1506,51 +1586,35 @@ function applyCreateRegionAmbienceZone(
   region: RegionDocument,
   command: CreateRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: [
-        ...(region.audio?.ambienceZones ?? []),
-        command.payload.zone
-      ]
-    }
-  };
+  // Plan 069.4 — reconcile the trigger-role volumes from the intended zone
+  // list (re-derives the ambience alias; preserves emitters).
+  const nextZones = [
+    ...(region.audio?.ambienceZones ?? []),
+    command.payload.zone
+  ];
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 function applyUpdateRegionAmbienceZone(
   region: RegionDocument,
   command: UpdateRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: (region.audio?.ambienceZones ?? []).map((zone) =>
-        zone.zoneId === command.payload.zoneId
-          ? { ...zone, ...command.payload.patch }
-          : zone
-      )
-    }
-  };
+  const nextZones = (region.audio?.ambienceZones ?? []).map((zone) =>
+    zone.zoneId === command.payload.zoneId
+      ? { ...zone, ...command.payload.patch }
+      : zone
+  );
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 function applyDeleteRegionAmbienceZone(
   region: RegionDocument,
   command: DeleteRegionAmbienceZoneCommand
 ): RegionDocument {
-  return {
-    ...region,
-    audio: {
-      ...region.audio,
-      emitters: region.audio?.emitters ?? [],
-      ambienceZones: (region.audio?.ambienceZones ?? []).filter(
-        (zone) => zone.zoneId !== command.payload.zoneId
-      )
-    }
-  };
+  const nextZones = (region.audio?.ambienceZones ?? []).filter(
+    (zone) => zone.zoneId !== command.payload.zoneId
+  );
+  return reconcileRegionVolumesFromAmbienceZones(region, nextZones);
 }
 
 export function executeCommand(
@@ -1624,6 +1688,10 @@ export function executeCommand(
       ({ region: updatedRegion, scene: updatedScene } =
         applySetPlacedAssetSurfaceSlotOverride(context, command));
       break;
+    case "SetPlacedAssetColliderOverride":
+      ({ region: updatedRegion, scene: updatedScene } =
+        applySetPlacedAssetColliderOverride(context, command));
+      break;
     case "SetPlacedAssetShaderParameterOverride":
       ({ region: updatedRegion, scene: updatedScene } =
         applySetPlacedAssetShaderParameterOverride(context, command));
@@ -1647,6 +1715,9 @@ export function executeCommand(
     case "UpdateRegionMetadata":
       updatedRegion = applyUpdateRegionMetadata(region, command);
       break;
+    case "SetRegionNavMesh":
+      updatedRegion = { ...region, navMesh: command.payload.navMesh };
+      break;
     case "CreateRegionArea":
       updatedRegion = applyCreateRegionArea(region, command);
       break;
@@ -1655,6 +1726,15 @@ export function executeCommand(
       break;
     case "DeleteRegionArea":
       updatedRegion = applyDeleteRegionArea(region, command);
+      break;
+    case "CreateRegionVolume":
+      updatedRegion = applyCreateRegionVolume(region, command);
+      break;
+    case "UpdateRegionVolume":
+      updatedRegion = applyUpdateRegionVolume(region, command);
+      break;
+    case "DeleteRegionVolume":
+      updatedRegion = applyDeleteRegionVolume(region, command);
       break;
     case "CreateRegionNPCBehavior":
       updatedRegion = applyCreateRegionNPCBehavior(region, command);

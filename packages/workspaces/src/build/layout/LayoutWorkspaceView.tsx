@@ -62,6 +62,7 @@ import {
   ToolOptionSlider,
   ToolOptionsBar,
   ToolRail,
+  ViewportViewToggleBar,
   type SceneExplorerNode,
   type ToolRailItem
 } from "@sugarmagic/ui";
@@ -74,6 +75,7 @@ import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "./LayoutOrientationWidget";
 import { AssetAppearanceSection } from "./AssetAppearanceSection";
+import { AssetCollisionSection } from "./AssetCollisionSection";
 import { surfaceDefinitionMatchesContext } from "@sugarmagic/domain";
 import { LayoutAudioPlacementSection } from "./LayoutAudioPlacementSection";
 import type { TransformTool } from "../../interaction/tool-state";
@@ -415,6 +417,14 @@ export function useLayoutWorkspaceView(
   const scatterBrushSettings = useVanillaStoreSelector(
     viewportStore,
     (state) => state.scatterBrushSettings
+  );
+  const showColliders = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showColliders
+  );
+  const showNavMesh = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showNavMesh
   );
   // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
   // layer is armed; the mask-paint overlay owns the strokes, this
@@ -1699,6 +1709,21 @@ export function useLayoutWorkspaceView(
                 onOpenSurfaceStudio={onOpenSurfaceStudio}
               />
             ) : null}
+            {region ? (
+              <AssetCollisionSection
+                instance={selectedAsset}
+                assetDefinition={
+                  assetDefinitions.find(
+                    (definition) =>
+                      definition.definitionId === selectedAsset.assetDefinitionId
+                  ) ?? null
+                }
+                regionId={region.identity.id}
+                activeScene={activeScene}
+                isSceneContained={overlayAssetIds.has(selectedAsset.instanceId)}
+                onCommand={onCommand}
+              />
+            ) : null}
             <Stack gap="xs">
               <Text
                 size="xs"
@@ -2298,6 +2323,26 @@ export function useLayoutWorkspaceView(
             </ToolOptionsBar>
           </Box>
         ) : null}
+        <ViewportViewToggleBar
+          toggles={[
+            {
+              id: "show-colliders",
+              icon: "▨",
+              label: `${showColliders ? "Hide" : "Show"} colliders`,
+              active: showColliders,
+              onToggle: () =>
+                viewportStore.getState().setShowColliders(!showColliders)
+            },
+            {
+              id: "show-navmesh",
+              icon: "🧭",
+              label: `${showNavMesh ? "Hide" : "Show"} navmesh`,
+              active: showNavMesh,
+              onToggle: () =>
+                viewportStore.getState().setShowNavMesh(!showNavMesh)
+            }
+          ]}
+        />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
         {contextMenu && (
           <Box

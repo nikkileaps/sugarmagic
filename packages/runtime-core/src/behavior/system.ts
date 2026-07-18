@@ -1,6 +1,5 @@
 import type {
   RegionDocument,
-  RegionBehaviorWorldFlagCondition,
   RegionNPCBehaviorDefinition,
   RegionNPCBehaviorTask,
   SaveSlice
@@ -13,6 +12,32 @@ import {
   type RuntimeBlackboard
 } from "../state";
 import { findRegionAreaById } from "../spatial";
+import {
+  resolveMove,
+  type CircleObstacle,
+  type CollisionWorld
+} from "../collision";
+import { evaluateRegionQuestBinding } from "../region-conditions";
+import type { NavMeshPathfinder } from "../navmesh";
+
+/** One dynamic agent (NPC/player) the NPC mover must not interpenetrate
+ *  (Plan 069.3). `id` is the presenceId, used to exclude self. */
+export interface NpcCollisionAgent {
+  id: string;
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** Per-frame collision context for NPC movement (Plan 069.3): the static
+ *  collision world + every agent circle (built by the caller). */
+export interface NpcMovementCollisionContext {
+  world: CollisionWorld;
+  agents: readonly NpcCollisionAgent[];
+}
+
+/** Fallback NPC radius when an NPC is absent from the agent snapshot. */
+const DEFAULT_NPC_AGENT_RADIUS = 0.35;
 
 export interface RuntimeBehaviorQuestState {
   questDefinitionId: string;
@@ -37,6 +62,14 @@ export interface RuntimeNpcBehaviorSystemOptions {
   arrivalThresholdMeters?: number;
   now?: () => number;
   logDebug?: (event: string, payload?: Record<string, unknown>) => void;
+  /** Plan 069.3 — supplies the collision world + agent circles each sync
+   *  so NPC moves route through the SAME `resolveMove` as the player
+   *  (single enforcer). Absent => NPCs move without collision (V1 / tests). */
+  getCollisionContext?: () => NpcMovementCollisionContext | null;
+  /** Plan 069.9 — the baked navmesh pathfinder. When present, NPCs follow
+   *  navmesh waypoints to the task target (routing around props); absent =>
+   *  straight-line locomotion (069.3), so unbaked regions keep working. */
+  getPathfinder?: () => NavMeshPathfinder | null;
 }
 
 export interface RuntimeNpcBehaviorSyncResult {
@@ -121,6 +154,10 @@ const DEFAULT_MOVEMENT_SPEED_METERS_PER_SECOND = 2.5;
 const DEFAULT_STUCK_TIMEOUT_MS = 2500;
 const DEFAULT_ARRIVAL_THRESHOLD_METERS = 0.4;
 const MOVEMENT_PROGRESS_THRESHOLD_METERS = 0.05;
+// Plan 069.9 — path-following tuning.
+const WAYPOINT_ARRIVAL_METERS = 0.6; // advance to the next corner within this
+const REPATH_TARGET_MOVE_METERS = 1.0; // re-path when the final target shifts
+const REPATH_DRIFT_METERS = 2.5; // re-path when collision shoved us off route
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -165,46 +202,16 @@ function resolveTaskTargetPoint(
   };
 }
 
-function coerceWorldFlagValue(
-  condition: RegionBehaviorWorldFlagCondition
-): string | boolean | number | undefined {
-  if (condition.valueType === "boolean") {
-    if (condition.value === null) {
-      return true;
-    }
-    return condition.value.toLowerCase() === "true";
-  }
-  if (condition.valueType === "number") {
-    if (condition.value === null) {
-      return undefined;
-    }
-    const parsed = Number(condition.value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return condition.value ?? undefined;
-}
-
 function taskMatchesActivation(
   task: RegionNPCBehaviorTask,
   activeQuest: RuntimeBehaviorQuestState | null,
   hasWorldFlag?: (key: string, value?: unknown) => boolean
 ): boolean {
-  if (task.activation.questDefinitionId && activeQuest?.questDefinitionId !== task.activation.questDefinitionId) {
-    return false;
-  }
-  if (task.activation.questStageId && activeQuest?.stageId !== task.activation.questStageId) {
-    return false;
-  }
-  if (task.activation.worldFlagEquals?.key) {
-    if (!hasWorldFlag) {
-      return false;
-    }
-    const expectedValue = coerceWorldFlagValue(task.activation.worldFlagEquals);
-    if (!hasWorldFlag(task.activation.worldFlagEquals.key, expectedValue)) {
-      return false;
-    }
-  }
-  return true;
+  // Plan 069.5 — one grammar evaluator, shared with the containment gate.
+  return evaluateRegionQuestBinding(task.activation, {
+    activeQuest,
+    hasWorldFlag
+  });
 }
 
 function resolveBehaviorTask(
@@ -239,6 +246,27 @@ function distance2d(
   const dx = left.x - right.x;
   const dz = left.z - right.z;
   return Math.sqrt(dx * dx + dz * dz);
+}
+
+/** Perpendicular XZ distance from `p` to the segment `a`->`b` (Plan 069.9
+ *  drift detection). Heading toward a FAR waypoint is normal; being far off
+ *  the path LINE (e.g. shoved by another agent) is drift. */
+function distanceToSegment2d(
+  p: { x: number; z: number },
+  a: { x: number; z: number },
+  b: { x: number; z: number }
+): number {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const lenSq = abx * abx + abz * abz;
+  if (lenSq === 0) {
+    return distance2d(p, a);
+  }
+  const t = Math.max(
+    0,
+    Math.min(1, ((p.x - a.x) * abx + (p.z - a.z) * abz) / lenSq)
+  );
+  return distance2d(p, { x: a.x + t * abx, z: a.z + t * abz });
 }
 
 function createInitialMovementState(
@@ -352,13 +380,151 @@ export function createRuntimeNpcBehaviorSystem(
     stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
     arrivalThresholdMeters = DEFAULT_ARRIVAL_THRESHOLD_METERS,
     now = () => Date.now(),
-    logDebug
+    logDebug,
+    getCollisionContext,
+    getPathfinder
   } = options;
   const movementStateByNpcId = new Map<string, MovementState>();
+  // Plan 069.9 — ephemeral (not persisted) navmesh route per NPC: the
+  // waypoint list + which one we're heading to + the final target it was
+  // computed for (to detect a target change and re-path).
+  const navPathByNpcId = new Map<
+    string,
+    { waypoints: { x: number; z: number }[]; index: number; targetX: number; targetZ: number }
+  >();
   const currentTaskByNpcId = new Map<string, RuntimeNpcCurrentTask>();
   const behaviorByNpcId = new Map(
     region.behaviors.map((behavior) => [behavior.npcDefinitionId, behavior])
   );
+  // Plan 069.3 — snapshotted once per sync so every NPC this frame resolves
+  // against the same agent positions (last-frame snapshot, standard).
+  let currentCollisionContext: NpcMovementCollisionContext | null = null;
+  const otherAgentCircles: CircleObstacle[] = [];
+
+  /**
+   * Plan 069.9 — the immediate step target: the current navmesh waypoint
+   * toward `finalTarget`, or `finalTarget` itself when there is no pathfinder
+   * or no route (straight-line fallback — unbaked regions keep working). Re-
+   * paths when the target shifts, the route is exhausted, or collision shoved
+   * the NPC off it. The stepper still measures ARRIVAL against `finalTarget`.
+   */
+  function resolveStepTarget(
+    npcId: string,
+    position: { x: number; y: number; z: number },
+    finalTarget: { x: number; z: number }
+  ): { x: number; z: number } {
+    const pathfinder = getPathfinder?.() ?? null;
+    if (!pathfinder) {
+      navPathByNpcId.delete(npcId);
+      return finalTarget;
+    }
+    let path = navPathByNpcId.get(npcId);
+    const targetMoved =
+      !!path &&
+      distance2d({ x: path.targetX, z: path.targetZ }, finalTarget) >
+        REPATH_TARGET_MOVE_METERS;
+    // Drift = shoved off the path LINE, not merely far from a distant next
+    // corner (that's normal). Measure perpendicular distance from the segment
+    // the NPC is currently traversing (prev corner -> current corner). At
+    // index 0 there is no traversed segment yet (heading to the snapped
+    // start) -- skip the check, else an off-mesh NPC whose snap point is
+    // beyond the threshold would re-path (WASM findPath) EVERY frame.
+    const currentWaypoint = path ? path.waypoints[path.index] ?? null : null;
+    const prevWaypoint =
+      path && path.index >= 1 ? path.waypoints[path.index - 1] ?? null : null;
+    const drifted =
+      !!currentWaypoint &&
+      !!prevWaypoint &&
+      distanceToSegment2d(position, prevWaypoint, currentWaypoint) >
+        REPATH_DRIFT_METERS;
+    const exhausted = !!path && path.index >= path.waypoints.length;
+
+    if (!path || targetMoved || drifted || exhausted) {
+      const waypoints = pathfinder
+        .findPath(
+          { x: position.x, y: position.y, z: position.z },
+          { x: finalTarget.x, y: position.y, z: finalTarget.z }
+        )
+        .map((p) => ({ x: p.x, z: p.z }));
+      if (waypoints.length === 0) {
+        navPathByNpcId.delete(npcId); // off-mesh / unreachable -> straight-line
+        return finalTarget;
+      }
+      path = {
+        waypoints,
+        // Skip the first corner when it's just the snapped start position.
+        index:
+          waypoints.length > 1 &&
+          distance2d(position, waypoints[0]!) < WAYPOINT_ARRIVAL_METERS
+            ? 1
+            : 0,
+        targetX: finalTarget.x,
+        targetZ: finalTarget.z
+      };
+      navPathByNpcId.set(npcId, path);
+    }
+    return path.waypoints[path.index] ?? finalTarget;
+  }
+
+  /** Advance past every waypoint the NPC has reached this frame. */
+  function advanceWaypoints(npcId: string, position: { x: number; z: number }) {
+    const path = navPathByNpcId.get(npcId);
+    if (!path) {
+      return;
+    }
+    while (
+      path.index < path.waypoints.length - 1 &&
+      distance2d(position, path.waypoints[path.index]!) <= WAYPOINT_ARRIVAL_METERS
+    ) {
+      path.index += 1;
+    }
+  }
+
+  /**
+   * Commit an NPC's proposed step. Plan 069.3 — routes through the SAME
+   * `resolveMove` as the player (collide-and-slide vs static boxes + push-
+   * out vs other agents). Without a collision context (V1 / tests) it
+   * writes the proposed position directly, preserving old behavior. The
+   * RESOLVED position flows into stuck-detection: a slide makes progress
+   * (not stuck), a pinned NPC makes none (stuck) — no separate tuning.
+   */
+  function commitNpcMove(
+    position: { x: number; z: number },
+    presenceId: string,
+    proposedX: number,
+    proposedZ: number
+  ): void {
+    const context = currentCollisionContext;
+    if (!context) {
+      position.x = proposedX;
+      position.z = proposedZ;
+      return;
+    }
+    let selfRadius = DEFAULT_NPC_AGENT_RADIUS;
+    otherAgentCircles.length = 0;
+    for (const agent of context.agents) {
+      if (agent.id === presenceId) {
+        selfRadius = agent.radius;
+        continue;
+      }
+      otherAgentCircles.push({
+        x: agent.x,
+        z: agent.z,
+        radius: agent.radius,
+        id: agent.id
+      });
+    }
+    const resolved = resolveMove(
+      // `id` = presenceId so an exact-coincidence tie ejects deterministically
+      // opposite the other agent (069.9 mini-review fix).
+      { x: position.x, z: position.z, radius: selfRadius, id: presenceId },
+      { x: proposedX - position.x, z: proposedZ - position.z },
+      context.world,
+      otherAgentCircles
+    );
+    position.x += resolved.x;
+    position.z += resolved.z;
+  }
 
   function emitDebug(event: string, payload?: Record<string, unknown>) {
     logDebug?.(event, payload);
@@ -471,31 +637,37 @@ export function createRuntimeNpcBehaviorSystem(
         });
       }
 
-      const stepResult = stepToward({
-        position,
-        target: targetPoint,
-        movementSpeedMetersPerSecond,
-        deltaSeconds,
-        arrivalThresholdMeters
-      });
-      distanceToTargetMeters = stepResult.distanceToTargetMeters;
+      // Plan 069.9 — arrival is measured against the FINAL authored point;
+      // locomotion heads to the current navmesh waypoint toward it (or
+      // straight there when unbaked). V1 stays planar x/z; vertical is the
+      // later terrain layer.
+      const distanceToFinal = distance2d(position, targetPoint);
+      distanceToTargetMeters = distanceToFinal;
 
-      if (stepResult.status === "at_target") {
-        // V1 movement is position-based and writes directly to the Position component.
-        // That keeps NPC behavior deterministic, but it also means this path does not
-        // emit a separate "moved" event for other ECS systems and only resolves planar
-        // x/z travel toward a sampled point inside the authored area. Vertical traversal
-        // and richer movement signaling belong in a later locomotion/pathfinding layer.
-        position.x = stepResult.x;
-        position.z = stepResult.z;
+      if (distanceToFinal <= arrivalThresholdMeters) {
+        commitNpcMove(position, npc.presenceId, targetPoint.x, targetPoint.z);
         state.status = "at_target";
         state.lastProgressAtMs = now();
         state.blockedAtMs = null;
+        navPathByNpcId.delete(npc.npcDefinitionId);
       } else if (state.status !== "blocked") {
-        // See note above: this mutates Position in place for V1 behavior movement.
-        position.x = stepResult.x;
-        position.z = stepResult.z;
+        const stepTarget = resolveStepTarget(
+          npc.npcDefinitionId,
+          position,
+          targetPoint
+        );
+        const stepResult = stepToward({
+          position,
+          target: stepTarget,
+          movementSpeedMetersPerSecond,
+          deltaSeconds,
+          arrivalThresholdMeters
+        });
+        // Plan 069.3 — resolved move (collide-and-slide + agent push-out);
+        // the RESOLVED position feeds stuck-detection below.
+        commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
         state.status = "en_route";
+        advanceWaypoints(npc.npcDefinitionId, position);
 
         const stuckResult = detectStuck({
           position,
@@ -516,6 +688,8 @@ export function createRuntimeNpcBehaviorSystem(
           state.status = "blocked";
           state.blockedAtMs = now();
           failureReason = "stuck";
+          // Plan 069.9 — drop the stale route so a retry re-paths.
+          navPathByNpcId.delete(npc.npcDefinitionId);
           emitDebug("npc-movement-blocked", {
             npcDefinitionId: npc.npcDefinitionId,
             targetAreaId: directive.targetAreaId,
@@ -563,6 +737,9 @@ export function createRuntimeNpcBehaviorSystem(
 
   return {
     sync(input) {
+      // Plan 069.3 — snapshot the collision world + agent circles once for
+      // the whole sync; every NPC's move this frame resolves against it.
+      currentCollisionContext = getCollisionContext?.() ?? null;
       const currentNpcEntities = resolveNpcEntities();
       const activeNpcIds = new Set(
         currentNpcEntities.map((npc) => npc.npcDefinitionId)
@@ -573,6 +750,7 @@ export function createRuntimeNpcBehaviorSystem(
         }
         movementStateByNpcId.delete(npcDefinitionId);
         currentTaskByNpcId.delete(npcDefinitionId);
+        navPathByNpcId.delete(npcDefinitionId);
       }
 
       const snapshots = currentNpcEntities
@@ -587,6 +765,7 @@ export function createRuntimeNpcBehaviorSystem(
     reset() {
       movementStateByNpcId.clear();
       currentTaskByNpcId.clear();
+      navPathByNpcId.clear();
     },
     // ---- Plan 056 §056.2 — save participation ------------------------
     serializeSaveSlice(): NpcBehaviorSlice {

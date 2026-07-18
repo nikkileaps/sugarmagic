@@ -1,5 +1,5 @@
 /**
- * ViewportToolbar: HUD overlay for switching transform tools.
+ * ViewportToolbar: HUD overlay for switching tools.
  *
  * Positioned at top-left of the viewport. Shows move/rotate/scale
  * buttons with Blender-convention keyboard hints (G/R/S).

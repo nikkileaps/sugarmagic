@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { RegionDocument } from "@sugarmagic/domain";
+import { createRegionVolumeDefinition, type RegionDocument } from "@sugarmagic/domain";
 import { World, Position } from "@sugarmagic/runtime-core";
 import {
+  buildCollisionWorld,
+  createEmptyCollisionWorld,
   createRuntimeBlackboard,
   createRuntimeNpcBehaviorSystem,
   getEntityCurrentActivity,
   getEntityCurrentGoal,
-  getEntityMovement
+  getEntityMovement,
+  type NavMeshPathfinder,
+  type NpcMovementCollisionContext
 } from "@sugarmagic/runtime-core";
 
 function makeRegion(): RegionDocument {
@@ -458,5 +462,249 @@ describe("runtime NPC behavior system", () => {
     });
 
     expect(result.snapshots).toHaveLength(2);
+  });
+
+  it("follows navmesh waypoints (069.9) instead of heading straight to the target", () => {
+    const region = makeRegion(); // dock target at +X (10, _, 0)
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    // A detour route that first heads +Z (a wall between the NPC and the dock).
+    const detourPathfinder: NavMeshPathfinder = {
+      findPath: () => [
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 8 },
+        { x: 10, y: 0, z: 0 }
+      ],
+      destroy: () => {}
+    };
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      getPathfinder: () => detourPathfinder,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({
+      deltaSeconds: 1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+    });
+
+    const position = world.getComponent(entity, Position);
+    // Took the +Z detour toward the first waypoint, not a straight +X beeline.
+    expect(position!.z).toBeGreaterThan(1);
+    expect(position!.x).toBeLessThan(1);
+  });
+
+  it("falls back to a straight line when there is no pathfinder (unbaked regions)", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      // no getPathfinder
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({
+      deltaSeconds: 1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+    });
+
+    const position = world.getComponent(entity, Position);
+    // Straight beeline toward the dock (+X), no lateral detour.
+    expect(position!.x).toBeGreaterThan(1);
+    expect(Math.abs(position!.z)).toBeLessThan(1);
+  });
+});
+
+describe("069.3 — NPC collision-context adapter (commitNpcMove)", () => {
+  function makeCollisionSystem(context: NpcMovementCollisionContext | null) {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      stuckTimeoutMs: 100,
+      now: (() => {
+        let t = 0;
+        return () => (t += 200); // every call advances past stuckTimeoutMs
+      })(),
+      getCollisionContext: () => context,
+      npcEntities: [
+        { presenceId: "p:rick", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+    return { system, world, blackboard, entity };
+  }
+  const arrival = {
+    questDefinitionId: "quest:find-suitcase",
+    stageId: "stage:arrival"
+  };
+
+  it("a wall across the path pins the NPC and stuck-detection reports blocked", () => {
+    // Blocker volume spanning z, between the NPC (0,0) and the dock (+X).
+    // Small dt so the per-frame step (0.25m) can't discretely tunnel the 1m
+    // wall — walking-speed steps are the resolver's contract (CCD deferred).
+    const wallWorld = buildCollisionWorld(
+      [],
+      [
+        createRegionVolumeDefinition({
+          volumeId: "vol:wall",
+          roles: ["blocker"],
+          blockDirection: "in",
+          bounds: { kind: "box", center: [2.5, 0, 0], size: [1, 4, 100] }
+        })
+      ]
+    );
+    const { system, world, blackboard, entity } = makeCollisionSystem({
+      world: wallWorld,
+      agents: []
+    });
+    for (let i = 0; i < 20; i += 1) {
+      system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    }
+    const pos = world.getComponent(entity, Position)!;
+    expect(pos.x).toBeLessThan(2); // pinned at the wall face, never crossed
+    // The RESOLVED (pinned) position fed stuck-detection.
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("blocked");
+  });
+
+  it("the NPC's OWN circle in the agent snapshot does not perturb its motion", () => {
+    // Same directive with and without the self-only agent snapshot must land
+    // on the IDENTICAL position (the sampled task target has nonzero z, so
+    // assert against a control run rather than a straight +X line).
+    const withSelf = makeCollisionSystem({
+      world: createEmptyCollisionWorld(),
+      agents: [{ id: "p:rick", x: 0, z: 0, radius: 0.35 }] // itself only
+    });
+    const control = makeCollisionSystem(null);
+    withSelf.system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    control.system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    const a = withSelf.world.getComponent(withSelf.entity, Position)!;
+    const b = control.world.getComponent(control.entity, Position)!;
+    expect(a.x).toBeCloseTo(b.x, 6);
+    expect(a.z).toBeCloseTo(b.z, 6);
+    expect(a.x).toBeGreaterThan(1); // and it actually walked
+  });
+
+  it("another agent in the path pushes the NPC out (no interpenetration)", () => {
+    const other = { id: "p:other", x: 2.5, z: 0, radius: 0.4 };
+    const { system, world, entity } = makeCollisionSystem({
+      world: createEmptyCollisionWorld(),
+      agents: [other]
+    });
+    system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    const pos = world.getComponent(entity, Position)!;
+    // Separated by at least combined radii (0.4 + DEFAULT 0.35).
+    expect(Math.hypot(pos.x - other.x, pos.z - other.z)).toBeGreaterThanOrEqual(
+      0.75 - 1e-6
+    );
+  });
+});
+
+describe("069.9 — path-following state machine across frames", () => {
+  /** A spy-able fake mesh: a detour that always ENDS at the requested target,
+   *  so the follower advances corners then arrives at the final point. */
+  function detourPathfinder(): { pf: NavMeshPathfinder; calls: () => number } {
+    let calls = 0;
+    const pf: NavMeshPathfinder = {
+      findPath: (from, to) => {
+        calls += 1;
+        return [
+          { x: from.x, y: 0, z: from.z },
+          { x: from.x, y: 0, z: from.z + 5 }, // a corner to advance past
+          { x: to.x, y: 0, z: to.z }
+        ];
+      },
+      destroy: () => {}
+    };
+    return { pf, calls: () => calls };
+  }
+
+  function makeSystem(pf: NavMeshPathfinder) {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      getPathfinder: () => pf,
+      npcEntities: [
+        { presenceId: "p:rick", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+    return { system, world, blackboard, entity };
+  }
+
+  const arrival = {
+    questDefinitionId: "quest:find-suitcase",
+    stageId: "stage:arrival"
+  };
+
+  it("advances corners across ticks and arrives at the final target", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, blackboard } = makeSystem(pf);
+    for (let i = 0; i < 30; i += 1) {
+      system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    }
+    // Reached the authored area via the mesh, and the route was computed ONCE
+    // (followed, not re-pathed every frame).
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe(
+      "at_target"
+    );
+    expect(calls()).toBe(1);
+  });
+
+  it("re-paths when collision shoves the NPC off its route (drift)", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, world, entity } = makeSystem(pf);
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    expect(calls()).toBe(1);
+    // Teleport far off the current waypoint (> REPATH_DRIFT_METERS).
+    const pos = world.getComponent(entity, Position)!;
+    pos.z = 60;
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    expect(calls()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("re-paths when the task target moves (arrival stage -> search stage)", () => {
+    const { pf, calls } = detourPathfinder();
+    const { system, blackboard } = makeSystem(pf);
+    system.sync({ deltaSeconds: 0.1, activeQuest: arrival }); // -> dock
+    expect(calls()).toBe(1);
+    // stage:search activates task:shop -> target area changes to "shop".
+    system.sync({
+      deltaSeconds: 0.1,
+      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:search" }
+    });
+    expect(calls()).toBeGreaterThanOrEqual(2);
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.targetAreaId).toBe(
+      "shop"
+    );
   });
 });

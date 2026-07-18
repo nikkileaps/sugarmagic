@@ -23,6 +23,7 @@ import {
   type AuthoringSession,
   getActiveRegion,
   getMaskTextureDefinition,
+  resolveRegionVolumes,
   type MaskTextureDefinition,
   type RegionDocument,
   type RegionLandscapeState
@@ -39,6 +40,7 @@ import {
 import {
   resolveSceneObjects,
   computeSceneDelta,
+  loadNavMeshDebugGeometry,
   type SceneObject
 } from "@sugarmagic/runtime-core";
 import {
@@ -386,6 +388,208 @@ export function createAuthoringViewport(
   authoredRoot.name = "authoring-authored-root";
   scene.add(authoredRoot);
 
+  // Plan 069.6 — collider + volume-blocker wireframes, toggled by
+  // `showColliders`. World space (colliders resolve to world AABBs), so it
+  // sits directly under the scene, rebuilt whenever the projection changes.
+  const colliderWireframeRoot = new THREE.Group();
+  colliderWireframeRoot.name = "collider-wireframes";
+  scene.add(colliderWireframeRoot);
+  const COLLIDER_WIRE_COLOR = 0x89b4fa; // asset collider (blue)
+  const BLOCKER_WIRE_COLOR = 0xf38ba8; // volume blocker (red)
+  const CONTAINMENT_WIRE_COLOR = 0xf9a825; // containment boundary (amber)
+  const _wireBox = new THREE.Box3();
+  const _wireMin = new THREE.Vector3();
+  const _wireMax = new THREE.Vector3();
+  const _wireMat = new THREE.Matrix4();
+  const _wirePos = new THREE.Vector3();
+  const _wireQuat = new THREE.Quaternion();
+  const _wireEuler = new THREE.Euler();
+  const _wireScale = new THREE.Vector3();
+
+  // Plan 069.8 — the baked navmesh walkable surface, toggled by
+  // `showNavMesh`. Loaded async from the artifact blob (asset-source store)
+  // and cached by the bake's input hash so it only reloads on a fresh bake.
+  const navMeshVizRoot = new THREE.Group();
+  navMeshVizRoot.name = "navmesh-viz";
+  scene.add(navMeshVizRoot);
+  const NAVMESH_VIZ_COLOR = 0x89dceb;
+  let navMeshVizHash: string | null = null;
+  let navMeshVizToken = 0;
+
+  /** Dispose the drawn mesh only — does NOT touch the hash cache. */
+  function disposeNavMeshVizChildren() {
+    for (let i = navMeshVizRoot.children.length - 1; i >= 0; i -= 1) {
+      const child = navMeshVizRoot.children[i]!;
+      navMeshVizRoot.remove(child);
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+  }
+
+  /** Full reset: drop the mesh AND the cache key, and supersede any
+   *  in-flight load (else a toggled-off load would still draw late). */
+  function clearNavMeshViz() {
+    navMeshVizHash = null;
+    navMeshVizToken += 1;
+    disposeNavMeshVizChildren();
+  }
+
+  function buildNavMeshVizMesh(positions: number[], indices: number[]) {
+    // Children only — clearing the hash here would defeat the cache and
+    // refetch + WASM-reimport on every projection tick (mini-review r3 #1).
+    disposeNavMeshVizChildren();
+    if (positions.length === 0 || indices.length === 0) {
+      return;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
+    geometry.setIndex(indices);
+    const fill = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: NAVMESH_VIZ_COLOR,
+        transparent: true,
+        opacity: 0.25,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false
+      })
+    );
+    // Hover just above the ground plane to avoid z-fighting the grid.
+    fill.position.y = 0.05;
+    navMeshVizRoot.add(fill);
+    const wire = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geometry),
+      new THREE.LineBasicMaterial({
+        color: NAVMESH_VIZ_COLOR,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
+        toneMapped: false
+      })
+    );
+    wire.position.y = 0.05;
+    navMeshVizRoot.add(wire);
+  }
+
+  async function syncNavMeshViz(projection: ViewportProjection) {
+    const artifact = projection.region?.navMesh ?? null;
+    const url = artifact
+      ? projection.assetSources[artifact.assetPath]
+      : undefined;
+    if (!projection.showNavMesh || !artifact || !url) {
+      clearNavMeshViz();
+      return;
+    }
+    if (navMeshVizHash === artifact.inputHash) {
+      return; // already showing this bake
+    }
+    navMeshVizHash = artifact.inputHash;
+    const token = navMeshVizToken + 1;
+    navMeshVizToken = token;
+    try {
+      const response = await fetch(url);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const geometry = await loadNavMeshDebugGeometry(bytes);
+      if (token !== navMeshVizToken) {
+        return; // a newer request superseded this one
+      }
+      buildNavMeshVizMesh(geometry.positions, geometry.indices);
+    } catch (error) {
+      console.warn("[navmesh-viz] load failed", error);
+      if (token === navMeshVizToken) {
+        clearNavMeshViz();
+      }
+    }
+  }
+
+  function clearColliderWireframes() {
+    for (let i = colliderWireframeRoot.children.length - 1; i >= 0; i -= 1) {
+      const child = colliderWireframeRoot.children[i]!;
+      colliderWireframeRoot.remove(child);
+      if (child instanceof THREE.Box3Helper) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+  }
+
+  function addWireBox(box: THREE.Box3, color: number) {
+    colliderWireframeRoot.add(new THREE.Box3Helper(box.clone(), color));
+  }
+
+  function syncColliderWireframes(
+    objects: readonly SceneObject[],
+    region: RegionDocument,
+    show: boolean
+  ) {
+    clearColliderWireframes();
+    if (!show) {
+      return;
+    }
+    // Asset colliders (definition/instance/scene-resolved, matches the
+    // collision world's single source of truth).
+    for (const object of objects) {
+      const collider = object.collider;
+      if (!collider || collider.shape === "none" || !collider.localBounds) {
+        continue;
+      }
+      _wirePos.set(
+        object.transform.position[0],
+        object.transform.position[1],
+        object.transform.position[2]
+      );
+      _wireEuler.set(
+        object.transform.rotation[0],
+        object.transform.rotation[1],
+        object.transform.rotation[2]
+      );
+      _wireQuat.setFromEuler(_wireEuler);
+      _wireScale.set(
+        object.transform.scale[0],
+        object.transform.scale[1],
+        object.transform.scale[2]
+      );
+      _wireMat.compose(_wirePos, _wireQuat, _wireScale);
+      _wireMin.set(
+        collider.localBounds.min[0],
+        collider.localBounds.min[1],
+        collider.localBounds.min[2]
+      );
+      _wireMax.set(
+        collider.localBounds.max[0],
+        collider.localBounds.max[1],
+        collider.localBounds.max[2]
+      );
+      _wireBox.set(_wireMin, _wireMax).applyMatrix4(_wireMat);
+      addWireBox(_wireBox, COLLIDER_WIRE_COLOR);
+    }
+    // Volume blockers / containment boundaries (already world-space boxes).
+    for (const volume of resolveRegionVolumes(region)) {
+      if (!volume.enabled) {
+        continue;
+      }
+      const isBlocker = volume.roles.includes("blocker");
+      const isContainment = volume.roles.includes("containment-boundary");
+      if (!isBlocker && !isContainment) {
+        continue;
+      }
+      const [cx, cy, cz] = volume.bounds.center;
+      const [sx, sy, sz] = volume.bounds.size;
+      _wireBox.min.set(cx - sx / 2, cy - sy / 2, cz - sz / 2);
+      _wireBox.max.set(cx + sx / 2, cy + sy / 2, cz + sz / 2);
+      addWireBox(
+        _wireBox,
+        isContainment ? CONTAINMENT_WIRE_COLOR : BLOCKER_WIRE_COLOR
+      );
+    }
+  }
+
   const overlayRoot = asOverlayViewportRoot(new THREE.Group());
   overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
@@ -503,9 +707,11 @@ export function createAuthoringViewport(
 
   function applyProjection(projection: ViewportProjection) {
     currentAssetSources = projection.assetSources;
+    void syncNavMeshViz(projection);
 
     if (!projection.region || !projection.contentLibrary) {
       renderGeneration += 1;
+      clearColliderWireframes();
       desiredObjects.clear();
       previousObjects = [];
       for (const entry of objectMap.values()) {
@@ -543,6 +749,7 @@ export function createAuthoringViewport(
         projection.transformOverrides[object.instanceId]
       )
     );
+    syncColliderWireframes(currentObjects, region, projection.showColliders);
     const delta = computeSceneDelta(previousObjects, currentObjects);
     // NOT incremented here: bumping per call raced in-flight loads
     // (see scheduleRenderableLoad). Teardown paths own the bump.

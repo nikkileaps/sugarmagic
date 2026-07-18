@@ -2,7 +2,9 @@ import {
   composeRegionContents,
   getAssetDefinition,
   getCharacterModelDefinition,
+  resolveEffectiveInstanceCollider,
   type AssetKind,
+  type AssetCollider,
   type ContentLibrarySnapshot,
   type ItemDefinition,
   type NPCDefinition,
@@ -81,6 +83,12 @@ export interface SceneObject {
   transform: SceneObjectTransform;
   representationKey: string;
   capsule: SceneObjectCapsuleSpec | null;
+  /** Plan 069.1 — definition-tier collider from the asset (null for
+   *  agents, which collide via `capsule`, and for items). The per-instance
+   *  override tier is 069.6. Not part of `representationKey`: collision is
+   *  a separate axis from rendering, so distinct colliders still instance
+   *  together for draw. */
+  collider: AssetCollider | null;
 }
 
 export interface SceneDelta {
@@ -313,8 +321,42 @@ function createPlacedAssetSceneObject(
       scale: asset.transform.scale
     },
     representationKey: `asset:${asset.assetDefinitionId}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, asset.shaderParameterOverrides)}`,
-    capsule: null
+    capsule: null,
+    // Plan 069.6 — resolve the collider across tiers (scene > instance >
+    // definition); 069.1 shipped only the definition tier.
+    collider: resolveEffectiveInstanceCollider(
+      assetDescriptor.definition?.collider,
+      asset.colliderOverride,
+      sceneAppearanceOverride?.colliderOverride
+    ).collider
   };
+}
+
+/**
+ * Player/NPC agent capsule dimensions from a definition's physical
+ * profile. Plan 069.2 — the collision layer reads the SAME radius from
+ * this helper (the player is excluded from `resolveSceneObjects`, so it
+ * has no live SceneObject to read a capsule off of).
+ */
+export function computePlayerAgentDimensions(
+  playerDefinition: PlayerDefinition | null | undefined
+): { height: number; radius: number } {
+  const height = Math.max(playerDefinition?.physicalProfile.height ?? 1.8, 0.5);
+  const radius = Math.max(
+    playerDefinition?.physicalProfile.radius ?? 0.35,
+    Math.min(0.45, height * 0.45)
+  );
+  return { height, radius };
+}
+
+/** NPC agent capsule dimensions (Plan 069.3 — the collision layer reads
+ *  the SAME radius from here for NPC-vs-NPC / NPC-vs-player push-out). */
+export function computeNpcAgentDimensions(
+  npcDefinition: NPCDefinition | null | undefined
+): { height: number; radius: number } {
+  const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
+  const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
+  return { height, radius };
 }
 
 function createPlayerSceneObject(
@@ -329,11 +371,7 @@ function createPlayerSceneObject(
     modelAssetDefinitionId,
     contentLibrary
   );
-  const height = Math.max(playerDefinition?.physicalProfile.height ?? 1.8, 0.5);
-  const radius = Math.max(
-    playerDefinition?.physicalProfile.radius ?? 0.35,
-    Math.min(0.45, height * 0.45)
-  );
+  const { height, radius } = computePlayerAgentDimensions(playerDefinition);
 
   return {
     instanceId: presence.presenceId,
@@ -372,7 +410,9 @@ function createPlayerSceneObject(
       height,
       radius,
       color: PLAYER_CAPSULE_COLOR
-    }
+    },
+    // Plan 069.1 — agents collide via `capsule`, not a mesh collider.
+    collider: null
   };
 }
 
@@ -388,8 +428,7 @@ function createNPCSceneObject(
     modelAssetDefinitionId,
     contentLibrary
   );
-  const height = Math.max(npcDefinition?.presentation.modelHeight ?? 1.7, 0.5);
-  const radius = Math.max(0.25, Math.min(0.45, height * 0.22));
+  const { height, radius } = computeNpcAgentDimensions(npcDefinition);
   const effectiveShaders = contentLibrary
     ? resolveEffectivePresenceShaderBindings(presence, assetDescriptor.definition, contentLibrary)
     : { surface: null, deform: null, effect: null };
@@ -422,7 +461,9 @@ function createNPCSceneObject(
       height,
       radius,
       color: NPC_CAPSULE_COLOR
-    }
+    },
+    // Plan 069.1 — agents collide via `capsule`, not a mesh collider.
+    collider: null
   };
 }
 
@@ -464,7 +505,9 @@ export function createItemSceneObject(
       scale: presence.transform.scale
     },
     representationKey: `item:${presence.itemDefinitionId}:${modelAssetDefinitionId ?? "cube"}:${assetDescriptor.assetKind ?? "unknown"}:${assetDescriptor.sourcePath ?? "fallback"}:${presence.quantity}:${shaderRepresentationKey(effectiveShaders, effectiveMaterialSlots, presence.shaderParameterOverrides)}`,
-    capsule: null
+    capsule: null,
+    // Plan 069.1 — items are pickups (proximity), not collision bodies.
+    collider: null
   };
 }
 

@@ -17,12 +17,20 @@
  */
 
 import { useState } from "react";
-import { Stack, Text, Button, TextInput } from "@mantine/core";
-import type { AssetDefinition } from "@sugarmagic/domain";
+import { Select, Stack, Text, Button, TextInput } from "@mantine/core";
+import type { AssetColliderShape, AssetDefinition } from "@sugarmagic/domain";
 
 function getAssetKindLabel(assetDefinition: AssetDefinition): string {
   return assetDefinition.assetKind === "foliage" ? "Foliage" : "Model";
 }
+
+const COLLIDER_SHAPE_OPTIONS: { value: AssetColliderShape; label: string }[] = [
+  { value: "auto-box", label: "Auto Box" },
+  { value: "sphere", label: "Sphere" },
+  { value: "capsule", label: "Capsule" },
+  { value: "convex", label: "Convex" },
+  { value: "none", label: "None (walk through)" }
+];
 
 export interface AssetDefinitionInspectorProps {
   assetDefinition: AssetDefinition;
@@ -31,17 +39,26 @@ export interface AssetDefinitionInspectorProps {
    *  gizmo sits on it. For imports whose Blender object sat off world
    *  origin (baked node translation puts the gizmo meters away). */
   onCorrectOrigin: (definitionId: string) => void | Promise<void>;
+  /** Plan 069.6 — set this asset's DEFINITION collider shape (the type-level
+   *  default every placed/scattered instance inherits). "none" = decor /
+   *  walk-through. Bakes bounds from the GLB when switching to a solid shape. */
+  onSetColliderShape: (
+    definitionId: string,
+    shape: AssetColliderShape
+  ) => void | Promise<void>;
 }
 
 export function AssetDefinitionInspector({
   assetDefinition,
   onUpdateAssetDefinition,
-  onCorrectOrigin
+  onCorrectOrigin,
+  onSetColliderShape
 }: AssetDefinitionInspectorProps) {
   const [draftDisplayName, setDraftDisplayName] = useState(
     assetDefinition.displayName
   );
   const [correctingOrigin, setCorrectingOrigin] = useState(false);
+  const [settingCollider, setSettingCollider] = useState(false);
 
   return (
     <Stack gap="md">
@@ -124,6 +141,31 @@ export function AssetDefinitionInspector({
         >
           Auto Correct Origin
         </Button>
+      </Stack>
+      <Stack gap={4}>
+        <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+          Collision
+        </Text>
+        <Select
+          size="xs"
+          data={COLLIDER_SHAPE_OPTIONS}
+          value={assetDefinition.collider?.shape ?? "none"}
+          disabled={settingCollider}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: true }}
+          onChange={async (value) => {
+            if (!value) return;
+            setSettingCollider(true);
+            try {
+              await onSetColliderShape(
+                assetDefinition.definitionId,
+                value as AssetColliderShape
+              );
+            } finally {
+              setSettingCollider(false);
+            }
+          }}
+        />
       </Stack>
       <Stack gap={4}>
         <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">

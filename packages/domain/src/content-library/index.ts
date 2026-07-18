@@ -103,6 +103,32 @@ export interface ContentDefinitionReference {
 
 export type AssetKind = "model" | "foliage";
 
+/** Plan 069.1 — collision primitive an asset presents. `"none"` = no
+ *  collision (decor / scatter-brushed foliage). `"auto-box"` uses the
+ *  local AABB; `sphere`/`capsule`/`convex` are authorable in 069.6. */
+export type AssetColliderShape =
+  | "auto-box"
+  | "sphere"
+  | "capsule"
+  | "convex"
+  | "none";
+
+/** Local-space axis-aligned bounds (a `THREE.Box3` min/max) the collision
+ *  world scales by the instance transform to place a world collider. */
+export interface AssetColliderBounds {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+/** Plan 069.1 — definition-tier collider metadata on an asset. The
+ *  per-instance override tier is 069.6. `localBounds` is `null` until the
+ *  studio bakes it from the GLB (the domain has no three) — `"none"`
+ *  colliders never need it. */
+export interface AssetCollider {
+  shape: AssetColliderShape;
+  localBounds: AssetColliderBounds | null;
+}
+
 export interface AssetDefinition {
   definitionId: string;
   definitionKind: "asset";
@@ -111,10 +137,83 @@ export interface AssetDefinition {
   surfaceSlots: AssetSurfaceSlot[];
   deform: ShaderReference | null;
   effect: ShaderReference | null;
+  /** Plan 069.1 — collision metadata (optional/non-breaking, like
+   *  `deform`); `normalizeContentLibrarySnapshot` backfills a kind-aware
+   *  default so it is always present post-load. */
+  collider?: AssetCollider;
   source: {
     relativeAssetPath: string;
     fileName: string;
     mimeType: string | null;
+  };
+}
+
+/** Kind-aware collider default (Plan 069.1). Foliage defaults to `"none"`
+ *  — the scatter brush lands real placements, so auto-boxing brushed
+ *  foliage would wall off every meadow; models default to `"auto-box"`.
+ *  `localBounds` starts `null` (the studio fills it from the GLB). */
+export function defaultAssetColliderForKind(
+  assetKind: AssetKind
+): AssetCollider {
+  return {
+    shape: assetKind === "foliage" ? "none" : "auto-box",
+    localBounds: null
+  };
+}
+
+/** Deep-clone a collider (Plan 069.6) — a fresh `localBounds` tuple pair so
+ *  per-instance override edits never alias the definition's baked bounds. */
+export function cloneAssetCollider(collider: AssetCollider): AssetCollider {
+  return {
+    shape: collider.shape,
+    localBounds: collider.localBounds
+      ? {
+          min: [
+            collider.localBounds.min[0],
+            collider.localBounds.min[1],
+            collider.localBounds.min[2]
+          ],
+          max: [
+            collider.localBounds.max[0],
+            collider.localBounds.max[1],
+            collider.localBounds.max[2]
+          ]
+        }
+      : null
+  };
+}
+
+/** The single source of truth for a valid collider shape — all three tiers
+ *  (definition here, per-instance override in `io`, scene override in
+ *  `scenes`) validate against this, so shape validity lives in one place. */
+export const VALID_COLLIDER_SHAPES: ReadonlySet<AssetColliderShape> = new Set([
+  "auto-box",
+  "sphere",
+  "capsule",
+  "convex",
+  "none"
+]);
+
+export function isValidColliderShape(shape: unknown): shape is AssetColliderShape {
+  return typeof shape === "string" && VALID_COLLIDER_SHAPES.has(shape as AssetColliderShape);
+}
+
+/** Normalize (backfill) an asset's collider on load — absent gets the
+ *  kind-aware default; present is preserved (bounds may still be `null`
+ *  awaiting the studio bake). An out-of-set `shape` (corrupt / hand-edited
+ *  file) fails closed to the kind default, matching the override tiers. */
+export function normalizeAssetCollider(
+  collider: AssetCollider | null | undefined,
+  assetKind: AssetKind
+): AssetCollider {
+  if (!collider) {
+    return defaultAssetColliderForKind(assetKind);
+  }
+  return {
+    shape: isValidColliderShape(collider.shape)
+      ? collider.shape
+      : defaultAssetColliderForKind(assetKind).shape,
+    localBounds: collider.localBounds ?? null
   };
 }
 
@@ -1885,7 +1984,10 @@ export function normalizeContentLibrarySnapshot(
       ...definition,
       surfaceSlots: normalizeAssetSurfaceSlots(definition.surfaceSlots),
       deform: normalizeShaderReference(definition.deform, projectId),
-      effect: normalizeShaderReference(definition.effect, projectId)
+      effect: normalizeShaderReference(definition.effect, projectId),
+      // Plan 069.1 — backfill the collider SHAPE (kind-aware) on load;
+      // localBounds needs the GLB and is filled studio-side.
+      collider: normalizeAssetCollider(definition.collider, definition.assetKind)
     })),
     audioClipDefinitions: normalizeAudioClipDefinitions(
       contentLibrary.audioClipDefinitions

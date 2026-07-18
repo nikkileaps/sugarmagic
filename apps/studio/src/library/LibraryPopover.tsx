@@ -75,6 +75,12 @@ export interface LibraryPopoverProps {
   /** #358 -- re-pivot the asset's GLB to bottom-center (Auto Correct
    *  Origin button in the asset detail panel). */
   onCorrectAssetOrigin: (definitionId: string) => void | Promise<void>;
+  /** Plan 069.6 -- set the asset DEFINITION collider shape (type-level
+   *  default all instances inherit). */
+  onSetAssetColliderShape: (
+    definitionId: string,
+    shape: import("@sugarmagic/domain").AssetColliderShape
+  ) => void | Promise<void>;
   onUpdateAudioClipDefinition: (
     definitionId: string,
     patch: Partial<AudioClipDefinition>
@@ -167,6 +173,7 @@ export function LibraryPopover({
   onUpdateAssetDefinition,
   onRemoveAssetDefinition,
   onCorrectAssetOrigin,
+  onSetAssetColliderShape,
   onUpdateAudioClipDefinition,
   onRemoveMaterialDefinition,
   onRemoveAudioClipDefinition,
@@ -467,6 +474,7 @@ export function LibraryPopover({
                     assetDefinition={selectedAsset}
                     onUpdateAssetDefinition={onUpdateAssetDefinition}
                     onCorrectOrigin={onCorrectAssetOrigin}
+                    onSetColliderShape={onSetAssetColliderShape}
                   />
                 </Stack>
               </ScrollArea>

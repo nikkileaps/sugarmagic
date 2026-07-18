@@ -1,17 +1,23 @@
 /**
  * SpatialWorkspaceView: the React view for Build > Spatial.
  *
- * Owns the authored-area list, inspector, and tool chrome. Spatial visuals,
- * hit testing, and draw interactions live in the Studio viewport overlay layer
- * and are accessed through a narrow registry seam.
+ * Plan 069.7 — authors unified drawn Volumes (label / trigger / blocker /
+ * containment / nav roles), not just areas. The list + draw + inspector all
+ * operate on `region.volumes`; the legacy `areas`/`ambience` stores are the
+ * derived aliases (069.4). Runtime role behavior lands in 069.5 — this view
+ * is authoring only.
  */
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import {
   ActionIcon,
   Button,
+  Checkbox,
+  ColorPicker,
+  ColorSwatch,
   Group,
   NumberInput,
+  Popover,
   Select,
   Stack,
   Text,
@@ -19,18 +25,25 @@ import {
   UnstyledButton
 } from "@mantine/core";
 import type {
+  RegionAreaBounds,
   RegionAreaKind,
   RegionDocument,
+  RegionVolumeBlockDirection,
+  RegionVolumeDefinition,
+  RegionVolumeRole,
+  RegionVolumeTriggerTiming,
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
-  createRegionAreaDefinition,
-  createRegionAreaId
+  createRegionVolumeDefinition,
+  createRegionVolumeId,
+  resolveRegionVolumes
 } from "@sugarmagic/domain";
 import {
   Inspector,
   PanelSection,
   ViewportToolbar,
+  ViewportViewToggleBar,
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
 import type { ViewportStore } from "@sugarmagic/shell";
@@ -49,11 +62,37 @@ const AREA_KIND_OPTIONS: Array<{ value: RegionAreaKind; label: string }> = [
   { value: "shop", label: "Shop" }
 ];
 
+const VOLUME_ROLE_OPTIONS: Array<{ value: RegionVolumeRole; label: string }> = [
+  { value: "label", label: "Label (semantic zone)" },
+  { value: "trigger", label: "Trigger" },
+  { value: "blocker", label: "Blocker (wall)" },
+  { value: "containment-boundary", label: "Containment (can't leave until…)" },
+  { value: "nav-bounds", label: "Nav bounds (bake navmesh here)" },
+  { value: "non-walkable", label: "Non-walkable" }
+];
+
+const BLOCK_DIRECTION_OPTIONS: Array<{
+  value: RegionVolumeBlockDirection;
+  label: string;
+}> = [
+  { value: "both", label: "Both" },
+  { value: "in", label: "Block entry" },
+  { value: "out", label: "Block exit" }
+];
+
+const TRIGGER_TIMING_OPTIONS: Array<{
+  value: RegionVolumeTriggerTiming;
+  label: string;
+}> = [
+  { value: "on-enter", label: "On enter" },
+  { value: "always", label: "Always" }
+];
+
 type SpatialTool = "select" | "draw-rect";
 
 const spatialTools: ViewportToolbarItem[] = [
   { id: "select", label: "Select", icon: "↖", shortcut: "V" },
-  { id: "draw-rect", label: "Draw Area", icon: "▭", shortcut: "D" }
+  { id: "draw-rect", label: "Draw Volume", icon: "▭", shortcut: "D" }
 ];
 
 export interface SpatialWorkspaceViewProps {
@@ -64,16 +103,75 @@ export interface SpatialWorkspaceViewProps {
   onSelect: (ids: string[]) => void;
   region: RegionDocument | null;
   onCommand: (command: SemanticCommand) => void;
+  /** Plan 069.8 — bake the region navmesh (studio host action). */
+  onBakeNavMesh?: () => void | Promise<void>;
+  /** Plan 069.8 — a collider/nav-volume edit postdates the bake. */
+  navMeshStale?: boolean;
 }
 
-function nextAreaName(region: RegionDocument): string {
-  return `Area ${region.areas.length + 1}`;
+type VolumePatch = Partial<Omit<RegionVolumeDefinition, "volumeId">>;
+
+function volumesOf(region: RegionDocument): RegionVolumeDefinition[] {
+  return resolveRegionVolumes(region);
 }
 
-function toAreaParentOptions(region: RegionDocument, selectedAreaId: string | null) {
-  return region.areas
-    .filter((area) => area.areaId !== selectedAreaId)
-    .map((area) => ({ value: area.areaId, label: area.displayName }));
+const DEFAULT_VOLUME_COLOR = "#74c7ec";
+const VOLUME_COLOR_SWATCHES = [
+  "#f38ba8",
+  "#fab387",
+  "#f9e2af",
+  "#a6e3a1",
+  "#94e2d5",
+  "#74c7ec",
+  "#89b4fa",
+  "#cba6f7",
+  "#f5c2e7"
+];
+
+/** Plan 069.8 QoL — swatch + popover picker for a volume's viewport tint.
+ *  Local draft for smooth dragging; commits on change-end. */
+function VolumeColorControl(props: {
+  value: string | null;
+  onChange: (color: string | null) => void;
+}) {
+  const [draft, setDraft] = useState(props.value ?? DEFAULT_VOLUME_COLOR);
+  useEffect(() => {
+    setDraft(props.value ?? DEFAULT_VOLUME_COLOR);
+  }, [props.value]);
+  return (
+    <Popover position="bottom-end" withinPortal shadow="md">
+      <Popover.Target>
+        <ColorSwatch
+          component="button"
+          color={props.value ?? DEFAULT_VOLUME_COLOR}
+          size={16}
+          aria-label="Volume color"
+          style={{ cursor: "pointer", flexShrink: 0 }}
+          onClick={(event) => event.stopPropagation()}
+        />
+      </Popover.Target>
+      <Popover.Dropdown onClick={(event) => event.stopPropagation()}>
+        <Stack gap="xs">
+          <ColorPicker
+            format="hex"
+            size="xs"
+            value={draft}
+            onChange={setDraft}
+            onChangeEnd={(color) => props.onChange(color)}
+            swatches={VOLUME_COLOR_SWATCHES}
+          />
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={() => props.onChange(null)}
+          >
+            Default color
+          </Button>
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  );
 }
 
 export function useSpatialWorkspaceView(
@@ -86,7 +184,9 @@ export function useSpatialWorkspaceView(
     selectedIds,
     onSelect,
     region,
-    onCommand
+    onCommand,
+    onBakeNavMesh,
+    navMeshStale
   } = props;
   const activeTool = useVanillaStoreSelector(
     viewportStore,
@@ -96,15 +196,33 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.cameraQuaternion
   );
+  const showColliders = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showColliders
+  );
+  const showNavMesh = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showNavMesh
+  );
+  const hiddenVolumeIds = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.hiddenVolumeIds
+  );
+  const [baking, setBaking] = useState(false);
 
-  const effectiveSelectedAreaId = useMemo(() => {
+  const volumes = useMemo(
+    () => (region ? volumesOf(region) : []),
+    [region]
+  );
+
+  const effectiveSelectedId = useMemo(() => {
     if (!region) return null;
-    const selectedAreaId = selectedIds[0] ?? null;
-    if (selectedAreaId && region.areas.some((area) => area.areaId === selectedAreaId)) {
-      return selectedAreaId;
+    const selectedId = selectedIds[0] ?? null;
+    if (selectedId && volumes.some((v) => v.volumeId === selectedId)) {
+      return selectedId;
     }
-    return region.areas[0]?.areaId ?? null;
-  }, [region, selectedIds]);
+    return volumes[0]?.volumeId ?? null;
+  }, [region, selectedIds, volumes]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -116,186 +234,535 @@ export function useSpatialWorkspaceView(
   useEffect(() => {
     if (!isActive) return;
     getSpatialWorkspaceForViewport(getViewportElement())?.syncAreas();
-  }, [effectiveSelectedAreaId, getViewportElement, isActive, region]);
+  }, [effectiveSelectedId, getViewportElement, isActive, region]);
 
-  const selectedArea = useMemo(() => {
-    if (!region || !effectiveSelectedAreaId) return null;
-    return region.areas.find((area) => area.areaId === effectiveSelectedAreaId) ?? null;
-  }, [effectiveSelectedAreaId, region]);
+  const selectedVolume = useMemo(() => {
+    if (!effectiveSelectedId) return null;
+    return volumes.find((v) => v.volumeId === effectiveSelectedId) ?? null;
+  }, [effectiveSelectedId, volumes]);
 
-  const updateArea = useCallback((payload: Omit<Extract<SemanticCommand, { kind: "UpdateRegionArea" }>['payload'], 'areaId'>) => {
-    if (!region || !selectedArea) return;
-    onCommand({
-      kind: "UpdateRegionArea",
-      target: {
-        aggregateKind: "region-document",
-        aggregateId: region.identity.id
-      },
-      subject: {
-        subjectKind: "region-area",
-        subjectId: selectedArea.areaId
-      },
-      payload: {
-        areaId: selectedArea.areaId,
-        ...payload
-      }
-    });
-  }, [onCommand, region, selectedArea]);
+  const updateVolume = useCallback(
+    (patch: VolumePatch) => {
+      if (!region || !selectedVolume) return;
+      onCommand({
+        kind: "UpdateRegionVolume",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "region-volume",
+          subjectId: selectedVolume.volumeId
+        },
+        payload: { volumeId: selectedVolume.volumeId, patch }
+      });
+    },
+    [onCommand, region, selectedVolume]
+  );
 
-  const createDefaultArea = useCallback(() => {
+  // Plan 069.8 QoL — set any volume's authoring tint by id (not just the
+  // selected one), so the color swatch works straight from the list row.
+  const setVolumeColor = useCallback(
+    (volumeId: string, color: string | null) => {
+      if (!region) return;
+      onCommand({
+        kind: "UpdateRegionVolume",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: { subjectKind: "region-volume", subjectId: volumeId },
+        payload: { volumeId, patch: { color } }
+      });
+    },
+    [onCommand, region]
+  );
+
+  const createVolume = useCallback(() => {
     if (!region) return;
-    const area = createRegionAreaDefinition({
-      areaId: createRegionAreaId(),
-      displayName: nextAreaName(region)
+    const volume = createRegionVolumeDefinition({
+      volumeId: createRegionVolumeId(),
+      displayName: `Volume ${volumesOf(region).length + 1}`,
+      roles: ["label"],
+      labelKind: "zone"
     });
     onCommand({
-      kind: "CreateRegionArea",
+      kind: "CreateRegionVolume",
       target: {
         aggregateKind: "region-document",
         aggregateId: region.identity.id
       },
       subject: {
-        subjectKind: "region-area",
-        subjectId: area.areaId
+        subjectKind: "region-volume",
+        subjectId: volume.volumeId
       },
-      payload: {
-        areaId: area.areaId,
-        displayName: area.displayName,
-        lorePageId: area.lorePageId,
-        parentAreaId: area.parentAreaId,
-        kind: area.kind,
-        bounds: area.bounds
-      }
+      payload: { volume }
     });
-    onSelect([area.areaId]);
+    onSelect([volume.volumeId]);
   }, [onCommand, onSelect, region]);
+
+  const parentOptions = useMemo(() => {
+    if (!selectedVolume) return [];
+    return volumes
+      .filter((v) => v.volumeId !== selectedVolume.volumeId)
+      .map((v) => ({ value: v.volumeId, label: v.displayName }));
+  }, [selectedVolume, volumes]);
+
+  const setBoundsAxis = useCallback(
+    (
+      axis: "centerX" | "centerZ" | "width" | "depth",
+      value: number,
+      bounds: RegionAreaBounds
+    ) => {
+      const next: RegionAreaBounds = {
+        kind: "box",
+        center: [...bounds.center] as [number, number, number],
+        size: [...bounds.size] as [number, number, number]
+      };
+      if (axis === "centerX") next.center[0] = value;
+      if (axis === "centerZ") next.center[2] = value;
+      if (axis === "width") next.size[0] = Math.max(1, value);
+      if (axis === "depth") next.size[2] = Math.max(1, value);
+      updateVolume({ bounds: next });
+    },
+    [updateVolume]
+  );
 
   return {
     leftPanel: region ? (
+      <>
       <PanelSection
-        title="Areas"
+        title="Volumes"
         icon="🗺️"
         actions={
-          <Group gap="xs">
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              aria-label="Add area"
-              onClick={createDefaultArea}
-            >
-              ＋
-            </ActionIcon>
-          </Group>
+          <ActionIcon
+            variant="subtle"
+            size="sm"
+            aria-label="Add volume"
+            onClick={createVolume}
+          >
+            ＋
+          </ActionIcon>
         }
       >
         <Stack gap="xs">
-          <Text size="xs" c="var(--sm-color-overlay0)">
-            {activeTool === "draw-rect"
-              ? selectedArea
-                ? "Drag in the viewport to define the selected area's snapped rectangle."
-                : "Create or select an area first, then drag in the viewport to define it."
-              : "Create or select an area, then use the rectangle tool in the HUD to define it."}
-          </Text>
-          {region.areas.length === 0 ? (
+          {volumes.length === 0 ? (
             <Text size="xs" c="var(--sm-color-overlay0)">
-              No authored areas yet.
+              No volumes yet.
             </Text>
           ) : (
-            region.areas.map((area) => {
-              const isSelected = area.areaId === effectiveSelectedAreaId;
+            volumes.map((volume) => {
+              const isSelected = volume.volumeId === effectiveSelectedId;
+              const isHidden = hiddenVolumeIds.includes(volume.volumeId);
               return (
-                <UnstyledButton
-                  key={area.areaId}
-                  onClick={() => {
-                    onSelect([area.areaId]);
-                  }}
+                <Group
+                  key={volume.volumeId}
+                  gap={4}
+                  wrap="nowrap"
                   style={{
                     border: "1px solid var(--sm-panel-border)",
                     borderRadius: "var(--sm-radius-sm)",
-                    padding: "8px 10px",
-                    background: isSelected ? "var(--sm-active-bg)" : "var(--sm-color-surface0)",
-                    color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)"
+                    padding: "4px 6px 4px 10px",
+                    background: isSelected
+                      ? "var(--sm-active-bg)"
+                      : "var(--sm-color-surface0)"
                   }}
                 >
-                  <Stack gap={2}>
-                    <Text size="sm" fw={isSelected ? 600 : 500}>{area.displayName}</Text>
-                    <Text size="xs" c="var(--sm-color-overlay0)">
-                      {area.kind}
-                    </Text>
-                  </Stack>
-                </UnstyledButton>
+                  <UnstyledButton
+                    onClick={() => onSelect([volume.volumeId])}
+                    style={{ flex: 1, minWidth: 0, padding: "4px 0" }}
+                  >
+                    <Stack gap={2}>
+                      <Text
+                        size="sm"
+                        fw={isSelected ? 600 : 500}
+                        c={
+                          isSelected
+                            ? "var(--sm-accent-blue)"
+                            : "var(--sm-color-text)"
+                        }
+                        truncate
+                      >
+                        {volume.displayName}
+                      </Text>
+                      <Text size="xs" c="var(--sm-color-overlay0)" truncate>
+                        {volume.roles.length > 0
+                          ? volume.roles.join(" · ")
+                          : "no roles"}
+                      </Text>
+                    </Stack>
+                  </UnstyledButton>
+                  <VolumeColorControl
+                    value={volume.color}
+                    onChange={(color) => setVolumeColor(volume.volumeId, color)}
+                  />
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    color="gray"
+                    aria-label={isHidden ? "Show volume" : "Hide volume"}
+                    style={{ flexShrink: 0, opacity: isHidden ? 0.4 : 1 }}
+                    onClick={() =>
+                      viewportStore.getState().toggleVolumeHidden(volume.volumeId)
+                    }
+                  >
+                    {isHidden ? "🙈" : "👁"}
+                  </ActionIcon>
+                </Group>
               );
             })
           )}
         </Stack>
       </PanelSection>
+      {onBakeNavMesh ? (
+        <PanelSection title="NavMesh" icon="🧭">
+          <Stack gap="xs">
+            <Text
+              size="xs"
+              c={
+                !region.navMesh
+                  ? "var(--sm-color-overlay0)"
+                  : navMeshStale
+                    ? "var(--sm-accent-yellow, #f9e2af)"
+                    : "var(--sm-accent-green, #a6e3a1)"
+              }
+            >
+              {!region.navMesh
+                ? "Not baked"
+                : navMeshStale
+                  ? "Stale — edits postdate the bake"
+                  : "Baked"}
+            </Text>
+            <Button
+              size="xs"
+              variant={navMeshStale ? "filled" : "light"}
+              color={navMeshStale ? "yellow" : undefined}
+              loading={baking}
+              onClick={async () => {
+                setBaking(true);
+                try {
+                  await onBakeNavMesh();
+                } finally {
+                  setBaking(false);
+                }
+              }}
+            >
+              {region.navMesh ? "Rebake NavMesh" : "Bake NavMesh"}
+            </Button>
+          </Stack>
+        </PanelSection>
+      ) : null}
+      </>
     ) : null,
     rightPanel: region ? (
-      <Inspector selectionLabel={selectedArea?.displayName ?? region.displayName}>
-        {selectedArea ? (
+      <Inspector
+        selectionLabel={selectedVolume?.displayName ?? region.displayName}
+      >
+        {selectedVolume ? (
           <Stack gap="md">
-            <Text size="sm" fw={600}>Area</Text>
             <TextInput
               label="Display Name"
               size="xs"
-              value={selectedArea.displayName}
-              onChange={(event) => updateArea({ displayName: event.currentTarget.value })}
+              value={selectedVolume.displayName}
+              onChange={(event) =>
+                updateVolume({ displayName: event.currentTarget.value })
+              }
             />
+
+            <Stack gap={4}>
+              <Text size="xs" fw={600} c="var(--sm-color-subtext)" tt="uppercase">
+                Roles
+              </Text>
+              <Checkbox.Group
+                value={selectedVolume.roles}
+                onChange={(value) =>
+                  updateVolume({ roles: value as RegionVolumeRole[] })
+                }
+              >
+                <Stack gap={4}>
+                  {VOLUME_ROLE_OPTIONS.map((option) => (
+                    <Checkbox
+                      key={option.value}
+                      value={option.value}
+                      label={option.label}
+                      size="xs"
+                    />
+                  ))}
+                </Stack>
+              </Checkbox.Group>
+            </Stack>
+
+            {selectedVolume.roles.includes("label") && (
+              <Stack gap="xs">
+                <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+                  Label
+                </Text>
+                <Select
+                  label="Kind"
+                  size="xs"
+                  data={AREA_KIND_OPTIONS}
+                  value={selectedVolume.labelKind ?? "zone"}
+                  onChange={(value) =>
+                    value && updateVolume({ labelKind: value as RegionAreaKind })
+                  }
+                />
+                <TextInput
+                  label="Lore Page ID"
+                  size="xs"
+                  placeholder="root.locations.station.exterior"
+                  value={selectedVolume.lorePageId ?? ""}
+                  onChange={(event) =>
+                    updateVolume({
+                      lorePageId: event.currentTarget.value || null
+                    })
+                  }
+                />
+              </Stack>
+            )}
+
+            {selectedVolume.roles.includes("trigger") && (
+              <Stack gap="xs">
+                <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+                  Trigger
+                </Text>
+                <Select
+                  label="Timing"
+                  size="xs"
+                  data={TRIGGER_TIMING_OPTIONS}
+                  value={selectedVolume.trigger?.timing ?? "on-enter"}
+                  onChange={(value) =>
+                    value &&
+                    updateVolume({
+                      trigger: {
+                        timing: value as RegionVolumeTriggerTiming,
+                        action: selectedVolume.trigger?.action ?? {
+                          audioCueId: null,
+                          setWorldFlag: null
+                        }
+                      }
+                    })
+                  }
+                />
+                <TextInput
+                  label="Audio Cue ID"
+                  size="xs"
+                  value={selectedVolume.trigger?.action.audioCueId ?? ""}
+                  onChange={(event) =>
+                    updateVolume({
+                      trigger: {
+                        timing: selectedVolume.trigger?.timing ?? "on-enter",
+                        action: {
+                          audioCueId: event.currentTarget.value || null,
+                          setWorldFlag:
+                            selectedVolume.trigger?.action.setWorldFlag ?? null
+                        }
+                      }
+                    })
+                  }
+                />
+                {/* Flag assignment fires only on the on-enter edge; "always"
+                    is the continuous ambient bed and runs no actions — hide
+                    the fields so an inert flag can't be authored. */}
+                {(selectedVolume.trigger?.timing ?? "on-enter") ===
+                  "on-enter" && (
+                <Group grow>
+                  <TextInput
+                    label="Set Flag Key"
+                    size="xs"
+                    value={
+                      selectedVolume.trigger?.action.setWorldFlag?.key ?? ""
+                    }
+                    onChange={(event) =>
+                      updateVolume({
+                        trigger: {
+                          timing: selectedVolume.trigger?.timing ?? "on-enter",
+                          action: {
+                            audioCueId:
+                              selectedVolume.trigger?.action.audioCueId ?? null,
+                            setWorldFlag: event.currentTarget.value
+                              ? {
+                                  key: event.currentTarget.value,
+                                  valueType:
+                                    selectedVolume.trigger?.action.setWorldFlag
+                                      ?.valueType ?? "boolean",
+                                  value:
+                                    selectedVolume.trigger?.action.setWorldFlag
+                                      ?.value ?? "true"
+                                }
+                              : null
+                          }
+                        }
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="Value"
+                    size="xs"
+                    value={
+                      selectedVolume.trigger?.action.setWorldFlag?.value ?? ""
+                    }
+                    disabled={!selectedVolume.trigger?.action.setWorldFlag?.key}
+                    onChange={(event) =>
+                      selectedVolume.trigger?.action.setWorldFlag?.key &&
+                      updateVolume({
+                        trigger: {
+                          timing: selectedVolume.trigger.timing,
+                          action: {
+                            audioCueId:
+                              selectedVolume.trigger.action.audioCueId,
+                            setWorldFlag: {
+                              key: selectedVolume.trigger.action.setWorldFlag
+                                .key,
+                              valueType:
+                                selectedVolume.trigger.action.setWorldFlag
+                                  .valueType,
+                              value: event.currentTarget.value
+                            }
+                          }
+                        }
+                      })
+                    }
+                  />
+                </Group>
+                )}
+              </Stack>
+            )}
+
+            {(selectedVolume.roles.includes("blocker") ||
+              selectedVolume.roles.includes("containment-boundary")) && (
+              <Stack gap="xs">
+                <Text size="xs" fw={600} c="var(--sm-color-subtext)">
+                  Blocking
+                </Text>
+                <Select
+                  label="Direction"
+                  size="xs"
+                  data={BLOCK_DIRECTION_OPTIONS}
+                  // Display fallback MUST match the runtime default for a
+                  // null blockDirection (collision addVolumeColliders):
+                  // containment retains ("out"), blocker repels ("in").
+                  value={
+                    selectedVolume.blockDirection ??
+                    (selectedVolume.roles.includes("containment-boundary")
+                      ? "out"
+                      : "in")
+                  }
+                  onChange={(value) =>
+                    value &&
+                    updateVolume({
+                      blockDirection: value as RegionVolumeBlockDirection
+                    })
+                  }
+                />
+                {selectedVolume.roles.includes("containment-boundary") && (
+                  <Group grow>
+                    <TextInput
+                      label="Open when flag"
+                      size="xs"
+                      placeholder="boss_defeated"
+                      value={
+                        selectedVolume.condition?.worldFlagEquals?.key ?? ""
+                      }
+                      onChange={(event) =>
+                        updateVolume({
+                          condition: {
+                            questDefinitionId:
+                              selectedVolume.condition?.questDefinitionId ??
+                              null,
+                            questStageId:
+                              selectedVolume.condition?.questStageId ?? null,
+                            worldFlagEquals: event.currentTarget.value
+                              ? {
+                                  key: event.currentTarget.value,
+                                  valueType:
+                                    selectedVolume.condition?.worldFlagEquals
+                                      ?.valueType ?? "boolean",
+                                  value:
+                                    selectedVolume.condition?.worldFlagEquals
+                                      ?.value ?? "true"
+                                }
+                              : null
+                          }
+                        })
+                      }
+                    />
+                    <TextInput
+                      label="equals"
+                      size="xs"
+                      value={
+                        selectedVolume.condition?.worldFlagEquals?.value ?? ""
+                      }
+                      disabled={
+                        !selectedVolume.condition?.worldFlagEquals?.key
+                      }
+                      onChange={(event) =>
+                        selectedVolume.condition?.worldFlagEquals?.key &&
+                        updateVolume({
+                          condition: {
+                            questDefinitionId:
+                              selectedVolume.condition.questDefinitionId,
+                            questStageId:
+                              selectedVolume.condition.questStageId,
+                            worldFlagEquals: {
+                              key: selectedVolume.condition.worldFlagEquals.key,
+                              valueType:
+                                selectedVolume.condition.worldFlagEquals
+                                  .valueType,
+                              value: event.currentTarget.value
+                            }
+                          }
+                        })
+                      }
+                    />
+                  </Group>
+                )}
+              </Stack>
+            )}
+
+            {selectedVolume.roles.includes("non-walkable") && (
+              <NumberInput
+                label="Nav Cost"
+                size="xs"
+                min={0}
+                step={1}
+                value={selectedVolume.navCost ?? 1}
+                onChange={(value) =>
+                  typeof value === "number" && updateVolume({ navCost: value })
+                }
+              />
+            )}
+
             <Select
-              label="Kind"
-              size="xs"
-              data={AREA_KIND_OPTIONS}
-              value={selectedArea.kind}
-              onChange={(value) => {
-                if (!value) return;
-                updateArea({ kind: value as RegionAreaKind });
-              }}
-            />
-            <TextInput
-              label="Lore Page ID"
-              size="xs"
-              placeholder="root.locations.station.exterior"
-              value={selectedArea.lorePageId ?? ""}
-              onChange={(event) => updateArea({ lorePageId: event.currentTarget.value })}
-            />
-            <Select
-              label="Parent Area"
+              label="Parent Volume"
               size="xs"
               clearable
-              data={toAreaParentOptions(region, selectedArea.areaId)}
-              value={selectedArea.parentAreaId}
-              onChange={(value) => updateArea({ parentAreaId: value ?? null })}
+              data={parentOptions}
+              value={selectedVolume.parentVolumeId}
+              onChange={(value) =>
+                updateVolume({ parentVolumeId: value ?? null })
+              }
             />
+
             <Group grow>
               <NumberInput
                 label="Center X"
                 size="xs"
                 step={1}
-                value={selectedArea.bounds.center[0]}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateArea({
-                    bounds: {
-                      ...selectedArea.bounds,
-                      center: [value, selectedArea.bounds.center[1], selectedArea.bounds.center[2]]
-                    }
-                  });
-                }}
+                value={selectedVolume.bounds.center[0]}
+                onChange={(value) =>
+                  typeof value === "number" &&
+                  setBoundsAxis("centerX", value, selectedVolume.bounds)
+                }
               />
               <NumberInput
                 label="Center Z"
                 size="xs"
                 step={1}
-                value={selectedArea.bounds.center[2]}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateArea({
-                    bounds: {
-                      ...selectedArea.bounds,
-                      center: [selectedArea.bounds.center[0], selectedArea.bounds.center[1], value]
-                    }
-                  });
-                }}
+                value={selectedVolume.bounds.center[2]}
+                onChange={(value) =>
+                  typeof value === "number" &&
+                  setBoundsAxis("centerZ", value, selectedVolume.bounds)
+                }
               />
             </Group>
             <Group grow>
@@ -304,64 +771,54 @@ export function useSpatialWorkspaceView(
                 size="xs"
                 step={1}
                 min={1}
-                value={selectedArea.bounds.size[0]}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateArea({
-                    bounds: {
-                      ...selectedArea.bounds,
-                      size: [Math.max(1, value), selectedArea.bounds.size[1], selectedArea.bounds.size[2]]
-                    }
-                  });
-                }}
+                value={selectedVolume.bounds.size[0]}
+                onChange={(value) =>
+                  typeof value === "number" &&
+                  setBoundsAxis("width", value, selectedVolume.bounds)
+                }
               />
               <NumberInput
                 label="Depth"
                 size="xs"
                 step={1}
                 min={1}
-                value={selectedArea.bounds.size[2]}
-                onChange={(value) => {
-                  if (typeof value !== "number") return;
-                  updateArea({
-                    bounds: {
-                      ...selectedArea.bounds,
-                      size: [selectedArea.bounds.size[0], selectedArea.bounds.size[1], Math.max(1, value)]
-                    }
-                  });
-                }}
+                value={selectedVolume.bounds.size[2]}
+                onChange={(value) =>
+                  typeof value === "number" &&
+                  setBoundsAxis("depth", value, selectedVolume.bounds)
+                }
               />
             </Group>
             <Text size="xs" c="var(--sm-color-overlay0)">
-              Vertical extent is generated automatically behind the scenes for runtime spatial resolution.
+              Vertical extent is generated automatically behind the scenes for
+              runtime spatial resolution.
             </Text>
+
             <Button
               color="red"
               variant="light"
-                onClick={() => {
-                  onCommand({
-                  kind: "DeleteRegionArea",
+              onClick={() => {
+                onCommand({
+                  kind: "DeleteRegionVolume",
                   target: {
                     aggregateKind: "region-document",
                     aggregateId: region.identity.id
                   },
                   subject: {
-                    subjectKind: "region-area",
-                    subjectId: selectedArea.areaId
+                    subjectKind: "region-volume",
+                    subjectId: selectedVolume.volumeId
                   },
-                  payload: {
-                      areaId: selectedArea.areaId
-                    }
-                  });
+                  payload: { volumeId: selectedVolume.volumeId }
+                });
                 onSelect([]);
               }}
             >
-              Delete Area
+              Delete Volume
             </Button>
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
-            Select an authored area or draw a new rectangle in the viewport.
+            Select a volume or draw a new rectangle in the viewport.
           </Text>
         )}
       </Inspector>
@@ -374,6 +831,26 @@ export function useSpatialWorkspaceView(
           onSelect={(id) =>
             viewportStore.getState().setActiveSpatialTool(id as SpatialTool)
           }
+        />
+        <ViewportViewToggleBar
+          toggles={[
+            {
+              id: "show-colliders",
+              label: `${showColliders ? "Hide" : "Show"} colliders`,
+              icon: "▨",
+              active: showColliders,
+              onToggle: () =>
+                viewportStore.getState().setShowColliders(!showColliders)
+            },
+            {
+              id: "show-navmesh",
+              label: `${showNavMesh ? "Hide" : "Show"} navmesh`,
+              icon: "🧭",
+              active: showNavMesh,
+              onToggle: () =>
+                viewportStore.getState().setShowNavMesh(!showNavMesh)
+            }
+          ]}
         />
         <LayoutOrientationWidget quaternion={cameraQuaternion} />
       </>

@@ -6,7 +6,7 @@ import type {
   RegionAmbienceZone,
   RegionSoundEmitter
 } from "../region-authoring";
-import type { EnvironmentDefinition } from "../content-library";
+import type { AssetCollider, EnvironmentDefinition } from "../content-library";
 import type {
   PostProcessShaderBinding,
   ShaderGraphDocument,
@@ -186,6 +186,15 @@ export type UpdateRegionMetadataCommand = SemanticCommandBase<
   }
 >;
 
+/** Plan 069.8 — set (or clear) the region's baked navmesh artifact
+ *  reference. `null` clears it (e.g. nav-bounds removed). */
+export type SetRegionNavMeshCommand = SemanticCommandBase<
+  "SetRegionNavMesh",
+  {
+    navMesh: import("../region-authoring").RegionNavMeshArtifact | null;
+  }
+>;
+
 export type CreateRegionAreaCommand = SemanticCommandBase<
   "CreateRegionArea",
   {
@@ -214,6 +223,34 @@ export type DeleteRegionAreaCommand = SemanticCommandBase<
   "DeleteRegionArea",
   {
     areaId: string;
+  }
+>;
+
+// Plan 069.7 — unified Volume authoring commands. The area/ambience
+// commands stay as the legacy label/trigger authoring surface (they
+// reconcile into the same volumes); these author volumes directly with
+// any role set.
+export type CreateRegionVolumeCommand = SemanticCommandBase<
+  "CreateRegionVolume",
+  {
+    volume: import("../region-authoring").RegionVolumeDefinition;
+  }
+>;
+
+export type UpdateRegionVolumeCommand = SemanticCommandBase<
+  "UpdateRegionVolume",
+  {
+    volumeId: string;
+    patch: Partial<
+      Omit<import("../region-authoring").RegionVolumeDefinition, "volumeId">
+    >;
+  }
+>;
+
+export type DeleteRegionVolumeCommand = SemanticCommandBase<
+  "DeleteRegionVolume",
+  {
+    volumeId: string;
   }
 >;
 
@@ -471,6 +508,19 @@ export type SetPlacedAssetSurfaceSlotOverrideCommand = SemanticCommandBase<
     slotName: string;
     surface: SurfaceBinding<"universal"> | null;
     /** Plan 068.2 — see SetPlacedAssetShaderOverrideCommand.scope. */
+    scope?: "base" | "scene";
+  }
+>;
+
+/** Plan 069.6 — per-instance collider override. `collider: null` clears the
+ *  override (falls back to the asset definition's collider). `scope` routes
+ *  base (the instance) vs scene (the active Scene overlay), exactly like the
+ *  surface-slot command. */
+export type SetPlacedAssetColliderOverrideCommand = SemanticCommandBase<
+  "SetPlacedAssetColliderOverride",
+  {
+    instanceId: string;
+    collider: AssetCollider | null;
     scope?: "base" | "scene";
   }
 >;
@@ -1001,9 +1051,13 @@ export type SemanticCommand =
   | RenameSceneFolderCommand
   | DeleteSceneFolderCommand
   | UpdateRegionMetadataCommand
+  | SetRegionNavMeshCommand
   | CreateRegionAreaCommand
   | UpdateRegionAreaCommand
   | DeleteRegionAreaCommand
+  | CreateRegionVolumeCommand
+  | UpdateRegionVolumeCommand
+  | DeleteRegionVolumeCommand
   | CreateRegionNPCBehaviorCommand
   | UpdateRegionNPCBehaviorCommand
   | DeleteRegionNPCBehaviorCommand
@@ -1035,6 +1089,7 @@ export type SemanticCommand =
   | ClearAssetDefaultShaderParameterOverrideCommand
   | SetPlacedAssetShaderOverrideCommand
   | SetPlacedAssetSurfaceSlotOverrideCommand
+  | SetPlacedAssetColliderOverrideCommand
   | SetNPCPresenceShaderOverrideCommand
   | SetItemPresenceShaderOverrideCommand
   | SetPlacedAssetShaderParameterOverrideCommand

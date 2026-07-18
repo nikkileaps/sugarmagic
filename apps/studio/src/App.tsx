@@ -41,6 +41,7 @@ import type {
   SoundCueDefinition
 } from "@sugarmagic/domain";
 import {
+  type AssetColliderShape,
   getAssetDefinition,
   getMaskTextureDefinition,
   getSurfaceDefinition,
@@ -160,7 +161,10 @@ import {
 } from "@sugarmagic/io";
 import {
   collectMechanicsConsumerInvocations,
-  validateMechanicsDefinition
+  validateMechanicsDefinition,
+  bakeNavMesh,
+  buildRegionNavMeshInput,
+  computeNavMeshInputHash
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -199,6 +203,7 @@ import { useStore } from "zustand";
 import { createAuthoringViewport } from "./viewport/authoringViewport";
 import { bakePaintUvsIntoGlb } from "./asset-pipeline/paint-uvs";
 import { correctAssetOriginToBottomCenter } from "./asset-pipeline/origin-correct";
+import { computeAssetColliderBounds } from "./asset-pipeline/collider-bounds";
 import { createItemViewport } from "./viewport/itemViewport";
 import { SurfacePreviewViewport } from "./viewport/surfacePreviewViewport";
 import {
@@ -1280,10 +1285,31 @@ export function App() {
           materialDefinition
         );
       }
-      nextSession = addAssetDefinitionToSession(
-        nextSession,
-        result.assetDefinition
-      );
+      // Plan 069.1 — bake the collider's localBounds in-memory from the
+      // imported bytes (Box3.setFromObject), never re-reading the just-
+      // written file (the FSAccess read-after-write flake). io set the
+      // kind-aware shape; "none" colliders need no bounds.
+      let importedAsset = result.assetDefinition;
+      if (
+        importedAsset.collider &&
+        importedAsset.collider.shape !== "none" &&
+        result.sourceBuffer
+      ) {
+        try {
+          const localBounds = await computeAssetColliderBounds(
+            result.sourceBuffer
+          );
+          if (localBounds) {
+            importedAsset = {
+              ...importedAsset,
+              collider: { ...importedAsset.collider, localBounds }
+            };
+          }
+        } catch (error) {
+          console.warn("[collider-bounds] import bake failed", error);
+        }
+      }
+      nextSession = addAssetDefinitionToSession(nextSession, importedAsset);
       projectStore.getState().updateSession(nextSession);
       // The import wrote new files; without refreshing their blob
       // URLs the Layout viewport can't render the asset until the
@@ -1962,6 +1988,10 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
+        // Plan 069.1 — the paint-UV bake is geometry-neutral (it appends a
+        // uv1 channel; vertex positions don't move), so the collider's
+        // localBounds stay valid — no rebake needed here (unlike origin
+        // correction, which shifts geometry).
         // Drop the renderables FIRST: the refreshPaths store tick is
         // what triggers the projection pass that re-schedules their
         // loads. The reverse order rebuilt before dropping and left
@@ -2032,6 +2062,28 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
+        // Plan 069.1 — origin correction shifted geometry relative to the
+        // origin, so the collider's localBounds are now stale; recompute
+        // from the in-memory corrected GLB and patch the definition.
+        if (definition.collider && definition.collider.shape !== "none") {
+          try {
+            const localBounds = await computeAssetColliderBounds(result.glb);
+            const { session: latestSession } = projectStore.getState();
+            if (localBounds && latestSession) {
+              projectStore
+                .getState()
+                .updateSession(
+                  updateAssetDefinitionInSession(
+                    latestSession,
+                    assetDefinitionId,
+                    { collider: { ...definition.collider, localBounds } }
+                  )
+                );
+            }
+          } catch (error) {
+            console.warn("[collider-bounds] origin-correct rebake failed", error);
+          }
+        }
         // Same ordering as paint-UV regen: drop the renderables first so
         // the refreshPaths tick re-schedules their loads from the
         // rewritten file.
@@ -2052,6 +2104,128 @@ export function App() {
     },
     []
   );
+
+  // Plan 069.6 -- set an asset's DEFINITION collider shape (the type-level
+  // default every placed / scattered instance inherits). "none" is the
+  // walk-through decor answer for scattered foliage. Switching to a solid
+  // shape bakes bounds from the GLB (reusing any already-baked bounds).
+  const handleSetAssetColliderShape = useCallback(
+    async (assetDefinitionId: string, shape: AssetColliderShape) => {
+      const { session } = projectStore.getState();
+      if (!session) {
+        return;
+      }
+      const definition = getAssetDefinition(
+        session.contentLibrary,
+        assetDefinitionId
+      );
+      if (!definition) {
+        return;
+      }
+      const current = definition.collider ?? null;
+
+      if (shape === "none") {
+        projectStore.getState().updateSession(
+          updateAssetDefinitionInSession(session, assetDefinitionId, {
+            collider: { shape: "none", localBounds: current?.localBounds ?? null }
+          })
+        );
+        return;
+      }
+
+      // Solid shape needs local bounds; reuse the baked ones or measure the
+      // GLB (same read as the origin bake). "none"-default foliage has none.
+      let localBounds = current?.localBounds ?? null;
+      if (!localBounds) {
+        const { handle } = projectStore.getState();
+        if (handle) {
+          const pathSegments = definition.source.relativeAssetPath
+            .split("/")
+            .filter(Boolean);
+          const blob = await readBlobFile(handle, ...pathSegments);
+          if (blob) {
+            try {
+              localBounds = await computeAssetColliderBounds(
+                await blob.arrayBuffer()
+              );
+            } catch (error) {
+              console.warn("[collider-bounds] shape-change bake failed", error);
+            }
+          }
+        }
+      }
+      const { session: latest } = projectStore.getState();
+      if (!latest) {
+        return;
+      }
+      projectStore.getState().updateSession(
+        updateAssetDefinitionInSession(latest, assetDefinitionId, {
+          collider: { shape, localBounds }
+        })
+      );
+    },
+    []
+  );
+
+  // Plan 069.8 -- bake the region navmesh from the collision geometry inside
+  // nav-bounds volumes, write the artifact + publish the in-memory blob to
+  // the asset-source store (never read-after-write, per the FSAccess flake),
+  // and record the reference (+ input hash for staleness) on the region.
+  const handleBakeNavMesh = useCallback(async () => {
+    const { session, handle } = projectStore.getState();
+    if (!session || !handle) {
+      return;
+    }
+    const region = getActiveRegion(session);
+    if (!region) {
+      return;
+    }
+    const input = buildRegionNavMeshInput({
+      region,
+      contentLibrary: session.contentLibrary,
+      playerDefinition: getPlayerDefinition(session),
+      itemDefinitions: getAllItemDefinitions(session),
+      npcDefinitions: getAllNPCDefinitions(session),
+      activeScene: getActiveScene(session)
+    });
+    const bytes = await bakeNavMesh(input);
+    if (!bytes) {
+      window.alert(
+        "Draw a nav-bounds volume over the walkable ground first, then bake."
+      );
+      return;
+    }
+    // Under assets/ so the deploy workflow ships it (it copies only assets/)
+    // and it matches the file-backed-asset convention (assets/thumbnails, etc.).
+    const assetPath = `assets/navmesh/${region.identity.id}.navmesh.bin`;
+    const blob = new Blob([new Uint8Array(bytes)], {
+      type: "application/octet-stream"
+    });
+    await writeBlobFile(handle, assetPath.split("/"), blob);
+    // Publish the in-memory blob so the runtime resolves it without a
+    // read-after-write (the known FSAccess flake).
+    assetSourceStore.getState().setSource(assetPath, blob);
+    dispatchCommand({
+      kind: "SetRegionNavMesh",
+      target: {
+        aggregateKind: "region-document",
+        aggregateId: region.identity.id
+      },
+      subject: {
+        subjectKind: "region-document",
+        subjectId: region.identity.id
+      },
+      payload: {
+        navMesh: {
+          assetPath,
+          inputHash: computeNavMeshInputHash(input),
+          agentRadius: input.agentRadius,
+          // Scene provenance — the bake composed THIS Scene's overlay.
+          sceneId: getActiveScene(session)?.sceneId ?? null
+        }
+      }
+    });
+  }, []);
 
   // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
   // doesn't already have them. Wired into both the Surface Brush's
@@ -2321,6 +2495,33 @@ export function App() {
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
 
+  // Plan 069.8 -- navmesh staleness: re-derive the bake input hash and
+  // compare to the baked one; a collider/nav-volume edit postdating the bake
+  // flips this true (drives the "rebake" warning in the Spatial workspace).
+  // Deps are the ACTUAL hash inputs (region + library + scene + player), not
+  // `session` -- session identity changes on EVERY command, which made this
+  // re-resolve all scene objects on unrelated edits (mini-review r3).
+  const staleContentLibrary = session?.contentLibrary ?? null;
+  const staleActiveScene = session ? getActiveScene(session) : null;
+  const stalePlayerDefinition = session ? getPlayerDefinition(session) : null;
+  const navMeshStale = useMemo(() => {
+    if (!session || !activeRegion?.navMesh || !staleContentLibrary) {
+      return false;
+    }
+    // Item/NPC definitions never contribute colliders (agents have null
+    // colliders), so they aren't recompute triggers -- read them lazily.
+    const input = buildRegionNavMeshInput({
+      region: activeRegion,
+      contentLibrary: staleContentLibrary,
+      playerDefinition: stalePlayerDefinition,
+      itemDefinitions: getAllItemDefinitions(session),
+      npcDefinitions: getAllNPCDefinitions(session),
+      activeScene: staleActiveScene
+    });
+    return computeNavMeshInputHash(input) !== activeRegion.navMesh.inputHash;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRegion, staleContentLibrary, staleActiveScene, stalePlayerDefinition]);
+
   // --- Surface Studio (Plan 068.10) ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =
     useState<SurfaceStudioTarget | null>(null);
@@ -2335,6 +2536,75 @@ export function App() {
     const timeout = setTimeout(() => setBusyToast(null), 12000);
     return () => clearTimeout(timeout);
   }, [busyToast]);
+
+  // Plan 069.1 — backfill collider localBounds for projects created before
+  // colliders existed. The domain normalize sets the SHAPE on load; bounds
+  // need the GLB, so fill them here, once per opened project (they persist
+  // after save). Best-effort + sequential; skips "none" and already-baked.
+  // Keyed on the project identity (not `session`) so an edit doesn't re-run
+  // it; reads the LATEST session from the store to dodge stale closures.
+  useEffect(() => {
+    const projectId = session?.gameProject.identity.id;
+    if (!projectId || !projectHandle) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { session: current, handle } = projectStore.getState();
+      if (!current || !handle) {
+        return;
+      }
+      const pending = current.contentLibrary.assetDefinitions.filter(
+        (def) =>
+          def.collider &&
+          def.collider.shape !== "none" &&
+          !def.collider.localBounds
+      );
+      for (const def of pending) {
+        if (cancelled) {
+          return;
+        }
+        try {
+          const pathSegments = def.source.relativeAssetPath
+            .split("/")
+            .filter(Boolean);
+          const blob = await readBlobFile(handle, ...pathSegments);
+          if (!blob || cancelled) {
+            continue;
+          }
+          const localBounds = await computeAssetColliderBounds(
+            await blob.arrayBuffer()
+          );
+          if (!localBounds || cancelled) {
+            continue;
+          }
+          const { session: latest } = projectStore.getState();
+          const target = latest
+            ? getAssetDefinition(latest.contentLibrary, def.definitionId)
+            : null;
+          // Re-check: still needs bounds, and nothing raced us to it.
+          if (!latest || !target?.collider || target.collider.localBounds) {
+            continue;
+          }
+          projectStore.getState().updateSession(
+            updateAssetDefinitionInSession(latest, def.definitionId, {
+              collider: { ...target.collider, localBounds }
+            })
+          );
+        } catch (error) {
+          console.warn(
+            "[collider-bounds] backfill failed",
+            def.definitionId,
+            error
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.gameProject.identity.id, projectHandle]);
   const surfaceStudioSurface = useMemo<Surface<"universal"> | null>(() => {
     if (!session || !surfaceStudioTarget) {
       return null;
@@ -2493,6 +2763,8 @@ export function App() {
         );
     },
     onGenerateAssetPaintUvs: handleGenerateAssetPaintUvs,
+    onBakeNavMesh: handleBakeNavMesh,
+    navMeshStale,
     onOpenSurfaceStudio: async (target) => {
       // Ensure paint UVs exist BEFORE the Studio loads the asset (it
       // loads its own GLB copy, so the bake must land first).
@@ -3007,6 +3279,7 @@ export function App() {
         onUpdateAssetDefinition={handleUpdateAssetDefinition}
         onRemoveAssetDefinition={handleRemoveAssetDefinition}
         onCorrectAssetOrigin={handleCorrectAssetOrigin}
+        onSetAssetColliderShape={handleSetAssetColliderShape}
         onRemoveTextureDefinition={(definitionId) => {
           const { session: currentSession } = projectStore.getState();
           if (!currentSession) return;

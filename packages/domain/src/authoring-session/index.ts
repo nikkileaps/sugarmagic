@@ -2866,7 +2866,10 @@ export function updateAssetDefinitionInSession(
   session: AuthoringSession,
   definitionId: string,
   patch: Partial<
-    Pick<AssetDefinition, "displayName" | "surfaceSlots" | "deform" | "effect">
+    Pick<
+      AssetDefinition,
+      "displayName" | "surfaceSlots" | "deform" | "effect" | "collider"
+    >
   >
 ): AuthoringSession {
   return {

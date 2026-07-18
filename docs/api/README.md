@@ -28,6 +28,7 @@ They are architecture-facing developer API documents that explain how the system
 - [SugarDeploy Game Deployment](/Users/nikki/projects/sugarmagic/docs/api/sugardeploy-game-deployment.md) — onboarding a new game (Provision / Release / Deploy lifecycle, developer + player auth models, where the moving pieces live)
 - [Character Wizard](/Users/nikki/projects/sugarmagic/docs/api/character-wizard.md) — static GLB to rigged, animated character in Studio (wizard steps, weight painting, edit-in-place, integration seams)
 - [Animation Generation](/Users/nikki/projects/sugarmagic/docs/api/animation-generation.md) — procedural idle/walk/run with personality sliders, pose adjust, and curve editing (the animation panel)
+- [Collision & Navigation](/Users/nikki/projects/sugarmagic/docs/api/collision-and-navigation.md) — runtime collision (single `resolveMove` enforcer), drawn Volumes + roles, object colliders, and navmesh bake/pathfinding (epic 069)
 
 ## Relationship to Proposals and ADRs
 

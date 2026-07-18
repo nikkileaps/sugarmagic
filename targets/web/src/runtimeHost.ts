@@ -51,6 +51,7 @@ import {
   type UITheme,
   composeRegionContents,
   migrateToScenes,
+  resolveRegionVolumes,
   resolveActiveScene,
   resolveUnlockedSceneIds,
   type CreditsDefinition,
@@ -84,6 +85,12 @@ import {
   type CameraSnapshot,
   World,
   MovementSystem,
+  CollisionSystem,
+  buildCollisionWorld,
+  createEmptyCollisionWorld,
+  loadNavMeshPathfinder,
+  type NavMeshPathfinder,
+  computePlayerAgentDimensions,
   PlayerControlled,
   Position,
   Velocity,
@@ -1311,6 +1318,13 @@ export function createWebRuntimeHost(
   let gameplayAssembly: ReturnType<
     typeof createRuntimeGameplayAssembly
   > | null = null;
+  // Plan 069.9 — outer-scoped so teardown frees the WASM navmesh across
+  // region/scene restarts (holds a recast NavMesh); `getPathfinder` reads it.
+  let navMeshPathfinder: NavMeshPathfinder | null = null;
+  // Bumped every start(); the async navmesh load bails (and frees its result)
+  // when a newer start() has superseded it — else a late load would overwrite
+  // the current region's pathfinder with a stale mesh AND leak the WASM one.
+  let navMeshLoadEpoch = 0;
   let playerEyeHeight = 1.62;
   let spellCastFeedbackHost: SpellCastFeedbackHost | null = null;
   let pluginBannerHost: RuntimePluginBannerHost | null = null;
@@ -1331,6 +1345,16 @@ export function createWebRuntimeHost(
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
+  // Plan 069.10 perf probe (dev-only, gated by `window.__smperf`): isolates
+  // the CPU update path (where all of epic 069's collision/nav work lives)
+  // from render. Set `window.__smperf = true` in the preview to log a 1Hz
+  // line; the update ms vs frame ms tells us CPU-bound (dig into systems) vs
+  // GPU/render-bound (069 is not the cost). Cheap + off by default.
+  let perfWorldMs = 0;
+  let perfSessionMs = 0;
+  let perfFrameMs = 0;
+  let perfFrames = 0;
+  let perfLastLogMs = 0;
   let started = false;
   const sceneObjectEntries = new Map<string, SceneObjectEntry>();
 
@@ -1357,6 +1381,11 @@ export function createWebRuntimeHost(
     void gameplayAssembly?.dispose();
     gameplayAssembly = null;
     gameplaySession = null;
+    // Plan 069.9 — free the recast navmesh (WASM) on teardown, and bump the
+    // epoch so an in-flight load can't resurrect (and leak) after dispose.
+    navMeshLoadEpoch += 1;
+    navMeshPathfinder?.destroy();
+    navMeshPathfinder = null;
     billboardRenderer?.dispose();
     billboardRenderer = null;
     textBillboardRenderer?.dispose();
@@ -1493,8 +1522,30 @@ export function createWebRuntimeHost(
 
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
+
+    const perfOn = (globalThis as { __smperf?: boolean }).__smperf === true;
+    const pWorldStart = perfOn ? performance.now() : 0;
     world.update(delta);
+    const pSessionStart = perfOn ? performance.now() : 0;
     gameplaySession?.update(delta);
+    if (perfOn) {
+      const pEnd = performance.now();
+      perfWorldMs += pSessionStart - pWorldStart;
+      perfSessionMs += pEnd - pSessionStart;
+      perfFrameMs += delta * 1000;
+      perfFrames += 1;
+      if (now - perfLastLogMs > 1000) {
+        const n = Math.max(perfFrames, 1);
+        console.info(
+          `[smperf] frame ${(perfFrameMs / n).toFixed(1)}ms (~${(1000 / (perfFrameMs / n)).toFixed(0)}fps) | world.update ${(perfWorldMs / n).toFixed(2)}ms | session.update ${(perfSessionMs / n).toFixed(2)}ms | rest(render) ${((perfFrameMs - perfWorldMs - perfSessionMs) / n).toFixed(1)}ms`
+        );
+        perfWorldMs = 0;
+        perfSessionMs = 0;
+        perfFrameMs = 0;
+        perfFrames = 0;
+        perfLastLogMs = now;
+      }
+    }
 
     for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
       const entry = sceneObjectEntries.get(snapshot.presenceId);
@@ -1979,6 +2030,17 @@ export function createWebRuntimeHost(
       console.warn("[web-runtime] landscape-apply warning", warning);
     }
 
+    // Plan 069.2 — the collision world, built once per start from the
+    // resolved scene objects (rebuild-on-start covers region/scene switches
+    // and preview live edits). Populated inside the activeRegion block
+    // below; consumed by the CollisionSystem registered after MovementSystem.
+    let collisionWorld = createEmptyCollisionWorld();
+    // Plan 069.9 — the baked navmesh pathfinder, loaded async from the
+    // artifact blob; NPCs follow it once ready (straight-line until then, and
+    // forever in unbaked regions). Outer-scoped so teardown frees it.
+    navMeshPathfinder?.destroy();
+    navMeshPathfinder = null;
+    const navMeshEpoch = ++navMeshLoadEpoch;
     if (activeRegion) {
       const region = activeRegion;
       const objects = resolveSceneObjects(region, {
@@ -1989,6 +2051,33 @@ export function createWebRuntimeHost(
         includePlayerPresence: false,
         activeScene
       });
+      // Plan 069.5 — blocker / containment volumes join the collision world
+      // alongside the prop colliders (conditional gates refreshed per frame
+      // by the gameplay session, which holds the same world by reference).
+      collisionWorld = buildCollisionWorld(objects, resolveRegionVolumes(region));
+      // Plan 069.9 — resolve the navmesh artifact blob (published to the
+      // asset-source store at bake) and load a pathfinder off the main path.
+      const navMeshUrl = region.navMesh
+        ? state.assetSources[region.navMesh.assetPath]
+        : undefined;
+      if (navMeshUrl) {
+        void (async () => {
+          try {
+            const response = await fetch(navMeshUrl);
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            const pathfinder = await loadNavMeshPathfinder(bytes);
+            // A newer start() superseded this load — free it, don't assign
+            // (else we'd overwrite the current mesh + leak the new one).
+            if (navMeshEpoch !== navMeshLoadEpoch) {
+              pathfinder.destroy();
+              return;
+            }
+            navMeshPathfinder = pathfinder;
+          } catch (error) {
+            console.warn("[web-runtime] navmesh load failed", error);
+          }
+        })();
+      }
       // Plan 057 — item presences run through the shared filter
       // helper so this visual-spawn path and the ECS spawn path
       // in gameplay-session apply the same filter set. New
@@ -2489,6 +2578,16 @@ export function createWebRuntimeHost(
     const movementSystem = new MovementSystem();
     world.addSystem(movementSystem);
 
+    // Plan 069.2 — resolve the player's move against the collision world
+    // AFTER MovementSystem integrates it. Player radius from the shared
+    // agent-dimensions helper (the player has no live SceneObject here).
+    const collisionSystem = new CollisionSystem();
+    collisionSystem.setCollisionWorld(collisionWorld);
+    collisionSystem.setPlayerRadius(
+      computePlayerAgentDimensions(state.playerDefinition).radius
+    );
+    world.addSystem(collisionSystem);
+
     inputManager = createRuntimeInputManager();
     inputManager.attach(root);
     spellCastFeedbackHost = createSpellCastFeedbackHost(root);
@@ -2503,6 +2602,10 @@ export function createWebRuntimeHost(
       inputManager,
       activeRegion,
       activeScene,
+      // Plan 069.3 — NPC movement resolves against the same static world.
+      collisionWorld,
+      // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
+      getPathfinder: () => navMeshPathfinder,
       onSceneAction: hostHandleSceneAction,
       // Initial track by boot lifecycle: menu theme while the
       // start menu is up, else the in-game track (usually null).

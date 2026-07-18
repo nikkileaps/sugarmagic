@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
+    "@recast-navigation/core": "^0.43.1",
+    "@recast-navigation/generators": "^0.43.1",
     "@sugarmagic/domain": "workspace:*",
     "json5": "^2.2.3",
     "three": "^0.183.2"

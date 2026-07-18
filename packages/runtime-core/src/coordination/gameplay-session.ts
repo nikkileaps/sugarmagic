@@ -36,6 +36,7 @@ import {
   type Scene,
   type SpellDefinition,
   type RegionDocument,
+  type RegionVolumeDefinition,
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
 import {
@@ -89,7 +90,18 @@ import {
   Interactable,
   InteractionSystem
 } from "../interaction";
-import { iterateActiveItemPresences } from "../scene";
+import {
+  iterateActiveItemPresences,
+  computePlayerAgentDimensions,
+  computeNpcAgentDimensions
+} from "../scene";
+import {
+  applyVolumeColliderGates,
+  createEmptyCollisionWorld,
+  type CollisionWorld
+} from "../collision";
+import type { NavMeshPathfinder } from "../navmesh";
+import { resolveWorldFlagWriteValue } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -110,7 +122,8 @@ import type {
 import { RuntimePluginSystem } from "../plugins";
 import {
   createRuntimeNpcBehaviorSystem,
-  type RuntimeNpcBehaviorSystem
+  type RuntimeNpcBehaviorSystem,
+  type NpcCollisionAgent
 } from "../behavior";
 import {
   clearActiveQuestObjectives,
@@ -192,6 +205,14 @@ export interface RuntimeGameplaySessionControllerOptions {
   soundEventBindings?: SoundEventBindingMap;
   audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
+  /** Plan 069.3 — the static collision world (built by the host from the
+   *  scene objects) so NPC movement resolves against props via the shared
+   *  `resolveMove`. Absent => empty world (agent-vs-agent still applies). */
+  collisionWorld?: CollisionWorld;
+  /** Plan 069.9 — supplies the baked navmesh pathfinder (the host loads it
+   *  async from the artifact blob). NPCs follow navmesh paths when present,
+   *  straight-line otherwise. */
+  getPathfinder?: () => NavMeshPathfinder | null;
   onItemPresenceCollected?: (presenceId: string) => void;
   /**
    * Plan 055 §055.6 — the host consults its WorldPresenceTracker
@@ -293,6 +314,11 @@ export interface RuntimeGameplayAssembly {
   readonly gameplaySession: RuntimeGameplaySessionController;
   dispose: () => Promise<void>;
 }
+
+/** Plan 069.3 — sentinel agent id for the player in NPC collision (can't
+ *  clash with an NPC presenceId). */
+const PLAYER_COLLISION_AGENT_ID = "__player__";
+const DEFAULT_AGENT_RADIUS = 0.35;
 
 const DIALOGUE_LOCK_ID = "runtime-dialogue";
 const JOURNAL_LOCK_ID = "runtime-quest-journal";
@@ -415,6 +441,8 @@ export function createRuntimeGameplaySessionController(
     questDefinitions,
     mechanics,
     contentLibrary,
+    collisionWorld,
+    getPathfinder,
     soundEventBindings,
     audioMixer,
     pluginManager,
@@ -551,6 +579,38 @@ export function createRuntimeGameplaySessionController(
   const debugBillboardWarningKeys = new Set<string>();
   let debugBillboardsInitialized = false;
   let debugBillboardsEnabled = false;
+  // Plan 069.5 — the static collision world, shared by reference with the
+  // player CollisionSystem (host) and the NPC collision context below, so a
+  // single per-frame containment-gate refresh reaches both resolve paths.
+  const sharedCollisionWorld = collisionWorld ?? createEmptyCollisionWorld();
+
+  // Plan 069.5 — fire an authored on-enter trigger action: play (enter) /
+  // stop (exit) the cue and, on enter, set the world flag. Player-only.
+  function fireTriggerAction(volume: RegionVolumeDefinition, kind: "enter" | "exit") {
+    const trigger = volume.trigger;
+    if (!trigger) {
+      return;
+    }
+    const instanceKey = `region:${activeRegion?.identity.id ?? "region"}:trigger:${volume.volumeId}`;
+    if (kind === "exit") {
+      if (trigger.action.audioCueId) {
+        audioController.stopInstance(instanceKey);
+      }
+      return;
+    }
+    if (trigger.action.audioCueId) {
+      audioController.playCue({
+        cueDefinitionId: trigger.action.audioCueId,
+        instanceKey,
+        position: volume.bounds.center
+      });
+    }
+    const flag = trigger.action.setWorldFlag;
+    if (flag?.key) {
+      questManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
+    }
+  }
+
   const spatialResolverSystem = activeRegion
     ? createRuntimeSpatialResolverSystem({
         blackboard,
@@ -559,6 +619,9 @@ export function createRuntimeGameplaySessionController(
         confirmationFrames: SPATIAL_AREA_CONFIRMATION_FRAMES,
         logDebug(event, payload) {
           console.info(`[runtime-core] ${event}`, payload ?? {});
+        },
+        onTriggerEvent({ volume, kind }) {
+          fireTriggerAction(volume, kind);
         }
       })
     : null;
@@ -1857,6 +1920,16 @@ export function createRuntimeGameplaySessionController(
   });
   registerNpcInteractables();
   if (activeRegion) {
+    // Plan 069.3 — agent radii are stable; precompute once. Player id is a
+    // sentinel that can't collide with an NPC presenceId.
+    const playerAgentRadius =
+      computePlayerAgentDimensions(playerDefinition).radius;
+    const npcAgentRadiusById = new Map(
+      npcDefinitions.map((definition) => [
+        definition.definitionId,
+        computeNpcAgentDimensions(definition).radius
+      ])
+    );
     npcBehaviorSystem = createRuntimeNpcBehaviorSystem({
       region: activeRegion,
       world,
@@ -1870,6 +1943,41 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
+      getPathfinder,
+      // Plan 069.3 — per-sync snapshot of the collision world + every agent
+      // circle (player + NPCs), so NPC moves resolve against props and each
+      // other through the shared resolveMove.
+      getCollisionContext: () => {
+        const agents: NpcCollisionAgent[] = [];
+        const playerEntity = resolvePlayerEntity();
+        if (playerEntity !== null) {
+          const playerPos = world.getComponent(playerEntity, Position);
+          if (playerPos) {
+            agents.push({
+              id: PLAYER_COLLISION_AGENT_ID,
+              x: playerPos.x,
+              z: playerPos.z,
+              radius: playerAgentRadius
+            });
+          }
+        }
+        for (const [presenceId, entry] of npcInteractableEntities.entries()) {
+          const npcPos = world.getComponent(entry.entity, Position);
+          if (!npcPos) {
+            continue;
+          }
+          agents.push({
+            id: presenceId,
+            x: npcPos.x,
+            z: npcPos.z,
+            radius:
+              npcAgentRadiusById.get(entry.npcDefinitionId) ??
+              DEFAULT_AGENT_RADIUS
+          });
+        }
+        return { world: sharedCollisionWorld, agents };
+      },
       logDebug(event, payload) {
         console.info(`[runtime-core] ${event}`, payload ?? {});
       }
@@ -1913,6 +2021,20 @@ export function createRuntimeGameplaySessionController(
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
       const trackedQuest = questManager.getTrackedQuest();
+      // Plan 069.5 — re-evaluate conditional containment gates against the
+      // current quest/flag state BEFORE any move resolves this frame (NPC
+      // sync here; the player CollisionSystem reads the same world next tick).
+      if (sharedCollisionWorld.gates.length > 0) {
+        applyVolumeColliderGates(sharedCollisionWorld, {
+          activeQuest: trackedQuest
+            ? {
+                questDefinitionId: trackedQuest.questDefinitionId,
+                stageId: trackedQuest.stageId
+              }
+            : null,
+          hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
+        });
+      }
       npcBehaviorSystem?.sync({
         deltaSeconds,
         activeQuest: trackedQuest

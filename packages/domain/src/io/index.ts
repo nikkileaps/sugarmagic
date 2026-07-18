@@ -8,13 +8,22 @@
  * impossible states deeper into the runtime.
  */
 
-import type { ContentLibrarySnapshot } from "../content-library";
+import {
+  cloneAssetCollider,
+  isValidColliderShape,
+  type AssetCollider,
+  type ContentLibrarySnapshot
+} from "../content-library";
 import type { ShaderBindingOverride, ShaderSlotKind } from "../shader-graph";
 import {
   createDefaultRegionLandscapeSurfaceSlots,
   createDefaultRegionLandscapeState,
   createPlacedAssetInstance,
   createRegionAreaDefinition,
+  createRegionVolumeDefinition,
+  migrateRegionVolumesFromLegacy,
+  deriveRegionAreasFromVolumes,
+  deriveRegionAmbienceZonesFromVolumes,
   createRegionAudioState,
   createRegionItemPresence,
   createLandscapeSurfaceSlot,
@@ -78,6 +87,18 @@ function normalizeSurfaceSlotOverrides(asset: {
     });
   }
   return bySlotName.size > 0 ? [...bySlotName.values()] : undefined;
+}
+
+/** Plan 069.6 — validate + clone a per-instance collider override on load;
+ *  an unknown shape drops the override (falls back to the definition). */
+function normalizeInstanceColliderOverride(asset: {
+  colliderOverride?: AssetCollider;
+}): AssetCollider | undefined {
+  const override = asset.colliderOverride;
+  if (!override || !isValidColliderShape(override.shape)) {
+    return undefined;
+  }
+  return cloneAssetCollider(override);
 }
 
 function normalizeShaderOverrides(
@@ -221,6 +242,43 @@ export function normalizeRegionDocumentForLoad(
   const baseAssets = region.placedAssets ?? [];
   const baseFolders = region.folders ?? [];
 
+  // Plan 069.4 — unify areas + ambience zones into canonical `volumes`,
+  // then re-derive the `@deprecated` area/ambience aliases from them so
+  // every legacy reader keeps working. Migrate from the normalized legacy
+  // stores only when a file predates volumes; otherwise volumes is
+  // canonical (and preserves physical roles authored in 069.5/069.7).
+  const normalizedAreas = (region.areas ?? []).map((area) =>
+    createRegionAreaDefinition({
+      ...area,
+      lorePageId:
+        typeof area.lorePageId === "string" &&
+        area.lorePageId.trim().length > 0
+          ? area.lorePageId.trim()
+          : null,
+      parentAreaId:
+        typeof area.parentAreaId === "string" &&
+        area.parentAreaId.trim().length > 0
+          ? area.parentAreaId.trim()
+          : null
+    })
+  );
+  const normalizedAudio = createRegionAudioState(
+    (
+      region as RegionDocument & {
+        audio?: Parameters<typeof createRegionAudioState>[0];
+      }
+    ).audio
+  );
+  const regionVolumes = Array.isArray(region.volumes)
+    ? region.volumes.map((volume) => createRegionVolumeDefinition(volume))
+    : migrateRegionVolumesFromLegacy(
+        normalizedAreas,
+        normalizedAudio.ambienceZones
+      );
+  const derivedAreas = deriveRegionAreasFromVolumes(regionVolumes);
+  const derivedAmbienceZones =
+    deriveRegionAmbienceZonesFromVolumes(regionVolumes);
+
   return {
     ...region,
     lorePageId:
@@ -233,7 +291,8 @@ export function normalizeRegionDocumentForLoad(
         ...asset,
         inspectable: asset.inspectable ?? null,
         shaderOverrides: normalizeShaderOverrides(contentLibrary, asset),
-        surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset)
+        surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset),
+        colliderOverride: normalizeInstanceColliderOverride(asset)
       })
     ),
     folders: [...baseFolders],
@@ -242,21 +301,9 @@ export function normalizeRegionDocumentForLoad(
         normalizedBinding?.defaultEnvironmentId ??
         defaultEnvironmentId(contentLibrary)
     },
-    areas: (region.areas ?? []).map((area) =>
-      createRegionAreaDefinition({
-        ...area,
-        lorePageId:
-          typeof area.lorePageId === "string" &&
-          area.lorePageId.trim().length > 0
-            ? area.lorePageId.trim()
-            : null,
-        parentAreaId:
-          typeof area.parentAreaId === "string" &&
-          area.parentAreaId.trim().length > 0
-            ? area.parentAreaId.trim()
-            : null
-      })
-    ),
+    // Plan 069.4 — canonical volumes + derived `@deprecated` area alias.
+    volumes: regionVolumes,
+    areas: derivedAreas,
     behaviors: (region.behaviors ?? []).map((behavior) =>
       createRegionNPCBehaviorDefinition({
         ...behavior,
@@ -352,13 +399,8 @@ export function normalizeRegionDocumentForLoad(
       ),
       paintPayload: legacyLandscape?.paintPayload ?? null
     }),
-    audio: createRegionAudioState(
-      (
-        region as RegionDocument & {
-          audio?: Parameters<typeof createRegionAudioState>[0];
-        }
-      ).audio
-    ),
+    // Plan 069.4 — ambience zones re-derived from the trigger-role volumes.
+    audio: { ...normalizedAudio, ambienceZones: derivedAmbienceZones },
     // Plan 065 §065.1 — authoring-only Layout Sketch. Coerced on
     // load so a malformed payload can't leak into the session;
     // absent stays null (the common case).
@@ -405,7 +447,8 @@ export function normalizeScenesForLoad(
             ...asset,
             inspectable: asset.inspectable ?? null,
             shaderOverrides: normalizeShaderOverrides(contentLibrary, asset),
-            surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset)
+            surfaceSlotOverrides: normalizeSurfaceSlotOverrides(asset),
+            colliderOverride: normalizeInstanceColliderOverride(asset)
           })
         ),
         folders: [...overlay.folders],

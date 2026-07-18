@@ -1,7 +1,10 @@
-import type {
-  RegionAreaBounds,
-  RegionAreaDefinition,
-  RegionDocument
+import {
+  resolveRegionVolumes,
+  volumeToRegionArea,
+  type RegionAreaBounds,
+  type RegionAreaDefinition,
+  type RegionDocument,
+  type RegionVolumeDefinition
 } from "@sugarmagic/domain";
 import type {
   AreaReference,
@@ -16,7 +19,14 @@ const regionAreaIndexCache = new WeakMap<
   Map<string, RegionAreaDefinition>
 >();
 
-function containsPoint(bounds: RegionAreaBounds, x: number, y: number, z: number): boolean {
+/** Plan 069.5 — exported so the trigger tracker (and any role consumer)
+ *  shares one box containment test. Y is honored (volumes are boxes). */
+export function containsPoint(
+  bounds: RegionAreaBounds,
+  x: number,
+  y: number,
+  z: number
+): boolean {
   const [centerX, centerY, centerZ] = bounds.center;
   const [sizeX, sizeY, sizeZ] = bounds.size;
   const halfX = sizeX / 2;
@@ -43,7 +53,18 @@ export function buildAreaIndex(region: RegionDocument): Map<string, RegionAreaDe
     return cached;
   }
 
-  const index = new Map(region.areas.map((area) => [area.areaId, area]));
+  // Plan 069.4 — source from the CANONICAL `label`-role volumes, not the
+  // `@deprecated region.areas` alias, so this has zero live readers of the
+  // alias and can't drift if a future write path forgets to re-derive it.
+  // (`volumeToRegionArea` is exactly what derives the alias, so results are
+  // identical to the old `region.areas`.)
+  const index = new Map<string, RegionAreaDefinition>();
+  for (const volume of resolveRegionVolumes(region)) {
+    const area = volumeToRegionArea(volume);
+    if (area) {
+      index.set(area.areaId, area);
+    }
+  }
   regionAreaIndexCache.set(region, index);
   return index;
 }
@@ -92,7 +113,9 @@ export function resolveRegionAreaAtPosition(
   region: RegionDocument,
   position: { x: number; y: number; z: number }
 ): RegionAreaDefinition | null {
-  const containingAreas = region.areas.filter((area) =>
+  // Plan 069.4 — canonical label volumes (via `buildAreaIndex`), not the
+  // `@deprecated region.areas` alias.
+  const containingAreas = [...buildAreaIndex(region).values()].filter((area) =>
     containsPoint(area.bounds, position.x, position.y, position.z)
   );
   if (containingAreas.length === 0) {
@@ -107,10 +130,20 @@ export interface SpatialAreaTrackerOptions {
   confirmationFrames?: number;
 }
 
-export interface SpatialAreaResolution {
+interface SpatialAreaResolutionCore {
   rawArea: RegionAreaDefinition | null;
   area: RegionAreaDefinition | null;
   changed: boolean;
+}
+
+export interface SpatialAreaResolution extends SpatialAreaResolutionCore {
+  /**
+   * Plan 069.5 — `on-enter` trigger volumes this entity crossed INTO / OUT
+   * of since the previous resolve. Edge-detected off a per-entity inside
+   * set, so a trigger fires once per entry and re-arms only after an exit.
+   */
+  triggersEntered: RegionVolumeDefinition[];
+  triggersExited: RegionVolumeDefinition[];
 }
 
 interface SpatialAreaTrackerState {
@@ -135,8 +168,57 @@ export function createSpatialAreaTracker(
   const states = new Map<string, SpatialAreaTrackerState>();
   const index = buildAreaIndex(region);
 
-  return {
-    resolve(entityId, position) {
+  // Plan 069.5 — `on-enter` trigger volumes and the per-entity inside set we
+  // edge-detect against. Only on-enter triggers need edge tracking; "always"
+  // triggers are the continuous ambient bed played from the audio alias.
+  const triggerVolumes = resolveRegionVolumes(region).filter(
+    (volume) =>
+      volume.enabled &&
+      volume.roles.includes("trigger") &&
+      volume.trigger?.timing === "on-enter"
+  );
+  const insideTriggerIdsByEntity = new Map<string, Set<string>>();
+
+  function resolveTriggerEdges(
+    entityId: string,
+    position: { x: number; y: number; z: number }
+  ): { entered: RegionVolumeDefinition[]; exited: RegionVolumeDefinition[] } {
+    const entered: RegionVolumeDefinition[] = [];
+    const exited: RegionVolumeDefinition[] = [];
+    if (triggerVolumes.length === 0) {
+      return { entered, exited };
+    }
+    const previous = insideTriggerIdsByEntity.get(entityId);
+    // First resolve for this entity: PRIME the inside-set (record where it
+    // already is) without emitting edges — spawning INSIDE an on-enter trigger
+    // is not a crossing, so it must not fire the cue / set the world flag on
+    // load. Only genuine enter/exit crossings on later frames fire.
+    const isFirstResolve = previous === undefined;
+    const current = new Set<string>();
+    for (const volume of triggerVolumes) {
+      const inside = containsPoint(
+        volume.bounds,
+        position.x,
+        position.y,
+        position.z
+      );
+      if (inside) {
+        current.add(volume.volumeId);
+        if (!isFirstResolve && !previous.has(volume.volumeId)) {
+          entered.push(volume);
+        }
+      } else if (!isFirstResolve && previous.has(volume.volumeId)) {
+        exited.push(volume);
+      }
+    }
+    insideTriggerIdsByEntity.set(entityId, current);
+    return { entered, exited };
+  }
+
+  function resolveArea(
+    entityId: string,
+    position: { x: number; y: number; z: number }
+  ): SpatialAreaResolutionCore {
       const rawArea = resolveRegionAreaAtPosition(region, position);
       const rawAreaId = rawArea?.areaId ?? null;
       const state = states.get(entityId);
@@ -217,9 +299,21 @@ export function createSpatialAreaTracker(
         area: state.committedAreaId ? index.get(state.committedAreaId) ?? null : null,
         changed: false
       };
+  }
+
+  return {
+    resolve(entityId, position) {
+      const areaResolution = resolveArea(entityId, position);
+      const triggers = resolveTriggerEdges(entityId, position);
+      return {
+        ...areaResolution,
+        triggersEntered: triggers.entered,
+        triggersExited: triggers.exited
+      };
     },
     reset() {
       states.clear();
+      insideTriggerIdsByEntity.clear();
     }
   };
 }
