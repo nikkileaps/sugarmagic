@@ -1402,7 +1402,9 @@ export function createWebRuntimeHost(
   async function runSmperfMatrix(
     opts?: { perConditionMs?: number }
   ): Promise<{ table: string; rows: Record<string, number | string | null>[] }> {
-    const perCond = opts?.perConditionMs ?? 2500;
+    // Default 4s per condition: shadow toggles force a pipeline recompile,
+    // so a short window captures rebuild churn instead of steady state.
+    const perCond = opts?.perConditionMs ?? 4000;
     const conditions: [string, Record<string, boolean>][] = [
       ["baseline", { log: true }],
       ["-shadows", { log: true, noShadows: true }],

@@ -104,15 +104,27 @@ Extend the 069 frame probe + perf harness to split `rest(render)` into render-CP
 
 **Attribution results:** _PENDING CAPTURE_ — needs a scatter-heavy preview (lavender meadow). Simplest capture (works in ANY normal Chrome — no debugger attach, which turned out to hang GPU on this machine): start the preview, walk into the meadow, open the console, run `await __smperfRun()`. It flips all five conditions itself (~13s), prints + returns the table; paste it here. (Alt driver for when automated Chrome cooperates: `pnpm --filter @sugarmagic/perf-harness attribute:render`.) Fill this table + name the reboot ms, then re-weight 070.4 if the data disagrees with the chunking/BatchedMesh thesis.
 
+Capture #1 (2026-07-18, normal Chrome, vsync-LOCKED at 60fps, meadow-edge viewpoint):
+
 | condition | frame ms | fps | world | session | render-cpu | gpu+rest | d(frame) |
 |-----------|----------|-----|-------|---------|-----------|----------|----------|
-| baseline  | | | | | | | 0 |
-| -shadows  | | | | | | | |
-| -scatter  | | | | | | | |
-| -landscape| | | | | | | |
-| -all      | | | | | | | |
+| baseline  | 16.67 | 60.0 | 0.04 | 0.08 | 2.77 | 13.77 | 0.0 |
+| -shadows  | 21.88 | 45.7 | 0.05 | 0.06 | 8.33 | 13.43 | +5.2 (ARTIFACT) |
+| -scatter  | 16.68 | 60.0 | 0.04 | 0.06 | 2.36 | 14.22 | 0.0 |
+| -landscape| 16.65 | 60.1 | 0.06 | 0.05 | 2.49 | 14.05 | 0.0 |
+| -all      | 17.18 | 58.3 | 0.05 | 0.08 | 2.05 | 15.00 | +0.5 |
 
-reboot (lastBootMs): _pending_ · #355 turn-stutter: _pending — compare turn-left vs turn-right under baseline and -shadows_
+reboot (lastBootMs): **585ms** (real; higher than the ~200-300ms guess — feeds 070.7).
+
+**Reading capture #1 (with caveats):**
+- This viewpoint is a solid **60fps and NOT render-bound**. CPU total ~3ms (world+session+render-cpu). Scatter compute ≈0.4ms, landscape ≈0 — neither is a cost here.
+- **vsync is LOCKED** (normal Chrome), so every frame pins to 16.67ms and `gpu+rest` is mostly CPU idling to vsync — the TRUE render/GPU ms is invisible while the scene sits under the 16.67ms budget.
+- **`-shadows` row is an ARTIFACT**: toggling `renderer.shadowMap.enabled` at runtime forces a WebGPU pipeline recompile; the 8.33ms render-cpu / 21.88ms frame is rebuild churn, not shadow render cost. Don't trust it. (Sampling window widened to 4s to let recompiles settle; a non-recompiling shadow A/B is TBD — likely author shadow-quality off for a clean session compare, or skip the shadow pass without touching `enabled`.)
+- **The ~27ms premise is not reproduced here.** The earlier 30-38fps was a different scene/viewpoint (or denser scatter in view). Capture #2 must be taken WHERE the framerate actually drops below 60 (frame > 16.67 makes the breakdown meaningful even under vsync), else with vsync unlocked.
+
+Capture #2 (the actually-slow viewpoint): _PENDING_ — needed before 070.4 weighting is trusted.
+
+#355 turn-stutter: _pending — compare turn-left vs turn-right in the slow viewpoint_
 
 ### 070.2 — Shared renderable-lifecycle reconciler (#350)
 
