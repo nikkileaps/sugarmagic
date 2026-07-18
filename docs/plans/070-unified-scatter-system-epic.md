@@ -93,7 +93,9 @@ Design principles (consistent with repo norms):
 
 ## Stories
 
-**EXECUTION ORDER: 070.1 -> 070.2 -> 070.3 -> 070.4 -> 070.5 -> 070.6 -> 070.7 -> 070.8.**
+**EXECUTION ORDER: 070.1 -> 070.2 -> [070.6 -> 070.5 -> 070.3 -> 070.7 -> 070.8].**
+
+POST-LOCK AMENDMENT (2026-07-18, nikki-approved): after 070.1's capture #2 showed the render bottleneck is the BASE SCENE (not scatter/shadows/landscape), the epic's perf premise for **070.4 (HISM culling/LOD/shadows-for-fps) is dead — 070.4 is DEFERRED**, to be re-scoped (visual "shadows-on-scatter" + real base-render bottleneck hunt) when we revisit perf after the epic. The remaining already-gated stories are re-ordered per nikki (070.6 -> 070.5 -> 070.3 -> 070.7 -> 070.8); their individual DESIGNS are unchanged, so no re-gate is required (a re-gate is only needed if 070.4's replacement perf work is designed). The original numeric order below is retained for reference.
 
 ### 070.1 — Render-frame attribution (measure first)
 
