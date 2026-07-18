@@ -28,6 +28,27 @@ pnpm --filter @sugarmagic/perf-harness measure:live
 Reports median/p95 frame time + fps and scrapes the HUD text. Use it to
 A/B a fix: measure, apply the fix, rebuild, measure again.
 
+## `capture` -- fully automated, ZERO human (Plan 070.1)
+
+The one that matters. Claude/CI runs it start-to-finish: it launches a
+real hardware-WebGPU Chrome itself (direct binary — the debug port works
+and WebGPU renders on the actual GPU even if the browser toolbar doesn't
+paint; we drive it entirely over CDP and never need to see it), drives
+the Studio (start Preview -> New Game -> wait for the scene), runs the
+host's `__smperfRun()` A/B matrix, and prints the table. No human, no
+attaching to a hand-launched browser.
+
+```
+pnpm --filter @sugarmagic/perf-harness capture           # launches + closes Chrome
+pnpm --filter @sugarmagic/perf-harness capture -- --keep # reuse Chrome next run (faster)
+```
+
+Notes: the Studio profile persists (project stays open, so no picking);
+the game's "New Game" enters the scene without the sign-in wall (local
+preview). Default region spawn sits near the 60fps vsync cap — drive the
+player into a heavier viewpoint for render-bound numbers (movement
+automation TBD).
+
 ## `attribute:render` -- split the render frame (Plan 070.1)
 
 Same CDP attach as `measure:live`, but drives the runtime host's
