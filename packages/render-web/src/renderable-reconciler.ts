@@ -100,6 +100,9 @@ export interface RenderableReconcilerConfig {
   validate?: (object: SceneObject, renderable: THREE.Object3D) => string | null;
   /** Fires after an entry's renderable is live (game attaches mixers here). */
   onEntryLoaded?: (entry: ReconciledEntry, renderable: THREE.Object3D) => void;
+  /** Fires when the in-flight load set drains to empty (the studio uses it
+   *  to dismiss its "updating scene" toast). */
+  onSettled?: () => void;
   /** Fires just before an entry is removed + disposed. */
   onEntryWillRemove?: (entry: ReconciledEntry) => void;
   logger?: { warn: (message: string, payload?: unknown) => void };
@@ -258,6 +261,9 @@ export function createRenderableReconciler(
       .loadModel(url)
       .then((gltfScene) => {
         pending.delete(object.instanceId);
+        if (pending.size === 0) {
+          config.onSettled?.();
+        }
         // Stale-load guard: the object may have been removed or its
         // representation changed while we loaded.
         const latest = desired.get(object.instanceId) ?? null;
@@ -287,6 +293,9 @@ export function createRenderableReconciler(
       })
       .catch((error) => {
         pending.delete(object.instanceId);
+        if (pending.size === 0) {
+          config.onSettled?.();
+        }
         config.logger?.warn("reconciler-load-failed", {
           instanceId: object.instanceId,
           error

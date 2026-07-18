@@ -1,20 +1,15 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   createCapsuleFallback,
   registerLivePaintedMask,
   createFallbackMesh,
   createRenderView,
-  createRenderableShaderApplicationState,
+  createRenderableReconciler,
   disposeRenderableObject,
-  ensureShaderSetAppliedToRenderable,
-  sanitizeRenderableVertexFormats,
   ensureShaderSetsAppliedToRenderables,
-  normalizeModelScale,
-  type RenderableShaderApplicationState,
+  type RenderableReconciler,
   type RenderView,
-  type ShaderRuntime,
   type WebRenderEngine
 } from "@sugarmagic/render-web";
 import {
@@ -39,7 +34,6 @@ import {
 } from "@sugarmagic/shell";
 import {
   resolveSceneObjects,
-  computeSceneDelta,
   loadNavMeshDebugGeometry,
   type SceneObject
 } from "@sugarmagic/runtime-core";
@@ -47,7 +41,6 @@ import {
   SCENE_OBJECT_MARKER_KEY,
   type WorkspaceViewport
 } from "@sugarmagic/workspaces";
-import { resolveRenderableCompletion } from "./renderable-lifecycle";
 import type { ViewportOverlayFactory } from "./overlay-context";
 import {
   asAuthoredViewportRoot,
@@ -59,14 +52,6 @@ import {
 const GRID_COLOR = 0x45475a;
 
 const gltfLoader = new GLTFLoader();
-
-interface SceneObjectEntry {
-  root: THREE.Group;
-  object: SceneObject;
-  representationKey: string;
-  loadedWithAsset: boolean;
-  shaderApplication: RenderableShaderApplicationState;
-}
 
 interface LandscapeGridSpec {
   size: number;
@@ -170,23 +155,6 @@ function reportRenderableError(
   );
 }
 
-function applyObjectTransform(root: THREE.Object3D, object: SceneObject) {
-  root.position.set(
-    object.transform.position[0],
-    object.transform.position[1],
-    object.transform.position[2]
-  );
-  root.rotation.set(
-    object.transform.rotation[0],
-    object.transform.rotation[1],
-    object.transform.rotation[2]
-  );
-  root.scale.set(
-    object.transform.scale[0],
-    object.transform.scale[1],
-    object.transform.scale[2]
-  );
-}
 
 function applyTransformOverride(
   object: SceneObject,
@@ -210,149 +178,6 @@ function applyTransformOverride(
   };
 }
 
-function assetSourceAvailable(
-  object: SceneObject,
-  assetSources: Record<string, string>
-): boolean {
-  if (!object.modelSourcePath) return false;
-  return Boolean(assetSources[object.modelSourcePath]);
-}
-
-async function createRenderableRoot(
-  object: SceneObject,
-  assetSources: Record<string, string>,
-  shaderRuntime: ShaderRuntime | null,
-  renderView: RenderView
-): Promise<SceneObjectEntry> {
-  const root = new THREE.Group();
-  root.name = object.instanceId;
-  root.userData[SCENE_OBJECT_MARKER_KEY] = {
-    instanceId: object.instanceId,
-    assetDefinitionId: object.assetDefinitionId ?? null,
-    kind: object.kind
-  };
-  applyObjectTransform(root, object);
-
-  const assetSourceUrl = object.modelSourcePath
-    ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath)
-    : null;
-
-  if (!assetSourceUrl) {
-    root.add(
-      object.kind === "asset"
-        ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
-        : createCapsuleFallback(object, {
-            fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
-          })
-    );
-    return {
-      root,
-      object,
-      representationKey: object.representationKey,
-      loadedWithAsset: false,
-      shaderApplication: createRenderableShaderApplicationState()
-    };
-  }
-
-  let gltf: Awaited<ReturnType<typeof gltfLoader.loadAsync>>;
-  try {
-    gltf = await gltfLoader.loadAsync(assetSourceUrl);
-  } catch (error) {
-    reportRenderableError(object, "gltf-load", error, { assetSourceUrl });
-    root.add(createErrorFallbackMesh());
-    return {
-      root,
-      object,
-      representationKey: object.representationKey,
-      loadedWithAsset: false,
-      shaderApplication: createRenderableShaderApplicationState()
-    };
-  }
-
-  // SkeletonUtils.clone (NOT plain Object3D.clone): plain clone shares
-  // the SkinnedMesh skeleton reference with the source gltf, so moving
-  // the wrapper Group via the gizmo doesn't translate the rendered
-  // mesh — the skinning shader anchors to the source bones which were
-  // never added to the scene. SkeletonUtils.clone re-binds the cloned
-  // mesh to the cloned bones so wrapper-Group transforms actually
-  // propagate. Required for any rigged glTF (Player + NPC character
-  // models post-Plan-038); harmless for static-mesh assets.
-  const renderable = cloneSkinnedObject(gltf.scene) as THREE.Object3D;
-  // No file on disk may crash the render loop (WebGPU rejects
-  // normalized float vertex formats; see renderableFallbacks).
-  sanitizeRenderableVertexFormats(renderable);
-  // Populate matrixWorld for every node BEFORE measuring the bbox in
-  // normalizeModelScale. SkinnedMesh.computeBoundingBox uses bone
-  // matrixWorlds; without this update they're identity and the bbox
-  // is garbage, leading to wildly wrong scale.
-  renderable.updateMatrixWorld(true);
-  if (object.targetModelHeight) {
-    normalizeModelScale(renderable, object.targetModelHeight);
-  }
-  // Disable frustum culling on skinned meshes — bind-pose bounding
-  // sphere goes stale after rescaling + animation, can pop the model
-  // out of view at certain camera angles. Matches the player + NPC
-  // runtime controllers.
-  renderable.traverse((child) => {
-    if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
-      child.frustumCulled = false;
-    }
-  });
-  renderView.enableShadowsOnObject(renderable);
-  const shaderApplication = createRenderableShaderApplicationState();
-  // Parent BEFORE building shaders: the asset-surface bake frames the
-  // mesh in WORLD XZ and blades sample it by world XZ, so the mesh
-  // world matrix must include the instance transform at build time.
-  // Building first (unparented) baked in local space -> blades
-  // sampled outside the map -> black grass (Plan 068.11, 2026-07-13).
-  root.add(renderable);
-  root.updateMatrixWorld(true);
-  try {
-    ensureShaderSetAppliedToRenderable(
-      renderable,
-      object,
-      shaderRuntime,
-      shaderApplication,
-      assetSources
-    );
-  } catch (error) {
-    reportRenderableError(object, "shader-apply", error);
-    root.add(createErrorFallbackMesh());
-    return {
-      root,
-      object,
-      representationKey: object.representationKey,
-      loadedWithAsset: false,
-      shaderApplication: createRenderableShaderApplicationState()
-    };
-  }
-  return {
-    root,
-    object,
-    representationKey: object.representationKey,
-    loadedWithAsset: true,
-    shaderApplication
-  };
-}
-
-function ensureRenderableShadersApplied(
-  entry: SceneObjectEntry,
-  object: SceneObject,
-  shaderRuntime: ShaderRuntime | null,
-  assetSources: Record<string, string>
-) {
-  try {
-    ensureShaderSetAppliedToRenderable(
-      entry.root,
-      object,
-      shaderRuntime,
-      entry.shaderApplication,
-      assetSources
-    );
-  } catch (error) {
-    reportRenderableError(object, "shader-ensure", error);
-  }
-}
 
 export function createAuthoringViewport(
   options: AuthoringViewportOptions
@@ -594,84 +419,44 @@ export function createAuthoringViewport(
   overlayRoot.name = "authoring-overlay-root";
   scene.add(overlayRoot);
 
-  const objectMap = new Map<string, SceneObjectEntry>();
-  const pendingRenderableLoads = new Set<string>();
-  /** What the latest projection wants on screen, by instanceId --
-   *  async loads consult this on completion instead of a generation
-   *  counter, so projection churn can't strand them (see below). */
-  const desiredObjects = new Map<string, SceneObject>();
-  let previousObjects: SceneObject[] = [];
   let currentAssetSources: Record<string, string> = {};
-  let renderGeneration = 0;
+  // Plan 070.2 — the shared reconciler owns the authored renderables (was a
+  // hand-rolled objectMap / pending / generation / O(N) sweep here that
+  // duplicated the game host). Grouping stays OFF for the studio until
+  // 070.6 (instanced members must stay individually pickable).
+  const renderableReconciler: RenderableReconciler = createRenderableReconciler({
+    parent: authoredRoot,
+    resolveUrl: (object) =>
+      object.modelSourcePath
+        ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath) ??
+          null
+        : null,
+    loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+    createFallback: (object) =>
+      object.kind === "asset"
+        ? createFallbackMesh({ color: EDITOR_NEUTRAL_CLAY_COLOR })
+        : createCapsuleFallback(object, {
+            fallbackColor: EDITOR_NEUTRAL_CLAY_COLOR
+          }),
+    createErrorFallback: (object, error) => {
+      reportRenderableError(object, "load", error);
+      return createErrorFallbackMesh();
+    },
+    shaderRuntime: renderView.shaderRuntime,
+    getFileSources: () => currentAssetSources,
+    enableShadows: (renderableRoot) =>
+      renderView.enableShadowsOnObject(renderableRoot),
+    grouping: false,
+    onSettled: () => options.onRenderablesSettled?.(),
+    logger: {
+      warn: (message, payload) =>
+        console.warn("[authoring-viewport]", message, payload)
+    }
+  });
   let unsubscribeProjection: (() => void) | null = null;
   let unsubscribeShaderEnsureFrame: (() => void) | null = null;
   let unsubscribeTexturesUpdated: (() => void) | null = null;
   let overlayTeardowns: Array<() => void> = [];
-
-  function scheduleRenderableLoad(
-    object: SceneObject,
-    assetSources: Record<string, string>,
-    activeShaderRuntime: ShaderRuntime | null,
-    generation: number
-  ) {
-    if (pendingRenderableLoads.has(object.instanceId)) {
-      return;
-    }
-
-    pendingRenderableLoads.add(object.instanceId);
-    void createRenderableRoot(object, assetSources, activeShaderRuntime, renderView)
-      .then((entry) => {
-        pendingRenderableLoads.delete(object.instanceId);
-        if (pendingRenderableLoads.size === 0) {
-          options.onRenderablesSettled?.();
-        }
-        // Judge this load against the CURRENT desired set (see
-        // renderable-lifecycle.ts for why not a per-update counter):
-        // discarded on teardown or removal, re-scheduled when the
-        // representation changed mid-flight (the pending guard
-        // deduped that re-schedule away), adopted otherwise.
-        const latest = desiredObjects.get(object.instanceId) ?? null;
-        const decision = resolveRenderableCompletion({
-          scheduledGeneration: generation,
-          currentGeneration: renderGeneration,
-          loadedRepresentationKey: entry.representationKey,
-          desiredRepresentationKey: latest?.representationKey ?? null
-        });
-        if (decision === "discard" || !latest) {
-          disposeRenderableObject(entry.root);
-          return;
-        }
-        if (decision === "reschedule") {
-          disposeRenderableObject(entry.root);
-          scheduleRenderableLoad(
-            latest,
-            currentAssetSources,
-            renderView.shaderRuntime,
-            renderGeneration
-          );
-          return;
-        }
-        const existing = objectMap.get(object.instanceId);
-        if (existing) {
-          authoredRoot.remove(existing.root);
-          disposeRenderableObject(existing.root);
-        }
-        // The object may have moved while the load was in flight.
-        entry.object = latest;
-        applyObjectTransform(entry.root, latest);
-        authoredRoot.add(entry.root);
-        ensureRenderableShadersApplied(
-          entry,
-          latest,
-          renderView.shaderRuntime,
-          assetSources
-        );
-        objectMap.set(object.instanceId, entry);
-      })
-      .catch(() => {
-        pendingRenderableLoads.delete(object.instanceId);
-      });
-  }
 
   function syncCameraProjection(width: number, height: number) {
     const safeWidth = Math.max(1, width);
@@ -710,16 +495,8 @@ export function createAuthoringViewport(
     void syncNavMeshViz(projection);
 
     if (!projection.region || !projection.contentLibrary) {
-      renderGeneration += 1;
       clearColliderWireframes();
-      desiredObjects.clear();
-      previousObjects = [];
-      for (const entry of objectMap.values()) {
-        authoredRoot.remove(entry.root);
-        disposeRenderableObject(entry.root);
-      }
-      objectMap.clear();
-      pendingRenderableLoads.clear();
+      renderableReconciler.reconcile([]);
       return;
     }
 
@@ -738,9 +515,8 @@ export function createAuthoringViewport(
       playerDefinition,
       itemDefinitions,
       npcDefinitions,
-      // Compose the ambient Scene's overlay exactly like the game
-      // does — Scene-scoped placements must render here too (they
-      // were invisible in the viewport before 2026-07-09).
+      // Compose the ambient Scene's overlay exactly like the game does --
+      // Scene-scoped placements must render in the viewport too.
       activeScene: projection.activeScene
     });
     const currentObjects = resolvedObjects.map((object) =>
@@ -750,78 +526,10 @@ export function createAuthoringViewport(
       )
     );
     syncColliderWireframes(currentObjects, region, projection.showColliders);
-    const delta = computeSceneDelta(previousObjects, currentObjects);
-    // NOT incremented here: bumping per call raced in-flight loads
-    // (see scheduleRenderableLoad). Teardown paths own the bump.
-    const generation = renderGeneration;
-    desiredObjects.clear();
-    for (const object of currentObjects) {
-      desiredObjects.set(object.instanceId, object);
-    }
-
-    for (const id of delta.removed) {
-      const entry = objectMap.get(id);
-      if (!entry) continue;
-      authoredRoot.remove(entry.root);
-      disposeRenderableObject(entry.root);
-      objectMap.delete(id);
-    }
-
-    for (const object of delta.added) {
-      scheduleRenderableLoad(object, projection.assetSources, renderView.shaderRuntime, generation);
-    }
-
-    for (const object of delta.updated) {
-      const existing = objectMap.get(object.instanceId);
-      const assetAvailable = assetSourceAvailable(object, projection.assetSources);
-      if (
-        existing &&
-        existing.representationKey === object.representationKey &&
-        existing.loadedWithAsset === assetAvailable
-      ) {
-        existing.object = object;
-        applyObjectTransform(existing.root, object);
-        ensureRenderableShadersApplied(
-          existing,
-          object,
-          renderView.shaderRuntime,
-          projection.assetSources
-        );
-        continue;
-      }
-      if (existing) {
-        authoredRoot.remove(existing.root);
-        disposeRenderableObject(existing.root);
-        objectMap.delete(object.instanceId);
-      }
-      scheduleRenderableLoad(object, projection.assetSources, renderView.shaderRuntime, generation);
-    }
-
-    for (const object of currentObjects) {
-      const entry = objectMap.get(object.instanceId);
-      const assetAvailable = assetSourceAvailable(object, projection.assetSources);
-      if (entry && entry.loadedWithAsset !== assetAvailable) {
-        authoredRoot.remove(entry.root);
-        disposeRenderableObject(entry.root);
-        objectMap.delete(object.instanceId);
-        scheduleRenderableLoad(object, projection.assetSources, renderView.shaderRuntime, generation);
-        continue;
-      }
-      if (!entry) {
-        scheduleRenderableLoad(object, projection.assetSources, renderView.shaderRuntime, generation);
-        continue;
-      }
-      entry.object = object;
-      applyObjectTransform(entry.root, object);
-      ensureRenderableShadersApplied(
-        entry,
-        object,
-        renderView.shaderRuntime,
-        projection.assetSources
-      );
-    }
-
-    previousObjects = currentObjects;
+    // Plan 070.2 — the reconciler diffs against its live set and applies
+    // add / update-in-place / remove (grouping OFF, so every object is a
+    // singleton exactly as before).
+    renderableReconciler.reconcile(currentObjects);
   }
 
   return {
@@ -847,7 +555,7 @@ export function createAuthoringViewport(
       // after first mount, without depending on host-specific load order.
       unsubscribeShaderEnsureFrame = renderView.subscribeFrame(() => {
         ensureShaderSetsAppliedToRenderables(
-          objectMap.values(),
+          renderableReconciler.entries(),
           renderView.shaderRuntime,
           currentAssetSources
         );
@@ -860,7 +568,7 @@ export function createAuthoringViewport(
       // 068.11). Per-frame debounced: the ensure pass runs once next
       // frame regardless of how many textures resolved.
       unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
-        for (const entry of objectMap.values()) {
+        for (const entry of renderableReconciler.entries()) {
           const hasScatter = (entry.object.effectiveMaterialSlots ?? []).some(
             (slot) =>
               slot.surface?.layers?.some((layer) => layer.kind === "scatter")
@@ -927,7 +635,7 @@ export function createAuthoringViewport(
             options.stores.viewportStore.getState().clearMaskPaintFillRequest();
           },
           invalidateRenderableShaders(filter) {
-            for (const entry of objectMap.values()) {
+            for (const entry of renderableReconciler.entries()) {
               const matches =
                 (filter.instanceId &&
                   entry.object.instanceId === filter.instanceId) ||
@@ -1006,15 +714,7 @@ export function createAuthoringViewport(
     },
 
     unmount() {
-      renderGeneration += 1;
-      desiredObjects.clear();
-
-      for (const entry of objectMap.values()) {
-        authoredRoot.remove(entry.root);
-        disposeRenderableObject(entry.root);
-      }
-      objectMap.clear();
-      pendingRenderableLoads.clear();
+      renderableReconciler.dispose();
       for (const teardown of overlayTeardowns) {
         teardown();
       }
@@ -1041,15 +741,12 @@ export function createAuthoringViewport(
     reloadAssetRenderables(assetDefinitionId) {
       // Dropping the entries is enough: the next applyProjection pass
       // (any store tick -- the caller's assetSources refresh provides
-      // one) finds no entry, no pending load, and re-schedules with
-      // the fresh source. Same convergence path as first load.
-      for (const [instanceId, entry] of [...objectMap.entries()]) {
-        if (entry.object.assetDefinitionId !== assetDefinitionId) {
-          continue;
+      // one) finds no entry, re-schedules with the fresh source. Same
+      // convergence path as first load.
+      for (const entry of [...renderableReconciler.entries()]) {
+        if (entry.object.assetDefinitionId === assetDefinitionId) {
+          renderableReconciler.remove(entry.object.instanceId);
         }
-        authoredRoot.remove(entry.root);
-        disposeRenderableObject(entry.root);
-        objectMap.delete(instanceId);
       }
     },
 
@@ -1057,7 +754,7 @@ export function createAuthoringViewport(
       // True only if a loaded renderable for this asset exists and every
       // one of its meshes carries uv1. Any mesh without it -> needs a
       // bake -> return false.
-      for (const entry of objectMap.values()) {
+      for (const entry of renderableReconciler.entries()) {
         if (entry.object.assetDefinitionId !== assetDefinitionId) {
           continue;
         }
