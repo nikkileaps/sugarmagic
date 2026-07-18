@@ -122,7 +122,25 @@ reboot (lastBootMs): **585ms** (real; higher than the ~200-300ms guess — feeds
 - **`-shadows` row is an ARTIFACT**: toggling `renderer.shadowMap.enabled` at runtime forces a WebGPU pipeline recompile; the 8.33ms render-cpu / 21.88ms frame is rebuild churn, not shadow render cost. Don't trust it. (Sampling window widened to 4s to let recompiles settle; a non-recompiling shadow A/B is TBD — likely author shadow-quality off for a clean session compare, or skip the shadow pass without touching `enabled`.)
 - **The ~27ms premise is not reproduced here.** The earlier 30-38fps was a different scene/viewpoint (or denser scatter in view). Capture #2 must be taken WHERE the framerate actually drops below 60 (frame > 16.67 makes the breakdown meaningful even under vsync), else with vsync unlocked.
 
-Capture #2 (the actually-slow viewpoint): _PENDING_ — needed before 070.4 weighting is trusted.
+Capture #2 (2026-07-18, render-bound at 41fps — likely VRR/ProMotion display, 24ms is a real GPU frame not a vsync step):
+
+| condition | frame ms | fps | world | session | render-cpu | gpu+rest | d(frame) |
+|-----------|----------|-----|-------|---------|-----------|----------|----------|
+| baseline  | 24.21 | 41.3 | 0.03 | 0.19 | 1.69 | 22.29 | 0.0 |
+| -shadows  | 24.26 | 41.3 | 0.03 | 0.21 | 2.36 | 21.65 | +0.1 |
+| -scatter  | 24.83 | 40.5 | 0.04 | 0.22 | 4.50 | 20.07 | +0.6 |
+| -landscape| 23.83 | 42.0 | 0.04 | 0.22 | 1.58 | 21.99 | -0.4 |
+| -all      | 23.20 | 43.2 | 0.02 | 0.25 | 1.36 | 21.56 | -1.0 |
+
+reboot (lastBootMs): 1005ms.
+
+**Reading capture #2 — DISAGREES with the epic's perf thesis (the "re-weight 070.4" branch triggered):**
+- Render-bound at ~22ms GPU (render-cpu only 1.7ms — CPU submit is cheap).
+- Shadows cost ~0ms (`-shadows` d +0.1). Scatter compute off did NOT help (`-scatter` d +0.6, render-cpu rose — skipping compute leaves grass drawing stale, so this isn't a clean grass-off, but it's clearly not a win). Landscape ~0.4ms.
+- **All three suspects OFF TOGETHER save ~1ms of 24.** The bottleneck is the base scene render (prop meshes / characters / node-material pipelines / postprocessing), NOT scatter/shadows/landscape.
+- Baseline varied wildly across sessions (60 / 45-35 / 41 fps) with no grass correlation the 2nd/3rd time — external factors (thermal/throttle/other load) move the baseline; the bottleneck is not a fixed grass cost.
+
+**Consequence for 070.4:** its premise — HISM chunking/culling/LOD on model-scatter is the fps lever — is NOT supported. Scatter is already cheap. 070.4 should be RE-SCOPED (see epic-status note below): shadows-on-scatter becomes an optional visual-quality item (not fps); culling/LOD becomes scale-headroom (not a current-fps fix). The real ~22ms bottleneck is a SEPARATE investigation needing toggles for postprocessing / base props / characters / billboards — capture #3 territory. Pending nikki's call on amending the locked plan.
 
 #355 turn-stutter: _pending — compare turn-left vs turn-right in the slow viewpoint_
 
