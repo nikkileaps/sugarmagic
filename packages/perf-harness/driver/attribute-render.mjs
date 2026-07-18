@@ -8,12 +8,14 @@
  * 1Hz `window.__smperfStats` (frame / world / session / render-cpu /
  * gpu+rest ms). Prints a table ready to paste into the plan doc.
  *
- * SETUP (same as measure-live):
- *   1. Quit Google Chrome COMPLETELY (Cmd-Q).
- *   2. open -a "Google Chrome" --args --remote-debugging-port=9222 \
+ * SETUP (does NOT touch your normal Chrome — launches a separate instance
+ * with its own profile dir so the debug port is honored alongside it):
+ *   1. open -na "Google Chrome" --args --remote-debugging-port=9222 \
+ *        --user-data-dir="$HOME/.sugarmagic-perf-chrome" \
  *        --disable-gpu-vsync --disable-frame-rate-limit
- *   3. Open Studio -> load project -> start preview -> get INTO the scene
- *      (a scatter-heavy region: the lavender meadow).
+ *      (reuses the same profile dir each run, so you sign in once, ever.)
+ *   2. In that window: open Studio -> load project -> start preview -> get
+ *      INTO the scene (a scatter-heavy region: the lavender meadow).
  *
  * Then:  node driver/attribute-render.mjs [--seconds=4] [--port=9222]
  *
@@ -98,9 +100,10 @@ async function main() {
     browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
   } catch {
     throw new Error(
-      `Could not attach to Chrome on :${PORT}. Launch it first:\n` +
-        `  Quit Chrome fully, then:\n` +
-        `  open -a "Google Chrome" --args --remote-debugging-port=${PORT} ` +
+      `Could not attach to Chrome on :${PORT}. Launch a separate debuggable\n` +
+        `instance (leaves your normal Chrome untouched):\n` +
+        `  open -na "Google Chrome" --args --remote-debugging-port=${PORT} ` +
+        `--user-data-dir="$HOME/.sugarmagic-perf-chrome" ` +
         `--disable-gpu-vsync --disable-frame-rate-limit`
     );
   }

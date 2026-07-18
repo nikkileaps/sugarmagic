@@ -7,17 +7,17 @@
  * can't reproduce. Read-only: injects a rAF fps sampler and scrapes the
  * debug HUD text; changes nothing in the app.
  *
- * SETUP (do this once, in a terminal):
- *   1. Quit Google Chrome COMPLETELY (Cmd-Q -- a running instance
- *      ignores the flags below).
- *   2. Launch it with the debug port + vsync unlocked so frame time is
- *      unquantized:
- *        open -a "Google Chrome" --args \
+ * SETUP (does NOT touch your normal Chrome — a SEPARATE instance with its
+ * own profile dir honors the debug port + runs alongside it):
+ *   1. Launch it (debug port + vsync unlocked for unquantized frame time):
+ *        open -na "Google Chrome" --args \
  *          --remote-debugging-port=9222 \
+ *          --user-data-dir="$HOME/.sugarmagic-perf-chrome" \
  *          --disable-gpu-vsync --disable-frame-rate-limit
- *   3. Open the Studio, load your project, start the preview, and get
- *      into the scene. Open the debug HUD (Renderer tab) for draw/tri
- *      readouts.
+ *      (same profile dir each run -> sign in once, ever.)
+ *   2. In that window: open the Studio, load your project, start the
+ *      preview, get into the scene. Open the debug HUD (Renderer tab)
+ *      for draw/tri readouts.
  *
  * Then:  node driver/measure-live.mjs [--seconds=6] [--port=9222]
  */
@@ -42,9 +42,10 @@ async function main() {
     browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
   } catch {
     throw new Error(
-      `Could not attach to Chrome on :${PORT}. Launch it first:\n` +
-        `  Quit Chrome fully, then:\n` +
-        `  open -a "Google Chrome" --args --remote-debugging-port=${PORT} ` +
+      `Could not attach to Chrome on :${PORT}. Launch a separate debuggable\n` +
+        `instance (leaves your normal Chrome untouched):\n` +
+        `  open -na "Google Chrome" --args --remote-debugging-port=${PORT} ` +
+        `--user-data-dir="$HOME/.sugarmagic-perf-chrome" ` +
         `--disable-gpu-vsync --disable-frame-rate-limit`
     );
   }

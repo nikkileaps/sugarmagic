@@ -14,11 +14,13 @@ window, and measures the actual scene (scatter + ensure-loop machinery)
 that the synthetic rig can't reproduce. Read-only.
 
 ```
-# 1. Quit Chrome completely (Cmd-Q), then:
-open -a "Google Chrome" --args --remote-debugging-port=9222 \
+# 1. Launch a SEPARATE debuggable Chrome (leaves your normal Chrome +
+#    tabs untouched; own profile dir -> sign in once, ever):
+open -na "Google Chrome" --args --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.sugarmagic-perf-chrome" \
   --disable-gpu-vsync --disable-frame-rate-limit
-# 2. Open Studio -> load project -> start preview -> get into the scene
-#    (open the debug HUD's Renderer tab for draw/tri readouts).
+# 2. In that window: Studio -> load project -> start preview -> get into
+#    the scene (open the debug HUD's Renderer tab for draw/tri readouts).
 # 3.
 pnpm --filter @sugarmagic/perf-harness measure:live
 ```
