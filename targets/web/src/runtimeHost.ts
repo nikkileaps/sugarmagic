@@ -65,18 +65,15 @@ import {
   normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
-  buildInstancedAssetGroup,
   createCapsuleFallback,
   createRenderView,
   createWebRenderEngine,
   createFallbackMesh,
-  createRenderableShaderApplicationState,
+  createRenderableReconciler,
   disposeRenderableObject,
-  ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
-  normalizeModelScale,
-  sanitizeRenderableVertexFormats,
-  type RenderableShaderApplicationState,
+  type ReconciledEntry,
+  type RenderableReconciler,
   type RenderView,
   type WebRenderEngine
 } from "@sugarmagic/render-web";
@@ -557,16 +554,10 @@ const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
 const gltfLoader = new GLTFLoader();
 
-interface SceneObjectEntry {
-  root: THREE.Group;
-  object: SceneObject;
-  shaderApplication: RenderableShaderApplicationState;
-  /**
-   * AnimationMixer for NPCs whose definition has bound animation slots.
-   * Driven each frame from the runtime loop. Static-mesh assets and
-   * NPCs without animations leave this null.
-   */
-  mixer: THREE.AnimationMixer | null;
+/** Plan 070.2 — NPCs stash their idle AnimationMixer in the reconciler
+ *  entry's `host` slot (driven each frame from the runtime loop). */
+interface HostEntryData {
+  mixer?: THREE.AnimationMixer;
 }
 
 /** Plan 068.13a -- a placed asset is instanceable if it is a static model
@@ -1476,7 +1467,12 @@ export function createWebRuntimeHost(
     );
     return { table, rows };
   }
-  const sceneObjectEntries = new Map<string, SceneObjectEntry>();
+  // Plan 070.2 — the shared reconciler owns all scene renderables (created
+  // per start() so its config closes over that start's state; disposed in
+  // disposeRuntime). Cross-cutting per-frame consumers read it by instanceId.
+  let renderableReconciler: RenderableReconciler | null = null;
+  const npcMixer = (entry: ReconciledEntry): THREE.AnimationMixer | undefined =>
+    (entry.host as HostEntryData).mixer;
 
   function disposeRuntime() {
     if (animationId !== null) {
@@ -1543,11 +1539,8 @@ export function createWebRuntimeHost(
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
 
-    for (const entry of sceneObjectEntries.values()) {
-      scene?.remove(entry.root);
-      disposeRenderableObject(entry.root);
-    }
-    sceneObjectEntries.clear();
+    renderableReconciler?.dispose();
+    renderableReconciler = null;
 
     if (scene) {
       disposeRenderableObject(scene);
@@ -1662,7 +1655,7 @@ export function createWebRuntimeHost(
     const pSessionEnd = perfOn ? performance.now() : 0;
 
     for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
-      const entry = sceneObjectEntries.get(snapshot.presenceId);
+      const entry = renderableReconciler?.get(snapshot.presenceId);
       if (!entry) {
         continue;
       }
@@ -1670,10 +1663,10 @@ export function createWebRuntimeHost(
     }
 
     // Tick every entry mixer (NPCs with bound idle animations). The
-    // mixer is null for static-mesh assets and for NPCs without
+    // mixer is absent for static-mesh assets and for NPCs without
     // animations, so this loop is cheap when nothing's animated.
-    for (const entry of sceneObjectEntries.values()) {
-      entry.mixer?.update(delta);
+    for (const entry of renderableReconciler?.entries() ?? []) {
+      npcMixer(entry)?.update(delta);
     }
 
     const playerEntities = world.query(PlayerControlled, Position);
@@ -1756,7 +1749,7 @@ export function createWebRuntimeHost(
         continue;
       }
 
-      const entry = sceneObjectEntries.get(binding.sceneInstanceId);
+      const entry = renderableReconciler?.get(binding.sceneInstanceId);
       if (entry) {
         renderBindings.set(binding.entity, entry.root);
       }
@@ -1770,11 +1763,13 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
-    ensureShaderSetsAppliedToRenderables(
-      sceneObjectEntries.values(),
-      renderView.shaderRuntime,
-      currentAssetSources
-    );
+    if (renderableReconciler) {
+      ensureShaderSetsAppliedToRenderables(
+        renderableReconciler.entries(),
+        renderView.shaderRuntime,
+        currentAssetSources
+      );
+    }
 
     const pRenderStart = perfOn ? performance.now() : 0;
     renderView.setCamera(camera);
@@ -2021,7 +2016,7 @@ export function createWebRuntimeHost(
     // renderables so the per-frame ensure pass rebuilds their grass
     // with the now-ready mask (Plan 068.11).
     unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
-      for (const entry of sceneObjectEntries.values()) {
+      for (const entry of renderableReconciler?.entries() ?? []) {
         // Surface-brushed grass lives in a surface-ref layer's NESTED
         // scatter, not a bare `scatter` layer, so use the same detector
         // the instancing partition uses (checks scatter AND surface-ref).
@@ -2263,280 +2258,90 @@ export function createWebRuntimeHost(
           activeItemPresenceIds.add(presence.presenceId);
         }
       );
-      // Plan 068.13a / ADR 028 -- instance repeated scatter-brushed placed
-      // assets. Group instanceable static placements by representationKey
-      // (which folds in asset + surface + mask, ADR 028 Gate 2) and render
-      // each group of >=2 as one InstancedMesh per submesh via the shared
-      // builder, instead of N full GLB clones. Singletons + everything
-      // non-instanceable (characters/NPCs/items, skinned, scatter/
-      // surface-ref surfaces) keep the per-object path below unchanged.
-      const singletonObjects: SceneObject[] = [];
-      const instanceGroups = new Map<string, SceneObject[]>();
-      for (const object of objects) {
-        if (
-          object.kind === "item" &&
-          !activeItemPresenceIds.has(object.instanceId)
-        ) {
-          continue;
-        }
-        if (assetObjectIsInstanceable(object)) {
-          const existing = instanceGroups.get(object.representationKey);
-          if (existing) {
-            existing.push(object);
-          } else {
-            instanceGroups.set(object.representationKey, [object]);
+      // Plan 070.2 — one shared reconciler builds every scene renderable
+      // (was two hand-rolled paths here: instanced grouping by
+      // representationKey + the singleton clone/sanitize/scale/shadow/
+      // parent/shader sequence). Grouping ON for the game; the studio keeps
+      // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
+      // is excluded upstream (includePlayerPresence: false).
+      renderableReconciler = createRenderableReconciler({
+        parent: scene,
+        resolveUrl: (object) =>
+          object.modelSourcePath
+            ? renderView!.assetResolver.resolveAssetUrl(
+                object.modelSourcePath
+              ) ?? null
+            : null,
+        loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+        createFallback: (object) => getSceneObjectFallback(object),
+        shaderRuntime: renderView!.shaderRuntime,
+        getFileSources: () => currentAssetSources,
+        enableShadows: (renderableRoot) =>
+          renderView!.enableShadowsOnObject(renderableRoot),
+        grouping: true,
+        isInstanceable: assetObjectIsInstanceable,
+        validate: validateRenderableAsset,
+        logger: {
+          warn: (message, payload) =>
+            console.warn(`[web-runtime] ${message}`, payload)
+        },
+        onEntryLoaded: (entry, renderable) => {
+          // NPCs with a bound idle clip get an AnimationMixer stashed in the
+          // entry's host slot; the frame loop ticks it via npcMixer().
+          if (entry.object.kind !== "npc") {
+            return;
           }
-        } else {
-          singletonObjects.push(object);
-        }
-      }
-
-      for (const groupMembers of instanceGroups.values()) {
-        if (groupMembers.length < 2) {
-          singletonObjects.push(...groupMembers);
-          continue;
-        }
-        const representative = groupMembers[0]!;
-        const modelPath = (
-          representative as { modelSourcePath?: string | null }
-        ).modelSourcePath;
-        const groupUrl = modelPath
-          ? renderView.assetResolver.resolveAssetUrl(modelPath)
-          : null;
-        if (!groupUrl) {
-          singletonObjects.push(...groupMembers);
-          continue;
-        }
-        const groupKey = `instanced:${representative.representationKey}`;
-        // Capture the live scene: a dispose() + start() that runs WHILE
-        // this GLB is loading reassigns `scene` to a fresh THREE.Scene, so
-        // a plain `if (!scene)` guard would pass and attach a stale batch
-        // (built from the OLD start's SceneObjects) to the NEW scene, and
-        // could clobber a groupKey the new start already populated
-        // (068.13 mini-review). Comparing the captured reference bails.
-        const groupScene = scene;
-        void gltfLoader
-          .loadAsync(groupUrl)
-          .then((gltf) => {
-            if (!scene || scene !== groupScene) return;
-            const built = buildInstancedAssetGroup({
-              group: groupMembers,
-              sourceScene: gltf.scene,
-              shaderRuntime: renderView?.shaderRuntime ?? null,
-              assetSources: state.assetSources,
-              // Instanced scatter fields do NOT cast shadows. One
-              // InstancedMesh has a single field-spanning bounding sphere,
-              // so it survives every CSM cascade's cull and re-renders all
-              // instances into all (up to 4) cascades -- ~3-4x shadow-pass
-              // geometry vs the pre-instancing per-clone culling, which
-              // tanks fps and makes cascade re-splits jitter on camera turn.
-              // Small foliage shadows are low-value; skip them until the
-              // field is spatially chunked (deferred #347 HISM). To cast
-              // shadows again, restore enableShadowsOnObject here.
-              enableShadows: undefined
-            });
-            if (!built) {
-              // Skinned model slipped through (rare -- asset-kind is meant
-              // to be static). Skip rather than mis-render; log it.
-              console.warn("[web-runtime] instanced-group-skipped", {
-                representationKey: representative.representationKey,
-                modelSourcePath: modelPath,
-                count: groupMembers.length
-              });
-              return;
-            }
-            scene.add(built.root);
-            sceneObjectEntries.set(groupKey, {
-              root: built.root,
-              object: built.representative,
-              shaderApplication: built.shaderApplication,
-              mixer: null
-            });
-          })
-          .catch((error) => {
-            console.error("[web-runtime] instanced-group-load-failed", {
-              representationKey: representative.representationKey,
-              modelSourcePath: modelPath,
-              error
-            });
-          });
-      }
-
-      for (const object of singletonObjects) {
-        // For kind "item" the SceneObject's `instanceId` equals
-        // the presenceId — see scene/index.ts:createItemSceneObject.
-        // If the filter pass didn't include this presence,
-        // don't spawn its visual either.
-        if (
-          object.kind === "item" &&
-          !activeItemPresenceIds.has(object.instanceId)
-        ) {
-          continue;
-        }
-        const rootObject = new THREE.Group();
-        const shaderApplication = createRenderableShaderApplicationState();
-        rootObject.name = object.instanceId;
-        rootObject.userData.sceneInstanceId = object.instanceId;
-        rootObject.position.set(...object.transform.position);
-        rootObject.rotation.set(...object.transform.rotation);
-        rootObject.scale.set(...object.transform.scale);
-
-        const assetSourceUrl = object.modelSourcePath
-          ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath)
-          : null;
-
-        if (assetSourceUrl) {
+          const presence = activeRegionContents?.npcPresences.find(
+            (p) => p.presenceId === entry.object.instanceId
+          );
+          const npcDefinition = presence
+            ? state.npcDefinitions.find(
+                (d) => d.definitionId === presence.npcDefinitionId
+              )
+            : null;
+          const idleBindingId =
+            npcDefinition?.presentation.animationAssetBindings.idle ?? null;
+          const idleAnimDef = idleBindingId
+            ? getCharacterAnimationDefinition(
+                state.contentLibrary,
+                idleBindingId
+              )
+            : null;
+          const idleSourceUrl = idleAnimDef
+            ? state.assetSources[idleAnimDef.source.relativeAssetPath] ?? null
+            : null;
+          if (!idleSourceUrl) {
+            return;
+          }
           void gltfLoader
-            .loadAsync(assetSourceUrl)
-            .then((gltf) => {
-              if (!scene) return;
-              // SkeletonUtils.clone for SkinnedMesh-bearing glTFs:
-              // plain Object3D.clone shares the skeleton with the
-              // source gltf, so the rendered character anchors to the
-              // source bones (always at origin) regardless of the
-              // wrapper Group's transform. SkeletonUtils.clone re-binds
-              // the cloned mesh to cloned bones so wrapper-Group
-              // transforms actually move the rendered mesh. Required
-              // for character models post-Plan-038; harmless for
-              // static-mesh assets.
-              const renderable = cloneSkinnedObject(
-                gltf.scene
-              ) as THREE.Object3D;
-              // Defend the runtime render loop the same way the studio
-              // viewport does: a poisoned normalized-float vertex format
-              // (e.g. from a paint-UV bake) crashes createRenderPipeline
-              // and kills the loop. The sanitize belongs at every load
-              // boundary, not just the editor's (068.13 mini-review).
-              sanitizeRenderableVertexFormats(renderable);
-              const validationError = validateRenderableAsset(
-                object,
-                renderable
-              );
-              if (validationError) {
-                console.error("[web-runtime] invalid-asset-payload", {
-                  instanceId: object.instanceId,
-                  assetDefinitionId: object.assetDefinitionId,
-                  assetKind: object.assetKind,
-                  modelSourcePath: object.modelSourcePath,
-                  message: validationError
-                });
-                rootObject.add(getSceneObjectFallback(object));
+            .loadAsync(idleSourceUrl)
+            .then((animGltf) => {
+              const clip = animGltf.animations[0];
+              if (!clip) {
                 return;
               }
-              // Populate matrixWorld for every node BEFORE measuring
-              // the bbox. SkinnedMesh.computeBoundingBox uses bone
-              // matrixWorlds; without this update they're identity and
-              // the bbox is garbage, leading to wildly wrong scale.
-              renderable.updateMatrixWorld(true);
-              if (object.targetModelHeight) {
-                normalizeModelScale(renderable, object.targetModelHeight);
-              }
-              // Disable frustum culling on skinned meshes — bind-pose
-              // bounding sphere goes stale after rescaling + animation,
-              // can pop the model out of view at certain camera angles.
-              renderable.traverse((child) => {
-                if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
-                  child.frustumCulled = false;
-                }
-              });
-              renderView?.enableShadowsOnObject(renderable);
-              // Parent BEFORE building shaders: the asset-surface bake
-              // frames the mesh in WORLD XZ and blades sample it by
-              // world XZ, so the mesh world matrix must include the
-              // instance transform at build time. Building first
-              // (unparented) baked in local space -> black grass
-              // (Plan 068.11, 2026-07-13).
-              rootObject.add(renderable);
-              rootObject.updateMatrixWorld(true);
-              ensureShaderSetAppliedToRenderable(
-                renderable,
-                object,
-                renderView?.shaderRuntime ?? null,
-                shaderApplication,
-                state.assetSources
-              );
-
-              // For NPCs with bound animations, load the idle clip and
-              // attach an AnimationMixer so the runtime frame loop can
-              // drive it. v1: NPCs default to playing idle forever (no
-              // locomotion-driven slot switching like the player).
-              if (object.kind === "npc") {
-                const presence = activeRegionContents?.npcPresences.find(
-                  (p) => p.presenceId === object.instanceId
-                );
-                const npcDefinition = presence
-                  ? state.npcDefinitions.find(
-                      (d) => d.definitionId === presence.npcDefinitionId
-                    )
-                  : null;
-                const idleBindingId =
-                  npcDefinition?.presentation.animationAssetBindings.idle ??
-                  null;
-                const idleAnimDef = idleBindingId
-                  ? getCharacterAnimationDefinition(
-                      state.contentLibrary,
-                      idleBindingId
-                    )
-                  : null;
-                const idleSourceUrl = idleAnimDef
-                  ? (state.assetSources[idleAnimDef.source.relativeAssetPath] ??
-                    null)
-                  : null;
-                if (idleSourceUrl) {
-                  void gltfLoader
-                    .loadAsync(idleSourceUrl)
-                    .then((animGltf) => {
-                      const clip = animGltf.animations[0];
-                      if (!clip) return;
-                      const npcEntry = sceneObjectEntries.get(
-                        object.instanceId
-                      );
-                      if (!npcEntry) return;
-                      const mixer = new THREE.AnimationMixer(renderable);
-                      const action = mixer.clipAction(clip);
-                      action.reset();
-                      action.play();
-                      npcEntry.mixer = mixer;
-                    })
-                    .catch((error) => {
-                      console.error("[web-runtime] npc-animation-load-failed", {
-                        instanceId: object.instanceId,
-                        sourceUrl: idleSourceUrl,
-                        error
-                      });
-                    });
-                }
-              }
+              const mixer = new THREE.AnimationMixer(renderable);
+              const action = mixer.clipAction(clip);
+              action.reset();
+              action.play();
+              (entry.host as HostEntryData).mixer = mixer;
             })
             .catch((error) => {
-              console.error("[web-runtime] asset-load-failed", {
-                instanceId: object.instanceId,
-                assetDefinitionId: object.assetDefinitionId,
-                assetKind: object.assetKind,
-                modelSourcePath: object.modelSourcePath,
+              console.error("[web-runtime] npc-animation-load-failed", {
+                instanceId: entry.object.instanceId,
+                sourceUrl: idleSourceUrl,
                 error
               });
-              rootObject.add(getSceneObjectFallback(object));
             });
-        } else {
-          console.error("[web-runtime] asset-source-missing", {
-            instanceId: object.instanceId,
-            assetDefinitionId: object.assetDefinitionId,
-            assetKind: object.assetKind,
-            modelSourcePath: object.modelSourcePath
-          });
-          rootObject.add(getSceneObjectFallback(object));
         }
-
-        scene.add(rootObject);
-        const entry: SceneObjectEntry = {
-          root: rootObject,
-          object,
-          shaderApplication,
-          mixer: null
-        };
-        sceneObjectEntries.set(object.instanceId, entry);
-      }
+      });
+      renderableReconciler.reconcile(
+        objects.filter(
+          (object) =>
+            object.kind !== "item" ||
+            activeItemPresenceIds.has(object.instanceId)
+        )
+      );
     }
     world = new World();
     uiContextStore = createUIContextStore();
@@ -2820,11 +2625,9 @@ export function createWebRuntimeHost(
           activeSceneIdForSave,
           presenceId
         );
-        const entry = sceneObjectEntries.get(presenceId);
-        if (!entry || !scene) return;
-        scene.remove(entry.root);
-        disposeRenderableObject(entry.root);
-        sceneObjectEntries.delete(presenceId);
+        // Plan 070.2 — the reconciler owns removal + disposal + drops it
+        // from its desired set (a later reconcile won't re-add it).
+        renderableReconciler?.remove(presenceId);
       },
       shouldSkipItemPresence: (presenceId) =>
         worldPresenceTracker.shouldSkip(
