@@ -122,15 +122,38 @@ async function main() {
     });
   }
 
-  // Wait until the host is live (its __smperfRun is exposed).
+  // Wait until the host is live (its __smperfRun is exposed). If it stalls
+  // and the game is sitting on the "Sign In to Play" wall, fill the test
+  // creds from env (SM_TEST_EMAIL / SM_TEST_PASSWORD) and retry once.
   log("waiting for the scene to boot ...");
   let ready = false;
+  let triedSignIn = false;
   for (let i = 0; i < 40; i += 1) {
     ready = await preview.evaluate(() => typeof globalThis.__smperfRun === "function");
     if (ready) break;
+    if (i === 8 && !triedSignIn && process.env.SM_TEST_EMAIL && process.env.SM_TEST_PASSWORD) {
+      triedSignIn = true;
+      const filled = await preview.evaluate((creds) => {
+        const email = document.querySelector('input[type=email], input[name*=email i], input[placeholder*=email i]');
+        const pass = document.querySelector('input[type=password]');
+        if (!email || !pass) return false;
+        const set = (el, v) => {
+          const proto = Object.getPrototypeOf(el);
+          Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        set(email, creds.email);
+        set(pass, creds.password);
+        const btn = [...document.querySelectorAll("button")].find((b) => /^sign in$/i.test((b.textContent || "").trim()));
+        btn?.click();
+        return true;
+      }, { email: process.env.SM_TEST_EMAIL, password: process.env.SM_TEST_PASSWORD });
+      if (filled) log("filled sign-in from env creds, retrying ...");
+    }
     await sleep(500);
   }
-  if (!ready) throw new Error("__smperfRun never appeared (host didn't boot)");
+  if (!ready) throw new Error("__smperfRun never appeared (host didn't boot; sign-in may be blocking — set SM_TEST_EMAIL/SM_TEST_PASSWORD)");
   await preview.waitForTimeout(1500); // let it settle
 
   log("running A/B matrix (~20s) ...");
