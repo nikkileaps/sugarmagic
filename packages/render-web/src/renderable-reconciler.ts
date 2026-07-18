@@ -104,6 +104,13 @@ export interface RenderableReconciler {
   reconcile(desired: SceneObject[]): void;
   /** Live entry for an instanceId (host per-instance cross-cutting reads). */
   get(instanceId: string): ReconciledEntry | undefined;
+  /**
+   * Host-driven removal of ONE singleton by instanceId (e.g. the game
+   * dropping an item's visual on collection — an event, not a re-diff).
+   * The next reconcile() re-adds it if still desired, so callers that also
+   * drop it from the desired set get permanent removal.
+   */
+  remove(instanceId: string): void;
   /** All live entries (singletons + instanced groups). */
   entries(): IterableIterator<ReconciledEntry>;
   /** Remove + dispose everything. */
@@ -464,6 +471,10 @@ export function createRenderableReconciler(
   return {
     reconcile,
     get: (instanceId) => entries.get(instanceId),
+    remove: (instanceId) => {
+      desired.delete(instanceId);
+      removeSingleton(instanceId);
+    },
     entries: function* () {
       yield* entries.values();
       yield* groups.values();

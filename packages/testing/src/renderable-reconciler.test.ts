@@ -134,6 +134,19 @@ describe("070.2 — renderable reconciler (singletons)", () => {
     expect(parent.children.length).toBe(0); // stale renderable not attached
   });
 
+  it("remove() drops one singleton by id (host-driven, e.g. item collection)", async () => {
+    const { parent, reconciler } = makeReconciler();
+    reconciler.reconcile([obj("a"), obj("item1")]);
+    await flush();
+    reconciler.remove("item1");
+    expect(reconciler.get("item1")).toBeUndefined();
+    expect(parent.children.length).toBe(1);
+    // a later reconcile that also drops it keeps it gone
+    reconciler.reconcile([obj("a")]);
+    await flush();
+    expect(reconciler.get("item1")).toBeUndefined();
+  });
+
   it("dispose() tears down every entry", async () => {
     const { parent, reconciler } = makeReconciler();
     reconciler.reconcile([obj("a"), obj("b"), obj("c")]);
