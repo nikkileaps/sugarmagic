@@ -577,6 +577,7 @@ export function createScatterComputePipeline(options: {
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   let candidatesDirty = true;
+  // camera.uuid -> last frameId dispatched (bounded to live camera count).
   const lastPreparedFrameByCamera = new Map<string, number>();
   const ownerObject = new THREE.Object3D();
 
@@ -931,8 +932,11 @@ export function createScatterComputePipeline(options: {
     },
     prepareForRender(renderer: WebGPURenderer, camera: THREE.Camera) {
       const frameId = renderer.info.frame;
-      const cameraKey = `${camera.uuid}:${frameId}`;
-      if (lastPreparedFrameByCamera.has(cameraKey)) {
+      // Dedup: dispatch at most once per camera per frame. Key by
+      // camera.uuid and STORE the frameId (not `uuid:frameId` as the key) so
+      // the map stays bounded to the live camera count — the old composite
+      // key grew one entry every frame forever (Plan 070.1).
+      if (lastPreparedFrameByCamera.get(camera.uuid) === frameId) {
         return;
       }
 
@@ -952,7 +956,7 @@ export function createScatterComputePipeline(options: {
         renderer.compute(state.scanPartialsCompute);
         renderer.compute(state.scatterCompactCompute);
       }
-      lastPreparedFrameByCamera.set(cameraKey, frameId);
+      lastPreparedFrameByCamera.set(camera.uuid, frameId);
     },
     dispose() {
       buildCandidatesCompute.dispose();

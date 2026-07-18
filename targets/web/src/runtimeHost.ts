@@ -1345,17 +1345,56 @@ export function createWebRuntimeHost(
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
-  // Plan 069.10 perf probe (dev-only, gated by `window.__smperf`): isolates
-  // the CPU update path (where all of epic 069's collision/nav work lives)
-  // from render. Set `window.__smperf = true` in the preview to log a 1Hz
-  // line; the update ms vs frame ms tells us CPU-bound (dig into systems) vs
-  // GPU/render-bound (069 is not the cost). Cheap + off by default.
+  // Plan 069.10 / 070.1 perf probe (dev-only, gated by `window.__smperf`):
+  // isolates the CPU update path from render, and (070.1) splits render into
+  // CPU-submission vs the GPU/vsync remainder, with A/B toggles to attribute
+  // the ~27ms render cost. Off by default.
+  //
+  //   window.__smperf = true                         // log only (legacy)
+  //   window.__smperf = { log:true, noShadows:true } // + A/B a suspect
+  //
+  // A/B flags (any combination): noShadows, noScatter (grass compute),
+  // noLandscape. `window.__smperfStats` exposes the last 1Hz averages for
+  // the perf harness driver to scrape; `lastBootMs` is the last host.start()
+  // wall-clock (the PREVIEW_BOOT reboot cost).
   let perfWorldMs = 0;
   let perfSessionMs = 0;
+  let perfRenderCpuMs = 0;
   let perfFrameMs = 0;
   let perfFrames = 0;
   let perfLastLogMs = 0;
   let started = false;
+
+  interface SmperfConfig {
+    on: boolean;
+    log: boolean;
+    noShadows: boolean;
+    noScatter: boolean;
+    noLandscape: boolean;
+  }
+  function readSmperf(): SmperfConfig {
+    const raw = (globalThis as { __smperf?: unknown }).__smperf;
+    if (raw === true) {
+      return { on: true, log: true, noShadows: false, noScatter: false, noLandscape: false };
+    }
+    if (raw && typeof raw === "object") {
+      const o = raw as Record<string, unknown>;
+      return {
+        on: true,
+        log: o.log !== false,
+        noShadows: o.noShadows === true,
+        noScatter: o.noScatter === true,
+        noLandscape: o.noLandscape === true
+      };
+    }
+    return { on: false, log: false, noShadows: false, noScatter: false, noLandscape: false };
+  }
+  function publishSmperfStats(stats: Record<string, number>): void {
+    (globalThis as { __smperfStats?: Record<string, number> }).__smperfStats = {
+      ...((globalThis as { __smperfStats?: Record<string, number> }).__smperfStats ?? {}),
+      ...stats
+    };
+  }
   const sceneObjectEntries = new Map<string, SceneObjectEntry>();
 
   function disposeRuntime() {
@@ -1523,29 +1562,23 @@ export function createWebRuntimeHost(
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
-    const perfOn = (globalThis as { __smperf?: boolean }).__smperf === true;
+    const smperf = readSmperf();
+    const perfOn = smperf.on;
+    // Plan 070.1 — apply dev-only A/B toggles (idempotent per frame). Shadows
+    // via the WebGPU global shadow switch, landscape via its root visibility,
+    // grass compute via the flag RenderView reads in its pre-pass traverse.
+    if (perfOn && renderView.renderer) {
+      renderView.renderer.shadowMap.enabled = !smperf.noShadows;
+    }
+    renderView.landscapeController.root.visible = !smperf.noLandscape;
+    (globalThis as { __smperfNoScatter?: boolean }).__smperfNoScatter =
+      smperf.noScatter;
+
     const pWorldStart = perfOn ? performance.now() : 0;
     world.update(delta);
     const pSessionStart = perfOn ? performance.now() : 0;
     gameplaySession?.update(delta);
-    if (perfOn) {
-      const pEnd = performance.now();
-      perfWorldMs += pSessionStart - pWorldStart;
-      perfSessionMs += pEnd - pSessionStart;
-      perfFrameMs += delta * 1000;
-      perfFrames += 1;
-      if (now - perfLastLogMs > 1000) {
-        const n = Math.max(perfFrames, 1);
-        console.info(
-          `[smperf] frame ${(perfFrameMs / n).toFixed(1)}ms (~${(1000 / (perfFrameMs / n)).toFixed(0)}fps) | world.update ${(perfWorldMs / n).toFixed(2)}ms | session.update ${(perfSessionMs / n).toFixed(2)}ms | rest(render) ${((perfFrameMs - perfWorldMs - perfSessionMs) / n).toFixed(1)}ms`
-        );
-        perfWorldMs = 0;
-        perfSessionMs = 0;
-        perfFrameMs = 0;
-        perfFrames = 0;
-        perfLastLogMs = now;
-      }
-    }
+    const pSessionEnd = perfOn ? performance.now() : 0;
 
     for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
       const entry = sceneObjectEntries.get(snapshot.presenceId);
@@ -1662,8 +1695,51 @@ export function createWebRuntimeHost(
       currentAssetSources
     );
 
+    const pRenderStart = perfOn ? performance.now() : 0;
     renderView.setCamera(camera);
     renderView.render();
+    if (perfOn) {
+      const pRenderEnd = performance.now();
+      perfWorldMs += pSessionStart - pWorldStart;
+      perfSessionMs += pSessionEnd - pSessionStart;
+      // render-CPU = JS submission (scatter pre-pass traverse + pipeline
+      // submit). On WebGPU the GPU work overlaps the next frame, so the
+      // GPU/vsync cost shows up as (frame - all CPU), not in this number.
+      perfRenderCpuMs += pRenderEnd - pRenderStart;
+      perfFrameMs += delta * 1000;
+      perfFrames += 1;
+      if (now - perfLastLogMs > 1000) {
+        const n = Math.max(perfFrames, 1);
+        const frame = perfFrameMs / n;
+        const worldMs = perfWorldMs / n;
+        const sessionMs = perfSessionMs / n;
+        const renderCpuMs = perfRenderCpuMs / n;
+        // Everything not accounted for by update + render-submit: billboard
+        // sync, the ensure loop, camera-snapshot allocs, and GPU/vsync wait.
+        const gpuRestMs = frame - worldMs - sessionMs - renderCpuMs;
+        const suffix =
+          (smperf.noShadows ? " -shadows" : "") +
+          (smperf.noScatter ? " -scatter" : "") +
+          (smperf.noLandscape ? " -landscape" : "");
+        console.info(
+          `[smperf] frame ${frame.toFixed(1)}ms (~${(1000 / frame).toFixed(0)}fps) | world ${worldMs.toFixed(2)} | session ${sessionMs.toFixed(2)} | render-cpu ${renderCpuMs.toFixed(2)} | gpu+rest ${gpuRestMs.toFixed(1)}${suffix}`
+        );
+        publishSmperfStats({
+          frameMs: Number(frame.toFixed(2)),
+          fps: Number((1000 / frame).toFixed(1)),
+          worldMs: Number(worldMs.toFixed(3)),
+          sessionMs: Number(sessionMs.toFixed(3)),
+          renderCpuMs: Number(renderCpuMs.toFixed(3)),
+          gpuRestMs: Number(gpuRestMs.toFixed(2))
+        });
+        perfWorldMs = 0;
+        perfSessionMs = 0;
+        perfRenderCpuMs = 0;
+        perfFrameMs = 0;
+        perfFrames = 0;
+        perfLastLogMs = now;
+      }
+    }
 
     debugHud?.update(delta);
 
@@ -1673,6 +1749,8 @@ export function createWebRuntimeHost(
   }
 
   async function start(state: WebRuntimeStartState): Promise<void> {
+    // Plan 070.1 — wall-clock the whole boot (the PREVIEW_BOOT reboot cost).
+    const bootStart = ownerWindow.performance.now();
     if (!started) {
       started = true;
       ownerWindow.addEventListener("resize", handleResize);
@@ -2884,6 +2962,7 @@ export function createWebRuntimeHost(
     ownerWindow.requestAnimationFrame(() => {
       handleResize();
       lastTime = ownerWindow.performance.now();
+      publishSmperfStats({ lastBootMs: Number((lastTime - bootStart).toFixed(1)) });
       animationId = ownerWindow.requestAnimationFrame(renderFrame);
     });
   }

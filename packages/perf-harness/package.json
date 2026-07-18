@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "measure:load": "node driver/measure-load.mjs",
-    "measure:live": "node driver/measure-live.mjs"
+    "measure:live": "node driver/measure-live.mjs",
+    "attribute:render": "node driver/attribute-render.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",

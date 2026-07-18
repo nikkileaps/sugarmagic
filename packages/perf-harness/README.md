@@ -26,6 +26,25 @@ pnpm --filter @sugarmagic/perf-harness measure:live
 Reports median/p95 frame time + fps and scrapes the HUD text. Use it to
 A/B a fix: measure, apply the fix, rebuild, measure again.
 
+## `attribute:render` -- split the render frame (Plan 070.1)
+
+Same CDP attach as `measure:live`, but drives the runtime host's
+`window.__smperf` A/B toggles to attribute the render cost. For each
+condition (baseline, -shadows, -scatter, -landscape, -all) it flips the
+toggle, lets the scene settle, and averages the host's own 1Hz
+`window.__smperfStats` (frame / world / session / render-cpu / gpu+rest
+ms), then prints a table. The `d(frame)` column on a `-suspect` row is
+that suspect's per-frame cost.
+
+```
+# same setup as measure:live (Chrome on :9222, preview in a scatter-heavy scene)
+pnpm --filter @sugarmagic/perf-harness attribute:render -- --seconds=4
+```
+
+The host probe is dev-only and off by default (`window.__smperf` unset).
+It also publishes `window.__smperfStats.lastBootMs` -- restart the
+preview once to capture the PREVIEW_BOOT reboot cost.
+
 ## `measure:load` -- synthetic sweep
 
 Spawns a headed Chrome over a tunable plain-three load; sanity-checks the

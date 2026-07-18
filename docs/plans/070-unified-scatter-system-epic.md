@@ -100,6 +100,20 @@ Design principles (consistent with repo norms):
 Extend the 069 frame probe + perf harness to split `rest(render)` into render-CPU (submission) vs GPU wait, and A/B the big suspects: shadows on/off (CSM cascade cost), grass compute on/off (count REAL dispatches: per-bin per-layer per-renderable), landscape on/off. Also instrument the shadow pass while TURNING the camera (the #355 symptom; the in-code "Instanced scatter fields do NOT cast shadows" note ties cascade re-splits to camera turns). Measure a PREVIEW_BOOT reboot cost (the ~200-300ms figure in this doc is a guess). Check the `lastPreparedFrameByCamera` unbounded-growth leak (compute-pipeline.ts:580; grows per camera per frame, clears only on edit) — fix here if trivial, else 070.8 sweeps it. Output: a table in this doc attributing the ~27ms, and a re-weighting of 070.4 if the data disagrees with the chunking/BatchedMesh thesis.
 **Verify:** numbers in hand — each suspect's ms cost named; reboot cost measured; #355 either explained or explicitly not shadow-related.
 
+**Instrumentation shipped (this story):** the runtime frame probe (`targets/web/src/runtimeHost.ts`) now splits render into **render-CPU** (JS submission) vs **gpu+rest** (frame − all CPU), and reads `window.__smperf` as a config object with A/B toggles `noShadows` / `noScatter` / `noLandscape`; it publishes 1Hz averages to `window.__smperfStats` and the boot wall-clock to `.lastBootMs`. Toggle wiring: shadows via `renderer.shadowMap.enabled`, landscape via `landscapeController.root.visible`, grass compute via a dev flag RenderView reads in its scatter pre-pass. Driver `pnpm --filter @sugarmagic/perf-harness attribute:render` flips the matrix and prints the table. The `lastPreparedFrameByCamera` leak is FIXED here (keyed by camera.uuid, bounded to live-camera count — compute-pipeline.ts).
+
+**Attribution results:** _PENDING CAPTURE_ — needs a scatter-heavy preview (lavender meadow) in headed-WebGPU Chrome. Recipe: (1) quit Chrome, `open -a "Google Chrome" --args --remote-debugging-port=9222 --disable-gpu-vsync --disable-frame-rate-limit`; (2) Studio -> load project -> start preview -> walk into the meadow; (3) `pnpm --filter @sugarmagic/perf-harness attribute:render`. Fill this table + name the reboot ms, then re-weight 070.4 if the data disagrees with the chunking/BatchedMesh thesis.
+
+| condition | frame ms | fps | world | session | render-cpu | gpu+rest | d(frame) |
+|-----------|----------|-----|-------|---------|-----------|----------|----------|
+| baseline  | | | | | | | 0 |
+| -shadows  | | | | | | | |
+| -scatter  | | | | | | | |
+| -landscape| | | | | | | |
+| -all      | | | | | | | |
+
+reboot (lastBootMs): _pending_ · #355 turn-stutter: _pending — compare turn-left vs turn-right under baseline and -shadows_
+
 ### 070.2 — Shared renderable-lifecycle reconciler (#350)
 
 Extract ONE reconciler (desired SceneObjects in -> delta -> load/update/dispose renderables) that both the studio authoring viewport and the game runtime host consume. `computeSceneDelta` ALREADY lives in runtime-core (scene/index.ts) — the delta half of open question 2 is answered; the extraction is the realization layer (render-web). The studio's incremental machinery (objectMap/pending/generation, authoringViewport.ts) is the seed; the game host's wholesale `start()` build becomes "reconcile from empty". While extracting, CLEAN the studio's duplication rather than copying it: `applyProjection` currently does a full O(N) transform+ensure sweep every tick that subsumes its own delta.updated loop.
