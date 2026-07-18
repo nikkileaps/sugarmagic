@@ -97,7 +97,7 @@ async function measureCondition(preview, cfg, seconds) {
 async function main() {
   let browser;
   try {
-    browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   } catch {
     throw new Error(
       `Could not attach to Chrome on :${PORT}. Launch a separate debuggable\n` +
