@@ -1395,6 +1395,85 @@ export function createWebRuntimeHost(
       ...stats
     };
   }
+  // Plan 070.1 — self-driving A/B capture. Run `await __smperfRun()` in the
+  // preview console (works in ANY Chrome — no debugger attach needed): it
+  // flips each condition, samples the 1Hz stats, restores, and prints +
+  // returns the attribution table. Exposed on window in start().
+  async function runSmperfMatrix(
+    opts?: { perConditionMs?: number }
+  ): Promise<{ table: string; rows: Record<string, number | string | null>[] }> {
+    const perCond = opts?.perConditionMs ?? 2500;
+    const conditions: [string, Record<string, boolean>][] = [
+      ["baseline", { log: true }],
+      ["-shadows", { log: true, noShadows: true }],
+      ["-scatter", { log: true, noScatter: true }],
+      ["-landscape", { log: true, noLandscape: true }],
+      ["-all", { log: true, noShadows: true, noScatter: true, noLandscape: true }]
+    ];
+    const w = globalThis as {
+      __smperf?: unknown;
+      __smperfNoScatter?: boolean;
+      __smperfStats?: Record<string, number>;
+    };
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const rows: Record<string, number | string | null>[] = [];
+    for (const [name, cfg] of conditions) {
+      w.__smperf = cfg;
+      const samples: Record<string, number>[] = [];
+      let lastFrame = -1;
+      const end = performance.now() + perCond;
+      while (performance.now() < end) {
+        await sleep(250);
+        const s = w.__smperfStats;
+        if (s && s.frameMs !== lastFrame) {
+          lastFrame = s.frameMs;
+          samples.push({ ...s });
+        }
+      }
+      const use = samples.slice(1); // drop the settling bucket
+      const avg = (k: string) =>
+        use.length
+          ? Number(
+              (use.reduce((a, s) => a + (s[k] ?? 0), 0) / use.length).toFixed(2)
+            )
+          : null;
+      rows.push({
+        name,
+        frameMs: avg("frameMs"),
+        fps: avg("fps"),
+        worldMs: avg("worldMs"),
+        sessionMs: avg("sessionMs"),
+        renderCpuMs: avg("renderCpuMs"),
+        gpuRestMs: avg("gpuRestMs")
+      });
+    }
+    w.__smperf = false;
+    w.__smperfNoScatter = false;
+    const base = rows[0];
+    const pad = (s: unknown, n: number) => String(s ?? "-").padEnd(n);
+    const lines = [
+      pad("condition", 12) + pad("frame", 8) + pad("fps", 6) +
+        pad("world", 7) + pad("session", 9) + pad("render-cpu", 12) +
+        pad("gpu+rest", 10) + "d(frame)"
+    ];
+    for (const r of rows) {
+      const d =
+        typeof r.frameMs === "number" && typeof base.frameMs === "number"
+          ? (r.frameMs - base.frameMs).toFixed(1)
+          : "-";
+      lines.push(
+        pad(r.name, 12) + pad(r.frameMs, 8) + pad(r.fps, 6) +
+          pad(r.worldMs, 7) + pad(r.sessionMs, 9) + pad(r.renderCpuMs, 12) +
+          pad(r.gpuRestMs, 10) + d
+      );
+    }
+    const table = lines.join("\n");
+    // eslint-disable-next-line no-console
+    console.info(
+      `[smperf-matrix]\n${table}\nreboot(lastBootMs): ${w.__smperfStats?.lastBootMs ?? "n/a"}`
+    );
+    return { table, rows };
+  }
   const sceneObjectEntries = new Map<string, SceneObjectEntry>();
 
   function disposeRuntime() {
@@ -1763,6 +1842,9 @@ export function createWebRuntimeHost(
     }
 
     disposeRuntime();
+    // Plan 070.1 — expose the self-driving A/B capture on the preview window.
+    (ownerWindow as unknown as { __smperfRun?: typeof runSmperfMatrix }).__smperfRun =
+      runSmperfMatrix;
     currentAssetSources = state.assetSources;
     webAudioAdapter = new WebAudioAdapter({
       ownerWindow,
