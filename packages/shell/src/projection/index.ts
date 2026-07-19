@@ -50,6 +50,9 @@ export interface ViewportProjection {
   showColliders: ViewportState["showColliders"];
   /** Plan 069.8 — draw the baked navmesh walkable surface. */
   showNavMesh: ViewportState["showNavMesh"];
+  /** Plan 070.3 — folders the author has toggled invisible in the Scene
+   *  Explorer; the viewport hides their placed-asset subtree. */
+  hiddenFolderIds: ViewportState["hiddenFolderIds"];
 }
 
 export interface PlayerPreviewProjection {
@@ -163,7 +166,8 @@ export function selectViewportProjection(
     transformOverrides: viewport.transformDrafts,
     cursor: viewport.activeToolCursor,
     showColliders: viewport.showColliders,
-    showNavMesh: viewport.showNavMesh
+    showNavMesh: viewport.showNavMesh,
+    hiddenFolderIds: viewport.hiddenFolderIds
   };
 }
 

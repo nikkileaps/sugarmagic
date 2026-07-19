@@ -7,14 +7,17 @@
   "scripts": {
     "dev": "vite",
     "measure:load": "node driver/measure-load.mjs",
-    "measure:live": "node driver/measure-live.mjs"
+    "measure:live": "node driver/measure-live.mjs",
+    "attribute:render": "node driver/attribute-render.mjs",
+    "capture": "node driver/auto-capture.mjs",
+    "probe:mask": "node driver/mask-probe.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",
     "three": "^0.183.2"
   },
   "devDependencies": {
-    "playwright-core": "^1.49.0",
+    "playwright-core": "^1.61.1",
     "vite": "^8.0.3"
   }
 }

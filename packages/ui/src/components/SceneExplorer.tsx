@@ -26,6 +26,10 @@ export interface SceneExplorerFolder {
   displayName: string;
   children: SceneExplorerNode[];
   isRoot?: boolean;
+  /** Plan 070.3 — false when the author has toggled this folder's eye off.
+   *  Ephemeral viewport visibility (a whole scatter stroke / patch), never the
+   *  saved region. Defaults to visible when omitted. */
+  visible?: boolean;
 }
 
 /**
@@ -55,6 +59,8 @@ export interface SceneExplorerProps {
   onSelect: (instanceId: string) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (instanceId: string) => void;
+  /** Plan 070.3 — toggle a folder's viewport visibility (its eye). */
+  onToggleFolderVisibility?: (folderId: string) => void;
   onRenameFolder?: (folderId: string, displayName: string) => void;
   onCreateFolder?: (parentFolderId: string | null) => void;
   onDeleteFolder?: (folderId: string) => void;
@@ -289,6 +295,7 @@ function FolderRow({
   onSelect,
   onSelectFolder,
   onToggleVisibility,
+  onToggleFolderVisibility,
   onOpenContextMenu,
   onMoveEntityToFolder,
   expansionChoices,
@@ -304,6 +311,7 @@ function FolderRow({
   onSelect: (id: string) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
+  onToggleFolderVisibility?: (folderId: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
   onMoveEntityToFolder?: (
     instanceId: string,
@@ -425,6 +433,29 @@ function FolderRow({
         <Text size="xs" c="var(--sm-color-overlay0)" ml={2}>
           ({node.children.length})
         </Text>
+        {onToggleFolderVisibility && !node.isRoot && (
+          <ActionIcon
+            variant="subtle"
+            size="xs"
+            aria-label={node.visible === false ? "Show folder" : "Hide folder"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFolderVisibility(node.folderId);
+            }}
+            style={{ marginLeft: "auto" }}
+            styles={{
+              root: {
+                color:
+                  node.visible === false
+                    ? "var(--sm-color-overlay0)"
+                    : "var(--sm-color-overlay2)",
+                "&:hover": { background: "var(--sm-hover-bg)" }
+              }
+            }}
+          >
+            {node.visible === false ? "👁‍🗨" : "👁"}
+          </ActionIcon>
+        )}
       </Box>
       {isExpanded &&
         node.children.map((child) => (
@@ -437,6 +468,7 @@ function FolderRow({
             onSelect={onSelect}
             onSelectFolder={onSelectFolder}
             onToggleVisibility={onToggleVisibility}
+            onToggleFolderVisibility={onToggleFolderVisibility}
             onOpenContextMenu={onOpenContextMenu}
             onMoveEntityToFolder={onMoveEntityToFolder}
             expansionChoices={expansionChoices}
@@ -455,6 +487,7 @@ function TreeNode({
   onSelect,
   onSelectFolder,
   onToggleVisibility,
+  onToggleFolderVisibility,
   onOpenContextMenu,
   onMoveEntityToFolder,
   expansionChoices,
@@ -467,6 +500,7 @@ function TreeNode({
   onSelect: (id: string) => void;
   onSelectFolder?: (folderId: string) => void;
   onToggleVisibility?: (id: string) => void;
+  onToggleFolderVisibility?: (folderId: string) => void;
   onOpenContextMenu: (event: MouseEvent, state: ContextMenuState) => void;
   onMoveEntityToFolder?: (
     instanceId: string,
@@ -516,6 +550,7 @@ function TreeNode({
       onSelect={onSelect}
       onSelectFolder={onSelectFolder}
       onToggleVisibility={onToggleVisibility}
+      onToggleFolderVisibility={onToggleFolderVisibility}
       onOpenContextMenu={onOpenContextMenu}
       onMoveEntityToFolder={onMoveEntityToFolder}
       expansionChoices={expansionChoices}
@@ -533,6 +568,7 @@ export function SceneExplorer({
   onSelect,
   onSelectFolder,
   onToggleVisibility,
+  onToggleFolderVisibility,
   onRenameFolder,
   onCreateFolder,
   onDeleteFolder,
@@ -585,6 +621,7 @@ export function SceneExplorer({
           onSelect={onSelect}
           onSelectFolder={onSelectFolder}
           onToggleVisibility={onToggleVisibility}
+          onToggleFolderVisibility={onToggleFolderVisibility}
           onOpenContextMenu={(_event, state) => setContextMenu(state)}
           onMoveEntityToFolder={onMoveEntityToFolder}
           expansionChoices={expansionChoices}

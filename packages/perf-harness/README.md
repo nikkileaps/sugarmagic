@@ -14,17 +14,59 @@ window, and measures the actual scene (scatter + ensure-loop machinery)
 that the synthetic rig can't reproduce. Read-only.
 
 ```
-# 1. Quit Chrome completely (Cmd-Q), then:
-open -a "Google Chrome" --args --remote-debugging-port=9222 \
+# 1. Launch a SEPARATE debuggable Chrome (leaves your normal Chrome +
+#    tabs untouched; own profile dir -> sign in once, ever):
+open -na "Google Chrome" --args --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.sugarmagic-perf-chrome" \
   --disable-gpu-vsync --disable-frame-rate-limit
-# 2. Open Studio -> load project -> start preview -> get into the scene
-#    (open the debug HUD's Renderer tab for draw/tri readouts).
+# 2. In that window: Studio -> load project -> start preview -> get into
+#    the scene (open the debug HUD's Renderer tab for draw/tri readouts).
 # 3.
 pnpm --filter @sugarmagic/perf-harness measure:live
 ```
 
 Reports median/p95 frame time + fps and scrapes the HUD text. Use it to
 A/B a fix: measure, apply the fix, rebuild, measure again.
+
+## `capture` -- fully automated, ZERO human (Plan 070.1)
+
+The one that matters. Claude/CI runs it start-to-finish: it launches a
+real hardware-WebGPU Chrome itself (direct binary — the debug port works
+and WebGPU renders on the actual GPU even if the browser toolbar doesn't
+paint; we drive it entirely over CDP and never need to see it), drives
+the Studio (start Preview -> New Game -> wait for the scene), runs the
+host's `__smperfRun()` A/B matrix, and prints the table. No human, no
+attaching to a hand-launched browser.
+
+```
+pnpm --filter @sugarmagic/perf-harness capture           # launches + closes Chrome
+pnpm --filter @sugarmagic/perf-harness capture -- --keep # reuse Chrome next run (faster)
+```
+
+Notes: the Studio profile persists (project stays open, so no picking);
+the game's "New Game" enters the scene without the sign-in wall (local
+preview). Default region spawn sits near the 60fps vsync cap — drive the
+player into a heavier viewpoint for render-bound numbers (movement
+automation TBD).
+
+## `attribute:render` -- split the render frame (Plan 070.1)
+
+Same CDP attach as `measure:live`, but drives the runtime host's
+`window.__smperf` A/B toggles to attribute the render cost. For each
+condition (baseline, -shadows, -scatter, -landscape, -all) it flips the
+toggle, lets the scene settle, and averages the host's own 1Hz
+`window.__smperfStats` (frame / world / session / render-cpu / gpu+rest
+ms), then prints a table. The `d(frame)` column on a `-suspect` row is
+that suspect's per-frame cost.
+
+```
+# same setup as measure:live (Chrome on :9222, preview in a scatter-heavy scene)
+pnpm --filter @sugarmagic/perf-harness attribute:render -- --seconds=4
+```
+
+The host probe is dev-only and off by default (`window.__smperf` unset).
+It also publishes `window.__smperfStats.lastBootMs` -- restart the
+preview once to capture the PREVIEW_BOOT reboot cost.
 
 ## `measure:load` -- synthetic sweep
 

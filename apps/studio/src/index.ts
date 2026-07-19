@@ -10,10 +10,6 @@ export { connectStudioRenderEngineProjector } from "./viewport/RenderEngineProje
 export { createSurfacePreviewGeometry } from "./viewport/surface-preview-samplers";
 export { shouldShowSharedViewport } from "./viewport/viewportVisibility";
 export {
-  resolveRenderableCompletion,
-  type RenderableCompletionDecision
-} from "./viewport/renderable-lifecycle";
-export {
   bakePaintUvsIntoGlb,
   type PaintUvBakeOptions,
   type PaintUvBakeResult

@@ -8,9 +8,12 @@ export {
 export {
   createHitTestService,
   SCENE_OBJECT_MARKER_KEY,
+  buildSceneObjectMarker,
+  resolveSceneObjectMarker,
   type HitTestService,
   type HitTestResult,
-  type HitTestMode
+  type HitTestMode,
+  type SceneObjectMarker
 } from "./hit-test-service";
 
 export {

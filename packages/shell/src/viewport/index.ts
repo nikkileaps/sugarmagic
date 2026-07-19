@@ -132,6 +132,11 @@ export interface ViewportState {
    *  `enabled` flag): volumeIds hidden from the Spatial viewport overlay so a
    *  busy region stays legible. */
   hiddenVolumeIds: string[];
+  /** Plan 070.3 — per-folder authoring visibility in the Layout Scene Explorer
+   *  (ephemeral, NOT persisted): folderIds hidden from the viewport so a whole
+   *  scatter stroke / patch can be toggled out of the way. Hiding a folder
+   *  hides its subtree (see `resolveHiddenAssetInstanceIds`). */
+  hiddenFolderIds: string[];
   /** Plan 069.6 — show collider + volume-blocker wireframes in the viewport. */
   showColliders: boolean;
   /** Plan 069.8 — show the baked navmesh walkable surface in the viewport. */
@@ -163,6 +168,7 @@ export interface ViewportActions {
   setActiveTransformTool: (tool: TransformTool) => void;
   setActiveSpatialTool: (tool: "select" | "draw-rect") => void;
   toggleVolumeHidden: (volumeId: string) => void;
+  toggleFolderHidden: (folderId: string) => void;
   setShowColliders: (showColliders: boolean) => void;
   setShowNavMesh: (showNavMesh: boolean) => void;
   setCameraQuaternion: (
@@ -234,6 +240,7 @@ export function createViewportStore() {
     activeTransformTool: "move",
     activeSpatialTool: "select",
     hiddenVolumeIds: [],
+    hiddenFolderIds: [],
     showColliders: false,
     showNavMesh: false,
     cameraQuaternion: [0, 0, 0, 1],
@@ -310,6 +317,13 @@ export function createViewportStore() {
         hiddenVolumeIds: state.hiddenVolumeIds.includes(volumeId)
           ? state.hiddenVolumeIds.filter((id) => id !== volumeId)
           : [...state.hiddenVolumeIds, volumeId]
+      }));
+    },
+    toggleFolderHidden(folderId) {
+      set((state) => ({
+        hiddenFolderIds: state.hiddenFolderIds.includes(folderId)
+          ? state.hiddenFolderIds.filter((id) => id !== folderId)
+          : [...state.hiddenFolderIds, folderId]
       }));
     },
     setShowColliders(showColliders) {

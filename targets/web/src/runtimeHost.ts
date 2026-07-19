@@ -65,18 +65,15 @@ import {
   normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
-  buildInstancedAssetGroup,
   createCapsuleFallback,
   createRenderView,
   createWebRenderEngine,
   createFallbackMesh,
-  createRenderableShaderApplicationState,
+  createRenderableReconciler,
   disposeRenderableObject,
-  ensureShaderSetAppliedToRenderable,
   ensureShaderSetsAppliedToRenderables,
-  normalizeModelScale,
-  sanitizeRenderableVertexFormats,
-  type RenderableShaderApplicationState,
+  type ReconciledEntry,
+  type RenderableReconciler,
   type RenderView,
   type WebRenderEngine
 } from "@sugarmagic/render-web";
@@ -96,6 +93,8 @@ import {
   Velocity,
   iterateActiveItemPresences,
   resolveSceneObjects,
+  assetObjectIsInstanceable,
+  objectSurfaceHasScatter,
   DEFAULT_CAMERA_CONFIG,
   createCameraState,
   updateCameraFollow,
@@ -557,16 +556,10 @@ const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
 const gltfLoader = new GLTFLoader();
 
-interface SceneObjectEntry {
-  root: THREE.Group;
-  object: SceneObject;
-  shaderApplication: RenderableShaderApplicationState;
-  /**
-   * AnimationMixer for NPCs whose definition has bound animation slots.
-   * Driven each frame from the runtime loop. Static-mesh assets and
-   * NPCs without animations leave this null.
-   */
-  mixer: THREE.AnimationMixer | null;
+/** Plan 070.2 — NPCs stash their idle AnimationMixer in the reconciler
+ *  entry's `host` slot (driven each frame from the runtime loop). */
+interface HostEntryData {
+  mixer?: THREE.AnimationMixer;
 }
 
 /** Plan 068.13a -- a placed asset is instanceable if it is a static model
@@ -576,29 +569,6 @@ interface SceneObjectEntry {
  *  (`representationKey` folds in the mask, ADR 028 Gate 2), so they simply
  *  land in different groups rather than being excluded here. Skinned models
  *  are `npc`/`player` kind and never reach here; the builder also guards. */
-function objectSurfaceHasScatter(object: SceneObject): boolean {
-  const slots = (
-    object as {
-      effectiveMaterialSlots?: Array<{
-        surface?: { layers?: Array<{ kind?: string }> } | null;
-      }>;
-    }
-  ).effectiveMaterialSlots;
-  if (!slots) return false;
-  return slots.some((slot) =>
-    (slot.surface?.layers ?? []).some(
-      (layer) => layer.kind === "scatter" || layer.kind === "surface-ref"
-    )
-  );
-}
-
-function assetObjectIsInstanceable(object: SceneObject): boolean {
-  return (
-    object.kind === "asset" &&
-    Boolean((object as { modelSourcePath?: string | null }).modelSourcePath) &&
-    !objectSurfaceHasScatter(object)
-  );
-}
 
 function createCameraSnapshot(
   camera: THREE.PerspectiveCamera,
@@ -1345,18 +1315,143 @@ export function createWebRuntimeHost(
   let webAudioAdapter: WebAudioAdapter | null = null;
   let animationId: number | null = null;
   let lastTime = 0;
-  // Plan 069.10 perf probe (dev-only, gated by `window.__smperf`): isolates
-  // the CPU update path (where all of epic 069's collision/nav work lives)
-  // from render. Set `window.__smperf = true` in the preview to log a 1Hz
-  // line; the update ms vs frame ms tells us CPU-bound (dig into systems) vs
-  // GPU/render-bound (069 is not the cost). Cheap + off by default.
+  // Plan 069.10 / 070.1 perf probe (dev-only, gated by `window.__smperf`):
+  // isolates the CPU update path from render, and (070.1) splits render into
+  // CPU-submission vs the GPU/vsync remainder, with A/B toggles to attribute
+  // the ~27ms render cost. Off by default.
+  //
+  //   window.__smperf = true                         // log only (legacy)
+  //   window.__smperf = { log:true, noShadows:true } // + A/B a suspect
+  //
+  // A/B flags (any combination): noShadows, noScatter (grass compute),
+  // noLandscape. `window.__smperfStats` exposes the last 1Hz averages for
+  // the perf harness driver to scrape; `lastBootMs` is the last host.start()
+  // wall-clock (the PREVIEW_BOOT reboot cost).
   let perfWorldMs = 0;
   let perfSessionMs = 0;
+  let perfRenderCpuMs = 0;
   let perfFrameMs = 0;
   let perfFrames = 0;
   let perfLastLogMs = 0;
   let started = false;
-  const sceneObjectEntries = new Map<string, SceneObjectEntry>();
+
+  interface SmperfConfig {
+    on: boolean;
+    log: boolean;
+    noShadows: boolean;
+    noScatter: boolean;
+    noLandscape: boolean;
+  }
+  function readSmperf(): SmperfConfig {
+    const raw = (globalThis as { __smperf?: unknown }).__smperf;
+    if (raw === true) {
+      return { on: true, log: true, noShadows: false, noScatter: false, noLandscape: false };
+    }
+    if (raw && typeof raw === "object") {
+      const o = raw as Record<string, unknown>;
+      return {
+        on: true,
+        log: o.log !== false,
+        noShadows: o.noShadows === true,
+        noScatter: o.noScatter === true,
+        noLandscape: o.noLandscape === true
+      };
+    }
+    return { on: false, log: false, noShadows: false, noScatter: false, noLandscape: false };
+  }
+  function publishSmperfStats(stats: Record<string, number>): void {
+    (globalThis as { __smperfStats?: Record<string, number> }).__smperfStats = {
+      ...((globalThis as { __smperfStats?: Record<string, number> }).__smperfStats ?? {}),
+      ...stats
+    };
+  }
+  // Plan 070.1 — self-driving A/B capture. Run `await __smperfRun()` in the
+  // preview console (works in ANY Chrome — no debugger attach needed): it
+  // flips each condition, samples the 1Hz stats, restores, and prints +
+  // returns the attribution table. Exposed on window in start().
+  async function runSmperfMatrix(
+    opts?: { perConditionMs?: number }
+  ): Promise<{ table: string; rows: Record<string, number | string | null>[] }> {
+    // Default 4s per condition: shadow toggles force a pipeline recompile,
+    // so a short window captures rebuild churn instead of steady state.
+    const perCond = opts?.perConditionMs ?? 4000;
+    const conditions: [string, Record<string, boolean>][] = [
+      ["baseline", { log: true }],
+      ["-shadows", { log: true, noShadows: true }],
+      ["-scatter", { log: true, noScatter: true }],
+      ["-landscape", { log: true, noLandscape: true }],
+      ["-all", { log: true, noShadows: true, noScatter: true, noLandscape: true }]
+    ];
+    const w = globalThis as {
+      __smperf?: unknown;
+      __smperfNoScatter?: boolean;
+      __smperfStats?: Record<string, number>;
+    };
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const rows: Record<string, number | string | null>[] = [];
+    for (const [name, cfg] of conditions) {
+      w.__smperf = cfg;
+      const samples: Record<string, number>[] = [];
+      let lastFrame = -1;
+      const end = performance.now() + perCond;
+      while (performance.now() < end) {
+        await sleep(250);
+        const s = w.__smperfStats;
+        if (s && s.frameMs !== lastFrame) {
+          lastFrame = s.frameMs;
+          samples.push({ ...s });
+        }
+      }
+      const use = samples.slice(1); // drop the settling bucket
+      const avg = (k: string) =>
+        use.length
+          ? Number(
+              (use.reduce((a, s) => a + (s[k] ?? 0), 0) / use.length).toFixed(2)
+            )
+          : null;
+      rows.push({
+        name,
+        frameMs: avg("frameMs"),
+        fps: avg("fps"),
+        worldMs: avg("worldMs"),
+        sessionMs: avg("sessionMs"),
+        renderCpuMs: avg("renderCpuMs"),
+        gpuRestMs: avg("gpuRestMs")
+      });
+    }
+    w.__smperf = false;
+    w.__smperfNoScatter = false;
+    const base = rows[0];
+    const pad = (s: unknown, n: number) => String(s ?? "-").padEnd(n);
+    const lines = [
+      pad("condition", 12) + pad("frame", 8) + pad("fps", 6) +
+        pad("world", 7) + pad("session", 9) + pad("render-cpu", 12) +
+        pad("gpu+rest", 10) + "d(frame)"
+    ];
+    for (const r of rows) {
+      const d =
+        typeof r.frameMs === "number" && typeof base.frameMs === "number"
+          ? (r.frameMs - base.frameMs).toFixed(1)
+          : "-";
+      lines.push(
+        pad(r.name, 12) + pad(r.frameMs, 8) + pad(r.fps, 6) +
+          pad(r.worldMs, 7) + pad(r.sessionMs, 9) + pad(r.renderCpuMs, 12) +
+          pad(r.gpuRestMs, 10) + d
+      );
+    }
+    const table = lines.join("\n");
+    // eslint-disable-next-line no-console
+    console.info(
+      `[smperf-matrix]\n${table}\nreboot(lastBootMs): ${w.__smperfStats?.lastBootMs ?? "n/a"}`
+    );
+    return { table, rows };
+  }
+  // Plan 070.2 — the shared reconciler owns all scene renderables (created
+  // per start() so its config closes over that start's state; disposed in
+  // disposeRuntime). Cross-cutting per-frame consumers read it by instanceId.
+  let renderableReconciler: RenderableReconciler | null = null;
+  const npcMixer = (entry: ReconciledEntry): THREE.AnimationMixer | undefined =>
+    (entry.host as HostEntryData).mixer;
 
   function disposeRuntime() {
     if (animationId !== null) {
@@ -1423,11 +1518,8 @@ export function createWebRuntimeHost(
     webAudioAdapter = null;
     playerEyeHeight = 1.62;
 
-    for (const entry of sceneObjectEntries.values()) {
-      scene?.remove(entry.root);
-      disposeRenderableObject(entry.root);
-    }
-    sceneObjectEntries.clear();
+    renderableReconciler?.dispose();
+    renderableReconciler = null;
 
     if (scene) {
       disposeRenderableObject(scene);
@@ -1523,32 +1615,30 @@ export function createWebRuntimeHost(
     const delta = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
-    const perfOn = (globalThis as { __smperf?: boolean }).__smperf === true;
+    const smperf = readSmperf();
+    const perfOn = smperf.on;
+    // Plan 070.1 — apply dev-only A/B toggles (idempotent per frame). Shadows
+    // via the WebGPU global shadow switch, landscape via its root visibility,
+    // grass compute via the flag RenderView reads in its pre-pass traverse.
+    // These run UNCONDITIONALLY (not gated on perfOn): when perf is off
+    // readSmperf reports every flag false, so this RESTORES the baseline
+    // (shadows on, landscape visible) after a matrix run ends -- gating on
+    // perfOn left shadowMap.enabled stuck off until a reboot (070.8 review).
+    if (renderView.renderer) {
+      renderView.renderer.shadowMap.enabled = !smperf.noShadows;
+    }
+    renderView.landscapeController.root.visible = !smperf.noLandscape;
+    (globalThis as { __smperfNoScatter?: boolean }).__smperfNoScatter =
+      smperf.noScatter;
+
     const pWorldStart = perfOn ? performance.now() : 0;
     world.update(delta);
     const pSessionStart = perfOn ? performance.now() : 0;
     gameplaySession?.update(delta);
-    if (perfOn) {
-      const pEnd = performance.now();
-      perfWorldMs += pSessionStart - pWorldStart;
-      perfSessionMs += pEnd - pSessionStart;
-      perfFrameMs += delta * 1000;
-      perfFrames += 1;
-      if (now - perfLastLogMs > 1000) {
-        const n = Math.max(perfFrames, 1);
-        console.info(
-          `[smperf] frame ${(perfFrameMs / n).toFixed(1)}ms (~${(1000 / (perfFrameMs / n)).toFixed(0)}fps) | world.update ${(perfWorldMs / n).toFixed(2)}ms | session.update ${(perfSessionMs / n).toFixed(2)}ms | rest(render) ${((perfFrameMs - perfWorldMs - perfSessionMs) / n).toFixed(1)}ms`
-        );
-        perfWorldMs = 0;
-        perfSessionMs = 0;
-        perfFrameMs = 0;
-        perfFrames = 0;
-        perfLastLogMs = now;
-      }
-    }
+    const pSessionEnd = perfOn ? performance.now() : 0;
 
     for (const snapshot of gameplaySession?.getNpcRuntimeSnapshots() ?? []) {
-      const entry = sceneObjectEntries.get(snapshot.presenceId);
+      const entry = renderableReconciler?.get(snapshot.presenceId);
       if (!entry) {
         continue;
       }
@@ -1556,10 +1646,10 @@ export function createWebRuntimeHost(
     }
 
     // Tick every entry mixer (NPCs with bound idle animations). The
-    // mixer is null for static-mesh assets and for NPCs without
+    // mixer is absent for static-mesh assets and for NPCs without
     // animations, so this loop is cheap when nothing's animated.
-    for (const entry of sceneObjectEntries.values()) {
-      entry.mixer?.update(delta);
+    for (const entry of renderableReconciler?.entries() ?? []) {
+      npcMixer(entry)?.update(delta);
     }
 
     const playerEntities = world.query(PlayerControlled, Position);
@@ -1642,7 +1732,7 @@ export function createWebRuntimeHost(
         continue;
       }
 
-      const entry = sceneObjectEntries.get(binding.sceneInstanceId);
+      const entry = renderableReconciler?.get(binding.sceneInstanceId);
       if (entry) {
         renderBindings.set(binding.entity, entry.root);
       }
@@ -1656,14 +1746,59 @@ export function createWebRuntimeHost(
       viewportHeight: root.clientHeight || 1
     });
 
-    ensureShaderSetsAppliedToRenderables(
-      sceneObjectEntries.values(),
-      renderView.shaderRuntime,
-      currentAssetSources
-    );
+    if (renderableReconciler) {
+      ensureShaderSetsAppliedToRenderables(
+        renderableReconciler.entries(),
+        renderView.shaderRuntime,
+        currentAssetSources
+      );
+    }
 
+    const pRenderStart = perfOn ? performance.now() : 0;
     renderView.setCamera(camera);
     renderView.render();
+    if (perfOn) {
+      const pRenderEnd = performance.now();
+      perfWorldMs += pSessionStart - pWorldStart;
+      perfSessionMs += pSessionEnd - pSessionStart;
+      // render-CPU = JS submission (scatter pre-pass traverse + pipeline
+      // submit). On WebGPU the GPU work overlaps the next frame, so the
+      // GPU/vsync cost shows up as (frame - all CPU), not in this number.
+      perfRenderCpuMs += pRenderEnd - pRenderStart;
+      perfFrameMs += delta * 1000;
+      perfFrames += 1;
+      if (now - perfLastLogMs > 1000) {
+        const n = Math.max(perfFrames, 1);
+        const frame = perfFrameMs / n;
+        const worldMs = perfWorldMs / n;
+        const sessionMs = perfSessionMs / n;
+        const renderCpuMs = perfRenderCpuMs / n;
+        // Everything not accounted for by update + render-submit: billboard
+        // sync, the ensure loop, camera-snapshot allocs, and GPU/vsync wait.
+        const gpuRestMs = frame - worldMs - sessionMs - renderCpuMs;
+        const suffix =
+          (smperf.noShadows ? " -shadows" : "") +
+          (smperf.noScatter ? " -scatter" : "") +
+          (smperf.noLandscape ? " -landscape" : "");
+        console.info(
+          `[smperf] frame ${frame.toFixed(1)}ms (~${(1000 / frame).toFixed(0)}fps) | world ${worldMs.toFixed(2)} | session ${sessionMs.toFixed(2)} | render-cpu ${renderCpuMs.toFixed(2)} | gpu+rest ${gpuRestMs.toFixed(1)}${suffix}`
+        );
+        publishSmperfStats({
+          frameMs: Number(frame.toFixed(2)),
+          fps: Number((1000 / frame).toFixed(1)),
+          worldMs: Number(worldMs.toFixed(3)),
+          sessionMs: Number(sessionMs.toFixed(3)),
+          renderCpuMs: Number(renderCpuMs.toFixed(3)),
+          gpuRestMs: Number(gpuRestMs.toFixed(2))
+        });
+        perfWorldMs = 0;
+        perfSessionMs = 0;
+        perfRenderCpuMs = 0;
+        perfFrameMs = 0;
+        perfFrames = 0;
+        perfLastLogMs = now;
+      }
+    }
 
     debugHud?.update(delta);
 
@@ -1673,6 +1808,8 @@ export function createWebRuntimeHost(
   }
 
   async function start(state: WebRuntimeStartState): Promise<void> {
+    // Plan 070.1 — wall-clock the whole boot (the PREVIEW_BOOT reboot cost).
+    const bootStart = ownerWindow.performance.now();
     if (!started) {
       started = true;
       ownerWindow.addEventListener("resize", handleResize);
@@ -1685,6 +1822,9 @@ export function createWebRuntimeHost(
     }
 
     disposeRuntime();
+    // Plan 070.1 — expose the self-driving A/B capture on the preview window.
+    (ownerWindow as unknown as { __smperfRun?: typeof runSmperfMatrix }).__smperfRun =
+      runSmperfMatrix;
     currentAssetSources = state.assetSources;
     webAudioAdapter = new WebAudioAdapter({
       ownerWindow,
@@ -1859,7 +1999,7 @@ export function createWebRuntimeHost(
     // renderables so the per-frame ensure pass rebuilds their grass
     // with the now-ready mask (Plan 068.11).
     unsubscribeTexturesUpdated = renderView.subscribeTexturesUpdated(() => {
-      for (const entry of sceneObjectEntries.values()) {
+      for (const entry of renderableReconciler?.entries() ?? []) {
         // Surface-brushed grass lives in a surface-ref layer's NESTED
         // scatter, not a bare `scatter` layer, so use the same detector
         // the instancing partition uses (checks scatter AND surface-ref).
@@ -2101,280 +2241,90 @@ export function createWebRuntimeHost(
           activeItemPresenceIds.add(presence.presenceId);
         }
       );
-      // Plan 068.13a / ADR 028 -- instance repeated scatter-brushed placed
-      // assets. Group instanceable static placements by representationKey
-      // (which folds in asset + surface + mask, ADR 028 Gate 2) and render
-      // each group of >=2 as one InstancedMesh per submesh via the shared
-      // builder, instead of N full GLB clones. Singletons + everything
-      // non-instanceable (characters/NPCs/items, skinned, scatter/
-      // surface-ref surfaces) keep the per-object path below unchanged.
-      const singletonObjects: SceneObject[] = [];
-      const instanceGroups = new Map<string, SceneObject[]>();
-      for (const object of objects) {
-        if (
-          object.kind === "item" &&
-          !activeItemPresenceIds.has(object.instanceId)
-        ) {
-          continue;
-        }
-        if (assetObjectIsInstanceable(object)) {
-          const existing = instanceGroups.get(object.representationKey);
-          if (existing) {
-            existing.push(object);
-          } else {
-            instanceGroups.set(object.representationKey, [object]);
+      // Plan 070.2 — one shared reconciler builds every scene renderable
+      // (was two hand-rolled paths here: instanced grouping by
+      // representationKey + the singleton clone/sanitize/scale/shadow/
+      // parent/shader sequence). Grouping ON for the game; the studio keeps
+      // it OFF until 070.6. Items are visual-filtered (Plan 057); the player
+      // is excluded upstream (includePlayerPresence: false).
+      renderableReconciler = createRenderableReconciler({
+        parent: scene,
+        resolveUrl: (object) =>
+          object.modelSourcePath
+            ? renderView!.assetResolver.resolveAssetUrl(
+                object.modelSourcePath
+              ) ?? null
+            : null,
+        loadModel: (url) => gltfLoader.loadAsync(url).then((gltf) => gltf.scene),
+        createFallback: (object) => getSceneObjectFallback(object),
+        shaderRuntime: renderView!.shaderRuntime,
+        getFileSources: () => currentAssetSources,
+        enableShadows: (renderableRoot) =>
+          renderView!.enableShadowsOnObject(renderableRoot),
+        grouping: true,
+        isInstanceable: assetObjectIsInstanceable,
+        validate: validateRenderableAsset,
+        logger: {
+          warn: (message, payload) =>
+            console.warn(`[web-runtime] ${message}`, payload)
+        },
+        onEntryLoaded: (entry, renderable) => {
+          // NPCs with a bound idle clip get an AnimationMixer stashed in the
+          // entry's host slot; the frame loop ticks it via npcMixer().
+          if (entry.object.kind !== "npc") {
+            return;
           }
-        } else {
-          singletonObjects.push(object);
-        }
-      }
-
-      for (const groupMembers of instanceGroups.values()) {
-        if (groupMembers.length < 2) {
-          singletonObjects.push(...groupMembers);
-          continue;
-        }
-        const representative = groupMembers[0]!;
-        const modelPath = (
-          representative as { modelSourcePath?: string | null }
-        ).modelSourcePath;
-        const groupUrl = modelPath
-          ? renderView.assetResolver.resolveAssetUrl(modelPath)
-          : null;
-        if (!groupUrl) {
-          singletonObjects.push(...groupMembers);
-          continue;
-        }
-        const groupKey = `instanced:${representative.representationKey}`;
-        // Capture the live scene: a dispose() + start() that runs WHILE
-        // this GLB is loading reassigns `scene` to a fresh THREE.Scene, so
-        // a plain `if (!scene)` guard would pass and attach a stale batch
-        // (built from the OLD start's SceneObjects) to the NEW scene, and
-        // could clobber a groupKey the new start already populated
-        // (068.13 mini-review). Comparing the captured reference bails.
-        const groupScene = scene;
-        void gltfLoader
-          .loadAsync(groupUrl)
-          .then((gltf) => {
-            if (!scene || scene !== groupScene) return;
-            const built = buildInstancedAssetGroup({
-              group: groupMembers,
-              sourceScene: gltf.scene,
-              shaderRuntime: renderView?.shaderRuntime ?? null,
-              assetSources: state.assetSources,
-              // Instanced scatter fields do NOT cast shadows. One
-              // InstancedMesh has a single field-spanning bounding sphere,
-              // so it survives every CSM cascade's cull and re-renders all
-              // instances into all (up to 4) cascades -- ~3-4x shadow-pass
-              // geometry vs the pre-instancing per-clone culling, which
-              // tanks fps and makes cascade re-splits jitter on camera turn.
-              // Small foliage shadows are low-value; skip them until the
-              // field is spatially chunked (deferred #347 HISM). To cast
-              // shadows again, restore enableShadowsOnObject here.
-              enableShadows: undefined
-            });
-            if (!built) {
-              // Skinned model slipped through (rare -- asset-kind is meant
-              // to be static). Skip rather than mis-render; log it.
-              console.warn("[web-runtime] instanced-group-skipped", {
-                representationKey: representative.representationKey,
-                modelSourcePath: modelPath,
-                count: groupMembers.length
-              });
-              return;
-            }
-            scene.add(built.root);
-            sceneObjectEntries.set(groupKey, {
-              root: built.root,
-              object: built.representative,
-              shaderApplication: built.shaderApplication,
-              mixer: null
-            });
-          })
-          .catch((error) => {
-            console.error("[web-runtime] instanced-group-load-failed", {
-              representationKey: representative.representationKey,
-              modelSourcePath: modelPath,
-              error
-            });
-          });
-      }
-
-      for (const object of singletonObjects) {
-        // For kind "item" the SceneObject's `instanceId` equals
-        // the presenceId — see scene/index.ts:createItemSceneObject.
-        // If the filter pass didn't include this presence,
-        // don't spawn its visual either.
-        if (
-          object.kind === "item" &&
-          !activeItemPresenceIds.has(object.instanceId)
-        ) {
-          continue;
-        }
-        const rootObject = new THREE.Group();
-        const shaderApplication = createRenderableShaderApplicationState();
-        rootObject.name = object.instanceId;
-        rootObject.userData.sceneInstanceId = object.instanceId;
-        rootObject.position.set(...object.transform.position);
-        rootObject.rotation.set(...object.transform.rotation);
-        rootObject.scale.set(...object.transform.scale);
-
-        const assetSourceUrl = object.modelSourcePath
-          ? renderView.assetResolver.resolveAssetUrl(object.modelSourcePath)
-          : null;
-
-        if (assetSourceUrl) {
+          const presence = activeRegionContents?.npcPresences.find(
+            (p) => p.presenceId === entry.object.instanceId
+          );
+          const npcDefinition = presence
+            ? state.npcDefinitions.find(
+                (d) => d.definitionId === presence.npcDefinitionId
+              )
+            : null;
+          const idleBindingId =
+            npcDefinition?.presentation.animationAssetBindings.idle ?? null;
+          const idleAnimDef = idleBindingId
+            ? getCharacterAnimationDefinition(
+                state.contentLibrary,
+                idleBindingId
+              )
+            : null;
+          const idleSourceUrl = idleAnimDef
+            ? state.assetSources[idleAnimDef.source.relativeAssetPath] ?? null
+            : null;
+          if (!idleSourceUrl) {
+            return;
+          }
           void gltfLoader
-            .loadAsync(assetSourceUrl)
-            .then((gltf) => {
-              if (!scene) return;
-              // SkeletonUtils.clone for SkinnedMesh-bearing glTFs:
-              // plain Object3D.clone shares the skeleton with the
-              // source gltf, so the rendered character anchors to the
-              // source bones (always at origin) regardless of the
-              // wrapper Group's transform. SkeletonUtils.clone re-binds
-              // the cloned mesh to cloned bones so wrapper-Group
-              // transforms actually move the rendered mesh. Required
-              // for character models post-Plan-038; harmless for
-              // static-mesh assets.
-              const renderable = cloneSkinnedObject(
-                gltf.scene
-              ) as THREE.Object3D;
-              // Defend the runtime render loop the same way the studio
-              // viewport does: a poisoned normalized-float vertex format
-              // (e.g. from a paint-UV bake) crashes createRenderPipeline
-              // and kills the loop. The sanitize belongs at every load
-              // boundary, not just the editor's (068.13 mini-review).
-              sanitizeRenderableVertexFormats(renderable);
-              const validationError = validateRenderableAsset(
-                object,
-                renderable
-              );
-              if (validationError) {
-                console.error("[web-runtime] invalid-asset-payload", {
-                  instanceId: object.instanceId,
-                  assetDefinitionId: object.assetDefinitionId,
-                  assetKind: object.assetKind,
-                  modelSourcePath: object.modelSourcePath,
-                  message: validationError
-                });
-                rootObject.add(getSceneObjectFallback(object));
+            .loadAsync(idleSourceUrl)
+            .then((animGltf) => {
+              const clip = animGltf.animations[0];
+              if (!clip) {
                 return;
               }
-              // Populate matrixWorld for every node BEFORE measuring
-              // the bbox. SkinnedMesh.computeBoundingBox uses bone
-              // matrixWorlds; without this update they're identity and
-              // the bbox is garbage, leading to wildly wrong scale.
-              renderable.updateMatrixWorld(true);
-              if (object.targetModelHeight) {
-                normalizeModelScale(renderable, object.targetModelHeight);
-              }
-              // Disable frustum culling on skinned meshes — bind-pose
-              // bounding sphere goes stale after rescaling + animation,
-              // can pop the model out of view at certain camera angles.
-              renderable.traverse((child) => {
-                if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
-                  child.frustumCulled = false;
-                }
-              });
-              renderView?.enableShadowsOnObject(renderable);
-              // Parent BEFORE building shaders: the asset-surface bake
-              // frames the mesh in WORLD XZ and blades sample it by
-              // world XZ, so the mesh world matrix must include the
-              // instance transform at build time. Building first
-              // (unparented) baked in local space -> black grass
-              // (Plan 068.11, 2026-07-13).
-              rootObject.add(renderable);
-              rootObject.updateMatrixWorld(true);
-              ensureShaderSetAppliedToRenderable(
-                renderable,
-                object,
-                renderView?.shaderRuntime ?? null,
-                shaderApplication,
-                state.assetSources
-              );
-
-              // For NPCs with bound animations, load the idle clip and
-              // attach an AnimationMixer so the runtime frame loop can
-              // drive it. v1: NPCs default to playing idle forever (no
-              // locomotion-driven slot switching like the player).
-              if (object.kind === "npc") {
-                const presence = activeRegionContents?.npcPresences.find(
-                  (p) => p.presenceId === object.instanceId
-                );
-                const npcDefinition = presence
-                  ? state.npcDefinitions.find(
-                      (d) => d.definitionId === presence.npcDefinitionId
-                    )
-                  : null;
-                const idleBindingId =
-                  npcDefinition?.presentation.animationAssetBindings.idle ??
-                  null;
-                const idleAnimDef = idleBindingId
-                  ? getCharacterAnimationDefinition(
-                      state.contentLibrary,
-                      idleBindingId
-                    )
-                  : null;
-                const idleSourceUrl = idleAnimDef
-                  ? (state.assetSources[idleAnimDef.source.relativeAssetPath] ??
-                    null)
-                  : null;
-                if (idleSourceUrl) {
-                  void gltfLoader
-                    .loadAsync(idleSourceUrl)
-                    .then((animGltf) => {
-                      const clip = animGltf.animations[0];
-                      if (!clip) return;
-                      const npcEntry = sceneObjectEntries.get(
-                        object.instanceId
-                      );
-                      if (!npcEntry) return;
-                      const mixer = new THREE.AnimationMixer(renderable);
-                      const action = mixer.clipAction(clip);
-                      action.reset();
-                      action.play();
-                      npcEntry.mixer = mixer;
-                    })
-                    .catch((error) => {
-                      console.error("[web-runtime] npc-animation-load-failed", {
-                        instanceId: object.instanceId,
-                        sourceUrl: idleSourceUrl,
-                        error
-                      });
-                    });
-                }
-              }
+              const mixer = new THREE.AnimationMixer(renderable);
+              const action = mixer.clipAction(clip);
+              action.reset();
+              action.play();
+              (entry.host as HostEntryData).mixer = mixer;
             })
             .catch((error) => {
-              console.error("[web-runtime] asset-load-failed", {
-                instanceId: object.instanceId,
-                assetDefinitionId: object.assetDefinitionId,
-                assetKind: object.assetKind,
-                modelSourcePath: object.modelSourcePath,
+              console.error("[web-runtime] npc-animation-load-failed", {
+                instanceId: entry.object.instanceId,
+                sourceUrl: idleSourceUrl,
                 error
               });
-              rootObject.add(getSceneObjectFallback(object));
             });
-        } else {
-          console.error("[web-runtime] asset-source-missing", {
-            instanceId: object.instanceId,
-            assetDefinitionId: object.assetDefinitionId,
-            assetKind: object.assetKind,
-            modelSourcePath: object.modelSourcePath
-          });
-          rootObject.add(getSceneObjectFallback(object));
         }
-
-        scene.add(rootObject);
-        const entry: SceneObjectEntry = {
-          root: rootObject,
-          object,
-          shaderApplication,
-          mixer: null
-        };
-        sceneObjectEntries.set(object.instanceId, entry);
-      }
+      });
+      renderableReconciler.reconcile(
+        objects.filter(
+          (object) =>
+            object.kind !== "item" ||
+            activeItemPresenceIds.has(object.instanceId)
+        )
+      );
     }
     world = new World();
     uiContextStore = createUIContextStore();
@@ -2658,11 +2608,9 @@ export function createWebRuntimeHost(
           activeSceneIdForSave,
           presenceId
         );
-        const entry = sceneObjectEntries.get(presenceId);
-        if (!entry || !scene) return;
-        scene.remove(entry.root);
-        disposeRenderableObject(entry.root);
-        sceneObjectEntries.delete(presenceId);
+        // Plan 070.2 — the reconciler owns removal + disposal + drops it
+        // from its desired set (a later reconcile won't re-add it).
+        renderableReconciler?.remove(presenceId);
       },
       shouldSkipItemPresence: (presenceId) =>
         worldPresenceTracker.shouldSkip(
@@ -2884,6 +2832,7 @@ export function createWebRuntimeHost(
     ownerWindow.requestAnimationFrame(() => {
       handleResize();
       lastTime = ownerWindow.performance.now();
+      publishSmperfStats({ lastBootMs: Number((lastTime - bootStart).toFixed(1)) });
       animationId = ownerWindow.requestAnimationFrame(renderFrame);
     });
   }

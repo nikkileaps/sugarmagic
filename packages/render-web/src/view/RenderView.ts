@@ -140,7 +140,13 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     // makes this pre-pass call the one that wins. Gated on
     // renderPipeline: before backend init completes, compute() eats
     // the pipeline's one-shot candidate build into the void.
-    if (renderer && renderPipeline) {
+    // Plan 070.1 — dev-only A/B: skip the scatter compute dispatch so the
+    // frame probe can attribute grass-compute cost. Off by default; set
+    // `window.__smperfNoScatter = true` in a preview to disable.
+    const skipScatterCompute =
+      (globalThis as { __smperfNoScatter?: boolean }).__smperfNoScatter ===
+      true;
+    if (renderer && renderPipeline && !skipScatterCompute) {
       scene.traverse((object) => {
         const prepare = (
           object.userData as {

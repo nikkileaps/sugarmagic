@@ -1405,6 +1405,24 @@ function applyIRToPostProcess(
   return nextOutputNode;
 }
 
+/**
+ * Snapshot of the material cache (Plan 070.8). The cache is otherwise private;
+ * this is the introspection seam a render-stats HUD or a headless budget alarm
+ * reads. `live` materials are the ones actually bound to renderables right now
+ * (refCount > 0, not retired) — the number that matters for a draw/material
+ * budget; `retired` are awaiting their disposal timer.
+ */
+export interface MaterialCacheStats {
+  /** Total cached entries (live + retired-but-not-yet-disposed). */
+  total: number;
+  live: number;
+  retired: number;
+  /** Sum of refCounts across live entries — how many renderables hold them. */
+  totalRefs: number;
+  /** Live material count per shaderDefinitionId. */
+  liveByShaderDefinition: Record<string, number>;
+}
+
 export class ShaderRuntime {
   /**
    * The landscape's baked ground-color map (stable texture identity;
@@ -2154,6 +2172,37 @@ export class ShaderRuntime {
 
   getShaderDiagnostics(shaderDefinitionId: string): ShaderIRDiagnostic[] {
     return [...(this.diagnostics.get(shaderDefinitionId) ?? [])];
+  }
+
+  /**
+   * Material-cache snapshot (Plan 070.8). Reads the private cache for a
+   * render-stats HUD or the headless material-budget alarm — the epic's whole
+   * point was folding same-surface renderables onto ONE shared material, and
+   * this is how a regression (surfaces that stop sharing → material count
+   * balloons) becomes measurable without a GPU.
+   */
+  getMaterialStats(): MaterialCacheStats {
+    let live = 0;
+    let retired = 0;
+    let totalRefs = 0;
+    const liveByShaderDefinition: Record<string, number> = {};
+    for (const entry of this.materialEntries) {
+      if (entry.retired) {
+        retired += 1;
+        continue;
+      }
+      live += 1;
+      totalRefs += entry.refCount;
+      liveByShaderDefinition[entry.shaderDefinitionId] =
+        (liveByShaderDefinition[entry.shaderDefinitionId] ?? 0) + 1;
+    }
+    return {
+      total: this.materialEntries.size,
+      live,
+      retired,
+      totalRefs,
+      liveByShaderDefinition
+    };
   }
 
   dispose(): void {

@@ -25,7 +25,7 @@ const PORT = Number(args.port ?? 9222);
 const log = (...m) => console.log("[inv]", ...m);
 
 async function main() {
-  const browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const pages = browser.contexts().flatMap((c) => c.pages());
   const preview =
     pages.find((p) => p.url().includes("preview.html")) ??
