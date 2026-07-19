@@ -769,15 +769,14 @@ export function createAuthoringViewport(
     },
 
     reloadAssetRenderables(assetDefinitionId) {
-      // Dropping the entries is enough: the next applyProjection pass
-      // (any store tick -- the caller's assetSources refresh provides
-      // one) finds no entry, re-schedules with the fresh source. Same
-      // convergence path as first load.
-      for (const entry of [...renderableReconciler.entries()]) {
-        if (entry.object.assetDefinitionId === assetDefinitionId) {
-          renderableReconciler.remove(entry.object.instanceId);
-        }
-      }
+      // Dropping the renderables is enough: the next applyProjection pass
+      // (any store tick -- the caller's assetSources refresh provides one)
+      // finds them gone and re-schedules with the fresh source. Same
+      // convergence path as first load. Uses reloadAsset (not a remove() loop)
+      // because brushed/scatter assets are instanced GROUPS since 070.6, and
+      // remove() only reaches singletons -- so a group would keep showing the
+      // pre-bake geometry (070.8 review).
+      renderableReconciler.reloadAsset(assetDefinitionId);
     },
 
     assetHasPaintUvs(assetDefinitionId) {

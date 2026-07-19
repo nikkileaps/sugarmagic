@@ -1620,7 +1620,11 @@ export function createWebRuntimeHost(
     // Plan 070.1 — apply dev-only A/B toggles (idempotent per frame). Shadows
     // via the WebGPU global shadow switch, landscape via its root visibility,
     // grass compute via the flag RenderView reads in its pre-pass traverse.
-    if (perfOn && renderView.renderer) {
+    // These run UNCONDITIONALLY (not gated on perfOn): when perf is off
+    // readSmperf reports every flag false, so this RESTORES the baseline
+    // (shadows on, landscape visible) after a matrix run ends -- gating on
+    // perfOn left shadowMap.enabled stuck off until a reboot (070.8 review).
+    if (renderView.renderer) {
       renderView.renderer.shadowMap.enabled = !smperf.noShadows;
     }
     renderView.landscapeController.root.visible = !smperf.noLandscape;

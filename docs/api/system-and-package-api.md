@@ -281,18 +281,16 @@ adopts only if that instanceId is still desired with the same
   `packages/testing/src/render-budget.test.ts` asserts a fixture
   meadow stays under a draw-unit budget with no GPU (Plan 070.8).
 
-### Scatter groups (derived) + folder visibility
+### Folder visibility (Scene Explorer eye)
 
-`resolveScatterGroups(region)` (`@sugarmagic/domain`) DERIVES scatter
-groups from brushed placements by folder identity (folderless brushed
-instances fall back to a synthetic per-asset bucket) -- no persisted
-entity, no migration (Plan 070.3). Its live consumer is the Scene
-Explorer per-folder visibility eye: `resolveHiddenAssetInstanceIds`
+The Scene Explorer's per-folder visibility eye (Plan 070.3) is derived,
+never persisted. `resolveHiddenAssetInstanceIds` (`@sugarmagic/domain`)
 takes the COMPOSED contents (base + active-Scene overlay, via
-`composeRegionContents` -- NOT base `region.placedAssets`, or
-scene-scoped items never hide) and the authoring viewport drops hidden
-assets from the reconcile input. Ephemeral (`viewport.hiddenFolderIds`),
-never persisted.
+`composeRegionContents` -- NOT base `region.placedAssets`, or scene-scoped
+items never hide) plus the hidden folderIds, expands the folder subtree,
+and returns the placed-asset instanceIds under it; the authoring viewport
+drops those from the reconcile input so they leave the scene. Ephemeral
+(`viewport.hiddenFolderIds`), never persisted.
 
 ### Asset-transform pipeline
 

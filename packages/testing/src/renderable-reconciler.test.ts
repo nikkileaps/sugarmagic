@@ -246,4 +246,71 @@ describe("070.2 — renderable reconciler (grouping gate)", () => {
     expect(reconciler.get("npc")?.instanced).toBe(false);
     expect([...reconciler.entries()].filter((e) => e.instanced).length).toBe(1);
   });
+
+  it("070.8: reloadAsset disposes an instanced GROUP (not just singletons), then it rebuilds", async () => {
+    const { reconciler, loadCount } = makeReconciler({
+      grouping: true,
+      isInstanceable: () => true
+    });
+    reconciler.reconcile([obj("g0"), obj("g1")]); // rep:x -> one group
+    await flush();
+    const groupsNow = () =>
+      [...reconciler.entries()].filter((e) => e.instanced).length;
+    expect(groupsNow()).toBe(1);
+    expect(loadCount()).toBe(1);
+    // remove() only reaches singletons; reloadAsset must drop the group too.
+    reconciler.reloadAsset("asset:x");
+    expect(groupsNow()).toBe(0);
+    // next reconcile rebuilds from the (fresh) source
+    reconciler.reconcile([obj("g0"), obj("g1")]);
+    await flush();
+    expect(groupsNow()).toBe(1);
+    expect(loadCount()).toBe(2);
+  });
+
+  it("070.8: a membership change DURING a group's load commits the LATEST members (no stale batch)", async () => {
+    const releases: Array<(v: THREE.Object3D) => void> = [];
+    const parent = new THREE.Group();
+    const reconciler = createRenderableReconciler({
+      parent,
+      resolveUrl: () => "blob:x",
+      loadModel: () => new Promise<THREE.Object3D>((r) => releases.push(r)),
+      createFallback: () =>
+        new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+      shaderRuntime: null,
+      getFileSources: () => ({}),
+      grouping: true,
+      isInstanceable: () => true
+    });
+    reconciler.reconcile([obj("g0"), obj("g1")]); // schedules ONE load (2 members)
+    reconciler.reconcile([obj("g0"), obj("g1"), obj("g2")]); // +g2 while loading
+    expect(releases.length).toBe(1); // deduped -- no second load scheduled
+    releases[0]!(fakeGltfScene());
+    await flush();
+    const group = [...reconciler.entries()].find((e) => e.instanced)!;
+    // Built from the LATEST membership, not the stale [g0,g1] captured at schedule.
+    expect(group.instanceOrder).toEqual(["g0", "g1", "g2"]);
+  });
+
+  it("070.2: a representation swap mid-load reschedules and ends on the NEW rep", async () => {
+    const releases: Array<(v: THREE.Object3D) => void> = [];
+    const parent = new THREE.Group();
+    const reconciler = createRenderableReconciler({
+      parent,
+      resolveUrl: () => "blob:x",
+      loadModel: () => new Promise<THREE.Object3D>((r) => releases.push(r)),
+      createFallback: () =>
+        new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+      shaderRuntime: null,
+      getFileSources: () => ({}),
+      grouping: false
+    });
+    reconciler.reconcile([obj("a", { representationKey: "rep:1" })]); // load L1
+    reconciler.reconcile([obj("a", { representationKey: "rep:2" })]); // swap while L1 in flight
+    releases[0]!(fakeGltfScene()); // L1 resolves -> stale rep:1 discarded, reschedules L2
+    await flush();
+    releases[1]!(fakeGltfScene()); // L2 (rep:2) resolves
+    await flush();
+    expect(reconciler.get("a")?.representationKey).toBe("rep:2");
+  });
 });

@@ -139,6 +139,14 @@ export interface RenderableReconciler {
    * drop it from the desired set get permanent removal.
    */
   remove(instanceId: string): void;
+  /**
+   * Drop every renderable of one asset -- singletons AND instanced groups --
+   * so the next reconcile rebuilds them from the (freshly re-imported / baked)
+   * source. `remove()` only reaches singletons; a brushed/scatter asset is a
+   * group, so a reload path must dispose those too or it silently shows stale
+   * geometry after a paint-UV bake / origin correction (070.8 review).
+   */
+  reloadAsset(assetDefinitionId: string): void;
   /** All live entries (singletons + instanced groups). */
   entries(): IterableIterator<ReconciledEntry>;
   /** Draw/chunk counts for the render-stats HUD + budget alarm (070.8). */
@@ -193,6 +201,12 @@ export function createRenderableReconciler(
   const groups = new Map<string, ReconciledEntry>();
   // instanceIds with an async load in flight.
   const pending = new Set<string>();
+  // groupKeys with an async group build in flight (dedup, like `pending`).
+  const pendingGroups = new Set<string>();
+  // groupKey -> the LATEST desired members. A group build reads this on
+  // completion (not the members captured at schedule time), so a membership
+  // change during the load commits the up-to-date batch, not a stale one.
+  const desiredGroupMembers = new Map<string, SceneObject[]>();
   // What the latest reconcile wants on screen, by instanceId — async loads
   // consult this on completion (not a bare generation counter, so a re-add
   // of the same id during a load still adopts).
@@ -381,6 +395,12 @@ export function createRenderableReconciler(
 
   /** Full (re)build of instanced groups from the desired instanceable set. */
   function reconcileGroups(instanceable: Map<string, SceneObject[]>): void {
+    // Publish the latest desired membership so in-flight builds (below) commit
+    // the up-to-date batch even if members were added/removed while loading.
+    desiredGroupMembers.clear();
+    for (const [rk, members] of instanceable) {
+      desiredGroupMembers.set(`${GROUP_KEY_PREFIX}${rk}`, members);
+    }
     // Drop groups whose membership changed or vanished.
     const desiredKeys = new Set(
       [...instanceable.keys()].map((k) => `${GROUP_KEY_PREFIX}${k}`)
@@ -416,6 +436,12 @@ export function createRenderableReconciler(
       if (existing) {
         disposeGroupEntry(groupKey);
       }
+      // A build is already in flight for this key — don't schedule a second.
+      // Its completion reads `desiredGroupMembers`, so it picks up whatever the
+      // membership became (this reconcile's `members` included).
+      if (pendingGroups.has(groupKey)) {
+        continue;
+      }
       const representative = members[0]!;
       const url = config.resolveUrl(representative);
       if (!url) {
@@ -423,15 +449,24 @@ export function createRenderableReconciler(
       }
       const loadGeneration = generation;
       const groupParent = config.parent;
+      pendingGroups.add(groupKey);
       void config
         .loadModel(url)
         .then((gltfScene) => {
-          if (generation !== loadGeneration) {
+          pendingGroups.delete(groupKey);
+          if (generation !== loadGeneration || groups.has(groupKey)) {
+            return;
+          }
+          // Build from the LATEST desired membership, not the (possibly stale)
+          // set captured when this load was scheduled. If the group is no
+          // longer desired (or fell below the instancing threshold), drop it.
+          const latestMembers = desiredGroupMembers.get(groupKey);
+          if (!latestMembers || latestMembers.length < 2) {
             return;
           }
           const built: InstancedAssetGroupResult | null =
             buildInstancedAssetGroup({
-              group: members,
+              group: latestMembers,
               sourceScene: gltfScene,
               shaderRuntime: config.shaderRuntime,
               assetSources: config.getFileSources(),
@@ -440,7 +475,7 @@ export function createRenderableReconciler(
           if (!built) {
             config.logger?.warn("reconciler-instanced-skipped", {
               representationKey,
-              count: members.length
+              count: latestMembers.length
             });
             return;
           }
@@ -461,12 +496,13 @@ export function createRenderableReconciler(
             disposeGroup: () => built.dispose(),
             updateInstance: (index, transform) =>
               built.updateInstance(index, transform),
-            memberTransforms: members.map((m) => m.transform)
+            memberTransforms: latestMembers.map((m) => m.transform)
           };
           groups.set(groupKey, entry);
           config.onEntryLoaded?.(entry, built.root);
         })
         .catch((error) => {
+          pendingGroups.delete(groupKey);
           config.logger?.warn("reconciler-instanced-load-failed", {
             representationKey,
             error
@@ -560,6 +596,20 @@ export function createRenderableReconciler(
       desired.delete(instanceId);
       removeSingleton(instanceId);
     },
+    reloadAsset: (assetDefinitionId) => {
+      for (const id of [...entries.keys()]) {
+        if (entries.get(id)?.object.assetDefinitionId === assetDefinitionId) {
+          removeSingleton(id);
+        }
+      }
+      for (const key of [...groups.keys()]) {
+        if (groups.get(key)?.object.assetDefinitionId === assetDefinitionId) {
+          disposeGroupEntry(key);
+        }
+      }
+      // Next reconcile() re-adds the singletons and rebuilds the groups from
+      // the current source (same convergence path as first load).
+    },
     entries: function* () {
       yield* entries.values();
       yield* groups.values();
@@ -580,6 +630,8 @@ export function createRenderableReconciler(
       generation += 1;
       desired.clear();
       pending.clear();
+      pendingGroups.clear();
+      desiredGroupMembers.clear();
       for (const id of [...entries.keys()]) {
         removeSingleton(id);
       }
