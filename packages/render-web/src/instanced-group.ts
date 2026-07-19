@@ -41,7 +41,31 @@ export interface InstancedAssetGroupResult {
    *  map a raycast `intersect.instanceId` back to a PlacedAssetInstance
    *  (Plan 068.13b). */
   instanceOrder: string[];
+  /** Plan 070.6 — patch ONE member's transform in place (all submeshes'
+   *  InstancedMesh matrices at `index`), no group rebuild. Used when a
+   *  grouped plant is moved/edited. */
+  updateInstance(index: number, transform: SceneObject["transform"]): void;
   dispose(): void;
+}
+
+function composeInstanceWorld(
+  transform: SceneObject["transform"]
+): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(
+      transform.position[0],
+      transform.position[1],
+      transform.position[2]
+    ),
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(
+        transform.rotation[0],
+        transform.rotation[1],
+        transform.rotation[2]
+      )
+    ),
+    new THREE.Vector3(transform.scale[0], transform.scale[1], transform.scale[2])
+  );
 }
 
 export function buildInstancedAssetGroup(options: {
@@ -90,36 +114,21 @@ export function buildInstancedAssetGroup(options: {
   template.updateMatrixWorld(true);
 
   const instanceWorld = group.map((member) =>
-    new THREE.Matrix4().compose(
-      new THREE.Vector3(
-        member.transform.position[0],
-        member.transform.position[1],
-        member.transform.position[2]
-      ),
-      new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          member.transform.rotation[0],
-          member.transform.rotation[1],
-          member.transform.rotation[2]
-        )
-      ),
-      new THREE.Vector3(
-        member.transform.scale[0],
-        member.transform.scale[1],
-        member.transform.scale[2]
-      )
-    )
+    composeInstanceWorld(member.transform)
   );
 
   const root = new THREE.Group();
   root.name = `instanced-asset:${representative.representationKey}`;
-  const instancedMeshes: THREE.InstancedMesh[] = [];
+  // Each InstancedMesh + its submesh-local matrix, so a single instance can
+  // be re-composed later (updateInstance) without a rebuild.
+  const built: Array<{ instanced: THREE.InstancedMesh; submeshMatrix: THREE.Matrix4 }> = [];
   const composed = new THREE.Matrix4();
   template.traverse((child) => {
     if (!(child as THREE.Mesh).isMesh) {
       return;
     }
     const submesh = child as THREE.Mesh;
+    const submeshMatrix = submesh.matrixWorld.clone();
     const instanced = new THREE.InstancedMesh(
       submesh.geometry,
       submesh.material,
@@ -127,12 +136,12 @@ export function buildInstancedAssetGroup(options: {
     );
     instanced.name = submesh.name || "mesh";
     for (let i = 0; i < instanceWorld.length; i += 1) {
-      composed.multiplyMatrices(instanceWorld[i]!, submesh.matrixWorld);
+      composed.multiplyMatrices(instanceWorld[i]!, submeshMatrix);
       instanced.setMatrixAt(i, composed);
     }
     instanced.instanceMatrix.needsUpdate = true;
     root.add(instanced);
-    instancedMeshes.push(instanced);
+    built.push({ instanced, submeshMatrix });
   });
 
   root.updateMatrixWorld(true);
@@ -151,13 +160,25 @@ export function buildInstancedAssetGroup(options: {
     assetSources
   );
 
+  const patchMatrix = new THREE.Matrix4();
   return {
     root,
     representative,
     shaderApplication,
     instanceOrder: group.map((member) => member.instanceId),
+    updateInstance(index, transform) {
+      const iw = composeInstanceWorld(transform);
+      for (const { instanced, submeshMatrix } of built) {
+        patchMatrix.multiplyMatrices(iw, submeshMatrix);
+        instanced.setMatrixAt(index, patchMatrix);
+        instanced.instanceMatrix.needsUpdate = true;
+        // The batch's bounding sphere widened if the instance moved out; a
+        // fresh compute keeps frustum culling honest.
+        instanced.computeBoundingSphere();
+      }
+    },
     dispose() {
-      for (const instanced of instancedMeshes) {
+      for (const { instanced } of built) {
         instanced.geometry.dispose();
         instanced.dispose();
       }

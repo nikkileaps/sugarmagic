@@ -65,6 +65,11 @@ export interface ReconciledEntry {
   instanceOrder?: readonly string[];
   /** Set for instanced entries: disposes the InstancedMesh build. */
   disposeGroup?: () => void;
+  /** Set for instanced entries: patch one member's matrix in place (070.6). */
+  updateInstance?: (index: number, transform: SceneObject["transform"]) => void;
+  /** Set for instanced entries: last-applied member transforms (to detect
+   *  which members moved between reconciles). */
+  memberTransforms?: SceneObject["transform"][];
 }
 
 export interface RenderableReconcilerConfig {
@@ -145,6 +150,23 @@ function applyTransform(root: THREE.Object3D, object: SceneObject): void {
 }
 
 const GROUP_KEY_PREFIX = "instanced:";
+
+function transformsEqual(
+  a: SceneObject["transform"] | undefined,
+  b: SceneObject["transform"]
+): boolean {
+  if (!a) return false;
+  for (let i = 0; i < 3; i += 1) {
+    if (
+      a.position[i] !== b.position[i] ||
+      a.rotation[i] !== b.rotation[i] ||
+      a.scale[i] !== b.scale[i]
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function createRenderableReconciler(
   config: RenderableReconcilerConfig
@@ -361,6 +383,18 @@ export function createRenderableReconciler(
         existing.instanceOrder.length === members.length &&
         members.every((m, i) => existing.instanceOrder![i] === m.instanceId);
       if (sameMembers) {
+        // Membership unchanged — patch in place any member whose transform
+        // moved (070.6), instead of rebuilding the whole InstancedMesh.
+        if (existing!.updateInstance && existing!.memberTransforms) {
+          for (let i = 0; i < members.length; i += 1) {
+            const next = members[i]!.transform;
+            if (!transformsEqual(existing!.memberTransforms[i], next)) {
+              existing!.updateInstance(i, next);
+              existing!.memberTransforms[i] = next;
+              existing!.object = members[i]!;
+            }
+          }
+        }
         continue;
       }
       if (existing) {
@@ -408,7 +442,10 @@ export function createRenderableReconciler(
             instanced: true,
             host: {},
             instanceOrder: built.instanceOrder,
-            disposeGroup: () => built.dispose()
+            disposeGroup: () => built.dispose(),
+            updateInstance: (index, transform) =>
+              built.updateInstance(index, transform),
+            memberTransforms: members.map((m) => m.transform)
           };
           groups.set(groupKey, entry);
           config.onEntryLoaded?.(entry, built.root);

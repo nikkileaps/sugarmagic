@@ -193,6 +193,45 @@ describe("070.2 — renderable reconciler (grouping gate)", () => {
     expect(reconciler.get("solo")?.instanced).toBe(false);
   });
 
+  it("grouping ON: moving a member patches its instance matrix in place (no rebuild)", async () => {
+    let builds = 0;
+    const parent = new THREE.Group();
+    const reconciler = createRenderableReconciler({
+      parent,
+      resolveUrl: () => "blob:x",
+      loadModel: async () => {
+        builds += 1;
+        const g = new THREE.Group();
+        g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()));
+        return g;
+      },
+      createFallback: () => new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()),
+      shaderRuntime: null,
+      getFileSources: () => ({}),
+      grouping: true,
+      isInstanceable: () => true
+    });
+    reconciler.reconcile([obj("g0"), obj("g1")]);
+    await flush();
+    expect(builds).toBe(1);
+    const group = [...reconciler.entries()].find((e) => e.instanced)!;
+    const im = group.root.children[0] as unknown as {
+      getMatrixAt: (i: number, m: THREE.Matrix4) => void;
+    };
+    // Move g1.
+    reconciler.reconcile([
+      obj("g0"),
+      obj("g1", { transform: { position: [7, 0, 4], rotation: [0, 0, 0], scale: [1, 1, 1] } })
+    ]);
+    await flush();
+    expect(builds).toBe(1); // patched, NOT rebuilt
+    const m = new THREE.Matrix4();
+    im.getMatrixAt(1, m);
+    const p = new THREE.Vector3().setFromMatrixPosition(m);
+    expect(p.x).toBeCloseTo(7, 5);
+    expect(p.z).toBeCloseTo(4, 5);
+  });
+
   it("grouping ON: non-instanceable objects stay singletons alongside a group", async () => {
     const { reconciler } = makeReconciler({
       grouping: true,
