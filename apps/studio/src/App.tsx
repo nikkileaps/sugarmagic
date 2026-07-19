@@ -822,6 +822,9 @@ export function App() {
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
+  // Plan 070.7 — flips false->true once when a project loads; used as the only
+  // session-derived trigger for the preview boot so edits don't re-fire it.
+  const hasSession = session != null;
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
   const isRender = activeProductMode === "render";
@@ -1031,59 +1034,54 @@ export function App() {
     });
   }, []);
 
+  // Plan 070.7 — the Preview boots ONCE, when you launch it, and does NOT
+  // auto-reboot on Studio churn. This effect used to re-post PREVIEW_BOOT on
+  // every selection change, workspace-tab switch, and session edit; because
+  // `host.start()` is not idempotent (preview.tsx tears the runtime down and
+  // back up) AND the fresh-start flag is consumed on the first boot, any
+  // re-post dumped a running game back onto the Start menu (the classic
+  // "hit New Game, get in, bounced back to New Game"). The earlier
+  // `assetSources` fix was the same class of bug; this generalizes it.
+  //
+  // The Preview is "play the game" — an isolated boot like Unreal PIE. The
+  // Layout/Spatial viewports are where edits show live; re-launch the Preview
+  // to pick up edits. So every boot-payload value is read IMPERATIVELY here,
+  // and the only triggers are the preview opening and a project loading.
   useEffect(() => {
-    if (
-      !isPreviewRunning ||
-      !previewWindow ||
-      previewWindow.closed ||
-      !session
-    ) {
+    if (!isPreviewRunning || !previewWindow || previewWindow.closed) {
       return;
     }
-
+    const { session: currentSession } = projectStore.getState();
+    if (!currentSession) {
+      return;
+    }
+    const shell = shellStore.getState();
     const snapshot: AuthoringContextSnapshot = {
-      activeProductMode,
-      activeBuildWorkspaceKind: activeBuildKind,
-      activeDesignWorkspaceKind: activeDesignKind,
-      activeRenderWorkspaceKind: activeRenderKind,
-      activePublishWorkspaceKind: activePublishKind,
-      activeRegionId,
-      activeEnvironmentId,
-      activeWorkspaceId,
-      selectedEntityIds: selectedIds
+      activeProductMode: shell.activeProductMode,
+      activeBuildWorkspaceKind: shell.activeBuildWorkspaceKind,
+      activeDesignWorkspaceKind: shell.activeDesignWorkspaceKind,
+      activeRenderWorkspaceKind: shell.activeRenderWorkspaceKind,
+      activePublishWorkspaceKind: shell.activePublishWorkspaceKind,
+      activeRegionId: shell.activeRegionId,
+      activeEnvironmentId: shell.activeEnvironmentId,
+      activeWorkspaceId: shell.activeWorkspaceId,
+      selectedEntityIds: shell.selection.entityIds
     };
-
-    // Read the latest asset sources imperatively rather than triggering
-    // on them. The asset-source store settles its async disk read ~1-2s
-    // after a preview boots, churning `sources` to a NEW reference (fresh
-    // blob URLs, same files). With `assetSources` in the dep array that
-    // spurious change re-posted PREVIEW_BOOT, and since host.start() is
-    // not idempotent (preview.tsx re-invokes it, tearing the runtime
-    // down and back up) the running game hard-restarted -- landing on the
-    // Start menu because the fresh-start flag was already consumed. Only
-    // genuine authoring context / session changes should re-boot a live
-    // preview; a background source refresh must not.
+    const currentInstalledPluginIds =
+      currentSession.gameProject.pluginConfigurations.map(
+        (configuration) => configuration.pluginId
+      );
     void postPreviewBootMessage(
       previewWindow,
-      session,
+      currentSession,
       snapshot,
       assetSourceStore.getState().sources,
-      installedPluginIds
+      currentInstalledPluginIds
     );
-  }, [
-    activeBuildKind,
-    activeDesignKind,
-    activeEnvironmentId,
-    activeProductMode,
-    activeRegionId,
-    activeRenderKind,
-    activeWorkspaceId,
-    installedPluginIds,
-    isPreviewRunning,
-    previewWindow,
-    selectedIds,
-    session
-  ]);
+    // Triggers ONLY: the preview opening, and a project first loading
+    // (`hasSession` flips false->true once). Selection, tab switches, and
+    // content edits deliberately do NOT reboot a running preview.
+  }, [isPreviewRunning, previewWindow, hasSession]);
 
   const discoveredPlugins = useMemo(
     () => listDiscoveredPluginDefinitions(),
