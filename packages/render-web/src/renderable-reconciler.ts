@@ -113,6 +113,20 @@ export interface RenderableReconcilerConfig {
   logger?: { warn: (message: string, payload?: unknown) => void };
 }
 
+/**
+ * Render-budget counts (Plan 070.8). `drawUnits` (singleton renderables +
+ * instanced group roots) is the number that stays flat as `instances` grows —
+ * that flatness IS the batching win, and the headless budget alarm asserts it.
+ */
+export interface RenderableStats {
+  singletons: number;
+  groups: number;
+  /** Total placed members represented (singletons + all grouped members). */
+  instances: number;
+  /** Draw roots = singletons + groups; the budgeted number. */
+  drawUnits: number;
+}
+
 export interface RenderableReconciler {
   /** Diff `desired` against the live set and apply add/update/remove. */
   reconcile(desired: SceneObject[]): void;
@@ -127,6 +141,8 @@ export interface RenderableReconciler {
   remove(instanceId: string): void;
   /** All live entries (singletons + instanced groups). */
   entries(): IterableIterator<ReconciledEntry>;
+  /** Draw/chunk counts for the render-stats HUD + budget alarm (070.8). */
+  stats(): RenderableStats;
   /** Remove + dispose everything. */
   dispose(): void;
 }
@@ -547,6 +563,18 @@ export function createRenderableReconciler(
     entries: function* () {
       yield* entries.values();
       yield* groups.values();
+    },
+    stats: () => {
+      let instances = entries.size;
+      for (const group of groups.values()) {
+        instances += group.instanceOrder?.length ?? 0;
+      }
+      return {
+        singletons: entries.size,
+        groups: groups.size,
+        instances,
+        drawUnits: entries.size + groups.size
+      };
     },
     dispose: () => {
       generation += 1;

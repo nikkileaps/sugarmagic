@@ -248,29 +248,51 @@ It is also the owner of preview orchestration:
 
 It should use the shared `targets/web` host path for the actual running preview.
 
-### Authoring viewport renderable lifecycle
+### Renderable-lifecycle reconciler (shared)
 
-The authoring viewport (`apps/studio/src/viewport/authoringViewport.ts`)
-loads renderables (glTF) asynchronously off projection updates. Two
-invariants keep that safe:
+Both hosts render placed assets through ONE reconciler
+(`packages/render-web/src/renderable-reconciler.ts`, Plan 070.2): the
+studio authoring viewport and the game runtime host each call
+`createRenderableReconciler(config)` and drive it with
+`reconcile(desiredObjects)`. It diffs the desired `SceneObject[]`
+against its live set and applies add / update-in-place / remove; host
+differences are injected as config (model loader, url resolver,
+fallback meshes, shader runtime, grouping gate, per-entry hooks) rather
+than forked code paths. Async-load safety lives here: a finished load
+adopts only if that instanceId is still desired with the same
+`representationKey`, and a monotonic generation (bumped on
+`dispose()`) discards loads that resolve after teardown.
 
-- **Completion checks the desired OBJECT, not a churn counter.** A
-  finished load asks "is this instanceId still in the latest
-  projection, with the representation I loaded?" against a
-  desired-objects map (pure logic in
-  `apps/studio/src/viewport/renderable-lifecycle.ts`, tested in
-  `packages/testing/src/renderable-completion.test.ts`): adopt when
-  both match (applying the object's LATEST transform), re-schedule
-  when the representation changed mid-flight (the pending-load guard
-  deduped that re-schedule away, so completion must trigger it), and
-  discard otherwise. It must not be gated on a per-update generation
-  number: projection emits happen on any store tick, so a generation
-  bump per update silently discarded every in-flight load during
-  first scene load and nothing appeared until the next projection
-  change re-scheduled them.
-- **The render generation only advances on teardown** (unmount,
-  region cleared) -- the moments when every in-flight load must be
-  discarded and disposed.
+- **Instancing.** With `grouping: true` (the game host, and the studio
+  viewport since 070.6), >= 2 instanceable objects sharing a
+  `representationKey` collapse into one `THREE.InstancedMesh` group
+  (`instanced-group.ts`) instead of N renderables. Members stay
+  individually pickable (`instanceOrder[index]` -> instanceId) and
+  editable in place (`updateInstance(index, transform)` patches one
+  matrix, no rebuild). A lone instanceable object stays a singleton.
+- **Grouping key is asset + surface, not folder.** `representationKey`
+  (`runtime-core/src/scene/index.ts`) folds
+  `effectiveMaterialSlots`, so same-surface placements share ONE
+  material (the epic's draw/material win) regardless of scene folder.
+  Scatter GROUPS (below) are a separate, authoring-only axis.
+- **Render budget.** `reconciler.stats()` returns
+  `{ singletons, groups, instances, drawUnits }` and
+  `ShaderRuntime.getMaterialStats()` exposes the material cache;
+  `packages/testing/src/render-budget.test.ts` asserts a fixture
+  meadow stays under a draw-unit budget with no GPU (Plan 070.8).
+
+### Scatter groups (derived) + folder visibility
+
+`resolveScatterGroups(region)` (`@sugarmagic/domain`) DERIVES scatter
+groups from brushed placements by folder identity (folderless brushed
+instances fall back to a synthetic per-asset bucket) -- no persisted
+entity, no migration (Plan 070.3). Its live consumer is the Scene
+Explorer per-folder visibility eye: `resolveHiddenAssetInstanceIds`
+takes the COMPOSED contents (base + active-Scene overlay, via
+`composeRegionContents` -- NOT base `region.placedAssets`, or
+scene-scoped items never hide) and the authoring viewport drops hidden
+assets from the reconcile input. Ephemeral (`viewport.hiddenFolderIds`),
+never persisted.
 
 ### Asset-transform pipeline
 
