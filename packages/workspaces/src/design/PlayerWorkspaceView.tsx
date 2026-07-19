@@ -100,6 +100,7 @@ export function usePlayerWorkspaceView(
     riggedBytes: ArrayBuffer;
     boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null>(null);
+  const [wizardInitialSourceBytes, setWizardInitialSourceBytes] = useState<ArrayBuffer | null>(null);
 
   // §062.9 — the rig button EDITS a wizard-generated model
   // (recipe reopens; bindings untouched) and CREATES otherwise.
@@ -134,6 +135,15 @@ export function usePlayerWorkspaceView(
         });
         setWizardOpen(true);
         return;
+      }
+    }
+    // Non-wizard model: pre-seed the source bytes so the user doesn't
+    // have to re-pick a GLB they already set via the Model field.
+    if (model?.source?.relativeAssetPath) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const bytes = await (await fetch(url)).arrayBuffer();
+        setWizardInitialSourceBytes(bytes);
       }
     }
     setWizardEditSession(null);
@@ -315,9 +325,11 @@ export function usePlayerWorkspaceView(
           defaultCharacterName={playerDefinition?.displayName ?? "Player"}
           services={characterWizardServices}
           editSession={wizardEditSession}
+          initialSourceBytes={wizardInitialSourceBytes}
           onClose={() => {
             setWizardOpen(false);
             setWizardEditSession(null);
+            setWizardInitialSourceBytes(null);
           }}
           onCommitted={(result) => {
             // Bind the generated model + all three slots in one

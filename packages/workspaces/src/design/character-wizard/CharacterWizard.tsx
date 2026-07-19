@@ -182,6 +182,11 @@ export interface CharacterWizardProps {
   opened: boolean;
   defaultCharacterName: string;
   services: CharacterWizardServices;
+  /** Pre-seeded GLB bytes from the player's existing Model field.
+   *  When set (and editSession is absent), the wizard auto-analyses
+   *  the model on open so the user lands with "Pick a different GLB..."
+   *  already satisfied and can proceed straight to joints. */
+  initialSourceBytes?: ArrayBuffer | null;
   /** Plan 062 §062.9 — when set, the wizard reopens an existing
    *  wizard-generated character: markers + painted weights load
    *  from the stamped recipe, the name is locked, and Finish
@@ -238,6 +243,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
     defaultCharacterName,
     services,
     editSession,
+    initialSourceBytes,
     onCommitted,
     onClose
   } = props;
@@ -344,6 +350,29 @@ export function CharacterWizard(props: CharacterWizardProps) {
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, editSession]);
+
+  // Pre-seed from an existing model set via the Model field so the
+  // user lands with the GLB already analysed and can skip straight to
+  // Next without having to re-pick a file they already uploaded.
+  useEffect(() => {
+    if (!opened || editSession || !initialSourceBytes) return;
+    setBusy(true);
+    setBusyLabel("Analyzing model...");
+    void services
+      .analyzeModel(initialSourceBytes)
+      .then((analysis) => {
+        setSourceBytes(initialSourceBytes);
+        setSourceUrl(trackBlobUrl(initialSourceBytes));
+        setLandmarks(analysis.landmarks);
+      })
+      .catch((analyzeError) => {
+        setError(
+          analyzeError instanceof Error ? analyzeError.message : String(analyzeError)
+        );
+      })
+      .finally(() => setBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened, editSession, initialSourceBytes]);
 
   async function handleFilePicked(file: File) {
     setError(null);
