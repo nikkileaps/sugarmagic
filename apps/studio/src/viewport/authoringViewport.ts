@@ -18,6 +18,7 @@ import {
   type AuthoringSession,
   getActiveRegion,
   getMaskTextureDefinition,
+  resolveHiddenAssetInstanceIds,
   resolveRegionVolumes,
   type MaskTextureDefinition,
   type RegionDocument,
@@ -543,6 +544,37 @@ export function createAuthoringViewport(
     // add / update-in-place / remove (grouping OFF, so every object is a
     // singleton exactly as before).
     renderableReconciler.reconcile(currentObjects);
+    applyFolderVisibility(region, projection.hiddenFolderIds);
+  }
+
+  // Plan 070.3 — apply the Scene Explorer's per-folder eye. Ephemeral display
+  // state, never persisted: hide the renderable roots of assets under a hidden
+  // folder via `.visible` (snappy — no reload/rebuild, unlike filtering the
+  // reconcile input, which re-runs loadModel on every toggle).
+  //
+  // A singleton hides exactly. An instanced GROUP hides only when EVERY member
+  // is hidden: a patch folder maps 1:1 to a full group, so toggling one stroke
+  // hides it. KNOWN SEAM: two strokes of the SAME asset+surface land in
+  // DIFFERENT folders but ONE shared InstancedMesh (identical representationKey
+  // -> merged group). Hiding just one of those folders leaves the shared group
+  // partially hidden, so it stays fully visible rather than half-hiding. REVISIT
+  // when authors report "hid a patch but it's still there" for duplicate-asset
+  // strokes — the fix is per-instance InstancedMesh visibility (zero-scale the
+  // hidden members) or folder-scoped studio grouping, both out of 070.3 scope.
+  function applyFolderVisibility(
+    region: RegionDocument,
+    hiddenFolderIds: readonly string[]
+  ) {
+    const hidden = resolveHiddenAssetInstanceIds(region, hiddenFolderIds);
+    for (const entry of renderableReconciler.entries()) {
+      if (entry.instanced && entry.instanceOrder) {
+        entry.root.visible = !entry.instanceOrder.every((id) =>
+          hidden.has(id)
+        );
+      } else {
+        entry.root.visible = !hidden.has(entry.object.instanceId);
+      }
+    }
   }
 
   return {

@@ -215,7 +215,8 @@ function buildSceneTree(
   playerDefinition: PlayerDefinition | null,
   itemDefinitions: ItemDefinition[],
   documentDefinitions: DocumentDefinition[],
-  npcDefinitions: NPCDefinition[]
+  npcDefinitions: NPCDefinition[],
+  hiddenFolderIds: Set<string>
 ): SceneExplorerNode[] {
   const assetKindsByDefinitionId = new Map(
     assetDefinitions.map((definition) => [
@@ -252,7 +253,8 @@ function buildSceneTree(
         type: "folder" as const,
         folderId: folder.folderId,
         displayName: folder.displayName,
-        children: buildChildren(folder.folderId)
+        children: buildChildren(folder.folderId),
+        visible: !hiddenFolderIds.has(folder.folderId)
       })
     );
 
@@ -422,6 +424,10 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.showColliders
   );
+  const hiddenFolderIds = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.hiddenFolderIds
+  );
   const showNavMesh = useVanillaStoreSelector(
     viewportStore,
     (state) => state.showNavMesh
@@ -585,12 +591,14 @@ export function useLayoutWorkspaceView(
             playerDefinition,
             itemDefinitions,
             documentDefinitions,
-            npcDefinitions
+            npcDefinitions,
+            new Set(hiddenFolderIds)
           )
         : [],
     [
       assetDefinitions,
       documentDefinitions,
+      hiddenFolderIds,
       itemDefinitions,
       npcDefinitions,
       overlayAssetIds,
@@ -1413,6 +1421,9 @@ export function useLayoutWorkspaceView(
               });
               onSelect([]);
             }}
+            onToggleFolderVisibility={(folderId) =>
+              viewportStore.getState().toggleFolderHidden(folderId)
+            }
             onRenameFolder={handleRenameFolder}
             onCreateFolder={handleCreateFolder}
             onDeleteFolder={handleDeleteFolder}

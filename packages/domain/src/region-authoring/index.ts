@@ -946,6 +946,49 @@ export function resolveScatterGroups(region: RegionDocument): ScatterGroup[] {
   return groups;
 }
 
+/**
+ * Placed-asset instanceIds hidden by folder visibility (Plan 070.3, #349).
+ * The Scene Explorer's per-folder eye is EPHEMERAL authoring visibility (like
+ * the Spatial volume eye) — it never touches the saved region. Hiding a folder
+ * hides its whole subtree, so descendant folders expand first, then every
+ * brushed-or-hand placed asset parented anywhere under a hidden folder is
+ * collected. Only `placedAssets` carry `parentFolderId`, so presences are
+ * unaffected. Total by construction: an empty `hiddenFolderIds` returns an
+ * empty set.
+ */
+export function resolveHiddenAssetInstanceIds(
+  region: RegionDocument,
+  hiddenFolderIds: Iterable<string>
+): Set<string> {
+  const hidden = new Set(hiddenFolderIds);
+  if (hidden.size === 0) return new Set();
+  // Expand to the full hidden subtree: a hidden folder hides its descendants.
+  const childrenByParent = new Map<string, RegionSceneFolder[]>();
+  for (const folder of region.folders ?? []) {
+    if (folder.parentFolderId === null) continue;
+    const list = childrenByParent.get(folder.parentFolderId);
+    if (list) list.push(folder);
+    else childrenByParent.set(folder.parentFolderId, [folder]);
+  }
+  const stack = [...hidden];
+  while (stack.length > 0) {
+    const folderId = stack.pop()!;
+    for (const child of childrenByParent.get(folderId) ?? []) {
+      if (!hidden.has(child.folderId)) {
+        hidden.add(child.folderId);
+        stack.push(child.folderId);
+      }
+    }
+  }
+  const instanceIds = new Set<string>();
+  for (const asset of region.placedAssets ?? []) {
+    if (asset.parentFolderId && hidden.has(asset.parentFolderId)) {
+      instanceIds.add(asset.instanceId);
+    }
+  }
+  return instanceIds;
+}
+
 export function createRegionSceneTransform(
   overrides: Partial<RegionSceneTransform> = {}
 ): RegionSceneTransform {
