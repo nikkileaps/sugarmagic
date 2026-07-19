@@ -8,6 +8,10 @@
 import * as THREE from "three";
 import type { TransformTool } from "../../interaction/tool-state";
 import { gizmoHandleName } from "../../interaction/gizmo-contract";
+import {
+  SCENE_OBJECT_MARKER_KEY,
+  type SceneObjectMarker
+} from "../../interaction/hit-test-service";
 
 const AXIS_COLORS = {
   x: 0xf38ba8,
@@ -413,6 +417,18 @@ export function createSelectionHoverHull(): SelectionHoverHull {
   function rebuild() {
     root.clear();
     if (!target) return;
+    // Plan 070.6 — an instanced group root batches ALL its members into one
+    // InstancedMesh, so cloning its geometry would hull the whole batch at
+    // the group origin. Skip the hover outline for instanced selections (the
+    // gizmo still attaches at the member's transform). A proper per-member
+    // hull (clone the geometry at the selected instance's matrix) is a
+    // deferred refinement.
+    const marker = target.userData?.[SCENE_OBJECT_MARKER_KEY] as
+      | SceneObjectMarker
+      | undefined;
+    if (marker?.instanced) {
+      return;
+    }
     target.updateWorldMatrix(true, true);
     inverseTarget.copy(target.matrixWorld).invert();
     target.traverse((object) => {

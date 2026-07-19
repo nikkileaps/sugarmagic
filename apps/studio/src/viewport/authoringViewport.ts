@@ -34,6 +34,7 @@ import {
 } from "@sugarmagic/shell";
 import {
   resolveSceneObjects,
+  assetObjectIsInstanceable,
   loadNavMeshDebugGeometry,
   type SceneObject
 } from "@sugarmagic/runtime-core";
@@ -421,10 +422,11 @@ export function createAuthoringViewport(
   scene.add(overlayRoot);
 
   let currentAssetSources: Record<string, string> = {};
-  // Plan 070.2 — the shared reconciler owns the authored renderables (was a
-  // hand-rolled objectMap / pending / generation / O(N) sweep here that
-  // duplicated the game host). Grouping stays OFF for the studio until
-  // 070.6 (instanced members must stay individually pickable).
+  // Plan 070.2/070.6 — the shared reconciler owns the authored renderables.
+  // Grouping is now ON in the studio too (070.6): brushed placements batch
+  // into InstancedMeshes (fast meadows in the editor), and picking + the
+  // gizmo resolve individual members via the instanceOrder marker +
+  // per-instance matrix-patch.
   const renderableReconciler: RenderableReconciler = createRenderableReconciler({
     parent: authoredRoot,
     resolveUrl: (object) =>
@@ -447,7 +449,8 @@ export function createAuthoringViewport(
     getFileSources: () => currentAssetSources,
     enableShadows: (renderableRoot) =>
       renderView.enableShadowsOnObject(renderableRoot),
-    grouping: false,
+    grouping: true,
+    isInstanceable: assetObjectIsInstanceable,
     onSettled: () => options.onRenderablesSettled?.(),
     // Every authored renderable root carries the scene-object marker so the
     // single hit-test enforcer + surface painting can resolve it (was set by
