@@ -158,7 +158,11 @@ Reconciler CONTRACTS (verified load-bearing in review round 1, must hold):
 - The studio binds a module-level `gltfLoader`; the reconciler takes the loader injected so the promised delta tests can run headless.
 **Verify:** both hosts render identically to before (no visual delta); the game host's start() routes through the reconciler; studio behavior unchanged (grouping gated OFF there); tests cover delta add/update/remove incl. instanced groups and the stable-fileSources contract.
 
-### 070.3 — Declared scatter groups: data model (#349)
+### 070.3 — Declared scatter groups: data model (#349) — DONE (2026-07-19), pending nikki visual verify of the folder eye
+
+**RESOLUTION (open question 3): DERIVE, not persist.** `ScatterGroup` is a derived view over `placedAssets` (`resolveScatterGroups`, domain) — no persisted entity, no migration, no aliases; old regions "have" groups the moment it ships and the round-trip is trivially invisible (region document unchanged). Layer 1 (derive + fixtures for folder-backed AND folderless buckets) committed 29df313. Layer 2 (its first live consumer — the Scene Explorer per-folder visibility eye) committed 7ff0940: `resolveHiddenAssetInstanceIds` (domain, folder-subtree expansion) + `hiddenFolderIds` viewport state/projection + `authoringViewport.applyFolderVisibility` (`.visible` on renderable roots, ephemeral, never persisted). KNOWN SEAM (documented in code at `applyFolderVisibility`): two same-asset+surface strokes in different folders merge into ONE InstancedMesh (shared `representationKey`), so hiding just one of those folders can't half-hide the shared group — REVISIT trigger is authors reporting "hid a patch, still visible" for duplicate-asset strokes; fix is per-instance instanced visibility or folder-scoped studio grouping (out of 070.3 scope). Layer 3 (erase-per-group-membership) is already satisfied by the existing brush erase (removes `brushed` instances by folder); no new work.
+
+
 
 `ScatterGroup` domain entity: id, displayName, assetDefinitionId (or member representation), member instances (per open question 3), authoring metadata (brush provenance). Brush strokes create/extend groups; erase operates per-group-membership.
 
