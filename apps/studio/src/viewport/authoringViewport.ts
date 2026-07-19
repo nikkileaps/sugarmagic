@@ -557,18 +557,6 @@ export function createAuthoringViewport(
       hidden.size > 0
         ? currentObjects.filter((object) => !hidden.has(object.instanceId))
         : currentObjects;
-    // TEMP 070.3 diagnostic — remove once the folder eye is confirmed. Run
-    // `window.__smFolderEyeDebug()` in the console after clicking a folder eye.
-    (window as unknown as Record<string, unknown>).__smFolderEyeDebug = () => ({
-      hiddenFolderIds: [...projection.hiddenFolderIds],
-      hiddenInstanceIds: [...hidden],
-      composedPlacedAssets: composed.placedAssets.map((a) => ({
-        id: a.instanceId,
-        name: a.displayName,
-        parentFolderId: a.parentFolderId
-      })),
-      renderedInstanceIds: currentObjects.map((o) => o.instanceId)
-    });
     // Plan 070.2 — the reconciler diffs against its live set and applies
     // add / update-in-place / remove.
     renderableReconciler.reconcile(visibleObjects);
