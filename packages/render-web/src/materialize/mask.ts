@@ -12,7 +12,7 @@ import {
   float,
   min,
   normalWorld,
-  positionLocal,
+  positionGeometry,
   positionViewDirection,
   positionWorld,
   pow,
@@ -73,12 +73,21 @@ function gradientAxisNode(
   if (space !== "local" || !bounds) {
     return worldNode;
   }
+  // Plan 070.5 — sample the RAW object-space attribute (`positionGeometry`),
+  // NOT `positionLocal`. On the WebGPU node path `InstanceNode`/`BatchNode`
+  // (and skinning/morph/displacement) reassign `positionLocal` BEFORE user
+  // nodes run, so on an instanced asset `positionLocal` is the instance-WORLD
+  // position; normalizing it against the geometry's object-space `bounds`
+  // saturated -> every instance's local gradient/height mask read flat. For
+  // rigid non-instanced meshes `positionLocal === positionGeometry`, so this
+  // is a no-op there; for deformed assets the local ramp is now bind-pose
+  // relative (geometry-relative, the intended meaning of a "local" mask).
   const localNode =
     axis === "x"
-      ? positionLocal.x
+      ? positionGeometry.x
       : axis === "y"
-        ? positionLocal.y
-        : positionLocal.z;
+        ? positionGeometry.y
+        : positionGeometry.z;
   const extent = Math.max(bounds.size[axisIndex], 0.0001);
   return (localNode as { sub: (o: unknown) => { div: (o: unknown) => unknown } })
     .sub(float(bounds.min[axisIndex]))
