@@ -2536,6 +2536,10 @@ export function createWebRuntimeHost(
     collisionSystem.setPlayerRadius(
       computePlayerAgentDimensions(state.playerDefinition).radius
     );
+    // Lazy getter: gameplaySession is null here but populated before the first
+    // world.update() fires. Each frame the player resolves against last-frame
+    // NPC positions (symmetric with how NPCs resolve against the player).
+    collisionSystem.setAgentsGetter(() => gameplaySession?.getNpcAgents() ?? []);
     world.addSystem(collisionSystem);
 
     inputManager = createRuntimeInputManager();

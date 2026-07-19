@@ -8,6 +8,7 @@ import { Position, Velocity, PlayerControlled } from "../components";
 import {
   createEmptyCollisionWorld,
   resolveMove,
+  type CircleObstacle,
   type CollisionWorld
 } from "../../collision";
 
@@ -91,6 +92,7 @@ export class MovementSystem extends System {
 export class CollisionSystem extends System {
   private collisionWorld: CollisionWorld = createEmptyCollisionWorld();
   private playerRadius = 0.35;
+  private agentsGetter: (() => readonly CircleObstacle[]) | null = null;
 
   setCollisionWorld(world: CollisionWorld): void {
     this.collisionWorld = world;
@@ -100,10 +102,15 @@ export class CollisionSystem extends System {
     this.playerRadius = radius;
   }
 
+  setAgentsGetter(fn: () => readonly CircleObstacle[]): void {
+    this.agentsGetter = fn;
+  }
+
   update(world: World, delta: number): void {
     if (this.collisionWorld.colliders.length === 0) {
       return;
     }
+    const npcObstacles = this.agentsGetter?.() ?? [];
     for (const entity of world.query(PlayerControlled, Position, Velocity)) {
       const pos = world.getComponent(entity, Position)!;
       const vel = world.getComponent(entity, Velocity)!;
@@ -115,7 +122,8 @@ export class CollisionSystem extends System {
       const resolved = resolveMove(
         { x: fromX, z: fromZ, radius: this.playerRadius },
         { x: proposedX, z: proposedZ },
-        this.collisionWorld
+        this.collisionWorld,
+        npcObstacles
       );
       pos.x = fromX + resolved.x;
       pos.z = fromZ + resolved.z;

@@ -253,6 +253,24 @@ describe("resolveMove with circle obstacles (agent-vs-agent, 069.3)", () => {
     expect(aabb.maxZ).toBeCloseTo(7, 5);
   });
 
+  it("CollisionSystem blocks player move against an NPC circle (setAgentsGetter)", () => {
+    // Player at x=-2, proposed move +3 into an NPC standing at x=0.
+    // Without agentsGetter the player walks through; with it, it's blocked.
+    const world = new World();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(-2 + 3, 0, 0)); // post-MovementSystem
+    world.addComponent(entity, new Velocity(3, 0, 0));
+    world.addComponent(entity, new PlayerControlled());
+    const system = new CollisionSystem();
+    system.setPlayerRadius(0.4);
+    system.setCollisionWorld(createEmptyCollisionWorld());
+    system.setAgentsGetter(() => [{ x: 0, z: 0, radius: 0.4, id: "npc:1" }]);
+    system.update(world, 1);
+    const pos = world.getComponent(entity, Position)!;
+    // Must stop at least combined-radius (0.8) away from the NPC.
+    expect(Math.abs(pos.x)).toBeGreaterThanOrEqual(0.8 - 1e-3);
+  });
+
   it("CollisionSystem reconstructs the pre-move position and re-commits resolved", () => {
     // MovementSystem already committed pos += vel*delta. The player ENDED at
     // x=5, outside a containment box — but it STARTED inside (pre-move =

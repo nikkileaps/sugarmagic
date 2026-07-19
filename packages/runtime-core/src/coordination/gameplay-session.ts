@@ -98,6 +98,7 @@ import {
 import {
   applyVolumeColliderGates,
   createEmptyCollisionWorld,
+  type CircleObstacle,
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
@@ -300,6 +301,11 @@ export interface RuntimeGameplaySessionController {
     cueDefinitionId: string | null,
     options?: { fadeOutMs?: number }
   ) => void;
+  /** Returns the current NPC agent circles for the player's CollisionSystem.
+   *  Reads ECS Position components, so values are one frame stale relative
+   *  to when CollisionSystem runs -- acceptable and symmetric with how NPCs
+   *  read the player position. */
+  getNpcAgents: () => readonly CircleObstacle[];
   toggleInventory: () => void;
   toggleCaster: () => void;
   dispose: () => void;
@@ -1919,17 +1925,19 @@ export function createRuntimeGameplaySessionController(
     syncInteractionPrompt();
   });
   registerNpcInteractables();
+  // Plan 069.3 — agent radii are stable; precompute once. Hoisted so
+  // getNpcAgents() (called by the player CollisionSystem each frame) can
+  // use accurate per-NPC radii without re-deriving them on every call.
+  const npcAgentRadiusById = new Map(
+    npcDefinitions.map((definition) => [
+      definition.definitionId,
+      computeNpcAgentDimensions(definition).radius
+    ])
+  );
   if (activeRegion) {
-    // Plan 069.3 — agent radii are stable; precompute once. Player id is a
-    // sentinel that can't collide with an NPC presenceId.
+    // Player id is a sentinel that can't collide with an NPC presenceId.
     const playerAgentRadius =
       computePlayerAgentDimensions(playerDefinition).radius;
-    const npcAgentRadiusById = new Map(
-      npcDefinitions.map((definition) => [
-        definition.definitionId,
-        computeNpcAgentDimensions(definition).radius
-      ])
-    );
     npcBehaviorSystem = createRuntimeNpcBehaviorSystem({
       region: activeRegion,
       world,
@@ -2114,6 +2122,20 @@ export function createRuntimeGameplaySessionController(
           ];
         }
       );
+    },
+    getNpcAgents(): CircleObstacle[] {
+      const agents: CircleObstacle[] = [];
+      for (const [presenceId, entry] of npcInteractableEntities.entries()) {
+        const pos = world.getComponent(entry.entity, Position);
+        if (!pos) continue;
+        agents.push({
+          id: presenceId,
+          x: pos.x,
+          z: pos.z,
+          radius: npcAgentRadiusById.get(entry.npcDefinitionId) ?? DEFAULT_AGENT_RADIUS
+        });
+      }
+      return agents;
     },
     initializeDebugBillboards,
     refreshDebugBillboards,
