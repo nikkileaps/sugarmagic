@@ -91,7 +91,7 @@ export function updateCameraFollow(
 
       // Shortest-path angle difference
       let angleDiff = behindAngle - next.yaw;
-      angleDiff = ((angleDiff + Math.PI) % (Math.PI * 2)) - Math.PI;
+      angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
 
       next.yaw += angleDiff * autoFollowFactor;
     }
