@@ -548,29 +548,26 @@ export function createAuthoringViewport(
   }
 
   // Plan 070.3 — apply the Scene Explorer's per-folder eye. Ephemeral display
-  // state, never persisted: hide the renderable roots of assets under a hidden
-  // folder via `.visible` (snappy — no reload/rebuild, unlike filtering the
-  // reconcile input, which re-runs loadModel on every toggle).
+  // state, never persisted: hide the renderables of assets under a hidden folder
+  // via `.visible` / per-instance collapse (snappy — no reload/rebuild, unlike
+  // filtering the reconcile input, which re-runs loadModel on every toggle).
   //
-  // A singleton hides exactly. An instanced GROUP hides only when EVERY member
-  // is hidden: a patch folder maps 1:1 to a full group, so toggling one stroke
-  // hides it. KNOWN SEAM: two strokes of the SAME asset+surface land in
-  // DIFFERENT folders but ONE shared InstancedMesh (identical representationKey
-  // -> merged group). Hiding just one of those folders leaves the shared group
-  // partially hidden, so it stays fully visible rather than half-hiding. REVISIT
-  // when authors report "hid a patch but it's still there" for duplicate-asset
-  // strokes — the fix is per-instance InstancedMesh visibility (zero-scale the
-  // hidden members) or folder-scoped studio grouping, both out of 070.3 scope.
+  // Singletons flip `.visible`. Instanced GROUPS must hide PER MEMBER, not at the
+  // root: a studio batch merges every same-asset+surface instance across the
+  // WHOLE scene into one InstancedMesh regardless of folder, so a group routinely
+  // spans hidden and visible folders. `setInstanceVisible` collapses just the
+  // hidden members in place; the calls are idempotent, so calling for every
+  // member each projection is cheap (only real transitions rewrite a matrix).
   function applyFolderVisibility(
     region: RegionDocument,
     hiddenFolderIds: readonly string[]
   ) {
     const hidden = resolveHiddenAssetInstanceIds(region, hiddenFolderIds);
     for (const entry of renderableReconciler.entries()) {
-      if (entry.instanced && entry.instanceOrder) {
-        entry.root.visible = !entry.instanceOrder.every((id) =>
-          hidden.has(id)
-        );
+      if (entry.instanced && entry.instanceOrder && entry.setInstanceVisible) {
+        for (let i = 0; i < entry.instanceOrder.length; i += 1) {
+          entry.setInstanceVisible(i, !hidden.has(entry.instanceOrder[i]!));
+        }
       } else {
         entry.root.visible = !hidden.has(entry.object.instanceId);
       }

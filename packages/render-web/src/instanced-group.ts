@@ -45,8 +45,18 @@ export interface InstancedAssetGroupResult {
    *  InstancedMesh matrices at `index`), no group rebuild. Used when a
    *  grouped plant is moved/edited. */
   updateInstance(index: number, transform: SceneObject["transform"]): void;
+  /** Plan 070.3 — hide/show ONE member in place (collapses it to zero scale at
+   *  its own position, so a group that spans folders can hide just the members
+   *  under a hidden folder). Idempotent: re-setting the same state is a no-op,
+   *  so it's cheap to call for every member on each projection. */
+  setInstanceVisible(index: number, visible: boolean): void;
   dispose(): void;
 }
+
+// Post-multiplied onto a member's world matrix to collapse it to a zero-scale
+// point at its own translation (070.3 folder-eye hide) — invisible, but local,
+// so the batch's bounding sphere barely changes.
+const HIDE_SCALE_ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 function composeInstanceWorld(
   transform: SceneObject["transform"]
@@ -122,7 +132,21 @@ export function buildInstancedAssetGroup(options: {
   // Each InstancedMesh + its submesh-local matrix, so a single instance can
   // be re-composed later (updateInstance) without a rebuild.
   const built: Array<{ instanced: THREE.InstancedMesh; submeshMatrix: THREE.Matrix4 }> = [];
+  // Members collapsed to zero scale by the Scene Explorer folder eye (070.3).
+  const hiddenIndices = new Set<number>();
   const composed = new THREE.Matrix4();
+  // Write member `index`'s matrix across every submesh from its current
+  // `instanceWorld`, collapsing to a zero-scale point (kept AT its position, so
+  // the batch bounds barely move) when the member is hidden.
+  function writeInstanceMatrix(index: number): void {
+    const hidden = hiddenIndices.has(index);
+    for (const { instanced, submeshMatrix } of built) {
+      composed.multiplyMatrices(instanceWorld[index]!, submeshMatrix);
+      if (hidden) composed.multiply(HIDE_SCALE_ZERO);
+      instanced.setMatrixAt(index, composed);
+      instanced.instanceMatrix.needsUpdate = true;
+    }
+  }
   template.traverse((child) => {
     if (!(child as THREE.Mesh).isMesh) {
       return;
@@ -135,14 +159,12 @@ export function buildInstancedAssetGroup(options: {
       instanceWorld.length
     );
     instanced.name = submesh.name || "mesh";
-    for (let i = 0; i < instanceWorld.length; i += 1) {
-      composed.multiplyMatrices(instanceWorld[i]!, submeshMatrix);
-      instanced.setMatrixAt(i, composed);
-    }
-    instanced.instanceMatrix.needsUpdate = true;
     root.add(instanced);
     built.push({ instanced, submeshMatrix });
   });
+  for (let i = 0; i < instanceWorld.length; i += 1) {
+    writeInstanceMatrix(i);
+  }
 
   root.updateMatrixWorld(true);
   enableShadows?.(root);
@@ -160,22 +182,30 @@ export function buildInstancedAssetGroup(options: {
     assetSources
   );
 
-  const patchMatrix = new THREE.Matrix4();
   return {
     root,
     representative,
     shaderApplication,
     instanceOrder: group.map((member) => member.instanceId),
     updateInstance(index, transform) {
-      const iw = composeInstanceWorld(transform);
-      for (const { instanced, submeshMatrix } of built) {
-        patchMatrix.multiplyMatrices(iw, submeshMatrix);
-        instanced.setMatrixAt(index, patchMatrix);
-        instanced.instanceMatrix.needsUpdate = true;
-        // The batch's bounding sphere widened if the instance moved out; a
-        // fresh compute keeps frustum culling honest.
+      instanceWorld[index] = composeInstanceWorld(transform);
+      // Honors the member's current hidden state (writeInstanceMatrix checks
+      // hiddenIndices), so moving a hidden member keeps it hidden.
+      writeInstanceMatrix(index);
+      // The batch's bounding sphere widened if the instance moved out; a
+      // fresh compute keeps frustum culling honest.
+      for (const { instanced } of built) {
         instanced.computeBoundingSphere();
       }
+    },
+    setInstanceVisible(index, visible) {
+      const currentlyHidden = hiddenIndices.has(index);
+      if (visible === !currentlyHidden) {
+        return; // no transition — cheap to call for every member each frame
+      }
+      if (visible) hiddenIndices.delete(index);
+      else hiddenIndices.add(index);
+      writeInstanceMatrix(index);
     },
     dispose() {
       for (const { instanced } of built) {
