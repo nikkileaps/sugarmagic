@@ -67,9 +67,6 @@ export interface ReconciledEntry {
   disposeGroup?: () => void;
   /** Set for instanced entries: patch one member's matrix in place (070.6). */
   updateInstance?: (index: number, transform: SceneObject["transform"]) => void;
-  /** Set for instanced entries: hide/show one member in place (070.3 folder
-   *  eye) — a group can span folders, so root-level `.visible` is too coarse. */
-  setInstanceVisible?: (index: number, visible: boolean) => void;
   /** Set for instanced entries: last-applied member transforms (to detect
    *  which members moved between reconciles). */
   memberTransforms?: SceneObject["transform"][];
@@ -448,8 +445,6 @@ export function createRenderableReconciler(
             disposeGroup: () => built.dispose(),
             updateInstance: (index, transform) =>
               built.updateInstance(index, transform),
-            setInstanceVisible: (index, visible) =>
-              built.setInstanceVisible(index, visible),
             memberTransforms: members.map((m) => m.transform)
           };
           groups.set(groupKey, entry);

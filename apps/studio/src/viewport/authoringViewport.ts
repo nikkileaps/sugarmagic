@@ -17,6 +17,7 @@ import {
   EDITOR_NEUTRAL_CLAY_COLOR,
   type AuthoringSession,
   getActiveRegion,
+  composeRegionContents,
   getMaskTextureDefinition,
   resolveHiddenAssetInstanceIds,
   resolveRegionVolumes,
@@ -540,38 +541,37 @@ export function createAuthoringViewport(
       )
     );
     syncColliderWireframes(currentObjects, region, projection.showColliders);
+    // Plan 070.3 — Scene Explorer folder eye (ephemeral, never persisted): drop
+    // assets under a hidden folder from the reconcile input so they leave the
+    // scene entirely (uniform for singletons AND instanced batches — a shared
+    // batch just rebuilds without its hidden members). Resolve against the SAME
+    // COMPOSED set the reconciler renders (base + active-Scene overlay), not base
+    // `region.placedAssets` — else scene-scoped items in a hidden folder render
+    // but never hide.
+    const composed = composeRegionContents(region, projection.activeScene);
+    const hidden = resolveHiddenAssetInstanceIds(
+      composed,
+      projection.hiddenFolderIds
+    );
+    const visibleObjects =
+      hidden.size > 0
+        ? currentObjects.filter((object) => !hidden.has(object.instanceId))
+        : currentObjects;
+    // TEMP 070.3 diagnostic — remove once the folder eye is confirmed. Run
+    // `window.__smFolderEyeDebug()` in the console after clicking a folder eye.
+    (window as unknown as Record<string, unknown>).__smFolderEyeDebug = () => ({
+      hiddenFolderIds: [...projection.hiddenFolderIds],
+      hiddenInstanceIds: [...hidden],
+      composedPlacedAssets: composed.placedAssets.map((a) => ({
+        id: a.instanceId,
+        name: a.displayName,
+        parentFolderId: a.parentFolderId
+      })),
+      renderedInstanceIds: currentObjects.map((o) => o.instanceId)
+    });
     // Plan 070.2 — the reconciler diffs against its live set and applies
-    // add / update-in-place / remove (grouping OFF, so every object is a
-    // singleton exactly as before).
-    renderableReconciler.reconcile(currentObjects);
-    applyFolderVisibility(region, projection.hiddenFolderIds);
-  }
-
-  // Plan 070.3 — apply the Scene Explorer's per-folder eye. Ephemeral display
-  // state, never persisted: hide the renderables of assets under a hidden folder
-  // via `.visible` / per-instance collapse (snappy — no reload/rebuild, unlike
-  // filtering the reconcile input, which re-runs loadModel on every toggle).
-  //
-  // Singletons flip `.visible`. Instanced GROUPS must hide PER MEMBER, not at the
-  // root: a studio batch merges every same-asset+surface instance across the
-  // WHOLE scene into one InstancedMesh regardless of folder, so a group routinely
-  // spans hidden and visible folders. `setInstanceVisible` collapses just the
-  // hidden members in place; the calls are idempotent, so calling for every
-  // member each projection is cheap (only real transitions rewrite a matrix).
-  function applyFolderVisibility(
-    region: RegionDocument,
-    hiddenFolderIds: readonly string[]
-  ) {
-    const hidden = resolveHiddenAssetInstanceIds(region, hiddenFolderIds);
-    for (const entry of renderableReconciler.entries()) {
-      if (entry.instanced && entry.instanceOrder && entry.setInstanceVisible) {
-        for (let i = 0; i < entry.instanceOrder.length; i += 1) {
-          entry.setInstanceVisible(i, !hidden.has(entry.instanceOrder[i]!));
-        }
-      } else {
-        entry.root.visible = !hidden.has(entry.object.instanceId);
-      }
-    }
+    // add / update-in-place / remove.
+    renderableReconciler.reconcile(visibleObjects);
   }
 
   return {

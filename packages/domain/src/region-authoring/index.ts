@@ -951,20 +951,29 @@ export function resolveScatterGroups(region: RegionDocument): ScatterGroup[] {
  * The Scene Explorer's per-folder eye is EPHEMERAL authoring visibility (like
  * the Spatial volume eye) — it never touches the saved region. Hiding a folder
  * hides its whole subtree, so descendant folders expand first, then every
- * brushed-or-hand placed asset parented anywhere under a hidden folder is
- * collected. Only `placedAssets` carry `parentFolderId`, so presences are
- * unaffected. Total by construction: an empty `hiddenFolderIds` returns an
- * empty set.
+ * placed asset parented anywhere under a hidden folder is collected. Only
+ * `placedAssets` carry `parentFolderId`, so presences are unaffected. Total by
+ * construction: an empty `hiddenFolderIds` returns an empty set.
+ *
+ * Takes `folders` + `placedAssets` STRUCTURALLY (not a RegionDocument) so the
+ * caller passes the SAME set the viewport renders — i.e. the COMPOSED base +
+ * active-Scene overlay (`composeRegionContents`), not base alone. A base region
+ * satisfies the shape too, so base-only callers/tests are unchanged. This is
+ * load-bearing: overlay placements render but live outside base `placedAssets`,
+ * so a base-only resolve leaves scene-scoped items in a hidden folder visible.
  */
 export function resolveHiddenAssetInstanceIds(
-  region: RegionDocument,
+  contents: {
+    folders: readonly RegionSceneFolder[];
+    placedAssets: readonly PlacedAssetInstance[];
+  },
   hiddenFolderIds: Iterable<string>
 ): Set<string> {
   const hidden = new Set(hiddenFolderIds);
   if (hidden.size === 0) return new Set();
   // Expand to the full hidden subtree: a hidden folder hides its descendants.
   const childrenByParent = new Map<string, RegionSceneFolder[]>();
-  for (const folder of region.folders ?? []) {
+  for (const folder of contents.folders ?? []) {
     if (folder.parentFolderId === null) continue;
     const list = childrenByParent.get(folder.parentFolderId);
     if (list) list.push(folder);
@@ -981,7 +990,7 @@ export function resolveHiddenAssetInstanceIds(
     }
   }
   const instanceIds = new Set<string>();
-  for (const asset of region.placedAssets ?? []) {
+  for (const asset of contents.placedAssets ?? []) {
     if (asset.parentFolderId && hidden.has(asset.parentFolderId)) {
       instanceIds.add(asset.instanceId);
     }

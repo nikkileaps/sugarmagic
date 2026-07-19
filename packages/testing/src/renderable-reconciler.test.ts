@@ -232,37 +232,6 @@ describe("070.2 — renderable reconciler (grouping gate)", () => {
     expect(p.z).toBeCloseTo(4, 5);
   });
 
-  it("070.3: setInstanceVisible collapses ONE member in place, leaving siblings; restores exactly", async () => {
-    const { reconciler } = makeReconciler({
-      grouping: true,
-      isInstanceable: () => true
-    });
-    reconciler.reconcile([
-      obj("g0", { transform: { position: [1, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }),
-      obj("g1", { transform: { position: [5, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } })
-    ]);
-    await flush();
-    const group = [...reconciler.entries()].find((e) => e.instanced)!;
-    const im = group.root.children[0] as unknown as {
-      getMatrixAt: (i: number, m: THREE.Matrix4) => void;
-    };
-    const m = new THREE.Matrix4();
-    const scale = new THREE.Vector3();
-    // Hide g1 (index 1): scale collapses to ~0, but its position is preserved
-    // (local collapse keeps batch bounds tight); g0 untouched.
-    group.setInstanceVisible!(1, false);
-    im.getMatrixAt(1, m);
-    scale.setFromMatrixScale(m);
-    expect(scale.length()).toBeCloseTo(0, 6);
-    expect(new THREE.Vector3().setFromMatrixPosition(m).x).toBeCloseTo(5, 5);
-    im.getMatrixAt(0, m);
-    expect(new THREE.Vector3().setFromMatrixScale(m).length()).toBeGreaterThan(0.5);
-    // Restore g1: scale back to 1.
-    group.setInstanceVisible!(1, true);
-    im.getMatrixAt(1, m);
-    expect(new THREE.Vector3().setFromMatrixScale(m).x).toBeCloseTo(1, 5);
-  });
-
   it("grouping ON: non-instanceable objects stay singletons alongside a group", async () => {
     const { reconciler } = makeReconciler({
       grouping: true,
