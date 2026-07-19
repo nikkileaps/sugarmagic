@@ -147,6 +147,22 @@ describe("069.9 — navmesh pathfinding", () => {
     expect(path.length).toBeGreaterThanOrEqual(2);
     pathfinder.destroy();
   });
+
+  it("REJECTS non-artifact bytes at import instead of crashing WASM at query time", async () => {
+    // Prod regression: a 404'd artifact URL returns an HTML error page;
+    // recast's importNavMesh accepts the bytes silently and the FIRST
+    // findPath dies inside the WASM (memory access out of bounds), killing
+    // the frame loop. The import gate must throw a clean error instead.
+    const html = new TextEncoder().encode(
+      `<!DOCTYPE html>\n<html lang="en">\n<head><title>Page not found</title></head>` +
+        `<body>${"x".repeat(4096)}</body></html>`
+    );
+    await expect(loadNavMeshPathfinder(html)).rejects.toThrow(/not a baked navmesh artifact/);
+    // Empty / truncated bytes fail the same way.
+    await expect(loadNavMeshPathfinder(new Uint8Array(0))).rejects.toThrow(
+      /not a baked navmesh artifact/
+    );
+  });
 });
 
 describe("069.8 — navmesh staleness hash", () => {

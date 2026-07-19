@@ -2204,6 +2204,17 @@ export function createWebRuntimeHost(
         void (async () => {
           try {
             const response = await fetch(navMeshUrl);
+            // A miss on a static host answers with an HTML error page, and
+            // importNavMesh accepts those bytes silently -- then the first
+            // path query crashes the WASM and kills the frame loop. Treat a
+            // non-OK response as "no navmesh" (straight-line fallback).
+            if (!response.ok) {
+              console.warn(
+                `[web-runtime] navmesh artifact fetch failed (${response.status}) -- NPCs fall back to straight-line steering`,
+                navMeshUrl
+              );
+              return;
+            }
             const bytes = new Uint8Array(await response.arrayBuffer());
             const pathfinder = await loadNavMeshPathfinder(bytes);
             // A newer start() superseded this load — free it, don't assign

@@ -240,9 +240,29 @@ export async function bakeNavMesh(
   return bytes;
 }
 
+// Recast's NavMeshSetHeader magic ('MSET', little-endian on the wire).
+// `importNavMesh` does NOT validate it -- feeding it non-artifact bytes (an
+// HTML 404 body, a truncated file) returns a structurally-live NavMesh whose
+// first query crashes the WASM with a memory-access error, killing the rAF
+// loop (hard freeze). Every import path below goes through this gate instead.
+const NAVMESH_SET_MAGIC = 0x4d534554;
+
+function assertNavMeshArtifact(bytes: Uint8Array): void {
+  const magic =
+    bytes.length >= 4
+      ? new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true)
+      : 0;
+  if (magic !== NAVMESH_SET_MAGIC) {
+    throw new Error(
+      `[navmesh] bytes are not a baked navmesh artifact (bad magic; got ${bytes.length} bytes)`
+    );
+  }
+}
+
 /** Import a baked navmesh artifact for runtime queries (069.9). */
 export async function loadNavMesh(bytes: Uint8Array): Promise<NavMesh> {
   await ensureRecastInit();
+  assertNavMeshArtifact(bytes);
   return importNavMesh(bytes).navMesh;
 }
 
@@ -292,6 +312,7 @@ export async function loadNavMeshPathfinder(
   bytes: Uint8Array
 ): Promise<NavMeshPathfinder> {
   await ensureRecastInit();
+  assertNavMeshArtifact(bytes);
   return createNavMeshPathfinder(importNavMesh(bytes).navMesh);
 }
 
@@ -304,6 +325,7 @@ export async function loadNavMeshDebugGeometry(
   bytes: Uint8Array
 ): Promise<{ positions: number[]; indices: number[] }> {
   await ensureRecastInit();
+  assertNavMeshArtifact(bytes);
   const navMesh = importNavMesh(bytes).navMesh;
   const [positions, indices] = getNavMeshPositionsAndIndices(navMesh);
   navMesh.destroy();
