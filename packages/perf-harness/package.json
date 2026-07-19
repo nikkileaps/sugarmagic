@@ -9,7 +9,8 @@
     "measure:load": "node driver/measure-load.mjs",
     "measure:live": "node driver/measure-live.mjs",
     "attribute:render": "node driver/attribute-render.mjs",
-    "capture": "node driver/auto-capture.mjs"
+    "capture": "node driver/auto-capture.mjs",
+    "probe:mask": "node driver/mask-probe.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",

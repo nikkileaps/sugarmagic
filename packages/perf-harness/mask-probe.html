@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sugarmagic Mask Probe (#360)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #101014;
+        overflow: hidden;
+      }
+      #view {
+        position: fixed;
+        inset: 0;
+      }
+      #hud {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        font: 12px/1.4 ui-monospace, monospace;
+        color: #9fe;
+        white-space: pre;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <div id="hud">booting...</div>
+    <script type="module" src="/src/mask-probe.ts"></script>
+  </body>
+</html>
