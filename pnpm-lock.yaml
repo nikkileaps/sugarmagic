@@ -328,6 +328,9 @@ importers:
       '@sugarmagic/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@sugarmagic/render-web':
+        specifier: workspace:*
+        version: link:../render-web
       '@sugarmagic/runtime-core':
         specifier: workspace:*
         version: link:../runtime-core

@@ -39,6 +39,7 @@ import {
 } from "@sugarmagic/runtime-core";
 import {
   SCENE_OBJECT_MARKER_KEY,
+  buildSceneObjectMarker,
   type WorkspaceViewport
 } from "@sugarmagic/workspaces";
 import type { ViewportOverlayFactory } from "./overlay-context";
@@ -455,17 +456,7 @@ export function createAuthoringViewport(
     // flips ON) carry the instanceOrder so a raycast index resolves to the
     // member PlacedAssetInstance.
     onEntryLoaded: (entry) => {
-      entry.root.userData[SCENE_OBJECT_MARKER_KEY] = entry.instanced
-        ? {
-            instanced: true,
-            representationKey: entry.representationKey,
-            instanceOrder: entry.instanceOrder
-          }
-        : {
-            instanceId: entry.object.instanceId,
-            assetDefinitionId: entry.object.assetDefinitionId ?? null,
-            kind: entry.object.kind
-          };
+      entry.root.userData[SCENE_OBJECT_MARKER_KEY] = buildSceneObjectMarker(entry);
     },
     logger: {
       warn: (message, payload) =>

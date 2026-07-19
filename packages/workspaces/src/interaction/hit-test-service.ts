@@ -16,6 +16,7 @@
  */
 
 import * as THREE from "three";
+import type { ReconciledEntry } from "@sugarmagic/render-web";
 import { isCenterPickPriorityHandle } from "./gizmo-contract";
 
 /**
@@ -24,6 +25,74 @@ import { isCenterPickPriorityHandle } from "./gizmo-contract";
  * instanceId); select-mode hits resolve to the tagged ancestor.
  */
 export const SCENE_OBJECT_MARKER_KEY = "sugarmagicSceneObject";
+
+/** The metadata a scene-object root carries under SCENE_OBJECT_MARKER_KEY.
+ *  Singleton: identifies one PlacedAssetInstance. Instanced group (070.6):
+ *  carries the member ids in InstancedMesh index order for per-instance
+ *  resolution. */
+export interface SceneObjectMarker {
+  instanceId?: string;
+  assetDefinitionId?: string | null;
+  kind?: string;
+  instanced?: boolean;
+  representationKey?: string;
+  instanceOrder?: readonly string[];
+}
+
+/**
+ * Build the marker metadata for a reconciled renderable root. ONE definition
+ * so every host (and the regression test) agrees. Plan 070.2 shipped a bug
+ * where deleting the old createRenderableRoot dropped this marker entirely —
+ * rendering was fine but picking/painting silently broke; this + the round-
+ * trip test in packages/testing guard against a repeat.
+ */
+export function buildSceneObjectMarker(entry: ReconciledEntry): SceneObjectMarker {
+  return entry.instanced
+    ? {
+        instanced: true,
+        representationKey: entry.representationKey,
+        instanceOrder: entry.instanceOrder
+      }
+    : {
+        instanceId: entry.object.instanceId,
+        assetDefinitionId: entry.object.assetDefinitionId ?? null,
+        kind: entry.object.kind
+      };
+}
+
+/**
+ * Resolve a raycast hit to a scene-object instanceId: walk parents from the
+ * hit object to `root`, find the marked ancestor, and (for an instanced
+ * group) map the InstancedMesh index to the member id. Returns null when
+ * nothing under `root` is marked — which is exactly the 070.2 regression
+ * signature (every authored object resolving to null). Shared by testSelect
+ * and the headless guard test.
+ */
+export function resolveSceneObjectMarker(
+  hitObject: THREE.Object3D,
+  root: THREE.Object3D,
+  instanceIndex?: number
+): { objectName: string; node: THREE.Object3D } | null {
+  let node: THREE.Object3D | null = hitObject;
+  while (node && node !== root) {
+    const marker = node.userData?.[SCENE_OBJECT_MARKER_KEY] as
+      | SceneObjectMarker
+      | undefined;
+    if (marker) {
+      if (marker.instanced && marker.instanceOrder && instanceIndex != null) {
+        const memberId = marker.instanceOrder[instanceIndex];
+        if (memberId) {
+          return { objectName: memberId, node };
+        }
+      }
+      if (marker.instanceId) {
+        return { objectName: marker.instanceId, node };
+      }
+    }
+    node = node.parent;
+  }
+  return null;
+}
 
 export type HitTestMode = "select" | "gizmo" | "surface";
 
@@ -108,18 +177,15 @@ function pickNearest(
   // names ("blooms", "stems"), flickering hover between sub-meshes
   // and feeding non-instanceIds to selection.
   if (mode === "select") {
-    let node: THREE.Object3D | null = hit.object;
-    while (node && node !== root) {
-      if (node.userData && node.userData[SCENE_OBJECT_MARKER_KEY]) {
-        return {
-          mode,
-          objectName: node.name,
-          point: hit.point.clone(),
-          distance: hit.distance,
-          object: node
-        };
-      }
-      node = node.parent;
+    const resolved = resolveSceneObjectMarker(hit.object, root, hit.instanceId);
+    if (resolved) {
+      return {
+        mode,
+        objectName: resolved.objectName,
+        point: hit.point.clone(),
+        distance: hit.distance,
+        object: resolved.node
+      };
     }
     // Untagged content under the authored root (e.g. landscape
     // plane) falls through to the generic walk below.
