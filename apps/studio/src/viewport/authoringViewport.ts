@@ -448,6 +448,25 @@ export function createAuthoringViewport(
       renderView.enableShadowsOnObject(renderableRoot),
     grouping: false,
     onSettled: () => options.onRenderablesSettled?.(),
+    // Every authored renderable root carries the scene-object marker so the
+    // single hit-test enforcer + surface painting can resolve it (was set by
+    // the old createRenderableRoot; the reconciler doesn't know this key, so
+    // the studio stamps it here). Instanced group roots (070.6, once grouping
+    // flips ON) carry the instanceOrder so a raycast index resolves to the
+    // member PlacedAssetInstance.
+    onEntryLoaded: (entry) => {
+      entry.root.userData[SCENE_OBJECT_MARKER_KEY] = entry.instanced
+        ? {
+            instanced: true,
+            representationKey: entry.representationKey,
+            instanceOrder: entry.instanceOrder
+          }
+        : {
+            instanceId: entry.object.instanceId,
+            assetDefinitionId: entry.object.assetDefinitionId ?? null,
+            kind: entry.object.kind
+          };
+    },
     logger: {
       warn: (message, payload) =>
         console.warn("[authoring-viewport]", message, payload)
