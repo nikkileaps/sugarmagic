@@ -1827,7 +1827,7 @@ function formatLocalCompose(
     const serviceDir = `./services/${serviceName}`;
     const environment = [
       `      PORT: "8787"`,
-      `      ALLOW_ORIGIN: "*"`,
+      `      SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS: "*"`,
       `      SUGARMAGIC_LORE_SOURCE_KIND: "\${SUGARMAGIC_LORE_SOURCE_KIND:-${loreSource.kind}}"`,
       `      SUGARMAGIC_LORE_SOURCE_PATH: "/opt/sugarmagic/lore-source"`,
       `      SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL: "\${SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL:-${loreSource.repositoryUrl}}"`,
@@ -1894,7 +1894,7 @@ function buildLocalManagedFiles(
         `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
         `SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
         `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`,
-        `ALLOW_ORIGIN=*`
+        `SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=*`
       ])
     ),
     asTextFile(
