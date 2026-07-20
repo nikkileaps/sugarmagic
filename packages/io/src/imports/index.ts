@@ -8,10 +8,13 @@
  */
 
 import {
+  createDefaultAnimationLibraryDefinition,
   createDefaultAudioClipDefinition,
   createDefaultCharacterAnimationDefinition,
   createDefaultCharacterModelDefinition,
   defaultAssetColliderForKind,
+  STANDARD_RIG_CORE_BONE_NAMES,
+  type AnimationLibraryDefinition,
   type AssetDefinition,
   type AudioClipDefinition,
   type CharacterAnimationDefinition,
@@ -20,6 +23,7 @@ import {
   type MaskTextureDefinition,
   type TextureDefinition
 } from "@sugarmagic/domain";
+import { readGlb as readGlbFull, packGlb, type GltfJson } from "../glb";
 import {
   listFilesInDirectory,
   pickDirectory,
@@ -832,4 +836,261 @@ export async function importSourceAsset(
     sourceBuffer: ext.toLowerCase() === ".glb" ? sourceBuffer : null,
     warnings
   };
+}
+
+// ---- Animation library import ----------------------------------------
+
+export interface ImportAnimationLibraryRequest {
+  projectHandle: FileSystemDirectoryHandle;
+  descriptor: GameRootDescriptor;
+  projectId: string;
+}
+
+export interface ImportAnimationLibraryResult {
+  definitions: AnimationLibraryDefinition[];
+  writtenAssets: Array<{ relativeAssetPath: string; blob: Blob }>;
+  warnings: string[];
+}
+
+const STANDARD_RIG_BONE_SET = new Set<string>(STANDARD_RIG_CORE_BONE_NAMES);
+
+/**
+ * Extract one animation from a full GLB (which may carry meshes,
+ * materials, images from a Blender export) and return a clean GLB
+ * containing only the node hierarchy + that one animation track.
+ *
+ * The binary chunk is compacted to only the accessors the animation
+ * actually references. Nodes keep their parent-child hierarchy but
+ * shed mesh and skin references (they aren't needed for playback).
+ */
+function stripToSkeletonAnimation(
+  document: GltfJson,
+  binaryChunk: Uint8Array,
+  animIndex: number
+): ArrayBuffer {
+  const anim = document.animations![animIndex]!;
+
+  // Collect accessor indices referenced by this animation's samplers.
+  const usedAccessorIndices = new Set<number>();
+  for (const sampler of anim.samplers) {
+    usedAccessorIndices.add(sampler.input);
+    usedAccessorIndices.add(sampler.output);
+  }
+
+  // Collect bufferView indices used by those accessors.
+  const usedBufferViewIndices = new Set<number>();
+  for (const accIdx of usedAccessorIndices) {
+    const acc = document.accessors?.[accIdx];
+    if (acc?.bufferView !== undefined) usedBufferViewIndices.add(acc.bufferView);
+  }
+
+  // Build compact binary: copy each used bufferView's bytes (4-aligned).
+  const oldBinBase = binaryChunk.byteOffset;
+  const fullBuffer = binaryChunk.buffer;
+  const newByteOffsets = new Map<number, number>();
+  const parts: Uint8Array[] = [];
+  let compactedLength = 0;
+  for (const bvIdx of [...usedBufferViewIndices].sort((a, b) => a - b)) {
+    const bv = document.bufferViews?.[bvIdx];
+    if (!bv) continue;
+    const pad = (4 - (compactedLength % 4)) % 4;
+    if (pad > 0) {
+      parts.push(new Uint8Array(pad));
+      compactedLength += pad;
+    }
+    newByteOffsets.set(bvIdx, compactedLength);
+    const src = new Uint8Array(
+      fullBuffer,
+      oldBinBase + (bv.byteOffset ?? 0),
+      bv.byteLength ?? 0
+    );
+    parts.push(src);
+    compactedLength += src.byteLength;
+  }
+  const compactedBin = new Uint8Array(compactedLength);
+  let off = 0;
+  for (const part of parts) {
+    compactedBin.set(part, off);
+    off += part.byteLength;
+  }
+
+  // Remap bufferView indices -> compact indices.
+  const bvOldToNew = new Map<number, number>();
+  const newBufferViews: GltfJson["bufferViews"] = [];
+  for (const bvIdx of [...usedBufferViewIndices].sort((a, b) => a - b)) {
+    const bv = document.bufferViews?.[bvIdx];
+    if (!bv) continue;
+    bvOldToNew.set(bvIdx, newBufferViews.length);
+    newBufferViews.push({
+      buffer: 0,
+      byteOffset: newByteOffsets.get(bvIdx) ?? 0,
+      byteLength: bv.byteLength ?? 0
+    });
+  }
+
+  // Remap accessor indices -> compact indices.
+  const accOldToNew = new Map<number, number>();
+  const newAccessors: GltfJson["accessors"] = [];
+  for (const accIdx of [...usedAccessorIndices].sort((a, b) => a - b)) {
+    const acc = document.accessors?.[accIdx];
+    if (!acc) continue;
+    accOldToNew.set(accIdx, newAccessors.length);
+    newAccessors.push({
+      ...acc,
+      bufferView:
+        acc.bufferView !== undefined
+          ? (bvOldToNew.get(acc.bufferView) ?? acc.bufferView)
+          : undefined
+    });
+  }
+
+  // Rebuild animation with remapped sampler indices.
+  const newAnim = {
+    name: anim.name,
+    channels: anim.channels.map((ch) => ({ ...ch })),
+    samplers: anim.samplers.map((s) => ({
+      ...s,
+      input: accOldToNew.get(s.input) ?? s.input,
+      output: accOldToNew.get(s.output) ?? s.output
+    }))
+  };
+
+  // Clean nodes: strip mesh + skin references.
+  const cleanNodes: GltfJson["nodes"] = (document.nodes ?? []).map((node) => {
+    const { mesh: _mesh, skin: _skin, ...rest } = node as typeof node & {
+      mesh?: unknown;
+      skin?: unknown;
+    };
+    void _mesh;
+    void _skin;
+    return rest;
+  });
+
+  const outDocument: GltfJson = {
+    asset: { version: "2.0", generator: "sugarmagic" },
+    scene: 0,
+    scenes: [{ nodes: document.scenes?.[document.scene ?? 0]?.nodes ?? [] }],
+    nodes: cleanNodes,
+    animations: [newAnim] as GltfJson["animations"],
+    accessors: newAccessors,
+    bufferViews: newBufferViews,
+    buffers: [{ byteLength: compactedLength }]
+  };
+
+  return packGlb(outDocument, compactedBin);
+}
+
+/**
+ * Import a Blender GLB file as one or more animation library entries.
+ *
+ * Accepts Blender export quirks: dotted bone names (DEF-spine.001),
+ * extra non-bone nodes, meshes + materials included in the export
+ * (stripped in the re-emit). One library entry per animation action
+ * found in the file, named from the action.
+ *
+ * Validates that at least one animation channel targets a standard-rig
+ * bone name. Rejects with an actionable error if none match.
+ *
+ * Writes each stripped GLB to assets/animations/ and returns the
+ * in-memory blobs so callers can publishAssetSource without re-reading
+ * from disk (avoids the FSAccess read-after-write flake).
+ */
+export async function importAnimationLibraryFromGlbFile(
+  sourceFile: File,
+  request: ImportAnimationLibraryRequest
+): Promise<ImportAnimationLibraryResult> {
+  const { stem, ext } = getFileNameParts(sourceFile.name);
+  if (ext.toLowerCase() !== ".glb") {
+    throw new Error("Animation library imports accept GLB files only.");
+  }
+
+  const sourceBuffer = await sourceFile.arrayBuffer();
+  const chunks = readGlbFull(sourceBuffer);
+  if (!chunks) {
+    throw new Error("The selected file is not a valid GLB.");
+  }
+  const { document, binaryChunk } = chunks;
+
+  const animations = document.animations ?? [];
+  if (animations.length === 0) {
+    throw new Error("The selected GLB does not contain any animation clips.");
+  }
+
+  // Build a map of node index -> node name for bone validation.
+  const nodeNames = new Map<number, string>();
+  (document.nodes ?? []).forEach((node, index) => {
+    if (node.name) nodeNames.set(index, node.name);
+  });
+
+  // Validate: at least one channel in any animation targets a standard-rig bone.
+  let foundAnyRigBone = false;
+  const encounteredBoneNames = new Set<string>();
+  for (const anim of animations) {
+    for (const ch of anim.channels) {
+      const nodeName =
+        ch.target.node !== undefined ? nodeNames.get(ch.target.node) : undefined;
+      if (nodeName) {
+        encounteredBoneNames.add(nodeName);
+        if (STANDARD_RIG_BONE_SET.has(nodeName)) foundAnyRigBone = true;
+      }
+    }
+  }
+  if (!foundAnyRigBone) {
+    const found = [...encounteredBoneNames].slice(0, 5).join(", ");
+    throw new Error(
+      `No standard-rig bones found in animation tracks.` +
+        ` Expected names like "DEF-hips", "DEF-spine.001", "DEF-head".` +
+        (found ? ` Encountered: ${found}.` : "") +
+        ` Export from the standard maquette GLB or rename bones to match the contract.`
+    );
+  }
+
+  const safeStem = sanitizeFileNameSegment(stem);
+  const definitions: AnimationLibraryDefinition[] = [];
+  const writtenAssets: Array<{ relativeAssetPath: string; blob: Blob }> = [];
+  const warnings: string[] = [];
+  const assetsDir = request.descriptor.authoredAssetsPath;
+
+  for (let i = 0; i < animations.length; i += 1) {
+    const anim = animations[i]!;
+    const rawName = anim.name?.trim();
+    const clipName =
+      rawName && rawName.length > 0 ? rawName : `Clip ${i + 1}`;
+    const safeClip = sanitizeFileNameSegment(clipName);
+    const fileName = `${safeStem}-${safeClip}.glb`;
+    const relativeAssetPath = `${assetsDir}/animations/${fileName}`;
+
+    let strippedBuffer: ArrayBuffer;
+    try {
+      strippedBuffer = binaryChunk
+        ? stripToSkeletonAnimation(document, binaryChunk, i)
+        : sourceBuffer;
+    } catch (err) {
+      warnings.push(
+        `Clip "${clipName}": strip failed (${err instanceof Error ? err.message : String(err)}); writing source bytes.`
+      );
+      strippedBuffer = sourceBuffer;
+    }
+
+    const blob = new Blob([strippedBuffer], { type: "model/gltf-binary" });
+    await writeBlobFile(
+      request.projectHandle,
+      [assetsDir, "animations", fileName],
+      blob
+    );
+    writtenAssets.push({ relativeAssetPath, blob });
+
+    const definitionId = `${request.projectId}:animation-library:${safeStem}-${safeClip}`;
+    definitions.push(
+      createDefaultAnimationLibraryDefinition(request.projectId, {
+        definitionId,
+        displayName: clipName,
+        origin: "imported",
+        source: { relativeAssetPath, fileName, mimeType: "model/gltf-binary" },
+        clipNames: [clipName]
+      })
+    );
+  }
+
+  return { definitions, writtenAssets, warnings };
 }

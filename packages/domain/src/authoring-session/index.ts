@@ -104,6 +104,7 @@ import type {
 } from "../commands";
 import type {
   AssetDefinition,
+  AnimationLibraryDefinition,
   AudioClipDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
@@ -150,6 +151,7 @@ import {
   DEFAULT_CLOUD_SHADOW_SETTINGS,
   listAudioClipDefinitions as listAudioClipDefinitionsFromLibrary,
   listCharacterModelDefinitions as listCharacterModelDefinitionsFromLibrary,
+  listAnimationLibraryDefinitions as listAnimationLibraryDefinitionsFromLibrary,
   listCharacterAnimationDefinitions as listCharacterAnimationDefinitionsFromLibrary,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
@@ -325,6 +327,12 @@ export function getAllCharacterAnimationDefinitions(
   session: AuthoringSession
 ): CharacterAnimationDefinition[] {
   return listCharacterAnimationDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllAnimationLibraryDefinitions(
+  session: AuthoringSession
+): AnimationLibraryDefinition[] {
+  return listAnimationLibraryDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllEnvironmentDefinitions(
@@ -3253,6 +3261,66 @@ export function removeCharacterAnimationDefinitionFromSession(
           }
         })
       )
+    },
+    isDirty: true
+  };
+}
+
+export function addAnimationLibraryDefinitionToSession(
+  session: AuthoringSession,
+  definition: AnimationLibraryDefinition
+): AuthoringSession {
+  const existing = (
+    session.contentLibrary.animationLibraryDefinitions ?? []
+  ).findIndex((d) => d.definitionId === definition.definitionId);
+  const nextDefinitions = [
+    ...(session.contentLibrary.animationLibraryDefinitions ?? [])
+  ];
+  if (existing >= 0) {
+    nextDefinitions[existing] = definition;
+  } else {
+    nextDefinitions.push(definition);
+  }
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateAnimationLibraryDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<Pick<AnimationLibraryDefinition, "displayName">>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: (
+        session.contentLibrary.animationLibraryDefinitions ?? []
+      ).map((d) =>
+        d.definitionId === definitionId ? { ...d, ...patch } : d
+      )
+    },
+    isDirty: true
+  };
+}
+
+export function removeAnimationLibraryDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: (
+        session.contentLibrary.animationLibraryDefinitions ?? []
+      ).filter((d) => d.definitionId !== definitionId)
     },
     isDirty: true
   };

@@ -93,16 +93,17 @@ export interface ShellSelectionState {
  * Library popover kinds. Project-scoped reusable file-backed and graph-backed
  * content lives here. Surfaces are NOT a library kind — they're the composition
  * layer that references library content and are authored in the Surfaces
- * workspace, not browsed in a library popover. Character models and animations
- * are NOT library kinds either — they're entity-owned content authored via the
- * Player/NPC inspector file-pickers.
+ * workspace, not browsed in a library popover. Character models are entity-owned
+ * (1:1 with a character, authored via the Player/NPC inspector file-pickers).
+ * Animations are library-browseable: they're reusable across characters.
  */
 export type LibraryKind =
   | "assets"
   | "materials"
   | "textures"
   | "shaders"
-  | "audio";
+  | "audio"
+  | "animations";
 
 export interface ShellToolSessionState {
   workspaceId: string | null;
