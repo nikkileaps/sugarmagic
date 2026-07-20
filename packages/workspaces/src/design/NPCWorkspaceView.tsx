@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   ActionIcon,
   Box,
-  Button,
   Group,
   Menu,
   NumberInput,
@@ -55,7 +54,6 @@ import {
   type CharacterWizardServices
 } from "./character-wizard/CharacterWizard";
 import { AnimationPanel } from "./animation-panel/AnimationPanel";
-import { AnimationLibraryBrowser } from "./animation-panel/AnimationLibraryBrowser";
 import { WeightWorkbench } from "./weight-workbench/WeightWorkbench";
 
 export interface NPCWorkspaceViewProps {
@@ -70,7 +68,7 @@ export interface NPCWorkspaceViewProps {
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
   animationLibraryDefinitions: AnimationLibraryDefinition[];
-  /** path → blob URL map for resolving model + animation glbs. */
+  /** path -> blob URL map for resolving model + animation glbs. */
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
@@ -120,7 +118,6 @@ export function useNPCWorkspaceView(
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices,
     renderInspectorSections
   } = props;
@@ -136,7 +133,6 @@ export function useNPCWorkspaceView(
   } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [animMode, setAnimMode] = useState(false);
-  const [libBrowserSlot, setLibBrowserSlot] = useState<NPCAnimationSlot | null>(null);
   // Plan 064 UX rework: the rig button TOGGLES the weight
   // workbench for rigged characters (create-wizard for unrigged).
   const [rigMode, setRigMode] = useState(false);
@@ -245,11 +241,27 @@ export function useNPCWorkspaceView(
       (slot) => {
         const bindingId =
           selectedNPC.presentation.animationAssetBindings[slot] ?? null;
-        const animation = bindingId
-          ? characterAnimationDefinitions.find(
-              (definition) => definition.definitionId === bindingId
-            ) ?? null
-          : null;
+        let animation: CharacterAnimationDefinition | null = null;
+        if (bindingId) {
+          animation =
+            characterAnimationDefinitions.find(
+              (d) => d.definitionId === bindingId
+            ) ?? null;
+          if (!animation) {
+            const lib = animationLibraryDefinitions.find(
+              (d) => d.definitionId === bindingId
+            );
+            if (lib) {
+              animation = {
+                definitionId: lib.definitionId,
+                definitionKind: "character-animation",
+                displayName: lib.displayName,
+                source: lib.source,
+                clipNames: lib.clipNames
+              };
+            }
+          }
+        }
         return {
           value: slot,
           label: NPC_ANIMATION_SLOT_LABELS[slot],
@@ -257,7 +269,7 @@ export function useNPCWorkspaceView(
         };
       }
     );
-  }, [selectedNPC, characterAnimationDefinitions]);
+  }, [selectedNPC, characterAnimationDefinitions, animationLibraryDefinitions]);
 
   const availableInteractionModes = useMemo(
     () => new Set(interactionModeOptions.map((option) => option.value)),
@@ -357,6 +369,7 @@ export function useNPCWorkspaceView(
           assetSources={assetSources}
           targetHeight={selectedNPC.presentation.modelHeight ?? 1.7}
           services={characterWizardServices}
+          animationLibraryDefinitions={animationLibraryDefinitions}
           onCommitted={(bindings) => {
             const next = {
               ...selectedNPC.presentation.animationAssetBindings
@@ -369,6 +382,30 @@ export function useNPCWorkspaceView(
               presentation: {
                 ...selectedNPC.presentation,
                 animationAssetBindings: next
+              }
+            });
+          }}
+          onAssignFromLibrary={(slot, definitionId) => {
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: {
+                  ...selectedNPC.presentation.animationAssetBindings,
+                  [slot]: definitionId
+                }
+              }
+            });
+          }}
+          onClearSlot={(slot) => {
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: {
+                  ...selectedNPC.presentation.animationAssetBindings,
+                  [slot]: null
+                }
               }
             });
           }}
@@ -704,125 +741,6 @@ export function useNPCWorkspaceView(
               />
             </Stack>
 
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Animation Slots
-              </Text>
-              {(["idle", "walk", "run"] as NPCAnimationSlot[]).map((slot) => {
-                const boundId =
-                  selectedNPC.presentation.animationAssetBindings[slot];
-                const bound = boundId
-                  ? (characterAnimationDefinitions.find(
-                      (d) => d.definitionId === boundId
-                    ) ??
-                      animationLibraryDefinitions.find(
-                        (d) => d.definitionId === boundId
-                      ) ??
-                      null)
-                  : null;
-                const slotLabel = slot[0]!.toUpperCase() + slot.slice(1);
-                return (
-                  <Stack key={slot} gap={4}>
-                    <Text size="xs" fw={500}>
-                      {slotLabel}
-                    </Text>
-                    {bound ? (
-                      <Stack gap={4}>
-                        <Text size="xs">{bound.displayName}</Text>
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          {bound.source.relativeAssetPath}
-                        </Text>
-                        <Group gap="xs">
-                          <Button
-                            size="compact-xs"
-                            variant="light"
-                            onClick={async () => {
-                              const next = await onImportCharacterAnimationDefinition();
-                              if (!next) return;
-                              updateNPC({
-                                ...selectedNPC,
-                                presentation: {
-                                  ...selectedNPC.presentation,
-                                  animationAssetBindings: {
-                                    ...selectedNPC.presentation.animationAssetBindings,
-                                    [slot]: next.definitionId
-                                  }
-                                }
-                              });
-                            }}
-                          >
-                            Replace…
-                          </Button>
-                          <Button
-                            size="compact-xs"
-                            variant="light"
-                            onClick={() => setLibBrowserSlot(slot)}
-                          >
-                            From Library…
-                          </Button>
-                          <Button
-                            size="compact-xs"
-                            variant="subtle"
-                            color="red"
-                            onClick={() =>
-                              updateNPC({
-                                ...selectedNPC,
-                                presentation: {
-                                  ...selectedNPC.presentation,
-                                  animationAssetBindings: {
-                                    ...selectedNPC.presentation.animationAssetBindings,
-                                    [slot]: null
-                                  }
-                                }
-                              })
-                            }
-                          >
-                            Clear
-                          </Button>
-                        </Group>
-                      </Stack>
-                    ) : (
-                      <Stack gap={4}>
-                        {boundId ? (
-                          <Text size="xs" c="red">
-                            Bound animation is missing from the project — re-import.
-                          </Text>
-                        ) : null}
-                        <Group gap="xs">
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => setLibBrowserSlot(slot)}
-                          >
-                            From Library…
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="subtle"
-                            onClick={async () => {
-                              const next = await onImportCharacterAnimationDefinition();
-                              if (!next) return;
-                              updateNPC({
-                                ...selectedNPC,
-                                presentation: {
-                                  ...selectedNPC.presentation,
-                                  animationAssetBindings: {
-                                    ...selectedNPC.presentation.animationAssetBindings,
-                                    [slot]: next.definitionId
-                                  }
-                                }
-                              });
-                            }}
-                          >
-                            Import…
-                          </Button>
-                        </Group>
-                      </Stack>
-                    )}
-                  </Stack>
-                );
-              })}
-            </Stack>
 
             {renderInspectorSections?.({
               selectedNPC,
@@ -836,29 +754,7 @@ export function useNPCWorkspaceView(
         )}
       </Inspector>
     ),
-    centerPanel: (
-      <>
-        {isActive && selectedNPC ? centerPanel : null}
-        <AnimationLibraryBrowser
-          opened={libBrowserSlot !== null}
-          animationLibraryDefinitions={animationLibraryDefinitions}
-          onSelect={(definitionId) => {
-            if (!libBrowserSlot || !selectedNPC) return;
-            updateNPC({
-              ...selectedNPC,
-              presentation: {
-                ...selectedNPC.presentation,
-                animationAssetBindings: {
-                  ...selectedNPC.presentation.animationAssetBindings,
-                  [libBrowserSlot]: definitionId
-                }
-              }
-            });
-          }}
-          onClose={() => setLibBrowserSlot(null)}
-        />
-      </>
-    ),
+    centerPanel: isActive && selectedNPC ? centerPanel : null,
     viewportOverlay: null
   };
 }
