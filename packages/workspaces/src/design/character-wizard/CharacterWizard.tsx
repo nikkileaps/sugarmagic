@@ -397,7 +397,11 @@ export function CharacterWizard(props: CharacterWizardProps) {
       setSourceBytes(bytes);
       setSourceUrl(trackBlobUrl(bytes));
       setLandmarks(analysis.landmarks);
-      if (characterName === defaultCharacterName || characterName.length === 0) {
+      // Only auto-name from the file when no model was previously loaded
+      // (either via initialSourceBytes or a prior pick). Prevents a
+      // re-pick from silently renaming the character to a different
+      // character's name and clobbering their files on commit.
+      if (!sourceBytes && (characterName === defaultCharacterName || characterName.length === 0)) {
         setCharacterName(file.name.replace(/\.glb$/i, ""));
       }
     } catch (analysisError) {
