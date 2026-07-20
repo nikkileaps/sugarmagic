@@ -91,6 +91,8 @@ import {
   addAssetDefinitionToSession,
   addAudioClipDefinitionToSession,
   addAnimationLibraryDefinitionToSession,
+  updateAnimationLibraryDefinitionInSession,
+  removeAnimationLibraryDefinitionFromSession,
   addCharacterAnimationDefinitionToSession,
   addCharacterModelDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -152,6 +154,7 @@ import {
   importCharacterAnimationDefinition,
   importCharacterModelDefinition,
   importAudioClipDefinition,
+  importAnimationLibraryFromGlbFile,
   readBlobFile,
   readMaskFile,
   writeBlobFile,
@@ -952,6 +955,10 @@ export function App() {
     if (!session) return [];
     return getAllAudioClipDefinitions(session);
   }, [session]);
+  const animationLibraryDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllAnimationLibraryDefinitions(session);
+  }, [session]);
   const soundCueDefinitions = useMemo(() => {
     if (!session) return [];
     return getAllSoundCueDefinitions(session);
@@ -1672,6 +1679,80 @@ export function App() {
         .getState()
         .updateSession(
           removeAudioClipDefinitionFromSession(currentSession, definitionId)
+        );
+    },
+    []
+  );
+
+  const handleImportAnimationLibrary = useCallback(async () => {
+    const {
+      handle,
+      descriptor,
+      session: currentSession
+    } = projectStore.getState();
+    if (!handle || !descriptor || !currentSession) return null;
+    const fileHandle = await pickFile({
+      types: [{ description: "Blender GLB", accept: { "model/gltf-binary": [".glb"] } }]
+    });
+    const file = await fileHandle.getFile();
+    try {
+      const result = await importAnimationLibraryFromGlbFile(file, {
+        projectHandle: handle,
+        descriptor,
+        projectId: currentSession.gameProject.identity.id
+      });
+      if (result.warnings.length > 0) {
+        console.warn("[animation-library] Import warnings:", result.warnings);
+      }
+      const { session: latestSession } = projectStore.getState();
+      if (!latestSession) return null;
+      let next = latestSession;
+      for (const definition of result.definitions) {
+        next = addAnimationLibraryDefinitionToSession(next, definition);
+      }
+      for (const { relativeAssetPath, blob } of result.writtenAssets) {
+        assetSourceStore.getState().setSource(relativeAssetPath, blob);
+      }
+      projectStore.getState().updateSession(next);
+      return result.definitions;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return null;
+      }
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : `Animation import failed: ${String(error)}`
+      );
+      return null;
+    }
+  }, []);
+
+  const handleUpdateAnimationLibraryDefinition = useCallback(
+    (definitionId: string, displayName: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      projectStore
+        .getState()
+        .updateSession(
+          updateAnimationLibraryDefinitionInSession(currentSession, definitionId, {
+            displayName
+          })
+        );
+    },
+    []
+  );
+
+  const handleRemoveAnimationLibraryDefinition = useCallback(
+    (definitionId: string) => {
+      const { session: currentSession } = projectStore.getState();
+      if (!currentSession) return;
+      if (!window.confirm("Remove this animation library from the project?"))
+        return;
+      projectStore
+        .getState()
+        .updateSession(
+          removeAnimationLibraryDefinitionFromSession(currentSession, definitionId)
         );
     },
     []
@@ -3313,6 +3394,7 @@ export function App() {
         shaderDefinitions={shaderDefinitions}
         audioClipDefinitions={audioClipDefinitions}
         assetDefinitions={assetDefinitions}
+        animationLibraryDefinitions={animationLibraryDefinitions}
         contentLibrary={session?.contentLibrary ?? null}
         assetSources={assetSources}
         assetResolver={studioRenderEngine.assetResolver}
@@ -3348,9 +3430,12 @@ export function App() {
         onImportPbrMaterial={handleImportPbrMaterial}
         onImportTextureDefinition={handleImportTextureDefinition}
         onImportAudioClipDefinition={handleImportAudioClipDefinition}
+        onImportAnimationLibrary={handleImportAnimationLibrary}
         onUpdateAudioClipDefinition={handleUpdateAudioClipDefinition}
+        onUpdateAnimationLibraryDefinition={handleUpdateAnimationLibraryDefinition}
         onRemoveMaterialDefinition={handleRemoveMaterialDefinition}
         onRemoveAudioClipDefinition={handleRemoveAudioClipDefinition}
+        onRemoveAnimationLibraryDefinition={handleRemoveAnimationLibraryDefinition}
         onEditShaderInGraph={(shaderDefinitionId) => {
           // Close the popover and route the existing workspace-
           // navigation handler to the Render workspace's shader
@@ -3757,6 +3842,21 @@ export function App() {
                           }}
                         >
                           Audio
+                        </Menu.Item>
+                        <Menu.Item
+                          onClick={() =>
+                            shellStore.getState().setActiveLibrary("animations")
+                          }
+                          styles={{
+                            item: {
+                              fontSize: "var(--sm-font-size-lg)",
+                              color: "var(--sm-color-text)",
+                              padding: "10px 16px",
+                              "&:hover": { background: "var(--sm-active-bg)" }
+                            }
+                          }}
+                        >
+                          Animations
                         </Menu.Item>
                       </Menu.Sub.Dropdown>
                     </Menu.Sub>
