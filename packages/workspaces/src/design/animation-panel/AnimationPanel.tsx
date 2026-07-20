@@ -725,8 +725,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
                       }
                     />
                     <Text size="xs" c="var(--sm-color-subtext)">
-                      Drag a wrist or tail handle; applies to all
-                      generated slots.
+                      Drag a handle (wrists, head, chest, tail);
+                      applies to all generated slots.
                     </Text>
                   </ToolOptionsBar>
                 ) : null}

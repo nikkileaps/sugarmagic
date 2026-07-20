@@ -231,6 +231,64 @@ describe("generateStandardSkeleton (Plan 062)", () => {
     expect(skeleton.rigId).toBe(STANDARD_RIG_CORE.rigId);
   });
 
+  it("pins the hips rest orientation to the contract (pelvis-depth immune)", () => {
+    // 2026-07-20 regression (Mim on her toes): clips play verbatim
+    // locals, so a tracked hips lands at the CONTRACT's world tilt
+    // — but untracked bones (legs in generated idles) hold local
+    // rest under the PLAYED parent, drifting by the rest-vs-played
+    // difference. The hips rest must therefore BE the contract
+    // orientation regardless of where the pelvis marker sits in
+    // depth.
+    const landmarks = sampleLandmarks();
+    const moved = structuredClone(landmarks);
+    moved.pelvis = [
+      landmarks.pelvis[0],
+      landmarks.pelvis[1],
+      landmarks.pelvis[2] + 0.08
+    ];
+    const a = generateStandardSkeleton(landmarks);
+    const b = generateStandardSkeleton(moved);
+    const hipsA = a.bones.find((bone) => bone.name === "DEF-hips")!;
+    const hipsB = b.bones.find((bone) => bone.name === "DEF-hips")!;
+    // Identical rest rotation despite the pelvis depth change...
+    hipsA.localRestRotation.forEach((component, index) => {
+      expect(component).toBeCloseTo(hipsB.localRestRotation[index]!, 6);
+    });
+    // ...and it equals the contract's: root local * hips local ==
+    // contract hips world.
+    const contractByName = new Map(
+      STANDARD_RIG_CORE.bones.map((bone) => [bone.name, bone])
+    );
+    const mulQuat = (
+      q1: readonly number[],
+      q2: readonly number[]
+    ): [number, number, number, number] => [
+      q1[3]! * q2[0]! + q1[0]! * q2[3]! + q1[1]! * q2[2]! - q1[2]! * q2[1]!,
+      q1[3]! * q2[1]! - q1[0]! * q2[2]! + q1[1]! * q2[3]! + q1[2]! * q2[0]!,
+      q1[3]! * q2[2]! + q1[0]! * q2[1]! - q1[1]! * q2[0]! + q1[2]! * q2[3]!,
+      q1[3]! * q2[3]! - q1[0]! * q2[0]! - q1[1]! * q2[1]! - q1[2]! * q2[2]!
+    ];
+    const rootA = a.bones.find((bone) => bone.name === "root")!;
+    const generatedWorld = mulQuat(
+      rootA.localRestRotation,
+      hipsA.localRestRotation
+    );
+    const contractWorld = mulQuat(
+      contractByName.get("root")!.restRotation,
+      contractByName.get("DEF-hips")!.restRotation
+    );
+    // Same rotation up to quaternion sign.
+    const sign = Math.sign(
+      generatedWorld[3] * contractWorld[3]! +
+        generatedWorld[0] * contractWorld[0]! +
+        generatedWorld[1] * contractWorld[1]! +
+        generatedWorld[2] * contractWorld[2]!
+    );
+    generatedWorld.forEach((component, index) => {
+      expect(component).toBeCloseTo(sign * contractWorld[index]!, 5);
+    });
+  });
+
   it("places landmark-driven bones at their landmarks and derives fingers near hands", () => {
     const landmarks = sampleLandmarks();
     const skeleton = generateStandardSkeleton(landmarks);

@@ -34,7 +34,7 @@ const LANDMARK_LABELS: Record<string, string> = {
   pelvis: "Pelvis",
   chest: "Chest",
   neck: "Neck",
-  head: "Head",
+  head: "Head pivot (skull base, not head center)",
   shoulderLeft: "Left Shoulder",
   elbowLeft: "Left Elbow",
   wristLeft: "Left Wrist",

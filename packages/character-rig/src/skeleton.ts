@@ -276,7 +276,20 @@ export function generateStandardSkeleton(
     // to marker placement.
     const primaryChild = childrenOf.get(bone.name)?.[0];
     let charWorld: Quat;
-    if (bone.name === "DEF-head") {
+    if (bone.name === "DEF-hips") {
+      // ROOT is pinned to the CONTRACT world orientation
+      // (2026-07-20): clips play verbatim locals, so a tracked
+      // hips always lands at the contract's 14.5deg-forward world
+      // tilt — but bones the clip does NOT track (legs in
+      // generated idles) hold their local rest under the PLAYED
+      // parent, drifting by rest-vs-played difference. With a
+      // marker-aligned hips rest that pitched the whole body onto
+      // its toes by up to that full 14.5deg (Mim). Pinning rest ==
+      // played makes untracked children immune to pelvis-marker
+      // depth, same policy as DEF-head below. The pelvis marker
+      // still sets the hips POSITION.
+      charWorld = contractWorld;
+    } else if (bone.name === "DEF-head") {
       const contractDirection = quatRotateVec3(contractWorld, [0, 1, 0]);
       charWorld = quatMultiply(
         quatFromUnitVectors(contractDirection, [0, 1, 0]),
