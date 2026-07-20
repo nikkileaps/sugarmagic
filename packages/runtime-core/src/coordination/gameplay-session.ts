@@ -1072,16 +1072,10 @@ export function createRuntimeGameplaySessionController(
       case "notify-quest-event":
         questManager.notifyEvent(proposal.eventName);
         return;
-      case "surface-beat-evidence":
-        console.debug("[runtime-core] conversation beat evidence", proposal);
-        return;
       case "start-scripted-followup":
         pendingScriptedFollowupDialogueId = proposal.dialogueDefinitionId;
         return;
       case "request-close":
-        return;
-      case "propose-quest-hook":
-        console.debug("[runtime-core] ignored quest hook proposal", proposal);
         return;
       default: {
         const exhaustive: never = proposal;

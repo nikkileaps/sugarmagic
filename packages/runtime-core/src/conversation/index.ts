@@ -81,13 +81,7 @@ export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
   | { kind: "set-conversation-flag"; key: string; value: unknown }
   | { kind: "notify-quest-event"; eventName: string }
-  | { kind: "surface-beat-evidence"; beatId: string; evidence: string }
-  | { kind: "request-close" }
-  | {
-      kind: "propose-quest-hook";
-      questTemplateId: string;
-      params: Record<string, unknown>;
-    };
+  | { kind: "request-close" };
 
 export interface ConversationTurnEnvelope {
   turnId: string;
