@@ -1321,8 +1321,7 @@ describe("plugin infrastructure", () => {
         pluginConfigurations: [
           createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true, {
             openAiVectorStoreId: "vs_test_123",
-            anthropicModel: "claude-opus-4-7",
-            openAiEmbeddingModel: "text-embedding-3-large"
+            anthropicModel: "claude-opus-4-7"
           })
         ]
       })
@@ -1330,8 +1329,7 @@ describe("plugin infrastructure", () => {
 
     expect(plan.gatewayRuntimeConfigEnv).toEqual({
       SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID: "vs_test_123",
-      SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7",
-      SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL: "text-embedding-3-large"
+      SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7"
     });
 
     const deployScript = plan.managedFiles.find(
@@ -1343,10 +1341,6 @@ describe("plugin infrastructure", () => {
     expect(deployScript?.content).toContain(
       'RUNTIME_CONFIG_PAIRS+=("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID='
     );
-    expect(deployScript?.content).toContain(
-      'RUNTIME_CONFIG_PAIRS+=("SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL='
-    );
-
     const workflow = plan.managedFiles.find(
       (file) =>
         file.relativePath === ".github/workflows/sugardeploy-deploy.yml"
@@ -1356,9 +1350,6 @@ describe("plugin infrastructure", () => {
     );
     expect(workflow?.content).toContain(
       'SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7"'
-    );
-    expect(workflow?.content).toContain(
-      'SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL: "text-embedding-3-large"'
     );
   });
 
@@ -3717,7 +3708,6 @@ describe("plugin infrastructure", () => {
       loreRepositoryRef: "main",
       openAiVectorStoreId: "",
       anthropicModel: "",
-      openAiEmbeddingModel: "",
       maxEvidenceResults: 8,
       debugLogging: true,
       tone: ""
@@ -3741,7 +3731,6 @@ describe("plugin infrastructure", () => {
       loreRepositoryRef: "main",
       openAiVectorStoreId: "",
       anthropicModel: "",
-      openAiEmbeddingModel: "",
       maxEvidenceResults: 4,
       debugLogging: false,
       tone: ""

@@ -20,7 +20,6 @@ export { HELLO_PLUGIN_ID, normalizeHelloPluginConfig } from "../catalog/hello";
 export {
   SUGARAGENT_PLUGIN_ID,
   SugarAgentGatewayLLMClient,
-  SugarAgentGatewayEmbeddingsClient,
   SugarAgentGatewayVectorStoreClient,
   normalizeSugarAgentPluginConfig,
   type BearerTokenGetter

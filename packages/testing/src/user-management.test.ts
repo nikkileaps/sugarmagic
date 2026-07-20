@@ -36,7 +36,6 @@ import {
 } from "@sugarmagic/runtime-core";
 import {
   SugarAgentGatewayLLMClient,
-  SugarAgentGatewayEmbeddingsClient,
   SugarAgentGatewayVectorStoreClient,
   createCookieSessionStorage,
   normalizeSugarProfilePluginConfig
@@ -2377,25 +2376,6 @@ describe("47.9.5 — SugarAgent gateway clients send Authorization from the live
       const headersB = (captured.calls[1].headers ?? {}) as Record<string, string>;
       expect(headersA.authorization).toBe("Bearer token-A");
       expect(headersB.authorization).toBe("Bearer token-B");
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("omits the Authorization header when the getter returns null", async () => {
-    const { fetchStub, captured } = makeFetchStub({
-      ok: true,
-      embedding: { values: [0.1] }
-    });
-    vi.stubGlobal("fetch", fetchStub);
-    try {
-      const client = new SugarAgentGatewayEmbeddingsClient(
-        "https://gateway.example",
-        async () => null
-      );
-      await client.createEmbedding({ model: "m", input: "x" });
-      const headers = (captured.calls[0].headers ?? {}) as Record<string, string>;
-      expect(headers.authorization).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
     }

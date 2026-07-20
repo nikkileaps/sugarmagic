@@ -18,20 +18,9 @@ const TEST_ENVIRONMENT = {
   SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: "http://localhost:8787"
 };
 
-// Default gateway mock: handles the two routes every grounded turn calls.
-// /retrieve/embed -- SCHEDULED FOR DELETION in 071.3 (vestigial embeddings chain)
-// /retrieve/search -- returns empty results so no evidence reaches the generator
-//                     (tests that need evidence override this via vi.stubGlobal)
-// Any other URL throws -- alarm for unexpected calls on any exercised code path.
 function makeDefaultGatewayMock() {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input.toString();
-    if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-      return new Response(
-        JSON.stringify({ embedding: [0.1, 0.2, 0.3], requestId: "embed-test" }),
-        { status: 200, headers: { "content-type": "application/json" } }
-      );
-    }
     if (url.endsWith("/api/sugaragent/retrieve/search")) {
       return new Response(
         JSON.stringify({ results: [], requestId: "search-test" }),
@@ -365,12 +354,6 @@ describe("SugarAgent runtime provider", () => {
             : null;
         requests.push({ url, body });
 
-        if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-          return new Response(
-            JSON.stringify({ embedding: [0.1, 0.2, 0.3], requestId: "embed-1" }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
         if (url.endsWith("/api/sugaragent/retrieve/search")) {
           const isFiltered = body?.filters != null;
           return new Response(
@@ -456,12 +439,6 @@ describe("SugarAgent runtime provider", () => {
             : null;
         requests.push({ url, body });
 
-        if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-          return new Response(
-            JSON.stringify({ embedding: [0.4, 0.2, 0.1], requestId: "embed-here" }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
         if (url.endsWith("/api/sugaragent/retrieve/search")) {
           return new Response(
             JSON.stringify({
@@ -608,16 +585,8 @@ describe("SugarAgent runtime provider", () => {
   it("retries transient gateway overloads (529), then exits politely and closes the conversation", async () => {
     vi.useFakeTimers();
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
-
-      // SCHEDULED FOR DELETION in 071.3 -- vestigial embeddings chain
-      if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-        return new Response(
-          JSON.stringify({ embedding: [0.1, 0.2, 0.3], requestId: "embed-retry" }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
 
       if (url.endsWith("/api/sugaragent/retrieve/search")) {
         return new Response(

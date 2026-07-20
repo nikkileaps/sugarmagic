@@ -1,7 +1,6 @@
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import {
   OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
-  type EmbeddingsProvider,
   type OpenAIVectorStoreFilter,
   type VectorStoreProvider
 } from "../clients";
@@ -171,11 +170,14 @@ export interface RetrieveStageInput {
   interpret: InterpretResult;
 }
 
+// DEFERRED SEAM (071.3): if client-side re-ranking or local embeddings are added
+// (e.g. a Plan 019 re-rank stage), restore an EmbeddingsProvider here and wire
+// the fingerprint into the retrieval decision. For now, the gateway embeds
+// server-side from the raw text query; no browser-side embed call is needed.
 export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResult> {
   readonly stageId = "Retrieve";
 
   constructor(
-    private readonly embeddingsProvider: EmbeddingsProvider | null,
     private readonly vectorStoreProvider: VectorStoreProvider | null
   ) {}
 
@@ -216,8 +218,6 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       activeQuestDisplayName
     );
 
-    let semanticQueryFingerprint: number[] | null = null;
-    let usedEmbeddings = false;
     let vectorSearchPerformed = false;
     let evidencePack: RetrieveResult["evidencePack"] = [];
     let fallbackReason: string | null = null;
@@ -242,24 +242,6 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             value: targetedLorePageId
           }
         : undefined;
-
-    // Story 46.14 — embedding model + vector store id live
-    // server-side (Studio vite middleware in dev; Cloud Run gateway
-    // in published-web). Browser-side code passes empty strings;
-    // the gateway defaults them from its own configuration.
-    if (!skipRetrieval && this.embeddingsProvider && canUseProxyDefaults) {
-      try {
-        semanticQueryFingerprint = await this.embeddingsProvider.embedQuery(
-          searchQuery,
-          ""
-        );
-        usedEmbeddings = true;
-      } catch {
-        status = "degraded";
-        fallbackReason = "embedding-unavailable";
-        semanticQueryFingerprint = null;
-      }
-    }
 
     if (!skipRetrieval && this.vectorStoreProvider && canUseProxyDefaults) {
       try {
@@ -326,9 +308,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
 
     const output: RetrieveResult = {
       evidencePack,
-      usedEmbeddings,
-      vectorSearchPerformed,
-      semanticQueryFingerprint
+      vectorSearchPerformed
     };
 
     return {
@@ -364,9 +344,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           retrievalFilters,
           broadenedBeyondLorePage,
           pinnedNpcLoreEvidence,
-          usedEmbeddings,
-          vectorSearchPerformed,
-          semanticQueryDimensions: semanticQueryFingerprint?.length ?? 0
+          vectorSearchPerformed
         },
         fallbackReason
       ),

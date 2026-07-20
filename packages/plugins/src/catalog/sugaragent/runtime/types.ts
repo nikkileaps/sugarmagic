@@ -74,7 +74,6 @@ export interface SugarAgentPluginConfig {
    */
   openAiVectorStoreId: string;
   anthropicModel: string;
-  openAiEmbeddingModel: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
@@ -206,9 +205,7 @@ export interface RetrievedEvidenceItem {
 
 export interface RetrieveResult {
   evidencePack: RetrievedEvidenceItem[];
-  usedEmbeddings: boolean;
   vectorSearchPerformed: boolean;
-  semanticQueryFingerprint: number[] | null;
 }
 
 export interface PlanResult {

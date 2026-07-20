@@ -12,14 +12,11 @@ import {
   // client classes were deleted because the browser-side SugarAgent
   // never reads raw Anthropic / OpenAI keys (they live server-side, in
   // Studio's vite middleware or the deployed Cloud Run gateway).
-  SugarAgentGatewayEmbeddingsClient,
-  SugarAgentGatewayEmbeddingsProvider,
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayLLMProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
   type BearerTokenGetter,
-  type EmbeddingsProvider,
   type LLMProvider,
   type VectorStoreProvider
 } from "./clients";
@@ -200,7 +197,6 @@ function resolveProviders(
   _logger: SugarAgentLogger
 ): {
   llmProvider: LLMProvider | null;
-  embeddingsProvider: EmbeddingsProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
@@ -225,9 +221,6 @@ function resolveProviders(
   return {
     llmProvider: new SugarAgentGatewayLLMProvider(
       new SugarAgentGatewayLLMClient(baseUrl, getBearerToken)
-    ),
-    embeddingsProvider: new SugarAgentGatewayEmbeddingsProvider(
-      new SugarAgentGatewayEmbeddingsClient(baseUrl, getBearerToken)
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
       new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
@@ -405,13 +398,13 @@ export function createSugarAgentConversationProvider(
   const logger = createSugarAgentLogger(
     config.debugLogging || config.proxyBaseUrl.trim().length > 0
   );
-  const { llmProvider, embeddingsProvider, vectorStoreProvider } = resolveProviders(
+  const { llmProvider, vectorStoreProvider } = resolveProviders(
     config,
     logger
   );
   const stages = {
     interpret: new InterpretStage(),
-    retrieve: new RetrieveStage(embeddingsProvider, vectorStoreProvider),
+    retrieve: new RetrieveStage(vectorStoreProvider),
     plan: new PlanStage(),
     generate: new GenerateStage(llmProvider),
     audit: new AuditStage(),
@@ -421,7 +414,6 @@ export function createSugarAgentConversationProvider(
   logger.logPluginEvent("provider-registered", {
     providerId: SUGARAGENT_PROVIDER_ID,
     llmBackend: llmProvider ? "anthropic" : "deterministic",
-    embeddingsBackend: embeddingsProvider ? "openai" : "none",
     vectorStoreBackend: vectorStoreProvider ? "openai-hosted" : "none"
   });
 

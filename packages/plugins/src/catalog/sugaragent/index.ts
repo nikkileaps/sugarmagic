@@ -15,7 +15,6 @@ export const SUGARAGENT_PLUGIN_ID = "sugaragent";
 // imports them.
 export {
   SugarAgentGatewayLLMClient,
-  SugarAgentGatewayEmbeddingsClient,
   SugarAgentGatewayVectorStoreClient,
   type BearerTokenGetter
 } from "./runtime/clients";
@@ -179,10 +178,6 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicModel === "string"
         ? config.anthropicModel.trim()
         : "",
-    openAiEmbeddingModel:
-      typeof config?.openAiEmbeddingModel === "string"
-        ? config.openAiEmbeddingModel.trim()
-        : "",
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -263,15 +258,6 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       placeholder: "claude-sonnet-4-5"
     },
     {
-      configKey: "openAiEmbeddingModel",
-      label: "OpenAI Embedding Model",
-      type: "text",
-      group: "Gateway Runtime Config",
-      description:
-        "Override the embedding model the gateway's retrieve route uses. Empty = gateway default (text-embedding-3-small). Must match the model used to ingest the vector store above.",
-      placeholder: "text-embedding-3-small"
-    },
-    {
       configKey: "maxEvidenceResults",
       label: "Max Evidence Results",
       type: "number",
@@ -316,13 +302,6 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         "Default Anthropic model id the gateway uses when generating turns (e.g., `claude-sonnet-4-5`).",
       nonSecretAttestation: "safe-to-expose-publicly"
     },
-    {
-      configKey: "openAiEmbeddingModel",
-      envVarName: "SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL",
-      description:
-        "Default OpenAI embedding model the gateway's retrieve route uses (e.g., `text-embedding-3-small`).",
-      nonSecretAttestation: "safe-to-expose-publicly"
-    }
   ],
   defaultConfig: {
     loreSourceKind: "local",
@@ -331,7 +310,6 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     loreRepositoryRef: "main",
     openAiVectorStoreId: "",
     anthropicModel: "",
-    openAiEmbeddingModel: "",
     maxEvidenceResults: 4,
     debugLogging: false,
     tone: ""

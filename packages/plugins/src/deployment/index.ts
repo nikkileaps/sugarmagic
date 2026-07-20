@@ -1251,57 +1251,6 @@ async function handleSugarAgentGenerate(req, res) {
   });
 }
 
-async function handleSugarAgentEmbed(req, res) {
-  if (req.method !== "POST") {
-    sendMethodNotAllowed(res, ["POST", "OPTIONS"]);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const input = typeof body.input === "string" ? body.input.trim() : "";
-  const model =
-    typeof body.model === "string" && body.model.trim()
-      ? body.model.trim()
-      : resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL", "text-embedding-3-small");
-
-  if (!input) {
-    sendJson(res, 400, {
-      ok: false,
-      error: "InvalidRequest",
-      message: "input is required."
-    });
-    return;
-  }
-
-  const { payload, headers } = await requestJson(
-    "https://api.openai.com/v1/embeddings",
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
-      },
-      body: JSON.stringify({
-        input,
-        model
-      })
-    },
-    "OpenAI embeddings request"
-  );
-
-  const embedding = Array.isArray(payload?.data?.[0]?.embedding)
-    ? payload.data[0].embedding
-    : null;
-  if (!embedding) {
-    throw new Error("OpenAI embeddings response did not include an embedding.");
-  }
-
-  sendJson(res, 200, {
-    embedding,
-    requestId: headers.get("x-request-id")
-  });
-}
-
 async function handleSugarAgentSearch(req, res) {
   if (req.method !== "POST") {
     sendMethodNotAllowed(res, ["POST", "OPTIONS"]);
@@ -1689,15 +1638,6 @@ ${gatewayAuthMode === "bearer" ? `  if (!authorizeBearer(req)) {
       return;
     }
 
-    if (match.routeId === "sugaragent-retrieve" && path === match.path + "/embed") {
-      logInfo("gateway:dispatch", {
-        routeId: match.routeId,
-        path
-      });
-      await handleSugarAgentEmbed(req, res);
-      return;
-    }
-
     if (match.routeId === "sugaragent-retrieve" && path === match.path + "/search") {
       logInfo("gateway:dispatch", {
         routeId: match.routeId,
@@ -1892,7 +1832,6 @@ function buildLocalManagedFiles(
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL=${loreSource.repositoryUrl}`,
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_REF=${loreSource.repositoryRef}`,
         `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
-        `SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
         `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`,
         `SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=*`
       ])
@@ -2280,7 +2219,6 @@ function buildGoogleCloudRunManagedFiles(
         `SUGARMAGIC_GCP_PROJECT_ID=${overrides.projectId}`,
         `SUGARMAGIC_GCP_REGION=${overrides.region}`,
         `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
-        `SUGARMAGIC_SUGARAGENT_OPENAI_EMBEDDING_MODEL=text-embedding-3-small`,
         `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`
       ])
     ),
