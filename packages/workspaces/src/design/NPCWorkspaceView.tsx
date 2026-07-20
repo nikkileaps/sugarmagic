@@ -479,6 +479,20 @@ export function useNPCWorkspaceView(
           defaultCharacterName={selectedNPC.displayName}
           services={characterWizardServices}
           editSession={wizardEditSession}
+          riggedCharacterTemplates={characterModelDefinitions
+            .filter(
+              (m) =>
+                m.rigId &&
+                m.definitionId !== boundCharacterModel?.definitionId
+            )
+            .map((m) => ({
+              label: m.source.fileName.replace(/-rigged\.glb$/i, ""),
+              fetchBytes: async () => {
+                const url = assetSources[m.source.relativeAssetPath];
+                if (!url) throw new Error("Model not loaded");
+                return (await fetch(url)).arrayBuffer();
+              }
+            }))}
           onClose={() => {
             setWizardOpen(false);
             setWizardEditSession(null);

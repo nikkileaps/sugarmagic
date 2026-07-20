@@ -26,6 +26,7 @@ import {
   Box,
   Button,
   Group,
+  Select,
   Stack,
   Switch,
   Text,
@@ -198,6 +199,13 @@ export interface CharacterWizardProps {
      *  regeneration on marker-level edits). */
     boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null;
+  /** Already-rigged characters the user can copy bone positions from.
+   *  Shown as a "Copy rig from..." select in the joints step so new
+   *  characters with similar anatomy skip tedious marker placement. */
+  riggedCharacterTemplates?: Array<{
+    label: string;
+    fetchBytes: () => Promise<ArrayBuffer>;
+  }>;
   /** Fired after commit; the workspace binds model + slots. */
   onCommitted: (result: {
     characterModelDefinition: CharacterModelDefinition;
@@ -244,6 +252,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
     services,
     editSession,
     initialSourceBytes,
+    riggedCharacterTemplates,
     onCommitted,
     onClose
   } = props;
@@ -261,6 +270,9 @@ export function CharacterWizard(props: CharacterWizardProps) {
   // Mirroring defaults ON — symmetric characters are the design
   // center, so one drag places both sides (nikki, 2026-07-06).
   const [mirroring, setMirroring] = useState(true);
+  // Resets to null immediately after selection so the Select acts as
+  // a one-shot trigger rather than a persistent choice.
+  const [copyRigTemplateIdx, setCopyRigTemplateIdx] = useState<string | null>(null);
   // Plan 064 — optional tail: three extra sagittal markers.
   const hasTail = Boolean(landmarks?.tailBase);
   const toggleTail = useCallback(
@@ -554,6 +566,41 @@ export function CharacterWizard(props: CharacterWizardProps) {
                 />
               </Group>
             </Group>
+            {riggedCharacterTemplates && riggedCharacterTemplates.length > 0 ? (
+              <Select
+                size="xs"
+                placeholder="Copy rig from..."
+                data={riggedCharacterTemplates.map((t, i) => ({
+                  value: String(i),
+                  label: t.label
+                }))}
+                value={copyRigTemplateIdx}
+                disabled={busy}
+                onChange={(idx) => {
+                  if (idx === null) return;
+                  setCopyRigTemplateIdx(null);
+                  const template = riggedCharacterTemplates[Number(idx)];
+                  if (!template) return;
+                  setBusy(true);
+                  setBusyLabel("Copying rig...");
+                  void template
+                    .fetchBytes()
+                    .then((bytes) => services.prepareEdit(bytes))
+                    .then((loaded) => {
+                      setLandmarks(loaded.landmarks);
+                      landmarksDirtyRef.current = true;
+                    })
+                    .catch((copyError) => {
+                      setError(
+                        copyError instanceof Error
+                          ? copyError.message
+                          : String(copyError)
+                      );
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              />
+            ) : null}
             <Box style={{ height: 380 }}>
               <MarkerViewport
                 key={hasTail ? "with-tail" : "no-tail"}
