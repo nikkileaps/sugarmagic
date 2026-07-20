@@ -69,8 +69,6 @@ function ensureProviderState(
     consecutiveFallbackTurns: 0,
     closeRequested: false,
     history: [],
-    topicCoverage: [],
-    referents: [],
     lastTurnDiagnostics: {}
   };
   stateContainer[SUGARAGENT_STATE_KEY] = next;

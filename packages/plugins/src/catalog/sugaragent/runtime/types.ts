@@ -92,8 +92,6 @@ export interface SugarAgentProviderState {
   consecutiveFallbackTurns: number;
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
-  topicCoverage: string[];
-  referents: string[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
 }
 
@@ -103,7 +101,6 @@ export type TurnIntent =
   | "identity_self"
   | "lore_world"
   | "lore_other"
-  | "mixed_knowledge"
   | "quest_guidance"
   | "farewell"
   | "unclear";
@@ -126,7 +123,6 @@ export type QueryType =
   | "self_query"
   | "other_query"
   | "world_query"
-  | "mixed_query"
   | "quest_query";
 export type TurnPath = "social_fast" | "grounded";
 export type ReferentKind = "npc" | "location" | "faction" | "object" | "topic" | "unknown";

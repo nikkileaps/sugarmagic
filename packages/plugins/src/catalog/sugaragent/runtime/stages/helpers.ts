@@ -55,20 +55,6 @@ export function findStageDirectionViolations(text: string): string[] {
     .map((entry) => entry.violation);
 }
 
-export function findRawEvidenceFormatViolations(text: string): string[] {
-  const violations: string[] = [];
-  if (/\bPage ID:\s+/i.test(text)) {
-    violations.push("contains-page-id-metadata");
-  }
-  if (/\bTitle:\s+/i.test(text)) {
-    violations.push("contains-title-metadata");
-  }
-  if (/\bSection:\s+/i.test(text)) {
-    violations.push("contains-section-metadata");
-  }
-  return violations;
-}
-
 export function findGenericOnlyViolations(text: string): string[] {
   const violations: string[] = [];
   const normalized = text.trim();
@@ -84,15 +70,9 @@ export function findGenericOnlyViolations(text: string): string[] {
     violations.push("generic-only-too-many-sentences");
   }
 
-  // Disabled for now. This hardcoded noun list was acting like a fake world
-  // model and rejecting otherwise good replies for mentioning ordinary scene
-  // details.
-  // const unsupportedSpecificDetailPattern =
-  //   /\b(station|cargo|freighter|dock|docking|bay|uniform|report|reports|tablet|tablets|datapad|datapads|schedule|schedules|maintenance|comm|pressure doors|holographic|transit|hub|regulars|office|terminal)\b/i;
-  // if (unsupportedSpecificDetailPattern.test(normalized)) {
-  //   violations.push("generic-only-unsupported-specific-detail");
-  // }
-
+  // Rationale for the missing noun-list heuristic: a hardcoded list acts like
+  // a fake world model and rejects good replies for mentioning ordinary scene
+  // details. Real claim-vs-evidence auditing belongs in the judge stage (071.E).
   return violations;
 }
 

@@ -148,7 +148,6 @@ export function resolvePlanDecision(input: {
     interpretation.intent === "identity_self" ||
     interpretation.intent === "lore_world" ||
     interpretation.intent === "lore_other" ||
-    interpretation.intent === "mixed_knowledge" ||
     interpretation.intent === "session_recall"
   ) {
     responseIntent = input.hasEvidence ? "answer" : "abstain";

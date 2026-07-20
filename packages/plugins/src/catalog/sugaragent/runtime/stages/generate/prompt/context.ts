@@ -8,7 +8,6 @@
  * Exports:
  *   - BasePromptContext
  *   - AgentPromptContext
- *   - ScriptedPromptContext
  *   - GeneratePromptContext
  *
  * Status: active
@@ -102,28 +101,4 @@ export interface AgentPromptContext extends BasePromptContext {
   recentHistory: Array<{ role: string; text: string }>;
 }
 
-/**
- * Scripted mode: LLM adapts authored English text to the learner's language
- * level while preserving the exact narrative meaning.
- */
-export interface ScriptedPromptContext extends BasePromptContext {
-  mode: "scripted";
-
-  /** The original authored English dialogue line to adapt. */
-  authoredLineText: string;
-
-  /** The speaker of this line (NPC name). */
-  authoredLineSpeaker: string;
-
-  /** Quest context string for grounding (e.g. "Find the lost suitcase"), or null. */
-  questContext: string | null;
-
-  /** Recent conversation history for continuity. */
-  recentHistory: Array<{ role: string; text: string }>;
-}
-
-/**
- * Discriminated union — the builder switches on `context.mode`.
- * Adding a new mode someday just adds another variant here and a builder function.
- */
-export type GeneratePromptContext = AgentPromptContext | ScriptedPromptContext;
+export type GeneratePromptContext = AgentPromptContext;

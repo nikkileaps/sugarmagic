@@ -44,7 +44,6 @@ export interface ConversationSelectionContext {
   lorePageId?: string | null;
   activeQuest?: ConversationActiveQuestContext | null;
   scriptedFollowupDialogueDefinitionId?: string | null;
-  learnerBandOverride?: string | null;
   targetLanguage?: string | null;
   supportLanguage?: string | null;
   metadata?: Record<string, unknown>;
