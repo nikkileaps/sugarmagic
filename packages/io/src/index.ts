@@ -12,3 +12,4 @@ export * from "./schemas";
 export * from "./thumbnails";
 export * from "./glb";
 export * from "./character-wizard";
+export * from "./animation-library";

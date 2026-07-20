@@ -66,6 +66,7 @@ import {
   getAllRegions,
   getAllAssetDefinitions,
   getAllAudioClipDefinitions,
+  getAllAnimationLibraryDefinitions,
   getAllCharacterAnimationDefinitions,
   getAllCharacterModelDefinitions,
   getAllDialogueDefinitions,
@@ -89,6 +90,7 @@ import {
   getPlayerDefinition,
   addAssetDefinitionToSession,
   addAudioClipDefinitionToSession,
+  addAnimationLibraryDefinitionToSession,
   addCharacterAnimationDefinitionToSession,
   addCharacterModelDefinitionToSession,
   addEnvironmentDefinitionToSession,
@@ -145,6 +147,8 @@ import {
   importPbrTextureSet,
   importMaskTextureDefinition,
   importTextureDefinition,
+  seedCozAnimations,
+  cozySeedDefinitionId,
   importCharacterAnimationDefinition,
   importCharacterModelDefinition,
   importAudioClipDefinition,
@@ -282,6 +286,47 @@ function handleProjectError(e: unknown) {
 
 // --- Project lifecycle ---
 
+/**
+ * Seed the Cozy Idle/Walk/Run animation library entries on project
+ * open/create. Runs async after setActive so it doesn't block the
+ * UI. Only generates clips that aren't already in the session
+ * (safe to call every open).
+ */
+async function seedAnimationLibraryIfNeeded(
+  handle: FileSystemDirectoryHandle,
+  descriptor: Parameters<typeof seedCozAnimations>[0]["descriptor"],
+  projectId: string
+) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  const existing = new Set(
+    getAllAnimationLibraryDefinitions(session).map((d) => d.definitionId)
+  );
+  const SLUGS = ["cozy-idle", "cozy-walk", "cozy-run"];
+  if (SLUGS.every((slug) => existing.has(cozySeedDefinitionId(projectId, slug)))) return;
+
+  try {
+    const result = await seedCozAnimations(
+      { projectHandle: handle, descriptor, projectId },
+      existing
+    );
+    if (result.definitions.length === 0) return;
+
+    const storeState = projectStore.getState();
+    if (!storeState.session) return;
+    let next = storeState.session;
+    for (const definition of result.definitions) {
+      next = addAnimationLibraryDefinitionToSession(next, definition);
+    }
+    for (const { relativeAssetPath, blob } of result.writtenAssets) {
+      assetSourceStore.getState().setSource(relativeAssetPath, blob);
+    }
+    storeState.updateSession(next);
+  } catch (err) {
+    console.warn("[animation-library] Cozy seed failed:", err);
+  }
+}
+
 function activateRegion(region: RegionDocument | undefined) {
   if (!region) return;
   shellStore.getState().setActiveRegionId(region.identity.id);
@@ -309,6 +354,11 @@ async function handleOpenProject() {
     activateRegion(active.regions[0]);
     activateDefaultEnvironment(
       session.contentLibrary.environmentDefinitions[0]?.definitionId
+    );
+    void seedAnimationLibraryIfNeeded(
+      active.handle,
+      active.descriptor,
+      active.gameProject.identity.id
     );
   } catch (e) {
     handleProjectError(e);
@@ -342,6 +392,11 @@ async function handleCreateProject(input: { gameName: string; slug: string }) {
     activateRegion(active.regions[0]);
     activateDefaultEnvironment(
       session.contentLibrary.environmentDefinitions[0]?.definitionId
+    );
+    void seedAnimationLibraryIfNeeded(
+      active.handle,
+      active.descriptor,
+      active.gameProject.identity.id
     );
   } catch (e) {
     handleProjectError(e);
