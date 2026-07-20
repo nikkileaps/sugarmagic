@@ -54,7 +54,7 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   parseBillingAccountList,
   parseTemplateVersionStamp,
-  buildSupabaseJwtVerifierSource,
+  verifySupabaseJwt,
   SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
   SUPABASE_URL_ENV_VAR,
   type PluginSettingsSchemaField,
@@ -1065,9 +1065,7 @@ describe("plugin infrastructure", () => {
         file.relativePath ===
         "deployment/google-cloud-run/services/sugarmagic-gateway/server.mjs"
     );
-    expect(gateway?.content).toContain(
-      "process.env.SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS"
-    );
+    expect(gateway?.content).toContain("SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS");
     expect(gateway?.content).toContain("function resolveAllowedOrigin(origin)");
     expect(gateway?.content).toContain('vary: "origin"');
     expect(gateway?.content).toContain("access-control-allow-credentials");
@@ -2487,12 +2485,14 @@ describe("plugin infrastructure", () => {
     );
     expect(serverFile).toBeDefined();
     const content = serverFile!.content;
-    expect(content).toContain(
-      'import {\n  createHmac,\n  createPublicKey,\n  timingSafeEqual,\n  verify as cryptoVerify\n} from "node:crypto"'
-    );
+    // Story 071.9 — compiled via esbuild; exact import formatting may differ
+    // from the old template string. Assert on semantics, not byte format.
+    expect(content).toContain("createHmac");
+    expect(content).toContain("timingSafeEqual");
+    expect(content).toContain('from "node:crypto"');
     expect(content).toContain("function authorizeBearer(req)");
     expect(content).toContain("SUGARMAGIC_GATEWAY_SHARED_TOKEN");
-    expect(content).toContain("timingSafeEqual(expectedBuf, presentedBuf)");
+    expect(content).toContain("expectedBuf, presentedBuf");
     expect(content).toContain("if (!authorizeBearer(req))");
     expect(content).toContain('error: "Unauthorized"');
 
@@ -2560,19 +2560,20 @@ describe("plugin infrastructure", () => {
     );
     expect(serverFile).toBeDefined();
     const content = serverFile!.content;
-    expect(content).toContain(
-      'import {\n  createHmac,\n  createPublicKey,\n  timingSafeEqual,\n  verify as cryptoVerify\n} from "node:crypto"'
-    );
-    expect(content).toContain(
-      `async function ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req)`
-    );
+    // Story 071.9 — compiled via esbuild; exact import formatting may differ.
+    expect(content).toContain("createHmac");
+    expect(content).toContain("timingSafeEqual");
+    expect(content).toContain('from "node:crypto"');
+    // JWT verifier is always bundled into the compiled source (supabase-jwt.ts).
+    expect(content).toContain(`async function ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req)`);
     expect(content).toContain(SUPABASE_URL_ENV_VAR);
     expect(content).toContain("/auth/v1/.well-known/jwks.json");
+    // Auth gate snippet uses the JWT mode (injected at /*! __GATEWAY_AUTH_GATE__ */).
     expect(content).toContain(
       `const verifiedUser = await ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME}(req);`
     );
     expect(content).toContain("req.user = verifiedUser;");
-    expect(content).toContain('aud !== "authenticated"');
+    expect(content).toContain('["aud"] !== "authenticated"');
     expect(content).not.toContain("if (!authorizeBearer(req))");
 
     // No --set-secrets binding for either auth path.
@@ -2604,15 +2605,12 @@ describe("plugin infrastructure", () => {
     );
   });
 
-  it("47.9 — emitted JWT verifier source verifies ES256 (JWKS) + HS256 (oct JWK) and rejects invalid / expired / wrong-aud / missing-header / kid-mismatch cases", async () => {
-    // Behavior test: stand up a localhost HTTP server that serves a
-    // fake JWKS containing one ES256 (P-256) public key + one HS256
-    // (oct) key. Write the emitted verifier source to a temp .mjs
-    // file, dynamic-import it, point it at the fake JWKS via the env
-    // var, and exercise against hand-crafted JWTs. The gateway runs
-    // this exact source inside Cloud Run; making sure the function
-    // under test matches the emitted source (rather than a parallel
-    // TS impl) means there's no drift between test + production.
+  it("47.9 — JWT verifier (verifySupabaseJwt) verifies ES256 (JWKS) + HS256 (oct JWK) and rejects invalid / expired / wrong-aud / missing-header / kid-mismatch cases", async () => {
+    // Story 071.9 — verifySupabaseJwt is now a proper TypeScript function in
+    // packages/plugins/src/deployment/gateway/supabase-jwt.ts (bundled into
+    // the compiled gateway artifact). Import it directly from @sugarmagic/plugins
+    // instead of the old temp-file / dynamic-import approach. The function is
+    // the exact same code that runs in the Cloud Run gateway (no drift possible).
     const {
       generateKeyPairSync,
       createPrivateKey,
@@ -2735,38 +2733,11 @@ describe("plugin infrastructure", () => {
       return header + "." + body + "." + base64url(sig);
     }
 
-    const tmpDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "sugarmagic-jwt-verifier-")
-    );
-    const verifierPath = path.join(tmpDir, "verifier.mjs");
-    const moduleSource = [
-      "import {",
-      "  createHmac,",
-      "  createPublicKey,",
-      "  timingSafeEqual,",
-      "  verify as cryptoVerify",
-      '} from "node:crypto";',
-      "// Test stubs for the logError/logInfo functions the gateway",
-      "// server.mjs defines at module scope. The verifier source",
-      "// references logError on JWKS fetch failure paths.",
-      "function logError() {}",
-      "function logInfo() {}",
-      "",
-      buildSupabaseJwtVerifierSource(),
-      "",
-      `export { ${SUPABASE_JWT_VERIFIER_FUNCTION_NAME} };`,
-      ""
-    ].join("\n");
-    fs.writeFileSync(verifierPath, moduleSource, "utf8");
-
     process.env[SUPABASE_URL_ENV_VAR] = supabaseUrl;
+    // verifySupabaseJwt is imported at top of file from @sugarmagic/plugins
+    const verify = (req: { headers: Record<string, string | undefined> }) =>
+      verifySupabaseJwt(req as Parameters<typeof verifySupabaseJwt>[0]);
     try {
-      const mod = (await import(verifierPath)) as {
-        verifySupabaseJwt: (req: {
-          headers: Record<string, string | undefined>;
-        }) => Promise<{ userId: string; email: string | null } | null>;
-      };
-      const verify = mod.verifySupabaseJwt;
       const nowSeconds = Math.floor(Date.now() / 1000);
       const validPayload = {
         sub: "user-uuid-1234",
@@ -2871,7 +2842,6 @@ describe("plugin infrastructure", () => {
       });
     } finally {
       delete process.env[SUPABASE_URL_ENV_VAR];
-      fs.rmSync(tmpDir, { recursive: true, force: true });
       await new Promise<void>((resolveClose) =>
         server.close(() => resolveClose())
       );
