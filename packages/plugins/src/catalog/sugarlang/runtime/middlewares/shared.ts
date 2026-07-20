@@ -60,6 +60,8 @@ export interface PlacementFlowAnnotation {
   minAnswersForValid?: number;
   questionnaireVersion?: string;
   scoreResult?: PlacementScoreResult;
+  /** Full questionnaire payload (phase "questionnaire" only). Opaque to SugarAgent. */
+  questionnaire?: unknown;
 }
 
 export interface StoredComprehensionCheck {

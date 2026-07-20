@@ -249,19 +249,20 @@ export function createSugarLangContextMiddleware(
         if (placementFlowAnnotation) {
           execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] =
             placementFlowAnnotation;
-        } else {
+        } else if (questionnaire) {
+          const resolvedMinAnswers = resolvePlacementMinAnswersForValid(
+            questionnaire.minAnswersForValid,
+            config.placement.minAnswersForValid
+          );
           execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
             phase: placementPhase,
-            ...(questionnaire
-              ? {
-                  questionnaireVersion:
-                    getPlacementQuestionnaireVersion(questionnaire),
-                  minAnswersForValid: resolvePlacementMinAnswersForValid(
-                    questionnaire.minAnswersForValid,
-                    config.placement.minAnswersForValid
-                  )
-                }
-              : {})
+            questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
+            minAnswersForValid: resolvedMinAnswers,
+            questionnaire: { ...questionnaire, minAnswersForValid: resolvedMinAnswers }
+          } satisfies PlacementFlowAnnotation;
+        } else {
+          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
+            phase: placementPhase
           } satisfies PlacementFlowAnnotation;
         }
       }

@@ -28,10 +28,6 @@ interface LanguageLearningConstraint {
     targetLemmas: Array<{ lemmaId: string }>;
   };
 }
-// TODO: Move placement questionnaire loading to sugarlang plugin — it should
-// provide the questionnaire envelope via an annotation, not require SugarAgent
-// to import from sugarlang directly.
-import { loadPlacementQuestionnaire } from "../../../../sugarlang/runtime/placement/placement-questionnaire-loader";
 import type { LLMProvider } from "../../clients";
 import { createDiagnostics } from "../diagnostics";
 import {
@@ -94,21 +90,25 @@ function isMinimalGreetingMode(
 function buildPlacementQuestionnaireEnvelope(
   input: GenerateStageInput,
   context: TurnStageContext,
-  placementFlow: { minAnswersForValid?: unknown } | undefined
+  placementFlow: { questionnaire?: unknown; minAnswersForValid?: unknown } | undefined
 ): ConversationTurnEnvelope | null {
-  const targetLanguage = input.execution.selection.targetLanguage?.trim().toLowerCase();
-  if (!targetLanguage) {
+  const raw = placementFlow?.questionnaire;
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    typeof (raw as Record<string, unknown>).formIntro !== "string" ||
+    typeof (raw as Record<string, unknown>).lang !== "string" ||
+    typeof (raw as Record<string, unknown>).schemaVersion !== "number"
+  ) {
     return null;
   }
-
-  const questionnaire = loadPlacementQuestionnaire(targetLanguage);
-  const effectiveQuestionnaire =
-    typeof placementFlow?.minAnswersForValid === "number"
-      ? {
-          ...questionnaire,
-          minAnswersForValid: placementFlow.minAnswersForValid
-        }
-      : questionnaire;
+  const effectiveQuestionnaire = raw as {
+    formIntro: string;
+    lang: string;
+    schemaVersion: number;
+    minAnswersForValid: number;
+    [key: string]: unknown;
+  };
   return {
     turnId: context.turnId,
     providerId: "sugaragent.provider",
@@ -191,7 +191,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       "sugarlang.constraint"
     ] as LanguageLearningConstraint | undefined;
     const placementFlow = input.execution.annotations["sugarlang.placementFlow"] as
-      | { phase?: string; minAnswersForValid?: unknown }
+      | { phase?: string; questionnaire?: unknown; minAnswersForValid?: unknown }
       | undefined;
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
     const activeQuestDisplayName =
