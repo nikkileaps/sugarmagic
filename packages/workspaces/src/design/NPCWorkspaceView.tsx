@@ -141,6 +141,7 @@ export function useNPCWorkspaceView(
     riggedBytes: ArrayBuffer;
     boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null>(null);
+  const [wizardInitialSourceBytes, setWizardInitialSourceBytes] = useState<ArrayBuffer | null>(null);
 
   // §062.9 — edit wizard-generated models, create otherwise.
   async function launchWizard(
@@ -174,6 +175,15 @@ export function useNPCWorkspaceView(
         });
         setWizardOpen(true);
         return;
+      }
+    }
+    // Pre-seed from the Model field so the user doesn't have to re-pick
+    // a GLB they already uploaded.
+    if (model?.source?.relativeAssetPath) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const bytes = await (await fetch(url)).arrayBuffer();
+        setWizardInitialSourceBytes(bytes);
       }
     }
     setWizardEditSession(null);
@@ -479,6 +489,7 @@ export function useNPCWorkspaceView(
           defaultCharacterName={selectedNPC.displayName}
           services={characterWizardServices}
           editSession={wizardEditSession}
+          initialSourceBytes={wizardInitialSourceBytes}
           riggedCharacterTemplates={characterModelDefinitions
             .filter(
               (m) =>
@@ -496,6 +507,7 @@ export function useNPCWorkspaceView(
           onClose={() => {
             setWizardOpen(false);
             setWizardEditSession(null);
+            setWizardInitialSourceBytes(null);
           }}
           onCommitted={(result) => {
             const bindings = {
