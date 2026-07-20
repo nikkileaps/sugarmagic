@@ -972,6 +972,7 @@ export function createRuntimeGameplaySessionController(
   }
 
   function syncNpcInteractionAvailability() {
+    const hasAgentCapability = conversationProviders.length > 0;
     for (const {
       npcDefinitionId,
       entity
@@ -987,7 +988,7 @@ export function createRuntimeGameplaySessionController(
         continue;
       }
 
-      interactable.available = true;
+      interactable.available = hasAgentCapability;
     }
   }
 
@@ -1134,9 +1135,9 @@ export function createRuntimeGameplaySessionController(
           presence.npcDefinitionId,
           `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
           2.0,
-          questDialogueCoordinator.isNpcInteractableAvailable(
-            presence.npcDefinitionId
-          )
+          npcDefinition?.interactionMode === "scripted"
+            ? questDialogueCoordinator.isNpcInteractableAvailable(presence.npcDefinitionId)
+            : conversationProviders.length > 0
         )
       );
       npcInteractableEntities.set(presence.presenceId, {
