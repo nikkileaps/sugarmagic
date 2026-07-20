@@ -19,6 +19,7 @@
 
 import type { ReactNode } from "react";
 import type {
+  AnimationLibraryDefinition,
   AssetDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
@@ -105,6 +106,7 @@ export interface DesignProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
@@ -172,6 +174,7 @@ export function useDesignProductModeView(
     assetDefinitions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onSelectKind,
@@ -196,6 +199,7 @@ export function useDesignProductModeView(
     playerDefinition,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,
@@ -211,6 +215,7 @@ export function useDesignProductModeView(
     interactionModeOptions: npcInteractionOptions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,

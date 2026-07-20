@@ -2539,11 +2539,27 @@ export function getCharacterAnimationDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
 ): CharacterAnimationDefinition | null {
-  return (
-    contentLibrary.characterAnimationDefinitions.find(
-      (definition) => definition.definitionId === definitionId
-    ) ?? null
+  const direct = contentLibrary.characterAnimationDefinitions.find(
+    (definition) => definition.definitionId === definitionId
   );
+  if (direct) return direct;
+  // Fall through to the animation library pool so that slots bound
+  // via AnimLib 4's "From Library" picker (which stores the library
+  // definitionId directly) resolve correctly at runtime without
+  // requiring a CharacterAnimationDefinition proxy entry.
+  const lib = (contentLibrary.animationLibraryDefinitions ?? []).find(
+    (definition) => definition.definitionId === definitionId
+  );
+  if (lib) {
+    return {
+      definitionId: lib.definitionId,
+      definitionKind: "character-animation",
+      displayName: lib.displayName,
+      source: lib.source,
+      clipNames: lib.clipNames
+    };
+  }
+  return null;
 }
 
 export function listCharacterAnimationDefinitions(

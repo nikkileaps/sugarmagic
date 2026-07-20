@@ -3012,6 +3012,7 @@ export function App() {
     assetSources,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     designPreviewStore,
     onSelectKind: (kind) =>
       shellStore.getState().setActiveDesignWorkspaceKind(kind),
