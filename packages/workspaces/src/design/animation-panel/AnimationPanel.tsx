@@ -570,12 +570,28 @@ export function AnimationPanel(props: AnimationPanelProps) {
                           fullWidth
                           justify="flex-start"
                           style={{ flex: 1 }}
+                          styles={{
+                            root: { height: "auto", paddingTop: 2, paddingBottom: 2 },
+                            label: { flexDirection: "column", alignItems: "flex-start" }
+                          }}
                           variant={activeSlot === slot ? "light" : "subtle"}
                           color={activeSlot === slot ? "blue" : "gray"}
                           onClick={() => setActiveSlot(slot)}
                         >
-                          {slot}
-                          {slots[slot].dirty && slots[slot].pending ? " *" : ""}
+                          <span>
+                            {slot}
+                            {slots[slot].dirty && slots[slot].pending ? " *" : ""}
+                          </span>
+                          <Text
+                            size="xs"
+                            c="var(--sm-color-subtext)"
+                            style={{ fontSize: 10, lineHeight: 1.2 }}
+                          >
+                            {slots[slot].dirty && slots[slot].pending
+                              ? `${slots[slot].pending.clipName} (unsaved)`
+                              : (boundAnimations[slot]?.clipNames?.[0] ??
+                                "none bound")}
+                          </Text>
                         </Button>
                         <Tooltip
                           label={

@@ -350,6 +350,67 @@ describe("GeodesicVoxelWeightSolver (Plan 062)", () => {
     expect(checked).toBeGreaterThan(20);
   });
 
+  it("keeps a chibi head's jaw on the head bone (bounded support)", () => {
+    // 2026-07-19 regression (Mim): on big-head proportions the
+    // unbounded inverse-square falloff let the spine/neck claim a
+    // visible share of the jaw + lower-face vertices, so the head
+    // followed chest animation ("head grotesquely pulled
+    // forward"). Bounded support cuts influence past ~2x the
+    // nearest bone's geodesic distance. The mesh: fat head tube on
+    // a thin neck over a torso — jaw-rim vertices are close to the
+    // neck in space but must stay owned by the head.
+    const head = buildTube(0, 0, 0.3, 0.9, 1.5);
+    const neck = buildTube(0, 0, 0.06, 0.7, 0.95);
+    const torso = buildTube(0, 0, 0.14, 0.2, 0.8);
+    const mesh = mergeMeshes([head, neck, torso]);
+    const segments: BoneSegment[] = [
+      { boneName: "spine", start: [0, 0.3, 0], end: [0, 0.7, 0] },
+      { boneName: "neck", start: [0, 0.75, 0], end: [0, 0.9, 0] },
+      { boneName: "head", start: [0, 0.95, 0], end: [0, 1.45, 0] }
+    ];
+    const result = solver.solve(mesh, segments, { resolution: 64 });
+    // Thresholds calibrated against both historical failure modes:
+    //   - unnormalized smoothing let the neck's near-seed magnitude
+    //     spike hijack the jaw ring (head fell to ~0.03);
+    //   - unbounded falloff put ~0.18 spine on the jaw.
+    // The synthetic head's flat bottom cap is a real geodesic
+    // shortcut to the neck, so a head/neck BLEND at the jaw is
+    // legitimate — head must simply dominate and spine stay out.
+    const vertexCount = mesh.positions.length / 3;
+    let jawChecked = 0;
+    let skullChecked = 0;
+    let chestChecked = 0;
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const x = mesh.positions[vertex * 3]!;
+      const y = mesh.positions[vertex * 3 + 1]!;
+      const z = mesh.positions[vertex * 3 + 2]!;
+      const radial = Math.hypot(x, z);
+      // Jaw rim: bottom of the fat head, far out from the neck.
+      if (y < 1.0 && y >= 0.9 && radial > 0.25) {
+        const head = boneWeightAt(result, vertex, "head");
+        const neck = boneWeightAt(result, vertex, "neck");
+        expect(head).toBeGreaterThan(0.45);
+        expect(head).toBeGreaterThan(neck);
+        expect(boneWeightAt(result, vertex, "spine")).toBeLessThan(0.1);
+        jawChecked += 1;
+      }
+      // Skull: unambiguously head territory.
+      if (y > 1.3) {
+        expect(boneWeightAt(result, vertex, "head")).toBeGreaterThan(0.9);
+        skullChecked += 1;
+      }
+      // Chest: no head influence this far down.
+      if (y < 0.5) {
+        expect(boneWeightAt(result, vertex, "head")).toBeLessThan(0.02);
+        expect(boneWeightAt(result, vertex, "spine")).toBeGreaterThan(0.85);
+        chestChecked += 1;
+      }
+    }
+    expect(jawChecked).toBeGreaterThan(5);
+    expect(skullChecked).toBeGreaterThan(10);
+    expect(chestChecked).toBeGreaterThan(20);
+  });
+
   it("voxelizes a closed tube with interior cells", () => {
     const grid = voxelizeMesh(buildTube(0, 0, 0.2, 0, 1), 32);
     let interior = 0;

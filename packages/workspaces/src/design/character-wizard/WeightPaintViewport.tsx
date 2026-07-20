@@ -81,10 +81,24 @@ export interface WeightPaintViewportProps {
   onPaint: (faceVertices: [number, number, number]) => number[];
 }
 
-const HEAT_LOW = new THREE.Color(0x1a2340);
-const GHOST = new THREE.Color(0x0d0e16);
-const HEAT_HIGH = new THREE.Color(0xff4d6d);
-const SELECT_TINT = new THREE.Color(0xf7d774);
+// Blender-style weight ramp: 0 blue -> cyan -> green -> yellow ->
+// 1 red. Bright stops on purpose — the previous dark-navy zero
+// color sank into the dark background and the model silhouette
+// was unreadable while painting (nikki, 2026-07-19).
+const RAMP_STOPS = [
+  new THREE.Color(0x2050ff),
+  new THREE.Color(0x00c8ff),
+  new THREE.Color(0x22cc44),
+  new THREE.Color(0xffd020),
+  new THREE.Color(0xff3324)
+];
+function rampColor(weight: number, out: THREE.Color): THREE.Color {
+  const t = Math.max(0, Math.min(1, weight)) * (RAMP_STOPS.length - 1);
+  const stop = Math.min(RAMP_STOPS.length - 2, Math.floor(t));
+  return out.copy(RAMP_STOPS[stop]!).lerp(RAMP_STOPS[stop + 1]!, t - stop);
+}
+const GHOST = new THREE.Color(0x484c58);
+const SELECT_TINT = new THREE.Color(0xffffff);
 
 export function WeightPaintViewport(props: WeightPaintViewportProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -119,7 +133,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setClearColor(0x14141f);
+    renderer.setClearColor(0x2b2e37);
     container.appendChild(renderer.domElement);
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
@@ -218,7 +232,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
         const material = target.mesh.material as THREE.MeshStandardMaterial;
         const ghosted = isolated >= 0 && target.rangeIndex !== isolated;
         material.transparent = ghosted;
-        material.opacity = ghosted ? 0.12 : 1;
+        material.opacity = ghosted ? 0.25 : 1;
         material.depthWrite = !ghosted;
       }
     }
@@ -314,6 +328,7 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
       }
     });
 
+    const scratchColor = new THREE.Color();
     function refreshHeatmap(vertices?: number[]) {
       const column = propsRef.current.selectedBoneColumn;
       const weights = propsRef.current.weights;
@@ -329,9 +344,9 @@ export function WeightPaintViewport(props: WeightPaintViewportProps) {
             return;
           }
           const weight = boneWeightOfVertex(weights, flat, column);
-          const color = HEAT_LOW.clone().lerp(HEAT_HIGH, weight);
+          const color = rampColor(weight, scratchColor);
           if (propsRef.current.selection.has(flat)) {
-            color.lerp(SELECT_TINT, 0.65);
+            color.lerp(SELECT_TINT, 0.5);
           }
           colorAttribute.setXYZ(local, color.r, color.g, color.b);
         };

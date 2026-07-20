@@ -1544,9 +1544,11 @@ export function App() {
           projectStore.getState().updateSession(nextSession);
         },
         // §062.9 — edit-in-place rewrote asset files under the same
-        // paths; refresh their blob URLs so previews reload.
-        refreshAssetPaths: (relativeAssetPaths) =>
-          assetSourceStore.getState().refreshPaths(relativeAssetPaths)
+        // paths; publish the written bytes directly (re-reading a
+        // just-written file trips the FSAccess flake and nukes the
+        // blob URL).
+        publishAssetSource: (relativeAssetPath, blob) =>
+          assetSourceStore.getState().setSource(relativeAssetPath, blob)
       }),
     []
   );
