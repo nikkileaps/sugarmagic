@@ -622,7 +622,7 @@ export function AnimationPanel(props: AnimationPanelProps) {
                                 setLibBrowserSlot(slot);
                               }}
                             >
-                              Replace from Library...
+                              Replace
                             </Menu.Item>
                             <Menu.Item
                               color="red"
