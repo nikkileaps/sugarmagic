@@ -52,8 +52,6 @@ function createStageInput() {
       consecutiveFallbackTurns: 0,
       closeRequested: false,
       history: [],
-      topicCoverage: [],
-      referents: [],
       lastTurnDiagnostics: {}
     },
     interpret: {

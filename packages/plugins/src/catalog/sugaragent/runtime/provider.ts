@@ -414,7 +414,7 @@ export function createSugarAgentConversationProvider(
   logger.logPluginEvent("provider-registered", {
     providerId: SUGARAGENT_PROVIDER_ID,
     llmBackend: llmProvider ? "anthropic" : "deterministic",
-    vectorStoreBackend: vectorStoreProvider ? "openai-hosted" : "none"
+    vectorStoreBackend: vectorStoreProvider ? "gateway" : "none"
   });
 
   return {

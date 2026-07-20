@@ -51,8 +51,8 @@ const deploymentRequirements: DeploymentRequirement[] = [
     consumption: "server-only",
     exposure: "private",
     mappingHint: "SUGARMAGIC_OPENAI_API_KEY",
-    description: "Server-side secret used for OpenAI embeddings and vector retrieval.",
-    tags: ["embeddings", "retrieval", "server"]
+    description: "Server-side secret used for OpenAI vector store retrieval.",
+    tags: ["retrieval", "server"]
   },
   {
     requirementId: createDeploymentRequirementId({
