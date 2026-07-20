@@ -468,9 +468,9 @@ export function useNPCWorkspaceView(
         }
         assetSources={assetSources}
         onLaunchRigWizard={
-          characterWizardServices && selectedNPC
+          characterWizardServices && selectedNPC && boundCharacterModel
             ? () =>
-                boundCharacterModel?.rigId
+                boundCharacterModel.rigId
                   ? setRigMode(true)
                   : void launchWizard(boundCharacterModel)
             : undefined

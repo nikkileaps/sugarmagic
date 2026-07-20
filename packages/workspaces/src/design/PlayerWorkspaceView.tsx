@@ -346,9 +346,9 @@ export function usePlayerWorkspaceView(
         }
         assetSources={assetSources}
         onLaunchRigWizard={
-          characterWizardServices
+          characterWizardServices && boundCharacterModel
             ? () =>
-                boundCharacterModel?.rigId
+                boundCharacterModel.rigId
                   ? setRigMode(true)
                   : void launchWizard(boundCharacterModel)
             : undefined

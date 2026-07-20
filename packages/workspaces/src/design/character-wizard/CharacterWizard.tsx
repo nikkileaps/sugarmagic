@@ -29,8 +29,7 @@ import {
   Select,
   Stack,
   Switch,
-  Text,
-  TextInput
+  Text
 } from "@mantine/core";
 import { WizardDialog } from "@sugarmagic/ui";
 import type {
@@ -474,9 +473,7 @@ export function CharacterWizard(props: CharacterWizardProps) {
 
   const canAdvance =
     !busy &&
-    (step === "import"
-      ? sourceBytes !== null && characterName.trim().length > 0
-      : landmarks !== null);
+    (step === "import" ? sourceBytes !== null : landmarks !== null);
 
   return (
     <WizardDialog
@@ -508,13 +505,6 @@ export function CharacterWizard(props: CharacterWizardProps) {
               mesh, and attaches idle / walk / run so it is game-ready
               in one pass.
             </Text>
-            <TextInput
-              label="Character name"
-              size="xs"
-              value={characterName}
-              disabled={isEditMode}
-              onChange={(event) => setCharacterName(event.currentTarget.value)}
-            />
             <Group>
               <input
                 ref={fileInputRef}
