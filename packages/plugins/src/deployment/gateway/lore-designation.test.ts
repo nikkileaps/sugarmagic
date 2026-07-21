@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  composeLoreBody,
   designateLoreSections,
   isPersonaCardSection,
   isSecretSection,
@@ -103,6 +104,18 @@ describe("designateLoreSections", () => {
       coreKnowledge: [],
       secrets: []
     });
+  });
+});
+
+describe("composeLoreBody", () => {
+  it("re-emits sections as ## headings joined by blank lines", () => {
+    expect(
+      composeLoreBody([section("persona", "Warm."), section("work", "Bakes.")])
+    ).toBe("## persona\n\nWarm.\n\n## work\n\nBakes.");
+  });
+
+  it("yields an empty string for no visible sections (all-secrets page)", () => {
+    expect(composeLoreBody([])).toBe("");
   });
 });
 

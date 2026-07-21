@@ -95,3 +95,18 @@ export function designateLoreSections<T extends DesignatableLoreSection>(
   }
   return { personaCard, coreKnowledge, secrets };
 }
+
+/**
+ * Reconstruct a page's `body` markdown from a section list. Used by the
+ * lore/resolve route (072.2) to recompute `body` after excluding `## Secrets`,
+ * so the secret text never ships in the raw body field while `body` stays a
+ * valid non-empty string for consumers (an all-secrets page yields ""). Heading
+ * level is not preserved by the parser, so sections re-emit at `##`.
+ */
+export function composeLoreBody(
+  sections: readonly DesignatableLoreSection[]
+): string {
+  return sections
+    .map((section) => `## ${section.heading}\n\n${section.content}`)
+    .join("\n\n");
+}

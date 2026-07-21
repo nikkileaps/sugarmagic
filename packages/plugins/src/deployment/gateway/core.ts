@@ -16,7 +16,7 @@ import {
 // compile-options.ts precisely so this import survives into the compiled
 // bundle for the supabase-jwt auth gate that buildGatewayServerFile injects.
 import { verifySupabaseJwt } from "./supabase-jwt";
-import { isSecretSection } from "./lore-designation";
+import { isSecretSection, composeLoreBody } from "./lore-designation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1015,13 +1015,33 @@ export async function handleSugarAgentLoreResolve(
       missingPageIds.push(pageId);
       continue;
     }
+    // Plan 072.2: `## Secrets` must not leave the gateway. Strip it from BOTH
+    // `sections` and `body` (sugarlang's consumer feeds each into the scene
+    // lexicon). Pages without a secret section pass through byte-identical --
+    // only recompute `body` when a secret is actually being removed, so the
+    // raw markdown is preserved for the common case.
+    const hasSecret = page.sections.some(isSecretSection);
+    if (!hasSecret) {
+      resolvedPages.push({
+        pageId: page.pageId,
+        title: page.title,
+        relativePath: page.relativePath,
+        sectionCount: page.sectionCount,
+        body: page.body,
+        sections: page.sections
+      });
+      continue;
+    }
+    const visibleSections = page.sections.filter(
+      (section) => !isSecretSection(section)
+    );
     resolvedPages.push({
       pageId: page.pageId,
       title: page.title,
       relativePath: page.relativePath,
-      sectionCount: page.sectionCount,
-      body: page.body,
-      sections: page.sections
+      sectionCount: visibleSections.length,
+      body: composeLoreBody(visibleSections),
+      sections: visibleSections
     });
   }
 
