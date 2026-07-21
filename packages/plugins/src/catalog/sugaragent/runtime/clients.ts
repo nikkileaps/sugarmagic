@@ -362,7 +362,7 @@ const PERSONA_DIGEST_LINE_COUNT = 4;
  * non-empty lines of `## Persona`, plus the full `## Voice` section. Computed
  * once at session start; empty string when neither is authored.
  */
-function buildPersonaDigest(personaCard: LoreCardSection[]): string {
+export function buildPersonaDigest(personaCard: LoreCardSection[]): string {
   const personaLines = personaCard
     .filter((section) => section.slug === "persona")
     .flatMap((section) => section.content.split("\n"))

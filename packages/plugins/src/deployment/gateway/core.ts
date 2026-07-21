@@ -890,6 +890,15 @@ export async function handleSugarAgentGenerate(
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
 
+  // Plan 072.7 (mini-review) — report the model Anthropic actually served
+  // (its response `model`), not just the requested alias/tier; fall back to
+  // the requested id when the response omits it.
+  const servedModel =
+    typeof (payload as { model?: unknown }).model === "string" &&
+    (payload as { model: string }).model.trim().length > 0
+      ? (payload as { model: string }).model
+      : model;
+
   sendJson(res, 200, {
     text,
     requestId: headers.get("request-id"),
@@ -899,7 +908,7 @@ export async function handleSugarAgentGenerate(
       cacheReadInputTokens: usageNumber("cache_read_input_tokens"),
       cacheCreationInputTokens: usageNumber("cache_creation_input_tokens")
     },
-    model
+    model: servedModel
   });
 }
 

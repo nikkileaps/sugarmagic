@@ -16,6 +16,11 @@
  *   - Lives in the gateway source (bundled by build:gateway-source, no
  *     @sugarmagic imports) so all three consumers share one definition of
  *     what a persona / core / secret section is.
+ *   - IMPORTED BY BROWSER RUNTIME: `catalog/sugaragent/runtime/clients.ts`
+ *     (the card fetch) imports this module. It MUST therefore stay pure --
+ *     ZERO imports, no `node:*` builtins, no @sugarmagic/* -- or it will drag
+ *     node-only code into the browser bundle. The rest of `deployment/gateway/`
+ *     is node-only; this file is the deliberate browser-safe exception.
  *
  * Implements: Plan 072 story 072.1 -- lore-page authoring convention
  *
@@ -107,6 +112,13 @@ export function composeLoreBody(
   sections: readonly DesignatableLoreSection[]
 ): string {
   return sections
-    .map((section) => `## ${section.heading}\n\n${section.content}`)
+    .map((section) =>
+      // The implicit pre-heading section (slug "overview") had no heading in
+      // the source, so re-emit its content only -- don't inject a synthetic
+      // "## Overview" the author never wrote.
+      section.slug === "overview"
+        ? section.content
+        : `## ${section.heading}\n\n${section.content}`
+    )
     .join("\n\n");
 }

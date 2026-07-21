@@ -340,6 +340,59 @@ describe("handleSugarAgentGenerate", () => {
     expect(requestBody.system[0]).not.toHaveProperty("cache_control");
   });
 
+  it("072.7 — reports Anthropic's served model, falling back to the requested id", async () => {
+    // Response includes its own model -> that wins.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            content: [{ type: "text", text: "Hi." }],
+            model: "claude-haiku-4-5-20251001"
+          }),
+        headers: { get: () => "r" }
+      })
+    );
+    const res1 = makeRes();
+    await handleSugarAgentGenerate(
+      makeReq({
+        method: "POST",
+        url: "/api/sugaragent/generate",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt: "s", userPrompt: "u", model: "claude-haiku-4-5" })
+      }),
+      res1
+    );
+    expect((JSON.parse(res1.body) as { model: string }).model).toBe(
+      "claude-haiku-4-5-20251001"
+    );
+
+    // Response omits model -> fall back to the requested id.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ content: [{ type: "text", text: "Hi." }] }),
+        headers: { get: () => "r" }
+      })
+    );
+    const res2 = makeRes();
+    await handleSugarAgentGenerate(
+      makeReq({
+        method: "POST",
+        url: "/api/sugaragent/generate",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemPrompt: "s", userPrompt: "u", model: "claude-opus-4-8" })
+      }),
+      res2
+    );
+    expect((JSON.parse(res2.body) as { model: string }).model).toBe("claude-opus-4-8");
+  });
+
   it("072.5 — accepts systemBlocks alone (no systemPrompt) and passes usage through", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
