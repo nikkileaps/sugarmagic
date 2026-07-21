@@ -168,6 +168,13 @@ function resolveEffectiveSearchQuery(
 export interface RetrieveStageInput {
   execution: ConversationExecutionContext;
   interpret: InterpretResult;
+  /**
+   * Plan 072.6 (D1) — true when the NPC's persona card loaded (072.3). The
+   * card already carries the NPC's own page, so evidence retrieval EXCLUDES
+   * the own page and surfaces OTHER world lore. When false (degraded), the
+   * legacy own-page-preferred targeting is kept.
+   */
+  personaLoaded: boolean;
 }
 
 // DEFERRED SEAM (071.3): if client-side re-ranking or local embeddings are added
@@ -234,8 +241,18 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       !skipRetrieval &&
       npcLorePageId !== null &&
       npcLorePageId !== targetedLorePageId;
+    // Plan 072.6 (D1) — when the persona card loaded, the NPC's own page is
+    // already in the system prompt, so exclude it from evidence and pull OTHER
+    // world lore. Applies only when the primary target IS the own page
+    // (non-location-anchored); location-anchored retrieval is unchanged.
+    const excludeOwnPage =
+      input.personaLoaded &&
+      !skipRetrieval &&
+      npcLorePageId !== null &&
+      targetedLorePageId === npcLorePageId;
+    let ownPageExcluded = false;
     const retrievalFilters: OpenAIVectorStoreFilter | undefined =
-      !skipRetrieval && targetedLorePageId
+      !skipRetrieval && !excludeOwnPage && targetedLorePageId
         ? {
             type: "eq",
             key: OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
@@ -245,45 +262,69 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
 
     if (!skipRetrieval && this.vectorStoreProvider && canUseProxyDefaults) {
       try {
-        const reservedNpcLoreResults = shouldPinNpcLore ? 1 : 0;
-        const primaryMaxResults = Math.max(
-          1,
-          context.config.maxEvidenceResults - reservedNpcLoreResults
-        );
-
-        const searchLore = (filters?: OpenAIVectorStoreFilter) =>
-          this.vectorStoreProvider!.searchLore({
-            // Empty vectorStoreId → gateway defaults it server-side.
+        if (excludeOwnPage && npcLorePageId) {
+          // Broad search, then drop own-page results client-side. The
+          // server-side `ne` filter is NOT used: it is unverified against the
+          // live OpenAI vector-store /search schema (072.6 probe-first). Request
+          // headroom so dropping the own page still leaves up to
+          // maxEvidenceResults items of OTHER lore.
+          const requested = Math.min(8, context.config.maxEvidenceResults + 3);
+          const broad = await this.vectorStoreProvider.searchLore({
             vectorStoreId: "",
             query: searchQuery,
-            maxResults: filters ? primaryMaxResults : context.config.maxEvidenceResults,
-            filters
+            maxResults: requested,
+            filters: undefined
           });
-
-        evidencePack = await searchLore(retrievalFilters);
-        if (evidencePack.length === 0 && retrievalFilters) {
-          evidencePack = await searchLore();
-          broadenedBeyondLorePage = true;
-        }
-
-        if (shouldPinNpcLore && npcLorePageId) {
-          const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
-            vectorStoreId: "",
-            query: searchQuery,
-            maxResults: 1,
-            filters: {
-              type: "eq",
-              key: OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
-              value: npcLorePageId
-            }
-          });
-          pinnedNpcLoreEvidence = npcLoreEvidence.length > 0;
-          evidencePack = mergeEvidencePacks(evidencePack, npcLoreEvidence).slice(
-            0,
-            context.config.maxEvidenceResults
+          evidencePack = broad
+            .filter(
+              (item) =>
+                item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !==
+                npcLorePageId
+            )
+            .slice(0, context.config.maxEvidenceResults);
+          ownPageExcluded = true;
+          vectorSearchPerformed = true;
+        } else {
+          const reservedNpcLoreResults = shouldPinNpcLore ? 1 : 0;
+          const primaryMaxResults = Math.max(
+            1,
+            context.config.maxEvidenceResults - reservedNpcLoreResults
           );
+
+          const searchLore = (filters?: OpenAIVectorStoreFilter) =>
+            this.vectorStoreProvider!.searchLore({
+              // Empty vectorStoreId → gateway defaults it server-side.
+              vectorStoreId: "",
+              query: searchQuery,
+              maxResults: filters ? primaryMaxResults : context.config.maxEvidenceResults,
+              filters
+            });
+
+          evidencePack = await searchLore(retrievalFilters);
+          if (evidencePack.length === 0 && retrievalFilters) {
+            evidencePack = await searchLore();
+            broadenedBeyondLorePage = true;
+          }
+
+          if (shouldPinNpcLore && npcLorePageId) {
+            const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
+              vectorStoreId: "",
+              query: searchQuery,
+              maxResults: 1,
+              filters: {
+                type: "eq",
+                key: OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
+                value: npcLorePageId
+              }
+            });
+            pinnedNpcLoreEvidence = npcLoreEvidence.length > 0;
+            evidencePack = mergeEvidencePacks(evidencePack, npcLoreEvidence).slice(
+              0,
+              context.config.maxEvidenceResults
+            );
+          }
+          vectorSearchPerformed = true;
         }
-        vectorSearchPerformed = true;
       } catch {
         status = "degraded";
         fallbackReason = fallbackReason ?? "vector-search-unavailable";
@@ -321,8 +362,15 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           turnPath: input.interpret.turnRouting.path,
           queryType: input.interpret.queryType,
           skippedRetrieval: skipRetrieval,
-          evidencePackSummary: summarizeEvidence(evidencePack),
+          evidencePackSummary: summarizeEvidence(evidencePack, {
+            maxItems: context.config.maxEvidenceResults,
+            perItemChars: context.config.maxEvidenceCharsPerItem
+          }),
           evidenceCount: evidencePack.length,
+          // Plan 072.6 — retrieval rebalance observability.
+          personaLoaded: input.personaLoaded,
+          ownPageExcluded,
+          evidenceCharsPerItem: context.config.maxEvidenceCharsPerItem,
           npcLorePageId,
           currentAreaDisplayName: runtimeCurrentLocation?.area?.displayName ?? null,
           currentParentAreaDisplayName:

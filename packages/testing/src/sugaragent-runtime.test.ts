@@ -351,7 +351,10 @@ describe("SugarAgent runtime provider", () => {
     ).toBe("abstain");
   });
 
-  it("prefers the NPC lore page during retrieval before broadening search", async () => {
+  // Plan 072.6 (D1) — DEGRADED path: this test's fetch mock does not answer
+  // /lore/resolve, so persona load degrades (loaded=false) and retrieval keeps
+  // the legacy own-page-preferred targeting (eq filter, then broaden).
+  it("prefers the NPC lore page during retrieval before broadening (card not loaded)", async () => {
     const requests: Array<{ url: string; body: Record<string, unknown> | null }> = [];
     vi.stubGlobal(
       "fetch",
@@ -434,6 +437,108 @@ describe("SugarAgent runtime provider", () => {
           ?.Retrieve?.payload?.broadenedBeyondLorePage
       )
     ).toBe(true);
+  });
+
+  // Plan 072.6 (D1) — CARD-LOADED path: when the persona card loads, the NPC's
+  // own page is in the system prompt, so evidence retrieval runs a broad search
+  // (no own-page eq filter) and drops own-page hits, surfacing OTHER lore.
+  it("excludes the NPC's own page from evidence when the persona card is loaded", async () => {
+    const OWN_PAGE = "lore.entities.npcs.finnick";
+    const searchRequests: Array<Record<string, unknown> | null> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const body =
+          typeof init?.body === "string" && init.body.trim().length > 0
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : null;
+
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          // Page resolves -> persona loads (loaded=true).
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              pages: [
+                {
+                  pageId: OWN_PAGE,
+                  title: "Finnick",
+                  relativePath: "npc/finnick.md",
+                  sectionCount: 1,
+                  body: "## Persona\n\nCheese-obsessed.",
+                  sections: [
+                    { heading: "Persona", slug: "persona", content: "Cheese-obsessed." }
+                  ]
+                }
+              ],
+              missingPageIds: []
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          searchRequests.push(body);
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  fileId: "own",
+                  filename: "finnick.md",
+                  score: 0.99,
+                  attributes: { page_id: OWN_PAGE },
+                  text: "Finnick's own page content."
+                },
+                {
+                  fileId: "other",
+                  filename: "town.md",
+                  score: 0.8,
+                  attributes: { page_id: "lore.locations.town" },
+                  text: "The town square has a fountain."
+                }
+              ],
+              requestId: "search-broad"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          return new Response(
+            JSON.stringify({ text: "Cheese!", requestId: "gen-1" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: OWN_PAGE
+    });
+
+    const reply = await host.submitInput({
+      kind: "free_text",
+      text: "Tell me about the town."
+    });
+
+    const retrieve = (
+      reply?.diagnostics?.stages as
+        | Record<string, { payload?: Record<string, unknown> }>
+        | undefined
+    )?.Retrieve?.payload;
+    expect(retrieve?.personaLoaded).toBe(true);
+    expect(retrieve?.ownPageExcluded).toBe(true);
+    // The search that ran during this reply used NO own-page eq filter.
+    const lastSearch = searchRequests.at(-1);
+    expect(lastSearch?.filters).toBeUndefined();
+    // Own page dropped from evidence; only the other-page result survives.
+    expect(retrieve?.evidenceCount).toBe(1);
   });
 
   it("uses blackboard-backed current location context for 'where are we' retrieval", async () => {
@@ -664,6 +769,65 @@ describe("SugarAgent runtime provider", () => {
           ?.Generate?.fallbackReason
       )
     ).toBe("llm-retry-exhausted");
+  });
+
+  it("NEVER recites raw evidence when the LLM call fails (deterministic fallback stays in character)", async () => {
+    // Reproduces the gateway-contract-mismatch failure mode: the generate call
+    // fails, and the deterministic fallback must NOT dump the retrieved chunk.
+    const LORE_MARKER = "PODCASTSCRIPTLEAK: Title: Archivado Section: SCENE 3";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/sugaragent/retrieve/search")) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                fileId: "chunk-1",
+                filename: "podcast.md",
+                score: 0.9,
+                attributes: { page_id: "lore.entities.npcs.finnick" },
+                text: LORE_MARKER
+              }
+            ],
+            requestId: "search-1"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (url.endsWith("/api/sugaragent/generate")) {
+        // Non-retryable client error (e.g. an old gateway rejecting the new
+        // request shape) → the else-branch deterministic fallback.
+        return new Response(
+          JSON.stringify({ ok: false, error: "InvalidRequest", message: "bad" }),
+          { status: 400, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error("Unexpected fetch in test: " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "lore.entities.npcs.finnick"
+    });
+    const reply = await host.submitInput({
+      kind: "free_text",
+      text: "Tell me everything you know."
+    });
+
+    // The raw evidence and its vector-store markers must never surface.
+    expect(reply?.text).not.toContain("PODCASTSCRIPTLEAK");
+    expect(reply?.text).not.toContain("From what I know");
+    expect(reply?.text).not.toContain("Title:");
+    expect(reply?.text).not.toContain("Section:");
+    expect(reply?.text).not.toContain("Page ID:");
+    expect((reply?.text ?? "").length).toBeGreaterThan(0);
   });
 
   // Plan 072.3 — session-start persona load.

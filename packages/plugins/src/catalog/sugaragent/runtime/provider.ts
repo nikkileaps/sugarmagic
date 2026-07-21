@@ -319,7 +319,7 @@ async function executePipeline(args: {
 
   const { output: retrieve, diagnostics: retrieveDiagnostics } = await runStage(
     stages.retrieve,
-    { execution, interpret },
+    { execution, interpret, personaLoaded: state.persona?.loaded === true },
     context
   );
   const { output: plan, diagnostics: planDiagnostics } = await runStage(

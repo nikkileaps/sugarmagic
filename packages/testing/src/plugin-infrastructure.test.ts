@@ -3689,6 +3689,7 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       maxEvidenceResults: 8,
+      maxEvidenceCharsPerItem: 600,
       debugLogging: true,
       tone: ""
     });
@@ -3712,6 +3713,7 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       maxEvidenceResults: 4,
+      maxEvidenceCharsPerItem: 600,
       debugLogging: false,
       tone: ""
     });

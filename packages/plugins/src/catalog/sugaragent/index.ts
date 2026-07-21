@@ -178,6 +178,11 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicModel === "string"
         ? config.anthropicModel.trim()
         : "",
+    maxEvidenceCharsPerItem:
+      typeof config?.maxEvidenceCharsPerItem === "number" &&
+      Number.isFinite(config.maxEvidenceCharsPerItem)
+        ? Math.max(120, Math.min(4000, Math.floor(config.maxEvidenceCharsPerItem)))
+        : 600,
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -267,6 +272,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       max: 8
     },
     {
+      configKey: "maxEvidenceCharsPerItem",
+      label: "Max Evidence Chars / Item",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 600,
+      min: 120,
+      max: 4000
+    },
+    {
       configKey: "debugLogging",
       label: "Structured Debug Logging",
       type: "boolean",
@@ -311,6 +325,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     openAiVectorStoreId: "",
     anthropicModel: "",
     maxEvidenceResults: 4,
+    maxEvidenceCharsPerItem: 600,
     debugLogging: false,
     tone: ""
   },

@@ -18,10 +18,30 @@ const STAGE_DIRECTION_PATTERNS: Array<{ violation: string; pattern: RegExp }> = 
   { violation: "contains-parenthetical-stage-direction", pattern: /^\s*\([^)]{2,}\)\s*/m }
 ];
 
+export interface EvidenceBudget {
+  /** Max number of evidence items to forward. */
+  maxItems: number;
+  /** Per-item character cap. */
+  perItemChars: number;
+}
+
+/**
+ * Plan 072.6 — forward up to `maxItems` evidence items, each capped at
+ * `perItemChars`. Replaces the old hard 3x180 truncation so the wiki's
+ * richness actually reaches the model. Total budget is bounded by
+ * maxItems x perItemChars.
+ */
 export function summarizeEvidence(
-  evidencePack: RetrieveResult["evidencePack"]
+  evidencePack: RetrieveResult["evidencePack"],
+  budget: EvidenceBudget
 ): string[] {
-  return evidencePack.slice(0, 3).map((item) => item.text.slice(0, 180));
+  const maxItems = Math.max(1, Math.floor(budget.maxItems));
+  const perItemChars = Math.max(1, Math.floor(budget.perItemChars));
+  return evidencePack
+    .slice(0, maxItems)
+    .map((item) =>
+      item.text.length > perItemChars ? item.text.slice(0, perItemChars) : item.text
+    );
 }
 
 export function normalizeRetrievedEvidenceText(text: string): string {
@@ -142,15 +162,9 @@ export function normalizeNpcSpeech(text: string): string {
 export function buildFallbackReply(input: {
   interpret: InterpretResult;
   responseIntent: PlanResult["responseIntent"];
-  evidenceSummary: string[];
   activeQuestDisplayName: string | null;
 }): string {
-  const {
-    interpret,
-    responseIntent,
-    evidenceSummary,
-    activeQuestDisplayName
-  } = input;
+  const { interpret, responseIntent, activeQuestDisplayName } = input;
   if (responseIntent === "greet") {
     return "Hello. What can I help you with today?";
   }
@@ -175,9 +189,9 @@ export function buildFallbackReply(input: {
   if (responseIntent === "redirect" && activeQuestDisplayName) {
     return `Stay with the thread of ${activeQuestDisplayName}. That's where the answers are.`;
   }
-  if (evidenceSummary.length > 0) {
-    return `From what I know: ${evidenceSummary[0]}.`;
-  }
+  // A deterministic fallback must NEVER recite raw retrieved evidence — that
+  // dumps vector-store chunks (headers, other pages' scripts) verbatim at the
+  // player. Fall back to a generic, in-character, content-free deflection.
   return "I can talk this through, but I need a little more to go on.";
 }
 

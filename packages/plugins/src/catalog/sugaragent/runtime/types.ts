@@ -76,6 +76,12 @@ export interface SugarAgentPluginConfig {
   openAiVectorStoreId: string;
   anthropicModel: string;
   maxEvidenceResults: number;
+  /**
+   * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
+   * Replaces the old hard 180-char truncation; the wiki's richness must reach
+   * the model. Total evidence budget is bounded by maxEvidenceResults x this.
+   */
+  maxEvidenceCharsPerItem: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;

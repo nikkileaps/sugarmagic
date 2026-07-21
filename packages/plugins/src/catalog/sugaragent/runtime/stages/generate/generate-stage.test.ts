@@ -130,6 +130,7 @@ function createStageContext(options: { debugLogging?: boolean } = {}) {
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
       maxEvidenceResults: 4,
+      maxEvidenceCharsPerItem: 600,
       // Plan 072.4 — the full systemPrompt/userPrompt are only dumped into
       // diagnostics when debugLogging is on. These prompt-content tests need
       // them, so default on; the gate test overrides to false.

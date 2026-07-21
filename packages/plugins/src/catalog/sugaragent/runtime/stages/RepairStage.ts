@@ -1,10 +1,6 @@
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import { createDiagnostics } from "./diagnostics";
-import {
-  buildFallbackReply,
-  normalizeNpcSpeech,
-  summarizeEvidence
-} from "./helpers";
+import { buildFallbackReply, normalizeNpcSpeech } from "./helpers";
 import type {
   AuditResult,
   GenerateResult,
@@ -66,7 +62,6 @@ export class RepairStage implements TurnStage<RepairStageInput, RepairResult> {
       text: normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
-        evidenceSummary: summarizeEvidence(input.retrieve.evidencePack),
         activeQuestDisplayName
       })),
       actionProposals: input.generate.actionProposals,

@@ -227,7 +227,10 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let userPrompt = "";
     let retryCount = 0;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
-    const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
+    const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack, {
+      maxItems: context.config.maxEvidenceResults,
+      perItemChars: context.config.maxEvidenceCharsPerItem
+    });
     const minimalSugarlangGreetingMode = isMinimalGreetingMode(
       constraint
     );
@@ -434,7 +437,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           text = normalizeNpcSpeech(buildFallbackReply({
             interpret: input.interpret,
             responseIntent: input.plan.responseIntent,
-            evidenceSummary,
             activeQuestDisplayName
           }));
         }
@@ -445,7 +447,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       text = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
-        evidenceSummary: summarizeEvidence(input.retrieve.evidencePack),
         activeQuestDisplayName
       }));
     }
