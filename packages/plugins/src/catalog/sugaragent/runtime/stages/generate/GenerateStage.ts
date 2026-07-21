@@ -297,6 +297,14 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       }
     }
 
+    // Plan 072 personas: a persona'd NPC should answer player-initiated social
+    // turns (greetings, self-introductions, small talk) IN CHARACTER via the
+    // LLM, not with a canned line. The LLM path already keeps generic-only
+    // turns low-specificity and in-character. Keep the deterministic path only
+    // for the opening turn (no player text -- the "Hello, what can I help you
+    // with today?" line) and for persona-less NPCs (fast/cheap fallback).
+    const personaLoaded = input.state.persona?.loaded === true;
+    const isOpeningTurn = !input.interpret.userText;
     if (
       !constraint &&
       input.plan.responseSpecificity === "generic-only" &&
@@ -304,7 +312,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         input.plan.responseIntent === "greet" ||
         input.plan.responseIntent === "chat" ||
         input.plan.responseIntent === "answer"
-      )
+      ) &&
+      (!personaLoaded || isOpeningTurn)
     ) {
       text = buildGenericOnlyReply({
         responseIntent: input.plan.responseIntent,
