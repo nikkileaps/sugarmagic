@@ -19,6 +19,7 @@
 
 import type { ReactNode } from "react";
 import type {
+  AnimationLibraryDefinition,
   AssetDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
@@ -105,12 +106,12 @@ export interface DesignProductModeViewProps {
   assetDefinitions: AssetDefinition[];
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
-  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   /** Plan 062 §062.6 — Studio-side Character Wizard services;
    *  omitted/null hides the rig-wizard launcher. */
   characterWizardServices?: CharacterWizardServices | null;
@@ -172,12 +173,12 @@ export function useDesignProductModeView(
     assetDefinitions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onSelectKind,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices,
     onImportAsset,
     onGenerateItemThumbnail,
@@ -196,11 +197,11 @@ export function useDesignProductModeView(
     playerDefinition,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices: characterWizardServices ?? null
   });
 
@@ -211,11 +212,11 @@ export function useDesignProductModeView(
     interactionModeOptions: npcInteractionOptions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices: characterWizardServices ?? null,
     renderInspectorSections: renderNPCInspectorSections
   });

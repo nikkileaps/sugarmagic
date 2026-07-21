@@ -48,6 +48,9 @@ export function collectFileBackedAssetPaths(input: {
     ...(input.contentLibrary.characterAnimationDefinitions ?? []).map(
       (definition) => definition.source
     ),
+    ...(input.contentLibrary.animationLibraryDefinitions ?? []).map(
+      (definition) => definition.source
+    ),
     ...(input.contentLibrary.textureDefinitions ?? []).map(
       (definition) => definition.source
     ),

@@ -25,9 +25,8 @@ import {
   Button,
   Group,
   Loader,
-  Paper,
+  Menu,
   ScrollArea,
-  SegmentedControl,
   Stack,
   Switch,
   Text,
@@ -42,6 +41,7 @@ import {
 } from "@sugarmagic/ui";
 import {
   createDefaultMotionRecipe,
+  type AnimationLibraryDefinition,
   type CharacterAnimationDefinition,
   type CharacterModelDefinition,
   type MotionRecipe
@@ -49,10 +49,11 @@ import {
 import { evaluateOverrideCurve } from "@sugarmagic/character-rig";
 import { Select } from "@mantine/core";
 import { CharacterPreview, type CharacterPreviewSlot } from "../CharacterPreview";
+import { AnimationLibraryBrowser } from "./AnimationLibraryBrowser";
 import { PoseViewport } from "./PoseViewport";
 import type { CharacterWizardServices } from "../character-wizard/CharacterWizard";
 
-type Slot = "idle" | "walk" | "run";
+export type Slot = "idle" | "walk" | "run";
 const SLOTS: Slot[] = ["idle", "walk", "run"];
 
 interface SlotState {
@@ -74,11 +75,17 @@ export interface AnimationPanelProps {
   /** Preview scale — the player/NPC modelHeight. */
   targetHeight: number;
   services: CharacterWizardServices;
+  /** Library entries available for direct slot assignment. */
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
   onCommitted: (
     bindings: Array<{ slot: Slot; definition: CharacterAnimationDefinition }>
   ) => void;
+  /** Called immediately when the user picks a library clip (bypasses the save flow). */
+  onAssignFromLibrary: (slot: Slot, definitionId: string) => void;
+  /** Called immediately when the user clears a slot binding. */
+  onClearSlot: (slot: Slot) => void;
   onClose: () => void;
-  /** Switch to the weight workbench (the 🦴 tab). */
+  /** Switch to the weight workbench (the bone tab). */
   onSwitchToRig: () => void;
 }
 
@@ -126,11 +133,15 @@ export function AnimationPanel(props: AnimationPanelProps) {
     assetSources,
     targetHeight,
     services,
+    animationLibraryDefinitions,
     onCommitted,
+    onAssignFromLibrary,
+    onClearSlot,
     onClose,
     onSwitchToRig
   } = props;
   const [previewPlaying, setPreviewPlaying] = useState(true);
+  const [libBrowserSlot, setLibBrowserSlot] = useState<Slot | null>(null);
   // §063.5 pose adjust mode.
   const [poseMode, setPoseMode] = useState(false);
   // §063.6 curve editing.
@@ -570,42 +581,57 @@ export function AnimationPanel(props: AnimationPanelProps) {
                           fullWidth
                           justify="flex-start"
                           style={{ flex: 1 }}
+                          styles={{
+                            root: { height: "auto", paddingTop: 2, paddingBottom: 2 },
+                            label: { flexDirection: "column", alignItems: "flex-start" }
+                          }}
                           variant={activeSlot === slot ? "light" : "subtle"}
                           color={activeSlot === slot ? "blue" : "gray"}
                           onClick={() => setActiveSlot(slot)}
                         >
-                          {slot}
-                          {slots[slot].dirty && slots[slot].pending ? " *" : ""}
-                        </Button>
-                        <Tooltip
-                          label={
-                            slots[slot].source === "generated"
-                              ? "Generated — click for library clip"
-                              : "Library clip — click to generate"
-                          }
-                        >
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            color={
-                              slots[slot].source === "generated"
-                                ? "cyan"
-                                : "gray"
-                            }
-                            onClick={() => {
-                              setActiveSlot(slot);
-                              chooseSource(
-                                slot,
-                                slots[slot].source === "generated"
-                                  ? "library"
-                                  : "generated"
-                              );
-                            }}
-                            aria-label={`Toggle ${slot} source`}
+                          <span>
+                            {slot}
+                            {slots[slot].dirty && slots[slot].pending ? " *" : ""}
+                          </span>
+                          <Text
+                            size="xs"
+                            c="var(--sm-color-subtext)"
+                            style={{ fontSize: 10, lineHeight: 1.2 }}
                           >
-                            {slots[slot].source === "generated" ? "G" : "L"}
-                          </ActionIcon>
-                        </Tooltip>
+                            {slots[slot].dirty && slots[slot].pending
+                              ? `${slots[slot].pending.clipName} (unsaved)`
+                              : (boundAnimations[slot]?.clipNames?.[0] ??
+                                "none bound")}
+                          </Text>
+                        </Button>
+                        <Menu shadow="md" width={180} position="bottom-end">
+                          <Menu.Target>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="gray"
+                              aria-label={`${slot} slot options`}
+                            >
+                              ...
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Item
+                              onClick={() => {
+                                setActiveSlot(slot);
+                                setLibBrowserSlot(slot);
+                              }}
+                            >
+                              Replace
+                            </Menu.Item>
+                            <Menu.Item
+                              color="red"
+                              onClick={() => onClearSlot(slot)}
+                            >
+                              Clear
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
                       </Group>
                     ))}
                   </Stack>
@@ -709,8 +735,8 @@ export function AnimationPanel(props: AnimationPanelProps) {
                       }
                     />
                     <Text size="xs" c="var(--sm-color-subtext)">
-                      Drag a wrist or tail handle; applies to all
-                      generated slots.
+                      Drag a handle (wrists, head, chest, tail);
+                      applies to all generated slots.
                     </Text>
                   </ToolOptionsBar>
                 ) : null}
@@ -755,6 +781,15 @@ export function AnimationPanel(props: AnimationPanelProps) {
               ) : null}
             </Stack>
           </Group>
+          <AnimationLibraryBrowser
+            opened={libBrowserSlot !== null}
+            animationLibraryDefinitions={animationLibraryDefinitions}
+            onSelect={(definitionId) => {
+              if (libBrowserSlot) onAssignFromLibrary(libBrowserSlot, definitionId);
+              setLibBrowserSlot(null);
+            }}
+            onClose={() => setLibBrowserSlot(null)}
+          />
         </>
       )}
     </Stack>

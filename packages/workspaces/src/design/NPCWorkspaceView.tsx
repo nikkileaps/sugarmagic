@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   ActionIcon,
   Box,
-  Button,
   Group,
   Menu,
   NumberInput,
@@ -33,6 +32,7 @@ import {
   Tooltip
 } from "@mantine/core";
 import type {
+  AnimationLibraryDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   NPCAnimationSlot,
@@ -44,7 +44,10 @@ import type {
   DesignPreviewState,
   DesignPreviewStore
 } from "@sugarmagic/shell";
-import { createDefaultNPCDefinition } from "@sugarmagic/domain";
+import {
+  createDefaultNPCDefinition,
+  resolveCharacterAnimationBinding
+} from "@sugarmagic/domain";
 import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
@@ -67,7 +70,8 @@ export interface NPCWorkspaceViewProps {
   }>;
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
-  /** path → blob URL map for resolving model + animation glbs. */
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
+  /** path -> blob URL map for resolving model + animation glbs. */
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
@@ -79,14 +83,6 @@ export interface NPCWorkspaceViewProps {
    * Resolves to `null` when the user cancels.
    */
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
-  /**
-   * Triggers a file-picker that imports a character animation `.glb`
-   * via IO into the project. Resolves to the new
-   * `CharacterAnimationDefinition` so the inspector can bind it to a
-   * specific animation slot (idle / walk / run) on the selected NPC.
-   * Resolves to `null` when the user cancels.
-   */
-  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   /** Plan 062 §062.6 — Studio-side wizard services; null hides
    *  the rig-wizard launcher. */
   characterWizardServices: CharacterWizardServices | null;
@@ -112,11 +108,11 @@ export function useNPCWorkspaceView(
     interactionModeOptions,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices,
     renderInspectorSections
   } = props;
@@ -140,6 +136,7 @@ export function useNPCWorkspaceView(
     riggedBytes: ArrayBuffer;
     boundClips?: Partial<Record<"idle" | "walk" | "run", ArrayBuffer>>;
   } | null>(null);
+  const [wizardInitialSourceBytes, setWizardInitialSourceBytes] = useState<ArrayBuffer | null>(null);
 
   // §062.9 — edit wizard-generated models, create otherwise.
   async function launchWizard(
@@ -173,6 +170,15 @@ export function useNPCWorkspaceView(
         });
         setWizardOpen(true);
         return;
+      }
+    }
+    // Pre-seed from the Model field so the user doesn't have to re-pick
+    // a GLB they already uploaded.
+    if (model?.source?.relativeAssetPath) {
+      const url = assetSources[model.source.relativeAssetPath];
+      if (url) {
+        const bytes = await (await fetch(url)).arrayBuffer();
+        setWizardInitialSourceBytes(bytes);
       }
     }
     setWizardEditSession(null);
@@ -241,9 +247,11 @@ export function useNPCWorkspaceView(
         const bindingId =
           selectedNPC.presentation.animationAssetBindings[slot] ?? null;
         const animation = bindingId
-          ? characterAnimationDefinitions.find(
-              (definition) => definition.definitionId === bindingId
-            ) ?? null
+          ? resolveCharacterAnimationBinding(
+              characterAnimationDefinitions,
+              animationLibraryDefinitions,
+              bindingId
+            )
           : null;
         return {
           value: slot,
@@ -252,7 +260,7 @@ export function useNPCWorkspaceView(
         };
       }
     );
-  }, [selectedNPC, characterAnimationDefinitions]);
+  }, [selectedNPC, characterAnimationDefinitions, animationLibraryDefinitions]);
 
   const availableInteractionModes = useMemo(
     () => new Set(interactionModeOptions.map((option) => option.value)),
@@ -352,6 +360,7 @@ export function useNPCWorkspaceView(
           assetSources={assetSources}
           targetHeight={selectedNPC.presentation.modelHeight ?? 1.7}
           services={characterWizardServices}
+          animationLibraryDefinitions={animationLibraryDefinitions}
           onCommitted={(bindings) => {
             const next = {
               ...selectedNPC.presentation.animationAssetBindings
@@ -364,6 +373,30 @@ export function useNPCWorkspaceView(
               presentation: {
                 ...selectedNPC.presentation,
                 animationAssetBindings: next
+              }
+            });
+          }}
+          onAssignFromLibrary={(slot, definitionId) => {
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: {
+                  ...selectedNPC.presentation.animationAssetBindings,
+                  [slot]: definitionId
+                }
+              }
+            });
+          }}
+          onClearSlot={(slot) => {
+            updateNPC({
+              ...selectedNPC,
+              presentation: {
+                ...selectedNPC.presentation,
+                animationAssetBindings: {
+                  ...selectedNPC.presentation.animationAssetBindings,
+                  [slot]: null
+                }
               }
             });
           }}
@@ -416,9 +449,9 @@ export function useNPCWorkspaceView(
         }
         assetSources={assetSources}
         onLaunchRigWizard={
-          characterWizardServices && selectedNPC
+          characterWizardServices && selectedNPC && boundCharacterModel
             ? () =>
-                boundCharacterModel?.rigId
+                boundCharacterModel.rigId
                   ? setRigMode(true)
                   : void launchWizard(boundCharacterModel)
             : undefined
@@ -437,9 +470,25 @@ export function useNPCWorkspaceView(
           defaultCharacterName={selectedNPC.displayName}
           services={characterWizardServices}
           editSession={wizardEditSession}
+          initialSourceBytes={wizardInitialSourceBytes}
+          riggedCharacterTemplates={characterModelDefinitions
+            .filter(
+              (m) =>
+                m.rigId &&
+                m.definitionId !== boundCharacterModel?.definitionId
+            )
+            .map((m) => ({
+              label: m.source.fileName.replace(/-rigged\.glb$/i, ""),
+              fetchBytes: async () => {
+                const url = assetSources[m.source.relativeAssetPath];
+                if (!url) throw new Error("Model not loaded");
+                return (await fetch(url)).arrayBuffer();
+              }
+            }))}
           onClose={() => {
             setWizardOpen(false);
             setWizardEditSession(null);
+            setWizardInitialSourceBytes(null);
           }}
           onCommitted={(result) => {
             const bindings = {
@@ -699,105 +748,6 @@ export function useNPCWorkspaceView(
               />
             </Stack>
 
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Animation Slots
-              </Text>
-              {(["idle", "walk", "run"] as NPCAnimationSlot[]).map((slot) => {
-                const boundId =
-                  selectedNPC.presentation.animationAssetBindings[slot];
-                const bound = boundId
-                  ? characterAnimationDefinitions.find(
-                      (definition) => definition.definitionId === boundId
-                    ) ?? null
-                  : null;
-                const slotLabel = slot[0]!.toUpperCase() + slot.slice(1);
-                return (
-                  <Stack key={slot} gap={4}>
-                    <Text size="xs" fw={500}>
-                      {slotLabel}
-                    </Text>
-                    {bound ? (
-                      <Stack gap={4}>
-                        <Text size="xs">{bound.displayName}</Text>
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          {bound.source.relativeAssetPath}
-                        </Text>
-                        <Group gap="xs">
-                          <Button
-                            size="compact-xs"
-                            variant="light"
-                            onClick={async () => {
-                              const next = await onImportCharacterAnimationDefinition();
-                              if (!next) return;
-                              updateNPC({
-                                ...selectedNPC,
-                                presentation: {
-                                  ...selectedNPC.presentation,
-                                  animationAssetBindings: {
-                                    ...selectedNPC.presentation.animationAssetBindings,
-                                    [slot]: next.definitionId
-                                  }
-                                }
-                              });
-                            }}
-                          >
-                            Replace…
-                          </Button>
-                          <Button
-                            size="compact-xs"
-                            variant="subtle"
-                            color="red"
-                            onClick={() =>
-                              updateNPC({
-                                ...selectedNPC,
-                                presentation: {
-                                  ...selectedNPC.presentation,
-                                  animationAssetBindings: {
-                                    ...selectedNPC.presentation.animationAssetBindings,
-                                    [slot]: null
-                                  }
-                                }
-                              })
-                            }
-                          >
-                            Clear
-                          </Button>
-                        </Group>
-                      </Stack>
-                    ) : (
-                      <Stack gap={4}>
-                        {boundId ? (
-                          <Text size="xs" c="red">
-                            Bound animation is missing from the project — re-import.
-                          </Text>
-                        ) : null}
-                        <Button
-                          size="xs"
-                          variant="light"
-                          onClick={async () => {
-                            const next = await onImportCharacterAnimationDefinition();
-                            if (!next) return;
-                            updateNPC({
-                              ...selectedNPC,
-                              presentation: {
-                                ...selectedNPC.presentation,
-                                animationAssetBindings: {
-                                  ...selectedNPC.presentation.animationAssetBindings,
-                                  [slot]: next.definitionId
-                                }
-                              }
-                            });
-                          }}
-                        >
-                          Import Animation…
-                        </Button>
-                      </Stack>
-                    )}
-                  </Stack>
-                );
-              })}
-            </Stack>
 
             {renderInspectorSections?.({
               selectedNPC,

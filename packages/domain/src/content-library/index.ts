@@ -267,6 +267,29 @@ export interface CharacterAnimationDefinition {
   clipNames: string[];
 }
 
+export type AnimationLibraryOrigin = "imported" | "generated";
+
+/**
+ * A reusable animation clip in the project-scoped animation library.
+ * Unlike CharacterAnimationDefinition (entity-owned, 1:1 with a slot),
+ * library animations are browseable, shareable across characters, and
+ * importable from Blender GLB exports. Each entry holds exactly one
+ * clip (one action). Origin distinguishes Blender imports from
+ * procedurally generated clips (Cozy Idle / Walk / Run).
+ */
+export interface AnimationLibraryDefinition {
+  definitionId: string;
+  definitionKind: "animation-library";
+  displayName: string;
+  origin: AnimationLibraryOrigin;
+  clipNames: string[];
+  source: {
+    relativeAssetPath: string;
+    fileName: string;
+    mimeType: string | null;
+  };
+}
+
 export type SoundCategory = "music" | "sfx" | "ambient" | "ui" | "voice";
 
 export type SoundCuePlaybackMode =
@@ -564,6 +587,7 @@ export interface ContentLibrarySnapshot {
   audioClipDefinitions?: AudioClipDefinition[];
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  animationLibraryDefinitions?: AnimationLibraryDefinition[];
   materialDefinitions: MaterialDefinition[];
   soundCueDefinitions?: SoundCueDefinition[];
   textureDefinitions: TextureDefinition[];
@@ -1781,6 +1805,32 @@ export function createDefaultCharacterAnimationDefinition(
   };
 }
 
+export function createDefaultAnimationLibraryDefinition(
+  projectId: string,
+  options: {
+    definitionId?: string;
+    displayName?: string;
+    source: AnimationLibraryDefinition["source"];
+    clipNames?: string[];
+    origin?: AnimationLibraryOrigin;
+  }
+): AnimationLibraryDefinition {
+  return {
+    definitionId:
+      options.definitionId ??
+      `${projectId}:animation-library:${createScopedId("animation-library")}`,
+    definitionKind: "animation-library",
+    displayName: options.displayName ?? options.source.fileName,
+    origin: options.origin ?? "imported",
+    source: {
+      relativeAssetPath: options.source.relativeAssetPath,
+      fileName: options.source.fileName,
+      mimeType: options.source.mimeType
+    },
+    clipNames: [...(options.clipNames ?? [])]
+  };
+}
+
 export function createDefaultAudioClipDefinition(options: {
   definitionId?: string;
   displayName?: string;
@@ -1877,6 +1927,7 @@ export function createEmptyContentLibrarySnapshot(
     audioClipDefinitions: [],
     characterModelDefinitions: [],
     characterAnimationDefinitions: [],
+    animationLibraryDefinitions: [],
     materialDefinitions: builtInMaterialDefinitions,
     soundCueDefinitions: [],
     textureDefinitions: [],
@@ -1998,6 +2049,7 @@ export function normalizeContentLibrarySnapshot(
     characterAnimationDefinitions: normalizeCharacterAnimationDefinitions(
       contentLibrary.characterAnimationDefinitions
     ),
+    animationLibraryDefinitions: contentLibrary.animationLibraryDefinitions ?? [],
     materialDefinitions: mergedMaterialDefinitions,
     soundCueDefinitions: normalizeSoundCueDefinitions(
       contentLibrary.soundCueDefinitions
@@ -2483,14 +2535,47 @@ export function listCharacterModelDefinitions(
   return [...contentLibrary.characterModelDefinitions];
 }
 
+/**
+ * Resolve an animation slot binding to a playable definition. Tries
+ * the per-character pool first, then falls through to the animation
+ * library pool: slots bound via AnimLib 4's "From Library" picker
+ * store the library definitionId directly, so a library entry is
+ * synthesized into a CharacterAnimationDefinition proxy on the fly.
+ * This is the single enforcer for that synthesis — workspace views
+ * and the runtime both resolve through here.
+ */
+export function resolveCharacterAnimationBinding(
+  characterAnimationDefinitions: CharacterAnimationDefinition[],
+  animationLibraryDefinitions: AnimationLibraryDefinition[] | undefined,
+  definitionId: string
+): CharacterAnimationDefinition | null {
+  const direct = characterAnimationDefinitions.find(
+    (definition) => definition.definitionId === definitionId
+  );
+  if (direct) return direct;
+  const lib = (animationLibraryDefinitions ?? []).find(
+    (definition) => definition.definitionId === definitionId
+  );
+  if (lib) {
+    return {
+      definitionId: lib.definitionId,
+      definitionKind: "character-animation",
+      displayName: lib.displayName,
+      source: lib.source,
+      clipNames: lib.clipNames
+    };
+  }
+  return null;
+}
+
 export function getCharacterAnimationDefinition(
   contentLibrary: ContentLibrarySnapshot,
   definitionId: string
 ): CharacterAnimationDefinition | null {
-  return (
-    contentLibrary.characterAnimationDefinitions.find(
-      (definition) => definition.definitionId === definitionId
-    ) ?? null
+  return resolveCharacterAnimationBinding(
+    contentLibrary.characterAnimationDefinitions,
+    contentLibrary.animationLibraryDefinitions,
+    definitionId
   );
 }
 
@@ -2498,6 +2583,23 @@ export function listCharacterAnimationDefinitions(
   contentLibrary: ContentLibrarySnapshot
 ): CharacterAnimationDefinition[] {
   return [...contentLibrary.characterAnimationDefinitions];
+}
+
+export function listAnimationLibraryDefinitions(
+  contentLibrary: ContentLibrarySnapshot
+): AnimationLibraryDefinition[] {
+  return [...(contentLibrary.animationLibraryDefinitions ?? [])];
+}
+
+export function getAnimationLibraryDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): AnimationLibraryDefinition | null {
+  return (
+    (contentLibrary.animationLibraryDefinitions ?? []).find(
+      (definition) => definition.definitionId === definitionId
+    ) ?? null
+  );
 }
 
 export function getMaterialDefinition(

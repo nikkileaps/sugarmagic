@@ -40,6 +40,7 @@ import {
   readClipRecipe,
   mergeClipTracks,
   readClipDuration,
+  readClipName,
   readSkinWeightsFromGlb,
   readWizardRecipe,
   scaleClipHipsTranslation,
@@ -49,6 +50,7 @@ import {
   STANDARD_RIG_CORE,
   STANDARD_RIG_CORE_WITH_TAIL,
   STANDARD_RIG_TAIL_BONES,
+  createDefaultMotionRecipe,
   isMotionRecipe,
   type CharacterAnimationDefinition,
   type CharacterModelDefinition,
@@ -92,8 +94,13 @@ export interface CharacterWizardServiceDeps {
     model: CharacterModelDefinition | null,
     animations: CharacterAnimationDefinition[]
   ) => void;
-  /** Refresh blob URLs after edit-in-place overwrote asset files. */
-  refreshAssetPaths: (relativeAssetPaths: string[]) => Promise<void>;
+  /** Publish a just-written asset's bytes to the asset-source
+   *  store. NEVER re-read a just-written file to build its blob
+   *  URL: FSAccess intermittently returns null on read-after-write
+   *  (2026-07-20 Mim regression — the refresh deleted + revoked
+   *  live clip URLs, and the NEXT edit session then saw its slots
+   *  as unbound and stomped them back to defaults). */
+  publishAssetSource: (relativeAssetPath: string, blob: Blob) => void;
 }
 
 function solveWeightsInWorker(
@@ -203,6 +210,26 @@ function overlayTailWag(
   });
 }
 
+/** One library clip, hip-scaled (+tail wag for tailed rigs).
+ *  Rotations play VERBATIM. With the rest-ALIGNED skeleton (mesh
+ *  along bone axes), verbatim locals reproduce the library's
+ *  world orientations at the character's own bone lengths —
+ *  which IS correct retargeting. Two attempts at baking
+ *  rest-delta corrections into keyframes both over/under-rotated
+ *  limbs (2026-07-06: arms behind the back, then through the
+ *  torso); the bind-side alignment was the whole answer. */
+async function libraryClipForSlot(
+  slot: "idle" | "walk" | "run",
+  hipScale: number,
+  tail: { personality: MotionRecipe["personality"]; seed: number } | null
+): Promise<{ clipName: string; bytes: ArrayBuffer }> {
+  const entry = SLOT_CLIPS.find((candidate) => candidate.slot === slot)!;
+  const raw = await (await fetch(entry.url)).arrayBuffer();
+  let bytes = scaleClipHipsTranslation(raw, hipScale);
+  if (tail) bytes = overlayTailWag(bytes, tail.personality, tail.seed);
+  return { clipName: entry.clipName, bytes };
+}
+
 async function prepareClips(
   skeleton: GeneratedSkeleton
 ): Promise<WizardGenerated["clips"]> {
@@ -210,28 +237,21 @@ async function prepareClips(
   const hasTail = skeleton.bones.some((bone) =>
     bone.name.startsWith("DEF-tail.")
   );
-  const defaultPersonality = {
-    energy: 0.35,
-    bounce: 0.4,
-    curiosity: 0.45,
-    fidgetiness: 0.3
-  };
-  // Rotations play VERBATIM. With the rest-ALIGNED skeleton (mesh
-  // along bone axes), verbatim locals reproduce the library's
-  // world orientations at the character's own bone lengths —
-  // which IS correct retargeting. Two attempts at baking
-  // rest-delta corrections into keyframes both over/under-rotated
-  // limbs (2026-07-06: arms behind the back, then through the
-  // torso); the bind-side alignment was the whole answer.
+  // GENERATED clips are the default (nikki, 2026-07-20): the
+  // library's Idle_Loop reads as a combat stance ("weird man
+  // leaning forward"), and the whole point of the recipe
+  // generators is a neutral-cute baseline. Library clips remain
+  // one click away per slot in the Animations panel. The recipe
+  // is stamped into each GLB, so reopening the panel restores
+  // the sliders.
   const clips: WizardGenerated["clips"] = [];
   for (const entry of SLOT_CLIPS) {
-    const clipBytes = await (await fetch(entry.url)).arrayBuffer();
-    let bytes = scaleClipHipsTranslation(clipBytes, hipScale);
-    if (hasTail) bytes = overlayTailWag(bytes, defaultPersonality, 1);
+    const recipe = createDefaultMotionRecipe(entry.slot);
+    const generated = generateClipFromRecipe(recipe, hipScale, hasTail);
     clips.push({
       slot: entry.slot,
-      clipName: entry.clipName,
-      bytes
+      clipName: generated.clipName,
+      bytes: generated.bytes
     });
   }
   return clips;
@@ -387,30 +407,58 @@ export function createCharacterWizardServices(
         // re-register or rebind them) — generated slots survive.
         // Marker-level edit: slots whose CURRENT clip carries a
         // motion recipe REGENERATE at the new skeleton's hip scale
-        // (personality + pose survive); library slots re-copy.
+        // (personality + pose survive); other bound slots (Quaternius
+        // library or custom AnimLib imports) keep their own bytes,
+        // re-scaled to the new hip height. Unbound slots take the
+        // generated default.
         clips: request.skipAnimations
           ? []
-          : request.generated.clips.map((clip) => {
-              const boundBytes = request.boundClips?.[clip.slot];
-              const recipe = boundBytes ? readClipRecipe(boundBytes) : null;
-              if (recipe && isMotionRecipe(recipe)) {
+          : await Promise.all(
+              request.generated.clips.map(async (clip) => {
                 const hipScale =
                   request.generated.skeleton.hipHeight /
                   getStandardRigHipHeight();
-                const regenerated = generateClipFromRecipe(
-                  recipe,
-                  hipScale,
-                  request.generated.skeleton.bones.some((bone) =>
-                    bone.name.startsWith("DEF-tail.")
-                  )
+                const hasTail = request.generated.skeleton.bones.some(
+                  (bone) => bone.name.startsWith("DEF-tail.")
                 );
-                return {
-                  clipName: regenerated.clipName,
-                  bytes: regenerated.bytes
-                };
-              }
-              return { clipName: clip.clipName, bytes: clip.bytes };
-            }),
+                const boundBytes = request.boundClips?.[clip.slot];
+                const recipe = boundBytes ? readClipRecipe(boundBytes) : null;
+                if (recipe && isMotionRecipe(recipe)) {
+                  const regenerated = generateClipFromRecipe(
+                    recipe,
+                    hipScale,
+                    hasTail
+                  );
+                  return {
+                    clipName: regenerated.clipName,
+                    bytes: regenerated.bytes
+                  };
+                }
+                if (boundBytes) {
+                  // Non-recipe bound clip (Quaternius library OR a
+                  // custom AnimLib import): KEEP the user's bytes and
+                  // re-scale hips to the new skeleton. Never re-fetch
+                  // the bundled default here — that silently replaced
+                  // custom library assignments with Quaternius clips.
+                  // boundBytes come from the clip's own source file
+                  // (standard maquette scale), so the scale doesn't
+                  // compound across edits.
+                  let bytes = scaleClipHipsTranslation(boundBytes, hipScale);
+                  if (hasTail) {
+                    bytes = overlayTailWag(
+                      bytes,
+                      createDefaultMotionRecipe(clip.slot).personality,
+                      1
+                    );
+                  }
+                  return {
+                    clipName: readClipName(boundBytes) ?? clip.clipName,
+                    bytes
+                  };
+                }
+                return { clipName: clip.clipName, bytes: clip.bytes };
+              })
+            ),
         attributionText
       });
       // Registration UPSERTS by definitionId: unchanged clip names
@@ -423,22 +471,11 @@ export function createCharacterWizardServices(
         result.characterModelDefinition,
         result.characterAnimationDefinitions
       );
-      // Same paths, new bytes — refresh the blob URLs so previews
-      // pick up the edited character without a reload.
-      const safe = request.characterName
-        .trim()
-        .replace(/[^a-zA-Z0-9-_]+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "");
-      const assets = context.descriptor.authoredAssetsPath;
-      await deps.refreshAssetPaths([
-        `${assets}/character-models/${safe}-rigged.glb`,
-        `${assets}/character-models/${safe}-source.glb`,
-        ...request.generated.clips.map(
-          (clip) =>
-            `${assets}/character-animations/${safe}-${clip.clipName.replace(/[^a-zA-Z0-9-_]+/g, "-")}.glb`
-        )
-      ]);
+      // Same paths, new bytes — publish the written blobs so
+      // previews pick up the edited character without a reload.
+      for (const written of result.writtenAssets) {
+        deps.publishAssetSource(written.relativeAssetPath, written.blob);
+      }
       return {
         characterModelDefinition: result.characterModelDefinition,
         characterAnimationDefinitions: request.skipAnimations
@@ -474,11 +511,7 @@ export function createCharacterWizardServices(
     },
 
     async getLibraryClip(slot, hipScale, tail) {
-      const entry = SLOT_CLIPS.find((candidate) => candidate.slot === slot)!;
-      const raw = await (await fetch(entry.url)).arrayBuffer();
-      let bytes = scaleClipHipsTranslation(raw, hipScale);
-      if (tail) bytes = overlayTailWag(bytes, tail.personality, tail.seed);
-      return { clipName: entry.clipName, bytes };
+      return libraryClipForSlot(slot, hipScale, tail ?? null);
     },
 
     sampleChannel(recipe, channel, count) {
@@ -524,9 +557,14 @@ export function createCharacterWizardServices(
         }))
       });
       deps.registerDefinitions(null, definitions);
-      await deps.refreshAssetPaths(
-        definitions.map((definition) => definition.source.relativeAssetPath)
-      );
+      definitions.forEach((definition, index) => {
+        deps.publishAssetSource(
+          definition.source.relativeAssetPath,
+          new Blob([request.clips[index]!.bytes], {
+            type: "model/gltf-binary"
+          })
+        );
+      });
       return request.clips.map((clip, index) => ({
         slot: clip.slot,
         definition: definitions[index]!
@@ -561,6 +599,9 @@ export function createCharacterWizardServices(
         result.characterModelDefinition,
         result.characterAnimationDefinitions
       );
+      for (const written of result.writtenAssets) {
+        deps.publishAssetSource(written.relativeAssetPath, written.blob);
+      }
       return {
         characterModelDefinition: result.characterModelDefinition,
         characterAnimationDefinitions: bySlot

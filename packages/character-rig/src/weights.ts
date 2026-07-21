@@ -30,6 +30,29 @@ import {
 
 export const MAX_INFLUENCES = 4;
 
+/** Bounded support (Dionne & de Lasa §4): a bone influences a
+ *  vertex only while its geodesic distance is within FACTOR x the
+ *  NEAREST bone's distance (+ a small pad so on-bone vertices
+ *  still blend with their neighbors). Without this cutoff the
+ *  inverse-square falloff never reaches zero, so on chibi
+ *  proportions the big head bone leaked into the chest and the
+ *  spine leaked into the face — the head-pulled-forward artifact
+ *  (nikki, 2026-07-19). */
+const SUPPORT_FACTOR = 2.0;
+/** Support pad in voxel cells (geodesic fields are in cell units). */
+const SUPPORT_PAD_CELLS = 4;
+
+/** Wendland-style compact taper: 1 at d=0, exactly 0 at d=cutoff.
+ *  Non-finite cutoff (supportFactor Infinity, or 0 * Infinity =
+ *  NaN when the vertex sits on a seed) means unbounded support. */
+function supportTaper(distance: number, cutoff: number): number {
+  if (!Number.isFinite(cutoff)) return 1;
+  if (distance >= cutoff) return 0;
+  const t = distance / cutoff;
+  const inv = 1 - t * t;
+  return inv * inv;
+}
+
 export interface SkinWeights {
   /** Bone name per influence column, indexed by the values in `joints`. */
   boneOrder: string[];
@@ -44,6 +67,9 @@ export interface WeightSolveOptions {
   resolution?: number;
   /** Laplacian smoothing iterations over mesh adjacency. Default 2. */
   smoothingIterations?: number;
+  /** Bounded-support factor (see SUPPORT_FACTOR). Infinity
+   *  disables the cutoff (the pre-2026-07-19 behavior). */
+  supportFactor?: number;
   onProgress?: (fraction: number) => void;
 }
 
@@ -284,6 +310,7 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
   ): SkinWeights {
     const resolution = options.resolution ?? 96;
     const smoothingIterations = options.smoothingIterations ?? 2;
+    const supportFactor = options.supportFactor ?? SUPPORT_FACTOR;
     const grid = voxelizeMesh(mesh, resolution);
     options.onProgress?.(0.1);
 
@@ -321,13 +348,20 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
       }
       let anyFinite = false;
       if (index !== -1) {
+        let nearest = Infinity;
         for (let bone = 0; bone < fields.length; bone += 1) {
           const distance = fields[bone]![index]!;
-          if (Number.isFinite(distance)) {
-            anyFinite = true;
-            raw[vertex * boneOrder.length + bone] =
-              1 / ((distance * grid.cellSize + epsilon) ** 2);
-          }
+          if (distance < nearest) nearest = distance;
+        }
+        const cutoff = nearest * supportFactor + SUPPORT_PAD_CELLS;
+        for (let bone = 0; bone < fields.length; bone += 1) {
+          const distance = fields[bone]![index]!;
+          if (!Number.isFinite(distance)) continue;
+          const taper = supportTaper(distance, cutoff);
+          if (taper <= 0) continue;
+          anyFinite = true;
+          raw[vertex * boneOrder.length + bone] =
+            taper / ((distance * grid.cellSize + epsilon) ** 2);
         }
       }
       if (!anyFinite) {
@@ -339,14 +373,25 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
         // onto whichever bone sat first in the list (the
         // 2026-07-06 crumple).
         euclideanFallbacks += 1;
+        let nearest = Infinity;
+        const segmentDistances = new Float64Array(segments.length);
         for (let bone = 0; bone < segments.length; bone += 1) {
           const distance = pointSegmentDistance(
             position,
             segments[bone]!.start,
             segments[bone]!.end
           );
+          segmentDistances[bone] = distance;
+          if (distance < nearest) nearest = distance;
+        }
+        const cutoff =
+          nearest * supportFactor + SUPPORT_PAD_CELLS * grid.cellSize;
+        for (let bone = 0; bone < segments.length; bone += 1) {
+          const distance = segmentDistances[bone]!;
+          const taper = supportTaper(distance, cutoff);
+          if (taper <= 0) continue;
           raw[vertex * boneOrder.length + bone] =
-            1 / ((distance + epsilon) ** 2);
+            taper / ((distance + epsilon) ** 2);
         }
       }
     }
@@ -354,6 +399,27 @@ export class GeodesicVoxelWeightSolver implements WeightSolver {
       console.info(
         `[character-rig] ${euclideanFallbacks}/${vertexCount} vertices used the euclidean fallback (disconnected mesh pieces).`
       );
+    }
+
+    // Normalize BEFORE smoothing. Raw inverse-square values span
+    // orders of magnitude — a vertex sitting on a bone's seed
+    // voxels carries a value ~1000x its neighbors', and Laplacian
+    // averaging of unnormalized rows let that one spike hijack its
+    // entire neighborhood (the 2026-07-19 Mim jaw: the neck's
+    // magnitude bled up through the head-bottom ring and the jaw
+    // ended up ~95% neck despite the head bone being geodesically
+    // NEARER). Normalized rows make smoothing a bounded blend of
+    // neighbor distributions, which is all it was ever meant to be.
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      let sum = 0;
+      for (let bone = 0; bone < boneOrder.length; bone += 1) {
+        sum += raw[vertex * boneOrder.length + bone]!;
+      }
+      if (sum > 0) {
+        for (let bone = 0; bone < boneOrder.length; bone += 1) {
+          raw[vertex * boneOrder.length + bone]! /= sum;
+        }
+      }
     }
 
     // Laplacian smoothing over mesh adjacency, then top-4 +

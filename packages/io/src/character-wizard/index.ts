@@ -58,8 +58,10 @@ export interface CommitCharacterWizardRequest {
   attributionText: string;
 }
 
-/** Stamp the wizard recipe into a rigged GLB's asset.extras. */
-function stampRecipe(
+/** Stamp the wizard recipe into a rigged GLB's asset.extras.
+ *  Exported for headless tooling that rebuilds rigged GLBs
+ *  outside the Studio wizard (must produce the same artifact). */
+export function stampWizardRecipe(
   modelGlb: ArrayBuffer,
   landmarks: Record<string, [number, number, number]>,
   sourceAssetPath: string
@@ -84,6 +86,11 @@ function stampRecipe(
 export interface CommitCharacterWizardResult {
   characterModelDefinition: CharacterModelDefinition;
   characterAnimationDefinitions: CharacterAnimationDefinition[];
+  /** The EXACT blobs written, keyed by project-relative path.
+   *  Callers publish these to the asset-source store instead of
+   *  re-reading the files — FSAccess intermittently returns null
+   *  on read-after-write (2026-07-20 Mim clip-binding loss). */
+  writtenAssets: Array<{ relativeAssetPath: string; blob: Blob }>;
 }
 
 function sanitizeSegment(value: string): string {
@@ -104,20 +111,24 @@ export async function commitCharacterWizardResult(
   const modelFileName = `${safeName}-rigged.glb`;
   const sourceFileName = `${safeName}-source.glb`;
   const sourceAssetPath = `${assetsPath}/character-models/${sourceFileName}`;
-  const stamped = stampRecipe(
+  const stamped = stampWizardRecipe(
     request.modelGlb,
     request.landmarks,
     sourceAssetPath
   );
+  const modelBlob = new Blob([stamped], { type: "model/gltf-binary" });
+  const sourceBlob = new Blob([request.sourceGlb], {
+    type: "model/gltf-binary"
+  });
   await writeBlobFile(
     request.projectHandle,
     [assetsPath, "character-models", modelFileName],
-    new Blob([stamped], { type: "model/gltf-binary" })
+    modelBlob
   );
   await writeBlobFile(
     request.projectHandle,
     [assetsPath, "character-models", sourceFileName],
-    new Blob([request.sourceGlb], { type: "model/gltf-binary" })
+    sourceBlob
   );
   const characterModelDefinition = createDefaultCharacterModelDefinition(
     request.projectId,
@@ -147,7 +158,23 @@ export async function commitCharacterWizardResult(
     new Blob([request.attributionText], { type: "text/markdown" })
   );
 
-  return { characterModelDefinition, characterAnimationDefinitions };
+  return {
+    characterModelDefinition,
+    characterAnimationDefinitions,
+    writtenAssets: [
+      {
+        relativeAssetPath: characterModelDefinition.source.relativeAssetPath,
+        blob: modelBlob
+      },
+      { relativeAssetPath: sourceAssetPath, blob: sourceBlob },
+      ...characterAnimationDefinitions.map((definition, index) => ({
+        relativeAssetPath: definition.source.relativeAssetPath,
+        blob: new Blob([request.clips[index]!.bytes], {
+          type: "model/gltf-binary"
+        })
+      }))
+    ]
+  };
 }
 
 export interface CommitCharacterAnimationClipsRequest {

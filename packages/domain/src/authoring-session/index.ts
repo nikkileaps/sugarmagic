@@ -104,6 +104,7 @@ import type {
 } from "../commands";
 import type {
   AssetDefinition,
+  AnimationLibraryDefinition,
   AudioClipDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
@@ -150,6 +151,7 @@ import {
   DEFAULT_CLOUD_SHADOW_SETTINGS,
   listAudioClipDefinitions as listAudioClipDefinitionsFromLibrary,
   listCharacterModelDefinitions as listCharacterModelDefinitionsFromLibrary,
+  listAnimationLibraryDefinitions as listAnimationLibraryDefinitionsFromLibrary,
   listCharacterAnimationDefinitions as listCharacterAnimationDefinitionsFromLibrary,
   listAssetDefinitions as listAssetDefinitionsFromLibrary,
   listEnvironmentDefinitions as listEnvironmentDefinitionsFromLibrary,
@@ -325,6 +327,12 @@ export function getAllCharacterAnimationDefinitions(
   session: AuthoringSession
 ): CharacterAnimationDefinition[] {
   return listCharacterAnimationDefinitionsFromLibrary(session.contentLibrary);
+}
+
+export function getAllAnimationLibraryDefinitions(
+  session: AuthoringSession
+): AnimationLibraryDefinition[] {
+  return listAnimationLibraryDefinitionsFromLibrary(session.contentLibrary);
 }
 
 export function getAllEnvironmentDefinitions(
@@ -3204,6 +3212,47 @@ export function updateCharacterAnimationDefinitionInSession(
   };
 }
 
+/** Null out any Player or NPC animation slot bound to definitionId
+ *  so the runtime doesn't dereference a dangling id. Shared by both
+ *  animation-removal cascades (per-character and library pools —
+ *  AnimLib 4 slots store library definitionIds directly). */
+function clearAnimationSlotBindings(
+  gameProject: AuthoringSession["gameProject"],
+  definitionId: string
+): AuthoringSession["gameProject"] {
+  return {
+    ...gameProject,
+    playerDefinition: {
+      ...gameProject.playerDefinition,
+      presentation: {
+        ...gameProject.playerDefinition.presentation,
+        animationAssetBindings: Object.fromEntries(
+          Object.entries(
+            gameProject.playerDefinition.presentation.animationAssetBindings
+          ).map(([slot, bindingId]) => [
+            slot,
+            bindingId === definitionId ? null : bindingId
+          ])
+        ) as typeof gameProject.playerDefinition.presentation.animationAssetBindings
+      }
+    },
+    npcDefinitions: gameProject.npcDefinitions.map((npcDefinition) => ({
+      ...npcDefinition,
+      presentation: {
+        ...npcDefinition.presentation,
+        animationAssetBindings: Object.fromEntries(
+          Object.entries(npcDefinition.presentation.animationAssetBindings).map(
+            ([slot, bindingId]) => [
+              slot,
+              bindingId === definitionId ? null : bindingId
+            ]
+          )
+        ) as typeof npcDefinition.presentation.animationAssetBindings
+      }
+    }))
+  };
+}
+
 export function removeCharacterAnimationDefinitionFromSession(
   session: AuthoringSession,
   definitionId: string
@@ -3220,40 +3269,68 @@ export function removeCharacterAnimationDefinitionFromSession(
           (definition) => definition.definitionId !== definitionId
         )
     },
-    gameProject: {
-      ...session.gameProject,
-      playerDefinition: {
-        ...session.gameProject.playerDefinition,
-        presentation: {
-          ...session.gameProject.playerDefinition.presentation,
-          animationAssetBindings: Object.fromEntries(
-            Object.entries(
-              session.gameProject.playerDefinition.presentation
-                .animationAssetBindings
-            ).map(([slot, bindingId]) => [
-              slot,
-              bindingId === definitionId ? null : bindingId
-            ])
-          ) as typeof session.gameProject.playerDefinition.presentation.animationAssetBindings
-        }
-      },
-      npcDefinitions: session.gameProject.npcDefinitions.map(
-        (npcDefinition) => ({
-          ...npcDefinition,
-          presentation: {
-            ...npcDefinition.presentation,
-            animationAssetBindings: Object.fromEntries(
-              Object.entries(
-                npcDefinition.presentation.animationAssetBindings
-              ).map(([slot, bindingId]) => [
-                slot,
-                bindingId === definitionId ? null : bindingId
-              ])
-            ) as typeof npcDefinition.presentation.animationAssetBindings
-          }
-        })
+    gameProject: clearAnimationSlotBindings(session.gameProject, definitionId),
+    isDirty: true
+  };
+}
+
+export function addAnimationLibraryDefinitionToSession(
+  session: AuthoringSession,
+  definition: AnimationLibraryDefinition
+): AuthoringSession {
+  const existing = (
+    session.contentLibrary.animationLibraryDefinitions ?? []
+  ).findIndex((d) => d.definitionId === definition.definitionId);
+  const nextDefinitions = [
+    ...(session.contentLibrary.animationLibraryDefinitions ?? [])
+  ];
+  if (existing >= 0) {
+    nextDefinitions[existing] = definition;
+  } else {
+    nextDefinitions.push(definition);
+  }
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: nextDefinitions
+    },
+    isDirty: true
+  };
+}
+
+export function updateAnimationLibraryDefinitionInSession(
+  session: AuthoringSession,
+  definitionId: string,
+  patch: Partial<Pick<AnimationLibraryDefinition, "displayName">>
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: (
+        session.contentLibrary.animationLibraryDefinitions ?? []
+      ).map((d) =>
+        d.definitionId === definitionId ? { ...d, ...patch } : d
       )
     },
+    isDirty: true
+  };
+}
+
+export function removeAnimationLibraryDefinitionFromSession(
+  session: AuthoringSession,
+  definitionId: string
+): AuthoringSession {
+  return {
+    ...session,
+    contentLibrary: {
+      ...session.contentLibrary,
+      animationLibraryDefinitions: (
+        session.contentLibrary.animationLibraryDefinitions ?? []
+      ).filter((d) => d.definitionId !== definitionId)
+    },
+    gameProject: clearAnimationSlotBindings(session.gameProject, definitionId),
     isDirty: true
   };
 }

@@ -44,6 +44,12 @@ const HANDLES: Array<{
   label: string;
   /** Sagittal handles (tail) have no mirror twin. */
   mirror?: { handleBone: string; pivotBone: string };
+  /** Grab point offset along the handle bone's +Y, as a fraction
+   *  of model height. The head bone's NODE is at the skull base —
+   *  a tiny lever from the neck pivot; offsetting the grab point
+   *  to forehead level keeps the drag stable. Applied identically
+   *  in placement and the drag solve. */
+  handleOffsetY?: number;
 }> = [
   {
     handleBone: "DEF-hand.L",
@@ -69,6 +75,20 @@ const HANDLES: Array<{
     handleBone: "DEF-tail.003",
     pivotBone: "DEF-tail.002",
     label: "Tail (curl)"
+  },
+  // 2026-07-20 — the contract stance leans the chest out and the
+  // head down on chibi proportions; these two let the user counter
+  // it (the wrists alone could not).
+  {
+    handleBone: "DEF-head",
+    pivotBone: "DEF-neck",
+    label: "Head (tilt)",
+    handleOffsetY: 0.18
+  },
+  {
+    handleBone: "DEF-spine.003",
+    pivotBone: "DEF-spine.001",
+    label: "Chest (lean)"
   }
 ];
 
@@ -127,6 +147,9 @@ export function PoseViewport(props: PoseViewportProps) {
     );
 
     let disposed = false;
+    let modelHeight = 1;
+    const scratchQuat = new THREE.Quaternion();
+    const scratchY = new THREE.Vector3();
     const bonesByName = new Map<string, THREE.Bone>();
     const handleMeshes: Array<{
       mesh: THREE.Mesh;
@@ -159,6 +182,15 @@ export function PoseViewport(props: PoseViewportProps) {
         const bone = bonesByName.get(handle.config.handleBone);
         if (bone) {
           bone.getWorldPosition(handle.mesh.position);
+          if (handle.config.handleOffsetY) {
+            scratchY
+              .set(0, 1, 0)
+              .applyQuaternion(bone.getWorldQuaternion(scratchQuat));
+            handle.mesh.position.addScaledVector(
+              scratchY,
+              handle.config.handleOffsetY * modelHeight
+            );
+          }
           handle.mesh.visible = true;
         } else {
           handle.mesh.visible = false;
@@ -192,6 +224,7 @@ export function PoseViewport(props: PoseViewportProps) {
       });
       const bounds = new THREE.Box3().setFromObject(gltf.scene);
       const size = bounds.getSize(new THREE.Vector3());
+      modelHeight = size.y;
       orbit.targetY = bounds.min.y + size.y / 2;
       orbit.radius = Math.max(2, size.y * 2.4);
       applyCamera();
@@ -231,18 +264,27 @@ export function PoseViewport(props: PoseViewportProps) {
       );
     }
 
-    /** Rotate `pivotBone` so `handleBone`'s head follows target. */
+    /** Rotate `pivotBone` so `handleBone`'s grab point follows
+     *  target. `handleOffsetY` must match the placement offset or
+     *  the handle jumps on grab. */
     function pivotToward(
       pivotBoneName: string,
       handleBoneName: string,
       target: THREE.Vector3,
-      recordInto: Record<string, Quad>
+      recordInto: Record<string, Quad>,
+      handleOffsetY = 0
     ) {
       const pivotBone = bonesByName.get(pivotBoneName);
       const handleBone = bonesByName.get(handleBoneName);
       if (!pivotBone || !handleBone) return;
       const pivotPos = pivotBone.getWorldPosition(new THREE.Vector3());
       const handlePos = handleBone.getWorldPosition(new THREE.Vector3());
+      if (handleOffsetY) {
+        scratchY
+          .set(0, 1, 0)
+          .applyQuaternion(handleBone.getWorldQuaternion(scratchQuat));
+        handlePos.addScaledVector(scratchY, handleOffsetY * modelHeight);
+      }
       const from = handlePos.clone().sub(pivotPos).normalize();
       const to = target.clone().sub(pivotPos).normalize();
       if (from.lengthSq() < 1e-9 || to.lengthSq() < 1e-9) return;
@@ -321,7 +363,8 @@ export function PoseViewport(props: PoseViewportProps) {
         dragging.config.pivotBone,
         dragging.config.handleBone,
         dragPoint,
-        overrides
+        overrides,
+        dragging.config.handleOffsetY ?? 0
       );
       if (propsRef.current.mirroring && dragging.config.mirror) {
         // Mirror the PRIMARY side's resulting override onto the twin

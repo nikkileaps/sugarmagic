@@ -2,16 +2,14 @@
  * Library popover.
  *
  * Single owner of the Game > Libraries > {kind} dialog. Renders the
- * library kinds (Assets / Materials / Textures / Shaders / Audio —
- * Surfaces are NOT a library kind per Plan 037; character models +
- * animations are NOT library kinds per Plan 038, they're
- * entity-owned and authored via the Player/NPC inspector
- * file-pickers) with a list-on-left + preview-on-right layout.
+ * library kinds (Assets / Materials / Textures / Shaders / Audio /
+ * Animations) with a list-on-left + preview-on-right layout.
  * Reads `activeLibrary` from the shell store; the menu trigger
  * lives in App.tsx's Game menu.
  *
  * Assets joined the library kinds 2026-07-09 (they predate the
  * library pattern and used to be a whole Build workspace).
+ * Animations joined 2026-07-20 (AnimLib 3, Plan 070).
  */
 
 import { useMemo, useState } from "react";
@@ -29,6 +27,7 @@ import {
   Tooltip
 } from "@mantine/core";
 import type {
+  AnimationLibraryDefinition,
   AssetDefinition,
   AudioClipDefinition,
   ContentLibrarySnapshot,
@@ -53,6 +52,7 @@ export interface LibraryPopoverProps {
   shaderDefinitions: ShaderGraphDocument[];
   audioClipDefinitions: AudioClipDefinition[];
   assetDefinitions: AssetDefinition[];
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
   /** Full snapshot + scatter/mask defs for the asset inspector. */
   contentLibrary: ContentLibrarySnapshot | null;
   assetSources: Record<string, string>;
@@ -70,6 +70,7 @@ export interface LibraryPopoverProps {
   onImportTextureDefinition: () => Promise<TextureDefinition | null>;
   onImportAudioClipDefinition: () => Promise<AudioClipDefinition | null>;
   onImportAssetDefinition: () => Promise<AssetDefinition | null>;
+  onImportAnimationLibrary: () => Promise<AnimationLibraryDefinition[] | null>;
   onUpdateAssetDefinition: (definitionId: string, displayName: string) => void;
   onRemoveAssetDefinition: (definitionId: string) => void;
   /** #358 -- re-pivot the asset's GLB to bottom-center (Auto Correct
@@ -85,8 +86,13 @@ export interface LibraryPopoverProps {
     definitionId: string,
     patch: Partial<AudioClipDefinition>
   ) => void;
+  onUpdateAnimationLibraryDefinition: (
+    definitionId: string,
+    displayName: string
+  ) => void;
   onRemoveMaterialDefinition: (definitionId: string) => void;
   onRemoveAudioClipDefinition: (definitionId: string) => void;
+  onRemoveAnimationLibraryDefinition: (definitionId: string) => void;
   /**
    * Open a shader in the Render workspace's shader-graph editor.
    * Called when the user clicks "Edit in Shader Graph" on a shader
@@ -150,6 +156,16 @@ function getAssetItems(definitions: AssetDefinition[]): ListItem[] {
   }));
 }
 
+function getAnimationLibraryItems(
+  definitions: AnimationLibraryDefinition[]
+): ListItem[] {
+  return definitions.map((d) => ({
+    id: d.definitionId,
+    displayName: d.displayName,
+    isBuiltIn: false
+  }));
+}
+
 export function LibraryPopover({
   shellStore,
   materialDefinitions,
@@ -157,6 +173,7 @@ export function LibraryPopover({
   shaderDefinitions,
   audioClipDefinitions,
   assetDefinitions,
+  animationLibraryDefinitions,
   contentLibrary,
   assetSources,
   assetResolver,
@@ -170,13 +187,16 @@ export function LibraryPopover({
   onImportTextureDefinition,
   onImportAudioClipDefinition,
   onImportAssetDefinition,
+  onImportAnimationLibrary,
   onUpdateAssetDefinition,
   onRemoveAssetDefinition,
   onCorrectAssetOrigin,
   onSetAssetColliderShape,
   onUpdateAudioClipDefinition,
+  onUpdateAnimationLibraryDefinition,
   onRemoveMaterialDefinition,
   onRemoveAudioClipDefinition,
+  onRemoveAnimationLibraryDefinition,
   onEditShaderInGraph
 }: LibraryPopoverProps) {
   const activeLibrary = useStore(shellStore, (s) => s.activeLibrary);
@@ -190,6 +210,8 @@ export function LibraryPopover({
       return getTextureItems(textureDefinitions);
     if (activeLibrary === "shaders") return getShaderItems(shaderDefinitions);
     if (activeLibrary === "audio") return getAudioItems(audioClipDefinitions);
+    if (activeLibrary === "animations")
+      return getAnimationLibraryItems(animationLibraryDefinitions);
     return [];
   }, [
     activeLibrary,
@@ -197,7 +219,8 @@ export function LibraryPopover({
     audioClipDefinitions,
     materialDefinitions,
     textureDefinitions,
-    shaderDefinitions
+    shaderDefinitions,
+    animationLibraryDefinitions
   ]);
 
   const [searchState, setSearchState] = useState<{
@@ -267,6 +290,12 @@ export function LibraryPopover({
           (d) => d.definitionId === effectiveSelectedId
         ) ?? null)
       : null;
+  const selectedAnimationLibrary =
+    activeLibrary === "animations"
+      ? (animationLibraryDefinitions.find(
+          (d) => d.definitionId === effectiveSelectedId
+        ) ?? null)
+      : null;
 
   const titleText =
     activeLibrary === "assets"
@@ -279,7 +308,9 @@ export function LibraryPopover({
             ? "Shaders"
             : activeLibrary === "audio"
               ? "Audio"
-              : "Library";
+              : activeLibrary === "animations"
+                ? "Animations"
+                : "Library";
 
   return (
     <Modal
@@ -363,6 +394,13 @@ export function LibraryPopover({
                 onClick={() => void onImportAudioClipDefinition()}
               >
                 Import Audio
+              </Button>
+            ) : activeLibrary === "animations" ? (
+              <Button
+                size="xs"
+                onClick={() => void onImportAnimationLibrary()}
+              >
+                Import GLB
               </Button>
             ) : null}
           </Group>
@@ -660,6 +698,69 @@ export function LibraryPopover({
                 </Stack>
               ) : null}
             </>
+          ) : activeLibrary === "animations" ? (
+            selectedAnimationLibrary ? (
+              <Stack gap="sm">
+                <TextInput
+                  label="Display Name"
+                  value={selectedAnimationLibrary.displayName}
+                  onChange={(event) =>
+                    onUpdateAnimationLibraryDefinition(
+                      selectedAnimationLibrary.definitionId,
+                      event.currentTarget.value
+                    )
+                  }
+                />
+                <Stack gap={2}>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {selectedAnimationLibrary.origin === "generated"
+                      ? "generated"
+                      : "imported"}{" "}
+                    · {selectedAnimationLibrary.clipNames.length}{" "}
+                    {selectedAnimationLibrary.clipNames.length === 1
+                      ? "clip"
+                      : "clips"}
+                  </Text>
+                  <Text size="xs" c="var(--sm-color-overlay0)">
+                    {selectedAnimationLibrary.source.fileName}
+                  </Text>
+                </Stack>
+                {selectedAnimationLibrary.clipNames.length > 0 ? (
+                  <Stack gap={2}>
+                    <Text size="xs" fw={600}>
+                      Clips
+                    </Text>
+                    {selectedAnimationLibrary.clipNames.map((name) => (
+                      <Text key={name} size="xs" c="var(--sm-color-subtext)">
+                        {name}
+                      </Text>
+                    ))}
+                  </Stack>
+                ) : null}
+                {selectedAnimationLibrary.origin !== "generated" ? (
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() =>
+                        onRemoveAnimationLibraryDefinition(
+                          selectedAnimationLibrary.definitionId
+                        )
+                      }
+                    >
+                      Delete
+                    </Button>
+                  </Group>
+                ) : null}
+              </Stack>
+            ) : (
+              <Stack h="100%" align="center" justify="center">
+                <Text size="sm" c="var(--sm-color-overlay0)">
+                  Import a Blender GLB to add animation clips.
+                </Text>
+              </Stack>
+            )
           ) : null}
         </Stack>
       </Group>

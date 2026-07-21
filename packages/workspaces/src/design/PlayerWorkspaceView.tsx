@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box,
-  Button,
-  Group,
   NumberInput,
   Stack,
   Text,
   TextInput
 } from "@mantine/core";
 import type {
+  AnimationLibraryDefinition,
   CharacterAnimationDefinition,
   CharacterModelDefinition,
   PlayerAnimationSlot,
   PlayerDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
+import { resolveCharacterAnimationBinding } from "@sugarmagic/domain";
 import type {
   DesignPreviewState,
   DesignPreviewStore
@@ -36,7 +36,8 @@ export interface PlayerWorkspaceViewProps {
   playerDefinition: PlayerDefinition | null;
   characterModelDefinitions: CharacterModelDefinition[];
   characterAnimationDefinitions: CharacterAnimationDefinition[];
-  /** path → blob URL map for resolving model + animation glbs. */
+  animationLibraryDefinitions: AnimationLibraryDefinition[];
+  /** path -> blob URL map for resolving model + animation glbs. */
   assetSources: Record<string, string>;
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
@@ -48,14 +49,6 @@ export interface PlayerWorkspaceViewProps {
    * to `null` when the user cancels the picker.
    */
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
-  /**
-   * Triggers a file-picker that imports a character animation `.glb`
-   * via IO into the project. Resolves to the new
-   * `CharacterAnimationDefinition` so the inspector can bind it to a
-   * specific animation slot (idle / walk / run). Resolves to `null`
-   * when the user cancels the picker.
-   */
-  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   /** Plan 062 §062.6 — Studio-side wizard services; null hides the
    *  rig-wizard launcher (e.g. UI preview contexts). */
   characterWizardServices: CharacterWizardServices | null;
@@ -83,11 +76,11 @@ export function usePlayerWorkspaceView(
     playerDefinition,
     characterModelDefinitions,
     characterAnimationDefinitions,
+    animationLibraryDefinitions,
     assetSources,
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices
   } = props;
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -190,9 +183,11 @@ export function usePlayerWorkspaceView(
         const bindingId =
           playerDefinition.presentation.animationAssetBindings[slot] ?? null;
         const animation = bindingId
-          ? characterAnimationDefinitions.find(
-              (definition) => definition.definitionId === bindingId
-            ) ?? null
+          ? resolveCharacterAnimationBinding(
+              characterAnimationDefinitions,
+              animationLibraryDefinitions,
+              bindingId
+            )
           : null;
         return {
           value: slot,
@@ -201,7 +196,7 @@ export function usePlayerWorkspaceView(
         };
       }
     );
-  }, [playerDefinition, characterAnimationDefinitions]);
+  }, [playerDefinition, characterAnimationDefinitions, animationLibraryDefinitions]);
 
   function updatePlayerDefinition(nextDefinition: PlayerDefinition) {
     if (!gameProjectId) return;
@@ -238,6 +233,7 @@ export function usePlayerWorkspaceView(
           assetSources={assetSources}
           targetHeight={playerDefinition.physicalProfile.height ?? 1.8}
           services={characterWizardServices}
+          animationLibraryDefinitions={animationLibraryDefinitions}
           onCommitted={(bindings) => {
             const next = {
               ...playerDefinition.presentation.animationAssetBindings
@@ -250,6 +246,30 @@ export function usePlayerWorkspaceView(
               presentation: {
                 ...playerDefinition.presentation,
                 animationAssetBindings: next
+              }
+            });
+          }}
+          onAssignFromLibrary={(slot, definitionId) => {
+            updatePlayerDefinition({
+              ...playerDefinition,
+              presentation: {
+                ...playerDefinition.presentation,
+                animationAssetBindings: {
+                  ...playerDefinition.presentation.animationAssetBindings,
+                  [slot]: definitionId
+                }
+              }
+            });
+          }}
+          onClearSlot={(slot) => {
+            updatePlayerDefinition({
+              ...playerDefinition,
+              presentation: {
+                ...playerDefinition.presentation,
+                animationAssetBindings: {
+                  ...playerDefinition.presentation.animationAssetBindings,
+                  [slot]: null
+                }
               }
             });
           }}
@@ -304,9 +324,9 @@ export function usePlayerWorkspaceView(
         }
         assetSources={assetSources}
         onLaunchRigWizard={
-          characterWizardServices
+          characterWizardServices && boundCharacterModel
             ? () =>
-                boundCharacterModel?.rigId
+                boundCharacterModel.rigId
                   ? setRigMode(true)
                   : void launchWizard(boundCharacterModel)
             : undefined
@@ -326,6 +346,20 @@ export function usePlayerWorkspaceView(
           services={characterWizardServices}
           editSession={wizardEditSession}
           initialSourceBytes={wizardInitialSourceBytes}
+          riggedCharacterTemplates={characterModelDefinitions
+            .filter(
+              (m) =>
+                m.rigId &&
+                m.definitionId !== boundCharacterModel?.definitionId
+            )
+            .map((m) => ({
+              label: m.source.fileName.replace(/-rigged\.glb$/i, ""),
+              fetchBytes: async () => {
+                const url = assetSources[m.source.relativeAssetPath];
+                if (!url) throw new Error("Model not loaded");
+                return (await fetch(url)).arrayBuffer();
+              }
+            }))}
           onClose={() => {
             setWizardOpen(false);
             setWizardEditSession(null);
@@ -610,106 +644,6 @@ export function usePlayerWorkspaceView(
                 })
               }
             />
-
-            <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
-                Animation Slots
-              </Text>
-              {(["idle", "walk", "run"] as PlayerAnimationSlot[]).map((slot) => {
-                const boundId =
-                  playerDefinition.presentation.animationAssetBindings[slot];
-                const bound = boundId
-                  ? characterAnimationDefinitions.find(
-                      (definition) => definition.definitionId === boundId
-                    ) ?? null
-                  : null;
-                const slotLabel = slot[0]!.toUpperCase() + slot.slice(1);
-                return (
-                  <Stack key={slot} gap={4}>
-                    <Text size="xs" fw={500}>
-                      {slotLabel}
-                    </Text>
-                    {bound ? (
-                      <Stack gap={4}>
-                        <Text size="xs">{bound.displayName}</Text>
-                        <Text size="xs" c="var(--sm-color-overlay0)">
-                          {bound.source.relativeAssetPath}
-                        </Text>
-                        <Group gap="xs">
-                          <Button
-                            size="compact-xs"
-                            variant="light"
-                            onClick={async () => {
-                              const next = await onImportCharacterAnimationDefinition();
-                              if (!next) return;
-                              updatePlayerDefinition({
-                                ...playerDefinition,
-                                presentation: {
-                                  ...playerDefinition.presentation,
-                                  animationAssetBindings: {
-                                    ...playerDefinition.presentation.animationAssetBindings,
-                                    [slot]: next.definitionId
-                                  }
-                                }
-                              });
-                            }}
-                          >
-                            Replace…
-                          </Button>
-                          <Button
-                            size="compact-xs"
-                            variant="subtle"
-                            color="red"
-                            onClick={() =>
-                              updatePlayerDefinition({
-                                ...playerDefinition,
-                                presentation: {
-                                  ...playerDefinition.presentation,
-                                  animationAssetBindings: {
-                                    ...playerDefinition.presentation.animationAssetBindings,
-                                    [slot]: null
-                                  }
-                                }
-                              })
-                            }
-                          >
-                            Clear
-                          </Button>
-                        </Group>
-                      </Stack>
-                    ) : (
-                      <Stack gap={4}>
-                        {boundId ? (
-                          <Text size="xs" c="red">
-                            Bound animation is missing from the project — re-import.
-                          </Text>
-                        ) : null}
-                        <Button
-                          size="xs"
-                          variant="light"
-                          onClick={async () => {
-                            const next = await onImportCharacterAnimationDefinition();
-                            if (!next) return;
-                            updatePlayerDefinition({
-                              ...playerDefinition,
-                              presentation: {
-                                ...playerDefinition.presentation,
-                                animationAssetBindings: {
-                                  ...playerDefinition.presentation.animationAssetBindings,
-                                  [slot]: next.definitionId
-                                }
-                              }
-                            });
-                          }}
-                        >
-                          Import Animation…
-                        </Button>
-                      </Stack>
-                    )}
-                  </Stack>
-                );
-              })}
-            </Stack>
           </Stack>
         ) : (
           <Text size="xs" c="var(--sm-color-overlay0)">
