@@ -76,6 +76,12 @@ export interface BasePromptContext {
     personaCard: Array<{ heading: string; slug: string; content: string }>;
     coreKnowledge: Array<{ heading: string; slug: string; content: string }>;
   } | null;
+
+  /**
+   * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
+   * user message (after history). Empty string = nothing to re-inject.
+   */
+  personaDigest: string;
 }
 
 /**

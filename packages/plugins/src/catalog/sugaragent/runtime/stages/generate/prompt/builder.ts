@@ -204,7 +204,13 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       ? `Recent history:\n${context.recentHistory
           .map((entry) => `${entry.role}: ${entry.text}`)
           .join("\n")}`
-      : "Recent history: none."
+      : "Recent history: none.",
+
+    // Plan 072.8 — persona drift reminder, LAST block (after history). Lives in
+    // the uncached user half, so it doesn't disturb 072.4 system byte-stability.
+    context.personaDigest
+      ? `Before you reply, stay in character. Remember who you are:\n${context.personaDigest}`
+      : null
   ];
 
   return {

@@ -256,7 +256,8 @@ async function loadPersonaOnce(args: {
       loaded: false,
       fallbackReason: "persona-unavailable",
       personaCard: [],
-      coreKnowledge: []
+      coreKnowledge: [],
+      digest: ""
     };
     logger.logPluginEvent("persona-load-failed", {
       pageId: lorePageId,

@@ -387,7 +387,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
               personaCard: input.state.persona.personaCard,
               coreKnowledge: input.state.persona.coreKnowledge
             }
-          : null
+          : null,
+        // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
+        personaDigest: input.state.persona?.digest ?? ""
       };
 
       const prompts = buildGeneratePrompt(promptContext);

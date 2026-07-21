@@ -120,6 +120,13 @@ export interface LoadedPersona {
   personaCard: LoreCardSection[];
   /** Everything else on the page (implicit Overview + other sections). */
   coreKnowledge: LoreCardSection[];
+  /**
+   * Plan 072.8 — a compact persona reminder (first lines of `## Persona` +
+   * `## Voice`), computed once at session start, re-injected at the END of the
+   * user message each turn to fight ~8-turn character drift. Empty when
+   * degraded or no persona sections authored.
+   */
+  digest: string;
 }
 
 export interface SugarAgentProviderState {

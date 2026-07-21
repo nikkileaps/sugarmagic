@@ -49,6 +49,7 @@ function baseContext(
         { heading: "Work", slug: "work", content: "Runs the bakery on the square." }
       ]
     },
+    personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
     ...overrides
   };
 }
@@ -132,5 +133,24 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
       baseContext({ currentLocationDisplayName: "Market Square", npcCurrentActivity: "sweeping" })
     ).systemPrompt;
     expect(a).toBe(b);
+  });
+
+  // Plan 072.8 — persona drift re-injection.
+  it("re-injects the persona digest as the LAST user-message block (after history)", () => {
+    const { userPrompt, systemPrompt } = buildGeneratePrompt(baseContext());
+    expect(userPrompt).toContain("Remember who you are:");
+    expect(userPrompt).toContain("Short sentences; says 'love'.");
+    // It comes after the recent-history block.
+    const historyIdx = userPrompt.indexOf("Recent history:");
+    const digestIdx = userPrompt.indexOf("Remember who you are:");
+    expect(historyIdx).toBeGreaterThanOrEqual(0);
+    expect(digestIdx).toBeGreaterThan(historyIdx);
+    // The digest lives in the user half only — never the (cached) system half.
+    expect(systemPrompt).not.toContain("Remember who you are:");
+  });
+
+  it("omits the digest block when there is no persona digest", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ personaDigest: "" }));
+    expect(userPrompt).not.toContain("Remember who you are:");
   });
 });

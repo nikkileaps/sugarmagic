@@ -1,4 +1,4 @@
-import type { LoadedPersona, RetrievedEvidenceItem } from "./types";
+import type { LoadedPersona, LoreCardSection, RetrievedEvidenceItem } from "./types";
 // Pure classifier shared with the gateway (ingest) and lore/resolve. It has no
 // node/gateway dependencies, so importing it into the browser runtime is safe;
 // it is the "third consumer" (the card fetch) named in Plan 072.1.
@@ -349,8 +349,36 @@ function degradedPersona(pageId: string | null): LoadedPersona {
     loaded: false,
     fallbackReason: "persona-unavailable",
     personaCard: [],
-    coreKnowledge: []
+    coreKnowledge: [],
+    digest: ""
   };
+}
+
+/** Plan 072.8 — the number of `## Persona` lines the drift-reminder digest keeps. */
+const PERSONA_DIGEST_LINE_COUNT = 4;
+
+/**
+ * Build the compact persona digest: the first PERSONA_DIGEST_LINE_COUNT
+ * non-empty lines of `## Persona`, plus the full `## Voice` section. Computed
+ * once at session start; empty string when neither is authored.
+ */
+function buildPersonaDigest(personaCard: LoreCardSection[]): string {
+  const personaLines = personaCard
+    .filter((section) => section.slug === "persona")
+    .flatMap((section) => section.content.split("\n"))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, PERSONA_DIGEST_LINE_COUNT);
+  const voiceText = personaCard
+    .filter((section) => section.slug === "voice")
+    .map((section) => section.content.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  const parts: string[] = [];
+  if (personaLines.length > 0) parts.push(personaLines.join("\n"));
+  if (voiceText) parts.push(`Voice: ${voiceText}`);
+  return parts.join("\n");
 }
 
 export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
@@ -376,12 +404,14 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
       slug: section.slug,
       content: section.content
     });
+    const card = personaCard.map(toCardSection);
     return {
       pageId: trimmed,
       loaded: true,
       fallbackReason: null,
-      personaCard: personaCard.map(toCardSection),
-      coreKnowledge: coreKnowledge.map(toCardSection)
+      personaCard: card,
+      coreKnowledge: coreKnowledge.map(toCardSection),
+      digest: buildPersonaDigest(card)
     };
   }
 }
