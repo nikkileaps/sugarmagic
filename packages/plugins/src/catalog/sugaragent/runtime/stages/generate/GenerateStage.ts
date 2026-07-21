@@ -52,6 +52,7 @@ const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
 
 import type { GeneratePromptContext } from "./prompt/context";
 import { buildGeneratePrompt } from "./prompt/builder";
+import { dumpConstructedPrompt } from "./prompt/prompt-debug";
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
@@ -337,8 +338,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       };
     }
 
-    // Story 46.14 — model selection lives server-side now (Studio
-    // vite middleware in dev; Cloud Run gateway in published-web).
+    // Story 46.14 — model selection lives server-side now (the local
+    // SugarDeploy gateway in dev; the Cloud Run gateway in published-web).
     // Browser-side code passes an empty model string; the gateway
     // defaults it from its own configuration.
     if (this.llmProvider && canUseProxyDefaults) {
@@ -368,13 +369,29 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         evidenceSummary,
         recentHistory: input.state.history.slice(-4),
-        languageLearningOverlay: constraint?.generatorPromptOverlay || null
+        languageLearningOverlay: constraint?.generatorPromptOverlay || null,
+        // Plan 072.4 — persona/core loaded once at session start (072.3).
+        persona: input.state.persona
+          ? {
+              personaCard: input.state.persona.personaCard,
+              coreKnowledge: input.state.persona.coreKnowledge
+            }
+          : null
       };
 
       const prompts = buildGeneratePrompt(promptContext);
       systemPrompt = prompts.systemPrompt;
       userPrompt = prompts.userPrompt;
       systemPromptPreview = systemPrompt.slice(0, 220);
+
+      // Plan 072.4 — troubleshooting dump (console + window.__sugaragentPrompts),
+      // gated by debugLogging. No-op otherwise.
+      dumpConstructedPrompt({
+        npcDisplayName,
+        systemPrompt,
+        userPrompt,
+        enabled: context.config.debugLogging
+      });
 
       try {
         let generatedText = "";
@@ -473,8 +490,13 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
           systemPromptPreview,
-          systemPrompt,
-          userPrompt,
+          // Plan 072.4 (absorbed 071.8): the full prompts are heavy and were
+          // dumped unconditionally. Gate behind debugLogging; keep the 220-char
+          // preview always. The readable console/window dump (below) is also
+          // debugLogging-gated.
+          ...(context.config.debugLogging
+            ? { systemPrompt, userPrompt }
+            : {}),
           minimalSugarlangGreetingMode,
           sugarlangConstraintSummary: constraint
             ? {

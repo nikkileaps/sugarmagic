@@ -698,7 +698,8 @@ describe("SugarAgent runtime provider", () => {
     }
 
     it("loads + designates the NPC's page once, hitting lore/resolve with the pageId", async () => {
-      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        void init;
         const url = typeof input === "string" ? input : input.toString();
         if (url.endsWith("/api/sugaragent/lore/resolve")) {
           return new Response(JSON.stringify(resolvePayloadFor("lore.npc.maren")), {

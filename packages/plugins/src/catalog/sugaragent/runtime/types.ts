@@ -43,8 +43,9 @@ export interface TurnStageResult<TOutput> {
 export interface SugarAgentPluginConfig {
   /**
    * Story 46.14 — REQUIRED. Browser-side SugarAgent always routes
-   * through a proxy (Studio's vite middleware in dev; the deployed
-   * Cloud Run gateway in published-web). Third-party API keys
+   * through a proxy (the local SugarDeploy gateway in dev, reached via
+   * repo-root .env VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL; the
+   * deployed Cloud Run gateway in published-web). Third-party API keys
    * (Anthropic / OpenAI) NEVER live in browser code; the proxy
    * terminates the LLM calls server-side using keys from the local
    * `.env` (Studio) or Secret Manager (Cloud Run).

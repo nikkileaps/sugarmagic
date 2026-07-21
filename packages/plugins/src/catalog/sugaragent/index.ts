@@ -139,9 +139,9 @@ export function normalizeSugarAgentPluginConfig(
   return {
     // Story 46.14 — only the proxy URL crosses the plugin/runtime
     // boundary. Anthropic / OpenAI API keys + model identifiers +
-    // vector store ids all live server-side now (Studio's vite
-    // middleware in dev; the deployed Cloud Run gateway in
-    // published-web). They never enter SugarAgentPluginConfig.
+    // vector store ids all live server-side now (the local SugarDeploy
+    // gateway in dev; the deployed Cloud Run gateway in published-web).
+    // They never enter SugarAgentPluginConfig.
     proxyBaseUrl:
       readEnvValue(environment, "SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL") ||
       (typeof config?.proxyBaseUrl === "string" ? config.proxyBaseUrl.trim() : ""),
@@ -329,8 +329,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       if (!config.proxyBaseUrl.trim()) {
         throw new Error(
           `[sugaragent] SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL is not set. ` +
-          `SugarAgent always routes through a proxy (Studio's vite ` +
-          `middleware in dev; the deployed Cloud Run gateway in published- ` +
+          `SugarAgent always routes through a proxy (the local SugarDeploy ` +
+          `gateway in dev; the deployed Cloud Run gateway in published- ` +
           `web). In Studio: confirm the repo-root .env carries ` +
           `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL or ` +
           `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the GHA ` +

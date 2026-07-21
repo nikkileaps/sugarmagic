@@ -108,7 +108,7 @@ function createStageInput() {
   };
 }
 
-function createStageContext() {
+function createStageContext(options: { debugLogging?: boolean } = {}) {
   return {
     turnId: "turn-1",
     sessionId: "session-1",
@@ -130,7 +130,10 @@ function createStageContext() {
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
       maxEvidenceResults: 4,
-      debugLogging: false,
+      // Plan 072.4 — the full systemPrompt/userPrompt are only dumped into
+      // diagnostics when debugLogging is on. These prompt-content tests need
+      // them, so default on; the gate test overrides to false.
+      debugLogging: options.debugLogging ?? true,
       tone: ""
     },
     logStageStart() {
@@ -219,14 +222,19 @@ describe("GenerateStage", () => {
 
     const result = await stage.execute(input as never, createStageContext() as never);
 
+    // Plan 072.4 — the sugarlang overlay moved from the system prompt to the
+    // per-turn USER message (cache-boundary restructure).
     expect(llmProvider.generateStructuredTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        systemPrompt: expect.stringContaining(
+        userPrompt: expect.stringContaining(
           "Language constraint: Use a mixed reply."
         )
       })
     );
-    expect(resultDiagnosticsSystemPrompt(result)).toContain(
+    expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
+      "Language constraint: Use a mixed reply."
+    );
+    expect(resultDiagnosticsSystemPrompt(result)).not.toContain(
       "Language constraint: Use a mixed reply."
     );
   });
@@ -363,9 +371,11 @@ describe("GenerateStage", () => {
     const result = await stage.execute(input as never, createStageContext() as never);
 
     expect(result.diagnostics.payload.minimalSugarlangGreetingMode).toBe(true);
-    expect(resultDiagnosticsSystemPrompt(result)).toContain(
+    // Plan 072.4 — MINIMAL_GREETING_INSTRUCTION moved to the USER message.
+    expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
       "This is a first-meeting beginner greeting turn."
     );
+    // The system prompt now carries NO per-turn world state at all (072.4).
     expect(resultDiagnosticsSystemPrompt(result)).not.toContain("Current task:");
     expect(resultDiagnosticsSystemPrompt(result)).not.toContain("Active quest:");
     expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
@@ -453,6 +463,33 @@ describe("GenerateStage", () => {
       lang: "es",
       minAnswersForValid: 4
     });
+  });
+
+  // Plan 072.4 (absorbed 071.8) — the full prompts land in diagnostics only
+  // when debugLogging is on; the 220-char preview is always present.
+  it("gates the full systemPrompt/userPrompt in diagnostics behind debugLogging", async () => {
+    const llmProvider = {
+      generateStructuredTurn: vi.fn().mockResolvedValue("Hi there.")
+    };
+    const stage = new GenerateStage(llmProvider);
+
+    const offResult = await stage.execute(
+      createStageInput() as never,
+      createStageContext({ debugLogging: false }) as never
+    );
+    expect(offResult.diagnostics.payload.systemPrompt).toBeUndefined();
+    expect(offResult.diagnostics.payload.userPrompt).toBeUndefined();
+    // Preview still present so operators see SOMETHING without the full dump.
+    expect(String(offResult.diagnostics.payload.systemPromptPreview ?? "")).toContain(
+      "Speak as"
+    );
+
+    const onResult = await stage.execute(
+      createStageInput() as never,
+      createStageContext({ debugLogging: true }) as never
+    );
+    expect(typeof onResult.diagnostics.payload.systemPrompt).toBe("string");
+    expect(typeof onResult.diagnostics.payload.userPrompt).toBe("string");
   });
 });
 

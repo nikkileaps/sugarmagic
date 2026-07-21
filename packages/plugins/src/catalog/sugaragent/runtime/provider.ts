@@ -11,7 +11,7 @@ import {
   // Story 46.14 — only the gateway-routed providers remain; direct-API
   // client classes were deleted because the browser-side SugarAgent
   // never reads raw Anthropic / OpenAI keys (they live server-side, in
-  // Studio's vite middleware or the deployed Cloud Run gateway).
+  // the local SugarDeploy gateway (dev) or the deployed Cloud Run gateway).
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayLLMProvider,
   SugarAgentGatewayLoreClient,
@@ -191,7 +191,7 @@ function createTurnContext(
  * Story 46.14 — always returns the gateway-routed providers. The
  * direct-API fork (Anthropic / OpenAI clients constructed from raw
  * API keys) is gone — browser-side SugarAgent must always proxy
- * through Studio's vite middleware (dev) or the deployed Cloud Run
+ * through the local SugarDeploy gateway (dev) or the deployed Cloud Run
  * gateway (published-web). Missing proxy URL is caught earlier in
  * `createRuntimePlugin`'s init guard.
  */
@@ -455,9 +455,10 @@ async function executePipeline(args: {
 export function createSugarAgentConversationProvider(
   config: SugarAgentPluginConfig
 ): ConversationProvider {
-  const logger = createSugarAgentLogger(
-    config.debugLogging || config.proxyBaseUrl.trim().length > 0
-  );
+  // Plan 072.4 (absorbed 071.8): honor debugLogging. It was ORed with the
+  // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
+  // setting a no-op. Now stage logging + the prompt dump follow the flag.
+  const logger = createSugarAgentLogger(config.debugLogging);
   const { llmProvider, vectorStoreProvider, personaLoader } = resolveProviders(
     config,
     logger
